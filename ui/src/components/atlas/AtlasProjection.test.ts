@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { FirmArchitectureProjection, FirmLens } from "@/types";
 import { projectAtlas } from "./AtlasProjection";
-import { ORBIT_BET_CARD, ORBIT_CENTER, ORBIT_RADII, ORBIT_WALL_X } from "./atlasOrbitLayout";
+import { layoutAtlasNodes } from "@/lib/atlasLayoutEngine";
+
+// The projection decides *what* nodes and edges exist and what each carries; the layout engine
+// (atlasLayoutEngine, tested separately) decides *where*. These tests assert the projection's
+// content contract. Placement/collision is proven in atlasLayoutEngine.test.ts. The retired orbit
+// layout no longer participates: there is no orbit-field node, no sector vocabulary, no radius map.
 
 function fixture(): { projection: FirmArchitectureProjection; lens: FirmLens } {
   const elements: FirmArchitectureProjection["elements"] = [
@@ -35,7 +40,7 @@ function fixture(): { projection: FirmArchitectureProjection; lens: FirmLens } {
       }],
       outcomes: [{ type: "outcome", id: "outcome-1", betId: "bet-1", workRef: "release-1", outcomeKind: "reply", from: "Builder", body: "Six qualified builders replied", source: "captured", channel: "email", observedAt: "2026-07-15T00:00:00Z", joined: true }],
       wallItems: [{ id: "wall-1", ventureId: "buffalo", betId: "bet-1", workRef: "release-1", purpose: "release", blocksBet: true, effect: {}, parkedAt: "2026-07-15T00:00:00Z", decision: null }],
-      wall: { count: 1, oldestParkedAt: "2026-07-15T00:00:00Z" }, placement: { positions: { "architecture:proof": { x: 77, y: 88 } }, revision: 2 },
+      wall: { count: 1, oldestParkedAt: "2026-07-15T00:00:00Z" }, placement: { positions: {}, revision: 2 },
     },
   };
 }
@@ -53,7 +58,7 @@ describe("projectAtlas", () => {
     const scene = projectAtlas(projection, lens);
     expect(scene.nodes.filter((node) => node.id.startsWith("architecture:"))).toHaveLength(projection.elements.length);
     expect(scene.nodes).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "group:entry-terrain", type: "architectureGroup" }),
+      expect.objectContaining({ id: "group:entry-terrain", type: "architectureGroup", data: expect.objectContaining({ memberRefs: ["graduate", "partner"] }) }),
       expect.objectContaining({ id: "work:release-1", data: expect.objectContaining({ kind: "work", atWall: true }) }),
       expect.objectContaining({ id: "outcome:outcome-1", data: expect.objectContaining({ kind: "outcome", outcome: expect.objectContaining({ body: "Six qualified builders replied" }) }) }),
     ]));
@@ -104,66 +109,64 @@ describe("projectAtlas", () => {
     lens.bets.push({ ...lens.bets[0], id: "bet-unjoined", intent: "An ungrouped bet remains visible", position: "live", staged: [], stagedCount: 0 });
     const scene = projectAtlas(projection, lens);
     expect(scene.nodes.filter((node) => node.data.kind === "bet").map((node) => node.id)).toEqual(["bet:bet-1", "bet:bet-unjoined"]);
+    expect(scene.nodes.find((node) => node.id === "bet:bet-1")?.data.motionLabel).toBe("Graduate entry");
     expect(scene.nodes.find((node) => node.id === "bet:bet-unjoined")?.data.motionLabel).toBe("No path named");
-    expect(scene.nodes.find((node) => node.id === "atlas:orbit-field")?.data.sectors).toEqual(expect.arrayContaining([expect.objectContaining({ id: "ungrouped", label: "No path named" })]));
   });
 
-  it("uses polar radius to encode real decision proximity", () => {
+  it("carries decision-band and path labels on the effort card without any orbit vocabulary", () => {
     const { projection, lens } = fixture();
-    lens.bets.push({ ...lens.bets[0], id: "bet-near", intent: "New bet", position: "live", staged: [], stagedCount: 0 });
+    lens.bets.push({ ...lens.bets[0], id: "bet-near", intent: "New bet", position: "live", staged: [], evidence: [], events: [], latestOutcome: null, stagedCount: 0 });
     const scene = projectAtlas(projection, lens);
-    const distance = (id: string) => {
-      const position = scene.nodes.find((node) => node.id === id)!.position;
-      return Math.hypot(position.x + 90 - ORBIT_CENTER.x, position.y + 52 - ORBIT_CENTER.y);
-    };
-    expect(distance("bet:bet-near")).toBeCloseTo(ORBIT_RADII["near-intent"]);
-    expect(distance("bet:bet-1")).toBeCloseTo(ORBIT_RADII["approaching-wall"]);
-    expect(distance("bet:bet-near")).toBeLessThan(distance("bet:bet-1"));
+    // bet-1 is at the wall with a returned outcome → settled/approaching classification.
+    expect(scene.nodes.find((node) => node.id === "bet:bet-1")?.data.decisionBand).toBe("approaching-wall");
+    // A fresh bet with no staged work / evidence / events reads as near-intent.
+    expect(scene.nodes.find((node) => node.id === "bet:bet-near")?.data.decisionBand).toBe("near-intent");
   });
 
-  it("keeps dense orbit cards from colliding at the default card size", () => {
+  it("places every card collision-free once the layout engine positions the scene", () => {
     const { projection, lens } = fixture();
-    const campaign = projection.elements.find((element) => element.role === "campaign")!;
-    const graduate = projection.elements.find((element) => element.id === "graduate")!;
-    projection.elements.push({ ...graduate, id: "content", name: "Content entry" });
+    // Seven bets across paths plus the ungrouped case — the dense field the composite targets.
     lens.bets = Array.from({ length: 7 }, (_, index) => ({
-      ...lens.bets[0],
-      id: `bet-${index + 1}`,
-      intent: `Bet ${index + 1}`,
-      position: "live" as const,
-      staged: [],
-      stagedCount: 0,
+      ...lens.bets[0], id: `bet-${index + 1}`, intent: `Bet ${index + 1}`, position: "live" as const, staged: [], stagedCount: 0,
     }));
-    projection.elements = [
-      ...projection.elements.filter((element) => element.role !== "campaign"),
-      ...lens.bets.map((bet, index) => ({
-        ...campaign,
-        id: `campaign-${bet.id}`,
-        governingBetId: bet.id,
-        primaryMotionId: ["graduate", "partner", "content"][index % 3],
-        motionIds: [["graduate", "partner", "content"][index % 3]],
-      })),
-    ];
-    projection.document.elements = projection.elements;
-    lens.bets.push({ ...lens.bets[0], id: "bet-unjoined-dense", intent: "Ungrouped dense bet" });
-
-    const cards = projectAtlas(projection, lens).nodes.filter((node) => node.data.kind === "bet");
+    const scene = projectAtlas(projection, lens);
+    const { nodes } = layoutAtlasNodes(scene.nodes.map((node) => ({ ...node, measured: null })));
+    const cards = nodes.filter((node) => ["bet", "intent", "wall", "teammate", "capability", "work", "outcome"].includes(node.data.kind));
+    const size = (node: (typeof cards)[number]) => ({ w: (node.style?.width as number) ?? node.width ?? 180, h: (node.style?.height as number) ?? node.height ?? 180 });
     for (const [index, card] of cards.entries()) {
+      const a = { ...card.position, ...size(card) };
       for (const other of cards.slice(index + 1)) {
-        expect(
-          Math.abs(card.position.x - other.position.x) >= ORBIT_BET_CARD.width + ORBIT_BET_CARD.gap
-            || Math.abs(card.position.y - other.position.y) >= ORBIT_BET_CARD.height + ORBIT_BET_CARD.gap,
-          `${card.id} overlaps ${other.id}`,
-        ).toBe(true);
+        const b = { ...other.position, ...size(other) };
+        const overlap = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+        expect(overlap, `${card.id} overlaps ${other.id}`).toBe(false);
       }
     }
   });
 
-  it("insets the wall receipt from the orbit field edge", () => {
+  it("stamps orbitSide on effort cards from the settled field, growing expansion toward open space", () => {
     const { projection, lens } = fixture();
-    const wall = projectAtlas(projection, lens).nodes.find((node) => node.id === "atlas:wall")!;
-    expect(wall.position.x).toBe(ORBIT_WALL_X);
-    expect(wall.position.x + 230).toBeLessThan(1520 - 72);
+    lens.bets = Array.from({ length: 6 }, (_, index) => ({
+      ...lens.bets[0], id: `bet-${index + 1}`, intent: `Bet ${index + 1}`, position: "live" as const, staged: [], stagedCount: 0,
+    }));
+    const scene = projectAtlas(projection, lens);
+    const { nodes } = layoutAtlasNodes(scene.nodes.map((node) => ({ ...node, measured: null })));
+    const efforts = nodes.filter((node) => node.data.kind === "bet");
+    // Every effort carries a resolved side, and the field has cards on both sides (hub-centered ring).
+    expect(efforts.every((node) => node.data.orbitSide === "left" || node.data.orbitSide === "right")).toBe(true);
+    expect(new Set(efforts.map((node) => node.data.orbitSide)).size).toBe(2);
+  });
+
+  it("keeps one quiet wall boundary even when no outward act is waiting", () => {
+    const { projection, lens } = fixture();
+    lens.wall = { count: 0, oldestParkedAt: null };
+    lens.wallItems = [];
+    projection.joins.wall = [];
+    const scene = projectAtlas(projection, lens);
+    expect(scene.nodes.filter((node) => node.id === "atlas:wall")).toHaveLength(1);
+    expect(scene.nodes.find((node) => node.id === "atlas:wall")?.data).toMatchObject({
+      active: false,
+      statement: "Outward acts stop here",
+    });
   });
 
   it("unfolds only machinery backed by bet artifacts, wall items, and outcomes", () => {
@@ -181,19 +184,6 @@ describe("projectAtlas", () => {
     expect(scene.nodes.find((node) => node.id === "atlas:wall")?.data.statement).toBe("1 outward act held for your decision");
   });
 
-  it("keeps one quiet wall boundary even when no outward act is waiting", () => {
-    const { projection, lens } = fixture();
-    lens.wall = { count: 0, oldestParkedAt: null };
-    lens.wallItems = [];
-    projection.joins.wall = [];
-    const scene = projectAtlas(projection, lens);
-    expect(scene.nodes.filter((node) => node.id === "atlas:wall")).toHaveLength(1);
-    expect(scene.nodes.find((node) => node.id === "atlas:wall")?.data).toMatchObject({
-      active: false,
-      statement: "Outward acts stop here",
-    });
-  });
-
   it("shows an honest zero-bet intent state", () => {
     const { projection, lens } = fixture();
     lens.bets = [];
@@ -202,7 +192,7 @@ describe("projectAtlas", () => {
     expect(scene.nodes.find((node) => node.id === "atlas:intent")?.data.betCount).toBe(0);
   });
 
-  it("keeps every bet visible in an ungrouped orbit when architecture is unavailable", () => {
+  it("keeps every bet visible even when architecture is unavailable", () => {
     const { lens } = fixture();
     const scene = projectAtlas(null, lens);
     expect(scene.nodes.filter((node) => node.data.kind === "bet").map((node) => node.id)).toEqual(["bet:bet-1"]);
@@ -210,13 +200,14 @@ describe("projectAtlas", () => {
     expect(scene.nodes.find((node) => node.id === "atlas:intent")?.data).toMatchObject({ title: "What should change?", intentNamed: false });
   });
 
-  it("renders a placed teammate and capability at their saved canvas positions", () => {
+  it("renders a teammate and capability as engine-placed cards (never founder-dragged)", () => {
     const { projection, lens } = fixture();
     lens.crew = [{ ref: "mira", summonedAt: "2026-07-15T00:00:00Z", soul: { name: "Mira" } }];
-    lens.placement.positions["crew:mira"] = { x: 120, y: 240 };
-    lens.placement.positions["capability:product-truth"] = { x: 320, y: 240 };
     const scene = projectAtlas(projection, lens, { capabilities: [{ id: "product-truth", name: "Product truth", description: "Cited repository context", authority: "read" }] });
-    expect(scene.nodes.find((node) => node.id === "crew:mira")?.position).toEqual({ x: 120, y: 240 });
-    expect(scene.nodes.find((node) => node.id === "capability:product-truth")?.data).toMatchObject({ title: "Product truth", authority: "read" });
+    const teammate = scene.nodes.find((node) => node.id === "crew:mira");
+    const capability = scene.nodes.find((node) => node.id === "capability:product-truth");
+    expect(teammate?.draggable).toBe(false);
+    expect(capability?.draggable).toBe(false);
+    expect(capability?.data).toMatchObject({ title: "Product truth", authority: "read" });
   });
 });

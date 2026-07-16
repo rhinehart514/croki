@@ -204,7 +204,8 @@ new run-store; project from the existing receipts/events/outcomes.
 
 ### 2.6 Capability ports
 
-Audited present: the bound **product repository** (built-in crew source, read via `truth.mjs`/`scan.mjs`) and
+Audited present: the bound **product repository** (built-in crew source, read via `truth.mjs` — the cited
+repository snapshot; there is no separate `scan.mjs` in live `brain/src` at `850c52a`) and
 **Gmail OAuth** send/reply (`connectors/`, surfaced in `FirmSettings`, honest unavailable state when not
 connected). `capability-registry.mjs` is the registry; `canvasCapabilities.ts` projects them to the canvas.
 Capability nodes render these as warm instruments (direction §4). **Do not add new external connectors in this
@@ -405,9 +406,12 @@ honestly unattributed (never guessed onto unrelated work).
 
 ### 4A.5 First run (partly built — spec the connect→read-back→offers delta)
 
-**Audit.** Venture creation binds one product repository (`venture-store.mjs`, manifest); `truth.mjs`/`scan.mjs`
-provide the cited repository scan; `product-model-generator.mjs` interprets it as labeled inference (FIRM-SPEC
-keep-list). The venture-picker "Start another venture" flow exists (`VenturePicker.tsx`). **The gap:** the
+**Audit.** Venture creation binds one product repository (`venture-store.mjs`, manifest); `truth.mjs`
+provides the cited repository snapshot (the "scan"). **A `product-model-generator.mjs` interpreter is NOT
+present in live `brain/src` at `850c52a`** — it exists only under `brain/.dogfood-worktrees/**` (ephemeral).
+So the product read-back's *labeled-inference interpretation layer* must be located from a worktree and
+promoted into live source, or built fresh against `truth.mjs`, in Phase 7 — it is not a plain reuse. The
+venture-picker "Start another venture" flow exists (`VenturePicker.tsx`). **The gap:** the
 first-run *sequence* — read the product back on the canvas for correction, then offer concrete repo-derived
 directions in the conversation — is not assembled.
 
@@ -665,8 +669,9 @@ product read-back on the canvas (what it does, who it's for, **what's uncertain*
 offer **2–3 concrete repo-derived directions** in the conversation, routed through Phase 4 when picked.
 **Idea-stage ventures are deferred-not-scheduled** (decision log: open, needs mockup rounds).
 
-**Files.** venture-create flow (`venture-store.mjs` manifest, the create route), `scan.mjs`/`truth.mjs` (reuse),
-`product-model-generator.mjs` (reuse), the read-back materialization (Phase 3 unfolding), `ConversationFeed.tsx`
+**Files.** venture-create flow (`venture-store.mjs` manifest, the create route), `truth.mjs` (reuse — the
+cited scan), the product-model interpreter (promote from a `brain/.dogfood-worktrees/**` copy or build fresh
+against `truth.mjs` — **not present in live `brain/src`**), the read-back materialization (Phase 3 unfolding), `ConversationFeed.tsx`
 (direction offers), retire/replace `VenturePicker.tsx` create path as needed.
 
 **Acceptance.** Binding a real repo draws a correctable read-back with uncertainty labeled and offers 2–3

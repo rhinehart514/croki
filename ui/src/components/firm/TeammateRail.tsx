@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MessageCircle, PanelLeftClose, ShieldCheck, X } from "lucide-react";
+import { GitBranch, MessageCircle, PanelLeft, PanelLeftClose, ShieldCheck, X } from "lucide-react";
 import type { DriveTeammateResult, FirmVenture } from "@/api";
 import type { FirmArchitectureProjection, FirmConversationMessage, FirmLens } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -57,7 +57,6 @@ export function TeammateRail({
   messages,
   selection,
   wallOpen,
-  width,
   onSelectCrew,
   onSelectBet,
   onClearSelection,
@@ -74,7 +73,10 @@ export function TeammateRail({
   onShowWiderFirm,
   onReviewReturnBrief,
   onCollapse,
+  onExpand,
   transcriptOpen = true,
+  railCollapsed = false,
+  railAttention = false,
   readOnly = false,
   readOnlyReason = "Reconnecting before changes can be sent…",
   architecture,
@@ -84,7 +86,6 @@ export function TeammateRail({
   messages: FirmConversationMessage[];
   selection: CanvasSelection;
   wallOpen: boolean;
-  width?: number;
   onSelectCrew: (ref: string) => void;
   onSelectBet: (betId: string) => void;
   onClearSelection: () => void;
@@ -101,7 +102,10 @@ export function TeammateRail({
   onShowWiderFirm?: () => void;
   onReviewReturnBrief?: () => void;
   onCollapse?: () => void;
+  onExpand?: () => void;
   transcriptOpen?: boolean;
+  railCollapsed?: boolean;
+  railAttention?: boolean;
   readOnly?: boolean;
   readOnlyReason?: string;
   architecture?: FirmArchitectureProjection | null;
@@ -128,8 +132,24 @@ export function TeammateRail({
   };
   const readOnlyLabel = /desktop host/i.test(readOnlyReason) ? "Host required" : "Reconnecting";
 
+  if (railCollapsed) {
+    return (
+      <aside className="firm-app-rail" aria-label={`${venture.name} conversation, collapsed`}>
+        <div className="firm-app-rail-strip">
+          <span className="firm-app-rail-mark" aria-hidden="true"><GitBranch /></span>
+          <button type="button" aria-label="Open conversation" data-attention={railAttention || undefined} onClick={onExpand}>
+            <PanelLeft aria-hidden="true" />
+          </button>
+          <button type="button" aria-label="Open conversation" onClick={onExpand}>
+            <MessageCircle aria-hidden="true" />
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="firm-app-rail" aria-label={`${venture.name} ${transcriptOpen ? "firm conversation" : "exact work direction"}`} style={width ? { flexBasis: width } : undefined}>
+    <aside className="firm-app-rail" aria-label={`${venture.name} ${transcriptOpen ? "firm conversation" : "exact work direction"}`}>
       {transcriptOpen ? <section className="firm-app-thread" aria-labelledby="teammate-thread-title">
         <h2 id="teammate-thread-title" className="sr-only">Conversation</h2>
         <div className="firm-app-thread-scope">

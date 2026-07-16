@@ -178,7 +178,9 @@ test("WT6 keyboard journey: picker to exact consequence and one-layer return", a
     await waitForDom(client, `Boolean(document.querySelector('[data-venture-atlas], .venture-atlas')) && !document.querySelector('.atlas-dive')`, "second Escape did not return one altitude to Orbit");
     await waitForDom(
       client,
-      `document.activeElement?.closest?.('[data-scene-id]')?.getAttribute('data-scene-id') === ${JSON.stringify(BET_SCENE_ID)}`,
+      // React Flow nodes carry their scene id on data-id (see focusedKeyboardTarget), not a
+      // data-scene-id attribute — the latter never existed in production. Assert against the real one.
+      `document.activeElement?.closest?.('.react-flow__node')?.getAttribute('data-id') === ${JSON.stringify(BET_SCENE_ID)}`,
       "returning from Dive did not restore the originating work focus",
     );
     const returnedFocus = await focusedKeyboardTarget(client);

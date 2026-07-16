@@ -319,101 +319,137 @@
 .firm-app-workbench-actions { justify-content: flex-end; gap: var(--space-2); }
 .firm-app-workbench-actions button[aria-pressed="true"] { color: var(--ink); }
 
+/* ── The ADE shell (docked grid) ──────────────────────────────────────────────
+   Three real grid cells — rail (conversation) / stage (canvas) / inspector —
+   never floating panels over the canvas. A panel that has a cell cannot overlap
+   the stage: this is the structural fix for the audit's stacking/bleed findings.
+   Track widths follow the design system: rail minmax(56px,336px), stage 1fr,
+   inspector 0 (closed) or 380px (open). Collapse animates the track and the
+   atlas re-fits its new stage cell on transition end. */
 .firm-app-body {
   position: relative;
   flex: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns:
+    [rail] var(--firm-rail-width, 336px)
+    [stage] minmax(0, 1fr)
+    [inspector] var(--firm-inspector-width, 0px);
   min-height: 0;
+  transition: grid-template-columns var(--dur-base) var(--ease-out);
+}
+.firm-app-body[data-rail="collapsed"] { --firm-rail-width: 56px; }
+.firm-app-body[data-inspector="open"] { --firm-inspector-width: 380px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .firm-app-body { transition: none; }
 }
 
 .firm-app-rail {
+  grid-column: rail;
   z-index: 30;
   display: flex;
-  flex: 0 0 440px;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   border-right: 1px solid var(--line);
   background: var(--surface);
-  box-shadow: 8px 0 24px -22px rgba(38, 33, 26, 0.45);
+  box-shadow: var(--sh-rail, 8px 0 24px -22px rgba(38, 33, 26, 0.45));
 }
 
-.firm-app-conversation-resizer {
+/* Collapsed rail: an icon strip. The stage genuinely widens (grid track), so
+   nothing overlaps — collapse is a layout change, not a slide-over. */
+.firm-app-body[data-rail="collapsed"] .firm-app-rail { align-items: center; }
+.firm-app-body[data-rail="collapsed"] .firm-app-thread,
+.firm-app-body[data-rail="collapsed"] .firm-app-composer-layer { display: none; }
+
+.firm-app-rail-strip {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 56px;
+  padding: var(--space-3) 0;
+}
+.firm-app-body[data-rail="collapsed"] .firm-app-rail-strip { display: flex; }
+.firm-app-rail-strip button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
   position: relative;
-  z-index: 32;
-  flex: 0 0 8px;
-  margin: 0 -4px;
-  cursor: col-resize;
-  touch-action: none;
 }
-.firm-app-conversation-resizer::after {
-  position: absolute;
-  inset: 0 3px;
-  background: transparent;
+.firm-app-rail-strip button:hover { background: var(--canvas); color: var(--ink); border-color: var(--line-2); }
+.firm-app-rail-strip button svg { width: 16px; height: 16px; }
+.firm-app-rail-strip button[data-attention="true"]::after {
   content: "";
-  transition: background var(--dur-fast) var(--ease);
-}
-.firm-app-conversation-resizer:hover::after,
-.firm-app-conversation-resizer:focus-visible::after { background: var(--link); }
-.firm-app-conversation-resizer:focus-visible { outline: 0; }
-
-/* ── Floating spine ──────────────────────────────────────────────────────────
-   The conversation dissolves its panel seam and floats over a full-bleed canvas
-   as two soft bubbles — the briefing cluster and the composer capsule. Mineral
-   palette, no glass/glow: the 2026 feeling is pure geometry (round + settle). */
-.firm-app-open .firm-app-rail {
   position: absolute;
-  inset: 0;
+  top: 5px; right: 5px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--gap, #9a6b2f);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* The stage cell hosts the canvas; the composer docks to its bottom edge. */
+.firm-app-canvas { grid-column: stage; }
+
+/* The inspector cell — one swapping panel, edge-shadowed, never a second overlay. */
+.firm-app-inspector {
+  grid-column: inspector;
   z-index: 30;
-  display: block;
-  width: auto;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  pointer-events: none;
-}
-.firm-app-open .firm-app-conversation-resizer { display: none; }
-.firm-app-open:has(.atlas-dive) .firm-app-thread { display: none; }
-
-/* Briefing — a soft floating bubble, sits just right of the board shelf, collapsible. */
-.firm-app-open .firm-app-thread {
-  position: absolute;
-  top: var(--space-3);
-  left: 202px;
-  z-index: 31;
   display: flex;
   flex-direction: column;
-  width: 372px;
-  max-width: calc(100% - var(--space-6));
-  max-height: min(560px, calc(100% - 168px));
-  pointer-events: auto;
-  border: 1px solid var(--line);
-  border-radius: 26px;
-  background: color-mix(in srgb, var(--surface) 97%, transparent);
-  box-shadow: 0 22px 48px -30px rgba(38, 33, 26, 0.55);
-  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden auto;
+  border-left: 1px solid var(--line);
+  background: linear-gradient(178deg, #f2eee6, #ece8df);
+  box-shadow: var(--sh-panel, -18px 0 44px rgba(38, 37, 31, 0.045));
 }
-.firm-app-open:has(.atlas-shelf[data-expanded="false"]) .firm-app-thread {
-  left: 82px;
-  width: 302px;
-}
-.firm-app-open .firm-app-return-record { border-radius: 18px; }
+.firm-app-body:not([data-inspector="open"]) .firm-app-inspector { display: none; }
 
-/* Composer — the always-present bottom-center capsule, the command spine. */
-.firm-app-open .firm-app-composer-layer {
-  position: absolute;
-  bottom: var(--space-4);
-  left: 50%;
-  z-index: 32;
-  width: min(660px, calc(100% - 120px));
-  translate: -50% 0;
-  pointer-events: auto;
-  border: 1px solid var(--line);
-  border-radius: 28px;
-  background: var(--surface);
-  box-shadow: 0 22px 48px -30px rgba(38, 33, 26, 0.6);
+.firm-app-inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  border-bottom: 1px solid var(--line-soft, var(--line));
 }
-.firm-app-open .firm-app-composer form { border-radius: 22px; }
+.firm-app-inspector-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3, var(--muted));
+}
+.firm-app-inspector-body { padding: var(--space-5); }
+.firm-app-inspector-title {
+  margin: 0;
+  font-family: var(--font-heading, var(--serif));
+  font-size: var(--text-lg);
+  font-weight: 640;
+  line-height: 1.24;
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+}
+.firm-app-inspector-note {
+  margin: var(--space-3) 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.firm-app-conversation-resizer { display: none; }
+.firm-app-open:has(.atlas-dive) .firm-app-thread { display: none; }
 
 .firm-app-rail-head {
   padding: var(--space-3) var(--space-4);
@@ -1164,15 +1200,10 @@
   .firm-app-workbench-status { display: none; }
   .firm-app-workbench-identity > span:nth-child(2) small { display: none; }
   .firm-app-workbench-identity button { margin-left: 0; }
-  .firm-app-body { min-width: 0; }
-  .firm-app-rail {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: min(400px, calc(100vw - 64px));
-    max-width: calc(100vw - 64px);
-    flex-basis: auto !important;
-  }
-  .firm-app-conversation-resizer { display: none; }
+  /* Narrower desktop resilience: the rail track tightens but stays a real grid
+     cell — never a slide-over. Inspector closes to reclaim the stage. */
+  .firm-app-body { --firm-rail-width: 300px; }
+  .firm-app-body[data-inspector="open"] { --firm-inspector-width: 340px; }
   .firm-app-canvas { min-width: 0; }
 }
 .firm-app-working strong { font-size: var(--text-xs); }

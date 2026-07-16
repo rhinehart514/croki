@@ -1,18 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactFlowInstance, Viewport } from "@xyflow/react";
 import type { AtlasAltitude, AtlasNode } from "./atlasTypes";
-import { ORBIT_BET_CARD, ORBIT_CENTER } from "./atlasOrbitLayout";
 
 function cameraKey(receiptKey: string) { return `drover:atlas-camera:v6:${receiptKey}`; }
-
-function readCamera(receiptKey: string): Viewport | null {
-  try {
-    const value = JSON.parse(window.localStorage.getItem(cameraKey(receiptKey)) ?? "null") as Partial<Viewport> | null;
-    return value && Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.zoom)
-      ? { x: Number(value.x), y: Number(value.y), zoom: Number(value.zoom) }
-      : null;
-  } catch { return null; }
-}
 
 function altitudeForZoom(zoom: number): AtlasAltitude {
   if (zoom <= 0.78) return "venture";
@@ -20,62 +10,62 @@ function altitudeForZoom(zoom: number): AtlasAltitude {
   return "detail";
 }
 
-function openingNodes(nodes: AtlasNode[]) {
-  const orbit = nodes.find((node) => node.data.kind === "orbit-field");
-  const bets = nodes.filter((node) => node.data.kind === "bet");
-  const intent = nodes.find((node) => node.data.kind === "intent");
-  const wall = nodes.find((node) => node.data.kind === "wall");
+// The most a resting card is zoomed. The engine places the field hub-centered at composite density,
+// so a hub-centered fit fills the stage at a legible zoom; this cap keeps a sparse field from being
+// blown up past 1:1. The fit still zooms *out* below the cap whenever the field is larger than the
+// stage, so the whole collision-free field always insets.
+const RESTING_MAX_ZOOM = 1.0;
 
-  // A venture can have durable bets and returned reality before the founder has named any
-  // architecture. Open on one coherent consequence spine so the real return is not offscreen.
-  const outcome = nodes.find((node) => node.data.kind === "outcome");
-  if (outcome && !intent?.data.intentNamed) {
-    const joinedBetId = outcome.data.join?.betId;
-    const bet = bets.find((node) => node.data.bet?.id === joinedBetId) ?? bets[0];
-    const betId = bet?.data.bet?.id;
-    const work = nodes.find((node) => node.data.kind === "work" && (!betId || node.data.join?.betId === betId));
-    return [bet, work, outcome, wall].filter((node): node is AtlasNode => Boolean(node));
+// Fit the engine-placed cards HUB-CENTERED: the hub is pinned at the field origin, so we frame a box
+// centered on the origin whose half-extent covers the farthest card on each axis. This keeps the
+// central question dead-centre on the stage (the composite's structure) instead of letting an
+// off-centre bounding box drift the hub sideways, and it lets a sparse field fill the stage rather
+// than under-zooming. Decorative background (orbit ring / group frames) is excluded so it can't dwarf
+// the real cards. Extra top inset reserves the strip the return band floats over.
+function fitFieldToStage(instance: ReactFlowInstance<AtlasNode>) {
+  const framed = instance.getNodes().filter((node) => node.data.kind !== "group");
+  if (!framed.length) {
+    return instance.fitView({ padding: 0.1, maxZoom: RESTING_MAX_ZOOM, duration: 0 });
   }
-  if (orbit && bets.length) return [intent, ...bets, wall].filter((node): node is AtlasNode => Boolean(node));
-  let concepts = 0;
-  const architecture = nodes.filter((node) => {
-    if (["bet", "work", "outcome", "wall"].includes(node.data.kind)) return false;
-    if (node.data.kind !== "concept") return true;
-    concepts += 1;
-    return concepts <= 3;
+  const canvas = document.querySelector<HTMLElement>(".atlas-canvas");
+  // Without a live stage cell (jsdom / pre-mount) we cannot compute hub-centered bounds; defer to
+  // React Flow's own fitView so callers that restore a prior viewport are not clobbered.
+  if (!canvas) {
+    return instance.fitView({ padding: 0.12, maxZoom: RESTING_MAX_ZOOM, duration: 0 });
+  }
+  const bounds = visibleCanvasBounds(canvas);
+  const size = (node: (typeof framed)[number]) => ({
+    w: node.measured?.width ?? node.width ?? 180,
+    h: node.measured?.height ?? node.height ?? 160,
   });
-  if (architecture.some((node) => node.data.kind === "campaign")) return architecture;
-
-  const joinedBetId = outcome?.data.join?.betId;
-  const bet = nodes.find((node) => node.data.kind === "bet" && node.data.bet?.id === joinedBetId)
-    ?? nodes.find((node) => node.data.kind === "bet");
-  const betId = bet?.data.bet?.id;
-  const work = nodes.find((node) => node.data.kind === "work" && (!betId || node.data.join?.betId === betId));
-  const consequential = [bet, work, outcome]
-    .filter((node): node is AtlasNode => Boolean(node));
-  const consequenceSpine = wall && consequential.length ? [...consequential, wall] : consequential;
-  const framed = consequenceSpine.length ? consequenceSpine : architecture;
-  return [...new Map(framed.map((node) => [node.id, node])).values()];
+  // Origin-symmetric half-extent: the farthest a card's outer edge reaches from the field origin on
+  // each axis. Framing ±this box keeps the origin (hub center) at the stage center.
+  let halfX = 1;
+  let halfY = 1;
+  for (const node of framed) {
+    const { w, h } = size(node);
+    halfX = Math.max(halfX, Math.abs(node.position.x), Math.abs(node.position.x + w));
+    halfY = Math.max(halfY, Math.abs(node.position.y), Math.abs(node.position.y + h));
+  }
+  const availW = Math.max(1, bounds.right - bounds.left);
+  const availH = Math.max(1, bounds.bottom - bounds.top);
+  // Padding fraction so cards never touch the stage edge. Kept tight (the field is hub-centered and
+  // fits by construction) so a sparse field fills the stage at a legible zoom rather than floating in
+  // empty canvas.
+  const pad = 0.94;
+  const zoom = Math.min(RESTING_MAX_ZOOM, ((availW * pad) / (2 * halfX)), ((availH * pad) / (2 * halfY)));
+  // Put the field origin at the centre of the available stage region.
+  const centerX = (bounds.left + bounds.right) / 2;
+  const centerY = (bounds.top + bounds.bottom) / 2;
+  return instance.setViewport({ x: centerX, y: centerY, zoom }, { duration: 0 });
 }
 
-function nodeSize(node: AtlasNode) {
-  if (node.data.kind === "bet") return { width: ORBIT_BET_CARD.width, height: ORBIT_BET_CARD.height };
-  if (node.data.kind === "intent") return { width: 250, height: 164 };
-  if (node.data.kind === "wall") return { width: node.data.active ? 230 : 164, height: 122 };
-  return { width: node.measured?.width ?? node.width ?? 300, height: node.measured?.height ?? node.height ?? 180 };
-}
-
+// The stage cell is the canvas element itself (the ADE grid docks the rail and inspector in
+// their own cells). The only chrome that floats over the stage now is the return band and the
+// atlas controls at the top; the composer is docked in the rail cell, off the stage. Bounds are
+// the stage cell minus a 24px inset, with the top pushed below any floating stage chrome.
 function visibleCanvasBounds(canvas: HTMLElement) {
   const canvasRect = canvas.getBoundingClientRect();
-  const leftBlockers = [
-    document.querySelector<HTMLElement>(".atlas-shelf"),
-    document.querySelector<HTMLElement>(".firm-app-thread"),
-  ].filter((element): element is HTMLElement => Boolean(element));
-  const left = leftBlockers.reduce((edge, element) => {
-    const rect = element.getBoundingClientRect();
-    return Math.max(edge, rect.right - canvasRect.left + 16);
-  }, 24);
-  const composer = document.querySelector<HTMLElement>(".firm-app-composer-layer");
   const band = document.querySelector<HTMLElement>(".atlas-return-band");
   const controls = document.querySelector<HTMLElement>(".atlas-controls");
   const topBlocker = [band, controls].reduce((edge, element) => {
@@ -83,80 +73,55 @@ function visibleCanvasBounds(canvas: HTMLElement) {
     return Math.max(edge, element.getBoundingClientRect().bottom - canvasRect.top + 16);
   }, 24);
   return {
-    left,
+    left: 24,
     right: canvas.clientWidth - 24,
     top: topBlocker,
-    bottom: composer ? composer.getBoundingClientRect().top - canvasRect.top - 16 : canvas.clientHeight - 24,
+    bottom: canvas.clientHeight - 24,
   };
 }
 
-function setOpeningViewport(instance: ReactFlowInstance<AtlasNode>, nodes: AtlasNode[], duration: number) {
-  const canvas = document.querySelector<HTMLElement>(".atlas-canvas");
-  const semantic = openingNodes(nodes);
-  if (!semantic.length) return Promise.resolve(false);
-  const campaign = semantic.find((node) => node.data.kind === "campaign" && node.data.active)
-    ?? semantic.find((node) => node.data.kind === "campaign");
-  const framed = campaign ? semantic.filter((node) => node.position.x <= campaign.position.x) : semantic;
-  const minX = Math.min(...framed.map((node) => node.position.x));
-  const minY = Math.min(...framed.map((node) => node.position.y));
-  const maxY = Math.max(...framed.map((node) => node.position.y + nodeSize(node).height));
-  const right = campaign ? campaign.position.x + 300 : Math.max(...framed.map((node) => node.position.x + nodeSize(node).width));
-  const bounds = visibleCanvasBounds(canvas ?? document.body);
-  const horizontalZoom = (bounds.right - bounds.left) / Math.max(1, right - minX);
-  const verticalZoom = (bounds.bottom - bounds.top) / Math.max(1, maxY - minY);
-  // The opening canvas is allowed to extend beyond the viewport; panning is the interaction.
-  // Never shrink the truth vocabulary into unreadable texture just to fit every landmark at once.
-  const zoom = Math.min(0.78, Math.max(0.68, Math.min(horizontalZoom, verticalZoom)));
-  const fieldWidth = (right - minX) * zoom;
-  const fieldHeight = (maxY - minY) * zoom;
-  const x = bounds.left + Math.max(0, (bounds.right - bounds.left - fieldWidth) / 2) - minX * zoom;
-  const y = bounds.top + Math.max(0, (bounds.bottom - bounds.top - fieldHeight) / 2) - minY * zoom;
-  return instance.setViewport({ x, y, zoom }, { duration });
-}
-
-function keepAtlasChromeClear(instance: ReactFlowInstance<AtlasNode>, nodes: AtlasNode[], duration: number) {
-  const wall = nodes.find((node) => node.id === "atlas:wall");
+// fitFieldToStage owns the framing (zoom + centering). This backstop only translates the viewport so
+// the already-fitted field sits inside the stage bounds (below the floating return band at top) — it
+// never changes zoom, so it cannot shrink cards below the legibility fitView chose. It exists because
+// a fit that lands before nodes are measured (e.g. right after a dive folds back) can leave the field
+// offset; the position clamp pulls it back on-stage on the next settle. No orbital coordinates.
+function keepAtlasChromeClear(instance: ReactFlowInstance<AtlasNode>) {
   const canvas = document.querySelector<HTMLElement>(".atlas-canvas");
   if (!canvas) return Promise.resolve(false);
-  const viewport = instance.getViewport();
-  let x = viewport.x;
-  let y = viewport.y;
-  let zoom = viewport.zoom;
-
-  const bets = nodes.filter((node) => node.data.kind === "bet");
-  const composer = document.querySelector<HTMLElement>(".firm-app-composer-layer");
-  if (bets.length && composer) {
-    const safeBounds = visibleCanvasBounds(canvas);
-    const allowedBottom = safeBounds.bottom;
-    const allowedTop = safeBounds.top;
-    const minY = Math.min(...bets.map((node) => node.position.y));
-    const maxY = Math.max(...bets.map((node) => node.position.y + ORBIT_BET_CARD.height));
-    const fitZoom = (allowedBottom - allowedTop) / Math.max(1, maxY - minY);
-    if (fitZoom < zoom) {
-      const centerScreenX = x + ORBIT_CENTER.x * zoom;
-      // Dense orbital sectors can extend beyond the nominal 880px field once cards are spread
-      // far enough to avoid collisions. Let the default camera settle below 0.6 when that is the
-      // only way to keep every real bet between the return band and composer; clipping the truth
-      // behind chrome is worse than a modestly wider venture view.
-      zoom = Math.max(0.52, fitZoom);
-      x = centerScreenX - ORBIT_CENTER.x * zoom;
-      y = allowedTop - minY * zoom;
-    } else {
-      const renderedTop = y + minY * zoom;
-      const renderedBottom = y + maxY * zoom;
-      if (renderedBottom > allowedBottom) y -= Math.min(renderedBottom - allowedBottom, Math.max(0, renderedTop - allowedTop));
-    }
-  }
-
+  const framed = instance.getNodes().filter((node) => node.data.kind !== "group");
+  if (!framed.length) return Promise.resolve(false);
   const bounds = visibleCanvasBounds(canvas);
-  const intent = nodes.find((node) => node.data.kind === "intent");
-  const minimumX = intent ? bounds.left - intent.position.x * zoom : Number.NEGATIVE_INFINITY;
-  const wallWidth = wall?.data.active ? 230 : 164;
-  const maximumX = wall ? bounds.right - (wall.position.x + wallWidth) * zoom : Number.POSITIVE_INFINITY;
-  x = Math.min(maximumX, Math.max(minimumX, x));
-
+  const viewport = instance.getViewport();
+  const size = (node: (typeof framed)[number]) => ({
+    w: node.measured?.width ?? node.width ?? 180,
+    h: node.measured?.height ?? node.height ?? 160,
+  });
+  const minX = Math.min(...framed.map((node) => node.position.x));
+  const minY = Math.min(...framed.map((node) => node.position.y));
+  const maxX = Math.max(...framed.map((node) => node.position.x + size(node).w));
+  const maxY = Math.max(...framed.map((node) => node.position.y + size(node).h));
+  const fieldW = Math.max(1, maxX - minX);
+  const fieldH = Math.max(1, maxY - minY);
+  const availW = bounds.right - bounds.left;
+  const availH = bounds.bottom - bounds.top;
+  // If the field overruns the stage region at the fitted zoom, ease the zoom down to contain it so
+  // the whole collision-free field is visible inside the stage cell (no card bleeds past the edge or
+  // hides under the return band). fitView already chose the tightest legible zoom for the common case;
+  // this only tightens further when a card's real measured size makes the field larger than estimated.
+  // Ease the zoom down to contain the field inside the stage cell so the whole collision-free field
+  // is visible (no card bleeds past the edge or hides under the return band). fitView already chose
+  // the tightest legible zoom for the common case; this tightens further when a card's real measured
+  // size makes the field larger than estimated.
+  const containZoom = Math.min(availW / fieldW, availH / fieldH);
+  let zoom = viewport.zoom;
+  if (containZoom < zoom) zoom = Math.max(0.18, containZoom);
+  // Clamp (or, if still wider than the region, center) so the field sits inside the stage region.
+  const clampOrCenter = (lo: number, hi: number, value: number) =>
+    lo <= hi ? Math.min(hi, Math.max(lo, value)) : (lo + hi) / 2;
+  const x = clampOrCenter(bounds.right - maxX * zoom, bounds.left - minX * zoom, viewport.x);
+  const y = clampOrCenter(bounds.bottom - maxY * zoom, bounds.top - minY * zoom, viewport.y);
   if (x === viewport.x && y === viewport.y && zoom === viewport.zoom) return Promise.resolve(false);
-  return instance.setViewport({ x, y, zoom }, { duration });
+  return instance.setViewport({ x, y, zoom }, { duration: 0 });
 }
 
 export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
@@ -172,7 +137,6 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
   const [targetId, setTargetId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
-  const [storedViewport] = useState<Viewport | null>(() => readCamera(receiptKey));
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
@@ -202,19 +166,28 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
       x: screenCenterX - (anchor.position.x + width / 2) * zoom,
       y: screenCenterY - (anchor.position.y + height / 2) * zoom,
       zoom,
-    }, { duration: 0 }).then(() => keepAtlasChromeClear(instance, nodesRef.current, 0));
+    }, { duration: 0 }).then(() => keepAtlasChromeClear(instance));
     return true;
   }, []);
 
+  // Whenever the node set settles and no selection is being framed, re-fit the engine-placed field
+  // to the stage cell. This is the authoritative framing guarantee: it holds regardless of mount
+  // timing (e.g. after a dive folds back and the atlas re-renders), so the field is never left
+  // off-stage. When a selection is active, we frame that target instead.
   useEffect(() => {
     const instance = instanceRef.current;
     if (!instance || !readyRef.current) return;
+    // Double-rAF so React Flow has measured the freshly-rendered nodes before we fit — a fit against
+    // unmeasured nodes (right after a dive folds back and the atlas re-renders) frames the wrong box.
+    let inner = 0;
     const frame = window.requestAnimationFrame(() => {
-      const target = targetIdRef.current;
-      if (target) frameTarget(target);
-      else void keepAtlasChromeClear(instance, nodes, 0);
+      inner = window.requestAnimationFrame(() => {
+        const target = targetIdRef.current;
+        if (target) frameTarget(target);
+        else void Promise.resolve(fitFieldToStage(instance)).then(() => keepAtlasChromeClear(instance));
+      });
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => { window.cancelAnimationFrame(frame); window.cancelAnimationFrame(inner); };
   }, [frameTarget, nodes]);
 
   useEffect(() => {
@@ -222,22 +195,25 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     const canvas = document.querySelector<HTMLElement>(".atlas-canvas");
     if (!instance || !canvas || typeof ResizeObserver === "undefined") return;
     let frame = 0;
+    // Re-fit the atlas to its new stage cell whenever the rail collapses, the inspector opens,
+    // or the window resizes (contract §2.1: re-fit within 300ms of any region toggle). The stage
+    // cell is the canvas element; fitView reframes the engine-placed field into it.
     const reframe = () => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
         if (!readyRef.current) return;
         const target = targetIdRef.current;
         if (target) frameTarget(target);
-        else void setOpeningViewport(instance, nodesRef.current, 0).then(() => keepAtlasChromeClear(instance, nodesRef.current, 0));
+        else void Promise.resolve(fitFieldToStage(instance))
+          .then(() => keepAtlasChromeClear(instance));
       });
     };
     const observer = new ResizeObserver(reframe);
     [
       canvas,
-      document.querySelector<HTMLElement>(".atlas-shelf"),
-      document.querySelector<HTMLElement>(".firm-app-thread"),
-      document.querySelector<HTMLElement>(".firm-app-composer-layer"),
-      document.querySelector<HTMLElement>(".atlas-controls"),
+      document.querySelector<HTMLElement>(".firm-app-body"),
+      document.querySelector<HTMLElement>(".firm-app-rail"),
+      document.querySelector<HTMLElement>(".firm-app-inspector"),
     ].forEach((element) => { if (element) observer.observe(element); });
     window.addEventListener("resize", reframe);
     return () => {
@@ -265,13 +241,26 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
   const onInit = useCallback((instance: ReactFlowInstance<AtlasNode>) => {
     instanceRef.current = instance;
     readyRef.current = false;
+    // A fresh mount (first open, or the atlas re-rendering after a dive folds back) starts from the
+    // fitted overview — clear any stale reveal/focus target so the nodes-settle effect fits the whole
+    // field rather than re-centering on a selection captured before the remount.
+    if (!requestedTargetIdRef.current) {
+      targetIdRef.current = null;
+      focusedIdRef.current = null;
+      previousViewport.current = null;
+      previousFocusViewport.current = null;
+    }
     window.requestAnimationFrame(() => {
-      const opening = storedViewport
-        ? instance.setViewport(storedViewport, { duration: 0 })
-        : setOpeningViewport(instance, nodes, 0);
-      void opening
+      // Placement is engine-owned, deterministic, and collision-free, so the opening camera always
+      // fits the whole settled field to the live stage cell. We deliberately do NOT restore a
+      // persisted viewport on mount: a frame captured mid-interaction (or before a dive round-trip
+      // remounts the atlas) is stale against the current layout and would leave the field off-stage.
+      // Session pan/zoom still persists via onMoveEnd for in-session continuity; cross-mount framing
+      // is owned by fitView. (A durable "return to my frame" is a later camera-persistence concern.)
+      const opening = fitFieldToStage(instance);
+      void Promise.resolve(opening)
         .then(() => new Promise<void>((resolve) => { window.requestAnimationFrame(() => resolve()); }))
-        .then(() => keepAtlasChromeClear(instance, nodes, 0))
+        .then(() => keepAtlasChromeClear(instance))
         .then(() => {
         readyRef.current = true;
         setCameraReady(true);
@@ -279,7 +268,7 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
         if (requestedTargetIdRef.current) reveal(requestedTargetIdRef.current);
         });
     });
-  }, [nodes, reveal, storedViewport]);
+  }, [reveal]);
 
   const focus = useCallback((id: string, related: Set<string>) => {
     const instance = instanceRef.current;
@@ -325,8 +314,9 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     if (!instance) return;
     const previous = previousViewport.current;
     previousViewport.current = null;
+    // Broadening to the overview re-fits the whole engine-placed field to the stage cell.
     if (previous) void instance.setViewport(previous, { duration: 0 });
-    else void setOpeningViewport(instance, nodesRef.current, 0);
+    else void fitFieldToStage(instance);
   }, []);
 
   const syncSelection = useCallback((id: string | null) => {
@@ -347,9 +337,10 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     setFocusedId(null);
     previousViewport.current = null;
     previousFocusViewport.current = null;
-    // "Whole venture" must frame the entire venture — including the campaign's releases, the wall,
-    // and returned reality — not only the architecture spine. Fit every node, not openingNodes().
-    void instanceRef.current?.fitView({ padding: 0.14, maxZoom: 0.72, duration: 0 });
+    // "Whole venture" frames the entire engine-placed field (efforts, wall, returned reality) into
+    // the stage cell — excluding the decorative background field, which would otherwise dominate the
+    // fit and shove the real cards off to one side.
+    if (instanceRef.current) void fitFieldToStage(instanceRef.current);
   }, []);
 
   return {

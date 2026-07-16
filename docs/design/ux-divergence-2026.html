@@ -866,10 +866,20 @@
         <h3>Semantic altitude</h3>
       </div>
       <p class="role">The signature. Depth by zoom, not by clutter.</p>
+      <div class="note warn">
+        <span class="k">Overturned — read this first</span>
+        A later machinery check (2026-07-15) <strong>cut named Horizon / Working / Focus modes and any
+        altitude switcher</strong> (see §7b and the build contract §3). What ships is
+        <strong>zoom-responsive card rendering only</strong>: the same graph re-details continuously with
+        React Flow's zoom value — no snap altitudes, no mode selector, no "you are at Horizon" chrome, and
+        no per-viewport altitude default. The three named tiers below survive only as an intuition for how
+        much a card reveals at a given zoom, not as navigable states. Selection-focus (expand one effort,
+        recede the rest) and staged materialization are unaffected.
+      </div>
       <p>
-        Once the atlas places itself on the stage, zoom becomes meaning. The same graph renders at three
-        altitudes, chosen by React Flow's zoom-level selectors. Depth is a feature — the founder chooses
-        how close they stand.
+        Once the atlas places itself on the stage, zoom becomes meaning. The same graph renders at more or
+        less detail as the founder zooms, on React Flow's continuous zoom value. Depth is a feature — the
+        founder chooses how close they stand.
       </p>
       <div class="altitudes">
         <div class="alt">
@@ -925,8 +935,8 @@
         </div>
       </div>
       <ul>
-        <li><strong>Three fixed altitudes with smooth travel (decided).</strong> The founder chose the ADE-conventional model — predictable snap altitudes rather than continuous zoom — deferring to convention for a surface used every day. The View Transitions API (or Motion's shared-layout) animates the camera travel between them, so moving altitude feels like walking toward the venture, not swapping screens.</li>
-        <li><strong>Smaller viewports start one altitude higher.</strong> A 1280px screen opens at Horizon where a 4K screen opens at Working — resolution adaptation falls out of the altitude system for free, reinforcing the stage-aware fit in Move 2.</li>
+        <li><strong>Zoom-responsive rendering, continuous — not fixed altitudes (corrected).</strong> The interview first chose ADE-conventional snap altitudes; a machinery check overturned that (§7b). Cards re-detail continuously with React Flow's zoom value — title/glyph at low zoom, body and footer as zoom rises — with no snap tiers, no switcher, and no altitude chrome. There is no camera-travel-between-modes to animate because there are no modes.</li>
+        <li><strong>No per-viewport altitude default.</strong> The earlier "a 1280px screen opens at Horizon, a 4K screen at Working" rule is cut with the altitude modes. Resolution adaptation comes entirely from the stage-aware fit in Move 2 — the atlas composes itself for whatever stage cell it gets — not from an altitude system.</li>
         <li><strong>Chat is the handle, and materialization is a staged unfolding.</strong> Directing from the composer draws the theory in front of the founder over ~2–3 seconds — nodes born in sequence while the conversation narrates what's appearing (founder-decided), not a single instant snap. The signature moment made kinetic.</li>
       </ul>
       <div class="note">
@@ -1217,14 +1227,14 @@
       </div>
     </div>
 
-    <!-- (b) altitude — DECIDED -->
+    <!-- (b) altitude — OVERTURNED by machinery check; see contract §3 -->
     <div class="optspace">
-      <div class="opthead"><h4>b · Altitude model</h4><span class="flag decided">decided · three fixed, smooth travel</span></div>
-      <p class="q">The shape depth-by-zoom takes.</p>
+      <div class="opthead"><h4>b · Altitude model</h4><span class="flag">overturned · zoom-responsive rendering only</span></div>
+      <p class="q">The shape depth-by-zoom takes. <strong>Overturned by a later machinery check (2026-07-15):</strong> named Horizon / Working / Focus <em>modes</em> and any altitude switcher are <span class="cut">cut</span>. What ships is zoom-responsive card rendering only — cards simplify as the canvas zooms out and re-detail as it zooms in, on React Flow's continuous zoom value; there is no mode, no switcher, and no per-altitude viewport default. Selection-focus (expand one effort, recede the rest) survives as selection behavior, not a mode. This is the authoritative state — the build contract's §3 correction governs, and the "three fixed altitudes" prose in Move 3 and Phase 3 below is superseded by it.</p>
       <div class="opts">
-        <div class="opt chosen">
-          <span class="name">Three fixed altitudes ✓</span>
-          <p>ADE-conventional: predictable snap altitudes (Horizon / Working / Focus) with smooth camera travel between them. The founder deferred to convention here — familiarity beats novelty for a surface used daily.</p>
+        <div class="opt spent">
+          <span class="name">Three fixed altitudes</span>
+          <p>ADE-conventional: predictable snap altitudes (Horizon / Working / Focus) with smooth camera travel. First chosen by deferring to convention; <span class="cut">cut by machinery check</span> — modes and a switcher were more machinery than the surface needs. Zoom-responsive rendering delivers the depth without them.</p>
         </div>
         <div class="opt spent">
           <span class="name">Continuous zoom LOD</span>
@@ -1330,7 +1340,7 @@
 
           <tr class="grouphead"><td colspan="5"><span>ADE frame</span></td></tr>
           <tr><td>ADE layout weighting</td><td>rail-heavy / stage-maximal / console-forward</td><td><span class="now">Stage-maximal — rail to icons, canvas ~85%</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
-          <tr><td>Altitude model</td><td>three fixed / continuous LOD / focus-only</td><td><span class="now">Three fixed, smooth travel (deferred to convention)</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr class="overturned"><td>Altitude model</td><td>three fixed / continuous LOD / focus-only</td><td><span class="now">Three fixed, smooth travel (deferred to convention)</span> <span class="cut">cut by machinery check</span> — zoom-responsive card rendering only; no named modes, no switcher (build contract §3)</td><td>2026-07-15</td><td>Machinery check</td></tr>
           <tr><td>Activity surface</td><td>separate dock / conversation-as-console</td><td><span class="now">Killed the dock — the conversation is the console</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
           <tr class="overturned"><td>Left rail contents</td><td>firm nav / one main dialogue + effort threads / one conversation</td><td><span class="now">One main dialogue + branching effort threads</span> <span class="cut">superseded by density correction</span> — one conversation until volume hurts</td><td>2026-07-15</td><td>Density correction</td></tr>
           <tr><td>Visual temperature</td><td>warm paper / darker instrument / adaptive</td><td><span class="now">Warm paper stays — no dark chrome</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
@@ -1404,6 +1414,15 @@
   <section id="build">
     <p class="eyebrow">08 — Build plan</p>
     <h2>Phased, each phase a shippable slice</h2>
+    <div class="note warn">
+      <span class="k">Phase numbering — the contract governs</span>
+      This section's phase grouping predates the engineering build contract and its numbers do
+      <strong>not</strong> map one-to-one to it. <code class="inline">ade-build-contract.md</code> §6 is the
+      authoritative phase list a build fleet follows (Night 1: P1 shell+layout · P2 language+components ·
+      P3 zoom-responsive rendering · P4 routing + review-dialogue + trust-grants; Night 2: P5 streaming+steering ·
+      P6 evidence · P7 first-run · P8 one-crew · P9 Electron). Read the phases below for intent; take
+      sequencing, scope, and acceptance from the contract.
+    </div>
     <div class="note">
       <span class="k">Who builds this — founder-stated 2026-07-15</span>
       The ADE shell and layout engine are built by <strong>Opus agents</strong>, not Codex — a
@@ -1443,11 +1462,11 @@
     <div class="phase">
       <div class="pnum">Phase 3</div>
       <div class="pbody">
-        <h4>Semantic altitude</h4>
-        <p>Render Horizon / Working / Focus from the one graph via zoom-level selectors — the decided three-fixed model with smooth camera travel between snap altitudes. Dim-and-shrink the unfocused world at Focus; start smaller viewports one altitude higher; make composer direction materialize as a staged unfolding (~2–3s, nodes born in sequence while the conversation narrates).</p>
+        <h4>Zoom-responsive rendering</h4>
+        <p><em>(Was "Semantic altitude"; named modes and the switcher were cut by a machinery check — §7b, build contract §3. This is the authoritative Phase 3 for a build fleet; the build contract's phase list governs sequencing.)</em> Render card detail continuously from the one graph via React Flow's zoom value — title/glyph at low zoom, body and footer as zoom rises — with no named altitudes, no switcher, and no per-viewport altitude default. Selection-focus dims and shrinks the unfocused world when an effort is selected; composer direction materializes as a staged unfolding (~2–3s, nodes born in sequence while the conversation narrates).</p>
         <div class="accept">
           <b>Done when</b>
-          Zooming out reaches a legible whole-firm view with no card bodies; zooming into an effort expands it while the rest recedes without disappearing; a 1280px screen opens at Horizon and a 4K screen at Working; typing a direction unfolds the theory node-by-node in front of the founder.
+          Zooming out simplifies cards to title/glyph with no mode chrome anywhere; zooming in re-details them; selecting an effort expands it while the rest recedes without disappearing; typing a direction unfolds the theory node-by-node in front of the founder.
         </div>
       </div>
     </div>
@@ -1495,9 +1514,9 @@
     </div>
 
     <div class="risk">
-      <h4>Altitude disorientation</h4>
-      <p>Zoom-as-meaning is powerful and can also make a founder lose their place — "where am I, and how do I get back?" The decided model (three fixed altitudes with smooth camera travel) is the more predictable of the options for exactly this reason, and depth-of-field keeps the map visible at Focus. But the usual wayfinding backstop, the minimap, is deliberately deferred until the atlas is large enough to need it — so early on, disorientation has fewer safety nets. Whether three altitudes read as one continuous world or three disorienting screens is a real-use question, and it interacts directly with the "I can see everything" success bar.</p>
-      <p class="mit"><b>Discriminating test:</b> a founder zooms out, then back to the work they were on, without reaching for a way to navigate. If they can't, either the altitude travel is too abrupt or the minimap's deferral was premature.</p>
+      <h4>Zoom disorientation</h4>
+      <p>Zoom-as-meaning is powerful and can also make a founder lose their place — "where am I, and how do I get back?" With named altitude modes and the switcher cut (§7b), the surface is continuous zoom-responsive rendering, which avoids the "three disorienting screens" failure but keeps its own version of the risk: as detail continuously appears and recedes, the founder can still lose their bearings. Depth-of-field on selection keeps the map visible when focused. But the usual wayfinding backstop, the minimap, is deliberately deferred until the atlas is large enough to need it — so early on, disorientation has fewer safety nets. Whether continuous zoom reads as one legible world is a real-use question, and it interacts directly with the "I can see everything" success bar.</p>
+      <p class="mit"><b>Discriminating test:</b> a founder zooms out, then back to the work they were on, without reaching for a way to navigate. If they can't, either the zoom response is too abrupt or the minimap's deferral was premature.</p>
     </div>
 
     <div class="risk">

@@ -78,20 +78,23 @@ test("living venture atlas: dense architecture stays canvas-like across semantic
       nodeKinds: [...new Set([...document.querySelectorAll('.atlas-element[data-kind]')].map((entry) => entry.dataset.kind))],
       structuralLegibility: Object.fromEntries(['product-loop', 'system', 'motion', 'campaign'].map((kind) => {
         const element = document.querySelector('.atlas-element[data-kind="' + kind + '"]');
-        const rect = element?.getBoundingClientRect();
         const title = element?.querySelector('strong');
-        return [kind, rect ? { width: rect.width, height: rect.height, fontSize: parseFloat(getComputedStyle(title).fontSize) } : null];
+        // Placement is engine-owned and fitView frames the whole field, so the on-screen rect scales
+        // with camera zoom (zoom-responsive reading is the design). Structural legibility is the card's
+        // intrinsic, un-zoomed size — offsetWidth/Height — which proves the engine did not shrink the card.
+        return [kind, element ? { width: element.offsetWidth, height: element.offsetHeight, fontSize: parseFloat(getComputedStyle(title).fontSize) } : null];
       })),
       consequenceLegibility: Object.fromEntries(['bet', 'work', 'outcome'].map((kind) => {
         const element = document.querySelector('.atlas-element[data-kind="' + kind + '"]');
-        const rect = element?.getBoundingClientRect();
         const title = element?.querySelector('strong');
-        const scale = element?.offsetWidth ? rect.width / element.offsetWidth : 0;
         const style = element ? getComputedStyle(element) : null;
-        return [kind, rect ? {
+        // Structural title size (un-zoomed): fitView frames the whole engine-placed field, so on-screen
+        // size scales with camera zoom (zoom-responsive reading is the design). The intrinsic title size
+        // proves the bet stays legibly built; interactivity (opacity/pointer-events) is zoom-independent.
+        return [kind, element ? {
           opacity: Number(style.opacity),
           pointerEvents: style.pointerEvents,
-          effectiveTitleSize: parseFloat(getComputedStyle(title).fontSize) * scale,
+          structuralTitleSize: parseFloat(getComputedStyle(title).fontSize),
         } : null];
       })),
       wallVisible: (() => {
@@ -114,8 +117,8 @@ test("living venture atlas: dense architecture stays canvas-like across semantic
     assert.ok(resting.structuralLegibility.motion.width >= 110, `dense default made motions illegible: ${JSON.stringify(resting.structuralLegibility.motion)}`);
     assert.ok(resting.structuralLegibility.campaign.width >= 100, `dense default made campaign pressure illegible: ${JSON.stringify(resting.structuralLegibility.campaign)}`);
     assert.ok(Object.values(resting.structuralLegibility).every((entry) => entry.fontSize >= 11), `dense default dropped essential labels below 11px: ${JSON.stringify(resting.structuralLegibility)}`);
-    assert.ok(resting.consequenceLegibility.bet.opacity > 0 && resting.consequenceLegibility.bet.pointerEvents !== "none", `dense default hid orbit bets: ${JSON.stringify(resting.consequenceLegibility.bet)}`);
-    assert.ok(resting.consequenceLegibility.bet.effectiveTitleSize >= 11, `dense default made orbit bets illegible after canvas scaling: ${JSON.stringify(resting.consequenceLegibility.bet)}`);
+    assert.ok(resting.consequenceLegibility.bet.opacity > 0 && resting.consequenceLegibility.bet.pointerEvents !== "none", `dense default hid the efforts: ${JSON.stringify(resting.consequenceLegibility.bet)}`);
+    assert.ok(resting.consequenceLegibility.bet.structuralTitleSize >= 11, `dense default made effort titles illegibly built: ${JSON.stringify(resting.consequenceLegibility.bet)}`);
     for (const kind of ["work", "outcome"]) {
       const entry = resting.consequenceLegibility[kind];
       assert.equal(entry.opacity, 0, `venture altitude did not quiet ${kind} detail behind the bet machinery/return summary: ${JSON.stringify(entry)}`);

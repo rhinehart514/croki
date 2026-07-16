@@ -7,9 +7,14 @@ import type {
   FirmOutcome,
   FirmStagedArtifact,
 } from "@/types";
-import { generateAtlasLayout } from "./atlasLayout";
 import { atlasTeammates } from "./atlasTeammates";
 import type { AtlasEdge, AtlasNode } from "./atlasTypes";
+
+// Placeholder position for every placeable semantic card. Placement is engine-owned: the layout
+// engine (atlasLayoutEngine) computes the collision-free position for architecture/work/outcome
+// cards downstream and overwrites this. The projection decides *what* exists; the engine decides
+// *where*. Group frames are recomputed by the engine adapter from their members' settled positions.
+const PLACEHOLDER = { x: 0, y: 0 };
 
 export function atlasInertData(kind: AtlasNode["data"]["kind"], title: string) {
   return {
@@ -99,22 +104,29 @@ function stagedWork(bet: FirmBet | null, workRef: string) {
   return bet?.staged.find((work) => work.id === workRef) ?? null;
 }
 
+// Which campaign/motion reads as "active" (drives the live accent on the card). Pure classification,
+// no positions — it survived the retirement of the column layout that used to carry it.
+function activeElementIds(projection: FirmArchitectureProjection): { campaignId: string | null; motionId: string | null } {
+  const campaign = projection.elements.find((element) => element.role === "campaign" && !element.bounds?.endsAt)
+    ?? projection.elements.find((element) => element.role === "campaign")
+    ?? null;
+  const motionId = campaign?.primaryMotionId ?? campaign?.motionIds?.[0] ?? null;
+  return { campaignId: campaign?.id ?? null, motionId };
+}
+
 export function projectAtlasSemanticLayer(projection: FirmArchitectureProjection | null, lens: FirmLens) {
   const nodes: AtlasNode[] = [];
   const edges: AtlasEdge[] = [];
-  const layout = projection?.elements.length ? generateAtlasLayout(projection) : null;
+  const active = projection?.elements.length ? activeElementIds(projection) : null;
 
-  if (projection && layout) {
-    projection.groups.forEach((group, index) => {
-      const memberPositions = group.memberRefs.map((ref) => layout.positions.get(architectureRef(ref) ?? "")).filter(Boolean) as Array<{ x: number; y: number }>;
-      const minX = memberPositions.length ? Math.min(...memberPositions.map((position) => position.x)) - 34 : 320;
-      const minY = memberPositions.length ? Math.min(...memberPositions.map((position) => position.y)) - 42 : 80 + index * 220;
-      const maxX = memberPositions.length ? Math.max(...memberPositions.map((position) => position.x)) + 334 : minX + 420;
-      const maxY = memberPositions.length ? Math.max(...memberPositions.map((position) => position.y)) + 230 : minY + 180;
+  if (projection && active) {
+    projection.groups.forEach((group) => {
+      // Group frames are decorative background; the engine adapter recomputes their bounds from the
+      // settled positions of their members. Placeholder frame here — overwritten downstream.
       nodes.push({
-        id: `group:${group.id}`, type: "architectureGroup", position: { x: minX, y: minY }, zIndex: -2,
-        style: { width: maxX - minX, height: maxY - minY }, selectable: true, draggable: false,
-        data: { ...atlasInertData("group", group.name), statement: group.statement ?? null },
+        id: `group:${group.id}`, type: "architectureGroup", position: PLACEHOLDER, zIndex: -2,
+        style: { width: 420, height: 180 }, selectable: true, draggable: false,
+        data: { ...atlasInertData("group", group.name), statement: group.statement ?? null, memberRefs: group.memberRefs.map((ref) => architectureRef(ref)).filter((ref): ref is string => Boolean(ref)) },
       });
     });
 
@@ -122,16 +134,16 @@ export function projectAtlasSemanticLayer(projection: FirmArchitectureProjection
     for (const element of projection.elements) {
       const id = `architecture:${element.id}`;
       const pressure = pressureFor(projection, element.id);
-      const active = element.id === layout.activeCampaignId || element.id === layout.activeMotionId;
+      const isActive = element.id === active.campaignId || element.id === active.motionId;
       const atWall = pressure.some((entry) => entry.reason === "held-release");
       const restingOverflow = element.role === "concept" && conceptIndex++ >= 3;
       nodes.push({
-        id, type: "architectureElement", position: layout.positions.get(element.id) ?? { x: 400, y: 120 + nodes.length * 150 },
+        id, type: "architectureElement", position: PLACEHOLDER,
         selectable: true, draggable: false,
         data: {
           ...atlasInertData(element.role, element.name), element, statement: elementStatement(element), pressure,
-          active, atWall, restingOverflow, teammates: atlasTeammates(projection, lens, id),
-          continuation: element.role === "campaign" && active ? "Start here · Follow to the release" : null,
+          active: isActive, atWall, restingOverflow, teammates: atlasTeammates(projection, lens, id),
+          continuation: element.role === "campaign" && isActive ? "Start here · Follow to the release" : null,
         },
       });
     }
@@ -164,7 +176,7 @@ export function projectAtlasSemanticLayer(projection: FirmArchitectureProjection
     const atWall = Boolean(wallJoin && (lens.wallItems ?? []).some((item) => item.id === wallJoin.wallItemId || item.workRef === workRef));
     nodes.push({
       id: `work:${workRef}`, type: "architectureElement",
-      position: layout?.workPosition(join.campaignId ?? null, index) ?? { x: 1120, y: 120 + index * 160 }, selectable: true, draggable: false,
+      position: PLACEHOLDER, selectable: true, draggable: false,
       data: {
         ...atlasInertData("work", workTitle(work, join, index)), join, statement: text(work?.content ?? work), atWall,
         teammates: teammateNames(lens, [...(work?.ownerRefs ?? []), ...(work?.contributorRefs ?? []), bet?.teammateRef]),
@@ -175,10 +187,10 @@ export function projectAtlasSemanticLayer(projection: FirmArchitectureProjection
     if (atWall) edges.push(edge(`held:${workRef}`, `work:${workRef}`, "atlas:wall", "held for you", "atlas-edge-at-wall"));
   });
 
-  allOutcomes(projection, lens).forEach(([outcomeId, { join, outcome }], index) => {
+  allOutcomes(projection, lens).forEach(([outcomeId, { join, outcome }]) => {
     nodes.push({
       id: `outcome:${outcomeId}`, type: "architectureElement",
-      position: layout?.outcomePosition(join.campaignIds?.[0] ?? null, index) ?? { x: 1420, y: 160 + index * 180 }, selectable: true, draggable: false,
+      position: PLACEHOLDER, selectable: true, draggable: false,
       data: {
         ...atlasInertData("outcome", outcome?.body?.trim() || outcome?.outcomeKind?.trim() || join.title?.trim() || "Returned evidence"),
         outcome: outcome ?? undefined, join, statement: outcome?.from ? `From ${outcome.from}${outcome.channel ? ` · ${outcome.channel}` : ""}` : null,

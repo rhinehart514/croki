@@ -291,7 +291,7 @@ describe("FirmApp", () => {
     }));
   });
 
-  it("lets the founder resize, close, and restore conversation independently of the canvas", async () => {
+  it("docks the conversation rail as a grid cell and collapses it to an icon strip", async () => {
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
@@ -299,20 +299,22 @@ describe("FirmApp", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
     await screen.findByTestId("firm-lens-stub");
 
-    const separator = screen.getByRole("separator", { name: "Resize conversation" });
-    expect(separator).toHaveAttribute("aria-valuenow", "440");
-    fireEvent.keyDown(separator, { key: "ArrowRight" });
-    expect(separator).toHaveAttribute("aria-valuenow", "464");
+    // The rail is a real docked grid cell, never a floating panel or a resizable separator.
+    expect(screen.queryByRole("separator", { name: "Resize conversation" })).toBeNull();
+    expect(screen.getByRole("complementary", { name: /firm conversation/i })).toBeVisible();
 
+    // Collapse is a layout track change to an icon strip — the stage genuinely widens.
     fireEvent.click(screen.getByRole("button", { name: "Hide conversation" }));
     expect(screen.queryByRole("complementary", { name: /firm conversation/i })).toBeNull();
+    expect(screen.getByRole("complementary", { name: /conversation, collapsed/i })).toBeTruthy();
     expect(screen.getByTestId("firm-lens-stub")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open conversation" }));
+    // Restore from the collapsed strip.
+    fireEvent.click(screen.getAllByRole("button", { name: "Open conversation" })[0]);
     expect(screen.getByRole("complementary", { name: /firm conversation/i })).toBeVisible();
   });
 
-  it("keeps exact direction mounted when the conversation transcript is collapsed", async () => {
+  it("opens the inspector cell on canvas selection and closes it to reclaim the stage", async () => {
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
@@ -320,14 +322,16 @@ describe("FirmApp", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
     await screen.findByTestId("firm-lens-stub");
 
-    fireEvent.click(screen.getByRole("button", { name: "Select exact work" }));
-    expect(screen.getByRole("region", { name: /direction composer: direct exact work/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Hide conversation" }));
+    // Closed by default — the stage has full width.
+    expect(screen.queryByRole("complementary", { name: "Selection inspector" })).toBeNull();
 
-    expect(screen.queryByRole("complementary", { name: /firm conversation/i })).toBeNull();
-    expect(screen.getByRole("complementary", { name: /exact work direction/i })).toBeTruthy();
-    expect(screen.getByRole("region", { name: /direction composer: direct exact work/i })).toBeTruthy();
-    expect(screen.queryByRole("separator", { name: "Resize conversation" })).toBeNull();
+    // Selecting exact work opens the one swapping inspector cell.
+    fireEvent.click(screen.getByRole("button", { name: "Select exact work" }));
+    expect(screen.getByRole("complementary", { name: "Selection inspector" })).toBeTruthy();
+
+    // Closing the inspector clears the selection and gives the stage full width again.
+    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    expect(screen.queryByRole("complementary", { name: "Selection inspector" })).toBeNull();
   });
 
   it("keeps always-on work and real crew connections inside venture settings", async () => {

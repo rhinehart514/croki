@@ -1,28 +1,27 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useEdgesState, useNodesState, type OnNodeDrag } from "@xyflow/react";
+import { useEdgesState, useNodesState } from "@xyflow/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Focus, ListTree, RotateCcw, Sparkles, X } from "lucide-react";
 import { decideWallItem, startArchitectureCampaign, type ArchitectureMutationOperation, type WallDecision, type WallQueueItemView } from "@/api";
 import { Button } from "@/components/ui/button";
-import { targetArchitecture, targetBet, targetTeammates, targetTheory, targetWork, type CanvasSelection } from "@/components/firm/directionTarget";
+import { targetArchitecture, targetBet, targetTheory, targetWork, type CanvasSelection } from "@/components/firm/directionTarget";
 import { approveWallProductChange, inspectWallProductChange } from "@/lib/productChangeWall";
 import type { FirmArchitectureElement, FirmArchitectureProjection, FirmLens } from "@/types";
 import { ArchitectureMutationPreview, type AtlasMutationDraft } from "./ArchitectureMutationPreview";
 import { AtlasCanvas } from "./AtlasCanvas";
 import { AtlasLegend, AtlasLegendToggle } from "./AtlasLegend";
-import { AtlasShelf } from "./AtlasShelf";
 import { AtlasWallPanel } from "./AtlasWallPanel";
 import { useCanvasCapabilities } from "@/components/lens/canvasCapabilities";
 import { configurationForLens } from "@/lib/firmConfiguration";
 import { AtlasMachinery } from "./AtlasMachinery";
 import { AtlasOutline } from "./AtlasOutline";
 import { projectAtlas } from "./AtlasProjection";
+import { layoutAtlasNodes } from "@/lib/atlasLayoutEngine";
 import { AtlasReturnBand } from "./AtlasReturnBand";
 import { DiveSurface } from "./dive";
 import { ArchitectureProposalSurface, type ProposalMotionAdjustment } from "./propose";
 import { useArchitectureMutation } from "./useArchitectureMutation";
 import { useAtlasCamera } from "./useAtlasCamera";
-import { useAtlasPlacement } from "./useAtlasPlacement";
 import { useAtlasProjection } from "./useAtlasProjection";
 import { useAtlasRevisionReceipt } from "./useAtlasRevisionReceipt";
 import { useDiveFocus } from "./useDiveFocus";
@@ -35,7 +34,7 @@ import "@/styles/venture-atlas.css";
 export function VentureAtlas({
   ventureId, lens, selection, wallOpen, wallQueue, stale, readOnly,
   showReturnBand = true, repository = "Product repository", capabilityRefreshKey = 0,
-  onSelectionChange, onWallOpenChange, onLensChange, onArchitectureChange, onRefresh, onOpenSettings,
+  onSelectionChange, onWallOpenChange, onArchitectureChange, onRefresh,
 }: {
   ventureId: string;
   lens: FirmLens;
@@ -58,7 +57,15 @@ export function VentureAtlas({
   const reducedMotion = useReducedMotion();
   const { projection, error, loading, reload } = useAtlasProjection(ventureId);
   const capabilities = useCanvasCapabilities(repository, capabilityRefreshKey);
-  const scene = useMemo(() => projectAtlas(projection, lens, { capabilities }), [capabilities, lens, projection]);
+  // The projection decides *what* nodes exist; the layout engine decides *where*. Engine-owned
+  // placement makes cards physically non-overlapping (collision-free by construction) and the
+  // founder never drags. The engine leaves field/background nodes (orbit ring, group frames)
+  // where the projection put them; every placed card is re-homed hub-centered.
+  const scene = useMemo(() => {
+    const projected = projectAtlas(projection, lens, { capabilities });
+    const { nodes: placed } = layoutAtlasNodes(projected.nodes);
+    return { ...projected, nodes: placed };
+  }, [capabilities, lens, projection]);
   const markAtlasArrivals = useAtlasArrivalTracker(ventureId, Boolean(projection));
   const [nodes, setNodes, onNodesChange] = useNodesState<AtlasNode>(scene.nodes);
   const [edges, setEdges] = useEdgesState(scene.edges);
@@ -70,7 +77,6 @@ export function VentureAtlas({
   const [campaignBusy, setCampaignBusy] = useState(false);
   const [campaignError, setCampaignError] = useState<string | null>(null);
   const [connectionSourceId, setConnectionSourceId] = useState<string | null>(null);
-  const [pendingRevealId, setPendingRevealId] = useState<string | null>(null);
   const [diveBetId, setDiveBetId] = useState<string | null>(null);
   const { enterDive, returnFromDive } = useDiveFocus(diveBetId, setDiveBetId);
   const selectedNodeId = useMemo(() => {
@@ -91,21 +97,11 @@ export function VentureAtlas({
     onMoveEnd: handleCameraMoveEnd,
     syncSelection: syncCameraSelection,
     unfocus,
-    reveal: revealCamera,
   } = useAtlasCamera(nodes, ventureId);
   const mutation = useArchitectureMutation({ ventureId, revision: Math.max(projection?.revision ?? 0, revisionReceipt.value?.receipt.revision ?? 0) });
-  const placement = useAtlasPlacement({ ventureId, lens, readOnly, onLensChange, onRefresh });
-  const shelfConfiguration = useMemo(() => configurationForLens(lens), [lens]);
-  const placeItemAt = useCallback((key: string, point: { x: number; y: number }) => {
-    if (key.startsWith("crew:")) onSelectionChange(targetTeammates([key.slice("crew:".length)]));
-    void placement.commitPosition(key, point).then(() => setPendingRevealId(key));
-  }, [onSelectionChange, placement]);
-  const placeItem = useCallback((key: string) => {
-    const current = lens.placement.positions[key];
-    if (current) { setPendingRevealId(key); return; }
-    const placed = Object.keys(lens.placement.positions).filter((id) => id.startsWith("crew:") || id.startsWith("capability:")).length;
-    placeItemAt(key, { x: 360, y: 180 + placed * 150 });
-  }, [lens.placement.positions, placeItemAt]);
+  // Placement is engine-owned; teammates and capabilities are auto-placed on the canvas by the layout
+  // engine. The founder never drags and there is no drop-from-shelf path — the shelf was removed.
+  const diveConfiguration = useMemo(() => configurationForLens(lens), [lens]);
   const focusedTrace = useMemo(() => {
     if (!cameraFocusedId) return new Set<string>();
     if (cameraFocusedId.startsWith("theory:")) {
@@ -119,15 +115,6 @@ export function VentureAtlas({
     setNodes(markAtlasArrivals(scene.nodes));
     setEdges(scene.edges);
   }, [markAtlasArrivals, scene, setEdges, setNodes]);
-  useEffect(() => {
-    if (!pendingRevealId || !nodes.some((node) => node.id === pendingRevealId)) return;
-    const revealId = pendingRevealId;
-    const frame = window.requestAnimationFrame(() => {
-      revealCamera(revealId);
-      setPendingRevealId(null);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [nodes, pendingRevealId, revealCamera]);
   useEffect(() => {
     if (selectedNodeId && cameraFocusedId && focusedTrace.has(selectedNodeId)) return;
     syncCameraSelection(selectedNodeId);
@@ -170,7 +157,8 @@ export function VentureAtlas({
   const decoratedNodes = useMemo<AtlasNode[]>(() => nodes.map((node) => ({
     ...node,
     selected: node.id === selectedNodeId,
-    draggable: !readOnly && (node.data.kind === "teammate" || node.data.kind === "capability"),
+    // Placement is engine-owned; the founder never drags a node into place (contract §2.2).
+    draggable: false,
     data: {
       ...node.data, altitude, selected: node.id === selectedNodeId, expanded: node.id === selectedNodeId, readOnly,
       focusRole: cameraFocusedId === node.id ? "focus" as const : cameraFocusedId && focusedTrace.has(node.id) ? "related" as const : "context" as const,
@@ -199,10 +187,6 @@ export function VentureAtlas({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [cameraFocusedId, connectionSourceId, diveBetId, machineryId, mutationDraft, onSelectionChange, outlineOpen, readOnly, returnFromDive, selectedNodeId, unfocus]);
 
-  const savePosition = useCallback<OnNodeDrag<AtlasNode>>((_, node) => {
-    void placement.commitPosition(node.id, node.position);
-  }, [placement]);
-
   const applyMutation = useCallback(async (operations: ArchitectureMutationOperation[], reason: string, inverse: ArchitectureMutationOperation[]) => {
     const result = await mutation.apply(operations, reason);
     revisionReceipt.keep({ revision: result.revision, reason, affectedContexts: result.affectedContexts }, { operations: inverse, reason: `Undo: ${reason}` });
@@ -226,7 +210,7 @@ export function VentureAtlas({
     bet={diveBet}
     wallItems={wallQueue}
     outcomes={lens.outcomes ?? []}
-    configuration={shelfConfiguration}
+    configuration={diveConfiguration}
     onReturnToOrbit={returnFromDive}
     onReviewWallItem={() => { setDiveBetId(null); onWallOpenChange(true); }}
     onHoldWallItem={() => undefined}
@@ -244,16 +228,7 @@ export function VentureAtlas({
       {showReturnBand && projection ? <AtlasReturnBand projection={projection} lens={lens} onFocusOutcome={(id) => focusNode(`outcome:${id}`)} onFocusPressure={(subjectRef) => focusNode(subjectRef.startsWith("architecture:") || subjectRef.startsWith("theory:") ? subjectRef : `architecture:${subjectRef}`)} /> : null}
       {loading && !projection ? <div className="venture-atlas-loading-overlay" role="status">Loading the venture map…</div> : null}
       {stale || error ? <div className="venture-atlas-stale" role="status">{error && !projection ? "The venture map is unavailable. Durable work remains visible without grouping." : "Showing the last coherent view. External truth and consequential changes wait for a fresh connection."}</div> : null}
-      <AtlasCanvas nodes={decoratedNodes} edges={edges} altitude={altitude} onInit={(instance) => { initializeCamera(instance); syncCameraSelection(selectedNodeId); }} onMoveEnd={handleCameraMoveEnd} onNodesChange={onNodesChange} onNodeDragStop={savePosition} onPaneClick={() => onSelectionChange(null)} onPaneDoubleClick={() => undefined} onConnect={() => undefined} onDropItem={(key, point) => { if (!readOnly) placeItemAt(key, point); }} />
-      <AtlasShelf
-        crew={lens.crew}
-        configuration={shelfConfiguration}
-        capabilities={capabilities}
-        placedKeys={new Set(Object.keys(lens.placement.positions))}
-        readOnly={readOnly}
-        onPlace={placeItem}
-        onOpenSettings={onOpenSettings}
-      />
+      <AtlasCanvas nodes={decoratedNodes} edges={edges} altitude={altitude} onInit={(instance) => { initializeCamera(instance); syncCameraSelection(selectedNodeId); }} onMoveEnd={handleCameraMoveEnd} onNodesChange={onNodesChange} onPaneClick={() => onSelectionChange(null)} onPaneDoubleClick={() => undefined} onConnect={() => undefined} onDropItem={() => undefined} />
       <div className="atlas-controls" aria-label="Atlas controls">
         {!readOnly ? <Button type="button" variant="secondary" size="sm" onClick={() => setMutationDraft({ kind: "create", point: { x: 760, y: 440 } })}><Sparkles aria-hidden="true" /> Thought <kbd>N</kbd></Button> : null}
         <Button className="atlas-outline-toggle" type="button" variant="secondary" size="sm" aria-expanded={outlineOpen} aria-controls={outlineOpen ? "atlas-outline-panel" : undefined} onClick={() => setOutlineOpen((open) => !open)}><ListTree aria-hidden="true" /> Outline <kbd>O</kbd></Button>
@@ -273,8 +248,8 @@ export function VentureAtlas({
       {projection && omissionSummary(projection, Boolean(cameraFocusedId)) ? <div data-atlas-omissions className="atlas-omissions">{omissionSummary(projection, true)}</div> : null}
       {projection ? <AtlasOutline open={outlineOpen} nodes={decoratedNodes} selectedId={selectedNodeId} onSelect={(id, focus) => focus ? focusNode(id) : selectNode(id)} onClose={() => setOutlineOpen(false)} /> : null}
       {machineryId && projection ? <AtlasMachinery nodeId={machineryId} projection={projection} lens={lens} onClose={() => setMachineryId(null)} /> : null}
-      {mutationDraft ? <ArchitectureMutationPreview key={mutationDraft.kind} draft={mutationDraft} busy={mutation.busy || campaignBusy} error={mutation.error || campaignError} onCancel={() => setMutationDraft(null)} onCreate={(name, point) => {
-        const id = stableId("arch"); void applyMutation([{ op: "create-element", element: { id, role: "concept", name, provenance: { kind: "founder-authored", createdAt: new Date().toISOString() } } }], `Placed “${name}” in the venture architecture.`, [{ op: "remove-element", elementId: id }]).then(() => placement.commitPosition(`architecture:${id}`, point));
+      {mutationDraft ? <ArchitectureMutationPreview key={mutationDraft.kind} draft={mutationDraft} busy={mutation.busy || campaignBusy} error={mutation.error || campaignError} onCancel={() => setMutationDraft(null)} onCreate={(name) => {
+        const id = stableId("arch"); void applyMutation([{ op: "create-element", element: { id, role: "concept", name, provenance: { kind: "founder-authored", createdAt: new Date().toISOString() } } }], `Placed “${name}” in the venture architecture.`, [{ op: "remove-element", elementId: id }]);
       }} onPromote={(role) => {
         if (mutationDraft.kind !== "promote") return; const element = mutationDraft.element;
         void applyMutation([{ op: "change-role", elementId: element.id, role, fields: promotionFields(element, role) }], `Used “${element.name}” as ${role.replace("-", " ")}.`, [{ op: "change-role", elementId: element.id, role: "concept", fields: {} }]);

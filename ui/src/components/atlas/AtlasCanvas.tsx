@@ -6,7 +6,6 @@ import {
   type Connection,
   type NodeChange,
   type NodeTypes,
-  type OnNodeDrag,
   type OnMoveEnd,
   type ReactFlowInstance,
 } from "@xyflow/react";
@@ -14,7 +13,6 @@ import { memo, useCallback, useRef } from "react";
 import { ArchitectureElement } from "./ArchitectureElement";
 import { ArchitectureGroup } from "./ArchitectureGroup";
 import { FounderWall } from "./FounderWall";
-import { AtlasOrbitField } from "./AtlasOrbitField";
 import { AtlasIntentNode } from "./AtlasIntentNode";
 import { AtlasBetNode } from "./AtlasBetNode";
 import type { AtlasAltitude, AtlasEdge, AtlasNode } from "./atlasTypes";
@@ -24,7 +22,6 @@ const NODE_TYPES: NodeTypes = {
   architectureElement: ArchitectureElement,
   architectureGroup: ArchitectureGroup,
   founderWall: FounderWall,
-  orbitField: AtlasOrbitField,
   atlasIntent: AtlasIntentNode,
   atlasBet: AtlasBetNode,
 };
@@ -36,7 +33,6 @@ function AtlasCanvasView({
   onInit,
   onMoveEnd,
   onNodesChange,
-  onNodeDragStop,
   onPaneClick,
   onPaneDoubleClick,
   onConnect,
@@ -48,7 +44,6 @@ function AtlasCanvasView({
   onInit: (instance: ReactFlowInstance<AtlasNode>) => void;
   onMoveEnd: OnMoveEnd;
   onNodesChange: (changes: NodeChange<AtlasNode>[]) => void;
-  onNodeDragStop: OnNodeDrag<AtlasNode>;
   onPaneClick: () => void;
   onPaneDoubleClick: (point: { x: number; y: number }) => void;
   onConnect: (connection: Connection) => void;
@@ -75,7 +70,6 @@ function AtlasCanvasView({
       onInit={handleInit}
       onMoveEnd={onMoveEnd}
       onNodesChange={onNodesChange}
-      onNodeDragStop={onNodeDragStop}
       onNodeClick={(_, node) => node.data.onSelect(node.id)}
       onNodeDoubleClick={(_, node) => node.data.onFocus(node.id)}
       onPaneClick={(event) => {
@@ -103,7 +97,6 @@ function AtlasCanvasView({
       selectionOnDrag={false}
       minZoom={0.18}
       maxZoom={1.7}
-      fitView={false}
       proOptions={{ hideAttribution: true }}
       aria-label="Living venture atlas. Pan and zoom the venture architecture, or open the outline for deterministic access."
       data-atlas-altitude={altitude}

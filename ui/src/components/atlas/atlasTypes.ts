@@ -11,18 +11,11 @@ import type {
 } from "@/types";
 
 export type AtlasAltitude = "venture" | "architecture" | "detail";
-export type AtlasVisualKind = ArchitectureRole | "theory" | "intent" | "group" | "bet" | "work" | "outcome" | "wall" | "teammate" | "capability" | "orbit-field";
+export type AtlasVisualKind = ArchitectureRole | "theory" | "intent" | "group" | "bet" | "work" | "outcome" | "wall" | "teammate" | "capability";
 
 export type AtlasDecisionBand = "near-intent" | "drifting" | "approaching-wall" | "settled";
 
 export type AtlasWorkflowStage = FirmWorkflowStage;
-
-export type AtlasOrbitSector = {
-  id: string;
-  label: string;
-  startAngle: number;
-  endAngle: number;
-};
 
 export type AtlasNodeData = Record<string, unknown> & {
   kind: AtlasVisualKind;
@@ -51,11 +44,10 @@ export type AtlasNodeData = Record<string, unknown> & {
   decisionBand?: AtlasDecisionBand;
   orbitSide?: "left" | "right";
   motionLabel?: string;
+  memberRefs?: string[];
   workflow?: AtlasWorkflowStage[];
   machineryCounts?: Array<{ label: string; count: number }>;
   expanded?: boolean;
-  sectors?: AtlasOrbitSector[];
-  wallCount?: number;
   betCount?: number;
   revision?: number;
   intentNamed?: boolean;

@@ -269,13 +269,16 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, '');
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
     })()`);
+    // Placement is engine-owned now: the retired orbit layout's decision-proximity sectors are gone,
+    // so path names ride the effort card kicker rather than a background sector label. With no efforts
+    // open yet the atlas renders the intent hub only — no effort cards, no primary teammate cards.
     const configuredAtlas = await client.evaluate(`({
       atlas: Boolean(document.querySelector('[data-venture-atlas]')),
-      motionSector: [...document.querySelectorAll('.atlas-sector-label')].some((entry) => /Repository-grounded buyer outreach/i.test(entry.textContent || '')),
+      intentHub: Boolean(document.querySelector('.atlas-intent-node')),
       betCount: document.querySelectorAll('.atlas-bet-node').length,
       primaryTeammateCards: document.querySelectorAll('.firm-lens-participant-card, .firm-lens-crew-node').length,
     })`);
-    assert.deepEqual(configuredAtlas, { atlas: true, motionSector: true, betCount: 0, primaryTeammateCards: 0 });
+    assert.deepEqual(configuredAtlas, { atlas: true, intentHub: true, betCount: 0, primaryTeammateCards: 0 });
 
     const wallCountBeforeProposal = (await client.evaluate(`fetch('/api/ventures/${venture.id}/lens').then((response) => response.json()).then(({ lens }) => lens.wall.count)`));
     proposeArchitectureChange({
@@ -307,7 +310,7 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
     await waitForDom(client, `/Revise the proposed path/.test(document.querySelector('.firm-app-composer textarea')?.value || '')`, "adjusting a path did not return a grounded revision ask to conversation");
     await client.evaluate(`(() => { const textarea = document.querySelector('.firm-app-composer textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, ''); textarea.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.atlas-proposal-heading-actions button')].find((entry) => /Accept whole proposal/i.test(entry.textContent || '')); button?.click(); return Boolean(button); })()`), true, "the proposal did not expose whole-system acceptance");
-    await waitForDom(client, `!document.querySelector('.atlas-proposal-surface') && [...document.querySelectorAll('.atlas-sector-label')].some((entry) => /Product-led growth/i.test(entry.textContent || ''))`, "accepted proposal did not convert into the real orbital projection");
+    await waitForDom(client, `!document.querySelector('.atlas-proposal-surface') && [...document.querySelectorAll('.atlas-element')].some((entry) => /Product-led growth/i.test(entry.textContent || ''))`, "accepted proposal did not convert into the real venture projection");
     assert.equal(await client.evaluate(`fetch('/api/ventures/${venture.id}/lens').then((response) => response.json()).then(({ lens }) => lens.wall.count)`), wallCountBeforeProposal, "accepting architecture moved an outward act past the wall");
 
     const liveBetIntents = [
@@ -353,7 +356,7 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
     await client.send("Page.reload", { ignoreCache: true });
     await waitForDom(client, `/Continue a venture/i.test(document.body.textContent)`, "venture picker did not return after configured machinery reload");
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => /Acme firm/.test(entry.textContent || '')); button?.click(); return Boolean(button); })()`), true);
-    await waitForDom(client, `Boolean(document.querySelector('[data-venture-atlas]')) && [...document.querySelectorAll('.atlas-sector-label')].some((entry) => /Product-led growth/i.test(entry.textContent || ''))`, "configured Atlas did not survive reload");
+    await waitForDom(client, `Boolean(document.querySelector('[data-venture-atlas]')) && [...document.querySelectorAll('.atlas-element')].some((entry) => /Product-led growth/i.test(entry.textContent || ''))`, "configured Atlas did not survive reload");
     await waitForDom(client, `/7 lines underway.*nothing needs you/i.test(document.body.textContent) && document.querySelectorAll('.atlas-bet-node[data-position="live"]').length === 7`, "the seven active lines and clear decision boundary did not agree between header and orbit");
     assert.equal(await client.evaluate(`new Set([...document.querySelectorAll('.atlas-bet-node[data-position="live"]')].map((entry) => entry.querySelector('.atlas-bet-summary small')?.textContent)).size`), 3, "the seven live bets were not grouped across the accepted motions");
     assert.deepEqual(await client.evaluate(`(() => {
@@ -433,29 +436,33 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
     assert.doesNotMatch(await client.evaluate(`document.querySelector('.atlas-dive-gaps')?.textContent || ''`), /canonical workflow-stage graph/i);
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.atlas-dive button')].find((entry) => /Fold back to orbit/i.test(entry.textContent || '')); button?.click(); return Boolean(button); })()`), true, "dive did not fold back to the orbit");
     await waitForDom(client, `Boolean(document.querySelector('[data-venture-atlas]')) && !document.querySelector('.atlas-dive')`, "the orbit did not restore after dive");
+    // In the docked ADE grid the composer lives in the rail cell, off the stage entirely — so
+    // stage cards can never be occluded by it. The camera fits the collision-free field into the
+    // stage cell (.firm-app-canvas); cards settle inset within that cell and clear of the return
+    // band that floats over the stage top.
     await waitForDom(client, `(() => {
       const cards = [...document.querySelectorAll('.atlas-bet-node[data-expanded="false"]')];
-      const composer = document.querySelector('.firm-app-composer-layer')?.getBoundingClientRect();
+      const stage = document.querySelector('.firm-app-canvas')?.getBoundingClientRect();
       const band = document.querySelector('.atlas-return-band')?.getBoundingClientRect();
       const wall = document.querySelector('[data-atlas-kind="wall"]')?.getBoundingClientRect();
-      return Boolean(composer && wall && wall.right <= innerWidth - 24 && cards.every((card) => {
+      return Boolean(stage && wall && wall.right <= innerWidth - 24 && cards.length && cards.every((card) => {
         const rect = card.getBoundingClientRect();
-        return rect.bottom <= composer.top - 12 && (!band || rect.top >= band.bottom + 12);
+        return rect.left >= stage.left - 1 && rect.right <= stage.right + 1 && (!band || rect.top >= band.bottom + 12 || rect.left >= band.right - 1 || rect.right <= band.left + 1);
       }));
     })()`, "the Atlas camera did not settle clear of its docked chrome");
     const floatingClearance = await client.evaluate(`(() => {
-      const band = document.querySelector('.atlas-return-band')?.getBoundingClientRect();
+      const rail = document.querySelector('.firm-app-rail')?.getBoundingClientRect();
+      const stage = document.querySelector('.firm-app-canvas')?.getBoundingClientRect();
+      const inspector = document.querySelector('.firm-app-inspector')?.getBoundingClientRect();
       const controls = document.querySelector('.atlas-controls')?.getBoundingClientRect();
-      const thread = document.querySelector('.firm-app-thread')?.getBoundingClientRect();
-      const overlaps = (a, b) => Boolean(a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
-      const labels = [...document.querySelectorAll('.atlas-sector-label')].map((label) => label.getBoundingClientRect());
-      const radiusLabels = [...document.querySelectorAll('.atlas-radius-labels span')].map((label) => label.getBoundingClientRect()).filter((label) => label.width || label.height);
-      const clear = !overlaps(band, controls) && !overlaps(band, thread) && !overlaps(controls, thread)
-        && labels.every((label) => !overlaps(label, controls) && !overlaps(label, band) && radiusLabels.every((radius) => !overlaps(label, radius)));
+      const overlaps = (a, b) => Boolean(a && b && a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom && a.bottom > b.top);
+      // The docked grid cells never overlap one another — a panel with a cell cannot bleed onto
+      // the stage. The atlas controls float over the stage but stay inside its cell.
+      const clear = !overlaps(rail, stage) && !overlaps(inspector, stage) && Boolean(!controls || (controls.left >= stage.left - 1 && controls.right <= stage.right + 1));
       const pick = (rect) => rect && ({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom });
-      return { clear, band: pick(band), controls: pick(controls), thread: pick(thread), labels: labels.map(pick), radiusLabels: radiusLabels.map(pick) };
+      return { clear, rail: pick(rail), stage: pick(stage), inspector: pick(inspector), controls: pick(controls) };
     })()`);
-    assert.equal(floatingClearance.clear, true, `the return band, conversation, and Atlas controls still share the same screen region: ${JSON.stringify(floatingClearance)}`);
+    assert.equal(floatingClearance.clear, true, `the docked rail, stage, and inspector cells still share the same screen region: ${JSON.stringify(floatingClearance)}`);
     assert.equal(await client.evaluate(`(() => {
       const workflow = document.querySelector('.atlas-bet-workflow ol');
       return Boolean(workflow && workflow.scrollWidth <= workflow.clientWidth + 1);
@@ -474,16 +481,18 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
     })()`), [], "orbit cards overlap after the at-wall bet unfolds in the field");
     const chromeClearance = await client.evaluate(`(() => {
       const cards = [...document.querySelectorAll('.atlas-bet-node[data-expanded="false"]')];
-      const composer = document.querySelector('.firm-app-composer-layer')?.getBoundingClientRect();
+      const stage = document.querySelector('.firm-app-canvas')?.getBoundingClientRect();
       const band = document.querySelector('.atlas-return-band')?.getBoundingClientRect();
-      if (!composer) return { clear: false, reason: 'composer missing' };
+      if (!stage) return { clear: false, reason: 'stage missing' };
       const violations = cards.flatMap((card) => {
         const rect = card.getBoundingClientRect();
-        return rect.bottom <= composer.top - 12 && (!band || rect.top >= band.bottom + 12) ? [] : [{ text: card.textContent, top: rect.top, bottom: rect.bottom }];
+        const insideStage = rect.left >= stage.left - 1 && rect.right <= stage.right + 1;
+        const clearOfBand = !band || rect.top >= band.bottom + 12 || rect.left >= band.right - 1 || rect.right <= band.left + 1;
+        return insideStage && clearOfBand ? [] : [{ text: card.textContent, top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right }];
       });
-      return { clear: violations.length === 0, violations, composerTop: composer.top, bandBottom: band?.bottom ?? null };
+      return { clear: violations.length === 0, violations, stage, bandBottom: band?.bottom ?? null };
     })()`);
-    assert.equal(chromeClearance.clear, true, `folded orbit cards are occluded by the return band or composer: ${JSON.stringify(chromeClearance)}`);
+    assert.equal(chromeClearance.clear, true, `folded orbit cards are occluded by the return band or bleed outside the stage cell: ${JSON.stringify(chromeClearance)}`);
     const activeWallBounds = await client.evaluate(`(() => {
       const wall = document.querySelector('[data-atlas-kind="wall"]')?.getBoundingClientRect();
       return wall ? { left: wall.left, right: wall.right, viewport: innerWidth, inset: wall.right <= innerWidth - 24 && wall.left >= 24 } : null;

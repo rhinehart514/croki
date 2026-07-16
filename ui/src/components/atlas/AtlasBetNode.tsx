@@ -1,5 +1,5 @@
 import { memo, type KeyboardEvent } from "react";
-import type { NodeProps } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { AtlasBetWorkflow } from "./AtlasBetWorkflow";
 import { AtlasMachineryGlyph } from "./AtlasMachineryGlyph";
 import type { AtlasNode } from "./atlasTypes";
@@ -22,6 +22,9 @@ function AtlasBetNodeView({ data, id, selected }: NodeProps<AtlasNode>) {
   const orbitLabel = data.motionLabel === "No path named" ? "In progress" : data.motionLabel;
   return (
     <article className="atlas-bet-node atlas-element" data-atlas-kind="bet" data-kind="bet" data-focus-role={data.focusRole} data-position={data.bet?.position} data-orbit-side={data.orbitSide} data-band={data.decisionBand} data-expanded={expanded ? "true" : "false"}>
+      {/* Hidden, centered handles so the hub spoke and staged-work edges route to this effort. */}
+      <Handle type="target" position={Position.Left} className="atlas-hidden-handle" isConnectable={false} />
+      <Handle type="source" position={Position.Right} className="atlas-hidden-handle" isConnectable={false} />
       <button type="button" className="atlas-bet-summary" aria-pressed={expanded} title={data.title} onKeyDown={moveBetFocus} onClick={(event) => { event.stopPropagation(); data.onSelect(id); }}>
         <span><small>{orbitLabel}</small><em>{data.decisionBand?.replaceAll("-", " ")}</em></span>
         <strong title={data.title}>{data.title}</strong>

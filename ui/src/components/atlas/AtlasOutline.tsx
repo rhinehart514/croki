@@ -18,7 +18,7 @@ export function AtlasOutline({
 }) {
   const firstRef = useRef<HTMLButtonElement | null>(null);
   const rows = useMemo(() => nodes.flatMap((node) => {
-    if (["orbit-field", "group", "teammate", "capability", "wall", "intent"].includes(node.data.kind)) return [];
+    if (["group", "teammate", "capability", "wall", "intent"].includes(node.data.kind)) return [];
     const role = node.data.kind === "theory" ? "Current read"
       : node.data.kind === "bet" ? "In progress"
         : node.data.kind === "outcome" ? "Returned"

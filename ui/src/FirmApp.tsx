@@ -4,7 +4,7 @@
 //
 // Desktop only, no mobile layout (AGENTS.md). CrewFace is the only teammate portrait door (DESIGN.md).
 
-import { useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, GitBranch, MessageCircle, PanelLeftClose, Settings2 } from "lucide-react";
 import {
   markFounderAway,
@@ -27,21 +27,8 @@ import { advanceReturnCursor, readReturnCursor } from "@/lib/return-cursor";
 import { recordUxMetric, startReturnDecisionTimer } from "@/lib/ux-metrics";
 import type { FirmArchitectureProjection } from "@/types";
 
-const CONVERSATION_MIN_WIDTH = 360;
-const CONVERSATION_MAX_WIDTH = 680;
-const CONVERSATION_DEFAULT_WIDTH = 440;
-
-function conversationKey(ventureId: string, field: "open" | "width") {
+function conversationKey(ventureId: string, field: "open") {
   return `drover:conversation:${ventureId}:${field}`;
-}
-
-function readConversationWidth(ventureId: string) {
-  const stored = window.localStorage.getItem(conversationKey(ventureId, "width"));
-  if (stored == null) return CONVERSATION_DEFAULT_WIDTH;
-  const saved = Number(stored);
-  return Number.isFinite(saved)
-    ? Math.min(CONVERSATION_MAX_WIDTH, Math.max(CONVERSATION_MIN_WIDTH, saved))
-    : CONVERSATION_DEFAULT_WIDTH;
 }
 
 function readConversationOpen(ventureId: string) {
@@ -54,7 +41,6 @@ export default function FirmApp() {
   const [wallOpen, setWallOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [conversationOpen, setConversationOpen] = useState(true);
-  const [conversationWidth, setConversationWidth] = useState(CONVERSATION_DEFAULT_WIDTH);
   const [capabilityRefreshKey, setCapabilityRefreshKey] = useState(0);
   const [architecture, setArchitecture] = useState<FirmArchitectureProjection | null>(null);
   const { lens, messages, activeDrives, connection, refresh, setLens } = useFirmConnection(venture?.id ?? null);
@@ -66,6 +52,48 @@ export default function FirmApp() {
     [architecture, lens, messages, returnCursor],
   );
   const returnReviewedThrough = returnAccount?.reviewedThrough ?? null;
+
+  // The inspector is one docked cell that swaps content on selection — never a second overlay.
+  // It opens when the founder selects something on the stage and closes to give the stage full
+  // width. Copy is ordinary founder language; the deep content views (payload, record) are Phase 2.
+  const inspectorOpen = Boolean(canvasSelection) && !wallOpen;
+  const inspectorContent = useMemo(() => {
+    if (!canvasSelection) return { kicker: "Selection", title: "Nothing selected", note: "" };
+    if (canvasSelection.theoryId) {
+      return {
+        kicker: "Drover’s current read",
+        title: canvasSelection.theoryLabel ?? "A provisional idea",
+        note: "A provisional read of the venture — it changes as real work and evidence return.",
+      };
+    }
+    if (canvasSelection.architectureId) {
+      const element = architecture?.elements.find((candidate) => candidate.id === canvasSelection.architectureId);
+      return {
+        kicker: "Venture direction",
+        title: element?.name ?? "Selected direction",
+        note: element?.does ?? "A part of how this venture creates and reaches value.",
+      };
+    }
+    if (canvasSelection.betId) {
+      const bet = lens?.bets.find((candidate) => candidate.id === canvasSelection.betId);
+      return {
+        kicker: canvasSelection.workRef ? "Draft" : "Effort",
+        title: bet?.intent ?? "Selected effort",
+        note: canvasSelection.workRef
+          ? "A draft prepared for this. The exact payload and its record open here."
+          : "Work underway toward this. Selecting it opens what it can reach.",
+      };
+    }
+    if (canvasSelection.teammateRefs.length) {
+      const member = lens?.crew.find((candidate) => canvasSelection.teammateRefs.includes(candidate.ref));
+      return {
+        kicker: "Teammate",
+        title: member?.soul?.name?.trim() || canvasSelection.teammateRefs.join(", "),
+        note: "What this teammate is working on right now.",
+      };
+    }
+    return { kicker: "Selection", title: "Selected", note: "" };
+  }, [architecture, canvasSelection, lens]);
 
   useEffect(() => {
     const heartbeat = () => { void markFounderPresent().catch(() => undefined); };
@@ -85,7 +113,6 @@ export default function FirmApp() {
     setCanvasSelection(context?.betId ? targetBet(context.betId) : null);
     setWallOpen(Boolean(context));
     setConversationOpen(readConversationOpen(nextVenture.id));
-    setConversationWidth(readConversationWidth(nextVenture.id));
     setVenture(nextVenture);
     setArchitecture(null);
   }, []);
@@ -93,8 +120,7 @@ export default function FirmApp() {
   useEffect(() => {
     if (!venture) return;
     window.localStorage.setItem(conversationKey(venture.id, "open"), String(conversationOpen));
-    window.localStorage.setItem(conversationKey(venture.id, "width"), String(conversationWidth));
-  }, [conversationOpen, conversationWidth, venture]);
+  }, [conversationOpen, venture]);
 
   useEffect(() => {
     if (venture && returnAccount?.projection?.records.some((record) => (
@@ -128,27 +154,6 @@ export default function FirmApp() {
       window.requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".firm-app-composer textarea")?.focus());
     });
   }, []);
-
-  const beginConversationResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const startX = event.clientX;
-    const startWidth = conversationWidth;
-    const move = (next: PointerEvent) => {
-      setConversationWidth(Math.min(
-        CONVERSATION_MAX_WIDTH,
-        Math.max(CONVERSATION_MIN_WIDTH, startWidth + next.clientX - startX),
-      ));
-    };
-    const stop = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-      document.body.style.removeProperty("cursor");
-      document.body.style.removeProperty("user-select");
-    };
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop, { once: true });
-  }, [conversationWidth]);
 
   const reviewReturnBrief = useCallback(() => {
     if (!venture || !returnReviewedThrough) return;
@@ -215,57 +220,40 @@ export default function FirmApp() {
           </Button>
         </div>
       </header>
-      <div className="firm-app-body">
-        {(
-          <>
-            <TeammateRail
-              venture={venture}
-              lens={lens}
-              messages={messages}
-              selection={canvasSelection}
-              wallOpen={wallOpen}
-              width={conversationOpen ? conversationWidth : CONVERSATION_MIN_WIDTH}
-              onSelectCrew={(ref) => setCanvasSelection(targetTeammates([ref]))}
-              onSelectBet={(betId) => setCanvasSelection(targetBet(betId))}
-              onClearSelection={() => setCanvasSelection(null)}
-              onOpenWall={() => setWallOpen(true)}
-              onCloseWall={() => setWallOpen(false)}
-              onDriven={handleDriven}
-              onConfigurationChanged={refreshVenture}
-              activeWork={activeDrives}
-              onStopActiveWork={stopDrive}
-              returnBrief={returnAccount?.projection}
-              onOpenReturnProof={recordReturnProofOpen}
-              onReviewReturnBrief={reviewReturnBrief}
-              onViewReturnReceipt={viewReturnReceipt}
-              onSelectArchitecture={(architectureId, revision) => setCanvasSelection(targetArchitecture(architectureId, revision))}
-              onCollapse={conversationOpen ? () => setConversationOpen(false) : undefined}
-              transcriptOpen={conversationOpen}
-              readOnly={readOnly}
-              readOnlyReason={connection.message ?? "Reconnecting before changes can be sent…"}
-              architecture={architecture}
-            />
-            {conversationOpen ? <div
-              className="firm-app-conversation-resizer"
-              role="separator"
-              aria-label="Resize conversation"
-              aria-orientation="vertical"
-              aria-valuemin={CONVERSATION_MIN_WIDTH}
-              aria-valuemax={CONVERSATION_MAX_WIDTH}
-              aria-valuenow={conversationWidth}
-              tabIndex={0}
-              onPointerDown={beginConversationResize}
-              onKeyDown={(event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-                event.preventDefault();
-                setConversationWidth((width) => Math.min(
-                  CONVERSATION_MAX_WIDTH,
-                  Math.max(CONVERSATION_MIN_WIDTH, width + (event.key === "ArrowRight" ? 24 : -24)),
-                ));
-              }}
-            /> : null}
-          </>
-        )}
+      <div
+        className="firm-app-body"
+        data-rail={conversationOpen ? "expanded" : "collapsed"}
+        data-inspector={inspectorOpen ? "open" : "closed"}
+      >
+        <TeammateRail
+          venture={venture}
+          lens={lens}
+          messages={messages}
+          selection={canvasSelection}
+          wallOpen={wallOpen}
+          onSelectCrew={(ref) => setCanvasSelection(targetTeammates([ref]))}
+          onSelectBet={(betId) => setCanvasSelection(targetBet(betId))}
+          onClearSelection={() => setCanvasSelection(null)}
+          onOpenWall={() => setWallOpen(true)}
+          onCloseWall={() => setWallOpen(false)}
+          onDriven={handleDriven}
+          onConfigurationChanged={refreshVenture}
+          activeWork={activeDrives}
+          onStopActiveWork={stopDrive}
+          returnBrief={returnAccount?.projection}
+          onOpenReturnProof={recordReturnProofOpen}
+          onReviewReturnBrief={reviewReturnBrief}
+          onViewReturnReceipt={viewReturnReceipt}
+          onSelectArchitecture={(architectureId, revision) => setCanvasSelection(targetArchitecture(architectureId, revision))}
+          onExpand={conversationOpen ? undefined : () => setConversationOpen(true)}
+          onCollapse={conversationOpen ? () => setConversationOpen(false) : undefined}
+          transcriptOpen={conversationOpen}
+          railCollapsed={!conversationOpen}
+          railAttention={Boolean(lens?.wall.count)}
+          readOnly={readOnly}
+          readOnlyReason={connection.message ?? "Reconnecting before changes can be sent…"}
+          architecture={architecture}
+        />
         <FirmWorkbenchCanvas
           venture={venture}
           lens={lens}
@@ -284,6 +272,26 @@ export default function FirmApp() {
           onReturnToConversation={returnToConversation}
           onOpenSettings={() => setSettingsOpen(true)}
         />
+        {inspectorOpen ? (
+          <aside className="firm-app-inspector" aria-label="Selection inspector">
+            <div className="firm-app-inspector-head">
+              <span className="firm-app-inspector-kicker">{inspectorContent.kicker}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Close inspector"
+                onClick={() => setCanvasSelection(null)}
+              >
+                <ArrowLeft aria-hidden="true" />
+              </Button>
+            </div>
+            <div className="firm-app-inspector-body">
+              <h2 className="firm-app-inspector-title">{inspectorContent.title}</h2>
+              <p className="firm-app-inspector-note">{inspectorContent.note}</p>
+            </div>
+          </aside>
+        ) : null}
       </div>
       {settingsOpen ? (
         <FirmSettings

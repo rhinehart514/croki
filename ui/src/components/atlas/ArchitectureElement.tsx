@@ -24,7 +24,6 @@ const ROLE_LABELS = {
   wall: "Needs your hand",
   teammate: "Teammate",
   capability: "Capability",
-  "orbit-field": "Decision proximity",
 } as const;
 
 function ElementMaterial({ data }: { data: AtlasNode["data"] }) {
