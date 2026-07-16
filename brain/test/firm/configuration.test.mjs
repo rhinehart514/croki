@@ -20,8 +20,11 @@ import {
   listVentureDocs,
 } from "../../src/firm/venture-store.mjs";
 
+// These tests exercise firm-configuration formation from an empty roster (the compatibility seed, first-
+// participant formation, explicit agent lists), so they opt out of the founding-crew roster seed that
+// createVenture applies by default. Phase-8 seeding is proven in founding-crew.test.
 function freshRoot() {
-  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-configuration-")) };
+  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-configuration-")), seedFoundingCrew: false };
 }
 
 describe("firm configuration — readable compatibility seed", () => {

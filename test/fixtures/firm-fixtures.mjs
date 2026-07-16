@@ -130,7 +130,8 @@ function seedConversation(ventureId, entries, options) {
 
 /** A small unattended-return fixture. It is test-only and never imported by the product shell. */
 export function createOvernightVentureFixture({ root, repository } = {}) {
-  const options = { root };
+  // Hand-built deterministic fixture crew: opt out of the founding-crew seed so crew counts stay exact.
+  const options = { root, seedFoundingCrew: false };
   const venture = createVenture({
     id: "fixture-overnight-venture",
     name: "Overnight venture",
@@ -279,7 +280,8 @@ export function createOvernightVentureFixture({ root, repository } = {}) {
 
 /** A scale fixture for browser review and deterministic acceptance only. */
 export function createDenseVentureFixture({ root, repository } = {}) {
-  const options = { root };
+  // Hand-built deterministic fixture crew: opt out of the founding-crew seed so crew counts stay exact.
+  const options = { root, seedFoundingCrew: false };
   const venture = createVenture({
     id: "fixture-dense-venture",
     name: "Dense venture",
@@ -385,7 +387,8 @@ export function createDenseVentureFixture({ root, repository } = {}) {
 
 /** A compact four-purpose wall fixture for authority and recovery journeys. */
 export function createWallVentureFixture({ root, repository } = {}) {
-  const options = { root };
+  // Hand-built deterministic fixture crew: opt out of the founding-crew seed so crew counts stay exact.
+  const options = { root, seedFoundingCrew: false };
   const venture = createVenture({
     id: "fixture-wall-venture",
     name: "Wall venture",

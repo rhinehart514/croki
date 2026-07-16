@@ -20,6 +20,10 @@ import fs from "node:fs";
 import { persistence, storeRoot as persistenceStoreRoot } from "../persistence.mjs";
 import { safeId } from "../store-fs.mjs";
 import { teammateSoulStore } from "../teammate-soul-store.mjs";
+// founding-crew → crew → venture-store forms an ES module cycle; it is safe because seedFoundingCrew is a
+// live binding only *called* at runtime (createVenture), never at module load. crew.mjs likewise only uses
+// venture-store's exports at call time.
+import { seedFoundingCrew } from "./founding-crew.mjs";
 
 export { safeId };
 
@@ -93,13 +97,21 @@ function normalizeManifest(input = {}) {
   };
 }
 
-// Create a venture: writes its manifest at the product home and returns it. The venture's own
-// subdirectory is created lazily on first document write (persistence.mjs's atomic write already
-// mkdir -p's the collection directory), so an empty venture has a manifest and nothing else — still
-// a readable file tree, just a small one.
+// Create a venture: writes its manifest at the product home, seeds the founding crew, and returns the
+// manifest. The venture's own subdirectory is created lazily on first document write (persistence.mjs's
+// atomic write already mkdir -p's the collection directory).
+//
+// By default the venture opens with the firm's four named teammates already present (ADE build contract
+// Phase 8, Reading A): a new venture is seeded from the firm-level templates so Yara/Mira/Soren/Kai are the
+// SAME CHARACTERS everywhere, each born carrying its template's graduated lens while its own work stays
+// strictly venture-scoped (rail 6 holds — no venture's data crosses). Pass `{ seedFoundingCrew: false }` to
+// skip seeding when a test exercises the low-level primitives in isolation (crew.summon, the empty-start
+// work-loop first-participant path, the transfer round-trip); the real venture-create route leaves the
+// default on and gets the four.
 export function createVenture(input = {}, options = {}) {
   const manifest = normalizeManifest(input);
   manifestPersistence(options).set(MANIFEST_COLLECTION, safeId(manifest.id), manifest);
+  if (options.seedFoundingCrew !== false) seedFoundingCrew(manifest.id, options);
   return manifest;
 }
 
