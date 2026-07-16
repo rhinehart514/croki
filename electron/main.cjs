@@ -10,12 +10,13 @@
 //   3. wait for its health endpoint, then load that URL in a BrowserWindow.
 // No brain code changes — the desktop app talks to the same local API the dev server already serves.
 
-const { app, BrowserWindow, shell, utilityProcess, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, shell, utilityProcess, dialog, ipcMain, screen } = require("electron");
 const path = require("node:path");
 const http = require("node:http");
 const net = require("node:net");
 const crypto = require("node:crypto");
 const { execSync } = require("node:child_process");
+const windowState = require("./window-state.cjs");
 
 const HOST = "127.0.0.1";
 
@@ -99,6 +100,30 @@ function brainEntry() {
   return path.join(__dirname, "..", "brain", "src", "server.mjs");
 }
 
+// Stop the brain and don't leave it orphaned. SIGTERM lets server.mjs drain (it has its own
+// force-exit fail-safe); a short SIGKILL backstop covers a brain that ignores the term. Idempotent:
+// repeated calls (before-quit + quit, or an error path) are safe.
+function stopBrain() {
+  const child = brainProcess;
+  if (!child) return;
+  brainProcess = null;
+  try {
+    child.kill(); // SIGTERM → graceful shutdown in server.mjs
+  } catch {
+    return; // already gone
+  }
+  // Backstop: if the utility process is still alive shortly after, force it down so quitting the app
+  // never leaves an orphaned engine holding the loopback port.
+  const backstop = setTimeout(() => {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      /* already exited */
+    }
+  }, 2000);
+  backstop.unref?.();
+}
+
 function startBrain(port, capability) {
   const entry = brainEntry();
   const child = utilityProcess.fork(entry, [], {
@@ -148,9 +173,15 @@ function waitForHealth(port, { timeoutMs = 30000, intervalMs = 250 } = {}) {
 }
 
 async function createWindow(port) {
+  // Restore the founder's last window placement (contract §2.8). Falls back to 1440x900, and only
+  // uses saved coordinates that still land on a connected display.
+  const initial = windowState.resolveInitialBounds({ app, screen });
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: initial.width,
+    height: initial.height,
+    ...(Number.isFinite(initial.x) && Number.isFinite(initial.y)
+      ? { x: initial.x, y: initial.y }
+      : {}),
     minWidth: 960,
     minHeight: 640,
     backgroundColor: "#0a0a0a",
@@ -162,6 +193,12 @@ async function createWindow(port) {
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
+
+  // Persist bounds/maximized on move, resize, and close, so the next launch opens where we left off.
+  windowState.track({ app, window: mainWindow });
+
+  // A window saved while maximized reopens maximized; unmaximizing restores the tracked normal size.
+  if (initial.maximized) mainWindow.maximize();
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
 
@@ -224,6 +261,22 @@ if (!gotLock) {
 
   app.whenReady().then(boot);
 
+  // Route OS termination signals through the app-quit lifecycle so the brain is always torn down.
+  // `npm run app` runs Electron in the foreground, so a dev's Ctrl-C sends SIGINT to the whole group;
+  // a `kill` sends SIGTERM. Neither runs before-quit on its own — without this, the utility-process
+  // brain orphans and keeps the loopback port. app.quit() drives before-quit → stopBrain; the guard
+  // makes a repeated/again signal a hard exit so a wedged shutdown can't pin the terminal.
+  for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
+    process.on(signal, () => {
+      if (app.isQuiting) {
+        stopBrain();
+        process.exit(0);
+        return;
+      }
+      app.quit();
+    });
+  }
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0 && brainPort) void createWindow(brainPort);
   });
@@ -232,12 +285,16 @@ if (!gotLock) {
     if (process.platform !== "darwin") app.quit();
   });
 
-  app.on("before-quit", () => { app.isQuiting = true; });
+  // Begin brain teardown as soon as a quit is requested (before the window tears down), so the engine
+  // has the drain window while Electron closes the UI. isQuiting suppresses the "Drover stopped" alert
+  // for this expected exit.
+  app.on("before-quit", () => {
+    app.isQuiting = true;
+    stopBrain();
+  });
 
+  // Final backstop: quit fires even on paths that skip before-quit; stopBrain is idempotent.
   app.on("quit", () => {
-    if (brainProcess) {
-      try { brainProcess.kill(); } catch { /* already gone */ }
-      brainProcess = null;
-    }
+    stopBrain();
   });
 }
