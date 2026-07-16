@@ -171,6 +171,31 @@ export function ConversationFeed({
                 </li>
               );
             }
+            if (message.outcomeReport) {
+              // Evidence to cause: the teammate reports a real market reply, attached to the effort that
+              // caused it and linking down to its record. The founder reads what came back and can open
+              // the full receipt from here.
+              const outcome = (lens.outcomes ?? []).find((entry) => entry.id === message.outcomeReport!.outcomeId) ?? null;
+              const reportTime = timeLabel(message.createdAt);
+              return (
+                <li id={`firm-message:${message.id}`} key={message.id} className="firm-app-message firm-app-message-teammate firm-app-message-return" data-message-id={message.id} data-outcome-id={message.outcomeReport.outcomeId} tabIndex={-1}>
+                  <CrewFace agentRef={message.teammateRef ?? "unassigned-teammate"} size={30} />
+                  <article>
+                    <header>
+                      <strong>{teammateName(lens, message.teammateRef)}</strong>
+                      <span className="firm-app-return-flag">The market answered</span>
+                      {reportTime ? <time dateTime={message.createdAt}>{reportTime}</time> : null}
+                    </header>
+                    <p className="firm-app-return-line">{message.content}</p>
+                    {message.betId ? (
+                      <button type="button" className="firm-app-return-open" onClick={() => onSelectBet(message.betId!)}>
+                        See what came back{outcome?.channel ? ` · ${outcome.channel}` : ""}
+                      </button>
+                    ) : null}
+                  </article>
+                </li>
+              );
+            }
             const teammate = message.role === "teammate";
             const context = messageContext(message, lens);
             const time = timeLabel(message.createdAt);

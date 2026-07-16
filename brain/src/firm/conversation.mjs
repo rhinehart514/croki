@@ -26,6 +26,21 @@ function normalizeCoordination(value) {
   return requestedBy && protocol && question ? { requestedBy, protocol, question } : null;
 }
 
+// A joined market outcome reported in the thread carries a pointer down to its own record (the outcome
+// document) so the UI can link the reported reply to its full receipt. Purely a reference — the words the
+// founder reads live in `content`; this is the seam to the record, never rendered copy. Null unless the
+// message actually reports a joined outcome.
+function normalizeOutcomeReport(value) {
+  const outcomeId = trimOrNull(value?.outcomeId);
+  if (!outcomeId) return null;
+  return {
+    outcomeId,
+    outcomeKind: trimOrNull(value?.outcomeKind),
+    channel: trimOrNull(value?.channel),
+    from: trimOrNull(value?.from),
+  };
+}
+
 function normalizeTarget(value) {
   const betId = trimOrNull(value?.betId);
   const workRef = trimOrNull(value?.workRef);
@@ -96,6 +111,7 @@ export function appendConversationMessage({
   runtime = null,
   coordination = null,
   target = null,
+  outcomeReport = null,
 } = {}, options = {}) {
   if (!ventureId) throw new Error("A conversation message needs a ventureId.");
   if (!ROLES.has(role)) throw new Error(`Unknown conversation role: ${role}`);
@@ -147,6 +163,7 @@ export function appendConversationMessage({
     } : null,
     coordination: normalizeCoordination(coordination),
     target: normalizeTarget(target),
+    outcomeReport: normalizeOutcomeReport(outcomeReport),
     createdAt,
   };
   setVentureDoc(ventureId, "conversation", message.id, message, options);
