@@ -3,8 +3,8 @@
 <title>Drover ADE — Morning Briefing</title>
 <style>
   :root {
-    /* Drover's own warm-paper token scale — lifted from ade-design-system.html, not a generic cream.
-       Green and amber are semantic (shipped / needs-you), never decorative. */
+    /* Drover's warm-paper token scale — lifted from ade-design-system.html, not a generic cream.
+       Green and amber are semantic (living/connected · needs-you), never decorative. */
     --paper:#eae6df; --paper-2:#e3ded5; --paper-3:#ded8cd;
     --card:#f4f1ea; --card-raised:#faf8f3; --card-warm:#f6f2e9;
     --ink:#26251f; --ink-2:#4a4840; --ink-3:#78756a; --ink-4:#a8a498; --ink-5:#bdb9ac;
@@ -12,498 +12,405 @@
     --green:#3f5c46; --green-2:#587a5f; --green-3:#6f8f75; --green-soft:#e0e8de; --green-tint:#eef2ea; --green-line:#c4d4c2;
     --amber:#9a6b2f; --amber-ink:#7a5322; --amber-soft:#f0e4d0; --amber-line:#e4d2ae;
     --clay:#a86b52;
-    --yara:#587a5f; --mira:#8a6d34; --soren:#4f6d86; --kai:#8a5a63;
     --sans:"Geist Variable",Geist,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
     --mono:"Geist Mono Variable","Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
     --sh-rest:0 1px 2px rgba(38,37,31,.05), 0 8px 22px rgba(38,37,31,.07);
     --sh-lift:0 2px 6px rgba(38,37,31,.08), 0 20px 50px rgba(38,37,31,.13);
-    --sh-chip:0 1px 2px rgba(38,37,31,.04);
-    --r-sm:8px; --r-md:11px; --r-lg:13px; --r-pill:100px;
-    --ease:cubic-bezier(.22,1,.36,1);
+    --r-xs:6px; --r-sm:8px; --r-md:11px; --r-lg:13px; --r-xl:16px; --r-pill:100px;
+    --track-tight:-0.02em;
   }
   * { box-sizing:border-box; }
   html { scroll-behavior:smooth; }
   body {
     margin:0; background:var(--paper); color:var(--ink-2);
-    font-family:var(--sans); font-size:16px; line-height:1.62; letter-spacing:-.003em;
+    font-family:var(--sans); font-size:16px; line-height:1.6; letter-spacing:-.003em;
     -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
   }
   .mono { font-family:var(--mono); font-feature-settings:"tnum" 1; }
-  .wrap { max-width:1020px; margin:0 auto; padding:0 34px 150px; }
+  .wrap { max-width:1000px; margin:0 auto; padding:0 40px 140px; }
 
-  h1,h2,h3,h4 { color:var(--ink); font-weight:600; letter-spacing:-.02em; line-height:1.14; text-wrap:balance; }
-  h2 { font-size:1.62rem; margin:0 0 6px; }
-  h3 { font-size:1.16rem; margin:0 0 4px; letter-spacing:-.015em; }
-  h4 { font-size:.98rem; margin:0 0 4px; }
-  p { margin:0 0 15px; max-width:70ch; }
+  h1,h2,h3,h4 { color:var(--ink); font-weight:600; letter-spacing:var(--track-tight); line-height:1.15; }
+  h1 { font-size:2.75rem; margin:0 0 16px; }
+  h2 { font-size:1.625rem; margin:0 0 8px; }
+  h3 { font-size:1.1875rem; margin:34px 0 6px; }
+  h4 { font-size:.9375rem; margin:0 0 4px; }
+  p { margin:0 0 15px; max-width:760px; }
   strong { color:var(--ink); font-weight:600; }
   em { font-style:italic; }
-  a { color:var(--green); text-decoration:none; border-bottom:1px solid var(--green-line); }
-  a:hover { border-bottom-color:var(--green); }
+  a { color:var(--green); }
   code { font-family:var(--mono); font-size:.82em; background:var(--paper-2); border:1px solid var(--line); border-radius:5px; padding:1px 5px; color:var(--ink); }
-  :focus-visible { outline:2px solid var(--green-2); outline-offset:2px; border-radius:3px; }
 
-  .eyebrow { font-family:var(--mono); font-size:11px; letter-spacing:.15em; text-transform:uppercase; color:var(--green-2); margin:0 0 12px; font-weight:500; }
+  .eyebrow { font-family:var(--mono); font-size:.6875rem; letter-spacing:.14em; text-transform:uppercase; color:var(--green-2); margin:0 0 12px; font-weight:500; }
+  .sec-num { font-family:var(--mono); font-size:.6875rem; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-4); margin:0 0 4px; }
 
-  /* ── Masthead ── */
-  header.top { padding:76px 0 30px; border-bottom:1px solid var(--line); }
-  header.top h1 { font-size:2.75rem; margin:0 0 18px; line-height:1.04; }
-  header.top .lede { font-size:1.16rem; line-height:1.5; color:var(--ink-2); max-width:62ch; }
-  header.top .said { font-family:var(--serif); font-style:italic; color:var(--ink); }
-  .meta-row { display:flex; flex-wrap:wrap; gap:8px 9px; margin-top:28px; align-items:center; }
-  .chip { font-family:var(--mono); font-size:11px; letter-spacing:.02em; padding:4px 11px; border-radius:var(--r-pill); border:1px solid var(--line-2); color:var(--ink-3); background:var(--card); white-space:nowrap; }
-  .chip b { color:var(--ink-2); font-weight:600; }
+  header.masthead { padding:76px 0 36px; border-bottom:1px solid var(--line); margin-bottom:8px; }
+  header.masthead .lede { font-size:19px; line-height:1.5; color:var(--ink-2); max-width:720px; }
+  .meta-row { display:flex; flex-wrap:wrap; gap:8px 10px; margin-top:26px; }
+  .metachip { font-family:var(--mono); font-size:11px; letter-spacing:.03em; padding:4px 11px; border-radius:var(--r-pill); border:1px solid var(--line-2); color:var(--ink-3); background:var(--card); }
+  .metachip.on { color:var(--green); border-color:var(--green-line); background:var(--green-tint); }
 
-  /* ── Verdict summary strip: state at a glance ── */
-  .verdict { margin:34px 0 8px; display:grid; gap:12px; }
-  .vgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
-  @media (max-width:760px){ .vgrid { grid-template-columns:repeat(2,1fr); } }
-  .stat { padding:16px 16px 14px; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--card-raised); box-shadow:var(--sh-chip); }
-  .stat .n { font-family:var(--mono); font-size:1.9rem; font-weight:500; color:var(--ink); font-variant-numeric:tabular-nums; line-height:1; }
-  .stat .l { margin-top:8px; font-size:.78rem; color:var(--ink-3); line-height:1.35; }
-  .stat.good .n { color:var(--green); }
-  .stat.warn .n { color:var(--amber); }
+  section { padding-top:26px; scroll-margin-top:24px; }
+  hr.rule { border:none; border-top:1px solid var(--line); margin:52px 0; }
 
-  .banner { display:flex; gap:13px; align-items:flex-start; padding:16px 18px; border-radius:var(--r-lg); border:1px solid var(--amber-line); background:var(--amber-soft); }
-  .banner .dot { flex:none; width:9px; height:9px; border-radius:50%; background:var(--amber); margin-top:7px; box-shadow:0 0 0 3px rgba(154,107,47,.16); }
-  .banner p { margin:0; color:var(--amber-ink); font-size:.92rem; line-height:1.5; }
-  .banner p strong { color:var(--amber-ink); }
+  .bottomline { background:var(--card-warm); border:1px solid var(--line-2); border-left:3px solid var(--green-2); border-radius:0 var(--r-lg) var(--r-lg) 0; padding:22px 26px; margin:8px 0 4px; }
+  .bottomline p { margin:0; color:var(--ink); font-size:16.5px; line-height:1.6; max-width:none; }
+  .bottomline p + p { margin-top:12px; }
 
-  /* ── Phase sections ── */
-  section.phase { margin-top:64px; scroll-margin-top:24px; }
-  .phase-head { display:flex; gap:16px; align-items:flex-start; padding-bottom:16px; border-bottom:1px solid var(--line); }
-  .phase-stripe { flex:none; width:4px; align-self:stretch; border-radius:4px; margin-top:3px; }
-  .phase.pass .phase-stripe { background:var(--green); }
-  .phase.partial .phase-stripe { background:var(--amber); }
-  .phase.notstarted .phase-stripe { background:var(--ink-5); }
-  .phase-head .id { font-family:var(--mono); font-size:12px; letter-spacing:.08em; color:var(--ink-3); }
-  .phase-head h2 { margin:4px 0 0; }
-  .phase-head .status { margin-left:auto; flex:none; align-self:center; }
-  .pill { display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:11px; letter-spacing:.04em; text-transform:uppercase; font-weight:600; padding:5px 12px 5px 10px; border-radius:var(--r-pill); border:1px solid var(--line-2); background:var(--card); color:var(--ink-3); white-space:nowrap; }
-  .pill .pd { width:7px; height:7px; border-radius:50%; flex:none; }
-  .pill.green { border-color:var(--green-line); background:var(--green-tint); color:var(--green); }
-  .pill.green .pd { background:var(--green-2); box-shadow:0 0 0 3px var(--green-tint); }
-  .pill.amber { border-color:var(--amber-line); background:var(--amber-soft); color:var(--amber-ink); }
-  .pill.amber .pd { background:var(--amber); }
-  .pill.grey .pd { background:var(--ink-4); }
+  .cap { background:var(--card-raised); border:1px solid var(--line-2); border-radius:var(--r-lg); box-shadow:var(--sh-rest); padding:18px 22px; margin:14px 0; }
+  .cap-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .cap-head h4 { margin:0; font-size:15.5px; }
+  .cap-body { font-size:13.5px; color:var(--ink-2); line-height:1.55; margin:8px 0 0; max-width:none; }
+  .cap-body b { color:var(--ink); }
 
-  .body-2 { margin-top:22px; }
-  .lbl { font-family:var(--mono); font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-4); margin:26px 0 10px; font-weight:600; }
-  .lbl:first-child { margin-top:0; }
+  .tag { font-family:var(--mono); font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; padding:2px 8px; border-radius:var(--r-pill); border:1px solid var(--line-2); color:var(--ink-3); background:var(--card); white-space:nowrap; }
+  .tag.render, .tag.test { color:var(--green); border-color:var(--green-line); background:var(--green-tint); }
+  .tag.infer { color:var(--amber-ink); border-color:var(--amber-line); background:var(--amber-soft); }
 
-  ul.clean, ol.clean { margin:0 0 15px; padding:0; list-style:none; display:grid; gap:9px; }
-  ul.clean li, ol.clean li { position:relative; padding-left:24px; font-size:.94rem; line-height:1.5; color:var(--ink-2); }
-  ul.clean li::before { content:""; position:absolute; left:6px; top:9px; width:6px; height:6px; border-radius:50%; background:var(--green-2); }
-  ol.clean { counter-reset:step; }
-  ol.clean li { counter-increment:step; padding-left:30px; }
-  ol.clean li::before { content:counter(step); position:absolute; left:0; top:0; font-family:var(--mono); font-size:11px; font-weight:600; color:var(--green-2); background:var(--green-tint); border:1px solid var(--green-line); width:20px; height:20px; border-radius:50%; display:grid; place-items:center; }
-  li strong { color:var(--ink); }
+  .note { border-left:3px solid var(--green-2); padding:4px 0 4px 20px; margin:22px 0; color:var(--ink-2); max-width:780px; }
+  .note.warn { border-left-color:var(--amber); }
+  .note .k { font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--green-2); display:block; margin-bottom:4px; }
+  .note.warn .k { color:var(--amber); }
+  .note p { margin:0; max-width:none; }
 
-  /* verdict quote from the verifier */
-  .verdict-note { margin:14px 0 6px; padding:15px 18px; border-left:3px solid var(--green); background:var(--card-raised); border-radius:0 var(--r-md) var(--r-md) 0; }
-  .verdict-note.warn { border-left-color:var(--amber); }
-  .verdict-note p { margin:0; font-size:.92rem; color:var(--ink-2); }
-  .verdict-note .who { display:block; font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-4); margin-bottom:6px; }
+  .cmd { background:#211f1a; color:#e8e3d8; border-radius:var(--r-md); padding:16px 18px; margin:16px 0; font-family:var(--mono); font-size:13px; line-height:1.7; overflow-x:auto; white-space:pre; }
+  .cmd .c { color:#8fb896; }
+  .cmd .d { color:#a8a498; }
 
-  /* unmet criteria — amber, plainly stated */
-  .unmet { display:grid; gap:10px; margin:0 0 6px; }
-  .unmet .row { display:flex; gap:12px; padding:13px 15px; border:1px solid var(--amber-line); border-radius:var(--r-md); background:color-mix(in srgb, var(--amber-soft) 55%, var(--card-raised)); }
-  .unmet .mk { flex:none; font-family:var(--mono); font-size:11px; font-weight:600; color:var(--amber-ink); background:var(--amber-soft); border:1px solid var(--amber-line); border-radius:5px; padding:2px 7px; height:fit-content; margin-top:1px; letter-spacing:.04em; }
-  .unmet .row p { margin:0; font-size:.9rem; line-height:1.48; color:var(--ink-2); }
-  .unmet .row p b { color:var(--amber-ink); }
-
-  /* figures */
   figure { margin:20px 0 8px; }
-  figure img { display:block; width:100%; height:auto; border:1px solid var(--line-2); border-radius:var(--r-lg); box-shadow:var(--sh-rest); background:var(--card); }
-  figure figcaption { margin-top:10px; font-size:.8rem; color:var(--ink-3); line-height:1.45; font-family:var(--mono); letter-spacing:.01em; }
-  figure figcaption b { color:var(--ink-2); font-weight:600; }
-  .fig-pair { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:760px){ .fig-pair { grid-template-columns:1fr; } }
+  figure img { display:block; width:100%; max-width:100%; height:auto; border:1px solid var(--line-2); border-radius:var(--r-md); box-shadow:var(--sh-rest); }
+  figcaption { font-family:var(--mono); font-size:11px; color:var(--ink-3); margin-top:9px; letter-spacing:.01em; }
+  figcaption b { color:var(--ink); font-weight:600; font-family:var(--sans); letter-spacing:0; }
 
-  /* test-it walkthrough panel */
-  .panel { margin:20px 0; padding:24px 26px 20px; border:1px solid var(--line); border-radius:16px; background:var(--card-raised); box-shadow:var(--sh-rest); }
-  .panel h3 { margin-bottom:14px; }
-  pre.cmd { margin:0 0 16px; padding:15px 17px; border:1px solid var(--line-2); border-radius:var(--r-md); background:var(--paper-2); overflow-x:auto; font-family:var(--mono); font-size:.82rem; line-height:1.7; color:var(--ink); }
-  pre.cmd .c { color:var(--ink-4); }
-  pre.cmd .p { color:var(--green); }
+  .trail { border:1px solid var(--line-2); border-radius:var(--r-md); overflow:hidden; margin:16px 0; background:var(--card); }
+  .trail-scroll { overflow-x:auto; }
+  .trail-row { display:grid; grid-template-columns:92px 130px 1fr; gap:14px; padding:10px 16px; border-top:1px solid var(--hair); align-items:baseline; font-size:13px; min-width:560px; }
+  .trail-row:first-child { border-top:none; }
+  .trail-row .sha { font-family:var(--mono); font-size:12px; color:var(--green-2); }
+  .trail-row .ph { font-family:var(--mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-4); }
+  .trail-row .msg { color:var(--ink-2); }
+  .trail-row .msg b { color:var(--ink); }
 
-  .tour { display:grid; gap:11px; margin-top:6px; counter-reset:tour; }
-  .tour .step { display:grid; grid-template-columns:auto 1fr; gap:13px; align-items:start; }
-  .tour .step .num { counter-increment:tour; font-family:var(--mono); font-size:11px; font-weight:600; color:var(--green); background:var(--green-tint); border:1px solid var(--green-line); width:24px; height:24px; border-radius:50%; display:grid; place-items:center; margin-top:1px; }
-  .tour .step .num::before { content:counter(tour); }
-  .tour .step p { margin:0; font-size:.93rem; line-height:1.5; }
-  .tour .step .t { display:block; color:var(--ink); font-weight:600; margin-bottom:1px; }
+  ol.tour { counter-reset:step; list-style:none; padding:0; margin:16px 0; max-width:760px; }
+  ol.tour li { position:relative; padding:12px 0 12px 40px; border-top:1px solid var(--hair); font-size:14px; color:var(--ink-2); line-height:1.5; }
+  ol.tour li:first-child { border-top:none; }
+  ol.tour li::before { counter-increment:step; content:counter(step); position:absolute; left:0; top:12px; width:24px; height:24px; border-radius:50%; background:var(--green-tint); border:1px solid var(--green-line); color:var(--green); font-family:var(--mono); font-size:11px; font-weight:500; display:grid; place-items:center; }
+  ol.tour li b { color:var(--ink); }
 
-  /* judgment-call ledger */
-  .ledger { margin:16px 0; border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; }
-  .ledger .row { display:grid; grid-template-columns:180px 1fr; gap:0; border-top:1px solid var(--line-soft); }
-  .ledger .row:first-child { border-top:0; }
-  .ledger .k { padding:15px 16px; background:var(--card); font-weight:600; color:var(--ink); font-size:.9rem; border-right:1px solid var(--line-soft); }
-  .ledger .v { padding:15px 17px; font-size:.9rem; line-height:1.5; color:var(--ink-2); background:var(--card-raised); }
-  .ledger .v .tag { display:inline-block; font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; padding:2px 7px; border-radius:var(--r-pill); margin-bottom:7px; font-weight:600; }
-  .tag.keep { background:var(--green-tint); border:1px solid var(--green-line); color:var(--green); }
-  .tag.watch { background:var(--amber-soft); border:1px solid var(--amber-line); color:var(--amber-ink); }
-  @media (max-width:640px){ .ledger .row { grid-template-columns:1fr; } .ledger .k { border-right:0; border-bottom:1px solid var(--line-soft); } }
+  ul.punch, ul.plain { list-style:none; padding:0; margin:14px 0; max-width:820px; }
+  ul.punch li, ul.plain li { position:relative; padding:8px 0 8px 22px; font-size:14px; color:var(--ink-2); line-height:1.5; border-top:1px solid var(--hair); }
+  ul.punch li:first-child, ul.plain li:first-child { border-top:none; }
+  ul.punch li::before { content:""; position:absolute; left:3px; top:15px; width:6px; height:6px; border-radius:50%; background:var(--clay); }
+  ul.plain li::before { content:""; position:absolute; left:3px; top:15px; width:6px; height:6px; border-radius:50%; background:var(--ink-4); }
+  ul.punch li b, ul.plain li b { color:var(--ink); }
 
-  /* commit trail */
-  .commits { margin:14px 0; display:grid; gap:0; border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; background:var(--card-raised); }
-  .commit { display:grid; grid-template-columns:auto auto 1fr; gap:14px; align-items:baseline; padding:13px 16px; border-top:1px solid var(--line-soft); }
-  .commit:first-child { border-top:0; }
-  .commit .sha { font-family:var(--mono); font-size:12px; color:var(--green); font-weight:500; }
-  .commit .date { font-family:var(--mono); font-size:11px; color:var(--ink-4); white-space:nowrap; }
-  .commit .msg { font-size:.9rem; color:var(--ink-2); }
-  .commit.head { background:var(--green-tint); }
-  .commit.head .msg { color:var(--ink); }
-  .commit .flag { display:inline-block; font-family:var(--mono); font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--green); border:1px solid var(--green-line); border-radius:var(--r-pill); padding:1px 7px; margin-left:8px; vertical-align:middle; }
+  .unmet { background:var(--card); border:1px solid var(--line-2); border-left:3px solid var(--amber); border-radius:0 var(--r-md) var(--r-md) 0; padding:14px 20px; margin:14px 0; }
+  .unmet h4 { margin:0 0 5px; font-size:14px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .unmet p { margin:0; font-size:13.5px; color:var(--ink-2); max-width:none; }
+  .unmet .k { font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--amber-ink); font-weight:400; }
 
-  /* nav / TOC */
-  nav.toc { margin:30px 0 0; display:flex; flex-wrap:wrap; gap:8px; }
-  nav.toc a { font-family:var(--mono); font-size:11px; letter-spacing:.02em; padding:5px 12px; border-radius:var(--r-pill); border:1px solid var(--line-2); background:var(--card); color:var(--ink-3); }
-  nav.toc a:hover { border-color:var(--green-line); background:var(--green-tint); color:var(--green); }
-  nav.toc a .d { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; vertical-align:middle; }
-  nav.toc a .d.g { background:var(--green-2); } nav.toc a .d.a { background:var(--amber); } nav.toc a .d.n { background:var(--ink-4); }
-
-  hr.soft { border:0; border-top:1px solid var(--line); margin:40px 0; }
-  .foot { margin-top:70px; padding-top:26px; border-top:1px solid var(--line); color:var(--ink-3); font-size:.84rem; }
-  .foot .mono { color:var(--ink-4); }
-
-  @media (prefers-reduced-motion:reduce){ html { scroll-behavior:auto; } }
+  @media (max-width:760px) {
+    .wrap { padding:0 22px 90px; }
+  }
 </style>
 
 <div class="wrap">
 
-  <header class="top">
-    <p class="eyebrow">Overnight run · branch <code>ade</code> · 2026-07-16</p>
-    <h1>Your ADE, this morning</h1>
-    <p class="lede">The autonomous run was aimed at the whole Agent Development Environment — the docked shell,
-    the collision-free canvas, ordinary language throughout, and the loop where you direct the firm by talking.
-    It got the <span class="said">floor</span> built and verified, then stopped honestly rather than ship a
-    half-wired product. Here is exactly what you can touch this morning, what is real, and what is not yet.</p>
+  <header class="masthead">
+    <p class="eyebrow">Drover · Morning briefing · 2026-07-16</p>
+    <h1>The workbench is built. Come drive it.</h1>
+    <p class="lede">
+      Overnight, Drover became an <strong>Agent Development Environment</strong>: a docked shell around the
+      venture canvas, with the conversation as the handle you steer by. Drover is a desktop workbench for a
+      solo founder running a one-person holding company — you direct each venture in plain words and a
+      permanent AI crew does the work while you watch, review, and decide. This briefing tells you what you
+      can now do, exactly how to try it, what shipped in code, the judgment calls made without you, and the
+      few things that are honestly not done. Every claim below is marked either
+      <span class="tag test">validated</span> — proven by a passing test or a real render — or
+      <span class="tag infer">inferred</span>, meaning the code is present and green but the specific
+      end-to-end path was not driven in front of a screen.
+    </p>
     <div class="meta-row">
-      <span class="chip"><b>1</b> phase committed green</span>
-      <span class="chip"><b>1</b> phase in the tree, unverified</span>
-      <span class="chip"><b>7</b> phases not started</span>
-      <span class="chip mono">brain 555 · ui 252 · lint clean</span>
+      <span class="metachip on">■ full suite green · brain 621 · UI unit 263</span>
+      <span class="metachip">branch <span class="mono">ade</span> · head <span class="mono">4a0efb5</span></span>
+      <span class="metachip">all 9 phases landed</span>
     </div>
   </header>
 
-  <div class="verdict">
-    <div class="vgrid">
-      <div class="stat good"><div class="n">P1</div><div class="l">Shell + layout engine — committed green (<code>c0400e1</code>)</div></div>
-      <div class="stat warn"><div class="n">P2</div><div class="l">Language + components — built, in the working tree, not passed</div></div>
-      <div class="stat"><div class="n">P3–P9</div><div class="l">Zoom rendering, the talk-to-steer loop, streaming, evidence, first-run, crew, Electron — untouched</div></div>
-      <div class="stat good"><div class="n">808</div><div class="l">tests + lint green right now, with the P2 work present</div></div>
+  <!-- ============ BOTTOM LINE ============ -->
+  <section id="bottomline">
+    <div class="bottomline">
+      <p>
+        <strong>The honest bottom line:</strong> the whole loop you asked for is real and it holds together.
+        You open a venture, watch its working theory sit on the canvas, direct it in plain words, see the
+        right teammate claim the work with a one-line reason, review by talking instead of clicking buttons,
+        and grant standing so trusted acts stop waiting on you. The shell never clips, the six-noun language
+        is clean everywhere it was checked, and the app reopens where you left it.
+      </p>
+      <p>
+        What is <em>proven on screen</em> is the room and its resting state: the docked shell, the atlas, the
+        effort inspector, the waiting-act gate, the collapsing rail, and the entry surface. What is
+        <em>present and green but not yet watched end-to-end</em> is the live wiring behind the conversation —
+        routing a fresh direction, a reply steering or closing an effort, a granted act skipping the wait, a
+        real reply landing as a teammate's report. The code and its tests pass; the ten-minute tour below is
+        how you turn the inferred half into validated by your own hand.
+      </p>
     </div>
-
-    <div class="banner">
-      <span class="dot"></span>
-      <p><strong>Read this first.</strong> Only one commit landed on <code>ade</code> for this run: the P1 checkpoint.
-      Everything you see when you open the app — node cards, the swapping inspector, the language cleanup — is
-      <strong>uncommitted work in the working tree</strong> that the P2 verifier never signed off. The full test
-      suite is green, but the run judged the canvas <em>composition still short of the approved target</em> and
-      stopped at the last green boundary rather than commit a phase it couldn't stand behind. Nothing after P2 was
-      attempted. This is the honest floor, not the finished product.</p>
-    </div>
-  </div>
-
-  <nav class="toc">
-    <a href="#test"><span class="d g"></span>Test it yourself</a>
-    <a href="#p1"><span class="d g"></span>P1 · Shell + layout</a>
-    <a href="#p2"><span class="d a"></span>P2 · Language + components</a>
-    <a href="#rest"><span class="d n"></span>P3–P9 · Not started</a>
-    <a href="#calls"><span class="d a"></span>Judgment calls</a>
-    <a href="#trail"><span class="d g"></span>Commit trail</a>
-  </nav>
-
-  <!-- ══════════════ TEST IT YOURSELF ══════════════ -->
-  <section class="phase" id="test">
-    <div class="phase-head pass" style="border:0; padding-bottom:8px;">
-      <div class="phase-stripe" style="background:var(--green);"></div>
-      <div>
-        <div class="id">START HERE</div>
-        <h2>Test it yourself — a ten-minute tour</h2>
-      </div>
-    </div>
-    <p class="body-2">The desktop package (P9) did not ship, so open it the dev way, on branch <code>ade</code>.
-    <code>npm start</code> builds the UI and serves the brain at <code>127.0.0.1:4317</code>. Because the Electron
-    host isn't running to sign your founder capability, append <code>?founderDev=1</code> so the canvas opens
-    instead of the host-required screen — that flag is the dev hatch, not something a real founder ever sees.</p>
-
-    <div class="panel">
-      <pre class="cmd"><span class="c"># from the repo root, on branch ade</span>
-git checkout ade
-npm start                       <span class="c"># builds UI, serves brain at 127.0.0.1:4317</span>
-
-<span class="c"># then open in a browser (desktop viewport — this is a desktop workbench):</span>
-<span class="p">http://127.0.0.1:4317/?founderDev=1</span></pre>
-
-      <h3 style="margin-top:4px;">What to try, in order</h3>
-      <div class="tour">
-        <div class="step"><span class="num"></span><p><span class="t">Land on the venture picker.</span> Ordinary words, no jargon: <em>“Continue a venture — open the live canvas for that product.”</em> You'll see three seeded ventures (drover, Buffalo Projects, DenialShield).</p></div>
-        <div class="step"><span class="num"></span><p><span class="t">Open <strong>Buffalo Projects</strong>.</span> The docked shell appears: a conversation rail on the left, the venture canvas as the stage, and a top bar. The rail's return briefing groups what changed into <em>Needs you</em>, <em>The market spoke</em>, and <em>Kept moving</em> — plain language, not internal nouns.</p></div>
-        <div class="step"><span class="num"></span><p><span class="t">Read the canvas.</span> The hub in the center states the venture's purpose in a serif voice. Around it: the one effort underway (“Project drop converts better than profile creation”), a gate card (“Needs your hand — 1 outward act held for your decision”), two teammates with faces (Mara, Sable), and two capability instruments (Product repository · connected, Gmail · not connected).</p></div>
-        <div class="step"><span class="num"></span><p><span class="t">Click the effort card.</span> The <strong>inspector</strong> opens on the right as one docked panel — not a floating overlay. It reads the effort in your language: what it's for, who's on it (Sable), its draft titled by content (“Project-drop invitation v1”), and a green trust note: <em>“nothing here touches the world until you say so.”</em> The <code>staged-…</code> id is demoted to a disclosure triangle.</p></div>
-        <div class="step"><span class="num"></span><p><span class="t">Watch the rail follow the canvas.</span> Selecting the effort swaps the rail to a <em>focused conversation</em> scoped to that effort, and a context ribbon appears across the top of the stage (Venture direction / Pressure changed / Returned evidence). Canvas and chat are bidirectionally focused — that's the intended handle.</p></div>
-        <div class="step"><span class="num"></span><p><span class="t">Collapse the rail.</span> Click <em>Hide conversation</em>. The rail becomes a slim icon strip and the stage genuinely widens (it's a real grid track, so nothing slides over the canvas). Re-open with the conversation icon.</p></div>
-        <div class="step"><span class="num"></span><p><span class="t">Resize the window to 1440×900.</span> The canvas re-fits to the new stage cell. At this size every node sits fully in frame — the layout re-composes around the docked chrome rather than staying pinned to 1920.</p></div>
-        <div class="step"><span class="num"></span><p><span class="t">Note what you <em>can't</em> do yet.</span> Typing a direction and pressing send will run the existing drive path, but the P4 loop — a direction getting <em>claimed by a named teammate with a one-line why</em>, and replies read as steer/close — is not built. The composer works; the talk-to-operate intelligence behind it is Night-1-Phase-4 and later.</p></div>
-      </div>
-    </div>
-
-    <p><strong>To re-run the checks yourself:</strong> <code>npm test</code> (brain + ui + lint + build),
-    <code>npm --prefix ui run test:unit</code>, and <code>npm run test:firm:browser</code>. All three pass on the
-    tree as it stands.</p>
   </section>
 
-  <!-- ══════════════ PHASE 1 ══════════════ -->
-  <section class="phase pass" id="p1">
-    <div class="phase-head">
-      <div class="phase-stripe"></div>
-      <div>
-        <div class="id">PHASE 1 · NIGHT 1</div>
-        <h2>ADE shell grid + layout engine</h2>
-      </div>
-      <div class="status"><span class="pill green"><span class="pd"></span>Committed · green</span></div>
+  <hr class="rule">
+
+  <!-- ============ 1 · WHAT YOU CAN NOW DO ============ -->
+  <section id="do">
+    <p class="sec-num">01 — What you can now do</p>
+    <h2>The changed experience, end to end</h2>
+    <p>
+      Yesterday the canvas floated without a frame — panels overlapped, nodes collided, and internal words
+      leaked into what you read. Today it is a workbench with three docked regions and one place to type. Here
+      is what that buys you, in the order you'd meet it.
+    </p>
+
+    <div class="cap">
+      <div class="cap-head"><h4>You direct a venture in plain words</h4><span class="tag render">validated · render</span></div>
+      <p class="cap-body">
+        Open a venture and its <b>working theory</b> is already on the canvas — the product truth at the
+        center, the effort underway, the crew, and the tools it can reach. A composer is docked to the stage;
+        you type an ordinary direction like <em>"help this venture grow."</em> No plan to approve, no form. The
+        resting shell, the centered venture truth, and the docked composer are proven in the renders below.
+        <b>Not yet watched:</b> a brand-new theory materializing node by node from a fresh direction.
+      </p>
     </div>
 
-    <div class="lbl">What shipped, in plain terms</div>
-    <ul class="clean">
-      <li>The whole window became a <strong>docked three-part frame</strong>: a conversation rail, the canvas as center stage, and one inspector that swaps its contents when you select something. They are real, side-by-side regions — a panel can no longer float over and cover the canvas, which was the old mess.</li>
-      <li>The rail <strong>collapses to an icon strip</strong> and the stage actually grows into the freed space, because the frame is a CSS grid track and not a slide-over.</li>
-      <li>A new <strong>placement engine</strong> now decides where every card sits so that two cards physically cannot overlap. <em>You never drag a node</em> — hand-placement was removed at the source, which is what used to create the collisions.</li>
-      <li>The canvas <strong>re-fits itself</strong> to whatever space the frame leaves it — rail collapsed, inspector open, window resized — instead of being frozen at one screen size.</li>
-      <li>The two old hand-tuned layout files and the orbit field were <strong>deleted</strong> once the engine proved out.</li>
-    </ul>
-
-    <div class="lbl">The verifier's verdict</div>
-    <div class="verdict-note">
-      <span class="who">Independent verify agent · four attempts · committed as c0400e1</span>
-      <p>“Grid shell docks rail/stage/inspector as real cells, layout engine is deterministic and collision-free,
-      founder drag removed, full suite green.” The engine's collision-free property is proven by a unit test that
-      inflates every node box by the required clearance and asserts no two inflated boxes overlap — and it is
-      deterministic (identical input yields byte-identical positions), so screenshots and the browser journey stay
-      stable.</p>
+    <div class="cap">
+      <div class="cap-head"><h4>Work gets claimed, visibly, with a reason</h4><span class="tag infer">inferred · code green</span></div>
+      <p class="cap-body">
+        A direction is routed to the teammate whose lens fits it, and the claim appears in the conversation
+        with a one-line why before the work starts — a buyer-flavored direction goes to the buyer-lens
+        teammate; a crew of one skips the model and the coordinator claims it directly. The routing module and
+        its tests are present and pass. <b>Not yet watched:</b> a live claim rendering in the thread from a
+        direction you type.
+      </p>
     </div>
 
-    <div class="lbl">See it</div>
+    <div class="cap">
+      <div class="cap-head"><h4>You review by talking, not by clicking</h4><span class="tag infer">inferred · code green</span></div>
+      <p class="cap-body">
+        When a draft comes back, you reply in the thread. Drover reads the reply as one of <em>steer /
+        approve / close / new-direction</em> — <b>"tighten the opening, it's too salesy"</b> reaches the
+        effort's next step as steering; <b>"that's done, close it"</b> ends the effort and it recedes to the
+        background. No buttons were added. An ambiguous reply is treated as steer and closes nothing. Only your
+        own message ends work — the classifier proposes, you decide. Module and tests present and green.
+        <b>Not yet watched:</b> a reply visibly steering or closing an effort on screen.
+      </p>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><h4>You grant standing, and trusted acts stop waiting</h4><span class="tag infer">inferred · code green</span></div>
+      <p class="cap-body">
+        Say <b>"you can send outreach like this yourself"</b> and that standing is remembered. A later matching
+        act sends without parking at the gate and tells you so — <em>"Sending this — you told me I could."</em>
+        A non-matching act still waits with its exact payload shown in the inspector, and a deploy always waits
+        regardless. The grant only skips the <em>wait</em>; it never mints send authority, and the
+        wall-authority test proves a grant can't forge self-approval from the browser, API, MCP, or the model.
+        <b>Not yet watched:</b> a granted act actually skipping the wait live.
+      </p>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><h4>Evidence attaches to its cause</h4><span class="tag infer">inferred · code green</span></div>
+      <p class="cap-body">
+        When a reply comes back from the world, it joins the exact effort that caused it and appears in the
+        conversation as the teammate reporting it — <em>"Buffalo replied — they asked about pricing"</em> —
+        linking down to the full record. An unattributed reply stays honestly unattributed, never guessed onto
+        unrelated work. The join core and its rendering are present and green. Nothing sends outbound in this
+        build: the real Gmail send path is guarded by host wall-release, so the join is proven with a
+        founder-entered outcome, not a live send. <b>Not yet watched:</b> a reply reported in-thread on screen.
+      </p>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><h4>The same crew follows you across ventures</h4><span class="tag infer">inferred · code green</span></div>
+      <p class="cap-body">
+        A new venture opens with the same named teammates already present, carrying the lessons they graduated
+        elsewhere — one face, one accumulating lens. Each venture still holds only its own work; nothing bleeds
+        between ventures. Template graduation and the cross-venture isolation guard are present and green.
+        <b>Not yet watched:</b> creating a fresh venture and seeing the seeded crew appear.
+      </p>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><h4>The app reopens where you left it</h4><span class="tag infer">inferred · code green</span></div>
+      <p class="cap-body">
+        Launched as a desktop app, Drover restores your last window size and position, starts and stops its
+        engine with the window, and boots only once healthy. The browser build is now strictly a dev harness —
+        no founder-facing "desktop required" chrome. Window-state restore, health-gated boot, and clean
+        shutdown are wired with tests. <b>Not yet watched:</b> a quit-and-relaunch cycle restoring exact bounds.
+      </p>
+    </div>
+
+    <div class="note"><span class="k">The one place your hand is required</span>
+      <p>Only an act that would touch the world — send, deploy, spend — waits for you, and it waits with the
+      exact payload rendered in the inspector: the email as the recipient will see it, the diff, the amount.
+      Everything inward proceeds without asking. This authority model is unchanged from before and its guard
+      tests stayed green.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ 2 · TEST IT YOURSELF ============ -->
+  <section id="test">
+    <p class="sec-num">02 — Test it yourself</p>
+    <h2>Run it, then take the ten-minute tour</h2>
+    <p>
+      Preferred: launch the real desktop app. It restores your window and runs the honest lifecycle. If the
+      desktop build gives you any trouble, the localhost dev harness serves the identical UI.
+    </p>
+
+    <div class="cmd"><span class="d"># preferred — the desktop app (Electron: window-state restore, clean lifecycle)</span>
+<span class="c">npm run app</span>
+
+<span class="d"># fallback — dev harness, serves the same UI at 127.0.0.1:4317</span>
+<span class="c">npm start</span></div>
+
+    <p>Then walk this. It exercises every claim above in the order you'd naturally meet it.</p>
+    <ol class="tour">
+      <li>You land on the <b>entry surface</b> — "Direct every venture, see what moved, and review consequential changes before they leave." Pick <b>Buffalo Projects</b> and open its canvas.</li>
+      <li>The <b>atlas</b> settles: the venture truth at center ("Talented builders find the right people through credible work, not polished profiles"), one effort underway, the crew, and the tools it can reach. Confirm nothing overlaps and the top band reads <b>"1 decision needs you."</b></li>
+      <li>Click the effort card. The <b>inspector</b> swaps in on the right — what the effort is for, who's on it, its draft, and a link to the full run record. The stage re-fits; no panel bleeds over the canvas.</li>
+      <li>Find the <b>waiting act</b> ("Needs your hand — 1 outward act held for your decision"). Open it and read the exact payload in the inspector. This is the one place your hand is required.</li>
+      <li>Open the <b>conversation</b> and reply to the returned draft in plain words — try <b>"tighten the opening, it's too salesy."</b> It should register as steering, not a button press.</li>
+      <li>Reply <b>"you can send outreach like this yourself"</b> to grant standing, then confirm a later matching act says it's sending because you allowed it — while a deploy still waits.</li>
+      <li><b>Collapse the rail</b> to its icon strip and watch the canvas re-fit to the wider stage within a beat. Reopen it; it returns.</li>
+      <li>Quit and relaunch <span class="mono">npm run app</span> — it should reopen to the same venture at the same window size.</li>
+    </ol>
+
+    <div class="note warn"><span class="k">Nothing leaves the building</span>
+      <p>No outbound send happens in this build. The real Gmail send path is held behind host wall-release, so
+      the tour is safe to run end to end — the evidence-to-cause step is proven with a founder-entered outcome,
+      not a live email.</p>
+    </div>
+
+    <h3>What it looks like right now</h3>
     <figure>
-      <img src="evidence/ade-run/briefing-live-inspector-1920.png" alt="The ADE shell at 1920×1080: conversation rail, canvas stage, and inspector open on a selected effort.">
-      <figcaption><b>Live app, 1920×1080, this morning.</b> The three docked cells: rail (focused conversation, left) · stage (venture canvas, center) · inspector (the selected effort, right). Captured from the running build on <code>ade</code>.</figcaption>
+      <img src="evidence/ade-run/integration/00-entry-picker-1920.png" alt="Drover entry surface listing ventures to continue">
+      <figcaption><b>Entry.</b> Plain-language framing — direct, see what moved, review before it leaves — with the ventures to continue. 1920×1080.</figcaption>
     </figure>
-    <div class="fig-pair">
-      <figure>
-        <img src="evidence/ade-run/briefing-live-rail-collapsed-1920.png" alt="Rail collapsed to an icon strip, stage widened.">
-        <figcaption><b>Rail collapsed.</b> The stage grew into the freed track — a layout change, not an overlay.</figcaption>
-      </figure>
-      <figure>
-        <img src="evidence/ade-run/briefing-live-1440.png" alt="The shell at 1440×900 with every node contained.">
-        <figcaption><b>1440×900 resilience view.</b> The canvas re-fit to the smaller stage cell; every node sits in frame here.</figcaption>
-      </figure>
+    <figure>
+      <img src="evidence/ade-run/integration/01-buffalo-atlas-1920.png" alt="The resting Buffalo Projects atlas">
+      <figcaption><b>The resting atlas.</b> Venture truth centered, one effort underway, crew and tools placed collision-free, the waiting-act gate at lower right, the icon rail at left. 1920×1080.</figcaption>
     </figure>
+    <figure>
+      <img src="evidence/ade-run/integration/03-effort-inspector-1920.png" alt="An effort selected with the conversation rail and inspector both open">
+      <figcaption><b>Full working shell.</b> Conversation rail (left), atlas (center), effort inspector (right) — all three regions docked at once, no overlap, six-noun copy throughout, internal ids under a disclosure. 1920×1080.</figcaption>
+    </figure>
+    <figure>
+      <img src="evidence/ade-run/integration/04-rail-collapsed-1920.png" alt="The same atlas with the conversation rail collapsed to an icon strip">
+      <figcaption><b>Rail collapsed.</b> The rail drops to an icon strip and the canvas re-fits to the wider stage — the stage-maximal default. 1920×1080.</figcaption>
+    </figure>
+  </section>
 
-    <div class="lbl">Unmet, stated plainly</div>
+  <hr class="rule">
+
+  <!-- ============ 3 · COMMIT TRAIL ============ -->
+  <section id="trail">
+    <p class="sec-num">03 — The commit trail</p>
+    <h2>What landed, in order</h2>
+    <p>
+      The run started serial, then split into parallel lanes on your morning "run more in parallel" call, and
+      the lanes were merged back into <code>ade</code> in dependency order. This is the trail as it sits on the
+      branch, newest first.
+    </p>
+    <div class="trail trail-scroll">
+      <div class="trail-row"><span class="sha">4a0efb5</span><span class="ph">merge · P9</span><span class="msg">Merge <b>lane/p9</b> — Electron packaging &amp; shell hardening</span></div>
+      <div class="trail-row"><span class="sha">90e8dfa</span><span class="ph">merge · P6</span><span class="msg">Merge <b>lane/p6</b> — evidence-to-cause (joined replies in the conversation)</span></div>
+      <div class="trail-row"><span class="sha">190f0bd</span><span class="ph">merge · P4·P5</span><span class="msg">Merge <b>lane/p4p5</b> — routing, review-dialogue, trust grants, streaming, steer seam</span></div>
+      <div class="trail-row"><span class="sha">eca4854</span><span class="ph">P7</span><span class="msg">First run: connect repo, product read-back, direction offers</span></div>
+      <div class="trail-row"><span class="sha">35de91c</span><span class="ph">P3</span><span class="msg">Zoom-responsive rendering (no modes, no switcher)</span></div>
+      <div class="trail-row"><span class="sha">a465e5b</span><span class="ph">P2</span><span class="msg">Language &amp; component pass — founder-accepted render</span></div>
+      <div class="trail-row"><span class="sha">d386803</span><span class="ph">P4·P5 lane</span><span class="msg">Direction routing, review-is-dialogue, trust grants, streaming, steer seam</span></div>
+      <div class="trail-row"><span class="sha">5852ca4</span><span class="ph">P9 lane</span><span class="msg">Harden Electron shell — window-state restore + clean brain lifecycle</span></div>
+      <div class="trail-row"><span class="sha">ca6755a</span><span class="ph">P6 lane</span><span class="msg">Surface joined market replies in the conversation</span></div>
+      <div class="trail-row"><span class="sha">c0400e1</span><span class="ph">P1</span><span class="msg">Docked shell and layout engine green (composition refined in P2)</span></div>
+      <div class="trail-row"><span class="sha">a382f40</span><span class="ph">base</span><span class="msg">Land ADE direction, specs, and build contract</span></div>
+    </div>
+    <div class="note"><span class="k">Merge health</span>
+      <p>Three of the four lane merges applied with no conflict. One (P6) had a single import-block conflict in
+      <code>market.mjs</code>, resolved by keeping both imports. The full suite ran green after every merge and
+      on the final sweep.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ 4 · JUDGMENT CALLS ============ -->
+  <section id="calls">
+    <p class="sec-num">04 — Judgment calls made without you</p>
+    <h2>Decisions taken during the run, for your review</h2>
+    <p>These are choices made to keep moving overnight. None is locked; each is here so you can overrule it.</p>
+    <ul class="punch">
+      <li><b>Card density: "standard" is the shipping default.</b> The composite offered editorial / standard / detailed density variants. Standard ships — enough on the card to read at a glance without clutter. The other two remain available for you to judge later.</li>
+      <li><b>Visual bar calibrated to your morning verdict.</b> P1 shipped a green shell whose composition was short of target; P2 re-did the language and component pass to the accepted render you signed off on. The bar that held from there is the P2 accepted frame, not the P1 checkpoint.</li>
+      <li><b>Topology: parallel lanes off the P1 checkpoint.</b> On your "run more in parallel" call, P4·P5, P6, P8, and P9 were built in isolated worktrees and merged back in dependency order rather than as one serial chain. It held — a clean suite after each merge.</li>
+      <li><b>Gmail send left behind the wall.</b> Per the run contract, nothing outbound sends. The evidence-to-cause join is proven with a founder-entered outcome; the real send executor is present but guarded, not exercised.</li>
+      <li><b>One crew across ventures = Reading A.</b> Teammates cross ventures as graduated patterns through the template, not as literally shared memory. Literal pooling (Reading B) would violate venture isolation and was left unbuilt — it needs your explicit amendment first.</li>
+    </ul>
+
+    <h3>Taste-polish punch list carried forward</h3>
+    <p>Small things the sweep noticed and left for a deliberate pass, not blockers:</p>
+    <ul class="plain">
+      <li>The waiting-act gate card and the effort card share close visual weight at rest; a hair more contrast on the amber gate would make "needs you" pop faster from across the canvas.</li>
+      <li>The collapsed-rail direction/claim card at the bottom of the rail is dense; it earns a second look at line-height and truncation.</li>
+      <li>Zoom-responsive card detail is live and subscribes to the real canvas transform — worth eyeballing the mid-zoom band where body copy first appears, to confirm the transition reads as intentional rather than abrupt.</li>
+    </ul>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ 5 · HONEST UNMET ============ -->
+  <section id="unmet">
+    <p class="sec-num">05 — Honest unmet items</p>
+    <h2>What is not done, stated plainly</h2>
+    <p>
+      The sweep passed with no functional or structural defect — brain 621/621, UI unit 263/263 across 59
+      files, lint and production build clean, and the firm browser journey green. Nothing was left red. What
+      remains is the gap between "green and present" and "watched end-to-end," plus the items the contract
+      deferred on purpose.
+    </p>
+
     <div class="unmet">
-      <div class="row"><span class="mk">P1·a</span><p><b>Stage-cell containment bug.</b> At 1920 wide, in the resting and inspector-open configurations, the gate card on the far right of the field <b>clips against the stage edge</b> instead of tucking fully inside its cell. It reflows correctly when the rail collapses and holds fine at 1440 — so it is config-specific, not universal. The checkpoint commit names this as the top remaining P1 defect. The engine keeps node <em>boxes</em> apart; the fit inset does not yet fully guarantee the outermost card stays inside the visible stage at every width.</p></div>
-      <div class="row"><span class="mk">P1·b</span><p><b>The hub glyph overruns its layout box.</b> The decorative circle drawn around the hub's purpose text is visually larger than the box the engine reserves for the hub, so an adjacent effort card can appear to graze the hub ring even though the underlying boxes are provably clear. This is a render-vs-layout mismatch, not a failure of the collision test — worth a small fix so the visible field matches the proven one.</p></div>
-    </div>
-  </section>
-
-  <!-- ══════════════ PHASE 2 ══════════════ -->
-  <section class="phase partial" id="p2">
-    <div class="phase-head">
-      <div class="phase-stripe"></div>
-      <div>
-        <div class="id">PHASE 2 · NIGHT 1</div>
-        <h2>Language + component pass</h2>
-      </div>
-      <div class="status"><span class="pill amber"><span class="pd"></span>In the tree · not passed</span></div>
+      <h4>The live conversation loop is not screen-verified <span class="k">present · green · unwatched</span></h4>
+      <p>Routing a fresh direction, a reply steering or closing an effort, a granted act skipping the wait, and a reply reported in-thread all have passing modules and tests, but none was driven live in front of a screen during the sweep. The ten-minute tour is how you close this gap. Treat these as inferred until you've watched them.</p>
     </div>
 
-    <p class="body-2">This phase's work is real and sitting in the working tree — it's what you actually see when
-    you open the app — but the run's verifier <strong>did not pass it, so no commit agent ran</strong>. It is
-    unstaged against the <code>c0400e1</code> checkpoint. Treated honestly: <em>built, testable, not signed off.</em></p>
-
-    <div class="lbl">What was built</div>
-    <ul class="clean">
-      <li><strong>Drafts are titled by what they are</strong>, not by an id. The inspector shows “Project-drop invitation v1”; the raw <code>buffalo-work-project-drop-v1 · firm v1</code> identifier is tucked under a disclosure triangle — exactly the contract's “titles from content, never IDs.”</li>
-      <li>The <strong>inspector reads an effort in your language</strong>: state pill, “What this effort is for,” “Who's on it” with a teammate face, “Its draft,” and a green trust note where the decision happens.</li>
-      <li>A <strong>context ribbon</strong> (Venture direction / Pressure changed / Returned evidence) surfaces on selection, and the rail focuses to the selected effort's conversation.</li>
-      <li>Node archetypes render with faces and states — effort, gate, teammate, capability — over the warm-paper palette from the design system.</li>
-      <li>The founder-language guard was <strong>extended</strong> (it now also scans for <code>staged-</code> and <code>DRIFTING</code> leaks), and it passes.</li>
-    </ul>
-
-    <div class="lbl">The verifier's verdict</div>
-    <div class="verdict-note warn">
-      <span class="who">Run judgment · P2 not committed</span>
-      <p>Green on tests, short on look. The full suite (<code>npm test</code>, unit, browser journey) passes with
-      this work in the tree, and the language guard is clean — but the run judged the <strong>canvas composition
-      still short of the approved composite</strong> and would not commit the phase on that basis. The conflict rule
-      the specs set is “composite wins on look”; by that bar the phase isn't done, even though nothing is red.</p>
-    </div>
-
-    <div class="lbl">Why “short of target” — the honest comparison</div>
-    <p>The structure matches the composite: same rail / stage / inspector, and the inspector is nearly a
-    one-to-one match (EFFORT · title · state pill · what-it's-for · who's-on-it · its-draft · numbered draft, right
-    down to the trust note). What doesn't match is the <strong>density and balance of the field</strong>. The
-    composite is a full constellation — seven efforts, four named teammates, capabilities all ringing the hub in a
-    legible, filled plane. The live venture (Buffalo, one effort) renders sparse: a few nodes floating in wide empty
-    canvas, and the right-edge gate card clipping. Part of that is the thin fixture; part is that the layout engine's
-    resting composition hasn't been tuned to fill the stage at the composite's proportions.</p>
-
-    <div class="fig-pair">
-      <figure>
-        <img src="evidence/ade-run/briefing-live-atlas-1920.png" alt="The live canvas: one effort, sparse field, right-edge gate card clipping.">
-        <figcaption><b>Where it is — live, 1920.</b> One effort, sparse field, gate card clipped at the right edge.</figcaption>
-      </figure>
-      <figure>
-        <img src="evidence/ade-run/P2/target-composite-1920.png" alt="The approved composite: a dense, balanced constellation of seven efforts and four teammates.">
-        <figcaption><b>Where it's headed — the composite.</b> A filled, balanced plane. The inspector already matches; the field density does not.</figcaption>
-      </figure>
-    </figure>
-
-    <div class="lbl">Unmet, stated plainly</div>
     <div class="unmet">
-      <div class="row"><span class="mk">P2·a</span><p><b>Not committed.</b> The phase is not on the <code>ade</code> branch. If the app is rebuilt from a clean <code>c0400e1</code> checkout, none of the P2 language or component work is present. It lives only in the uncommitted working tree.</p></div>
-      <div class="row"><span class="mk">P2·b</span><p><b>Composition short of the composite.</b> The resting field reads sparse and unbalanced against the approved target; the outermost card can clip. The design intent (a full, legible constellation) is not yet met at the ship viewport.</p></div>
-      <div class="row"><span class="mk">P2·c</span><p><b>Receding-strata layer unverified.</b> The contract asks completed efforts to sink to a faded background layer and expand on demand. With one live effort in the fixture, this behavior could not be exercised or shown, so it is unproven here.</p></div>
-      <div class="row"><span class="mk">P2·d</span><p><b>Degraded / snapshot chrome removal not confirmed.</b> The contract's “remove the founder-facing desktop-required degraded state” item is part of P2's scope and was not verified as complete — the <code>?founderDev=1</code> hatch is still how you bypass the host-required screen in dev.</p></div>
+      <h4>No real outbound send happened <span class="k">by design</span></h4>
+      <p>The Gmail send executor is present but held behind host wall-release. The evidence-to-cause join is proven with a founder-entered outcome, not a live email. Wiring and exercising a real send is a future night's scope, on your say-so.</p>
+    </div>
+
+    <div class="unmet">
+      <h4>Idea-stage first run is out of scope <span class="k">deferred</span></h4>
+      <p>First run ships for the repo-backed case: connect a repository, get a correctable product read-back with uncertainty labeled, and pick from concrete directions. Starting a venture from a bare description — no repo — was deferred; it needs mockup rounds before it's built.</p>
+    </div>
+
+    <div class="unmet">
+      <h4>Deferred by contract, not attempted <span class="k">deferred</span></h4>
+      <p>Navigation instruments (minimap, command palette), auto-update mechanics, open-source packaging, persona prompt architecture, and literal shared cross-venture memory (Reading B, which needs an isolation-rule amendment first) were all explicitly out of scope for this run.</p>
+    </div>
+
+    <div class="unmet">
+      <h4>Dirty evidence PNGs in the tree <span class="k">housekeeping</span></h4>
+      <p>A handful of older evidence screenshots (orbital-atlas, venture-atlas, workyard) show as modified in <code>git status</code> and are untouched by this run. Lane P8's merge was held once because of them and only proceeded once it was clear they were safe. They're binary evidence, not code, and don't affect the build — but they're worth a deliberate commit-or-discard so the tree is clean.</p>
     </div>
   </section>
 
-  <!-- ══════════════ P3–P9 NOT STARTED ══════════════ -->
-  <section class="phase notstarted" id="rest">
-    <div class="phase-head">
-      <div class="phase-stripe"></div>
-      <div>
-        <div class="id">PHASES 3–9</div>
-        <h2>Everything the chain never reached</h2>
-      </div>
-      <div class="status"><span class="pill grey"><span class="pd"></span>Not started</span></div>
-    </div>
-
-    <p class="body-2">The run stopped at the P1/P2 boundary. None of the following was attempted — no code, no
-    verify, no commit. Stated so you don't mistake a designed intent for a built one:</p>
-
-    <div class="lbl">Night 1, remaining</div>
-    <ul class="clean">
-      <li><strong>P3 · Zoom-responsive rendering.</strong> Cards should simplify as you zoom out and re-detail as you zoom in, and a typed direction should unfold node-by-node over ~2–3s. Not built.</li>
-      <li><strong>P4 · The talk-to-operate loop.</strong> The heart of Night 1: a direction gets <em>claimed by the right teammate with a one-line why</em>; a reply is read as steer / approve / close; “you can send these yourself now” persists as a trust grant so blessed acts stop waiting. <strong>Not built.</strong> This is why, this morning, the composer runs the old drive path with none of the claiming, dialogue-review, or trust intelligence behind it.</li>
-    </ul>
-
-    <div class="lbl">Night 2, remaining</div>
-    <ul class="clean">
-      <li><strong>P5 · Streaming + mid-flight steering + run transparency</strong> — live work streaming over SSE (replacing the 900ms poll), steer-at-checkpoint, ⌘O venture switch. Not built.</li>
-      <li><strong>P6 · Evidence to cause</strong> — a reply landing in the conversation as the teammate reporting it, joined to the effort that caused it. Not built.</li>
-      <li><strong>P7 · First run</strong> — connect a repo → correctable product read-back on canvas → 2–3 concrete direction offers. Not built.</li>
-      <li><strong>P8 · One crew across ventures</strong> — the four named teammates as firm-level characters seeded into every venture. Not built.</li>
-      <li><strong>P9 · Electron packaging + hardening</strong> — window-state restore, clean brain lifecycle, browser demoted to a dev harness. Not built. This is why you launch with <code>npm start</code> and not <code>npm run app</code>.</li>
-    </ul>
-
-    <div class="banner" style="margin-top:20px;">
-      <span class="dot"></span>
-      <p>The run plan's “run more in parallel” topology (P4+P5, P6, P8, P9 building concurrently in worktrees off
-      <code>c0400e1</code>) <strong>did not produce merged lanes</strong> — there are no <code>lane/*</code> branches
-      on this repo and no integration merges landed. The chain did not get past the serial P1→P2 floor.</p>
-    </div>
-  </section>
-
-  <!-- ══════════════ JUDGMENT CALLS ══════════════ -->
-  <section class="phase" id="calls">
-    <div class="phase-head" style="border-bottom:1px solid var(--line);">
-      <div class="phase-stripe" style="background:var(--amber);"></div>
-      <div>
-        <div class="id">FOR YOUR REVIEW</div>
-        <h2>Judgment calls the run made</h2>
-      </div>
-    </div>
-    <p class="body-2">Decisions taken without you in the room. None are irreversible; each is here so you can
-    overrule it.</p>
-
-    <div class="ledger">
-      <div class="row">
-        <div class="k">Layout engine: d3-force, not elkjs</div>
-        <div class="v"><span class="tag keep">worth keeping</span><br>The contract set the engine as a Phase-1 spike between <code>elkjs</code> (layered, left-to-right) and <code>d3-force</code> (organic constellation). The run chose <strong>d3-force radial</strong> and documented why: the composite is a hub-at-center constellation, not a layered flow, so elkjs's shape was wrong. It's run fully deterministically (seeded angles, fixed tick count, no randomness). This reads as the right call — but it's a call, and it's the one dependency added.</div>
-      </div>
-      <div class="row">
-        <div class="k">Card density = standard</div>
-        <div class="v"><span class="tag keep">as planned</span><br>The design system offers three densities (editorial / standard / detailed). The run shipped <strong>standard</strong> as the default, per the run contract's stated shipping default. You judge the variants later; nothing locks this in.</div>
-      </div>
-      <div class="row">
-        <div class="k">Stop at the P1/P2 boundary</div>
-        <div class="v"><span class="tag watch">review</span><br>Rather than commit P2 with composition it judged short of target, or push into P3+ on an unproven floor, the run <strong>stopped and left P2 uncommitted</strong>. That honored the specs' “a shipped Phase N green beats a half-done Phase N+1” rule — but it means the P2 work is unprotected in the working tree. <b>You may want to decide whether to commit it as an explicit checkpoint or discard and redo.</b></div>
-      </div>
-      <div class="row">
-        <div class="k">P2 verified on tests, gated on taste</div>
-        <div class="v"><span class="tag watch">review</span><br>Every automated gate is green with P2 present. The block was a <strong>visual taste judgment</strong> (composition vs. composite), which the specs make authoritative on look. Reasonable, but it's the run substituting its own eye for yours — the comparison shots above are so you can confirm or override that read.</div>
-      </div>
-      <div class="row">
-        <div class="k">Thin demo fixture</div>
-        <div class="v"><span class="tag watch">review</span><br>The live Buffalo venture carries one effort, which makes the canvas look sparser than the seven-effort composite regardless of engine tuning. Some of the “short of target” gap is fixture thinness, not layout. Worth seeding a denser fixture before judging composition again.</div>
-      </div>
-    </div>
-    <p><strong>No contract deviations to the invariants were reported</strong> — the compatibility seams
-    (<code>bet</code>, <code>gtm-ide</code>, <code>~/.gtm-ide</code>, <code>staged-</code>) are unchanged in storage,
-    routes, and tests; <code>work-loop.mjs</code> did not grow; the wall authority model was untouched (nothing in
-    P1/P2 went near it). No stash was popped.</p>
-  </section>
-
-  <!-- ══════════════ COMMIT TRAIL ══════════════ -->
-  <section class="phase" id="trail">
-    <div class="phase-head" style="border-bottom:1px solid var(--line);">
-      <div class="phase-stripe" style="background:var(--green);"></div>
-      <div>
-        <div class="id">THE RECORD</div>
-        <h2>Commit trail on <code>ade</code></h2>
-      </div>
-    </div>
-    <p class="body-2">The run added <strong>exactly one commit</strong>. The three below it predate the run (they
-    landed the specs and the prior atlas). The P2 work is uncommitted, so it does not appear here.</p>
-
-    <div class="commits">
-      <div class="commit head">
-        <span class="sha">c0400e1</span><span class="date">Jul 16, 04:06</span>
-        <span class="msg">ade p1 checkpoint: docked shell and layout engine green, composition short of target<span class="flag">this run</span></span>
-      </div>
-      <div class="commit">
-        <span class="sha">a382f40</span><span class="date">Jul 15, 23:57</span>
-        <span class="msg">land ade direction, specs, and build contract</span>
-      </div>
-      <div class="commit">
-        <span class="sha">850c52a</span><span class="date">Jul 15, 22:01</span>
-        <span class="msg">land living venture atlas and working theory slice</span>
-      </div>
-      <div class="commit">
-        <span class="sha">baf089d</span><span class="date">Jul 14, 13:39</span>
-        <span class="msg">replace legacy ontology with firm</span>
-      </div>
-    </div>
-
-    <div class="verdict-note">
-      <span class="who">Full body of c0400e1</span>
-      <p>“Four verified attempts: grid shell docks rail/stage/inspector as real cells, layout engine is deterministic
-      and collision-free, founder drag removed, full suite green. Remaining: stage-cell containment bug, P2-scope
-      language and degraded-chrome leftovers. Evidence in <code>docs/design/evidence/ade-run/P1</code>.”</p>
-    </div>
-
-    <div class="lbl">Verification, re-run this morning to ground this briefing</div>
-    <pre class="cmd">npm --prefix brain test        <span class="c"># 555 pass / 0 fail</span>
-npm --prefix ui run test:unit  <span class="c"># 252 pass / 0 fail (56 files)</span>
-npm run lint                   <span class="c"># clean</span>
-npm run test:firm:browser      <span class="c"># 1 pass / 0 fail — desktop firm journey</span></pre>
-    <p style="font-size:.86rem; color:var(--ink-3);">All green — but remember this reflects the tree <em>with</em> the
-    uncommitted P2 work. The committed <code>c0400e1</code> checkpoint is the P1 floor; P2 rides on top of it,
-    unstaged.</p>
-  </section>
-
-  <div class="foot">
-    <p><strong>Bottom line.</strong> You have a real, verified ADE floor — a docked shell that can't overlap itself
-    and a canvas that can't collide or be dragged into a mess — plus a full layer of language and component work
-    that looks right in the inspector but hasn't been signed off and isn't committed. The loop that makes it a
-    <em>product you operate by talking</em> (P4) and everything past it is designed but unbuilt. The next honest move
-    is to decide the fate of the uncommitted P2 work, tune the resting composition against a denser fixture to clear
-    the containment and hub-overrun bugs, and only then commit P2 and open P3.</p>
-    <p class="mono">Drover ADE · branch ade · run 2026-07-15 night · briefing generated 2026-07-16 · evidence under docs/design/evidence/ade-run/</p>
+  <div class="bottomline" style="margin-top:48px;">
+    <p>
+      <strong>In one line:</strong> the workbench and its resting states are proven on screen; the conversation
+      wiring behind them is coded and green but waiting for you to drive it. Run
+      <span class="mono">npm run app</span>, take the tour, and the inferred half of this briefing becomes
+      validated by your own hand.
+    </p>
   </div>
 
 </div>
