@@ -13,7 +13,7 @@ they are compatibility seams, not UI copy or product identity. [comp: 2026-07]
 
 Drover is product-agnostic: features, copy, and examples speak for any product in a portfolio. Never frame a feature around one customer — LocalSeoData/LSD is an example that flows through Drover, not what Drover is.
 
-Drover is a desktop founder workbench built around an infinite-canvas node editor; phone/tablet is not a target. Build and judge at desktop only — don't audit, design for, or weigh mobile responsiveness. Use 1920×1080 as the primary design, ship-evidence, scoring, and recording viewport; smaller desktop sizes are resilience checks, not the source of visual truth. This is a deliberate stance, not an unfinished edge.
+Drover is a desktop-only founder workbench; phone/tablet is not a target and there is no web founder surface — the localhost web build is strictly a dev/test harness, so never design or ship snapshot/degraded web states. The shell is an ADE (Agent Development Environment): a docked conversation-thread rail, the infinite-canvas venture atlas as the stage, and one content-swapping inspector, with stage-maximal chrome. Chat is the console — agent activity and artifacts render inline in threads, bidirectionally focused with the canvas; do not build a separate activity console. The layout engine owns node placement and the canvas re-fits around docked chrome at any desktop viewport; 1920×1080 is the recording and ship-evidence viewport, not the sole source of visual truth. Authoritative direction and decision log: `docs/design/ux-divergence-2026.html`. Founder-stated 2026-07-15.
 
 The canvas exists to make Drover's work visible and explorable, including how concrete product and
 market actions relate—not just their status. Depth is a feature: the surface should feel deep and
@@ -30,7 +30,7 @@ produced them. Orient a new reader to what Drover is, who it serves, the current
 change, and the concrete founder experience before using project-specific concepts. Distinguish what
 is built today, what is proposed next, and what remains unproven. [comp: 2026-07]
 
-Division of labor, founder-stated 2026-07-15: Codex writes the production code; Claude sessions deliver design direction and executable specs under `docs/design/` and do not edit production code unless the founder asks.
+Division of labor, founder-amended 2026-07-15: Claude (Opus) agents build the ADE shell and canvas production code; Codex carries production work outside it. Claude design sessions still land direction and executable specs under `docs/design/`.
 
 ## Commands
 

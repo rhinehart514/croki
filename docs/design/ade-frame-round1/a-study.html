@@ -1,0 +1,913 @@
+<!-- The Study — ADE frame mockup, round 1, take A. Warmest / most editorial interpretation.
+     Pixel-real 1920×1080 composition, fluid down to 1440. All CSS inline, no external requests. -->
+<title>Drover ADE — The Study</title>
+<style>
+  :root {
+    --paper: #eae6df;
+    --paper-2: #e3ded5;
+    --field: #e7e2d9;
+    --card: #f4f1ea;
+    --card-raised: #faf8f3;
+    --card-warm: #f6f2e9;
+    --ink: #26251f;
+    --ink-2: #4a4840;
+    --ink-3: #78756a;
+    --ink-4: #a8a498;
+    --line: #d8d2c6;
+    --line-2: #cbc4b5;
+    --line-soft: #e0dacf;
+    --green: #3f5c46;
+    --green-2: #587a5f;
+    --green-soft: #e0e8de;
+    --green-tint: #eef2ea;
+    --amber: #9a6b2f;
+    --amber-soft: #f0e4d0;
+    --clay: #a86b52;
+    --plum: #6b5876;
+    --slate: #4f6472;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Georgia", serif;
+    --shadow-node: 0 1px 2px rgba(38,37,31,0.045), 0 10px 26px rgba(38,37,31,0.07);
+    --shadow-node-sel: 0 2px 6px rgba(38,37,31,0.08), 0 22px 54px rgba(38,37,31,0.13);
+    --shadow-panel: 0 1px 0 rgba(255,255,255,0.5) inset, -18px 0 44px rgba(38,37,31,0.05);
+    --shadow-rail: 0 1px 0 rgba(255,255,255,0.5) inset, 18px 0 44px rgba(38,37,31,0.04);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* ============ ADE SHELL — CSS grid: rail | stage | inspector ============ */
+  .ade {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr) 372px;
+    grid-template-rows: 100vh;
+    height: 100vh;
+    width: 100vw;
+  }
+  @media (max-width: 1600px) {
+    .ade { grid-template-columns: 280px minmax(0, 1fr) 344px; }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* LEFT RAIL — conversation threads, read like correspondence       */
+  /* ---------------------------------------------------------------- */
+  .rail {
+    background: linear-gradient(178deg, #ece8e0, #e6e1d8);
+    border-right: 1px solid var(--line-2);
+    box-shadow: var(--shadow-rail);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    position: relative;
+    z-index: 3;
+  }
+  .rail-top {
+    padding: 20px 22px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+  .brandmark {
+    width: 30px; height: 30px; border-radius: 9px; flex: none;
+    background: radial-gradient(circle at 32% 28%, #52735a, #34492f);
+    display: grid; place-items: center;
+    box-shadow: 0 1px 2px rgba(38,37,31,0.18), inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  .brandmark svg { display: block; }
+  .brand-name { font-weight: 600; font-size: 15.5px; letter-spacing: -0.02em; color: var(--ink); }
+  .brand-sub { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-top: 1px; }
+  .rail-collapse {
+    margin-left: auto; width: 26px; height: 26px; border-radius: 7px;
+    border: 1px solid var(--line-2); background: var(--card);
+    display: grid; place-items: center; color: var(--ink-3); cursor: pointer;
+  }
+  .rail-collapse:hover { color: var(--ink); background: var(--card-raised); }
+
+  .venture-line {
+    padding: 12px 22px 14px;
+    display: flex; align-items: center; gap: 9px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .venture-name { font-weight: 600; font-size: 13.5px; color: var(--ink); letter-spacing: -0.01em; }
+  .venture-switch {
+    margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: 0.03em;
+    color: var(--ink-3); border: 1px solid var(--line-2); border-radius: 6px;
+    padding: 2px 7px; background: var(--card); cursor: pointer; white-space: nowrap;
+  }
+  .venture-switch:hover { color: var(--ink); }
+  .effort-chip {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.02em;
+    color: var(--green); background: var(--green-tint); border: 1px solid #bccdbb;
+    border-radius: 100px; padding: 2px 9px; white-space: nowrap;
+  }
+
+  .rail-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 6px 0 12px; }
+  .rail-scroll::-webkit-scrollbar { width: 9px; }
+  .rail-scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
+
+  .thread-label {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.11em; text-transform: uppercase;
+    color: var(--ink-4); padding: 14px 22px 6px;
+  }
+
+  /* main venture dialogue — the correspondence */
+  .dialogue { padding: 4px 16px 0; }
+  .msg { display: flex; gap: 11px; padding: 9px 6px; }
+  .msg-av {
+    width: 30px; height: 30px; border-radius: 50%; flex: none;
+    border: 1.5px solid var(--card-raised); overflow: hidden;
+    box-shadow: 0 1px 2px rgba(38,37,31,0.12);
+  }
+  .msg-av.founder {
+    background: linear-gradient(150deg, #d8cfc0, #c8bda9);
+    display: grid; place-items: center;
+    font-family: var(--serif); font-size: 13px; font-weight: 600; color: #5a5140;
+    font-style: italic;
+  }
+  .msg-body { min-width: 0; flex: 1; }
+  .msg-who { display: flex; align-items: baseline; gap: 7px; margin-bottom: 2px; }
+  .msg-name { font-weight: 600; font-size: 13px; color: var(--ink); letter-spacing: -0.01em; }
+  .msg-time { font-family: var(--mono); font-size: 10px; color: var(--ink-4); }
+  .msg-text { font-size: 13.5px; line-height: 1.55; color: var(--ink-2); letter-spacing: -0.003em; }
+  .msg-text.founder-said {
+    font-family: var(--serif); font-size: 15px; line-height: 1.5; color: var(--ink);
+    font-style: italic;
+  }
+
+  /* inline agent activity */
+  .activity {
+    margin: 4px 0 2px 41px; display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--ink-3);
+  }
+  .activity .pulse {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); flex: none;
+    box-shadow: 0 0 0 0 rgba(88,122,95,0.5); animation: pulse 2.4s ease-out infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(88,122,95,0.45); }
+    70% { box-shadow: 0 0 0 7px rgba(88,122,95,0); }
+    100% { box-shadow: 0 0 0 0 rgba(88,122,95,0); }
+  }
+  .activity .verb { color: var(--ink-2); }
+  .activity .elapsed { font-family: var(--mono); font-size: 10.5px; color: var(--ink-4); margin-left: auto; }
+
+  /* inline artifact card inside the thread */
+  .thread-artifact {
+    margin: 8px 0 6px 41px;
+    background: var(--card-raised);
+    border: 1px solid var(--line-2);
+    border-radius: 11px;
+    padding: 12px 14px 13px;
+    box-shadow: 0 1px 2px rgba(38,37,31,0.04), 0 6px 16px rgba(38,37,31,0.05);
+    position: relative;
+    cursor: pointer;
+  }
+  .thread-artifact::before {
+    content: ""; position: absolute; left: -11px; top: -5px; width: 18px; height: 20px;
+    border-left: 1.5px solid var(--line-2); border-bottom: 1.5px solid var(--line-2);
+    border-radius: 0 0 0 8px;
+  }
+  .ta-kicker {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;
+  }
+  .ta-kicker .doticon { width: 13px; height: 13px; }
+  .ta-title { font-weight: 600; font-size: 13.5px; color: var(--ink); line-height: 1.3; letter-spacing: -0.01em; }
+  .ta-preview { font-size: 12px; color: var(--ink-3); margin-top: 4px; line-height: 1.45; }
+  .ta-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .ta-verb {
+    font-family: var(--mono); font-size: 10.5px; color: var(--green);
+    border: 1px solid #bccdbb; background: var(--green-tint); border-radius: 6px;
+    padding: 3px 9px; white-space: nowrap;
+  }
+  .ta-meta { font-family: var(--mono); font-size: 10px; color: var(--ink-4); margin-left: auto; }
+
+  /* effort threads (branches) */
+  .branch {
+    margin: 2px 16px; padding: 9px 12px 9px 13px; border-radius: 10px; cursor: pointer;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 3px 10px; align-items: center;
+    border: 1px solid transparent;
+  }
+  .branch:hover { background: rgba(255,255,255,0.4); }
+  .branch.active { background: var(--card-raised); border-color: var(--line-2); box-shadow: 0 1px 2px rgba(38,37,31,0.05); }
+  .branch-glyph {
+    width: 26px; height: 26px; border-radius: 8px; flex: none; grid-row: span 2;
+    display: grid; place-items: center; font-family: var(--serif); font-size: 12px; font-style: italic;
+    color: var(--green); background: var(--green-tint); border: 1px solid #c9d6c6; font-weight: 600;
+  }
+  .branch.active .branch-glyph { background: var(--green-soft); }
+  .branch-title { font-size: 12.5px; font-weight: 500; color: var(--ink); line-height: 1.35; letter-spacing: -0.01em; grid-column: 2; }
+  .branch-state { grid-column: 2; font-size: 11px; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+  .branch-state .sdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); flex: none; }
+  .branch-crew { grid-column: 3; grid-row: span 2; }
+  .mini-face {
+    width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #efeadf;
+    display: grid; place-items: center; font-size: 9px; font-weight: 600;
+  }
+
+  .rail-bottom { border-top: 1px solid var(--line-soft); padding: 10px 16px 14px; }
+  /* composer docked to rail bottom */
+  .composer {
+    background: var(--card-raised); border: 1px solid var(--line-2); border-radius: 13px;
+    padding: 11px 13px 10px; box-shadow: 0 1px 2px rgba(38,37,31,0.05);
+  }
+  .composer-input { font-size: 13.5px; color: var(--ink-3); font-style: italic; font-family: var(--serif); }
+  .composer-row { display: flex; align-items: center; gap: 8px; margin-top: 11px; }
+  .comp-tool {
+    width: 27px; height: 27px; border-radius: 8px; border: 1px solid var(--line-2);
+    background: var(--card); display: grid; place-items: center; color: var(--ink-3); cursor: pointer;
+  }
+  .comp-tool:hover { color: var(--ink); background: var(--card-raised); }
+  .comp-send {
+    margin-left: auto; width: 31px; height: 31px; border-radius: 9px; border: none;
+    background: linear-gradient(160deg, #4a6b51, #34492f); display: grid; place-items: center;
+    box-shadow: 0 1px 2px rgba(38,37,31,0.2); cursor: pointer;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* CENTER STAGE — the atlas                                          */
+  /* ---------------------------------------------------------------- */
+  .stage {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 26% 16%, #efece5, transparent 60%),
+      radial-gradient(circle at 78% 82%, #ece8e0, transparent 55%),
+      var(--paper);
+  }
+  /* dotted orbit background texture */
+  .orbit-field { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+  .stage-topbar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 4;
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 22px 30px;
+    background: linear-gradient(180deg, rgba(234,230,223,0.92) 40%, rgba(234,230,223,0));
+  }
+  .altitude-tag {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ink-3); display: flex; align-items: center; gap: 8px;
+  }
+  .altitude-tag .cur { color: var(--green); }
+  .topbar-chip {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.03em; color: var(--ink-2);
+    background: var(--card); border: 1px solid var(--line-2); border-radius: 100px;
+    padding: 4px 12px; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .topbar-chip .cdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+  .zoom-ctl {
+    display: inline-flex; align-items: center; background: var(--card); border: 1px solid var(--line-2);
+    border-radius: 9px; overflow: hidden;
+  }
+  .zoom-ctl button {
+    width: 30px; height: 28px; border: none; background: transparent; color: var(--ink-3);
+    font-size: 15px; cursor: pointer; display: grid; place-items: center;
+  }
+  .zoom-ctl button:hover { background: var(--card-raised); color: var(--ink); }
+  .zoom-ctl .div { width: 1px; height: 16px; background: var(--line-2); }
+
+  .canvas { position: absolute; inset: 0; z-index: 1; }
+  .edges { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+
+  /* ---- node cards: editorial-large index cards ---- */
+  .node { position: absolute; z-index: 2; }
+
+  /* central question hub */
+  .hub {
+    width: 210px; text-align: center;
+    background: radial-gradient(circle at 50% 30%, var(--card-raised), #efece4);
+    border: 1px solid #cdc5b5; border-radius: 18px;
+    padding: 22px 22px 20px; box-shadow: var(--shadow-node-sel);
+  }
+  .hub-eyebrow { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--green-2); }
+  .hub-q { font-family: var(--serif); font-size: 21px; line-height: 1.2; color: var(--ink); margin: 8px 0 10px; letter-spacing: -0.01em; }
+  .hub-intent { font-size: 11.5px; color: var(--ink-3); line-height: 1.4; }
+  .hub-ring { position: absolute; border-radius: 50%; border: 1px dashed #cfc7b6; pointer-events: none; }
+
+  /* work-line / effort card — the editorial index card */
+  .effort-card {
+    width: 270px;
+    background: var(--card-raised);
+    border: 1px solid var(--line-2);
+    border-radius: 13px;
+    padding: 16px 17px 14px;
+    box-shadow: var(--shadow-node);
+    transition: box-shadow .2s ease;
+  }
+  .effort-card.selected {
+    border-color: var(--green-2);
+    box-shadow: var(--shadow-node-sel);
+    background: linear-gradient(180deg, #f8f6ef, var(--card-raised));
+  }
+  .effort-card .ruled { border-bottom: 1px solid var(--line-soft); margin: 0 -17px 11px; }
+  .ec-kicker {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-3); margin-bottom: 6px; display: flex; align-items: center; gap: 7px;
+  }
+  .ec-kicker .kdot { width: 6px; height: 6px; border-radius: 50%; }
+  .ec-title { font-weight: 600; font-size: 15.5px; line-height: 1.28; color: var(--ink); letter-spacing: -0.015em; }
+  .ec-body { font-size: 12.5px; line-height: 1.5; color: var(--ink-2); margin: 8px 0 0; letter-spacing: -0.003em; }
+  .ec-foot { display: flex; align-items: center; gap: 9px; border-top: 1px solid var(--line-soft); margin-top: 13px; padding-top: 11px; }
+  .ec-state { font-size: 12px; color: var(--ink-2); font-weight: 500; display: flex; align-items: center; gap: 7px; }
+  .ec-state .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); box-shadow: 0 0 0 3px var(--green-tint); }
+  .ec-faces { margin-left: auto; display: flex; }
+  .ec-face {
+    width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--card-raised);
+    margin-left: -7px; display: grid; place-items: center; font-size: 10px; font-weight: 600;
+  }
+  .ec-face:first-child { margin-left: 0; }
+  /* prepared-work stack chip on the card */
+  .prepared-chip {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 11px;
+    font-family: var(--mono); font-size: 10.5px; color: var(--amber);
+    border: 1px solid #e0cba6; background: var(--amber-soft); border-radius: 7px; padding: 4px 9px;
+  }
+  .prepared-chip .stackicon { display: flex; }
+  .prepared-chip .stackicon span { width: 4px; height: 12px; border-radius: 1px; background: #c99a56; margin-left: -1px; opacity: .85; }
+
+  /* compact effort card (satellite, farther out) */
+  .effort-card.compact { width: 230px; padding: 14px 15px 12px; }
+  .effort-card.compact .ec-title { font-size: 14px; }
+  .effort-card.compact .ec-body { display: none; }
+
+  /* crew node — character with a face */
+  .crew-node {
+    width: 168px; text-align: center;
+    background: var(--card-warm); border: 1px solid var(--line-2); border-radius: 14px;
+    padding: 14px 14px 12px; box-shadow: var(--shadow-node);
+  }
+  .crew-face-wrap { width: 48px; height: 48px; margin: 0 auto 8px; position: relative; }
+  .crew-face-wrap svg { display: block; border-radius: 50%; box-shadow: 0 1px 3px rgba(38,37,31,0.14); }
+  .crew-work-dot {
+    position: absolute; right: 1px; bottom: 1px; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--green-2); border: 2.5px solid var(--card-warm);
+  }
+  .crew-name { font-weight: 600; font-size: 13.5px; color: var(--ink); letter-spacing: -0.01em; }
+  .crew-focus { font-size: 11px; color: var(--ink-3); line-height: 1.4; margin-top: 3px; }
+
+  /* capability node — warm instrument */
+  .cap-node {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--card); border: 1px solid var(--line-2); border-radius: 11px;
+    padding: 10px 14px 10px 11px; box-shadow: var(--shadow-node); width: 200px;
+  }
+  .cap-icon { width: 30px; height: 30px; border-radius: 8px; flex: none; display: grid; place-items: center;
+    background: var(--green-tint); border: 1px solid #c9d6c6; }
+  .cap-label { font-weight: 600; font-size: 13px; color: var(--ink); letter-spacing: -0.01em; }
+  .cap-state { font-size: 11px; color: var(--green-2); display: flex; align-items: center; gap: 5px; margin-top: 1px; }
+  .cap-state.off { color: var(--ink-4); }
+  .cap-state .cdot { width: 5px; height: 5px; border-radius: 50%; background: var(--green-2); }
+  .cap-state.off .cdot { background: var(--ink-4); }
+
+  /* gate node — clear state */
+  .gate-node {
+    width: 186px; text-align: center;
+    background: linear-gradient(180deg, #f1efe8, #ebe7de);
+    border: 1px dashed var(--line-2); border-radius: 14px; padding: 16px 16px 15px;
+  }
+  .gate-icon { width: 30px; height: 30px; margin: 0 auto 8px; opacity: .8; }
+  .gate-title { font-family: var(--serif); font-size: 14.5px; color: var(--ink-2); letter-spacing: -0.01em; }
+  .gate-sub { font-size: 11px; color: var(--ink-4); margin-top: 3px; }
+
+  /* ---------------------------------------------------------------- */
+  /* RIGHT INSPECTOR — docked, open on selected effort                */
+  /* ---------------------------------------------------------------- */
+  .inspector {
+    background: linear-gradient(178deg, #f2eee6, #ece8df);
+    border-left: 1px solid var(--line-2);
+    box-shadow: var(--shadow-panel);
+    display: flex; flex-direction: column; min-height: 0; position: relative; z-index: 3;
+  }
+  .insp-head { padding: 18px 22px 15px; border-bottom: 1px solid var(--line-soft); }
+  .insp-crumb { display: flex; align-items: center; gap: 8px; }
+  .insp-kicker { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink-3); }
+  .insp-close { margin-left: auto; width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--line-2);
+    background: var(--card); display: grid; place-items: center; color: var(--ink-3); cursor: pointer; }
+  .insp-close:hover { color: var(--ink); }
+  .insp-title { font-family: var(--serif); font-size: 20px; line-height: 1.24; color: var(--ink); margin-top: 12px; letter-spacing: -0.01em; }
+  .insp-state {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 11px;
+    font-size: 12px; color: var(--ink-2); background: var(--card); border: 1px solid var(--line-2);
+    border-radius: 100px; padding: 4px 12px 4px 10px;
+  }
+  .insp-state .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); box-shadow: 0 0 0 3px var(--green-tint); }
+
+  .insp-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 18px 22px 22px; }
+  .insp-scroll::-webkit-scrollbar { width: 9px; }
+  .insp-scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
+
+  .insp-section-label {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.11em; text-transform: uppercase;
+    color: var(--ink-4); margin: 0 0 10px;
+  }
+  .insp-block { margin-bottom: 24px; }
+  .insp-para { font-size: 13.5px; line-height: 1.6; color: var(--ink-2); letter-spacing: -0.004em; }
+
+  .insp-crew-row { display: flex; align-items: center; gap: 10px; }
+  .insp-crew-face { width: 34px; height: 34px; border-radius: 50%; flex: none; box-shadow: 0 1px 2px rgba(38,37,31,0.12); }
+  .insp-crew-name { font-weight: 600; font-size: 13.5px; color: var(--ink); }
+  .insp-crew-role { font-size: 11.5px; color: var(--ink-3); }
+
+  /* the prepared artifact, expanded in the inspector */
+  .insp-artifact {
+    background: var(--card-raised); border: 1px solid var(--line-2); border-radius: 13px;
+    padding: 16px 17px 15px; box-shadow: 0 1px 2px rgba(38,37,31,0.05), 0 8px 20px rgba(38,37,31,0.05);
+  }
+  .insp-art-kicker {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--amber); display: flex; align-items: center; gap: 7px; margin-bottom: 8px;
+  }
+  .insp-art-title { font-weight: 600; font-size: 16px; line-height: 1.3; color: var(--ink); letter-spacing: -0.015em; }
+  .insp-art-lede { font-size: 13px; line-height: 1.55; color: var(--ink-2); margin: 9px 0 0; }
+  .insp-art-list { margin: 13px 0 0; padding: 0; list-style: none; }
+  .insp-art-list li {
+    position: relative; padding: 8px 0 8px 24px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2);
+    border-top: 1px solid var(--line-soft);
+  }
+  .insp-art-list li:first-child { border-top: none; }
+  .insp-art-list li .num {
+    position: absolute; left: 0; top: 8px; font-family: var(--mono); font-size: 11px; color: var(--green-2); font-weight: 500;
+  }
+  .insp-art-list li b { color: var(--ink); font-weight: 600; }
+  .insp-art-foot { display: flex; align-items: center; gap: 9px; margin-top: 15px; }
+  .insp-btn {
+    font-size: 12.5px; font-weight: 500; border-radius: 9px; padding: 8px 15px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .insp-btn.primary { color: #f4f1ea; background: linear-gradient(160deg, #4a6b51, #34492f); box-shadow: 0 1px 2px rgba(38,37,31,0.18); }
+  .insp-btn.ghost { color: var(--ink-2); background: var(--card); border-color: var(--line-2); }
+  .insp-disclosure {
+    font-family: var(--mono); font-size: 10px; color: var(--ink-4); margin-top: 13px;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .insp-gate-note {
+    display: flex; align-items: flex-start; gap: 10px; padding: 13px 15px;
+    background: var(--green-tint); border: 1px solid #c9d6c6; border-radius: 11px;
+    font-size: 12.5px; line-height: 1.45; color: var(--green);
+  }
+  .insp-gate-note svg { flex: none; margin-top: 1px; }
+</style>
+
+<div class="ade">
+
+  <!-- ================= LEFT RAIL ================= -->
+  <aside class="rail">
+    <div class="rail-top">
+      <span class="brandmark">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 12.5c2.4-6 7.6-6 10-9M4.5 12.8c1.6-.3 3.2-.3 4.8.2" stroke="#e8ecdf" stroke-width="1.4" fill="none" stroke-linecap="round"/><circle cx="12.4" cy="4" r="1.5" fill="#e8ecdf"/></svg>
+      </span>
+      <div>
+        <div class="brand-name">Drover</div>
+        <div class="brand-sub">Your firm</div>
+      </div>
+      <button class="rail-collapse" title="Collapse rail">
+        <svg width="13" height="13" viewBox="0 0 13 13"><path d="M8 3L4.5 6.5 8 10" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <div class="venture-line">
+      <span class="venture-name">drover</span>
+      <span class="effort-chip">7 efforts underway</span>
+      <span class="venture-switch">⌘O</span>
+    </div>
+
+    <div class="rail-scroll">
+
+      <div class="thread-label">Main venture dialogue</div>
+      <div class="dialogue">
+
+        <div class="msg">
+          <span class="msg-av founder">J</span>
+          <div class="msg-body">
+            <div class="msg-who"><span class="msg-name">You</span><span class="msg-time">Jul 14 · 7:11 PM</span></div>
+            <div class="msg-text founder-said">"can we create an agent that focuses on developing an agent that finds buyer signals on reddit"</div>
+          </div>
+        </div>
+
+        <div class="msg">
+          <span class="msg-av">
+            <!-- Yara -->
+            <svg width="30" height="30" viewBox="0 0 30 30"><rect width="30" height="30" fill="#e6ded0"/><circle cx="15" cy="12" r="6.5" fill="#c99a56"/><path d="M6 30c0-6 4-9 9-9s9 3 9 9" fill="#4f6472"/><path d="M8.5 9c1-4 12-4 13 0 .6 2.2-.4 5-1 5.5-.3-2.5-1-3.5-1.5-4-2 1.5-7 1.5-9 0-.5.8-1 2-1.2 4-.7-.8-1.2-3.3-.3-5.5z" fill="#3a2f22"/></svg>
+          </span>
+          <div class="msg-body">
+            <div class="msg-who"><span class="msg-name">Yara</span><span class="msg-time">7:12 PM</span></div>
+            <div class="msg-text">Good — that's a real venture inside the firm. Before any strategy, I want to see what's actually here. I've opened seven efforts and put a first draft on each.</div>
+          </div>
+        </div>
+
+        <div class="activity">
+          <span class="pulse"></span>
+          <span class="verb">Yara is drawing the working theory onto the canvas</span>
+          <span class="elapsed">now</span>
+        </div>
+
+        <!-- inline artifact card in the thread -->
+        <div class="thread-artifact">
+          <div class="ta-kicker">
+            <svg class="doticon" viewBox="0 0 13 13"><rect x="1.5" y="1" width="8" height="11" rx="1.5" fill="none" stroke="#9a6b2f" stroke-width="1.1"/><path d="M4 4.5h3M4 7h3.5M4 9.5h2" stroke="#9a6b2f" stroke-width="1" stroke-linecap="round"/></svg>
+            Prepared · not yet released
+          </div>
+          <div class="ta-title">Where the venture stands, and what's blocked</div>
+          <div class="ta-preview">A read of what's visible today and the two gaps that stop a real buyer signal from shipping.</div>
+          <div class="ta-foot">
+            <span class="ta-verb">Open to review</span>
+            <span class="ta-meta">effort 1 of 7</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="thread-label">Effort threads</div>
+
+      <div class="branch">
+        <span class="branch-glyph" style="background:#eef2ea;color:#587a5f">1</span>
+        <span class="branch-title">Surface the current state before any strategy</span>
+        <span class="branch-state"><span class="sdot"></span>Draft ready</span>
+        <span class="branch-crew"><span class="mini-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+      </div>
+      <div class="branch">
+        <span class="branch-glyph">2</span>
+        <span class="branch-title">Propose three new crew with distinct lenses</span>
+        <span class="branch-state"><span class="sdot"></span>Draft ready</span>
+        <span class="branch-crew"><span class="mini-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+      </div>
+      <div class="branch">
+        <span class="branch-glyph">3</span>
+        <span class="branch-title">Refine Kai's persona and contribution</span>
+        <span class="branch-state"><span class="sdot"></span>Draft ready</span>
+        <span class="branch-crew"><span class="mini-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+      </div>
+      <div class="branch">
+        <span class="branch-glyph">4</span>
+        <span class="branch-title">Define the real buyer — ICP, use case, willingness to pay</span>
+        <span class="branch-state"><span class="sdot"></span>Draft ready</span>
+        <span class="branch-crew"><span class="mini-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+      </div>
+      <div class="branch">
+        <span class="branch-glyph">5</span>
+        <span class="branch-title">Define what counts as a buyer signal on Reddit</span>
+        <span class="branch-state"><span class="sdot"></span>Draft ready</span>
+        <span class="branch-crew"><span class="mini-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+      </div>
+      <div class="branch">
+        <span class="branch-glyph">6</span>
+        <span class="branch-title">Map the field — Gummysearch, F5bot, Brand24</span>
+        <span class="branch-state"><span class="sdot"></span>Draft ready</span>
+        <span class="branch-crew"><span class="mini-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+      </div>
+      <div class="branch active">
+        <span class="branch-glyph">7</span>
+        <span class="branch-title">Sequence the build — the minimum that produces a real signal</span>
+        <span class="branch-state"><span class="sdot"></span>Draft ready · open</span>
+        <span class="branch-crew"><span class="mini-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+      </div>
+
+    </div>
+
+    <div class="rail-bottom">
+      <div class="composer">
+        <div class="composer-input">Ask Yara, or steer the venture…</div>
+        <div class="composer-row">
+          <span class="comp-tool" title="Reference a node">
+            <svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </span>
+          <span class="comp-tool" title="Attach">
+            <svg width="14" height="14" viewBox="0 0 14 14"><path d="M9.5 4L5 8.5a1.8 1.8 0 002.5 2.5l4-4a3 3 0 00-4.2-4.2L3.5 6.5" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="comp-tool" title="Voice">
+            <svg width="14" height="14" viewBox="0 0 14 14"><rect x="5" y="2" width="4" height="7" rx="2" fill="currentColor"/><path d="M3.5 7a3.5 3.5 0 007 0M7 10.5V12" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>
+          </span>
+          <button class="comp-send" title="Send">
+            <svg width="15" height="15" viewBox="0 0 15 15"><path d="M2.5 7.5h9M7.5 3.5l4 4-4 4" stroke="#eef2e6" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= CENTER STAGE ================= -->
+  <main class="stage">
+
+    <!-- dotted orbit texture -->
+    <svg class="orbit-field" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+          <circle cx="1.4" cy="1.4" r="1.4" fill="#d4cdbe" opacity="0.55"/>
+        </pattern>
+        <radialGradient id="orbitfade" cx="46%" cy="44%" r="62%">
+          <stop offset="0%" stop-color="#000" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+        </radialGradient>
+        <mask id="orbitmask"><rect width="100%" height="100%" fill="url(#orbitfade)"/></mask>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#dots)" mask="url(#orbitmask)"/>
+      <!-- faint orbit rings around the hub -->
+      <g fill="none" stroke="#d1c9ba" stroke-opacity="0.5" stroke-dasharray="2 7">
+        <ellipse cx="47%" cy="46%" rx="270" ry="230"/>
+        <ellipse cx="47%" cy="46%" rx="410" ry="360"/>
+      </g>
+    </svg>
+
+    <div class="stage-topbar">
+      <span class="altitude-tag">Altitude <span class="cur">· Working</span></span>
+      <span class="topbar-chip"><span class="cdot"></span>Nothing needs you yet</span>
+      <div class="topbar-right">
+        <div class="zoom-ctl">
+          <button title="Horizon">−</button>
+          <span class="div"></span>
+          <button title="Focus">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- edges drawn under the nodes -->
+    <svg class="edges" viewBox="0 0 1248 1080" preserveAspectRatio="none">
+      <g fill="none" stroke="#bdb5a4" stroke-width="1.4" stroke-opacity="0.85">
+        <!-- hub to the seven efforts, from hub perimeter to each card's near edge -->
+        <path d="M520 460 C 400 400, 300 350, 210 388"/>          <!-- eff1 -->
+        <path d="M545 430 C 500 320, 480 240, 457 193"/>          <!-- eff2 -->
+        <path d="M540 540 C 400 620, 300 680, 210 616"/>          <!-- eff3 -->
+        <path d="M655 445 C 760 380, 880 340, 947 193"/>          <!-- eff6 -->
+        <path d="M690 480 C 850 420, 980 400, 1097 431"/>          <!-- eff4 -->
+        <path d="M695 520 C 850 600, 980 660, 1097 626"/>          <!-- eff5 -->
+      </g>
+      <!-- selected edge to effort 7, emphasized -->
+      <path d="M590 571 C 585 660, 592 730, 597 799" fill="none" stroke="#587a5f" stroke-width="2.2" stroke-opacity="0.9"/>
+      <!-- crew tethers, dashed -->
+      <g fill="none" stroke="#c9c1b1" stroke-width="1.2" stroke-dasharray="3 5" stroke-opacity="0.85">
+        <path d="M485 490 C 340 470, 210 460, 130 459"/>          <!-- hub to Yara -->
+        <path d="M700 505 C 900 515, 1040 525, 1140 534"/>        <!-- hub to Soren -->
+      </g>
+    </svg>
+
+    <!-- CENTRAL HUB -->
+    <div class="node" style="left:calc(47% - 105px); top:calc(46% - 74px);">
+      <div class="hub">
+        <div class="hub-eyebrow">The venture</div>
+        <div class="hub-q">What should change?</div>
+        <div class="hub-intent">Reddit buyer-signal agent — seven efforts open, first drafts in</div>
+      </div>
+    </div>
+
+    <!-- EFFORT 2 (upper) -->
+    <div class="node" style="left:calc(47% - 245px); top:9%;">
+      <div class="effort-card compact">
+        <div class="ec-kicker"><span class="kdot" style="background:#587a5f"></span>Underway</div>
+        <div class="ec-title">Propose three new crew members</div>
+        <div class="ec-foot">
+          <span class="ec-state"><span class="sdot"></span>Draft ready</span>
+          <span class="ec-faces"><span class="ec-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EFFORT 1 (upper-left) -->
+    <div class="node" style="left:5%; top:22%;">
+      <div class="effort-card">
+        <div class="ec-kicker"><span class="kdot" style="background:#587a5f"></span>Underway</div>
+        <div class="ec-title">Surface the current state before any strategy</div>
+        <div class="ec-body">Read what's visible and what's blocked today, before a single strategic call gets made.</div>
+        <div class="ec-foot">
+          <span class="ec-state"><span class="sdot"></span>Draft ready</span>
+          <span class="ec-faces"><span class="ec-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EFFORT 6 (upper-right) -->
+    <div class="node" style="left:min(calc(47% + 245px), calc(100% - 246px)); top:9%;">
+      <div class="effort-card compact">
+        <div class="ec-kicker"><span class="kdot" style="background:#587a5f"></span>Underway</div>
+        <div class="ec-title">Map the field — Gummysearch, F5bot, Brand24</div>
+        <div class="ec-foot">
+          <span class="ec-state"><span class="sdot"></span>Draft ready</span>
+          <span class="ec-faces"><span class="ec-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EFFORT 4 (right) -->
+    <div class="node" style="left:calc(100% - 286px); top:26%;">
+      <div class="effort-card">
+        <div class="ec-kicker"><span class="kdot" style="background:#587a5f"></span>Underway</div>
+        <div class="ec-title">Define the real buyer</div>
+        <div class="ec-body">Who this is for — ICP, the use case, and what they'd actually pay for a Reddit signal finder.</div>
+        <div class="ec-foot">
+          <span class="ec-state"><span class="sdot"></span>Draft ready</span>
+          <span class="ec-faces"><span class="ec-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EFFORT 3 (lower-left) -->
+    <div class="node" style="left:6%; top:57%;">
+      <div class="effort-card">
+        <div class="ec-kicker"><span class="kdot" style="background:#587a5f"></span>Underway</div>
+        <div class="ec-title">Refine Kai's persona and contribution</div>
+        <div class="ec-body">Sharpen who Kai is, the lens he brings, and exactly what he's on the hook for.</div>
+        <div class="ec-foot">
+          <span class="ec-state"><span class="sdot"></span>Draft ready</span>
+          <span class="ec-faces"><span class="ec-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EFFORT 5 (lower-right) -->
+    <div class="node" style="left:calc(100% - 286px); top:58%;">
+      <div class="effort-card">
+        <div class="ec-kicker"><span class="kdot" style="background:#587a5f"></span>Underway</div>
+        <div class="ec-title">Define what counts as a buyer signal</div>
+        <div class="ec-body">The signal taxonomy on Reddit, and the precision-versus-recall line the agent should hold.</div>
+        <div class="ec-foot">
+          <span class="ec-state"><span class="sdot"></span>Draft ready</span>
+          <span class="ec-faces"><span class="ec-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EFFORT 7 (lower-center) — SELECTED -->
+    <div class="node" style="left:calc(47% - 135px); top:74%;">
+      <div class="effort-card selected" style="width:290px;">
+        <div class="ec-kicker"><span class="kdot" style="background:#3f5c46"></span>Selected · underway</div>
+        <div class="ec-title">Sequence the build</div>
+        <div class="ec-body">The minimum version that produces a real buyer signal — before any infrastructure gets built.</div>
+        <span class="prepared-chip">
+          <span class="stackicon"><span></span><span></span><span></span></span>
+          1 draft prepared
+        </span>
+        <div class="ec-foot">
+          <span class="ec-state"><span class="sdot"></span>Draft ready</span>
+          <span class="ec-faces"><span class="ec-face" style="background:#c99a56;color:#3a2f22">Y</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREW: Yara (left cluster near hub) -->
+    <div class="node" style="left:2%; top:37%;">
+      <div class="crew-node">
+        <div class="crew-face-wrap">
+          <svg width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="24" fill="#e6ded0"/><circle cx="24" cy="19" r="10" fill="#c99a56"/><path d="M9 48c0-9 6.5-14 15-14s15 5 15 14" fill="#4f6472"/><path d="M13 14c1.5-6.5 20-6.5 22 0 1 3.6-.7 8-1.7 9-.5-4-1.6-5.6-2.5-6.4-3.2 2.4-11 2.4-14.5 0-.8 1.3-1.7 3.3-2 6.4-1.2-1.2-2.2-5.4-1.3-9z" fill="#3a2f22"/></svg>
+          <span class="crew-work-dot"></span>
+        </div>
+        <div class="crew-name">Yara</div>
+        <div class="crew-focus">Opened all seven efforts</div>
+      </div>
+    </div>
+
+    <!-- CREW: Kai (referenced by effort 3) -->
+    <div class="node" style="left:3%; top:88%;">
+      <div class="crew-node">
+        <div class="crew-face-wrap">
+          <svg width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="24" fill="#dfe3e0"/><circle cx="24" cy="19" r="10" fill="#b98a63"/><path d="M9 48c0-9 6.5-14 15-14s15 5 15 14" fill="#6b5876"/><path d="M14 15c0-5 20-5 20 0 0 1.4-.5 3-1 4-.4-3-1-4-1.5-4.4-4 1.4-11 1.4-15 0-.5.4-1.1 1.4-1.5 4.4-.5-1-1-2.6-1-4z" fill="#2b2620"/><rect x="17" y="17.5" width="6" height="4.5" rx="2" fill="#2b2620" opacity="0.85"/><rect x="25" y="17.5" width="6" height="4.5" rx="2" fill="#2b2620" opacity="0.85"/><path d="M23 19.5h2" stroke="#2b2620" stroke-width="1"/></svg>
+          <span class="crew-work-dot" style="background:#a8a498"></span>
+        </div>
+        <div class="crew-name">Kai</div>
+        <div class="crew-focus">Persona under refinement</div>
+      </div>
+    </div>
+
+    <!-- CREW: Mira -->
+    <div class="node" style="left:calc(50% - 84px); top:calc(46% + 160px);">
+      <div class="crew-node" style="width:150px;">
+        <div class="crew-face-wrap">
+          <svg width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="24" fill="#e7dfd4"/><circle cx="24" cy="19" r="10" fill="#c99a72"/><path d="M9 48c0-9 6.5-14 15-14s15 5 15 14" fill="#a86b52"/><path d="M12 22c-1-7 3-13 12-13s13 6 12 13c-.5 3.4-2 5.5-2.6 6-1-6-2.4-8-3.4-8.6-.6 4-5 6-6 6s-5.4-2-6-6c-1 .6-2.4 2.6-3.4 8.6-.6-.5-2.1-2.6-2.6-6z" fill="#5a3d2e"/></svg>
+        </div>
+        <div class="crew-name">Mira</div>
+        <div class="crew-focus">Idle — awaiting a market call</div>
+      </div>
+    </div>
+
+    <!-- CREW: Soren (right cluster) -->
+    <div class="node" style="left:calc(100% - 172px); top:44%;">
+      <div class="crew-node">
+        <div class="crew-face-wrap">
+          <svg width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="24" fill="#dfe1d9"/><circle cx="24" cy="19" r="10" fill="#bd9068"/><path d="M9 48c0-9 6.5-14 15-14s15 5 15 14" fill="#3f5c46"/><path d="M14 16c1-6 19-6 20 0 .4 2.4-.3 4.6-.8 5.4-.6-3-1.4-4.2-2.2-4.8-3.4 2-10.6 2-14 0-.8.6-1.6 1.8-2.2 4.8-.5-.8-1.2-3-.8-5.4z" fill="#4a3f34"/><path d="M18 30c1.6 1.4 10.4 1.4 12 0" stroke="#7a5a44" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>
+        </div>
+        <div class="crew-name">Soren</div>
+        <div class="crew-focus">Reading the current state</div>
+      </div>
+    </div>
+
+    <!-- CAPABILITY: Product truth (connected) -->
+    <div class="node" style="left:3%; top:calc(37% + 128px);">
+      <div class="cap-node">
+        <span class="cap-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 4.5l6-2.5 6 2.5v6L8 13.5 2 10.5z" fill="none" stroke="#3f5c46" stroke-width="1.2" stroke-linejoin="round"/><path d="M2 4.5l6 2.5 6-2.5M8 7v6.5" stroke="#3f5c46" stroke-width="1.1" fill="none"/></svg>
+        </span>
+        <div>
+          <div class="cap-label">Product truth</div>
+          <div class="cap-state"><span class="cdot"></span>Connected</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAPABILITY: Product changes -->
+    <div class="node" style="left:calc(100% - 208px); top:calc(58% + 158px);">
+      <div class="cap-node">
+        <span class="cap-icon" style="background:#efece4;border-color:#d4cec2">
+          <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2.5v11M2.5 8h11" stroke="#78756a" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="8" r="6" fill="none" stroke="#a8a498" stroke-width="1" stroke-dasharray="2 2.5"/></svg>
+        </span>
+        <div>
+          <div class="cap-label">Product changes</div>
+          <div class="cap-state off"><span class="cdot"></span>Ready when needed</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GATE (right boundary) -->
+    <div class="node" style="left:calc(100% - 202px); top:80%;">
+      <div class="gate-node">
+        <div class="gate-icon">
+          <svg width="30" height="30" viewBox="0 0 30 30"><rect x="7" y="13" width="16" height="12" rx="2" fill="none" stroke="#78756a" stroke-width="1.3"/><path d="M10 13v-3a5 5 0 0110 0" fill="none" stroke="#78756a" stroke-width="1.3"/><circle cx="15" cy="19" r="1.6" fill="#78756a"/></svg>
+        </div>
+        <div class="gate-title">Nothing needs you yet</div>
+        <div class="gate-sub">World-touching acts wait here</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================= RIGHT INSPECTOR ================= -->
+  <aside class="inspector">
+    <div class="insp-head">
+      <div class="insp-crumb">
+        <span class="insp-kicker">Effort · underway</span>
+        <button class="insp-close" title="Close inspector">
+          <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="insp-title">Sequence the build — the minimum that produces a real buyer signal</div>
+      <span class="insp-state"><span class="sdot"></span>Draft ready to review</span>
+    </div>
+
+    <div class="insp-scroll">
+
+      <div class="insp-block">
+        <p class="insp-section-label">What this effort is for</p>
+        <p class="insp-para">Before any infrastructure gets built, find the smallest version of the agent that surfaces one real buyer signal from Reddit — so the sequence is proven by a result, not assumed.</p>
+      </div>
+
+      <div class="insp-block">
+        <p class="insp-section-label">Who's on it</p>
+        <div class="insp-crew-row">
+          <svg class="insp-crew-face" width="34" height="34" viewBox="0 0 48 48"><rect width="48" height="48" rx="24" fill="#e6ded0"/><circle cx="24" cy="19" r="10" fill="#c99a56"/><path d="M9 48c0-9 6.5-14 15-14s15 5 15 14" fill="#4f6472"/><path d="M13 14c1.5-6.5 20-6.5 22 0 1 3.6-.7 8-1.7 9-.5-4-1.6-5.6-2.5-6.4-3.2 2.4-11 2.4-14.5 0-.8 1.3-1.7 3.3-2 6.4-1.2-1.2-2.2-5.4-1.3-9z" fill="#3a2f22"/></svg>
+          <div>
+            <div class="insp-crew-name">Yara</div>
+            <div class="insp-crew-role">Prepared the first draft · Jul 14, evening</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="insp-block">
+        <p class="insp-section-label">Prepared draft</p>
+        <div class="insp-artifact">
+          <div class="insp-art-kicker">
+            <svg width="13" height="13" viewBox="0 0 13 13"><rect x="1.5" y="1" width="8" height="11" rx="1.5" fill="none" stroke="#9a6b2f" stroke-width="1.1"/><path d="M4 4.5h3M4 7h3.5M4 9.5h2" stroke="#9a6b2f" stroke-width="1" stroke-linecap="round"/></svg>
+            Prepared · not yet released
+          </div>
+          <div class="insp-art-title">Draft: the minimum buildable version</div>
+          <p class="insp-art-lede">The shortest path to one real, checkable buyer signal — deliberately ahead of any scraping, storage, or scheduling infrastructure.</p>
+          <ul class="insp-art-list">
+            <li><span class="num">1</span><b>Pick one narrow subreddit</b> where buyers describe the problem in their own words, and read the last week by hand to confirm signals exist.</li>
+            <li><span class="num">2</span><b>Write the signal test</b> as a single prompt — post in, "is this a buyer signal, and why" out — before writing any code.</li>
+            <li><span class="num">3</span><b>Run it over ~50 real posts</b> and score precision against the hand read. If it can't beat a keyword filter, the wedge isn't here.</li>
+            <li><span class="num">4</span><b>Only then</b> add fetching, dedup, and scheduling — the infrastructure that makes a proven signal continuous.</li>
+          </ul>
+          <div class="insp-art-foot">
+            <button class="insp-btn primary">Refine with Yara</button>
+            <button class="insp-btn ghost">Open in full</button>
+          </div>
+          <div class="insp-disclosure">
+            <svg width="9" height="9" viewBox="0 0 9 9"><path d="M2.5 1.5L6 4.5 2.5 7.5" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            staged-20260714210559 · firm v4
+          </div>
+        </div>
+      </div>
+
+      <div class="insp-block" style="margin-bottom:0;">
+        <p class="insp-section-label">Before it goes anywhere</p>
+        <div class="insp-gate-note">
+          <svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 8l3 3 6-6.5" stroke="#3f5c46" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>This is a draft in your firm. Nothing here touches the world or spends until you release it.</span>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+</div>

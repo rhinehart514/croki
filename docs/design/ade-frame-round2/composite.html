@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drover ADE — Composite target (round 2)</title>
+<!--
+  ============================================================================
+  COLLISION-FREE LAYOUT PROOF
+  ============================================================================
+  The node field lives on a FIXED coordinate plane (.plane, 980x764 px) that is
+  centered in the canvas and scaled as a whole at narrower widths, so every
+  node's box is identical relative to its neighbors at 1920x1080 and 1440x900 —
+  only the surrounding margin changes. Boxes below are [x1,y1]-[x2,y2] in plane
+  px (top-left origin). Effort card widths 204; crew 132; capability 168; hub
+  190. Heights measured from the rendered content (detailed density, the tallest
+  effort state): normal effort ~204, selected ~210, stalled ~250, crew 118,
+  capability 52, hub 190.
+
+    HUB            [395,228]-[585,418]
+    E1 surface     [  0,  8]-[204,212]
+    E2 propose     [388,  0]-[592,204]
+    E6 map field   [776,  8]-[980,212]
+    E3 refine-Kai  [  0,272]-[204,522]   (stalled; need banner fully inside)
+    E4 buyer       [776,272]-[980,476]
+    E5 signal      [388,468]-[592,672]
+    E7 sequence    [632,500]-[836,710]   (selected)
+    Yara  (crew)   [238,250]-[370,368]
+    Soren (crew)   [612,244]-[744,362]
+    Kai   (crew)   [ 36,548]-[168,666]
+    Mira  (crew)   [232,548]-[364,666]
+    Product repo   [ 18,692]-[186,744]   (capability)
+    Gmail          [400,700]-[568,752]   (capability)
+
+  MINIMUM GAP CHECK (every adjacent pair; all >= 24px clear space):
+    E1  -> Yara        Yara.x1 238 - E1.x2 204            = 34
+    E1  -> E3          E3.y1 272 - E1.y2 212              = 60
+    E2  -> HUB         HUB.y1 228 - E2.y2 204             = 24
+    E6  -> Soren       E6.x1 776 - Soren.x2 744           = 32
+    E6  -> E4          E4.y1 272 - E6.y2 212              = 60
+    HUB -> Yara        HUB.x1 395 - Yara.x2 370           = 25
+    HUB -> Soren       Soren.x1 612 - HUB.x2 585          = 27
+    HUB -> E5          E5.y1 468 - HUB.y2 418             = 50
+    E3  -> Kai         Kai.y1 548 - E3.y2 522             = 26
+    E3  -> Mira        Mira.x1 232 - E3.x2 204            = 28
+    Kai -> Mira        Mira.x1 232 - Kai.x2 168           = 64
+    Kai -> Product     Product.y1 692 - Kai.y2 666        = 26
+    Mira -> E5         E5.x1 388 - Mira.x2 364            = 24
+    Mira -> Gmail      Gmail.y1 700 - Mira.y2 666         = 34
+    E5  -> Gmail       Gmail.y1 700 - E5.y2 672           = 28
+    E5  -> E7          E7.x1 632 - E5.x2 592              = 40
+    E4  -> E7          E7.y1 500 - E4.y2 476              = 24
+    Soren -> E7        E7.y1 500 - Soren.y2 362           = 138
+  No two boxes overlap. Plane bounds 0..980 x 0..764 contain every box.
+
+  VIEWPORT FIT (canvas width = viewport - rail - inspector; header 52px tall):
+    1920x1080: canvas ~1204w x 1028h; plane 980x764 unscaled -> fits, margins ~112/132.
+    1440x900 : canvas  ~776w x  848h; plane scaled 0.78 -> 764x596 -> fits, margins ~6/126.
+  Header chips use flex:none + white-space:nowrap, so none clip at any width.
+  ============================================================================
+-->
+<style>
+  :root {
+    --paper: #eae6df;
+    --paper-2: #e3ded5;
+    --paper-3: #ded8cd;
+    --card: #f4f1ea;
+    --card-raised: #faf8f3;
+    --card-warm: #f6f2e9;
+    --ink: #26251f;
+    --ink-2: #4a4840;
+    --ink-3: #78756a;
+    --ink-4: #a8a498;
+    --ink-5: #bdb9ac;
+    --line: #d8d2c6;
+    --line-2: #cbc4b5;
+    --line-soft: #e0dacf;
+    --hair: #e2dcd0;
+    --green: #3f5c46;
+    --green-2: #587a5f;
+    --green-3: #6f8f75;
+    --green-soft: #e0e8de;
+    --green-tint: #eef2ea;
+    --amber: #9a6b2f;
+    --amber-soft: #f0e4d0;
+    --clay: #a86b52;
+    /* crew accents — each teammate reads as a distinct person */
+    --yara: #587a5f;   --yara-soft: #e2ebe1;
+    --mira: #8a6d34;   --mira-soft: #efe4cf;
+    --soren: #4f6d86;  --soren-soft: #dfe7ed;
+    --kai: #8a5a63;    --kai-soft: #eddfe1;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Georgia", serif;
+    --shadow-node: 0 1px 2px rgba(38,37,31,0.05), 0 8px 22px rgba(38,37,31,0.07);
+    --shadow-lift: 0 2px 6px rgba(38,37,31,0.08), 0 20px 50px rgba(38,37,31,0.13);
+    --shadow-hub: 0 3px 8px rgba(38,37,31,0.09), 0 24px 60px rgba(38,37,31,0.13);
+    --shadow-panel: -18px 0 44px rgba(38,37,31,0.045);
+    --shadow-rail: 18px 0 44px rgba(38,37,31,0.04);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+  .mono { font-family: var(--mono); font-feature-settings: "tnum" 1; }
+
+  /* ============ ADE SHELL — rail | stage | inspector ============ */
+  .ade {
+    display: grid;
+    grid-template-columns: 336px minmax(0, 1fr) 380px;
+    grid-template-rows: 100vh;
+    height: 100vh;
+    width: 100vw;
+  }
+  @media (max-width: 1560px) {
+    .ade { grid-template-columns: 312px minmax(0, 1fr) 352px; }
+  }
+
+  /* ================================================================ */
+  /* LEFT RAIL — ONE conversation with the firm                       */
+  /* ================================================================ */
+  .rail {
+    background: linear-gradient(178deg, #ece8e0, #e7e2d9);
+    border-right: 1px solid var(--line-2);
+    box-shadow: var(--shadow-rail);
+    display: flex; flex-direction: column; min-height: 0;
+    position: relative; z-index: 3;
+  }
+  .rail-top {
+    padding: 17px 20px 14px; border-bottom: 1px solid var(--line-soft);
+    display: flex; align-items: center; gap: 11px;
+  }
+  .brandmark {
+    width: 29px; height: 29px; border-radius: 8px; flex: none;
+    background: radial-gradient(circle at 32% 28%, #52735a, #34492f);
+    display: grid; place-items: center;
+    box-shadow: 0 1px 2px rgba(38,37,31,0.2), inset 0 1px 0 rgba(255,255,255,0.14);
+  }
+  .brand-name { font-weight: 600; font-size: 15px; letter-spacing: -0.02em; color: var(--ink); }
+  .brand-sub { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); margin-top: 1px; }
+  .rail-collapse {
+    margin-left: auto; width: 25px; height: 25px; border-radius: 6px;
+    border: 1px solid var(--line-2); background: var(--card);
+    display: grid; place-items: center; color: var(--ink-3); cursor: pointer;
+  }
+
+  .conv-label {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.11em; text-transform: uppercase;
+    color: var(--ink-4); padding: 15px 20px 4px;
+  }
+
+  .conv-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 0 4px 6px; }
+  .conv-scroll::-webkit-scrollbar { width: 9px; }
+  .conv-scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
+
+  .dialogue { padding: 2px 16px 0; }
+  .msg { display: flex; gap: 11px; padding: 9px 4px; }
+  .msg-av {
+    width: 30px; height: 30px; border-radius: 50%; flex: none;
+    border: 1.5px solid var(--card-raised); overflow: hidden;
+    box-shadow: 0 1px 2px rgba(38,37,31,0.12);
+  }
+  .msg-av.founder {
+    background: linear-gradient(150deg, #d8cfc0, #c8bda9);
+    display: grid; place-items: center;
+    font-family: var(--serif); font-size: 13px; font-weight: 600; color: #5a5140; font-style: italic;
+  }
+  .msg-body { min-width: 0; flex: 1; }
+  .msg-who { display: flex; align-items: baseline; gap: 7px; margin-bottom: 3px; }
+  .msg-name { font-weight: 600; font-size: 12.5px; color: var(--ink); letter-spacing: -0.01em; }
+  .msg-badge { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 4px; }
+  .msg-time { font-family: var(--mono); font-size: 10px; color: var(--ink-4); margin-left: auto; }
+  .msg-text { font-size: 13px; line-height: 1.55; color: var(--ink-2); letter-spacing: -0.003em; }
+  .msg-text.founder-said {
+    font-family: var(--serif); font-size: 15px; line-height: 1.5; color: var(--ink); font-style: italic;
+  }
+  .msg-text b { color: var(--ink); font-weight: 600; }
+
+  /* inline activity line in the conversation */
+  .activity {
+    margin: 2px 0 2px 41px; display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--green);
+    background: var(--green-tint); border: 1px solid #d7e2d5;
+    border-radius: 8px; padding: 6px 10px;
+  }
+  .activity .pulse {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); flex: none; position: relative;
+  }
+  .activity .pulse::after { content:""; position:absolute; inset:-3px; border-radius:50%; border:1.5px solid var(--green-3); opacity:0.5; }
+  .activity .el { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--green-2); }
+
+  /* the teammate's stall ask, quoted in the conversation */
+  .msg-text.ask {
+    border-left: 2px solid var(--amber); padding-left: 11px; color: var(--ink);
+  }
+
+  /* inline draft handoff — a colleague handing work over */
+  .handoff {
+    margin: 8px 0 4px 41px;
+    background: var(--card-raised); border: 1px solid var(--line-2);
+    border-radius: 11px; box-shadow: 0 1px 2px rgba(38,37,31,0.04), 0 6px 16px rgba(38,37,31,0.05);
+    overflow: hidden; cursor: pointer; position: relative;
+  }
+  .handoff::before {
+    content: ""; position: absolute; left: -11px; top: -6px; width: 18px; height: 22px;
+    border-left: 1.5px solid var(--line-2); border-bottom: 1.5px solid var(--line-2); border-radius: 0 0 0 8px;
+  }
+  .handoff-top { display: flex; align-items: center; gap: 9px; padding: 10px 12px 9px; border-bottom: 1px solid var(--hair); }
+  .handoff-ic { width: 25px; height: 25px; border-radius: 7px; background: var(--green-tint); color: var(--green); display: grid; place-items: center; flex: none; }
+  .handoff-kick { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--green-2); }
+  .handoff-name { font-weight: 600; font-size: 12.5px; color: var(--ink); line-height: 1.25; letter-spacing: -0.01em; }
+  .handoff-body { padding: 9px 12px; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+  .handoff-foot { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--hair); background: color-mix(in srgb, var(--card) 55%, transparent); }
+  .handoff-verb { font-family: var(--mono); font-size: 10px; color: var(--green); border: 1px solid #bccdbb; background: var(--green-tint); border-radius: 6px; padding: 3px 9px; }
+  .handoff-meta { font-family: var(--mono); font-size: 10px; color: var(--ink-4); margin-left: auto; }
+
+  /* composer docked to rail bottom */
+  .rail-bottom { border-top: 1px solid var(--line-soft); padding: 11px 16px 14px; }
+  .composer {
+    background: var(--card-raised); border: 1px solid var(--line-2); border-radius: 13px;
+    padding: 11px 13px 10px; box-shadow: 0 1px 2px rgba(38,37,31,0.05);
+  }
+  .composer-input { font-size: 13.5px; color: var(--ink-4); }
+  .composer-row { display: flex; align-items: center; gap: 8px; margin-top: 11px; }
+  .comp-tool {
+    width: 27px; height: 27px; border-radius: 8px; border: 1px solid var(--line-2);
+    background: var(--card); display: grid; place-items: center; color: var(--ink-3); cursor: pointer;
+  }
+  .comp-tool:hover { color: var(--ink); background: var(--card-raised); }
+  .comp-send {
+    margin-left: auto; width: 31px; height: 31px; border-radius: 9px; border: none;
+    background: linear-gradient(160deg, #4a6b51, #34492f); display: grid; place-items: center;
+    box-shadow: 0 1px 2px rgba(38,37,31,0.2); cursor: pointer;
+  }
+
+  /* ================================================================ */
+  /* CENTER STAGE — the venture atlas                                 */
+  /* ================================================================ */
+  .stage {
+    position: relative; min-width: 0; overflow: hidden;
+    display: grid; grid-template-rows: 52px minmax(0,1fr);
+    background:
+      radial-gradient(1300px 900px at 44% 42%, #efece5 0%, var(--paper) 58%, #e5e0d7 100%);
+  }
+
+  /* --- minimal header: venture name + two chips --- */
+  .header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 20px; z-index: 20;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--paper) 84%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .venture-tag { display: flex; align-items: baseline; gap: 9px; flex: none; }
+  .venture-tag .vname { font-weight: 600; font-size: 16px; letter-spacing: -0.02em; color: var(--ink); }
+  .chip {
+    flex: none; white-space: nowrap;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.02em;
+    padding: 4px 11px; border-radius: 100px; border: 1px solid var(--line-2);
+    color: var(--ink-2); background: var(--card);
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .chip .cdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); flex: none; }
+  .chip.effort { color: var(--green); border-color: #c4d4c2; background: var(--green-tint); }
+  .chip.quiet { color: var(--ink-3); }
+  .chip.quiet .cdot { background: var(--ink-4); }
+  .header-spring { flex: 1 1 auto; }
+
+  /* --- canvas plane --- */
+  .canvas { position: relative; overflow: hidden; }
+  .texture {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(circle, rgba(120,117,106,0.15) 1px, transparent 1.4px);
+    background-size: 27px 27px;
+    -webkit-mask-image: radial-gradient(1200px 820px at 44% 46%, #000 58%, transparent 100%);
+            mask-image: radial-gradient(1200px 820px at 44% 46%, #000 58%, transparent 100%);
+  }
+  .orbits { position: absolute; inset: 0; pointer-events: none; }
+
+  /* wires under nodes — same 1440x860 basis as the field */
+  .wires { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .wires path { fill: none; stroke: rgba(120,117,106,0.32); stroke-width: 1.4; }
+  .wires path.living { stroke: rgba(88,122,95,0.4); }
+  .wires path.sel { stroke: rgba(88,122,95,0.85); stroke-width: 2.1; }
+  .wires path.faint { stroke: rgba(120,117,106,0.2); stroke-dasharray: 4 5; }
+
+  /* fixed design plane, centered in the canvas at every viewport so the
+     composition is byte-identical at 1440x900 and 1920x1080. All nodes are
+     positioned by TOP-LEFT corner in plane px — see bounding-box block at top. */
+  .field { position: absolute; inset: 0; z-index: 3; }
+  .plane {
+    position: absolute; left: 50%; top: 50%;
+    width: 980px; height: 764px;
+    transform: translate(-50%, -50%);
+  }
+  /* the plane is one fixed coordinate system; at narrower desktop widths it
+     scales as a whole (fit-to-view), so node boxes never change relative to
+     each other and nothing clips. 1920 canvas ~1204px wide: no scale.
+     1440 canvas ~776px wide: scale so the 980px plane fits with margin. */
+  @media (max-width: 1720px) { .plane { transform: translate(-50%, -50%) scale(0.9); } }
+  @media (max-width: 1560px) { .plane { transform: translate(-50%, -50%) scale(0.78); } }
+  .node { position: absolute; }
+
+  /* --- central question hub --- */
+  .hub {
+    width: 190px; height: 190px; border-radius: 50%;
+    background: radial-gradient(circle at 42% 34%, #f6f3ec, #ece7de 68%, #e6e0d6);
+    border: 1px solid var(--line-2);
+    box-shadow: var(--shadow-hub), inset 0 1px 0 rgba(255,255,255,0.5);
+    display: grid; place-items: center; text-align: center; position: relative;
+  }
+  .hub::before { content:""; position:absolute; inset: 14px; border-radius:50%; border: 1px dashed rgba(120,117,106,0.26); }
+  .hub-inner { position: relative; padding: 0 26px; }
+  .hub-kicker { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--green-2); margin-bottom: 7px; }
+  .hub-q { font-family: var(--serif); font-size: 21px; line-height: 1.18; color: var(--ink); letter-spacing: -0.01em; }
+  .hub-sub { font-size: 11px; color: var(--ink-3); margin-top: 8px; line-height: 1.4; }
+
+  /* ---- EFFORT CARD — three density renderings share one frame ---- */
+  .effort {
+    width: 204px;
+    background: var(--card-raised); border: 1px solid var(--line-2);
+    border-radius: 13px; box-shadow: var(--shadow-node); overflow: hidden;
+    transition: box-shadow .14s;
+  }
+  .effort.selected {
+    border-color: var(--green-2);
+    box-shadow: var(--shadow-lift), 0 0 0 3px rgba(88,122,95,0.14);
+  }
+  .effort.stalled { border-color: #dcc7a8; }
+  .e-body { padding: 13px 15px 12px; }
+  .e-kicker {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ink-3); display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  }
+  .e-kicker .kdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); flex: none; }
+  .effort.stalled .e-kicker { color: var(--amber); }
+  .effort.stalled .e-kicker .kdot { background: var(--amber); }
+  .e-title { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.28; letter-spacing: -0.012em; }
+  .effort.selected .e-title { font-size: 16px; }
+  .e-summary { font-size: 12px; color: var(--ink-2); line-height: 1.48; margin-top: 7px; }
+  .e-need {
+    display: flex; align-items: flex-start; gap: 7px; margin-top: 9px;
+    padding: 7px 9px; border-radius: 8px; background: var(--amber-soft); border: 1px solid #e4d2ae;
+    font-size: 11.5px; color: #7a5322; line-height: 1.35;
+  }
+  .e-need svg { flex: none; margin-top: 1px; }
+
+  /* draft chip — drafts live ON the effort */
+  .e-draft {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 10px;
+    font-family: var(--mono); font-size: 10px; color: var(--ink-2);
+    border: 1px solid var(--line-2); background: var(--card); border-radius: 7px; padding: 4px 9px;
+  }
+  .e-draft .stack { position: relative; width: 15px; height: 12px; flex: none; }
+  .e-draft .stack span { position: absolute; width: 11px; height: 9px; border-radius: 2px; border: 1px solid var(--line-2); background: var(--card-raised); }
+  .e-draft .stack span:nth-child(1){ left: 0; top: 3px; }
+  .e-draft .stack span:nth-child(2){ left: 2px; top: 1.5px; }
+  .e-draft .stack span:nth-child(3){ left: 4px; top: 0; background: var(--green-tint); border-color: #c3d2c1; }
+  .e-draft b { color: var(--ink); font-weight: 600; }
+
+  /* foot: state + who + last activity, revealed by density */
+  .e-foot {
+    display: flex; align-items: center; gap: 8px; padding: 9px 15px;
+    border-top: 1px solid var(--hair); background: color-mix(in srgb, var(--card) 55%, transparent);
+  }
+  .e-state { font-size: 11.5px; color: var(--ink-2); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+  .e-state .sdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); flex: none; }
+  .e-faces { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+  .e-facepile { display: flex; }
+  .face {
+    width: 21px; height: 21px; border-radius: 50%; overflow: hidden;
+    border: 1.5px solid var(--card-raised); margin-left: -6px; flex: none;
+  }
+  .face:first-child { margin-left: 0; }
+  .e-last {
+    padding: 0 15px 11px; margin-top: -3px;
+    font-family: var(--mono); font-size: 9.5px; color: var(--ink-4); letter-spacing: 0.01em;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .e-last::before { content:""; width: 4px; height: 4px; border-radius: 50%; background: var(--ink-5); flex: none; }
+
+  /* density visibility — driven by body[data-density] */
+  body[data-density="editorial"] .e-summary,
+  body[data-density="editorial"] .e-draft,
+  body[data-density="editorial"] .e-faces,
+  body[data-density="editorial"] .e-last { display: none; }
+  body[data-density="editorial"] .effort .e-body { padding-bottom: 13px; }
+
+  body[data-density="standard"] .e-faces,
+  body[data-density="standard"] .e-last { display: none; }
+
+  body[data-density="detailed"] .e-foot { display: flex; }
+  /* selected card always shows its need + draft regardless of density */
+  .effort.selected .e-summary { display: block; }
+
+  /* --- crew node: a teammate's face + one-line "now doing", at their effort --- */
+  .crew {
+    width: 132px; height: 118px;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    z-index: 5;
+  }
+  .cr-doing { max-width: 132px; }
+  .cr-av {
+    width: 46px; height: 46px; border-radius: 50%; position: relative;
+    box-shadow: var(--shadow-node), 0 0 0 2px var(--card-raised);
+  }
+  .cr-presence {
+    position: absolute; right: 0; bottom: 0; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--green-2); box-shadow: 0 0 0 2.5px var(--paper); display: grid; place-items: center;
+  }
+  .cr-presence::after { content:""; width: 4.5px; height: 4.5px; border-radius: 50%; background: #eef4ec; }
+  .cr-presence.idle { background: var(--ink-4); }
+  .cr-name { font-size: 12px; font-weight: 600; color: var(--ink); margin-top: 6px; letter-spacing: -0.01em; }
+  .cr-doing {
+    font-size: 10.5px; color: var(--green); margin-top: 4px; line-height: 1.3;
+    background: color-mix(in srgb, var(--green-tint) 85%, transparent);
+    border: 1px solid #d7e2d5; border-radius: 7px; padding: 3px 9px;
+  }
+  .cr-doing.idle { color: var(--ink-3); background: var(--paper-2); border-color: var(--line-2); }
+
+  /* --- capability node --- */
+  .capability {
+    width: 168px;
+    background: var(--card); border: 1px solid var(--line-2);
+    border-radius: 11px; padding: 11px 13px; box-shadow: var(--shadow-node);
+    display: flex; align-items: center; gap: 10px; z-index: 4;
+  }
+  .cap-icon { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+  .cap-icon.on { background: var(--green-soft); color: var(--green); }
+  .cap-icon.off { background: var(--paper-2); color: var(--ink-4); }
+  .cap-label { font-size: 12.5px; font-weight: 600; color: var(--ink); line-height: 1.2; letter-spacing: -0.01em; }
+  .cap-state { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.02em; margin-top: 2px; }
+  .cap-state.on { color: var(--green-2); }
+  .cap-state.off { color: var(--ink-4); }
+
+  /* ================================================================ */
+  /* RIGHT INSPECTOR — open on the selected effort                    */
+  /* ================================================================ */
+  .inspector {
+    background: linear-gradient(178deg, #f2eee6, #ece8df);
+    border-left: 1px solid var(--line-2); box-shadow: var(--shadow-panel);
+    display: flex; flex-direction: column; min-height: 0; z-index: 3;
+  }
+  .insp-head { padding: 16px 20px 14px; border-bottom: 1px solid var(--line-soft); }
+  .insp-crumb { display: flex; align-items: center; gap: 8px; }
+  .insp-kicker { font-family: var(--mono); font-size: 9px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink-3); }
+  .insp-close { margin-left: auto; width: 25px; height: 25px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--card); display: grid; place-items: center; color: var(--ink-3); cursor: pointer; }
+  .insp-title { font-family: var(--serif); font-size: 19px; line-height: 1.24; color: var(--ink); margin-top: 10px; letter-spacing: -0.01em; }
+  .insp-state {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 11px;
+    font-size: 12px; color: var(--ink-2); background: var(--card); border: 1px solid var(--line-2);
+    border-radius: 100px; padding: 4px 12px 4px 10px;
+  }
+  .insp-state .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); box-shadow: 0 0 0 3px var(--green-tint); flex: none; }
+
+  .insp-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 18px 20px 22px; }
+  .insp-scroll::-webkit-scrollbar { width: 9px; }
+  .insp-scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
+
+  .insp-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink-4); margin: 0 0 10px; }
+  .insp-block { margin-bottom: 22px; }
+  .insp-para { font-size: 13.5px; line-height: 1.6; color: var(--ink-2); letter-spacing: -0.004em; margin: 0; }
+
+  .insp-crew-row { display: flex; align-items: center; gap: 10px; }
+  .insp-crew-face { width: 34px; height: 34px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1.5px var(--card); }
+  .insp-crew-name { font-weight: 600; font-size: 13px; color: var(--ink); }
+  .insp-crew-role { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.02em; margin-top: 1px; }
+
+  /* the draft, expanded — its actual content */
+  .insp-draft {
+    background: var(--card-raised); border: 1px solid var(--line-2); border-radius: 13px;
+    overflow: hidden; box-shadow: 0 1px 2px rgba(38,37,31,0.05), 0 8px 20px rgba(38,37,31,0.05);
+  }
+  .id-head { display: flex; align-items: center; gap: 10px; padding: 13px 15px; border-bottom: 1px solid var(--hair); }
+  .id-ic { width: 30px; height: 30px; border-radius: 8px; background: var(--green-tint); color: var(--green); display: grid; place-items: center; flex: none; }
+  .id-kick { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green-2); }
+  .id-name { font-weight: 600; font-size: 14px; color: var(--ink); line-height: 1.25; letter-spacing: -0.015em; }
+  .id-lede { padding: 13px 15px 4px; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); }
+  .id-list { margin: 8px 0 0; padding: 0 15px 13px; list-style: none; }
+  .id-list li {
+    position: relative; padding: 9px 0 9px 26px; font-size: 12.5px; line-height: 1.48; color: var(--ink-2);
+    border-top: 1px solid var(--hair);
+  }
+  .id-list li:first-child { border-top: none; }
+  .id-list li .num { position: absolute; left: 0; top: 9px; font-family: var(--mono); font-size: 11px; color: var(--green-2); font-weight: 500; }
+  .id-list li b { color: var(--ink); font-weight: 600; }
+
+  .insp-note {
+    display: flex; align-items: flex-start; gap: 9px; padding: 12px 14px; margin-top: 4px;
+    background: var(--green-tint); border: 1px solid #cddccb; border-radius: 11px;
+    font-size: 12.5px; line-height: 1.45; color: var(--green);
+  }
+  .insp-note svg { flex: none; margin-top: 1px; }
+
+  /* ================================================================ */
+  /* density toggle — fixed, plain JS                                 */
+  /* ================================================================ */
+  .density {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 60; display: flex; align-items: center; gap: 3px;
+    background: color-mix(in srgb, var(--card-raised) 94%, transparent);
+    border: 1px solid var(--line-2); border-radius: 11px; padding: 4px;
+    box-shadow: 0 2px 6px rgba(38,37,31,0.1), 0 12px 30px rgba(38,37,31,0.14);
+    backdrop-filter: blur(8px);
+  }
+  .density .dlabel { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-4); padding: 0 8px 0 6px; }
+  .density button {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.02em;
+    border: none; background: transparent; color: var(--ink-3);
+    padding: 5px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .density button:hover { color: var(--ink); }
+  .density button.on { background: var(--green-tint); color: var(--green); box-shadow: inset 0 0 0 1px #cddccb; }
+</style>
+</head>
+<body data-density="detailed">
+<div class="ade">
+
+  <!-- ==================== LEFT RAIL — ONE conversation ==================== -->
+  <aside class="rail">
+    <div class="rail-top">
+      <span class="brandmark">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 12.5c2.4-6 7.6-6 10-9M4.5 12.8c1.6-.3 3.2-.3 4.8.2" stroke="#e8ecdf" stroke-width="1.4" fill="none" stroke-linecap="round"/><circle cx="12.4" cy="4" r="1.5" fill="#e8ecdf"/></svg>
+      </span>
+      <div>
+        <div class="brand-name">Drover</div>
+        <div class="brand-sub">Your firm</div>
+      </div>
+      <button class="rail-collapse" title="Collapse">
+        <svg width="12" height="12" viewBox="0 0 13 13"><path d="M8 3L4.5 6.5 8 10" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <div class="conv-label">Conversation with the firm</div>
+
+    <div class="conv-scroll">
+      <div class="dialogue">
+
+        <!-- founder direction, verbatim -->
+        <div class="msg">
+          <span class="msg-av founder">J</span>
+          <div class="msg-body">
+            <div class="msg-who"><span class="msg-name">You</span><span class="msg-time">Jul 14 · 7:11 PM</span></div>
+            <div class="msg-text founder-said">"can we create an agent that focuses on developing an agent that finds buyer signals on reddit"</div>
+          </div>
+        </div>
+
+        <!-- Yara opens the venture -->
+        <div class="msg">
+          <span class="msg-av" id="av-yara"></span>
+          <div class="msg-body">
+            <div class="msg-who"><span class="msg-name">Yara</span><span class="msg-badge">lead</span><span class="msg-time">7:12 PM</span></div>
+            <div class="msg-text">Good — that's a real venture, not a one-off. Before any strategy I want the ground truth on the canvas. I've opened <b>seven efforts</b> and put a first draft on each.</div>
+          </div>
+        </div>
+
+        <div class="activity">
+          <span class="pulse"></span>
+          <span>Yara drew the working theory onto the canvas</span>
+          <span class="el">just now</span>
+        </div>
+
+        <!-- Mira claims the buyer question as hers -->
+        <div class="msg">
+          <span class="msg-av" id="av-mira"></span>
+          <div class="msg-body">
+            <div class="msg-who"><span class="msg-name">Mira</span><span class="msg-time">7:14 PM</span></div>
+            <div class="msg-text">Defining what counts as a signal — precision versus recall — is a buyer question before it's a build one. <b>That one's mine.</b> I'll draft the taxonomy off the real posts.</div>
+          </div>
+        </div>
+
+        <!-- Soren hands back the sequencing draft, inline -->
+        <div class="msg">
+          <span class="msg-av" id="av-soren"></span>
+          <div class="msg-body">
+            <div class="msg-who"><span class="msg-name">Soren</span><span class="msg-time">7:19 PM</span></div>
+            <div class="msg-text">Here's how I'd sequence the build so a result proves the plan, not the other way round. Draft's on the effort — take a look.</div>
+          </div>
+        </div>
+
+        <div class="handoff">
+          <div class="handoff-top">
+            <span class="handoff-ic">
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="2" y="1.5" width="9" height="13" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 5h5M4.5 8h5M4.5 11h3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+            </span>
+            <div>
+              <div class="handoff-kick">Draft on “Sequence the build”</div>
+              <div class="handoff-name">The minimum buildable version</div>
+            </div>
+          </div>
+          <div class="handoff-body">Smallest path to one real, checkable buyer signal — deliberately ahead of any scraping, storage, or scheduling.</div>
+          <div class="handoff-foot">
+            <span class="handoff-verb">Open on canvas</span>
+            <span class="handoff-meta">by Soren · 7 of 7</span>
+          </div>
+        </div>
+
+        <!-- Kai's stall ask, in the conversation -->
+        <div class="msg">
+          <span class="msg-av" id="av-kai"></span>
+          <div class="msg-body">
+            <div class="msg-who"><span class="msg-name">Kai</span><span class="msg-time">7:21 PM</span></div>
+            <div class="msg-text ask">I can't sharpen my own persona without your read: am I the contrarian who challenges the buyer premise, or the one who defends the narrowest wedge? Tell me which and I'll take it from there.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="rail-bottom">
+      <div class="composer">
+        <div class="composer-input">Tell the firm what should change…</div>
+        <div class="composer-row">
+          <span class="comp-tool" title="Reference a node">
+            <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M7 2.5v1.6M7 9.9v1.6M2.5 7h1.6M9.9 7h1.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </span>
+          <span class="comp-tool" title="Attach">
+            <svg width="14" height="14" viewBox="0 0 14 14"><path d="M9.5 4L5 8.5a1.8 1.8 0 002.5 2.5l4-4a3 3 0 00-4.2-4.2L3.5 6.5" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="comp-tool" title="Voice">
+            <svg width="14" height="14" viewBox="0 0 14 14"><rect x="5" y="2" width="4" height="7" rx="2" fill="currentColor"/><path d="M3.5 7a3.5 3.5 0 007 0M7 10.5V12" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>
+          </span>
+          <button class="comp-send" title="Send">
+            <svg width="15" height="15" viewBox="0 0 15 15"><path d="M2.5 7.5h9M7.5 3.5l4 4-4 4" stroke="#eef2e6" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==================== CENTER STAGE ==================== -->
+  <main class="stage">
+
+    <div class="header">
+      <div class="venture-tag"><span class="vname">drover</span></div>
+      <span class="chip effort"><span class="cdot"></span>7 efforts underway</span>
+      <div class="header-spring"></div>
+      <span class="chip quiet"><span class="cdot"></span>Nothing needs you yet</span>
+    </div>
+
+    <div class="canvas">
+      <div class="texture"></div>
+
+      <div class="field">
+       <div class="plane">
+
+        <!-- orbit rings, centered on the hub center (490,323) of the plane -->
+        <svg class="orbits" width="980" height="764" viewBox="0 0 980 764" style="position:absolute;left:0;top:0;" aria-hidden="true">
+          <g fill="none" stroke="rgba(120,117,106,0.13)">
+            <circle cx="490" cy="323" r="210"/>
+            <circle cx="490" cy="323" r="340" stroke-dasharray="3 7"/>
+            <circle cx="490" cy="323" r="470"/>
+          </g>
+        </svg>
+
+        <!-- wires: hub center (490,323) to each node's near edge. Plane-px basis. -->
+        <svg class="wires" width="980" height="764" viewBox="0 0 980 764" style="position:absolute;left:0;top:0;" aria-hidden="true">
+          <path class="living" d="M415 285 C 320 240, 240 190, 172 175"/>     <!-- E1 top-left -->
+          <path class="living" d="M490 240 C 490 220, 490 210, 490 204"/>     <!-- E2 top-center -->
+          <path class="living" d="M565 285 C 660 240, 740 190, 808 175"/>     <!-- E6 top-right -->
+          <path class="living" d="M415 360 C 300 400, 230 435, 172 452"/>     <!-- E3 left -->
+          <path class="living" d="M565 360 C 680 400, 760 430, 808 400"/>     <!-- E4 right -->
+          <path class="living" d="M485 415 C 475 445, 470 480, 468 528"/>     <!-- E5 bottom-center -->
+          <path class="sel"    d="M545 405 C 640 450, 700 490, 728 560"/>     <!-- E7 selected -->
+          <path class="faint"  d="M420 375 C 260 480, 140 580, 100 712"/>     <!-- cap product repo -->
+          <path class="faint"  d="M498 415 C 490 550, 486 640, 486 720"/>     <!-- cap gmail -->
+        </svg>
+
+        <!-- CENTRAL HUB — top-left (395,228); box [395,228]-[585,418] -->
+        <div class="node hub" style="left:395px; top:228px;">
+          <div class="hub-inner">
+            <div class="hub-kicker">the venture</div>
+            <div class="hub-q">What should<br>change?</div>
+            <div class="hub-sub">A Reddit buyer-signal agent — seven efforts open, first drafts in.</div>
+          </div>
+        </div>
+
+        <!-- EFFORT 2 — top center; box [388,0]-[592,~204] -->
+        <div class="node effort" style="left:388px; top:0px;">
+          <div class="e-body">
+            <div class="e-kicker"><span class="kdot"></span>Underway</div>
+            <div class="e-title">Propose three new crew members</div>
+            <div class="e-summary">Three distinct product-strategy lenses worth adding to the firm, and what each is on the hook for.</div>
+            <span class="e-draft"><span class="stack"><span></span><span></span><span></span></span><b>1 draft</b> · by Yara</span>
+          </div>
+          <div class="e-foot">
+            <span class="e-state"><span class="sdot"></span>Draft ready</span>
+            <span class="e-faces"><span class="e-facepile"><span class="face" id="f-e2-yara"></span></span></span>
+          </div>
+          <div class="e-last">Yara added the three lenses · 6m ago</div>
+        </div>
+
+        <!-- EFFORT 1 — top left; box [0,8]-[204,~212] -->
+        <div class="node effort" style="left:0px; top:8px;">
+          <div class="e-body">
+            <div class="e-kicker"><span class="kdot"></span>Underway</div>
+            <div class="e-title">Surface the current state before any strategy</div>
+            <div class="e-summary">Read what's visible and what's blocked today, before a single strategic call gets made.</div>
+            <span class="e-draft"><span class="stack"><span></span><span></span><span></span></span><b>1 draft</b> · by Yara</span>
+          </div>
+          <div class="e-foot">
+            <span class="e-state"><span class="sdot"></span>Draft ready</span>
+            <span class="e-faces"><span class="e-facepile"><span class="face" id="f-e1-yara"></span></span></span>
+          </div>
+          <div class="e-last">Yara read the repo &amp; named two gaps · 9m ago</div>
+        </div>
+
+        <!-- EFFORT 6 — top right; box [776,8]-[980,~212] -->
+        <div class="node effort" style="left:776px; top:8px;">
+          <div class="e-body">
+            <div class="e-kicker"><span class="kdot" style="background:var(--soren)"></span>Underway</div>
+            <div class="e-title">Map the field — Gummysearch, F5bot, Brand24</div>
+            <div class="e-summary">Who already listens to Reddit, and the ground none of them hold: a mention turned into a qualified buying signal.</div>
+            <span class="e-draft"><span class="stack"><span></span><span></span><span></span></span><b>1 draft</b> · by Yara</span>
+          </div>
+          <div class="e-foot">
+            <span class="e-state"><span class="sdot"></span>Draft ready</span>
+            <span class="e-faces"><span class="e-facepile"><span class="face" id="f-e6-soren"></span></span></span>
+          </div>
+          <div class="e-last">Soren placed the three incumbents · 3m ago</div>
+        </div>
+
+        <!-- EFFORT 3 — mid left, STALLED; box [0,272]-[204,~520] -->
+        <div class="node effort stalled" style="left:0px; top:272px;">
+          <div class="e-body">
+            <div class="e-kicker"><span class="kdot"></span>Needs your read</div>
+            <div class="e-title">Refine Kai's persona and contribution</div>
+            <div class="e-summary">Sharpen who Kai is and the lens he brings — the one call the crew can't make for you.</div>
+            <div class="e-need">
+              <svg width="13" height="13" viewBox="0 0 14 14"><path d="M7 1.5l6 10.5H1z" fill="none" stroke="#9a6b2f" stroke-width="1.2" stroke-linejoin="round"/><path d="M7 5.5v3M7 10h.01" stroke="#9a6b2f" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <span>Waiting on you: contrarian, or narrowest-wedge defender?</span>
+            </div>
+            <span class="e-draft"><span class="stack"><span></span><span></span><span></span></span><b>1 draft</b> · by Yara</span>
+          </div>
+          <div class="e-foot">
+            <span class="e-state"><span class="sdot" style="background:var(--amber)"></span>Blocked on your read</span>
+            <span class="e-faces"><span class="e-facepile"><span class="face" id="f-e3-kai"></span></span></span>
+          </div>
+          <div class="e-last">Kai asked which direction · 1m ago</div>
+        </div>
+
+        <!-- EFFORT 4 — mid right; box [776,272]-[980,~476] -->
+        <div class="node effort" style="left:776px; top:272px;">
+          <div class="e-body">
+            <div class="e-kicker"><span class="kdot"></span>Underway</div>
+            <div class="e-title">Define the real buyer — ICP, use case, willingness to pay</div>
+            <div class="e-summary">Who this is for and what they'd actually pay, before the signal engine gets designed around a guess.</div>
+            <span class="e-draft"><span class="stack"><span></span><span></span><span></span></span><b>1 draft</b> · by Yara</span>
+          </div>
+          <div class="e-foot">
+            <span class="e-state"><span class="sdot"></span>Draft ready</span>
+            <span class="e-faces"><span class="e-facepile"><span class="face" id="f-e4-yara"></span></span></span>
+          </div>
+          <div class="e-last">Yara drafted the ICP &amp; price read · 7m ago</div>
+        </div>
+
+        <!-- EFFORT 5 — bottom center (Mira's); box [388,468]-[592,~672] -->
+        <div class="node effort" style="left:388px; top:468px;">
+          <div class="e-body">
+            <div class="e-kicker"><span class="kdot" style="background:var(--mira)"></span>Underway</div>
+            <div class="e-title">Define what counts as a buyer signal</div>
+            <div class="e-summary">The signal taxonomy on Reddit, and the precision-versus-recall line the agent should hold.</div>
+            <span class="e-draft"><span class="stack"><span></span><span></span><span></span></span><b>1 draft</b> · by Yara</span>
+          </div>
+          <div class="e-foot">
+            <span class="e-state"><span class="sdot"></span>Draft ready</span>
+            <span class="e-faces"><span class="e-facepile"><span class="face" id="f-e5-mira"></span></span></span>
+          </div>
+          <div class="e-last">Mira is drafting off ~50 real posts · now</div>
+        </div>
+
+        <!-- EFFORT 7 — bottom, right of center, SELECTED; box [632,500]-[836,~710] -->
+        <div class="node effort selected" style="left:632px; top:500px;">
+          <div class="e-body">
+            <div class="e-kicker"><span class="kdot" style="background:var(--green)"></span>Selected · underway</div>
+            <div class="e-title">Sequence the build</div>
+            <div class="e-summary">The minimum version that produces a real buyer signal — before any infrastructure gets built.</div>
+            <span class="e-draft"><span class="stack"><span></span><span></span><span></span></span><b>1 draft</b> · by Soren</span>
+          </div>
+          <div class="e-foot">
+            <span class="e-state"><span class="sdot"></span>Draft ready</span>
+            <span class="e-faces"><span class="e-facepile"><span class="face" id="f-e7-soren"></span></span></span>
+          </div>
+          <div class="e-last">Soren handed the sequence over · 2m ago</div>
+        </div>
+
+        <!-- CREW — a face + one-line now-doing, each in clear space by its effort -->
+        <!-- Yara: lead, in the gap between the left column and the hub; box [238,250]-[370,368] -->
+        <div class="node crew" style="left:238px; top:250px;">
+          <div class="cr-av" id="cr-yara"><span class="cr-presence"></span></div>
+          <div class="cr-name">Yara</div>
+          <div class="cr-doing">opening the ground truth</div>
+        </div>
+        <!-- Mira: left of her effort E5; box [232,548]-[364,666] -->
+        <div class="node crew" style="left:232px; top:548px;">
+          <div class="cr-av" id="cr-mira"><span class="cr-presence"></span></div>
+          <div class="cr-name">Mira</div>
+          <div class="cr-doing">drawing the taxonomy</div>
+        </div>
+        <!-- Soren: in the gap between the hub and the right column; box [612,244]-[744,362] -->
+        <div class="node crew" style="left:612px; top:244px;">
+          <div class="cr-av" id="cr-soren"><span class="cr-presence"></span></div>
+          <div class="cr-name">Soren</div>
+          <div class="cr-doing">sequencing the build</div>
+        </div>
+        <!-- Kai: below his own effort E3, idle; box [36,548]-[168,666] -->
+        <div class="node crew" style="left:36px; top:548px;">
+          <div class="cr-av" id="cr-kai"><span class="cr-presence idle"></span></div>
+          <div class="cr-name">Kai</div>
+          <div class="cr-doing idle">waiting on your read</div>
+        </div>
+
+        <!-- CAPABILITIES -->
+        <!-- Product repository: bottom-left; box [18,692]-[186,744] -->
+        <div class="node capability" style="left:18px; top:692px;">
+          <span class="cap-icon on">
+            <svg width="15" height="15" viewBox="0 0 16 16"><path d="M2 4.5l6-2.5 6 2.5v6L8 13.5 2 10.5z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M2 4.5l6 2.5 6-2.5M8 7v6.5" stroke="currentColor" stroke-width="1.1" fill="none"/></svg>
+          </span>
+          <div>
+            <div class="cap-label">Product repository</div>
+            <div class="cap-state on">connected</div>
+          </div>
+        </div>
+        <!-- Gmail: bottom-center; box [400,700]-[568,752] -->
+        <div class="node capability" style="left:400px; top:700px;">
+          <span class="cap-icon off">
+            <svg width="15" height="15" viewBox="0 0 16 16"><rect x="2" y="3.5" width="12" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 4.5L8 8.5l5.5-4" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>
+          </span>
+          <div>
+            <div class="cap-label">Gmail</div>
+            <div class="cap-state off">not connected</div>
+          </div>
+        </div>
+
+       </div><!-- /.plane -->
+      </div><!-- /.field -->
+    </div><!-- /.canvas -->
+  </main>
+
+  <!-- ==================== RIGHT INSPECTOR ==================== -->
+  <aside class="inspector">
+    <div class="insp-head">
+      <div class="insp-crumb">
+        <span class="insp-kicker">Effort · underway</span>
+        <button class="insp-close" title="Close">
+          <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="insp-title">Sequence the build — the minimum that produces a real buyer signal</div>
+      <span class="insp-state"><span class="sdot"></span>Draft ready to read</span>
+    </div>
+
+    <div class="insp-scroll">
+
+      <div class="insp-block">
+        <p class="insp-label">What this effort is for</p>
+        <p class="insp-para">Before any infrastructure gets built, find the smallest version of the agent that surfaces one real buyer signal from Reddit — so the sequence is proven by a result, not assumed.</p>
+      </div>
+
+      <div class="insp-block">
+        <p class="insp-label">Who's on it</p>
+        <div class="insp-crew-row">
+          <span class="insp-crew-face" id="insp-soren"></span>
+          <div>
+            <div class="insp-crew-name">Soren</div>
+            <div class="insp-crew-role">landscape · build · handed the draft over 2m ago</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="insp-block">
+        <p class="insp-label">Its draft</p>
+        <div class="insp-draft">
+          <div class="id-head">
+            <span class="id-ic">
+              <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="1.5" width="9" height="13" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 5h5M4.5 8h5M4.5 11h3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+            </span>
+            <div>
+              <div class="id-kick">Draft · not yet acted on</div>
+              <div class="id-name">The minimum buildable version</div>
+            </div>
+          </div>
+          <p class="id-lede">The shortest path to one real, checkable buyer signal — deliberately ahead of any scraping, storage, or scheduling infrastructure.</p>
+          <ul class="id-list">
+            <li><span class="num">1</span><b>Pick one narrow subreddit</b> where buyers describe the problem in their own words, and read the last week by hand to confirm signals exist.</li>
+            <li><span class="num">2</span><b>Write the signal test</b> as a single prompt — post in, "is this a buyer signal, and why" out — before writing any code.</li>
+            <li><span class="num">3</span><b>Run it over ~50 real posts</b> and score precision against the hand read. If it can't beat a keyword filter, the wedge isn't here.</li>
+            <li><span class="num">4</span><b>Only then</b> add fetching, dedup, and scheduling — the infrastructure that makes a proven signal continuous.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="insp-note">
+        <svg width="15" height="15" viewBox="0 0 16 16"><path d="M4 8l3 3 5.5-6" stroke="#3f5c46" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>This is a draft in your firm. Read it and say what you think — nothing here touches the world or spends until you say so.</span>
+      </div>
+
+    </div>
+  </aside>
+
+</div>
+
+<!-- density toggle — the one unresolved visual decision, pick by looking -->
+<div class="density" role="group" aria-label="Card density">
+  <span class="dlabel">Card density</span>
+  <button data-d="editorial">editorial</button>
+  <button data-d="standard">standard</button>
+  <button data-d="detailed" class="on">detailed</button>
+</div>
+
+<script>
+/* ---- crew portraits: distinct person per teammate, warm-paper palette ---- */
+(function () {
+  function portrait(o) {
+    var svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+      '<rect width="64" height="64" fill="' + o.bg + '"/>' +
+      '<circle cx="32" cy="25" r="13" fill="' + o.skin + '"/>' +
+      '<path d="M32 39c-10 0-18 6.5-18 16v9h36v-9c0-9.5-8-16-18-16Z" fill="' + o.accent + '"/>' +
+      o.hair + (o.feat || '') +
+      '</svg>';
+    return 'url("data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '")';
+  }
+  var yara = portrait({
+    bg:'#e7ded0', skin:'#e0b083', accent:'#587a5f',
+    hair:'<path d="M18 23c0-9 6-15 14-15s14 6 14 15c0 3-1 5-1 5l-3-8s-4 4-10 4-10-4-10-4l-3 8s-1-2-1-5Z" fill="#8a4b32"/>',
+    feat:'<circle cx="27" cy="25" r="1.5" fill="#3a2a20"/><circle cx="37" cy="25" r="1.5" fill="#3a2a20"/><path d="M29 31c2 1.5 6 1.5 8 0" stroke="#b07a55" stroke-width="1.3" fill="none" stroke-linecap="round"/>'
+  });
+  var mira = portrait({
+    bg:'#e6ddcd', skin:'#d7a878', accent:'#8a6d34',
+    hair:'<path d="M16 30c0-13 7-22 16-22s16 9 16 22l-4-2V15H20v13Z" fill="#2c2620"/>',
+    feat:'<rect x="23" y="22" width="7" height="5" rx="2.5" fill="none" stroke="#3a2a20" stroke-width="1.3"/><rect x="34" y="22" width="7" height="5" rx="2.5" fill="none" stroke="#3a2a20" stroke-width="1.3"/><path d="M30 24.5h4" stroke="#3a2a20" stroke-width="1.3"/><path d="M28 32h8" stroke="#a86f4a" stroke-width="1.3" stroke-linecap="round"/>'
+  });
+  var soren = portrait({
+    bg:'#dfe3ea', skin:'#c98f63', accent:'#4f6d86',
+    hair:'<path d="M19 24c0-9 6-15 13-15s13 6 13 15c0-6-5-9-13-9s-13 3-13 9Z" fill="#3d3126"/>',
+    feat:'<path d="M20 30c1 8 6 12 12 12s11-4 12-12c-2 3-6 5-12 5s-10-2-12-5Z" fill="#4a3524"/><circle cx="27" cy="26" r="1.5" fill="#2a2018"/><circle cx="37" cy="26" r="1.5" fill="#2a2018"/>'
+  });
+  var kai = portrait({
+    bg:'#ecdfe1', skin:'#e0ad84', accent:'#8a5a63',
+    hair:'<path d="M22 15a6 6 0 0 1 6-4 6 6 0 0 1 4 1 6 6 0 0 1 4-1 6 6 0 0 1 6 5 5 5 0 0 1-2 9c0-6-5-9-8-9s-8 3-8 9a5 5 0 0 1-2-10Z" fill="#4a3b2c"/>',
+    feat:'<circle cx="27" cy="26" r="1.5" fill="#3a2a20"/><circle cx="37" cy="26" r="1.5" fill="#3a2a20"/><path d="M29 32h6" stroke="#b07a55" stroke-width="1.3" stroke-linecap="round"/>'
+  });
+
+  var byId = {
+    'av-yara': yara, 'av-mira': mira, 'av-soren': soren, 'av-kai': kai,
+    'cr-yara': yara, 'cr-mira': mira, 'cr-soren': soren, 'cr-kai': kai,
+    'insp-soren': soren,
+    'f-e1-yara': yara, 'f-e2-yara': yara, 'f-e4-yara': yara,
+    'f-e6-soren': soren, 'f-e7-soren': soren, 'f-e5-mira': mira, 'f-e3-kai': kai
+  };
+  Object.keys(byId).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.backgroundImage = byId[id];
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+  });
+})();
+
+/* ---- density toggle ---- */
+(function () {
+  var body = document.body;
+  document.querySelectorAll('.density button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      body.setAttribute('data-density', b.getAttribute('data-d'));
+      document.querySelectorAll('.density button').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+    });
+  });
+})();
+</script>
+</body>
+</html>

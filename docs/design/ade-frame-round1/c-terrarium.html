@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drover ADE — The Terrarium</title>
+<style>
+  :root {
+    --paper: #eae6df;
+    --paper-2: #e3ded5;
+    --paper-3: #ded8cd;
+    --card: #f4f1ea;
+    --card-raised: #faf8f3;
+    --ink: #26251f;
+    --ink-2: #4a4840;
+    --ink-3: #78756a;
+    --ink-4: #a8a498;
+    --ink-5: #bdb9ac;
+    --line: #d4cec2;
+    --line-2: #c7c0b1;
+    --line-3: #b8b0a0;
+    --green: #3f5c46;
+    --green-2: #587a5f;
+    --green-3: #6f8f75;
+    --green-soft: #e0e8de;
+    --green-tint: #eef2ea;
+    --amber: #9a6b2f;
+    --amber-soft: #f0e4d0;
+    --alarm: #9c4a3f;
+    /* crew accents */
+    --yara: #587a5f;
+    --yara-soft: #e2ebe1;
+    --mira: #8a6d34;
+    --mira-soft: #efe4cf;
+    --soren: #4f6d86;
+    --soren-soft: #dfe7ed;
+    --kai: #8a5a63;
+    --kai-soft: #eddfe1;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --shadow-node: 0 1px 2px rgba(38,37,31,0.05), 0 8px 22px rgba(38,37,31,0.07);
+    --shadow-lift: 0 2px 5px rgba(38,37,31,0.07), 0 18px 44px rgba(38,37,31,0.12);
+    --shadow-hub: 0 3px 8px rgba(38,37,31,0.09), 0 24px 60px rgba(38,37,31,0.14);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* ============ ADE SHELL GRID ============ */
+  .ade {
+    display: grid;
+    grid-template-columns: 300px 1fr 372px;
+    grid-template-rows: 100vh;
+    height: 100vh;
+    width: 100vw;
+  }
+  @media (max-width: 1600px) {
+    .ade { grid-template-columns: 280px 1fr 344px; }
+  }
+
+  /* ============ LEFT RAIL — CONVERSATION THREADS ============ */
+  .rail {
+    background: var(--card);
+    border-right: 1px solid var(--line-2);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    position: relative;
+  }
+  .rail-head {
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .rail-head .brandmark {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: linear-gradient(150deg, var(--green-2), var(--green));
+    display: grid; place-items: center;
+    color: #f4f1ea; font-family: var(--mono); font-size: 13px; font-weight: 600;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+    flex: none;
+  }
+  .rail-head .venture-name { font-weight: 600; font-size: 15px; color: var(--ink); letter-spacing: -0.01em; }
+  .rail-head .venture-sub { font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; color: var(--ink-3); text-transform: uppercase; }
+  .rail-head .switch {
+    margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+    border: 1px solid var(--line-2); border-radius: 5px; padding: 3px 6px; background: var(--card-raised);
+    letter-spacing: 0.02em; cursor: default;
+  }
+  .rail-head .collapse {
+    width: 22px; height: 22px; border-radius: 5px; border: 1px solid transparent;
+    display: grid; place-items: center; color: var(--ink-4); flex: none;
+  }
+
+  .thread-scroll { flex: 1; overflow-y: auto; padding: 6px 12px 12px; min-height: 0; }
+  .thread-scroll::-webkit-scrollbar { width: 8px; }
+  .thread-scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 8px; border: 2px solid var(--card); }
+
+  /* main venture dialogue block */
+  .dialogue { padding: 6px 4px 4px; }
+  .msg { margin: 0 0 14px; }
+  .msg .who {
+    display: flex; align-items: center; gap: 7px; margin-bottom: 5px;
+  }
+  .msg .who .nm { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .msg .who .tm { font-family: var(--mono); font-size: 10px; color: var(--ink-4); margin-left: auto; letter-spacing: 0.02em; }
+  .msg .who .badge { font-family: var(--mono); font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 4px; }
+  .msg.founder .bubble {
+    background: var(--card-raised); border: 1px solid var(--line-2); border-radius: 4px 12px 12px 12px;
+    padding: 10px 13px; font-size: 13.5px; color: var(--ink); line-height: 1.45;
+  }
+  .msg.agent .bubble {
+    font-size: 13px; color: var(--ink-2); line-height: 1.5; padding: 1px 2px 0;
+  }
+  .avatar {
+    width: 22px; height: 22px; border-radius: 50%; flex: none; overflow: hidden;
+    box-shadow: 0 0 0 1.5px var(--card);
+  }
+  .avatar.founder { background: var(--paper-3); display: grid; place-items: center; font-size: 10px; font-weight: 600; color: var(--ink-3); }
+
+  /* inline agent activity line */
+  .activity {
+    display: flex; align-items: center; gap: 8px; margin: 3px 0 3px 0;
+    padding: 6px 10px; border-radius: 8px; background: var(--green-tint);
+    border: 1px solid #d4e0d2; font-size: 12px; color: var(--green);
+  }
+  .activity .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); flex: none; position: relative; }
+  .activity .pulse::after { content:""; position:absolute; inset:-4px; border-radius:50%; border:1.5px solid var(--green-3); opacity:0.5; }
+  .activity .el { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--green-2); letter-spacing: 0.02em; }
+
+  /* inline artifact card inside thread */
+  .thread-artifact {
+    margin: 8px 0 4px 30px; border: 1px solid var(--line-2); border-radius: 10px;
+    background: var(--card-raised); box-shadow: var(--shadow-node); overflow: hidden;
+  }
+  .thread-artifact .ta-top {
+    padding: 9px 12px 8px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: flex-start; gap: 8px;
+  }
+  .thread-artifact .ta-icon {
+    width: 22px; height: 22px; border-radius: 6px; background: var(--soren-soft);
+    display: grid; place-items: center; flex: none; margin-top: 1px;
+  }
+  .thread-artifact .ta-kicker { font-family: var(--mono); font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+  .thread-artifact .ta-title { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.3; margin-top: 1px; }
+  .thread-artifact .ta-preview { padding: 9px 12px 11px; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+  .thread-artifact .ta-foot {
+    display: flex; align-items: center; gap: 8px; padding: 0 12px 11px;
+  }
+  .thread-artifact .ta-verb {
+    font-family: var(--mono); font-size: 11px; color: var(--green); border: 1px solid #bccdbb;
+    background: var(--green-tint); border-radius: 6px; padding: 3px 10px;
+  }
+  .thread-artifact .ta-note { font-size: 11px; color: var(--ink-3); }
+
+  /* effort threads list */
+  .rail-section-label {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-4); margin: 16px 6px 8px; display: flex; align-items: center; gap: 8px;
+  }
+  .rail-section-label::after { content:""; flex:1; height:1px; background: var(--line); }
+  .effort-thread {
+    display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid transparent; margin-bottom: 2px;
+  }
+  .effort-thread:hover { background: var(--card-raised); }
+  .effort-thread.active { background: var(--green-tint); border-color: #cddccb; }
+  .effort-thread .et-branch { width: 12px; flex: none; color: var(--ink-4); font-family: var(--mono); font-size: 12px; text-align:center; }
+  .effort-thread .et-body { min-width: 0; flex: 1; }
+  .effort-thread .et-title {
+    font-size: 12.5px; color: var(--ink-2); line-height: 1.35; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .effort-thread.active .et-title { color: var(--ink); font-weight: 500; }
+  .effort-thread .et-meta { display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+  .effort-thread .et-face { width: 15px; height: 15px; border-radius: 50%; flex: none; }
+  .effort-thread .et-state { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: 0.02em; }
+  .effort-thread .et-unread { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); flex: none; margin-left: auto; }
+
+  /* composer docked at bottom of rail */
+  .composer {
+    border-top: 1px solid var(--line-2); background: var(--card-raised);
+    padding: 12px 14px 14px;
+  }
+  .composer .field {
+    border: 1px solid var(--line-2); border-radius: 11px; background: var(--paper);
+    padding: 10px 12px 8px; box-shadow: inset 0 1px 2px rgba(38,37,31,0.03);
+  }
+  .composer .ph { font-size: 13.5px; color: var(--ink-4); line-height: 1.4; min-height: 34px; }
+  .composer .ph .ref {
+    color: var(--green); background: var(--green-tint); border: 1px solid #cddccb;
+    border-radius: 5px; padding: 1px 5px; font-size: 12.5px; font-family: var(--mono);
+  }
+  .composer .tools { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .composer .tool { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--ink-3); border: 1px solid transparent; }
+  .composer .tool:hover { background: var(--card); border-color: var(--line); }
+  .composer .send {
+    margin-left: auto; width: 28px; height: 28px; border-radius: 8px;
+    background: var(--green); display: grid; place-items: center; color: #f4f1ea;
+    box-shadow: 0 1px 2px rgba(38,37,31,0.15);
+  }
+  .composer .hint { font-family: var(--mono); font-size: 9.5px; color: var(--ink-4); margin-top: 8px; letter-spacing: 0.02em; text-align:center; }
+
+  /* ============ CENTER STAGE — THE TERRARIUM ============ */
+  .stage {
+    position: relative; overflow: hidden;
+    background:
+      radial-gradient(1400px 900px at 42% 44%, #efece5 0%, #eae6df 58%, #e5e0d7 100%);
+  }
+  /* dotted-orbit background texture */
+  .stage .texture {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(circle, rgba(120,117,106,0.16) 1px, transparent 1.4px);
+    background-size: 26px 26px;
+    -webkit-mask-image: radial-gradient(1200px 820px at 42% 46%, #000 60%, transparent 100%);
+    mask-image: radial-gradient(1200px 820px at 42% 46%, #000 60%, transparent 100%);
+    opacity: 0.9;
+  }
+  /* faint concentric orbit rings — the "world" texture pushed further */
+  .stage .orbits { position: absolute; inset: 0; pointer-events: none; }
+  .stage .orbits circle { fill: none; stroke: rgba(120,117,106,0.13); stroke-width: 1; }
+  .stage .orbits circle.dash { stroke-dasharray: 3 7; stroke: rgba(120,117,106,0.16); }
+
+  /* top-of-stage chrome: altitude + effort chip + presence summary */
+  .stage-chrome {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 20px;
+    background: linear-gradient(180deg, rgba(234,230,223,0.86), rgba(234,230,223,0));
+    pointer-events: none;
+  }
+  .stage-chrome > * { pointer-events: auto; }
+  .chip {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.02em;
+    padding: 5px 11px; border-radius: 100px; border: 1px solid var(--line-2);
+    color: var(--ink-2); background: color-mix(in srgb, var(--card-raised) 88%, transparent);
+    backdrop-filter: blur(6px); display: inline-flex; align-items: center; gap: 7px;
+  }
+  .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); }
+  .chip.effort { color: var(--green); border-color: #c4d4c2; }
+  .presence-summary {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    background: color-mix(in srgb, var(--card-raised) 88%, transparent);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--line-2); border-radius: 100px; padding: 4px 12px 4px 6px;
+  }
+  .presence-summary .stack { display: flex; }
+  .presence-summary .stack .pv { width: 24px; height: 24px; border-radius: 50%; margin-left: -7px; box-shadow: 0 0 0 2px var(--card-raised); }
+  .presence-summary .stack .pv:first-child { margin-left: 0; }
+  .presence-summary .lbl { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); letter-spacing: 0.02em; }
+
+  /* altitude control cluster bottom-left */
+  .altitude {
+    position: absolute; left: 20px; bottom: 20px; z-index: 20;
+    background: color-mix(in srgb, var(--card-raised) 90%, transparent);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--line-2); border-radius: 11px; padding: 5px;
+    display: flex; flex-direction: column; gap: 2px; box-shadow: var(--shadow-node);
+  }
+  .altitude .alt {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.03em; color: var(--ink-3);
+    padding: 6px 12px; border-radius: 7px; text-align: center; white-space: nowrap;
+  }
+  .altitude .alt.on { background: var(--green-tint); color: var(--green); border: 1px solid #cddccb; font-weight: 500; }
+  .altitude .divider { height: 1px; background: var(--line); margin: 2px 6px; }
+
+  /* the canvas coordinate plane (nodes hand-placed, collision-free) */
+  .canvas { position: absolute; inset: 0; }
+  .node { position: absolute; }
+
+  /* --- finished-work strata: faded sunken layer beneath the living layer --- */
+  .strata {
+    position: absolute; z-index: 1; opacity: 0.5;
+    filter: saturate(0.7);
+  }
+  .strata .strata-card {
+    width: 174px; background: var(--paper-2); border: 1px solid var(--line);
+    border-radius: 9px; padding: 9px 11px; box-shadow: none;
+  }
+  .strata .strata-kicker { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-4); }
+  .strata .strata-title { font-size: 11.5px; color: var(--ink-3); line-height: 1.3; margin-top: 2px; }
+  .strata-label {
+    position: absolute; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-4);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .strata-label::before { content:""; width: 22px; height:1px; background: var(--ink-4); opacity: 0.5; }
+
+  /* --- central question hub --- */
+  .hub {
+    z-index: 8;
+    width: 224px; text-align: center;
+  }
+  .hub .ring {
+    width: 224px; height: 224px; border-radius: 50%;
+    background: radial-gradient(circle at 42% 36%, #f6f3ec, #ece7de 70%, #e6e0d6);
+    border: 1px solid var(--line-2);
+    box-shadow: var(--shadow-hub), inset 0 1px 0 rgba(255,255,255,0.5);
+    display: grid; place-items: center; position: relative;
+  }
+  .hub .ring::before {
+    content:""; position:absolute; inset: 14px; border-radius:50%;
+    border: 1px dashed rgba(120,117,106,0.28);
+  }
+  .hub .ring-inner { position: relative; padding: 0 30px; }
+  .hub .ring-kicker { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--green-2); margin-bottom: 8px; }
+  .hub .ring-q { font-size: 19px; font-weight: 600; color: var(--ink); line-height: 1.2; letter-spacing: -0.02em; }
+  .hub .ring-sub { font-size: 11.5px; color: var(--ink-3); margin-top: 9px; line-height: 1.4; }
+
+  /* --- effort node (work line), editorial card w/ now-doing pulse --- */
+  .effort {
+    z-index: 6; width: 234px;
+    background: var(--card-raised); border: 1px solid var(--line-2);
+    border-radius: 13px; box-shadow: var(--shadow-node);
+    overflow: hidden;
+  }
+  .effort.selected { border-color: var(--green-2); box-shadow: var(--shadow-lift), 0 0 0 3px rgba(88,122,95,0.14); }
+  .effort .e-body { padding: 13px 15px 11px; }
+  .effort .e-kicker {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-3); display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  }
+  .effort .e-kicker .k-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); }
+  .effort .e-title { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.28; letter-spacing: -0.01em; }
+  /* now-doing pulse line */
+  .now-doing {
+    display: flex; align-items: center; gap: 7px; margin-top: 10px;
+    padding: 6px 9px; border-radius: 8px; background: var(--green-tint); border: 1px solid #d7e2d5;
+  }
+  .now-doing .nd-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); flex: none; position: relative; }
+  .now-doing .nd-pulse::after { content:""; position:absolute; inset:-3px; border-radius:50%; border:1px solid var(--green-3); opacity: 0.55; }
+  .now-doing .nd-text { font-size: 11.5px; color: var(--green); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .effort .e-foot {
+    display: flex; align-items: center; gap: 8px; padding: 9px 15px;
+    border-top: 1px solid var(--line); background: color-mix(in srgb, var(--card) 55%, transparent);
+  }
+  .effort .e-state { font-size: 11.5px; color: var(--ink-2); font-weight: 500; }
+  .effort .e-prepared {
+    margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+    border: 1px solid var(--line-2); border-radius: 5px; padding: 2px 7px; background: var(--card-raised);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .effort .e-prepared .p-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--amber); }
+
+  /* compact effort — title + now-doing, no foot (for the ones farther out) */
+  .effort.compact { width: 210px; }
+  .effort.compact .e-title { font-size: 13px; }
+
+  /* --- crew avatar sitting ON the canvas near its effort --- */
+  .crew {
+    z-index: 7; width: 128px; display: flex; flex-direction: column; align-items: center; text-align: center;
+  }
+  .crew .cr-av {
+    width: 52px; height: 52px; border-radius: 50%; position: relative;
+    box-shadow: var(--shadow-node), inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+  .crew .cr-presence {
+    position: absolute; right: 1px; bottom: 1px; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--green-2); box-shadow: 0 0 0 2.5px var(--paper); display: grid; place-items: center;
+  }
+  .crew .cr-presence::after { content:""; width: 5px; height: 5px; border-radius: 50%; background: #eef4ec; }
+  .crew .cr-presence.idle { background: var(--ink-4); }
+  .crew .cr-name { font-size: 12px; font-weight: 600; color: var(--ink); margin-top: 7px; letter-spacing: -0.01em; }
+  .crew .cr-lens { font-family: var(--mono); font-size: 9px; letter-spacing: 0.02em; color: var(--ink-3); margin-top: 1px; line-height: 1.3; }
+  .crew .cr-doing {
+    font-size: 10.5px; color: var(--green); margin-top: 5px; line-height: 1.3;
+    background: color-mix(in srgb, var(--green-tint) 85%, transparent); border-radius: 7px; padding: 3px 8px;
+    border: 1px solid #d7e2d5;
+  }
+
+  /* --- capability node (a real reach the venture holds) --- */
+  .capability {
+    z-index: 5; width: 172px; background: var(--card); border: 1px solid var(--line-2);
+    border-radius: 11px; padding: 11px 13px; box-shadow: var(--shadow-node);
+  }
+  .capability .cap-top { display: flex; align-items: center; gap: 9px; }
+  .capability .cap-icon { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+  .capability .cap-icon.on { background: var(--green-soft); color: var(--green); }
+  .capability .cap-icon.off { background: var(--paper-2); color: var(--ink-4); }
+  .capability .cap-label { font-size: 12.5px; font-weight: 600; color: var(--ink); line-height: 1.2; }
+  .capability .cap-state { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.02em; margin-top: 2px; }
+  .capability .cap-state.on { color: var(--green-2); }
+  .capability .cap-state.off { color: var(--ink-4); }
+
+  /* --- gate node --- */
+  .gate {
+    z-index: 6; width: 186px; background: var(--card-raised);
+    border: 1px dashed var(--line-3); border-radius: 12px; padding: 13px 15px;
+    box-shadow: var(--shadow-node); text-align: center;
+  }
+  .gate .g-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--green-tint); border: 1px solid #cddccb; display: grid; place-items: center; margin: 0 auto 8px; color: var(--green); }
+  .gate .g-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .gate .g-sub { font-size: 11px; color: var(--ink-3); margin-top: 3px; line-height: 1.35; }
+
+  /* --- connective tissue: SVG lines between nodes --- */
+  .wires { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .wires path { fill: none; stroke: rgba(120,117,106,0.34); stroke-width: 1.5; }
+  .wires path.living { stroke: rgba(88,122,95,0.42); }
+  .wires path.faint { stroke: rgba(120,117,106,0.2); stroke-dasharray: 4 5; }
+
+  /* ============ RIGHT INSPECTOR ============ */
+  .inspector {
+    background: var(--card); border-left: 1px solid var(--line-2);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .insp-head {
+    padding: 15px 18px 13px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .insp-head .ih-kicker { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .insp-head .ih-title { font-size: 16px; font-weight: 600; color: var(--ink); line-height: 1.25; margin-top: 3px; letter-spacing: -0.01em; }
+  .insp-head .ih-close { margin-left: auto; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--ink-4); border: 1px solid transparent; flex: none; }
+  .insp-head .ih-close:hover { background: var(--card-raised); border-color: var(--line); }
+
+  .insp-scroll { flex: 1; overflow-y: auto; padding: 16px 18px 20px; min-height: 0; }
+  .insp-scroll::-webkit-scrollbar { width: 8px; }
+  .insp-scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 8px; border: 2px solid var(--card); }
+
+  .insp-status {
+    display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 9px;
+    background: var(--green-tint); border: 1px solid #d4e0d2; margin-bottom: 18px;
+  }
+  .insp-status .is-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); position: relative; flex: none; }
+  .insp-status .is-dot::after { content:""; position:absolute; inset:-4px; border-radius:50%; border:1.5px solid var(--green-3); opacity: 0.5; }
+  .insp-status .is-text { font-size: 12.5px; color: var(--green); font-weight: 500; }
+  .insp-status .is-el { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--green-2); }
+
+  .insp-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-4); margin: 0 0 9px; }
+  .insp-p { font-size: 13px; color: var(--ink-2); line-height: 1.55; margin: 0 0 18px; }
+
+  .insp-crew { display: flex; align-items: center; gap: 9px; margin-bottom: 20px; }
+  .insp-crew .ic-av { width: 30px; height: 30px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1.5px var(--card); }
+  .insp-crew .ic-nm { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .insp-crew .ic-role { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.02em; }
+
+  /* the prepared artifact, full inside the inspector */
+  .insp-artifact {
+    border: 1px solid var(--line-2); border-radius: 12px; background: var(--card-raised);
+    box-shadow: var(--shadow-node); overflow: hidden; margin-bottom: 18px;
+  }
+  .insp-artifact .ia-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start; }
+  .insp-artifact .ia-icon { width: 26px; height: 26px; border-radius: 7px; background: var(--soren-soft); color: var(--soren); display: grid; place-items: center; flex: none; margin-top: 1px; }
+  .insp-artifact .ia-kicker { font-family: var(--mono); font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+  .insp-artifact .ia-title { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.3; margin-top: 2px; }
+  .insp-artifact .ia-body { padding: 12px 14px; font-size: 12.5px; color: var(--ink-2); line-height: 1.55; }
+  .insp-artifact .ia-body ul { margin: 8px 0 0; padding-left: 0; list-style: none; }
+  .insp-artifact .ia-body li { position: relative; padding-left: 16px; margin-bottom: 7px; }
+  .insp-artifact .ia-body li::before { content:""; position: absolute; left: 2px; top: 7px; width: 5px; height: 5px; border-radius: 1.5px; background: var(--green-2); }
+  .insp-artifact .ia-body li b { color: var(--ink); font-weight: 600; }
+  .insp-artifact .ia-foot { display: flex; align-items: center; gap: 8px; padding: 0 14px 13px; }
+  .insp-artifact .ia-verb {
+    font-family: var(--mono); font-size: 11.5px; color: var(--green); border: 1px solid #bccdbb;
+    background: var(--green-tint); border-radius: 7px; padding: 5px 12px;
+  }
+  .insp-artifact .ia-verb.ghost { color: var(--ink-3); background: var(--card); border-color: var(--line-2); }
+  .insp-artifact .ia-disclosure { font-family: var(--mono); font-size: 9.5px; color: var(--ink-4); padding: 0 14px 12px; letter-spacing: 0.02em; }
+
+  .insp-divider { height: 1px; background: var(--line); margin: 6px 0 18px; }
+
+  .insp-related { display: flex; flex-direction: column; gap: 8px; }
+  .insp-related .ir {
+    display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 9px;
+    border: 1px solid var(--line); background: var(--card-raised); font-size: 12px; color: var(--ink-2);
+  }
+  .insp-related .ir .ir-icon { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; flex: none; }
+  .insp-related .ir .ir-arrow { margin-left: auto; color: var(--ink-4); font-family: var(--mono); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="ade">
+
+  <!-- ========================= LEFT RAIL ========================= -->
+  <aside class="rail">
+    <div class="rail-head">
+      <div class="brandmark">d</div>
+      <div>
+        <div class="venture-name">drover</div>
+        <div class="venture-sub">the venture</div>
+      </div>
+      <span class="switch">⌘O</span>
+    </div>
+
+    <div class="thread-scroll">
+      <!-- MAIN VENTURE DIALOGUE -->
+      <div class="dialogue">
+        <div class="msg founder">
+          <div class="who">
+            <span class="avatar founder">J</span>
+            <span class="nm">You</span>
+            <span class="tm">Jul 14 · 7:11 PM</span>
+          </div>
+          <div class="bubble">can we create an agent that focuses on developing an agent that finds buyer signals on reddit</div>
+        </div>
+
+        <div class="msg agent">
+          <div class="who">
+            <span class="avatar" style="background:var(--yara-soft)">
+              <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="8" r="4.2" fill="#587a5f"/><path d="M3.5 20c0-4.2 3.4-6.6 7.5-6.6s7.5 2.4 7.5 6.6z" fill="#6f8f75"/><circle cx="9.4" cy="7.4" r="0.8" fill="#eef2ea"/><circle cx="12.6" cy="7.4" r="0.8" fill="#eef2ea"/></svg>
+            </span>
+            <span class="nm">Yara</span>
+            <span class="badge">lead</span>
+            <span class="tm">7:12 PM</span>
+          </div>
+          <div class="bubble">Good place to start. Before I point the crew at building anything, I want to see the ground truth and get the questions that actually gate a buyer-signal agent onto the canvas. I opened seven efforts and prepared a first draft in each — nothing that touches the world yet.</div>
+        </div>
+
+        <div class="activity">
+          <span class="pulse"></span>
+          <span>Yara opened 7 efforts and prepared a first draft in each</span>
+          <span class="el">just now</span>
+        </div>
+
+        <!-- inline artifact card inside the visible thread -->
+        <div class="thread-artifact">
+          <div class="ta-top">
+            <span class="ta-icon">
+              <svg width="13" height="13" viewBox="0 0 14 14"><rect x="1.5" y="1.5" width="11" height="11" rx="2" fill="none" stroke="#4f6d86" stroke-width="1.3"/><path d="M4 5h6M4 7.5h6M4 10h3.5" stroke="#4f6d86" stroke-width="1.3" stroke-linecap="round"/></svg>
+            </span>
+            <div>
+              <div class="ta-kicker">Prepared · draft</div>
+              <div class="ta-title">Map: what already exists, and the wedge</div>
+            </div>
+          </div>
+          <div class="ta-preview">Gummysearch, F5bot, and Brand24 each own a slice of Reddit listening. The gap is precision on <em>buying intent</em> specifically — none turn a mention into a qualified signal.</div>
+          <div class="ta-foot">
+            <span class="ta-verb">Open on canvas</span>
+            <span class="ta-note">prepared by Yara</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- EFFORT THREADS -->
+      <div class="rail-section-label">effort threads · 7</div>
+
+      <div class="effort-thread">
+        <span class="et-branch">↳</span>
+        <div class="et-body">
+          <div class="et-title">Surface the current state before strategy</div>
+          <div class="et-meta">
+            <span class="et-face" style="background:var(--yara-soft)"></span>
+            <span class="et-state">draft ready</span>
+          </div>
+        </div>
+      </div>
+      <div class="effort-thread">
+        <span class="et-branch">↳</span>
+        <div class="et-body">
+          <div class="et-title">Propose three new crew, distinct lenses</div>
+          <div class="et-meta">
+            <span class="et-face" style="background:var(--yara-soft)"></span>
+            <span class="et-state">draft ready</span>
+          </div>
+        </div>
+      </div>
+      <div class="effort-thread">
+        <span class="et-branch">↳</span>
+        <div class="et-body">
+          <div class="et-title">Refine Kai's persona and contribution</div>
+          <div class="et-meta">
+            <span class="et-face" style="background:var(--kai-soft)"></span>
+            <span class="et-state">draft ready</span>
+          </div>
+        </div>
+      </div>
+      <div class="effort-thread">
+        <span class="et-branch">↳</span>
+        <div class="et-body">
+          <div class="et-title">Define who the real buyer is</div>
+          <div class="et-meta">
+            <span class="et-face" style="background:var(--yara-soft)"></span>
+            <span class="et-state">draft ready</span>
+          </div>
+        </div>
+      </div>
+      <div class="effort-thread">
+        <span class="et-branch">↳</span>
+        <div class="et-body">
+          <div class="et-title">Define what counts as a buyer signal</div>
+          <div class="et-meta">
+            <span class="et-face" style="background:var(--mira-soft)"></span>
+            <span class="et-state">draft ready</span>
+          </div>
+        </div>
+      </div>
+      <div class="effort-thread active">
+        <span class="et-branch">↳</span>
+        <div class="et-body">
+          <div class="et-title">Map the competitive landscape and wedge</div>
+          <div class="et-meta">
+            <span class="et-face" style="background:var(--soren-soft)"></span>
+            <span class="et-state">viewing · draft ready</span>
+          </div>
+        </div>
+        <span class="et-unread"></span>
+      </div>
+      <div class="effort-thread">
+        <span class="et-branch">↳</span>
+        <div class="et-body">
+          <div class="et-title">Sequence the build — smallest real signal first</div>
+          <div class="et-meta">
+            <span class="et-face" style="background:var(--mira-soft)"></span>
+            <span class="et-state">draft ready</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPOSER docked at bottom of rail -->
+    <div class="composer">
+      <div class="field">
+        <div class="ph">Reply to <span class="ref">@Map the wedge</span>, or ask for something new…</div>
+        <div class="tools">
+          <span class="tool" title="Attach">
+            <svg width="15" height="15" viewBox="0 0 16 16"><path d="M11 5.5 6 10.5a2 2 0 0 1-2.8-2.8l5.3-5.3a3 3 0 0 1 4.3 4.3l-5.3 5.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </span>
+          <span class="tool" title="Reference a node">
+            <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 3v2M8 11v2M3 8h2M11 8h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </span>
+          <span class="tool" title="Voice">
+            <svg width="15" height="15" viewBox="0 0 16 16"><rect x="6" y="2" width="4" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 8a4 4 0 0 0 8 0M8 12v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </span>
+          <span class="send">
+            <svg width="15" height="15" viewBox="0 0 16 16"><path d="M3 8h9M8 4l4 4-4 4" stroke="#f4f1ea" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          </span>
+        </div>
+      </div>
+      <div class="hint">the composer is the handle — @ a node, drop a file, or speak</div>
+    </div>
+  </aside>
+
+  <!-- ========================= CENTER STAGE — TERRARIUM ========================= -->
+  <main class="stage">
+    <div class="texture"></div>
+    <svg class="orbits" width="1300" height="920" viewBox="0 0 1300 920" preserveAspectRatio="xMinYMin meet"
+         style="position:absolute; left:0; top:0; width:1300px; height:920px;">
+      <circle cx="500" cy="430" r="182"/>
+      <circle cx="500" cy="430" r="300" class="dash"/>
+      <circle cx="500" cy="430" r="430"/>
+      <circle cx="500" cy="430" r="560" class="dash"/>
+    </svg>
+
+    <!-- top chrome -->
+    <div class="stage-chrome">
+      <span class="chip effort"><span class="dot"></span>7 efforts underway</span>
+      <span class="chip">Working altitude</span>
+      <div class="presence-summary">
+        <div class="stack">
+          <span class="pv" style="background:var(--yara-soft)"></span>
+          <span class="pv" style="background:var(--mira-soft)"></span>
+          <span class="pv" style="background:var(--soren-soft)"></span>
+          <span class="pv" style="background:var(--kai-soft)"></span>
+        </div>
+        <span class="lbl">4 crew · 3 working now</span>
+      </div>
+    </div>
+
+    <!-- WIRES between nodes — same pixel basis as the absolutely-placed nodes -->
+    <svg class="wires" width="1300" height="920" viewBox="0 0 1300 920" preserveAspectRatio="xMinYMin meet"
+         style="position:absolute; left:0; top:0; width:1300px; height:920px;">
+      <!-- hub center (500,430). living efforts radiate to their near edges. -->
+      <path class="living" d="M452 360 C 400 300, 350 260, 300 246"/>       <!-- effort 1 top-left -->
+      <path class="living" d="M528 350 C 545 290, 555 250, 560 212"/>       <!-- effort 3 top-center -->
+      <path class="living" d="M574 372 C 700 300, 830 270, 936 264"/>       <!-- effort 4 top-right -->
+      <path class="living" d="M420 470 C 380 486, 340 494, 302 500"/>       <!-- effort 2 left -->
+      <path class="living" d="M580 466 C 680 476, 760 480, 830 484"/>       <!-- effort 6 selected right -->
+      <path class="living" d="M456 520 C 430 570, 415 600, 404 634"/>       <!-- effort 5 bottom-left -->
+      <path class="living" d="M556 512 C 640 570, 710 610, 760 640"/>       <!-- effort 7 bottom-right -->
+      <!-- capabilities to hub, faint -->
+      <path class="faint" d="M430 500 C 300 580, 200 660, 150 726"/>
+      <path class="faint" d="M470 540 C 440 640, 430 720, 444 796"/>
+      <!-- gate, faint -->
+      <path class="faint" d="M580 480 C 780 560, 920 640, 1010 720"/>
+    </svg>
+
+    <div class="canvas">
+
+      <!-- ---- FINISHED-WORK STRATA (sunken beneath) ---- -->
+      <div class="strata-label" style="left: 78px; top: 826px;">finished work · sunk</div>
+      <div class="strata node" style="left: 168px; top: 828px;">
+        <div class="strata-card">
+          <div class="strata-kicker">Settled</div>
+          <div class="strata-title">Replaced the legacy ontology with the firm</div>
+        </div>
+      </div>
+      <div class="strata node" style="left: 578px; top: 834px;">
+        <div class="strata-card">
+          <div class="strata-kicker">Settled</div>
+          <div class="strata-title">Rebuilt drover around open-ended movement</div>
+        </div>
+      </div>
+
+      <!-- ---- CENTRAL QUESTION HUB ---- -->
+      <div class="hub node" style="left: 388px; top: 318px;">
+        <div class="ring">
+          <div class="ring-inner">
+            <div class="ring-kicker">the venture</div>
+            <div class="ring-q">What should change?</div>
+            <div class="ring-sub">A Reddit buyer-signal agent — the crew is finding out what it takes.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- EFFORT 1 — top-left ---- -->
+      <div class="effort compact node" style="left: 138px; top: 128px;">
+        <div class="e-body">
+          <div class="e-kicker"><span class="k-dot"></span>Underway</div>
+          <div class="e-title">Surface the current state before strategy</div>
+          <div class="now-doing"><span class="nd-pulse"></span><span class="nd-text">Reading what's visible and what's blocked</span></div>
+        </div>
+      </div>
+      <!-- Yara sits near effort 1 (she's lead, working across) -->
+      <div class="crew node" style="left: 40px; top: 288px;">
+        <div class="cr-av" style="background:var(--yara-soft)">
+          <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="19" r="10" fill="#587a5f"/><path d="M8 47c0-9.9 8-15.5 18-15.5S44 37.1 44 47z" fill="#6f8f75"/><circle cx="22" cy="17.5" r="1.9" fill="#eef2ea"/><circle cx="30" cy="17.5" r="1.9" fill="#eef2ea"/><path d="M23 23q3 2.4 6 0" stroke="#eef2ea" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>
+          <span class="cr-presence"></span>
+        </div>
+        <div class="cr-name">Yara</div>
+        <div class="cr-lens">lead · orchestrates</div>
+        <div class="cr-doing">opening the ground truth</div>
+      </div>
+
+      <!-- ---- EFFORT 3 — top-center (Kai's refinement) ---- -->
+      <div class="effort compact node" style="left: 502px; top: 88px;">
+        <div class="e-body">
+          <div class="e-kicker"><span class="k-dot"></span>Underway</div>
+          <div class="e-title">Refine Kai's persona and contribution</div>
+          <div class="now-doing"><span class="nd-pulse"></span><span class="nd-text">Sharpening Kai's lens and definition</span></div>
+        </div>
+      </div>
+
+      <!-- ---- EFFORT 4 — top-right ---- -->
+      <div class="effort node" style="left: 916px; top: 132px;">
+        <div class="e-body">
+          <div class="e-kicker"><span class="k-dot"></span>Underway</div>
+          <div class="e-title">Define who the real buyer is</div>
+          <div class="now-doing"><span class="nd-pulse"></span><span class="nd-text">ICP, use case, willingness to pay</span></div>
+        </div>
+        <div class="e-foot">
+          <span class="e-state">In progress</span>
+          <span class="e-prepared"><span class="p-dot"></span>1 prepared</span>
+        </div>
+      </div>
+
+      <!-- ---- EFFORT 2 — left ---- -->
+      <div class="effort node" style="left: 66px; top: 470px;">
+        <div class="e-body">
+          <div class="e-kicker"><span class="k-dot"></span>Underway</div>
+          <div class="e-title">Propose three new crew, distinct lenses</div>
+          <div class="now-doing"><span class="nd-pulse"></span><span class="nd-text">Drafting three product-strategy lenses</span></div>
+        </div>
+        <div class="e-foot">
+          <span class="e-state">In progress</span>
+          <span class="e-prepared"><span class="p-dot"></span>1 prepared</span>
+        </div>
+      </div>
+
+      <!-- ---- EFFORT 6 — SELECTED — right ---- -->
+      <div class="effort selected node" style="left: 828px; top: 428px;">
+        <div class="e-body">
+          <div class="e-kicker"><span class="k-dot" style="background:var(--soren)"></span>Underway · selected</div>
+          <div class="e-title">Map the competitive landscape and wedge</div>
+          <div class="now-doing"><span class="nd-pulse"></span><span class="nd-text">Placing Gummysearch, F5bot, Brand24</span></div>
+        </div>
+        <div class="e-foot">
+          <span class="e-state">In progress</span>
+          <span class="e-prepared"><span class="p-dot"></span>1 prepared</span>
+        </div>
+      </div>
+      <!-- Soren sits near effort 6, the competitive map -->
+      <div class="crew node" style="left: 664px; top: 316px;">
+        <div class="cr-av" style="background:var(--soren-soft)">
+          <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="19" r="10" fill="#4f6d86"/><path d="M8 47c0-9.9 8-15.5 18-15.5S44 37.1 44 47z" fill="#6a86a0"/><rect x="18" y="15" width="7" height="4.6" rx="2.3" fill="none" stroke="#dfe7ed" stroke-width="1.3"/><rect x="27" y="15" width="7" height="4.6" rx="2.3" fill="none" stroke="#dfe7ed" stroke-width="1.3"/><path d="M25 17.3h2" stroke="#dfe7ed" stroke-width="1.3"/></svg>
+          <span class="cr-presence"></span>
+        </div>
+        <div class="cr-name">Soren</div>
+        <div class="cr-lens">landscape · rigor</div>
+        <div class="cr-doing">mapping the wedge</div>
+      </div>
+
+      <!-- ---- EFFORT 5 — bottom-left (Mira, signal taxonomy) ---- -->
+      <div class="effort node" style="left: 286px; top: 632px;">
+        <div class="e-body">
+          <div class="e-kicker"><span class="k-dot" style="background:var(--mira)"></span>Underway</div>
+          <div class="e-title">Define what counts as a buyer signal</div>
+          <div class="now-doing"><span class="nd-pulse"></span><span class="nd-text">Taxonomy · precision vs recall</span></div>
+        </div>
+        <div class="e-foot">
+          <span class="e-state">In progress</span>
+          <span class="e-prepared"><span class="p-dot"></span>1 prepared</span>
+        </div>
+      </div>
+      <!-- Mira sits between efforts 5 and 7, her signal/sequencing work -->
+      <div class="crew node" style="left: 556px; top: 636px;">
+        <div class="cr-av" style="background:var(--mira-soft)">
+          <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="19" r="10" fill="#8a6d34"/><path d="M8 47c0-9.9 8-15.5 18-15.5S44 37.1 44 47z" fill="#a5893f"/><circle cx="22" cy="17.5" r="1.9" fill="#efe4cf"/><circle cx="30" cy="17.5" r="1.9" fill="#efe4cf"/><path d="M17 12q9-6 18 0" stroke="#efe4cf" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+          <span class="cr-presence"></span>
+        </div>
+        <div class="cr-name">Mira</div>
+        <div class="cr-lens">signal · precision</div>
+        <div class="cr-doing">drawing the taxonomy</div>
+      </div>
+
+      <!-- ---- EFFORT 7 — bottom-right (sequencing) ---- -->
+      <div class="effort node" style="left: 720px; top: 640px;">
+        <div class="e-body">
+          <div class="e-kicker"><span class="k-dot" style="background:var(--mira)"></span>Underway</div>
+          <div class="e-title">Sequence the build — smallest real signal first</div>
+          <div class="now-doing"><span class="nd-pulse"></span><span class="nd-text">Minimum version before infrastructure</span></div>
+        </div>
+        <div class="e-foot">
+          <span class="e-state">In progress</span>
+          <span class="e-prepared"><span class="p-dot"></span>1 prepared</span>
+        </div>
+      </div>
+
+      <!-- Kai — idle, waiting on his own refinement effort (top center-left) -->
+      <div class="crew node" style="left: 738px; top: 66px;">
+        <div class="cr-av" style="background:var(--kai-soft)">
+          <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="19" r="10" fill="#8a5a63"/><path d="M8 47c0-9.9 8-15.5 18-15.5S44 37.1 44 47z" fill="#a1727b"/><circle cx="22" cy="17.5" r="1.9" fill="#eddfe1"/><circle cx="30" cy="17.5" r="1.9" fill="#eddfe1"/><path d="M23 23h6" stroke="#eddfe1" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <span class="cr-presence idle"></span>
+        </div>
+        <div class="cr-name">Kai</div>
+        <div class="cr-lens">contrarian · being defined</div>
+        <div class="cr-doing" style="color:var(--ink-3); background:var(--paper-2); border-color:var(--line-2)">waiting on his own shape</div>
+      </div>
+
+      <!-- ---- CAPABILITIES (bottom-left instruments) ---- -->
+      <div class="capability node" style="left: 66px; top: 708px;">
+        <div class="cap-top">
+          <span class="cap-icon on">
+            <svg width="15" height="15" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </span>
+          <div>
+            <div class="cap-label">Product truth</div>
+            <div class="cap-state on">connected</div>
+          </div>
+        </div>
+      </div>
+      <div class="capability node" style="left: 360px; top: 780px;">
+        <div class="cap-top">
+          <span class="cap-icon off">
+            <svg width="15" height="15" viewBox="0 0 16 16"><path d="M4 8h8M8 4v8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </span>
+          <div>
+            <div class="cap-label">Product changes</div>
+            <div class="cap-state off">ready when needed</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- GATE (right boundary) ---- -->
+      <div class="gate node" style="left: 972px; top: 704px;">
+        <span class="g-mark">
+          <svg width="16" height="16" viewBox="0 0 18 18"><path d="M4 9l3.5 3.5L14 6" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <div class="g-title">Nothing needs you yet</div>
+        <div class="g-sub">No act touches the world until you say so.</div>
+      </div>
+
+    </div>
+
+    <!-- altitude control -->
+    <div class="altitude">
+      <div class="alt">Horizon</div>
+      <div class="divider"></div>
+      <div class="alt on">Working</div>
+      <div class="divider"></div>
+      <div class="alt">Focus</div>
+    </div>
+  </main>
+
+  <!-- ========================= RIGHT INSPECTOR ========================= -->
+  <aside class="inspector">
+    <div class="insp-head">
+      <div>
+        <div class="ih-kicker">Effort · selected</div>
+        <div class="ih-title">Map the competitive landscape and wedge</div>
+      </div>
+      <span class="ih-close">
+        <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </span>
+    </div>
+
+    <div class="insp-scroll">
+      <div class="insp-status">
+        <span class="is-dot"></span>
+        <span class="is-text">Soren is placing the players now</span>
+        <span class="is-el">4m</span>
+      </div>
+
+      <p class="insp-label">What this effort is</p>
+      <p class="insp-p">Where a Reddit buyer-signal agent has a real wedge against the tools that already listen. Gummysearch, F5bot, and Brand24 each hold ground — this maps who owns what, and where none of them turn a mention into a qualified buying signal.</p>
+
+      <div class="insp-crew">
+        <span class="ic-av" style="background:var(--soren-soft)">
+          <svg width="30" height="30" viewBox="0 0 52 52"><circle cx="26" cy="19" r="10" fill="#4f6d86"/><path d="M8 47c0-9.9 8-15.5 18-15.5S44 37.1 44 47z" fill="#6a86a0"/><rect x="18" y="15" width="7" height="4.6" rx="2.3" fill="none" stroke="#dfe7ed" stroke-width="1.3"/><rect x="27" y="15" width="7" height="4.6" rx="2.3" fill="none" stroke="#dfe7ed" stroke-width="1.3"/></svg>
+        </span>
+        <div>
+          <div class="ic-nm">Soren</div>
+          <div class="ic-role">landscape · rigor</div>
+        </div>
+      </div>
+
+      <p class="insp-label">Prepared draft</p>
+      <div class="insp-artifact">
+        <div class="ia-head">
+          <span class="ia-icon">
+            <svg width="14" height="14" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 8.5h6M5 11h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </span>
+          <div>
+            <div class="ia-kicker">Prepared · not yet sent</div>
+            <div class="ia-title">Map: what already exists, and the wedge</div>
+          </div>
+        </div>
+        <div class="ia-body">
+          A first read of the three incumbents and where the opening is:
+          <ul>
+            <li><b>Gummysearch</b> — audience research over subreddits; strong discovery, weak on per-mention intent.</li>
+            <li><b>F5bot</b> — free keyword alerts; wide reach, zero qualification.</li>
+            <li><b>Brand24</b> — broad social listening; not Reddit-native, not buyer-scored.</li>
+            <li><b>The wedge</b> — turning a raw mention into a <b>qualified buying signal</b> is the ground none of them hold.</li>
+          </ul>
+        </div>
+        <div class="ia-foot">
+          <span class="ia-verb">Refine</span>
+          <span class="ia-verb ghost">Read in full</span>
+        </div>
+        <div class="ia-disclosure">▸ staged-20260714210418 · firm v4 · prepared by Soren</div>
+      </div>
+
+      <div class="insp-divider"></div>
+
+      <p class="insp-label">Connected to</p>
+      <div class="insp-related">
+        <div class="ir">
+          <span class="ir-icon" style="background:var(--green-tint); color:var(--green)">
+            <svg width="13" height="13" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </span>
+          <span>Product truth</span>
+          <span class="ir-arrow">→</span>
+        </div>
+        <div class="ir">
+          <span class="ir-icon" style="background:var(--mira-soft); color:var(--mira)">
+            <svg width="13" height="13" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 8l3-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </span>
+          <span>Define what counts as a buyer signal</span>
+          <span class="ir-arrow">→</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+</div>
+</body>
+</html>

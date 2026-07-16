@@ -1,0 +1,1562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drover — UX Direction 2026</title>
+<style>
+  :root {
+    --paper: #eae6df;
+    --paper-2: #e3ded5;
+    --card: #f4f1ea;
+    --card-raised: #faf8f3;
+    --ink: #26251f;
+    --ink-2: #4a4840;
+    --ink-3: #78756a;
+    --ink-4: #a8a498;
+    --line: #d4cec2;
+    --line-2: #c7c0b1;
+    --green: #3f5c46;
+    --green-2: #587a5f;
+    --green-soft: #e0e8de;
+    --green-tint: #eef2ea;
+    --amber: #9a6b2f;
+    --amber-soft: #f0e4d0;
+    --alarm: #9c4a3f;
+    --alarm-soft: #eed9d3;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow-card: 0 1px 2px rgba(38,37,31,0.05), 0 8px 24px rgba(38,37,31,0.06);
+    --shadow-raised: 0 2px 4px rgba(38,37,31,0.06), 0 18px 48px rgba(38,37,31,0.10);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 32px 160px;
+  }
+
+  /* ---------- Typography ---------- */
+  h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; color: var(--ink); }
+  h1 { font-size: 44px; margin: 0 0 12px; }
+  h2 { font-size: 30px; margin: 0 0 4px; }
+  h3 { font-size: 21px; margin: 36px 0 10px; }
+  h4 { font-size: 16px; margin: 24px 0 8px; }
+  p { margin: 0 0 16px; color: var(--ink-2); }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--green); text-decoration: none; border-bottom: 1px solid var(--line-2); }
+  a:hover { border-bottom-color: var(--green); }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--green-2);
+    margin: 0 0 14px;
+    font-weight: 500;
+  }
+  .eyebrow.muted { color: var(--ink-3); }
+  .proposed-eyebrow { color: var(--amber) !important; }
+
+  /* ---------- Exploration option spaces ---------- */
+  .optspace { margin: 28px 0; }
+  .optspace > .opthead {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+  }
+  .optspace > .opthead h4 { margin: 0; font-size: 18px; }
+  .optspace > .opthead .flag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--amber);
+    border: 1px solid #e0cba6;
+    background: var(--amber-soft);
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+  .optspace > .opthead .flag.decided {
+    color: var(--green);
+    border-color: #b9cbb9;
+    background: var(--green-tint);
+  }
+  .opt.chosen { border-color: var(--green-2); background: var(--green-tint); }
+  .opt.chosen .name { color: var(--green); }
+  .opt.spent { opacity: 0.62; }
+  .opt.spent .name { color: var(--ink-3); }
+  .optspace > .q { color: var(--ink-3); font-size: 14px; margin: 2px 0 14px; }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+  .opt {
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    padding: 15px 16px;
+    background: var(--card);
+  }
+  .opt .name {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--green);
+    font-weight: 500;
+    display: block;
+    margin-bottom: 7px;
+  }
+  .opt p { margin: 0; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+  .opt .lean { display: block; margin-top: 8px; font-size: 11.5px; color: var(--ink-3); font-style: italic; }
+
+  /* ---------- Header ---------- */
+  header.masthead {
+    padding: 88px 0 48px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 8px;
+  }
+  header.masthead .lede {
+    font-size: 20px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 660px;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin-top: 28px;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 4px 10px;
+    border-radius: 100px;
+    border: 1px solid var(--line-2);
+    color: var(--ink-3);
+    background: var(--card);
+  }
+  .chip.built { color: var(--green); border-color: #b9cbb9; background: var(--green-tint); }
+  .chip.proposed { color: var(--amber); border-color: #e0cba6; background: var(--amber-soft); }
+  .chip.unproven { color: var(--alarm); border-color: #dcc0b8; background: var(--alarm-soft); }
+
+  /* ---------- Section nav ---------- */
+  nav.toc {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+    margin: 0 0 48px;
+  }
+  nav.toc ol {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin: 0 auto;
+    padding: 10px 32px;
+    max-width: 980px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+  nav.toc a {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 100px;
+    border: none;
+    color: var(--ink-3);
+  }
+  nav.toc a:hover { background: var(--card); color: var(--ink); }
+  nav.toc a .num { color: var(--ink-4); margin-right: 6px; }
+
+  section { padding-top: 20px; scroll-margin-top: 60px; }
+  section > .eyebrow { margin-top: 8px; }
+
+  /* ---------- Callouts ---------- */
+  .note {
+    border-left: 3px solid var(--green-2);
+    padding: 4px 0 4px 20px;
+    margin: 24px 0;
+    color: var(--ink-2);
+  }
+  .note.warn { border-left-color: var(--amber); }
+  .note .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green-2); display: block; margin-bottom: 4px; }
+  .note.warn .k { color: var(--amber); }
+
+  .callout {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin: 24px 0;
+  }
+  .callout.signature {
+    background: linear-gradient(180deg, var(--green-tint), var(--card));
+    border-color: #c3d2c1;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+
+  /* ---------- Evidence quotes ---------- */
+  .evidence {
+    display: grid;
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .finding {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 16px 18px;
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 4px 14px;
+    align-items: start;
+  }
+  .finding .n {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--alarm);
+    font-weight: 500;
+    padding-top: 2px;
+  }
+  .finding .t { margin: 0; color: var(--ink); font-weight: 500; }
+  .finding .d { grid-column: 2; margin: 4px 0 0; font-size: 14.5px; color: var(--ink-2); }
+  .finding code, code.inline {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+  .finding .src {
+    grid-column: 2;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    margin-top: 6px;
+  }
+
+  /* ---------- Move cards ---------- */
+  .move {
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius);
+    padding: 26px 28px;
+    margin: 22px 0;
+    background: var(--card-raised);
+    box-shadow: var(--shadow-card);
+  }
+  .move-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; }
+  .move-head .idx {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--green-2);
+    border: 1px solid #bccdbb;
+    background: var(--green-tint);
+    border-radius: 6px;
+    padding: 2px 8px;
+    white-space: nowrap;
+  }
+  .move-head h3 { margin: 0; font-size: 22px; }
+  .move .role { font-size: 14px; color: var(--ink-3); font-family: var(--mono); letter-spacing: 0.02em; margin-bottom: 16px; }
+  .move ul { margin: 12px 0; padding-left: 0; list-style: none; }
+  .move ul li { position: relative; padding-left: 22px; margin-bottom: 10px; color: var(--ink-2); }
+  .move ul li::before { content: ""; position: absolute; left: 4px; top: 10px; width: 6px; height: 6px; border-radius: 2px; background: var(--green-2); }
+
+  /* ---------- Diagrams ---------- */
+  .diagram {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 26px;
+    margin: 26px 0;
+  }
+  .diagram figcaption {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-top: 18px;
+    text-align: center;
+  }
+  .diagram svg { display: block; width: 100%; height: auto; }
+
+  /* altitude diagram */
+  .altitudes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .alt {
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    padding: 18px;
+    background: var(--card-raised);
+    position: relative;
+    overflow: hidden;
+  }
+  .alt .tag { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green-2); }
+  .alt h4 { margin: 6px 0 4px; font-size: 17px; }
+  .alt p { font-size: 13.5px; margin: 0; color: var(--ink-3); line-height: 1.5; }
+  .alt .mini { margin-top: 16px; height: 92px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); position: relative; overflow: hidden; }
+
+  /* ---------- Node card mockups ---------- */
+  .beforeafter { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 24px 0; align-items: start; }
+  .ba-col > .lab { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .ba-col.before > .lab { color: var(--alarm); }
+  .ba-col.after > .lab { color: var(--green-2); }
+  .ba-stage {
+    background: var(--paper);
+    border: 1px dashed var(--line-2);
+    border-radius: var(--radius);
+    padding: 26px 22px;
+    min-height: 190px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .ba-col.after .ba-stage { border-style: solid; border-color: var(--line); background: radial-gradient(circle at 30% 20%, #efece4, var(--paper)); }
+
+  /* the actual atlas cards */
+  .a-card {
+    background: var(--card-raised);
+    border: 1px solid var(--line-2);
+    border-radius: 11px;
+    padding: 15px 16px;
+    width: 260px;
+    box-shadow: var(--shadow-card);
+    font-size: 13.5px;
+  }
+  .a-card .a-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .a-card .a-title { font-weight: 600; color: var(--ink); font-size: 14.5px; line-height: 1.3; }
+  .a-card .a-kicker { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; }
+  .a-card .a-body { color: var(--ink-2); font-size: 13px; line-height: 1.5; margin: 6px 0 12px; }
+  .a-card .a-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .a-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); flex: none; }
+  .a-dot.amber { background: var(--amber); }
+  .a-state { font-size: 12px; color: var(--ink-2); font-weight: 500; }
+  .a-verb { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--green); border: 1px solid #bccdbb; background: var(--green-tint); border-radius: 5px; padding: 2px 8px; }
+  .a-faces { display: flex; margin-left: auto; }
+  .a-face { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--card-raised); margin-left: -6px; background: var(--green-soft); display: grid; place-items: center; font-size: 9px; color: var(--green); font-weight: 600; }
+  .a-face:first-child { margin-left: 0; }
+  .a-disclosure { font-family: var(--mono); font-size: 10.5px; color: var(--ink-4); margin-top: 10px; }
+
+  /* bad card */
+  .bad-card {
+    background: #f4f1ea;
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    padding: 13px 14px;
+    width: 250px;
+    box-shadow: var(--shadow-card);
+    position: relative;
+  }
+  .bad-card .bad-title { font-family: var(--mono); font-size: 12.5px; color: var(--ink); word-break: break-all; line-height: 1.35; }
+  .bad-badge { display: inline-block; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--alarm); border: 1px solid #d8b9b1; background: var(--alarm-soft); border-radius: 4px; padding: 1px 6px; margin-top: 10px; }
+  .bad-overlap { position: absolute; top: 22px; left: 34px; z-index: 2; }
+
+  /* ---------- Tables ---------- */
+  .table-scroll { overflow-x: auto; margin: 22px 0; border: 1px solid var(--line); border-radius: var(--radius); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 640px; }
+  thead th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 500;
+    padding: 12px 16px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line-2);
+    position: sticky;
+    top: 0;
+  }
+  tbody td { padding: 13px 16px; border-bottom: 1px solid var(--line); color: var(--ink-2); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) { background: color-mix(in srgb, var(--card) 40%, transparent); }
+  td strong { color: var(--ink); }
+  td .was { color: var(--alarm); font-family: var(--mono); font-size: 12.5px; }
+  td .now { color: var(--green); font-weight: 500; }
+  .pill { display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.03em; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--line-2); color: var(--ink-3); white-space: nowrap; }
+  .pill.installed { color: var(--green); border-color: #bccdbb; background: var(--green-tint); }
+  .pill.add { color: var(--amber); border-color: #e0cba6; background: var(--amber-soft); }
+  .pill.native { color: var(--ink-2); border-color: var(--line-2); background: var(--card); }
+  .pill.rejected { color: var(--alarm); border-color: #dcc0b8; background: var(--alarm-soft); }
+  tbody tr.grouphead td { background: var(--card); border-bottom: 1px solid var(--line-2); padding-top: 15px; }
+  tbody tr.grouphead td span { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green-2); font-weight: 500; }
+  tbody tr:nth-child(even).grouphead td { background: var(--card); }
+  .cut { color: var(--alarm); font-family: var(--mono); font-size: 11px; letter-spacing: 0.02em; }
+  td.overturned .now { color: var(--alarm); text-decoration: line-through; text-decoration-color: #cbb0a8; }
+
+  /* state grid */
+  .states { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+  .state-tok { font-family: var(--mono); font-size: 11px; padding: 3px 9px; border-radius: 5px; background: var(--paper-2); border: 1px solid var(--line); color: var(--ink-2); }
+
+  /* ---------- Phase plan ---------- */
+  .phase {
+    display: grid;
+    grid-template-columns: 74px 1fr;
+    gap: 0 22px;
+    border-left: 2px solid var(--line-2);
+    padding: 0 0 28px 0;
+    margin-left: 8px;
+    position: relative;
+  }
+  .phase::before { content: ""; position: absolute; left: -7px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--green-2); border: 2px solid var(--paper); }
+  .phase.floor::before { background: var(--alarm); }
+  .phase .pnum { font-family: var(--mono); font-size: 12px; color: var(--green-2); font-weight: 500; grid-column: 1; padding-left: 18px; }
+  .phase.floor .pnum { color: var(--alarm); }
+  .phase .pbody { grid-column: 2; }
+  .phase h4 { margin: 0 0 6px; font-size: 17px; }
+  .phase .accept { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 15px; margin-top: 10px; font-size: 13px; }
+  .phase .accept b { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--green-2); display: block; margin-bottom: 4px; font-weight: 500; }
+
+  /* risks */
+  .risk { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 16px 18px; margin-bottom: 12px; background: var(--card); }
+  .risk h4 { margin: 0 0 6px; font-size: 15px; }
+  .risk p { margin: 0; font-size: 13.5px; }
+  .risk .mit { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+  .risk .mit b { color: var(--green); font-weight: 600; }
+
+  hr.rule { border: none; border-top: 1px solid var(--line); margin: 56px 0; }
+
+  footer { color: var(--ink-3); font-size: 13px; font-family: var(--mono); padding-top: 40px; border-top: 1px solid var(--line); margin-top: 40px; }
+
+  @media (max-width: 720px) {
+    .wrap { padding: 0 20px 100px; }
+    h1 { font-size: 34px; }
+    .altitudes { grid-template-columns: 1fr; }
+    .beforeafter { grid-template-columns: 1fr; }
+    .phase { grid-template-columns: 1fr; }
+    .phase .pnum { padding-left: 18px; margin-bottom: 4px; }
+    .phase .pbody { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <ol>
+    <li><a href="#orient"><span class="num">01</span>Orientation</a></li>
+    <li><a href="#audit"><span class="num">02</span>Audit</a></li>
+    <li><a href="#direction"><span class="num">03</span>Direction</a></li>
+    <li><a href="#components"><span class="num">04</span>Components</a></li>
+    <li><a href="#language"><span class="num">05</span>Language</a></li>
+    <li><a href="#packages"><span class="num">06</span>Packages</a></li>
+    <li><a href="#explore"><span class="num">07</span>Exploration</a></li>
+    <li><a href="#build"><span class="num">08</span>Build plan</a></li>
+    <li><a href="#risks"><span class="num">09</span>Unproven</a></li>
+  </ol>
+</nav>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Drover · Design direction · The ADE turn · 2026-07-15</p>
+    <h1>Drover becomes an ADE.</h1>
+    <p class="lede">
+      Drover's canvas renders a living venture as a spatial world. Today it floats naked — panels
+      overlap it, nodes collide, it leaks its own internal vocabulary at the founder, and it never
+      adapts to the screen it's on. The thesis of this document: Drover becomes an
+      <strong>Agent Development Environment (ADE)</strong> with the venture canvas as its center stage —
+      the way Letta's ADE and LangSmith Studio frame an agent workspace, held to Drover's craft bar
+      rather than their default-gray chrome. Inside that frame, the atlas gets one spatial engine, three
+      altitudes of depth, and a language rebuild. A completed founder-interview series (2026-07-15,
+      five areas) settled the crew, the work loop, the gate, first run, and how Drover ships; every
+      decision below is folded through this document, with several earlier calls overturned by later
+      machinery checks and marked as such. This hands Opus build agents a phased plan to build it.
+    </p>
+    <div class="meta-row">
+      <span class="chip">Audience · Opus agents (build) + Jacob (taste)</span>
+      <span class="chip built">■ Built today</span>
+      <span class="chip proposed">■ Proposed next</span>
+      <span class="chip unproven">■ Unproven</span>
+    </div>
+  </header>
+
+  <!-- ================= 01 ORIENTATION ================= -->
+  <section id="orient">
+    <p class="eyebrow">01 — Orientation</p>
+    <h2>What Drover is, and who it's for</h2>
+    <p>
+      Drover is a desktop workbench for a founder running one or more ventures alone — a one-person
+      holding company. The promise is plain: <strong>vibe code your go-to-market</strong>. A permanent
+      AI crew researches, drafts, and builds while the founder works alongside it; product change and
+      reaching the market are one act; and everything that would touch the outside world — every send,
+      publish, deploy, or dollar spent — waits for the founder's hand. The founder's job compresses to
+      judgment: stop, continue, or release. Minutes a day, not hours. (One honest constraint from the
+      shipping decisions below: the crew works while the app is open, not overnight — see "How Drover
+      ships.")
+    </p>
+    <p>
+      The primary surface is not a dashboard. It's an <strong>infinite canvas</strong> — a pannable,
+      zoomable spatial world (built on React Flow) that shows how the venture creates value and reaches
+      its market <em>before</em> it shows the machinery underneath. Chat is the easy handle that drives
+      the deep canvas. The signature moment Drover is built around:
+    </p>
+    <div class="callout signature">
+      <p class="eyebrow" style="margin-bottom:8px">The frame, as of 2026-07-15</p>
+      <p>
+        That canvas now lives inside an <strong>Agent Development Environment</strong> — an ADE. Not a
+        naked canvas with panels floating over it, but IDE-grade chrome around the center stage, the way
+        Letta's ADE, LangSmith Studio, or a Cursor-class editor frame their workspace: a left rail of
+        conversation threads, the canvas as center stage holding most of the viewport, and a contextual
+        right inspector. There is no separate activity console — chat is the console, with agent work and
+        artifacts inline in the threads. The canvas is still the star; the ADE is the room it stands in —
+        and, as §3 shows, the room is also the fix for the panel anarchy the current build suffers.
+      </p>
+    </div>
+    <div class="callout signature">
+      <p class="eyebrow" style="margin-bottom:8px">The signature moment</p>
+      <p>
+        A founder types one plain sentence — <strong>"help this venture grow"</strong> — and the canvas
+        immediately draws a complete, editable working theory of the whole venture: who it may help, how
+        value happens, several ways to reach people, the first campaigns worth trying, and useful inward
+        work already beginning. It appears as Drover's provisional reading, not a plan to approve. Real
+        work and returned evidence revise it. Only an act that would touch the world waits for the
+        founder.
+      </p>
+    </div>
+    <div class="callout signature">
+      <p class="eyebrow" style="margin-bottom:8px">The concept set — exactly six, settled 2026-07-15</p>
+      <p>
+        Everything the founder sees is built from <strong>six nouns and no more</strong>:
+        <strong>venture</strong> (the business), <strong>conversation</strong> (talking with the firm),
+        <strong>effort</strong> (a piece of work the crew is attempting), <strong>teammate</strong> (a
+        member of the crew), <strong>capability</strong> (a real reach into the world, like Gmail or a
+        product repo), and <strong>record</strong> (the complete run history behind any artifact or
+        event). Two concepts the interview series had floated were folded back in by a later machinery
+        check: <em>prepared work</em> merged into <strong>effort</strong> — an effort simply has drafts —
+        and <em>trust grant</em> merged into <strong>conversation</strong> — the firm just remembers what
+        you told it it may do. Any component name or copy implying a seventh concept is reconciled to
+        these six.
+      </p>
+    </div>
+    <div class="callout signature">
+      <p class="eyebrow" style="margin-bottom:8px">The success bar — founder-stated 2026-07-15</p>
+      <p>
+        The 10/10 for this surface is <strong>"I can see everything."</strong> Total situational
+        awareness of the firm — what's underway, what changed, what's waiting — is the criterion the
+        founder named, ahead of leverage, embodiment, or demo appeal. Legibility wins. Every decision in
+        this document is measured against whether it makes the whole firm more or less readable at a
+        glance.
+      </p>
+    </div>
+    <p>
+      Two constraints govern every pixel. <strong>Desktop only</strong> — phone and tablet are not
+      targets, and nothing here should be judged for mobile. Desktop-only is now absolute: the localhost
+      web build survives strictly as a dev/test harness, and the old snapshot/degraded web state is
+      eliminated (founder-decided 2026-07-15). But the canvas must
+      <strong>adapt dynamically across desktop resolutions</strong> (roughly 1280px to 5K); the older
+      "design only for 1920×1080" rule is retired. And <strong>founder language is ordinary
+      language</strong> — the interface uses the founder's own words and the concrete thing happening.
+      Drover's internal nouns — <code class="inline">bet</code>, <code class="inline">motion</code>,
+      <code class="inline">fork</code>, <code class="inline">drifting</code>, <code class="inline">stage</code>,
+      <code class="inline">work item</code> — may live in storage and code as compatibility seams, but
+      must never appear in founder-facing copy.
+    </p>
+    <div class="note">
+      <span class="k">Division of labor</span>
+      Claude sessions (this document) ship design direction and executable specs under
+      <code class="inline">docs/design/</code>. Opus agents build the ADE shell and canvas production
+      code (founder-amended 2026-07-15); Codex carries production work outside it. This document is
+      direction and plan, not an edit to the app.
+    </div>
+
+    <div class="callout">
+      <p class="eyebrow" style="margin-bottom:8px">How Drover ships — settled 2026-07-15</p>
+      <p>
+        Drover is a <strong>local desktop application the founder runs on his own machine</strong>, and
+        that shapes the whole surface. A venture's data is <strong>plain readable files on disk</strong>
+        (the existing <code class="inline">~/.gtm-ide</code> location evolves) — no database, no cloud, no
+        Drover account. Capability connections (Gmail, Exa, Apollo, and the rest) are configured locally,
+        and the model runs on the <strong>founder's own subscriptions</strong> (the Claude Code / Codex
+        seam stays). The shell is <strong>Electron wrapping the existing UI</strong>; the browser build
+        stops being a founder surface and survives only as a dev/test harness. Work runs
+        <strong>only while the app is open</strong> — there is no background service and no cloud runner.
+        Stated honestly, that trades away overnight work: "since you left" means "since your last
+        session," not work done while the app was closed. Distribution is <strong>open source with a paid
+        layer later</strong>; update mechanics are deferred.
+      </p>
+    </div>
+
+    <h3>Who operates this</h3>
+    <p>
+      The design center is the <strong>solo founder</strong> — Jacob's own workflow, running one or more
+      ventures alone. Every default in this document optimizes for that: one person, minutes a day, the
+      composer and the stage as the whole job. That does not change.
+    </p>
+    <div class="callout">
+      <p class="eyebrow proposed-eyebrow" style="margin-bottom:8px">Proposed · unproven</p>
+      <p>
+        But the ADE frame should not <em>structurally</em> preclude other operator types later. Two are
+        plausible without redefining the product: a <strong>collaborator</strong> who can answer the
+        world-touching acts that are waiting but doesn't reshape the venture, and a <strong>viewer</strong>
+        who walks the atlas read-only to understand a venture (a prospective buyer, an advisor). This
+        constrains the shell in two concrete ways: releasing an act must be a permission boundary, not
+        just a UI state — the wall's host-issued capability already models this, so the shell honors it
+        rather than inventing it; and the atlas needs a genuine read-only mode where pan, zoom, and
+        altitude all work but nothing mutates. Both are marked unproven in §9. The point is a design
+        constraint now — don't hard-wire "the one operator is the one owner" into the shell — not a
+        feature to build.
+      </p>
+    </div>
+
+    <p>
+      What follows: the current UX fails structurally (§2); the committed direction is the ADE shell plus
+      three composed moves inside it (§3); each founder-facing surface — the shell's conversation rail and
+      inspector included — gets a redesign and a state grid (§4); the internal vocabulary gets translated
+      to ordinary language (§5); the frontier packages that make it buildable are named with their status
+      (§6); the exploration surface records what the founder interview settled and what still needs mockup
+      rounds (§7); a phased plan hands the build agents shippable slices (§8); and the honest open risks
+      are stated plainly (§9).
+    </p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ================= 02 AUDIT ================= -->
+  <section id="audit">
+    <p class="eyebrow">02 — Audit</p>
+    <h2>The failure is structural, not aesthetic</h2>
+    <p>
+      Audited live on 2026-07-15 against <code class="inline">localhost:4317</code> in Chrome DevTools,
+      verified at both 1920×1080 and 1440×900. The visual foundations are already good — a warm paper
+      background, Geist type, muted greens, calm cards. The problem is underneath: the atlas is placed by
+      hand, so it collides, clips, and never re-composes for the screen it's on. These are not polish
+      items. Below roughly 3/10, none of them are.
+    </p>
+
+    <div class="evidence">
+      <div class="finding">
+        <span class="n">01</span>
+        <p class="t">Nodes overlap each other.</p>
+        <p class="d">Crew cards sit on top of work-line cards — Soren covers "Surface the current state…", Kai covers "propose three new crew members…". The "Nothing needs you yet" gate card floats over other cards. Two things claim the same coordinates.</p>
+      </div>
+      <div class="finding">
+        <span class="n">02</span>
+        <p class="t">Seven prepared-work cards pile up and clip off-screen.</p>
+        <p class="d">A vertical stack of "CONCRETE WORK" cards is pinned to the right viewport edge, overlapping each other, and cut off at every resolution — the founder can't read the ones that fall past the edge.</p>
+      </div>
+      <div class="finding">
+        <span class="n">03</span>
+        <p class="t">Raw internal IDs are used as card titles.</p>
+        <p class="d">A card's founder-facing heading reads <code>Prepared work staged-20260714205951-287318d1</code>. The database key is showing where the name of the work should be.</p>
+      </div>
+      <div class="finding">
+        <span class="n">04</span>
+        <p class="t">Internal vocabulary leaks into copy.</p>
+        <p class="d">Founder surfaces show "4 bets opened", "7 concrete lines underway", and <code>DRIFTING</code> badges — the exact nouns the language contract forbids.</p>
+        <p class="src">confirmed in source: <code>AtlasOrbitField.tsx:32</code> renders a literal <code>Drifting</code> badge; <code>atlasTypes.ts:16</code> defines <code>"drifting"</code> as a decision band.</p>
+      </div>
+      <div class="finding">
+        <span class="n">05</span>
+        <p class="t">Panels stack and bleed through each other.</p>
+        <p class="d">Conversation, Outline, and Settings can all be open at once, stacked, covering ~60% of the canvas. Opening one never closes or re-fits the others, and the canvas never reclaims space when a panel takes it.</p>
+      </div>
+      <div class="finding">
+        <span class="n">06</span>
+        <p class="t">No resolution adaptation.</p>
+        <p class="d">Node positions are identical absolute coordinates at 1440×900 as at 1920×1080. The "Whole venture" fit fills the full viewport, ignoring the panels sitting on top of it — so "fitted" content hides under the chrome.</p>
+        <p class="src">root cause in source: <code>atlasLayout.ts</code> hard-codes a <code>COLUMNS</code> map (x from 40 to 3040) and an <code>OTHER_MOTION_Y = [80, 530, -140, 750]</code>; <code>AtlasCanvas.tsx:106</code> sets <code>fitView={false}</code>.</p>
+      </div>
+      <div class="finding">
+        <span class="n">07</span>
+        <p class="t">A degraded state colors the whole session as broken.</p>
+        <p class="d">A red "Desktop host required" alarm sits in the header, and the same message repeats in three places. A normal snapshot view reads as a system failure.</p>
+      </div>
+      <div class="finding">
+        <span class="n">08</span>
+        <p class="t">The venture picker uses one quadrant of the screen.</p>
+        <p class="d">A half-empty two-column page where the firm should feel like a place. The console shows repeated 400s and one 503 during the session.</p>
+      </div>
+    </div>
+
+    <div class="note warn">
+      <span class="k">Root cause — two parts</span>
+      <strong>The canvas has no frame.</strong> Findings 5–7 are what happens without a shell: panels
+      have nowhere to dock, so they float and stack; the degraded message has no home, so it's stamped
+      everywhere. <strong>The canvas is used naively.</strong> Findings 1–4 and 6 trace to React Flow 12
+      (<code class="inline">@xyflow/react 12.11.0</code>) being installed but hand-driven — absolute
+      positions, no auto-layout, <code class="inline">fitView</code> disabled, no zoom-level rendering, no
+      minimap. Both fixes are already in the dependency tree. The direction is to give the canvas an
+      environment and use React Flow properly, not to replace either.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ================= 03 DIRECTION ================= -->
+  <section id="direction">
+    <p class="eyebrow">03 — The direction</p>
+    <h2>The ADE shell, and three moves inside it</h2>
+    <p>
+      One frame and three moves, and they compose. The ADE shell (Move 1) is the room: it ends the panel
+      anarchy and gives the canvas a viewport it can measure. Inside it, the spatial engine (Move 2) makes
+      the atlas place itself, semantic altitude (Move 3) turns zoom into depth, and the language and
+      component rebuild (Move 4) runs across all of it. Build them in order — nothing inside the frame is
+      worth polishing until the frame exists.
+    </p>
+
+    <!-- MOVE 1 — ADE SHELL -->
+    <div class="move">
+      <div class="move-head">
+        <span class="idx">Move 1</span>
+        <h3>The ADE shell</h3>
+      </div>
+      <p class="role">The frame. The fix for panel anarchy, and the viewport the canvas measures against.</p>
+      <p>
+        Today the conversation, outline, and settings panels float over the canvas and stack on each
+        other (audit findings 5–6). The fix is not better overlay management — it's to stop overlaying.
+        Give Drover the shell every serious agent development environment already has: a persistent docked
+        workbench with the canvas as its center stage. This is prior art, not invention. Letta's ADE
+        frames an agent's memory and tools around a working canvas; LangSmith Studio and Retool both put a
+        graph or app on center stage with a left nav rail, a docked right inspector, and a composer docked
+        to the stage rather than floating over it. Drover takes that proven anatomy and holds it to its own
+        craft bar — warm paper, not the default gray these tools ship.
+      </p>
+      <div class="diagram">
+        <figure>
+          <svg viewBox="0 0 720 300" role="img" aria-label="ADE layout: left conversation rail, center canvas stage with docked composer, right inspector">
+            <!-- outer window -->
+            <rect x="6" y="6" width="708" height="288" rx="12" fill="#f4f1ea" stroke="#c7c0b1"/>
+            <!-- left rail — conversation threads -->
+            <rect x="6" y="6" width="132" height="288" rx="12" fill="#eef2ea" stroke="#c3d2c1"/>
+            <text x="72" y="30" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" letter-spacing="0.4" fill="#3f5c46">CONVERSATION</text>
+            <rect x="20" y="42" width="104" height="24" rx="5" fill="#dbe6d8" stroke="#c3d2c1"/>
+            <text x="72" y="57" text-anchor="middle" font-family="Geist, sans-serif" font-size="8" fill="#3f5c46">one conversation</text>
+            <rect x="34" y="74" width="90" height="16" rx="4" fill="#e6ede3"/>
+            <text x="79" y="85" text-anchor="middle" font-family="Geist, sans-serif" font-size="7.5" fill="#587a5f">founder ↔ firm</text>
+            <rect x="34" y="94" width="90" height="16" rx="4" fill="#e6ede3"/>
+            <text x="79" y="105" text-anchor="middle" font-family="Geist, sans-serif" font-size="7.5" fill="#587a5f">teammate claims work</text>
+            <rect x="34" y="114" width="90" height="16" rx="4" fill="#e6ede3"/>
+            <text x="79" y="125" text-anchor="middle" font-family="Geist, sans-serif" font-size="7.5" fill="#587a5f">work handed back</text>
+            <text x="72" y="152" text-anchor="middle" font-family="Geist, sans-serif" font-size="8" fill="#78756a">activity + artifacts</text>
+            <text x="72" y="164" text-anchor="middle" font-family="Geist, sans-serif" font-size="8" fill="#78756a">inline · splits when</text>
+            <text x="72" y="176" text-anchor="middle" font-family="Geist, sans-serif" font-size="8" fill="#78756a">volume hurts</text>
+            <text x="72" y="284" text-anchor="middle" font-family="Geist, sans-serif" font-size="7.5" fill="#a8a498">collapses to icons</text>
+            <!-- center stage -->
+            <rect x="146" y="14" width="382" height="240" rx="9" fill="#faf8f3" stroke="#d4cec2"/>
+            <text x="337" y="34" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9.5" letter-spacing="0.5" fill="#78756a">CENTER STAGE · VENTURE ATLAS (~85%)</text>
+            <circle cx="337" cy="128" r="22" fill="#eef2ea" stroke="#3f5c46"/>
+            <rect x="216" y="88" width="60" height="28" rx="6" fill="#f4f1ea" stroke="#c7c0b1"/>
+            <rect x="408" y="94" width="60" height="28" rx="6" fill="#f4f1ea" stroke="#c7c0b1"/>
+            <rect x="248" y="164" width="60" height="28" rx="6" fill="#f4f1ea" stroke="#c7c0b1"/>
+            <rect x="382" y="166" width="60" height="28" rx="6" fill="#f4f1ea" stroke="#c7c0b1"/>
+            <line x1="315" y1="128" x2="276" y2="102" stroke="#a8a498"/>
+            <line x1="359" y1="128" x2="408" y2="108" stroke="#a8a498"/>
+            <line x1="326" y1="146" x2="308" y2="164" stroke="#a8a498"/>
+            <line x1="352" y1="146" x2="382" y2="166" stroke="#a8a498"/>
+            <!-- composer docked to stage -->
+            <rect x="146" y="222" width="382" height="30" rx="7" fill="#f0efe9" stroke="#d4cec2"/>
+            <text x="337" y="241" text-anchor="middle" font-family="Geist, sans-serif" font-size="9" fill="#78756a">composer — the primary handle, docked to the stage</text>
+            <!-- right inspector -->
+            <rect x="536" y="14" width="172" height="240" rx="9" fill="#f4f1ea" stroke="#d4cec2"/>
+            <text x="622" y="34" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9.5" letter-spacing="0.5" fill="#78756a">RIGHT INSPECTOR</text>
+            <rect x="552" y="46" width="140" height="9" rx="3" fill="#e3ded5"/>
+            <rect x="552" y="62" width="120" height="7" rx="3" fill="#e3ded5"/>
+            <rect x="552" y="76" width="130" height="7" rx="3" fill="#e3ded5"/>
+            <rect x="552" y="98" width="90" height="18" rx="5" fill="#eef2ea" stroke="#c3d2c1"/>
+            <text x="622" y="150" text-anchor="middle" font-family="Geist, sans-serif" font-size="8.5" fill="#78756a">opens on selection</text>
+            <text x="622" y="163" text-anchor="middle" font-family="Geist, sans-serif" font-size="8.5" fill="#78756a">content swaps · one panel</text>
+          </svg>
+          <figcaption>The ADE frame — a conversation rail (one conversation with the firm, not a thread list), the center-stage atlas holding ~85% of the viewport with the composer docked to it, and a contextual right inspector. No separate activity dock: the conversation is the console.</figcaption>
+        </figure>
+      </div>
+      <ul>
+        <li><strong>Left rail — the conversation.</strong> The one surface that earns permanent residence in the rail. It holds <em>one</em> conversation with the firm — not a thread list. The earlier "one main dialogue plus a branching effort thread each" model was superseded by the density correction: keep a single conversation until volume genuinely hurts, then split, rather than fragmenting from the start. Ventures, crew, and the gate do <em>not</em> live here — the founder switches ventures through a ⌘O overlay, not a rail list, and one venture fills a session. Collapses to an icon strip; stage-maximal by default.</li>
+        <li><strong>Center stage — the atlas.</strong> The infinite canvas, holding roughly 85% of the viewport at rest. Moves 2–4 all live here. The composer is the primary handle — chat-first steering — docked to the stage rather than floating over nodes.</li>
+        <li><strong>Right inspector — context (docked, one panel).</strong> Opens on node selection: an effort's detail and drafts, an artifact, a teammate's <em>current work</em> (not a profile), or the run record behind any of it. Content swaps as selection changes; it never stacks a second overlay. This replaces the current overlapping right-side panels outright.</li>
+        <li><strong>No separate activity console — the conversation is the console.</strong> The earlier plan had a bottom activity dock; the founder killed it. Agent activity and artifacts render inline in the conversation, where the founder is already looking. Two extensions (the canvas echoing conversation activity, and world-touching acts surfacing in-conversation) are the right direction but need careful design — tracked as open in §7.</li>
+        <li><strong>The grid flexes with resolution.</strong> Rail, stage, and inspector are a CSS grid whose tracks respond to viewport width via container queries. The canvas re-fits inside its own cell — which is exactly the viewport-adaptation model below.</li>
+      </ul>
+      <div class="note">
+        <span class="k">The work loop — settled 2026-07-15</span>
+        Finished work <strong>lands in the conversation like a colleague handing it over</strong>, and
+        review is <strong>dialogue, not buttons</strong>: the founder reads it and says what he thinks —
+        there are no accept/reject controls and no review states to design. Real-world evidence comes
+        back in <strong>through capabilities</strong> (Gmail, Exa, Apollo, and the rest are the ports for
+        both outbound acts and returning evidence), and it attaches to context through those same ports.
+        When work stalls it shows <strong>both ways</strong> — the effort node reads blocked and names
+        what it needs, and the teammate asks in the conversation. Everything is fully transparent: any
+        artifact or event links down to its complete <strong>record</strong> (§1's sixth noun). Work runs
+        live while the founder is present; he can <strong>steer mid-flight by saying so in the
+        conversation</strong> and running work adjusts, and an <strong>effort ends when he says so</strong>
+        in conversation. (Only while the app is open — see "How Drover ships" in §1.)
+      </div>
+      <div class="diagram">
+        <figure>
+          <svg viewBox="0 0 720 250" role="img" aria-label="Viewport-fit inset model: fitView bounds equal the stage cell, not the whole window">
+            <!-- full window -->
+            <rect x="8" y="20" width="704" height="212" rx="10" fill="#f4f1ea" stroke="#c7c0b1"/>
+            <!-- left rail (collapsed to icons — stage-maximal) -->
+            <rect x="8" y="20" width="44" height="212" rx="10" fill="#eef2ea" stroke="#c3d2c1"/>
+            <text x="30" y="126" text-anchor="middle" font-family="Geist Mono, monospace" font-size="8" fill="#587a5f" transform="rotate(-90 30 126)">CHAT ▸</text>
+            <!-- right inspector -->
+            <rect x="588" y="20" width="124" height="212" rx="10" fill="#f4f1ea" stroke="#d4cec2"/>
+            <text x="650" y="126" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#78756a">INSPECTOR</text>
+            <!-- stage cell (composer docked) -->
+            <rect x="60" y="28" width="520" height="196" rx="8" fill="#faf8f3" stroke="#d4cec2"/>
+            <rect x="60" y="196" width="520" height="28" rx="8" fill="#f0efe9" stroke="#d4cec2"/>
+            <text x="320" y="214" text-anchor="middle" font-family="Geist, sans-serif" font-size="8.5" fill="#78756a">composer docked to stage</text>
+            <!-- fit bounds = stage cell inset -->
+            <rect x="74" y="42" width="492" height="140" rx="6" fill="none" stroke="#3f5c46" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <text x="320" y="16" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#3f5c46">fitView bounds = stage cell − padding, recomputed on every collapse/resize</text>
+            <rect x="140" y="70" width="80" height="34" rx="6" fill="#f4f1ea" stroke="#c7c0b1"/>
+            <rect x="300" y="118" width="80" height="34" rx="6" fill="#f4f1ea" stroke="#c7c0b1"/>
+            <rect x="440" y="76" width="80" height="34" rx="6" fill="#f4f1ea" stroke="#c7c0b1"/>
+            <line x1="220" y1="87" x2="300" y2="132" stroke="#a8a498"/>
+            <line x1="380" y1="132" x2="440" y2="94" stroke="#a8a498"/>
+          </svg>
+          <figcaption>The viewport-fit inset model — the atlas fits its stage cell, not the raw window, and re-fits whenever the rail collapses or the window resizes. Stage-maximal: rail to icons, canvas ~85%.</figcaption>
+        </figure>
+      </div>
+      <div class="note">
+        <span class="k">Prior art</span>
+        <a href="https://mobbin.com/screens/88617adf-21d4-4e89-845b-6457a0aa266b">LangSmith Studio</a> — the closest analogue: left nav rail, center graph canvas, docked right inspector (Input / Output / Attributes), composer docked below the stage.
+        <a href="https://mobbin.com/screens/efdb6822-c0c5-4489-b1e3-a52657c64f1f">Retool</a> — the IDE triptych: component rail, center canvas, right inspector with a top command bar. The Letta ADE is the same family. Drover's version keeps the warm-paper aesthetic and puts the venture atlas, not a node-wiring graph, on the stage.
+      </div>
+    </div>
+
+    <!-- MOVE 2 — SPATIAL INTEGRITY -->
+    <div class="move">
+      <div class="move-head">
+        <span class="idx">Move 2</span>
+        <h3>Spatial integrity engine</h3>
+      </div>
+      <p class="role">The floor inside the stage. Nothing on the canvas scores above 3/10 without it.</p>
+      <p>
+        With the frame in place, the atlas still has to place itself. Every remaining symptom in §2 traces
+        to hand-authored coordinates that don't know about each other or about the stage cell they live in.
+        Three mechanisms replace them:
+      </p>
+      <ul>
+        <li><strong>Collision-free auto-layout, fully automatic.</strong> A layout engine (elkjs layered/force, or d3-force) computes node positions so cards physically cannot overlap. Layout re-runs on graph change, and Motion's layout animation glides cards to their new spots — they never teleport. The founder never drags a node: the engine owns placement entirely (founder-decided 2026-07-15), which removes hand-arranged coordinates as a source of collisions rather than merely tidying around them.</li>
+        <li><strong>Stage-aware fit.</strong> <code class="inline">fitView</code> turns on, fitting the atlas to its stage cell — the space left after the rail and inspector take theirs — and re-fits whenever the rail collapses, the inspector opens, or the window resizes. This is the dynamic-resolution answer: the atlas composes itself for whatever stage cell it gets, on a 1280px laptop or a 5K display, instead of assuming 1920×1080.</li>
+        <li><strong>An effort's drafts collapse into the effort.</strong> The seven cards clipped off the edge were an effort's drafts spilling onto the canvas. They collapse into a single stack chip on their parent effort ("7 drafts"), expanding only on focus or when the founder opens the effort in the inspector. (Drafts are part of an effort, not a separate concept — see the six-noun set in §1.)</li>
+        <li><strong>Finished work sinks to a faded background layer.</strong> Completed efforts don't clutter the active atlas — they recede into a faded background layer (founder-decided), still there and expandable, but out of the way of what's live. This keeps the automatic layout working over a small live set instead of an ever-growing pile.</li>
+      </ul>
+    </div>
+
+    <!-- MOVE 3 — SEMANTIC ALTITUDE -->
+    <div class="move">
+      <div class="move-head">
+        <span class="idx">Move 3</span>
+        <h3>Semantic altitude</h3>
+      </div>
+      <p class="role">The signature. Depth by zoom, not by clutter.</p>
+      <p>
+        Once the atlas places itself on the stage, zoom becomes meaning. The same graph renders at three
+        altitudes, chosen by React Flow's zoom-level selectors. Depth is a feature — the founder chooses
+        how close they stand.
+      </p>
+      <div class="altitudes">
+        <div class="alt">
+          <span class="tag">Zoomed out</span>
+          <h4>Horizon</h4>
+          <p>The whole venture reads at a glance: crew, cluster chips in founder words ("7 efforts underway"), the gate marker, and the central "What should change?" hub. No card bodies.</p>
+          <div class="mini" aria-hidden="true">
+            <svg viewBox="0 0 200 92" width="100%" height="100%">
+              <circle cx="100" cy="46" r="13" fill="#eef2ea" stroke="#3f5c46"/>
+              <circle cx="42" cy="28" r="6" fill="#e0e8de" stroke="#587a5f"/>
+              <circle cx="158" cy="30" r="6" fill="#e0e8de" stroke="#587a5f"/>
+              <circle cx="52" cy="68" r="6" fill="#e0e8de" stroke="#587a5f"/>
+              <circle cx="150" cy="66" r="6" fill="#e0e8de" stroke="#587a5f"/>
+              <rect x="170" y="40" width="18" height="12" rx="3" fill="#f0e4d0" stroke="#9a6b2f"/>
+              <line x1="88" y1="42" x2="48" y2="30" stroke="#c7c0b1"/>
+              <line x1="112" y1="42" x2="152" y2="32" stroke="#c7c0b1"/>
+              <line x1="90" y1="52" x2="56" y2="66" stroke="#c7c0b1"/>
+              <line x1="110" y1="52" x2="146" y2="64" stroke="#c7c0b1"/>
+            </svg>
+          </div>
+        </div>
+        <div class="alt">
+          <span class="tag">Mid</span>
+          <h4>Working</h4>
+          <p>Full node cards, collision-free layout. This is where the founder reads the theory and directs work — the default altitude on a normal-sized screen.</p>
+          <div class="mini" aria-hidden="true">
+            <svg viewBox="0 0 200 92" width="100%" height="100%">
+              <rect x="16" y="16" width="54" height="30" rx="5" fill="#faf8f3" stroke="#c7c0b1"/>
+              <rect x="90" y="10" width="54" height="30" rx="5" fill="#faf8f3" stroke="#c7c0b1"/>
+              <rect x="60" y="54" width="54" height="30" rx="5" fill="#faf8f3" stroke="#c7c0b1"/>
+              <rect x="134" y="52" width="54" height="30" rx="5" fill="#faf8f3" stroke="#c7c0b1"/>
+              <line x1="70" y1="30" x2="90" y2="24" stroke="#a8a498"/>
+              <line x1="100" y1="40" x2="88" y2="54" stroke="#a8a498"/>
+              <line x1="114" y1="68" x2="134" y2="66" stroke="#a8a498"/>
+            </svg>
+          </div>
+        </div>
+        <div class="alt">
+          <span class="tag">Zoomed in</span>
+          <h4>Focus</h4>
+          <p>The selected line of work and its artifacts expand into rich detail. Everything else dims and shrinks — soft depth-of-field, not hidden. The founder never loses the map.</p>
+          <div class="mini" aria-hidden="true">
+            <svg viewBox="0 0 200 92" width="100%" height="100%">
+              <rect x="30" y="12" width="140" height="68" rx="6" fill="#faf8f3" stroke="#3f5c46"/>
+              <rect x="40" y="22" width="80" height="7" rx="2" fill="#3f5c46" opacity="0.7"/>
+              <rect x="40" y="36" width="120" height="5" rx="2" fill="#c7c0b1"/>
+              <rect x="40" y="46" width="110" height="5" rx="2" fill="#c7c0b1"/>
+              <rect x="40" y="62" width="40" height="10" rx="3" fill="#eef2ea" stroke="#587a5f"/>
+              <rect x="6" y="30" width="16" height="16" rx="3" fill="#efece4" stroke="#d4cec2" opacity="0.6"/>
+              <rect x="180" y="52" width="14" height="14" rx="3" fill="#efece4" stroke="#d4cec2" opacity="0.6"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <ul>
+        <li><strong>Three fixed altitudes with smooth travel (decided).</strong> The founder chose the ADE-conventional model — predictable snap altitudes rather than continuous zoom — deferring to convention for a surface used every day. The View Transitions API (or Motion's shared-layout) animates the camera travel between them, so moving altitude feels like walking toward the venture, not swapping screens.</li>
+        <li><strong>Smaller viewports start one altitude higher.</strong> A 1280px screen opens at Horizon where a 4K screen opens at Working — resolution adaptation falls out of the altitude system for free, reinforcing the stage-aware fit in Move 2.</li>
+        <li><strong>Chat is the handle, and materialization is a staged unfolding.</strong> Directing from the composer draws the theory in front of the founder over ~2–3 seconds — nodes born in sequence while the conversation narrates what's appearing (founder-decided), not a single instant snap. The signature moment made kinetic.</li>
+      </ul>
+      <div class="note">
+        <span class="k">Partly scaffolded already</span>
+        The type system already carries the three altitudes — <code class="inline">AtlasAltitude = "venture" | "architecture" | "detail"</code> in <code class="inline">atlasTypes.ts:13</code>, and nodes already carry a <code class="inline">focusRole</code> of focus / related / context. The altitude concept is present; what's missing is the collision-free layout beneath it (Move 2) and the zoom-driven rendering and animation on top. This is elevation of an existing seam, not a new invention.
+      </div>
+    </div>
+
+    <!-- MOVE 4 — LANGUAGE & COMPONENTS -->
+    <div class="move">
+      <div class="move-head">
+        <span class="idx">Move 4</span>
+        <h3>Language and component rebuild</h3>
+      </div>
+      <p class="role">Runs across the whole shell. Every founder-facing surface, redesigned.</p>
+      <ul>
+        <li><strong>Seven founder-facing components,</strong> each with an anatomy spec and a full state grid: the two shell regions (the conversation rail, right inspector) and five node archetypes — teammate, effort (which carries its own drafts), capability, gate ("Nothing needs you yet"), and the central question hub. There is no separate "prepared work" component: drafts belong to an effort, per the six-noun set in §1. Detailed in §4.</li>
+        <li><strong>Titles from content, never from IDs.</strong> A draft inside an effort is titled by what it is ("Draft: minimum buildable version"), with the <code class="inline">staged-…</code> identifier moved to metadata under a disclosure.</li>
+        <li><strong>A copy pass</strong> that removes "bets", "drifting", and "lines" from the interface and replaces them with ordinary language. Detailed in §5.</li>
+        <li><strong>Teammates as self-aware characters.</strong> The crew get faces and personality pushed further, not abstracted away (founder-decided) — the firm should feel staffed, not automated. Teammates are explicitly self-aware agents; personality surfaces at judgment moments. Clicking a teammate opens <em>their current work</em> in the standard inspector — there is no profile surface. The firm routes directions visibly: a teammate claims a direction in the conversation and says why. (How persona system prompts are written and structured is an open engineering task, tracked in §7 — not character fiction to design here.) Cut by a later machinery check: track records, blind-spot profiles, crew reviews, and hire proposals — the founder creates a new teammate directly when he wants one.</li>
+        <li><strong>No degraded state to design.</strong> The red "Desktop host required" alarm and the whole snapshot dual-state are gone: Drover is a local Electron desktop app from now on (§1's "How Drover ships"), and the browser build survives only as a dev/test harness. There is no founder-facing degraded chrome.</li>
+        <li><strong>Entry replaces the venture picker.</strong> The picker screen dies. The founder lands straight in their last venture; a ⌘O overlay switches ventures (one venture per session, ventures fully separate). Deferred instruments — the minimap and command palette — wait until the atlas is large enough to need them (§7).</li>
+      </ul>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ================= 04 COMPONENTS ================= -->
+  <section id="components">
+    <p class="eyebrow">04 — Component redesign</p>
+    <h2>The shell regions and the node archetypes</h2>
+    <p>
+      Seven founder-facing components carry the redesign: the two ADE shell regions (the conversation
+      rail, right inspector) and five node archetypes on the stage — teammate, effort, capability, gate,
+      and the question hub. Every archetype maps to one of the six nouns from §1; drafts are part of an
+      effort, not a seventh component. Each gets an anatomy and a full state grid below. First, two of
+      the worst offenders from the audit, rebuilt as real HTML — not screenshots. The "after" cards are
+      the actual proposed treatment.
+    </p>
+
+    <!-- BEFORE/AFTER 1: an effort's draft -->
+    <h3>An effort's draft</h3>
+    <div class="beforeafter">
+      <div class="ba-col before">
+        <p class="lab">✕ Before — ID as title, clipped pile</p>
+        <div class="ba-stage">
+          <div class="bad-card bad-overlap">
+            <div class="bad-title">Prepared work staged-20260714205951-287318d1</div>
+            <span class="bad-badge">Drifting</span>
+          </div>
+          <div class="bad-card" style="opacity:0.5">
+            <div class="bad-title">Prepared work staged-20260714210114-9fa2c0e2</div>
+            <span class="bad-badge">Drifting</span>
+          </div>
+        </div>
+      </div>
+      <div class="ba-col after">
+        <p class="lab">✓ After — named by content, one card</p>
+        <div class="ba-stage">
+          <div class="a-card">
+            <div class="a-kicker">Draft · not yet sent</div>
+            <div class="a-title">Draft: first outreach to inspectors</div>
+            <p class="a-body">A short note that opens with what they'd actually recognize, not a pitch. Waiting on your read.</p>
+            <div class="a-foot">
+              <span class="a-dot"></span>
+              <span class="a-state">Ready to refine</span>
+              <span class="a-verb">Refine</span>
+            </div>
+            <div class="a-disclosure">▸ staged-20260714205951 · firm v4</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BEFORE/AFTER 2: effort + teammate overlap -->
+    <h3>Effort, with teammate attribution</h3>
+    <div class="beforeafter">
+      <div class="ba-col before">
+        <p class="lab">✕ Before — crew card covering the work</p>
+        <div class="ba-stage">
+          <div class="bad-card" style="width:190px">
+            <div class="bad-title" style="font-family:var(--sans);font-size:13px">Surface the current state of the venture and…</div>
+          </div>
+          <div class="bad-card bad-overlap" style="width:120px;top:40px;left:96px">
+            <div class="bad-title" style="font-family:var(--sans);font-size:12px">Soren</div>
+            <span class="bad-badge">covers work</span>
+          </div>
+        </div>
+      </div>
+      <div class="ba-col after">
+        <p class="lab">✓ After — attribution as faces, no collision</p>
+        <div class="ba-stage">
+          <div class="a-card">
+            <div class="a-kicker">Underway</div>
+            <div class="a-title">Map the venture's current shape</div>
+            <p class="a-body">Reading what's built, who it helps, and where the gaps are.</p>
+            <div class="a-foot">
+              <span class="a-dot"></span>
+              <span class="a-state">In progress</span>
+              <span class="a-faces" aria-label="Soren and Kai">
+                <span class="a-face">S</span>
+                <span class="a-face">K</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p>
+      The pattern generalizes: a mono kicker names the archetype in founder words, a content-derived
+      title, an optional body that appears at Working and Focus altitudes, and a footer that reads like
+      an instrument — a status dot, a plain state label, and either a verb affordance or attribution
+      faces. IDs live under a disclosure triangle, never in the title.
+    </p>
+
+    <h3>Archetype anatomy and state grids</h3>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Component</th><th>What it is (founder words)</th><th>Anatomy</th><th>States</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Conversation rail</strong><br><span class="pill">shell</span></td>
+            <td>Your one conversation with the firm.</td>
+            <td>A single conversation — not a thread list; splits only when volume genuinely hurts (density correction). Teammates claim directions and hand work back in place; activity and artifacts render inline. Collapses to an icon strip. No venture/crew/gate lists — switching is ⌘O, one venture per session.</td>
+            <td><div class="states"><span class="state-tok">expanded</span><span class="state-tok">collapsed</span><span class="state-tok">teammate-claims</span><span class="state-tok">work-handed-back</span><span class="state-tok">activity-inline</span><span class="state-tok">artifact-inline</span><span class="state-tok">split-on-volume</span></div></td>
+          </tr>
+          <tr>
+            <td><strong>Right inspector</strong><br><span class="pill">shell</span></td>
+            <td>Everything about the thing you just selected — an effort and its drafts, a teammate's current work, an artifact, or its record.</td>
+            <td>Docked panel; header names the selection; body swaps by selection type (effort detail / drafts / a teammate's current work / artifact / the run record). Clicking a teammate shows their current work — there is no profile view. Closes to give the stage full width. Open question: also a drag target (§7).</td>
+            <td><div class="states"><span class="state-tok">closed</span><span class="state-tok">effort</span><span class="state-tok">draft</span><span class="state-tok">teammate-work</span><span class="state-tok">artifact</span><span class="state-tok">record</span><span class="state-tok">loading</span><span class="state-tok">empty</span></div></td>
+          </tr>
+          <tr>
+            <td><strong>Teammate</strong><br><span class="pill">node</span></td>
+            <td>A member of the crew — a face, a name, a personality, and what they're on.</td>
+            <td>Illustrated face pushed toward real character, name, current focus line, quiet runtime/model on hover. Self-aware agent; personality shows at judgment moments. Click opens their current work in the inspector — no profile surface. No hire/review affordances (cut by machinery check); the founder creates a new teammate directly.</td>
+            <td><div class="states"><span class="state-tok">idle</span><span class="state-tok">working</span><span class="state-tok">claiming</span><span class="state-tok">hover</span><span class="state-tok">selected</span><span class="state-tok">stale</span></div></td>
+          </tr>
+          <tr>
+            <td><strong>Effort</strong><br><span class="pill">node</span></td>
+            <td>A piece of work the crew is attempting — and it carries its own drafts.</td>
+            <td>Kicker, content title, body, status dot + state + attribution faces; drafts collapse into a stack chip on the effort ("7 drafts"), each draft titled by content with its ID under a disclosure. Blocked state names what it needs; the teammate also asks in the conversation.</td>
+            <td><div class="states"><span class="state-tok">idle</span><span class="state-tok">hover</span><span class="state-tok">selected</span><span class="state-tok">focused</span><span class="state-tok">in-progress</span><span class="state-tok">blocked</span><span class="state-tok">has-drafts</span><span class="state-tok">at-gate</span><span class="state-tok">stale</span><span class="state-tok">enter/exit</span></div></td>
+          </tr>
+          <tr>
+            <td><strong>Capability</strong><br><span class="pill">node</span></td>
+            <td>A real reach the venture holds — the product repo, a connected inbox.</td>
+            <td>Warm instrument treatment, icon, label, connected/unavailable line.</td>
+            <td><div class="states"><span class="state-tok">connected</span><span class="state-tok">hover</span><span class="state-tok">selected</span><span class="state-tok">unavailable</span></div></td>
+          </tr>
+          <tr>
+            <td><strong>Gate</strong><br><span class="pill">node</span></td>
+            <td>Where world-touching acts wait. "Nothing needs you yet" when clear.</td>
+            <td>Single right-hand boundary; compact when clear, prominent for real decisions. The inspector shows the <em>exact payload</em> — the email as the recipient will see it, the spend, the diff — and the founder answers in the conversation. No accept/reject buttons; releasing is dialogue. Trust is remembered from what the founder said, not a policy toggle here.</td>
+            <td><div class="states"><span class="state-tok">clear</span><span class="state-tok">one-waiting</span><span class="state-tok">many-waiting</span><span class="state-tok">showing-payload</span><span class="state-tok">unavailable</span></div></td>
+          </tr>
+          <tr>
+            <td><strong>Question hub</strong><br><span class="pill">node</span></td>
+            <td>The center of the atlas: "What should change?" — the handle into the whole thing.</td>
+            <td>Central landmark, intent display text, composer entry, materialization origin.</td>
+            <td><div class="states"><span class="state-tok">resting</span><span class="state-tok">composing</span><span class="state-tok">materializing</span><span class="state-tok">named-intent</span></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ================= 05 LANGUAGE ================= -->
+  <section id="language">
+    <p class="eyebrow">05 — Language</p>
+    <h2>From internal noun to founder words</h2>
+    <p>
+      The left column is what leaks today; the right is what the founder should read. Storage keys,
+      routes, and test identifiers keep the old names as compatibility seams — this table governs
+      <em>founder-facing copy only</em>.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Where it shows</th><th>Leaks today</th><th>Reads instead</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Work-line badge</td><td><span class="was">DRIFTING</span></td><td><span class="now">Moving without a direction yet</span></td></tr>
+          <tr><td>Venture summary</td><td><span class="was">4 bets opened</span></td><td><span class="now">4 efforts started</span></td></tr>
+          <tr><td>Cluster chip</td><td><span class="was">7 concrete lines underway</span></td><td><span class="now">7 efforts underway</span></td></tr>
+          <tr><td>Prepared-work title</td><td><span class="was">Prepared work staged-2026…</span></td><td><span class="now">Draft: first outreach to inspectors</span></td></tr>
+          <tr><td>Branching action</td><td><span class="was">Fork this bet</span></td><td><span class="now">Try another approach</span></td></tr>
+          <tr><td>Ending work</td><td><span class="was">End bet</span></td><td><span class="now">Stop this — we've learned enough</span></td></tr>
+          <tr><td>Returned evidence</td><td><span class="was">Outcome · joined</span></td><td><span class="now">The market answered</span></td></tr>
+          <tr><td>Gate, clear</td><td><span class="was">Wall empty · 0 items</span></td><td><span class="now">Nothing needs you yet</span></td></tr>
+          <tr><td>Gate, act you already OK'd</td><td><span class="was">Auto-approved (policy)</span></td><td><span class="now">Sending this — you told me I could</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <span class="k">Retired, not translated</span>
+      The old "Desktop host required" degraded banner isn't in this table because it no longer exists:
+      Drover is desktop-only now, so the snapshot dual-state is gone entirely (§7). There is no degraded
+      copy to soften — there is no degraded state.
+    </div>
+    <div class="note">
+      <span class="k">The guard</span>
+      Per the spec, a static founder-language guard should fail the build if product-owned interface copy
+      contains <code class="inline">bet</code>, <code class="inline">motion</code>,
+      <code class="inline">fork</code>, <code class="inline">outcome</code>,
+      <code class="inline">stage</code>, or <code class="inline">work item</code> — with user-authored
+      content and historical API/storage identifiers excluded. The copy above is written to pass it.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ================= 06 PACKAGES ================= -->
+  <section id="packages">
+    <p class="eyebrow">06 — Frontier packages</p>
+    <h2>What builds this, and what's already here</h2>
+    <p>
+      Most of the direction runs on what's installed. The only genuine addition is a layout engine. The
+      table names each capability, its status, and the move it serves.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Capability</th><th>Status</th><th>Serves</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>CSS Grid + container queries</strong> — the ADE shell layout (conversation rail / stage / inspector) that flexes with resolution</td><td><span class="pill installed">installed · Tailwind 4</span></td><td>Move 1 — the shell frame</td></tr>
+          <tr><td><strong>Base UI 1.6</strong> — docked rail & inspector panels, ⌘K command palette autocomplete</td><td><span class="pill installed">installed · underused</span></td><td>Moves 1 & 4 — shell panels, palette</td></tr>
+          <tr><td><strong>elkjs</strong> or <strong>d3-force</strong> — auto-layout feeding React Flow positions</td><td><span class="pill add">add</span></td><td>Move 2 — collision-free layout</td></tr>
+          <tr><td><strong>Motion 12</strong> — layout + shared-element animation</td><td><span class="pill installed">installed</span></td><td>Moves 2 & 3 — glide, not teleport</td></tr>
+          <tr><td><strong>View Transitions API</strong> — altitude change animation</td><td><span class="pill native">native platform</span></td><td>Move 3 — altitude transitions</td></tr>
+          <tr><td><strong>React 19</strong> — <code class="inline">useTransition</code> / <code class="inline">useOptimistic</code> for materialization streaming</td><td><span class="pill installed">installed</span></td><td>Move 3 — kinetic materialization</td></tr>
+          <tr><td><strong>React Flow MiniMap / Controls / zoom selectors</strong></td><td><span class="pill installed">installed · unused</span></td><td>Moves 1, 3 & 4 — minimap + altitude</td></tr>
+          <tr><td><strong>Popover API + CSS Anchor Positioning</strong> — anchored legend, node menus (ephemera, not panels)</td><td><span class="pill native">native platform</span></td><td>Move 4 — anchored ephemera</td></tr>
+          <tr><td><strong>tldraw SDK</strong> — full canvas replacement</td><td><span class="pill rejected">rejected</span></td><td>Would discard the working React Flow investment</td></tr>
+          <tr><td><strong>pixi / WebGPU renderer</strong></td><td><span class="pill rejected">rejected</span></td><td>Node counts don't justify a custom renderer</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <span class="k">Layout engine choice</span>
+      elkjs gives deterministic layered layouts that read as an atlas with clear left-to-right flow; d3-force gives organic clustering that suits the Horizon altitude. The likely answer is elkjs for Working/Focus structure and a force pass for Horizon clustering — but this is a Phase-2 spike to settle, not a decision to make on paper. It appears as an open option in §7 and a risk in §9.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ================= 07 EXPLORATION SURFACE ================= -->
+  <section id="explore">
+    <p class="eyebrow">07 — Exploration surface</p>
+    <h2>What the founder interviews settled, and what's still open</h2>
+    <p>
+      A founder-interview series completed on 2026-07-15 across five areas — the ADE frame, the crew,
+      the work loop, the gate and trust, and how Drover ships. It resolved most of the option spaces this
+      document had left open — several of them in ways that overturn earlier assumptions (the separate
+      activity console is gone; the venture-picker screen dies; the browser mode dies as a founder
+      surface). Just as important, several decisions the interviews first reached were later
+      <strong>overturned by machinery checks</strong> — asking what the mechanism actually needs to be —
+      and the decision log marks those "cut by machinery check" so the final state is unambiguous. The
+      decisions are folded through the whole document; this section records the option spaces and keeps
+      the ones that genuinely need mockup rounds or engineering to settle. The decision log at the end is
+      the durable record.
+    </p>
+
+    <!-- (a) ADE layout — DECIDED -->
+    <div class="optspace">
+      <div class="opthead"><h4>a · ADE layout weighting</h4><span class="flag decided">decided · stage-maximal</span></div>
+      <p class="q">How much room the chrome gets by default.</p>
+      <div class="opts">
+        <div class="opt chosen">
+          <span class="name">Stage-maximal ✓</span>
+          <p>The left rail collapses to an icon strip; the canvas holds roughly 85% of the viewport. Chrome earns its space only on demand. This is the closest expression of "the canvas is the star."</p>
+        </div>
+        <div class="opt spent">
+          <span class="name">Rail-heavy</span>
+          <p>A wide always-present rail. Rejected: it standing-taxes the stage the founder came for.</p>
+        </div>
+        <div class="opt spent">
+          <span class="name">Console-forward</span>
+          <p>A tall bottom run-stream. Moot — the separate console was killed entirely (see d).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- (b) altitude — DECIDED -->
+    <div class="optspace">
+      <div class="opthead"><h4>b · Altitude model</h4><span class="flag decided">decided · three fixed, smooth travel</span></div>
+      <p class="q">The shape depth-by-zoom takes.</p>
+      <div class="opts">
+        <div class="opt chosen">
+          <span class="name">Three fixed altitudes ✓</span>
+          <p>ADE-conventional: predictable snap altitudes (Horizon / Working / Focus) with smooth camera travel between them. The founder deferred to convention here — familiarity beats novelty for a surface used daily.</p>
+        </div>
+        <div class="opt spent">
+          <span class="name">Continuous zoom LOD</span>
+          <p>Map-like continuous detail. Rejected: harder to keep legible at every intermediate zoom, and less predictable.</p>
+        </div>
+        <div class="opt spent">
+          <span class="name">Focus-mode only</span>
+          <p>One flat altitude plus focus. Rejected: loses the zoomed-out read that makes the whole firm legible from afar.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- (c) node card density — STILL OPEN -->
+    <div class="optspace">
+      <div class="opthead"><h4>c · Node card density</h4><span class="flag">resolved by mockup rounds</span></div>
+      <p class="q">Explicitly left open — the founder wants two to three real treatments to react to on sight, not a decision on paper. Mockup round 1 should render these against real Drover data.</p>
+      <div class="opts">
+        <div class="opt">
+          <span class="name">Rich cards</span>
+          <p>Title, body preview, status, crew faces — everything at rest. Most legible without interaction; densest canvas.</p>
+        </div>
+        <div class="opt">
+          <span class="name">Title-plus-state</span>
+          <p>Title, a status dot, and a state word; detail appears on selection. Calmer canvas; one more step to read detail.</p>
+        </div>
+        <div class="opt">
+          <span class="name">Glyph-first</span>
+          <p>Near-iconographic at rest — shape and color carry meaning, text appears only close in. Most atlas-like from afar; demands a legible visual language.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- (d) activity surface — DECIDED (killed) -->
+    <div class="optspace">
+      <div class="opthead"><h4>d · Where live agent work shows</h4><span class="flag decided">decided · chat is the console</span></div>
+      <p class="q">Originally a separate bottom dock. The interview killed that surface.</p>
+      <div class="opts">
+        <div class="opt chosen">
+          <span class="name">The conversation is the console ✓</span>
+          <p>No separate activity surface. Agent activity and artifacts render inline in the one conversation — the crew shows what it's doing and hands work back in place. Two extensions are promising but need careful design (below): the canvas <em>echoing</em> that activity, and world-touching acts appearing <em>in-conversation</em>.</p>
+        </div>
+        <div class="opt spent">
+          <span class="name">Separate dock — stream / timeline / lanes</span>
+          <p>All three rejected. A second live surface competes with chat for the founder's attention and splits "what's happening" across two places.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- (e) temperature — DECIDED -->
+    <div class="optspace">
+      <div class="opthead"><h4>e · Visual temperature</h4><span class="flag decided">decided · warm paper stays</span></div>
+      <p class="q">Whether to keep the warm paper or move to dark instrument chrome.</p>
+      <div class="opts">
+        <div class="opt chosen">
+          <span class="name">Warm paper ✓</span>
+          <p>Kept. No dark chrome. The ink-on-paper identity is Drover's strongest visual asset and the thing no other ADE has — the taste references (Linear, Figma/FigJam, Cursor) are for their polish and spatial freedom, not their color.</p>
+        </div>
+        <div class="opt spent">
+          <span class="name">Darker instrument · Adaptive</span>
+          <p>Both rejected. Dark chrome forfeits the identity; adaptive doubles the surface to keep coherent and dilutes it.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- still-open: navigation + canvas-echo depth -->
+    <div class="optspace">
+      <div class="opthead"><h4>f · Navigation instruments</h4><span class="flag">resolved by mockup rounds</span></div>
+      <p class="q">Deferred, deliberately: minimap, command palette, and other wayfinding wait until the atlas is large enough to actually need them. Building them before the atlas has scale is guessing at a problem that isn't here yet. Revisit when a real venture's atlas outgrows a single screen.</p>
+    </div>
+
+    <div class="optspace">
+      <div class="opthead"><h4>g · Conversation rendering detail</h4><span class="flag">resolved by mockup rounds</span></div>
+      <p class="q">The conversation-is-the-console decision makes one detail load-bearing and unsettled: how inline activity and artifacts render <em>without noise</em>. A teammate claiming a direction, work landing back like a colleague handing it over, a blocked effort asking for what it needs, an artifact linking down to its record — all of this in one conversation. Done clumsily it turns the calm surface into a firehose. It also opens the canvas <em>echoing</em> that activity (nodes lighting up as work lands) and world-touching acts surfacing in-conversation. All of it needs real treatments against real data before it's built.</p>
+    </div>
+
+    <div class="optspace">
+      <div class="opthead"><h4>h · Persona system-prompt architecture</h4><span class="flag">engineering task</span></div>
+      <p class="q">Deepening the crew (Yara, Mira, Soren, Kai) as self-aware characters with lenses, not limits, raises a concrete engineering question: how the persona system prompts are actually written and structured so a teammate holds a consistent voice, defers to a sharper lens, and surfaces disagreement only when it forks the work. This is prompt engineering, not character fiction to draw here — flagged so it isn't mistaken for a design decision.</p>
+    </div>
+
+    <div class="optspace">
+      <div class="opthead"><h4>i · Idea-stage first work</h4><span class="flag">resolved by mockup rounds</span></div>
+      <p class="q">A venture can start from a description, not only from a repo (see first run below). When there's no product to read yet, the crew's first work has to make the idea concrete — but what that first move looks like, and how the first canvas fills for an idea-stage venture, is unsettled and needs mockup rounds.</p>
+    </div>
+
+    <div class="note">
+      <span class="k">How to read these</span>
+      Most spaces are <span style="color:var(--green)">decided</span> and folded through the document. Those still open are marked <strong>resolved by mockup rounds</strong> — node card density, conversation rendering detail, navigation instruments, and idea-stage first work need real treatments against real data — or <strong>engineering task</strong> for the persona prompt architecture and update mechanics. None of them blocks Phase 1 or 2; the ADE shell and layout engine are the floor regardless.
+    </div>
+
+    <h3>Decision log</h3>
+    <p>The interview series of 2026-07-15, grouped by area. Evidence is the founder statement or, where pending, the mockup round or engineering task that will settle it. Rows marked <span class="cut">cut by machinery check</span> are decisions the interviews first reached and a later look at the mechanism overturned — the choice column shows the final state.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Decision</th><th>Options considered</th><th>Choice</th><th>Date</th><th>Evidence</th></tr>
+        </thead>
+        <tbody>
+          <tr class="grouphead"><td colspan="5"><span>Concept set</span></td></tr>
+          <tr><td>Founder-facing nouns</td><td>open set / a fixed small set</td><td><span class="now">Exactly six: venture · conversation · effort · teammate · capability · record</span></td><td>2026-07-15</td><td>Founder + machinery check</td></tr>
+          <tr class="overturned"><td>Prepared work as a concept</td><td>own concept / merged</td><td><span class="now">Its own concept</span> <span class="cut">cut by machinery check</span> — merged into effort (an effort has drafts)</td><td>2026-07-15</td><td>Machinery check</td></tr>
+          <tr class="overturned"><td>Trust grant as a concept</td><td>own concept / merged</td><td><span class="now">Its own concept</span> <span class="cut">cut by machinery check</span> — merged into conversation (the firm remembers what you said it may do)</td><td>2026-07-15</td><td>Machinery check</td></tr>
+
+          <tr class="grouphead"><td colspan="5"><span>ADE frame</span></td></tr>
+          <tr><td>ADE layout weighting</td><td>rail-heavy / stage-maximal / console-forward</td><td><span class="now">Stage-maximal — rail to icons, canvas ~85%</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Altitude model</td><td>three fixed / continuous LOD / focus-only</td><td><span class="now">Three fixed, smooth travel (deferred to convention)</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Activity surface</td><td>separate dock / conversation-as-console</td><td><span class="now">Killed the dock — the conversation is the console</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr class="overturned"><td>Left rail contents</td><td>firm nav / one main dialogue + effort threads / one conversation</td><td><span class="now">One main dialogue + branching effort threads</span> <span class="cut">superseded by density correction</span> — one conversation until volume hurts</td><td>2026-07-15</td><td>Density correction</td></tr>
+          <tr><td>Visual temperature</td><td>warm paper / darker instrument / adaptive</td><td><span class="now">Warm paper stays — no dark chrome</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Session open</td><td>restore focus / re-orient / home</td><td><span class="now">Restore last focus — reopen where left</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Steering</td><td>chat-first / canvas-first / hybrid</td><td><span class="now">Chat-first — composer is the handle</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Node placement</td><td>manual / assisted / fully automatic</td><td><span class="now">Fully automatic — founder never drags; engine owns layout</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Bidirectional focus</td><td>one-way / bidirectional</td><td><span class="now">Conversation entries and nodes fly to each other</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Composer inputs</td><td>slash verbs / @-refs+files+voice</td><td><span class="now">@-node refs, file/image drops, voice; no slash verbs</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Materialization</td><td>instant / staged unfolding</td><td><span class="now">Staged unfolding ~2–3s, the conversation narrates</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Finished work</td><td>hide / archive to a faded layer</td><td><span class="now">Sink into a faded, expandable background layer</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Entry</td><td>picker screen / into last venture + ⌘O</td><td><span class="now">Straight into last venture; ⌘O switcher overlay</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Firm view</td><td>portfolio / one venture per session</td><td><span class="now">One venture per session; ventures fully separate</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Motion</td><td>rich everywhere / meaning-only</td><td><span class="now">Meaning-only, exceptional execution; frequent acts instant</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Success bar</td><td>leverage / embodiment / "I can see everything"</td><td><span class="now">"I can see everything" — total situational awareness</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Node card density</td><td>rich / title-plus-state / glyph-first</td><td>Open — wants 2–3 to react to</td><td>—</td><td>Mockup round 1</td></tr>
+          <tr><td>Navigation instruments</td><td>build now / defer</td><td>Deferred until the atlas needs them</td><td>—</td><td>Mockup rounds</td></tr>
+          <tr><td>Layout engine</td><td>elkjs / d3-force / hybrid</td><td>Open — Phase-2 spike</td><td>—</td><td>Prototype spike</td></tr>
+
+          <tr class="grouphead"><td colspan="5"><span>Crew</span></td></tr>
+          <tr><td>Crew scope</td><td>per-venture / one firm-wide crew</td><td><span class="now">One firm-wide crew works all ventures</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>The crew</td><td>abstract / named characters</td><td><span class="now">Keep and deepen Yara, Mira, Soren, Kai — self-aware characters with faces</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Specialization</td><td>fixed roles / lenses not limits</td><td><span class="now">Lenses not limits — anyone can do anything, defers to the sharper lens (strategy/buyers, build/product, distribution/voice)</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Routing directions</td><td>invisible / visible claim</td><td><span class="now">A teammate claims a direction in the conversation and says why</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Disagreement</td><td>always surfaced / only on a fork</td><td><span class="now">Surfaces only when it forks the work</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Clicking a teammate</td><td>profile surface / current work</td><td><span class="now">Opens their current work in the standard inspector — no profile</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Presence on canvas</td><td>rich card / face + one line</td><td><span class="now">Face + one line at the effort node being worked</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr class="overturned"><td>Track records &amp; blind-spot profiles</td><td>build / cut</td><td><span class="now">Per-teammate track records + blind-spot profiles</span> <span class="cut">cut by machinery check</span></td><td>2026-07-15</td><td>Machinery check</td></tr>
+          <tr class="overturned"><td>Crew reviews &amp; hire proposals</td><td>build / cut</td><td><span class="now">Crew reviews + firm-proposed hires</span> <span class="cut">cut by machinery check</span> — the founder creates a new teammate directly ("don't want to play dollhouse")</td><td>2026-07-15</td><td>Machinery check</td></tr>
+          <tr><td>Persona prompt architecture</td><td>—</td><td>Open — how persona system prompts are written/structured</td><td>—</td><td>Engineering task</td></tr>
+
+          <tr class="grouphead"><td colspan="5"><span>Work loop</span></td></tr>
+          <tr><td>Finished work delivery</td><td>a review queue / handed over in conversation</td><td><span class="now">Lands in the conversation like a colleague handing it over</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr class="overturned"><td>Review controls</td><td>accept/reject buttons + review states / dialogue</td><td><span class="now">Accept/reject buttons and review states</span> <span class="cut">cut by machinery check</span> — review is dialogue: read it, then say what you think</td><td>2026-07-15</td><td>Machinery check</td></tr>
+          <tr><td>Real-world evidence</td><td>a separate inbox / through capabilities</td><td><span class="now">Enters through capabilities (Gmail, Exa, Apollo…) — the same ports as outbound acts; attaches to context there</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Stalls</td><td>one place / both ways</td><td><span class="now">Effort node shows blocked + what it needs; the teammate also asks in the conversation</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Transparency</td><td>summary only / full record</td><td><span class="now">Every artifact and event links down to its complete run record</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Mid-flight steering</td><td>restart / adjust in place</td><td><span class="now">Say it in the conversation and running work adjusts</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Ending an effort</td><td>a control / say so</td><td><span class="now">Efforts end when the founder says so in conversation</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Conversation rendering</td><td>—</td><td>Open — how inline activity/artifacts render without noise</td><td>—</td><td>Mockup rounds</td></tr>
+          <tr><td>Canvas-echo / acts-in-conversation</td><td>—</td><td>Right direction; needs careful approach</td><td>—</td><td>Mockup rounds</td></tr>
+
+          <tr class="grouphead"><td colspan="5"><span>Gate &amp; trust (minimal by explicit choice)</span></td></tr>
+          <tr><td>Gate philosophy</td><td>always-gated / minimal remembered-trust</td><td><span class="now">World-touching acts wait; the inspector shows the exact payload; you answer in the conversation</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr class="overturned"><td>Earning trust</td><td>auto-clear policy system / remembered dialogue</td><td><span class="now">Start gated; auto-clear act types as a policy</span> <span class="cut">cut by machinery check</span> — trust is granted by saying it ("you can send these yourself now") and the firm remembers; it is remembered dialogue, not a policy system</td><td>2026-07-15</td><td>Machinery check</td></tr>
+          <tr class="overturned"><td>Trust machinery</td><td>granularity + caps UI + delay windows + undo queues / none</td><td><span class="now">Granularity schemes, caps UI, delay windows, undo queues</span> <span class="cut">cut by machinery check</span> — explicitly rejected; the run record is the paper trail</td><td>2026-07-15</td><td>Machinery check</td></tr>
+
+          <tr class="grouphead"><td colspan="5"><span>First run &amp; onboarding</span></td></tr>
+          <tr><td>First move</td><td>tour / read the repo and return with directions</td><td><span class="now">Connect repo → Drover reads it → returns in the conversation with what it understood + 2–3 concrete directions; the founder picks a real one</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>First canvas content</td><td>strategy first / the product read back</td><td><span class="now">The product read back (what it does, who it's for, what's uncertain) for correction before strategy</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Idea-stage ventures</td><td>repo required / description welcome</td><td><span class="now">A venture can start from a description; the crew's first work makes the idea concrete</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Onboarding</td><td>a tour system / inline in the crew's messages</td><td><span class="now">The crew explain things inline in their own messages; no tour system</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Idea-stage first work</td><td>—</td><td>Open — what the first move and first canvas look like with no repo</td><td>—</td><td>Mockup rounds</td></tr>
+
+          <tr class="grouphead"><td colspan="5"><span>How Drover ships</span></td></tr>
+          <tr><td>Venture data</td><td>database / cloud / local plain files</td><td><span class="now">Local readable plain files (the ~/.gtm-ide seam evolves) — no database, no cloud</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>When work runs</td><td>background service + cloud runners / only while open</td><td><span class="now">Only while the app is open — no background service, no cloud runner ("since you left" = since your last session)</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Capability connections</td><td>Drover account / local</td><td><span class="now">Configured locally; no Drover account</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Model</td><td>hosted / founder's own subscriptions</td><td><span class="now">Runs on the founder's own subscriptions (Claude Code / Codex seam stays)</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr class="overturned"><td>Desktop shell &amp; browser mode</td><td>keep browser as a surface / Electron only</td><td><span class="now">Browser as a founder surface</span> <span class="cut">cut</span> — Electron wrapping the existing UI; browser survives only as a dev/test harness</td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Distribution</td><td>closed / open source + paid layer</td><td><span class="now">Open source with a paid layer later</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+          <tr><td>Update mechanics</td><td>—</td><td>Deferred</td><td>—</td><td>Engineering task</td></tr>
+          <tr><td>First builder</td><td>Codex / Opus agents</td><td><span class="now">Opus agents build the ADE shell + layout engine</span></td><td>2026-07-15</td><td>Founder interview</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ================= 08 BUILD PLAN ================= -->
+  <section id="build">
+    <p class="eyebrow">08 — Build plan</p>
+    <h2>Phased, each phase a shippable slice</h2>
+    <div class="note">
+      <span class="k">Who builds this — founder-stated 2026-07-15</span>
+      The ADE shell and layout engine are built by <strong>Opus agents</strong>, not Codex — a
+      division-of-labor change from the earlier plan. The phases below name what "done" means; the first
+      one is the founder-named first build.
+    </div>
+    <p>
+      Each phase ships something a founder can use. Phase 1 is the ADE shell plus the layout engine
+      together — the founder named that pairing as the first build, and neither half stands without the
+      other: the shell has nowhere to put a colliding atlas, and the engine has no stage to fit into.
+    </p>
+
+    <div class="phase floor">
+      <div class="pnum">Phase 1</div>
+      <div class="pbody">
+        <h4>ADE shell + layout engine — the floor (Opus agents)</h4>
+        <p>Build the docked workbench and the collision-free atlas as one slice, inside the local Electron shell (the browser build stays a dev/test harness). The shell: a CSS-grid frame with a left rail that holds the one conversation with the firm (a single conversation, not a thread list — it splits only when volume hurts), a center-stage canvas with the composer docked to it, and a contextual right inspector that swaps content on selection. Stage-maximal by default — the rail collapses to an icon strip and the canvas holds ~85% of the viewport. No separate activity dock: agent activity and artifacts render inline in the conversation. The engine: spike elkjs vs d3-force on the real projection, wire the winner to feed React Flow positions, turn on <code class="inline">fitView</code> fitting the stage cell, and animate layout changes with Motion so cards glide. Placement is fully automatic — the founder never drags.</p>
+        <div class="accept">
+          <b>Done when</b>
+          Panels never stack or bleed: the rail docks and collapses, the inspector is one swapping panel. No two nodes overlap at 1280 / 1440 / 1920 / 2560 wide, in any shell configuration. Opening or collapsing a region re-fits the atlas to its stage cell within one animation-frame budget. The composer is docked to the stage. Mockup round 1 renders this whole frame in three divergent takes against the real Drover venture data.
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="pnum">Phase 2</div>
+      <div class="pbody">
+        <h4>Language and component pass</h4>
+        <p>Retitle an effort's drafts from content; move IDs to disclosure. Ship the seven components — the shell regions (conversation rail, inspector) and the five node archetypes (teammate, effort, capability, gate, question hub) — with full state grids, including teammates as self-aware characters with faces (clicking one opens their current work, no profile) and finished work sunk to the faded background layer. Kill the leaked nouns in copy and add the founder-language build guard. The degraded web state is gone entirely (Electron desktop-only), so there is no snapshot chrome to design.</p>
+        <div class="accept">
+          <b>Done when</b>
+          No founder-facing surface shows <code class="inline">staged-…</code> IDs, "bets", "drifting", or "lines"; nothing implies a seventh concept beyond the six nouns. The language guard passes in CI. Every component renders all its grid states. Completed efforts sink to the faded background layer and expand on demand.
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="pnum">Phase 3</div>
+      <div class="pbody">
+        <h4>Semantic altitude</h4>
+        <p>Render Horizon / Working / Focus from the one graph via zoom-level selectors — the decided three-fixed model with smooth camera travel between snap altitudes. Dim-and-shrink the unfocused world at Focus; start smaller viewports one altitude higher; make composer direction materialize as a staged unfolding (~2–3s, nodes born in sequence while the conversation narrates).</p>
+        <div class="accept">
+          <b>Done when</b>
+          Zooming out reaches a legible whole-firm view with no card bodies; zooming into an effort expands it while the rest recedes without disappearing; a 1280px screen opens at Horizon and a 4K screen at Working; typing a direction unfolds the theory node-by-node in front of the founder.
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="pnum">Phase 4</div>
+      <div class="pbody">
+        <h4>The bidirectional handle and the switcher</h4>
+        <p>Wire the conversation and canvas to focus each other — conversation entries and nodes fly to each other on selection. Add composer @-node references, file/image drops, and voice input (no slash verbs). Replace the dead venture-picker screen with entry straight into the last venture plus a ⌘O switcher overlay. Build the minimal gate: a world-touching act waits, the inspector shows the exact payload (the email as the recipient sees it, the spend, the diff), and the founder answers in the conversation. Trust is remembered dialogue — when the founder says "you can send these yourself now," the firm remembers and stops waiting on that; there is no policy system, no caps UI, no delay windows, no undo queue. The run record is the paper trail.</p>
+        <div class="accept">
+          <b>Done when</b>
+          Selecting a conversation entry frames its node and vice versa; @-referencing a node in the composer targets it; ⌘O switches ventures without a picker screen; a waiting act shows its exact payload in the inspector; and once the founder tells the firm in conversation it may send a kind of act itself, that kind stops waiting — remembered from what he said, not configured in a settings panel.
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="pnum">Phase 5</div>
+      <div class="pbody">
+        <h4>Deferred — navigation instruments</h4>
+        <p>Minimap, command-palette navigation, and other wayfinding wait until a real venture's atlas is large enough to need them (decided in §7). Named here so the sequence is honest, not scheduled.</p>
+        <div class="accept">
+          <b>Trigger, not a date</b>
+          Build when a real atlas outgrows a single screen and the founder reaches for a way to navigate it. Not before.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ================= 08 UNPROVEN ================= -->
+  <section id="risks">
+    <p class="eyebrow">09 — What remains unproven</p>
+    <h2>Open risks, stated plainly</h2>
+    <p>
+      This direction is committed, but several things are genuinely unproven and one whole flow is
+      unbuilt. Naming them is the point.
+    </p>
+
+    <div class="risk">
+      <h4>The ADE shell could make Drover feel like software to administer</h4>
+      <p>An IDE frame is the right structural answer to panel anarchy, but it carries a real tension with Drover's ethos: the canvas is meant to be the star and chat the easy handle, and the spec's fatal mode #4 is flow-killing — "friction, setup ceremony, mental-state drag." A rail and an inspector can read as a cockpit to operate rather than a venture to grow. The founder's interview decisions push hard against this — stage-maximal by default (rail collapses to icons, canvas ~85%), chat-first steering, and no separate activity console — so the shell starts as recessed as it can. Whether that's recessed enough, or the frame still reads as a control panel, is a taste call only real use settles.</p>
+      <p class="mit"><b>Discriminating test:</b> a founder does a full session — direct, review, release — touching only the composer and the stage, never needing to "manage" the shell. If they feel they're operating an IDE, the chrome is too loud and should recede further by default.</p>
+    </div>
+
+    <div class="risk">
+      <h4>Altitude disorientation</h4>
+      <p>Zoom-as-meaning is powerful and can also make a founder lose their place — "where am I, and how do I get back?" The decided model (three fixed altitudes with smooth camera travel) is the more predictable of the options for exactly this reason, and depth-of-field keeps the map visible at Focus. But the usual wayfinding backstop, the minimap, is deliberately deferred until the atlas is large enough to need it — so early on, disorientation has fewer safety nets. Whether three altitudes read as one continuous world or three disorienting screens is a real-use question, and it interacts directly with the "I can see everything" success bar.</p>
+      <p class="mit"><b>Discriminating test:</b> a founder zooms out, then back to the work they were on, without reaching for a way to navigate. If they can't, either the altitude travel is too abrupt or the minimap's deferral was premature.</p>
+    </div>
+
+    <div class="risk">
+      <h4>elk layout stability on a live-updating graph</h4>
+      <p>Auto-layout is clean on a static graph. Drover's graph changes as work returns and the crew acts — and because placement is now <em>fully automatic</em> (the founder never drags), there are no pinned founder coordinates to anchor the layout. That removes hand-arranged collisions but raises the stakes on stability: if elk re-solves the whole layout on every change, the whole atlas can reshuffle under the founder even with animation. Incremental layout — re-solving only the changed neighborhood and letting finished work sink to the faded background layer to keep the live set small — is the likely answer, but its stability under live updates is unverified.</p>
+      <p class="mit"><b>Discriminating test:</b> a single new effort appears and only its neighborhood adjusts; the rest of the atlas holds still.</p>
+    </div>
+
+    <div class="risk">
+      <h4>The signature flow itself is not built</h4>
+      <p>Per <code class="inline">docs/STATE.md</code> (2026-07-15), the immediate-working-theory flow and the founder-language migration are explicitly <em>not built</em>. Current production still uses internal nouns in several surfaces and still treats whole-system assembly as something the founder approves before useful work. This document designs toward that flow; it does not describe a shipped one. The atlas canvas (React Flow, pan/zoom/placement, altitude type-scaffolding) <em>is</em> built — the collision-free layout, viewport fit, and altitude rendering on top of it are not.</p>
+      <p class="mit"><b>What would settle it:</b> a real founder types one plain sentence and gets a coherent, non-colliding, plain-language theory that changes what the firm works on next — the alpha gate the spec names, which no deterministic test stands in for.</p>
+    </div>
+
+    <div class="risk">
+      <h4>Does the atlas stay legible with no grooming at all?</h4>
+      <p>The founder decided placement is fully automatic — he never drags a node. That is the right call for flow, but it raises the stakes on the engine: with no manual grooming as an escape hatch, if the automatic layout is ever hard to read, the founder has no way to fix it by hand. Legibility rests entirely on the engine plus the faded background layer keeping the live set small. This is the spec's own reconsider-condition made sharper, and it collides directly with the "I can see everything" success bar: an auto-layout the founder can't correct must be right on its own.</p>
+      <p class="mit"><b>Discriminating test:</b> a founder returns after a week of ambient work to an atlas they never touched, and it reads at a glance — no cleanup available and none needed.</p>
+    </div>
+
+    <div class="risk">
+      <h4>Operator types beyond the solo founder are unbuilt and unmodeled</h4>
+      <p>The collaborator (can answer the acts that are waiting) and the viewer (read-only atlas walk) from §1 are a design constraint, not a shipped capability. The founder-wall's host-issued release capability already models releasing an act as a permission boundary, which is the right seam to build on — but no second operator identity, no read-only atlas mode, and no shared-venture access exists today. The risk is designing the shell as if the operator is always the owner and having to unpick that later.</p>
+      <p class="mit"><b>What keeps it cheap now:</b> honor the existing wall capability as the permission boundary rather than inventing a UI-only gate, and keep the atlas's mutation paths separable from its pan/zoom/altitude paths so a read-only mode is a flag, not a rewrite. Neither requires building the operator types — only not precluding them.</p>
+    </div>
+
+    <div class="risk">
+      <h4>Only-while-open trades away the "runs around the clock" promise</h4>
+      <p>The production decision that work runs only while the app is open — no background service, no cloud runner — is a deliberate, honest simplification, but it collides with Drover's headline promise that a permanent AI crew works "around the clock." In practice "since you left" means "since your last session," not work done overnight while the machine slept. The crew's presence and the sense of a firm that keeps working have to survive that constraint, and the copy must never imply progress that didn't happen.</p>
+      <p class="mit"><b>Discriminating test:</b> a founder closes the app mid-effort and reopens it the next day; the effort resumes cleanly from where it paused, and nothing in the surface claims work happened while it was closed.</p>
+    </div>
+  </section>
+
+  <footer>
+    docs/design/ux-divergence-2026.html · Drover design direction · authored 2026-07-15 ·
+    grounded against localhost:4317 and the repository at commit 850c52a
+  </footer>
+
+</div>
+
+<script>
+  // Section-nav active-state highlight (progressive enhancement only).
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        var a = map[e.target.id];
+        if (!a) return;
+        if (e.isIntersecting) {
+          links.forEach(function (l) { l.style.background = ''; l.style.color = ''; });
+          a.style.background = 'var(--green-tint)';
+          a.style.color = 'var(--ink)';
+        }
+      });
+    }, { rootMargin: '-40% 0px -55% 0px' });
+    document.querySelectorAll('section[id]').forEach(function (s) { obs.observe(s); });
+  })();
+</script>
+</body>
+</html>
