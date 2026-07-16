@@ -190,6 +190,35 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => /start venture/i.test(entry.textContent)); button?.click(); return !!button; })()`), true);
     await waitForDom(client, `Boolean(document.querySelector('[data-venture-atlas], [aria-label="The firm: configured participants, their bets, and the wall."]'))`, "venture operating surface did not open");
 
+    // FIRST RUN (contract §4A.5 / Phase 7): binding the sample product repository reads it back on the
+    // canvas as a correctable working theory — what it does, who it may help, and what's still uncertain,
+    // with the uncertainty explicitly labeled — and offers 2-3 concrete repo-derived directions in the
+    // conversation. The read-back materializes on the stage as "Drover's current read" theory nodes.
+    const [boundVenture] = await client.evaluate(`fetch('/api/ventures').then((response) => response.json()).then((body) => body.ventures)`);
+    await waitForDom(
+      client,
+      `fetch('/api/ventures/${boundVenture.id}/architecture/projection').then((response) => response.json()).then(({ projection }) => Boolean(projection.workingTheory) && projection.workingTheory.subjects.length >= 3 && projection.workingTheory.subjects.every((subject) => subject.sourceRefs.length > 0) && projection.workingTheory.subjects.some((subject) => /uncertain/i.test(subject.name))).catch(() => false)`,
+      "the connected product was not read back as a correctable, source-grounded working theory",
+    );
+    // Every read-back claim is cited or labeled inference — the uncertainty claim reads as Drover's
+    // guess for the founder to correct, never asserted as fact.
+    assert.equal(await client.evaluate(`fetch('/api/ventures/${boundVenture.id}/architecture/projection').then((response) => response.json()).then(({ projection }) => {
+      const uncertain = projection.workingTheory.subjects.find((subject) => /uncertain/i.test(subject.name));
+      return Boolean(uncertain && /uncertain|inference|correct/i.test(uncertain.statement));
+    }).catch(() => false)`), true, "the uncertain read-back claim was not labeled as inference");
+    // The read-back changes no founder-confirmed architecture — a first read is provisional only.
+    assert.equal(await client.evaluate(`fetch('/api/ventures/${boundVenture.id}/architecture').then((response) => response.json()).then(({ architecture }) => architecture.elements.length).catch(() => -1)`), 0, "the first read-back asserted durable architecture");
+    // The offers land in the conversation in ordinary language — concrete directions the founder picks.
+    await waitForDom(
+      client,
+      `fetch('/api/ventures/${boundVenture.id}/conversation').then((response) => response.json()).then(({ messages }) => messages.some((message) => message.role === 'agent' && /pick one|directions/i.test(message.content) && (message.content.match(/^\\s*\\d+\\./gm) || []).length >= 2)).catch(() => false)`,
+      "first run did not offer concrete repo-derived directions in the conversation",
+    );
+    // The read-back materializes on the stage as provisional "Drover's current read" theory cards.
+    await waitForDom(client, `document.querySelectorAll('[data-atlas-kind="theory"]').length >= 1`, "the read-back did not draw provisional theory cards on the canvas");
+    const uncertainCardShown = await client.evaluate(`[...document.querySelectorAll('[data-atlas-kind="theory"]')].some((card) => /uncertain/i.test(card.textContent || ''))`);
+    assert.equal(uncertainCardShown, true, "the labeled-uncertain read-back claim did not render on the canvas");
+
     await waitForDom(client, `!!document.querySelector('.firm-app-rail .firm-app-composer textarea')`, "firm conversation composer did not render");
     await assertIconButtonActionIsVisible(client, "Explore this venture", true);
     assert.equal(await client.evaluate(`(() => {

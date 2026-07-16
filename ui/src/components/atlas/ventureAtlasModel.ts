@@ -2,23 +2,28 @@ import type { CanvasSelection } from "@/components/firm/directionTarget";
 import type { AtlasEdge, AtlasNode, AtlasScene } from "./atlasTypes";
 import type { ArchitectureRole, FirmArchitectureElement, FirmArchitectureProjection } from "@/types";
 
-// The resting stage renders only the composite's five archetypes — the central question hub, the
-// efforts ringing it (with their drafts as chips, not separate cards), the crew faces, the capability
-// instruments, and the wall. The full projection also carries architecture concepts, per-draft work
-// cards, outcomes, theory subjects, and group frames; those are the venture's *depth*, reachable
-// through the outline and the docked inspector, but they are not resting canvas furniture — rendering
-// them all is exactly the 94-node hairball the composite replaced. This keeps the stage legible: one
-// hub, ~7 efforts, ~4 crew, ~2 capabilities, one wall (contract §4 Phase 2, "Node explosion").
+// The resting stage renders the composite's archetypes — the central question hub, the efforts ringing
+// it (with their drafts as chips, not separate cards), the crew faces, the capability instruments, and
+// the wall. Drover's provisional working-theory read joins the stage as the signature canvas moment
+// (direction 2026-07-15: a plain-words ask materializes a complete, editable working theory *on the
+// canvas*) and the first-run read-back (contract §4A.5 / Phase 7) draws it the instant a repository
+// binds — BUT only while no real efforts exist yet. Once concrete efforts are underway the theory has
+// done its job as the opening read and recedes to depth (reachable through the outline and inspector),
+// so the effort ring is never crowded off the stage: the direction's own rule that "the first theory is
+// visibly provisional and changes as real work and evidence return." The full projection still carries
+// architecture concepts, per-draft work cards, outcomes, and group frames as depth off-stage.
 //
 // `atlas:intent` is the hub; `bet:*` are efforts; `crew:*` / `capability:*` / `atlas:wall` are the
-// remaining archetypes. Everything else is depth that lives off the resting stage.
+// remaining archetypes; `theory:*` is the opening read-back, on stage until efforts arrive.
 export function canvasArchetypeScene(scene: AtlasScene): AtlasScene {
+  const hasEfforts = scene.nodes.some((node) => node.id.startsWith("bet:"));
   const keep = (node: AtlasNode) =>
     node.id === "atlas:intent"
     || node.id === "atlas:wall"
     || node.id.startsWith("bet:")
     || node.id.startsWith("crew:")
-    || node.id.startsWith("capability:");
+    || node.id.startsWith("capability:")
+    || (!hasEfforts && node.id.startsWith("theory:"));
   const nodes = scene.nodes.filter(keep);
   const ids = new Set(nodes.map((node) => node.id));
   // Only the hub→effort spokes survive on the resting stage; edges into off-stage depth are dropped so

@@ -16,6 +16,7 @@
 import { json, readBody } from "../routes/util.mjs";
 import { buildLens, putPlacement, PersistenceConflictError } from "./lens.mjs";
 import { createVenture, listVentures } from "./venture-store.mjs";
+import { runFirstRun } from "./first-run.mjs";
 import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 
 function statusFor(err) {
@@ -36,6 +37,15 @@ export default async function handle({ req, res, url }) {
         authorizeFounderWriteForRequest(req, "Starting a venture");
         const body = await readBody(req);
         const venture = createVenture({ name: body?.name, repository: body?.repository });
+        // First run (Phase 7): read the bound product back on the canvas as a correctable working theory
+        // and offer concrete repo-derived directions in the conversation. It never sends anything outward.
+        // A first-run failure must not fail the create — the venture still opens; the read-back is a
+        // convenience the founder can trigger by asking, not a gate on entry.
+        try {
+          runFirstRun({ ventureId: venture.id, repository: venture.repository, ventureName: venture.name });
+        } catch {
+          // Honest degradation: an unreadable repository leaves the venture without a first read-back.
+        }
         json(res, 200, { venture });
       } catch (err) {
         json(res, statusFor(err), { error: err instanceof Error ? err.message : String(err) });
