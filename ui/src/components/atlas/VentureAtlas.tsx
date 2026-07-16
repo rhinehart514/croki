@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useEdgesState, useNodesState } from "@xyflow/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Focus, ListTree, RotateCcw, Sparkles, X } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
 import { decideWallItem, startArchitectureCampaign, type ArchitectureMutationOperation, type WallDecision, type WallQueueItemView } from "@/api";
 import { Button } from "@/components/ui/button";
 import { targetArchitecture, targetBet, targetTheory, targetWork, type CanvasSelection } from "@/components/firm/directionTarget";
@@ -9,7 +9,7 @@ import { approveWallProductChange, inspectWallProductChange } from "@/lib/produc
 import type { FirmArchitectureElement, FirmArchitectureProjection, FirmLens } from "@/types";
 import { ArchitectureMutationPreview, type AtlasMutationDraft } from "./ArchitectureMutationPreview";
 import { AtlasCanvas } from "./AtlasCanvas";
-import { AtlasLegend, AtlasLegendToggle } from "./AtlasLegend";
+import { AtlasLegend } from "./AtlasLegend";
 import { AtlasWallPanel } from "./AtlasWallPanel";
 import { useCanvasCapabilities } from "@/components/lens/canvasCapabilities";
 import { configurationForLens } from "@/lib/firmConfiguration";
@@ -29,7 +29,7 @@ import { projectAtlasTrace } from "./atlasTrace";
 import { ATLAS_EASE, ATLAS_MOTION } from "./atlasMotion";
 import type { AtlasNode } from "./atlasTypes";
 import { useAtlasArrivalTracker } from "./useAtlasArrivalTracker";
-import { architectureId, atlasNodeIdForSelection, omissionSummary, promotionFields, stableId } from "./ventureAtlasModel";
+import { architectureId, atlasNodeIdForSelection, canvasArchetypeScene, omissionSummary, promotionFields, stableId } from "./ventureAtlasModel";
 import "@/styles/venture-atlas.css";
 export function VentureAtlas({
   ventureId, lens, selection, wallOpen, wallQueue, stale, readOnly,
@@ -61,11 +61,17 @@ export function VentureAtlas({
   // placement makes cards physically non-overlapping (collision-free by construction) and the
   // founder never drags. The engine leaves field/background nodes (orbit ring, group frames)
   // where the projection put them; every placed card is re-homed hub-centered.
+  // The resting stage renders only the composite's archetypes (hub, efforts, crew, capabilities,
+  // wall); the full projection's depth (architecture, per-draft work, outcomes, theory, group frames)
+  // stays off-stage in the outline and inspector. Filtering *before* the layout engine is what keeps
+  // the field at composite density — the engine only ever places the ~14 cards the composite shows,
+  // never the 94-node hairball. The unfiltered projection is kept for the outline and selection.
+  const fullScene = useMemo(() => projectAtlas(projection, lens, { capabilities }), [capabilities, lens, projection]);
   const scene = useMemo(() => {
-    const projected = projectAtlas(projection, lens, { capabilities });
-    const { nodes: placed } = layoutAtlasNodes(projected.nodes);
-    return { ...projected, nodes: placed };
-  }, [capabilities, lens, projection]);
+    const stage = canvasArchetypeScene(fullScene);
+    const { nodes: placed } = layoutAtlasNodes(stage.nodes);
+    return { ...stage, nodes: placed };
+  }, [fullScene]);
   const markAtlasArrivals = useAtlasArrivalTracker(ventureId, Boolean(projection));
   const [nodes, setNodes, onNodesChange] = useNodesState<AtlasNode>(scene.nodes);
   const [edges, setEdges] = useEdgesState(scene.edges);
@@ -172,20 +178,38 @@ export function VentureAtlas({
     },
   })), [altitude, cameraFocusedId, enterDive, focusNode, focusedTrace, nodes, onSelectionChange, onWallOpenChange, readOnly, selectNode, selectedNodeId]);
 
+  // The inspector (in FirmApp, outside this tree) asks to open an effort's full run record — the Dive
+  // near-detail surface — via a custom event. Keeping Dive here (it owns the atlas remount + camera)
+  // while the trigger lives on the docked inspector keeps the effort card resting on the stage.
+  useEffect(() => {
+    const onDiveRequest = (event: Event) => {
+      const betId = (event as CustomEvent<{ betId?: string }>).detail?.betId;
+      if (betId) enterDive(`bet:${betId}`);
+    };
+    window.addEventListener("drover:dive-effort", onDiveRequest);
+    return () => window.removeEventListener("drover:dive-effort", onDiveRequest);
+  }, [enterDive]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof Element && target.matches("input, textarea, [contenteditable='true']")) return;
       if (event.key.toLowerCase() === "o") { event.preventDefault(); setOutlineOpen((open) => !open); }
       else if (event.key.toLowerCase() === "n" && !readOnly) { event.preventDefault(); setMutationDraft({ kind: "create", point: { x: 760, y: 440 } }); }
+      // Fit-the-whole-venture and the legend are keyboard functions now that the floating control
+      // cluster is cut (composite has no stage chrome). "f" reframes the whole field; "l" toggles the
+      // legend panel.
+      else if (event.key.toLowerCase() === "f") { event.preventDefault(); fitWhole(); onSelectionChange(null); }
+      else if (event.key.toLowerCase() === "l") { event.preventDefault(); setLegendOpen((open) => !open); }
       else if (event.key === "Escape") {
+        if (legendOpen) { setLegendOpen(false); return; }
         if (diveBetId) returnFromDive(); else if (connectionSourceId) setConnectionSourceId(null); else if (mutationDraft) setMutationDraft(null); else if (machineryId) setMachineryId(null); else if (outlineOpen) setOutlineOpen(false);
         else if (cameraFocusedId) unfocus(); else onSelectionChange(null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cameraFocusedId, connectionSourceId, diveBetId, machineryId, mutationDraft, onSelectionChange, outlineOpen, readOnly, returnFromDive, selectedNodeId, unfocus]);
+  }, [cameraFocusedId, connectionSourceId, diveBetId, fitWhole, legendOpen, machineryId, mutationDraft, onSelectionChange, outlineOpen, readOnly, returnFromDive, selectedNodeId, unfocus]);
 
   const applyMutation = useCallback(async (operations: ArchitectureMutationOperation[], reason: string, inverse: ArchitectureMutationOperation[]) => {
     const result = await mutation.apply(operations, reason);
@@ -229,12 +253,12 @@ export function VentureAtlas({
       {loading && !projection ? <div className="venture-atlas-loading-overlay" role="status">Loading the venture map…</div> : null}
       {stale || error ? <div className="venture-atlas-stale" role="status">{error && !projection ? "The venture map is unavailable. Durable work remains visible without grouping." : "Showing the last coherent view. External truth and consequential changes wait for a fresh connection."}</div> : null}
       <AtlasCanvas nodes={decoratedNodes} edges={edges} altitude={altitude} onInit={(instance) => { initializeCamera(instance); syncCameraSelection(selectedNodeId); }} onMoveEnd={handleCameraMoveEnd} onNodesChange={onNodesChange} onPaneClick={() => onSelectionChange(null)} onPaneDoubleClick={() => undefined} onConnect={() => undefined} onDropItem={() => undefined} />
-      <div className="atlas-controls" aria-label="Atlas controls">
-        {!readOnly ? <Button type="button" variant="secondary" size="sm" onClick={() => setMutationDraft({ kind: "create", point: { x: 760, y: 440 } })}><Sparkles aria-hidden="true" /> Thought <kbd>N</kbd></Button> : null}
-        <Button className="atlas-outline-toggle" type="button" variant="secondary" size="sm" aria-expanded={outlineOpen} aria-controls={outlineOpen ? "atlas-outline-panel" : undefined} onClick={() => setOutlineOpen((open) => !open)}><ListTree aria-hidden="true" /> Outline <kbd>O</kbd></Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => { fitWhole(); onSelectionChange(null); }}><Focus aria-hidden="true" /> Whole venture</Button>
-        <AtlasLegendToggle open={legendOpen} onToggle={() => setLegendOpen((open) => !open)} />
-      </div>
+      {/* No floating stage chrome — the composite carries no altitude switcher, mode selector, or
+          control cluster (contract §3: modes and named-altitude controls are cut). The outline (⌘O /
+          "o"), fit-to-whole (Escape), thought-capture ("n"), and legend stay as keyboard functions
+          and off-stage panels; nothing floats over the canvas at rest. A single screen-reader-only
+          control keeps the outline discoverable without keyboard-map knowledge (a11y). */}
+      <button type="button" className="atlas-outline-sr-toggle" aria-expanded={outlineOpen} aria-controls={outlineOpen ? "atlas-outline-panel" : undefined} onClick={() => setOutlineOpen((open) => !open)}>{outlineOpen ? "Close" : "Open"} the venture outline</button>
       <AtlasLegend open={legendOpen} onClose={() => setLegendOpen(false)} />
       <ArchitectureProposalSurface
         ventureId={ventureId}
@@ -246,7 +270,7 @@ export function VentureAtlas({
       />
       {connectionSourceId ? <div className="atlas-connect-status" role="status">Choose another architecture element to connect. Escape cancels.</div> : null}
       {projection && omissionSummary(projection, Boolean(cameraFocusedId)) ? <div data-atlas-omissions className="atlas-omissions">{omissionSummary(projection, true)}</div> : null}
-      {projection ? <AtlasOutline open={outlineOpen} nodes={decoratedNodes} selectedId={selectedNodeId} onSelect={(id, focus) => focus ? focusNode(id) : selectNode(id)} onClose={() => setOutlineOpen(false)} /> : null}
+      {projection ? <AtlasOutline open={outlineOpen} nodes={fullScene.nodes} selectedId={selectedNodeId} onSelect={(id, focus) => focus ? focusNode(id) : selectNode(id)} onClose={() => setOutlineOpen(false)} /> : null}
       {machineryId && projection ? <AtlasMachinery nodeId={machineryId} projection={projection} lens={lens} onClose={() => setMachineryId(null)} /> : null}
       {mutationDraft ? <ArchitectureMutationPreview key={mutationDraft.kind} draft={mutationDraft} busy={mutation.busy || campaignBusy} error={mutation.error || campaignError} onCancel={() => setMutationDraft(null)} onCreate={(name) => {
         const id = stableId("arch"); void applyMutation([{ op: "create-element", element: { id, role: "concept", name, provenance: { kind: "founder-authored", createdAt: new Date().toISOString() } } }], `Placed “${name}” in the venture architecture.`, [{ op: "remove-element", elementId: id }]);

@@ -14,6 +14,9 @@ Founder-authorized autonomous build. Fable orchestrates only; every unit of work
 - Nothing outbound is sent by anyone: the Gmail send port, if reached (P6), is wired but proven with founder-entered outcomes only, per contract §Phase 6.
 - Git: work only on branch `ade`. Stash `stranger-changes-before-ade-run` holds pre-run foreign edits; never pop or drop it.
 
+## Topology change, founder-directed 2026-07-16 morning ("run more in parallel")
+Serial chain trimmed to UI-dependent phases in the main tree (P2 → P3 → P7). P4+P5, P6, P8, P9 build concurrently in isolated worktrees off checkpoint c0400e1, each committing to `lane/p4p5|p6|p8|p9`. Integration pass after both complete: merge lanes into `ade` in dependency order (p4p5, p6, p8, p9), `npm test` after each merge, then one visual verification sweep across all phase acceptance criteria, then the briefing.
+
 ## Morning deliverables
 - The app running from branch `ade` (`npm start`, or `npm run app` if P9 completed).
 - `docs/design/ade-morning-briefing.html` — per-phase: what shipped, test output, screenshots, verifier verdict, unmet criteria stated unmet. Plus how-to-test walkthrough for the founder.

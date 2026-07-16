@@ -378,8 +378,45 @@
 .venture-atlas-stale { position: absolute; top: var(--space-3); left: 50%; z-index: 12; translate: -50% 0; padding: 7px 12px; border: 1px solid var(--gap); border-radius: var(--r-md); background: var(--surface); color: var(--ink-2); font-size: var(--text-meta); box-shadow: var(--shadow-card); }
 .venture-atlas:has(.atlas-return-band) .venture-atlas-stale { top: 86px; }
 
-.atlas-controls { position: absolute; top: var(--space-3); right: var(--space-3); z-index: 14; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-pop); }
-.atlas-controls kbd { min-width: 18px; padding: 1px 4px; border: 1px solid var(--line-2); border-radius: 4px; background: var(--canvas); color: var(--muted); font-family: var(--sans); font-size: var(--text-xs); text-align: center; }
+/* The composite carries no floating stage chrome — the altitude/mode control cluster is cut
+   (contract §3). The outline stays reachable by keyboard ("o") and, for discoverability without a
+   keymap, one screen-reader-only toggle that never paints over the canvas. */
+.atlas-outline-sr-toggle { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+.atlas-outline-sr-toggle:focus-visible { position: absolute; top: var(--space-3); right: var(--space-3); z-index: 14; width: auto; height: auto; margin: 0; padding: 6px 12px; overflow: visible; clip: auto; clip-path: none; border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--card-raised); color: var(--ink); box-shadow: var(--shadow-pop); }
+
+/* ---- CREW NODE (teammate on stage) — the composite's face + presence + now-doing ---- */
+.atlas-crew { width: 138px; }
+.atlas-crew-button { display: flex; flex-direction: column; align-items: center; gap: 0; width: 138px; padding: 0; border: none; background: none; cursor: pointer; text-align: center; }
+.atlas-crew .cr-av { position: relative; width: 46px; height: 46px; border-radius: 50%; box-shadow: var(--shadow-card), 0 0 0 2px var(--card-raised); transition: transform var(--dur-fast, 140ms) ease, box-shadow var(--dur-fast, 140ms) ease; }
+.atlas-crew .cr-av .crew-face { width: 46px; height: 46px; border-radius: 50%; overflow: hidden; }
+.atlas-crew-button:hover .cr-av { transform: translateY(-2px); box-shadow: var(--shadow-lift, var(--shadow-pop)), 0 0 0 2px var(--card-raised); }
+.atlas-crew[data-selected="true"] .cr-av { box-shadow: var(--shadow-lift, var(--shadow-pop)), 0 0 0 2px var(--card-raised), 0 0 0 4px rgba(88,122,95,0.18); }
+.atlas-crew .cr-presence { position: absolute; right: 0; bottom: 0; width: 13px; height: 13px; border-radius: 50%; background: var(--green-2); box-shadow: 0 0 0 2.5px var(--paper); display: grid; place-items: center; }
+.atlas-crew .cr-presence::after { content: ""; width: 4.5px; height: 4.5px; border-radius: 50%; background: #eef4ec; }
+.atlas-crew .cr-presence.idle { background: var(--ink-4-warm, #a8a498); }
+.atlas-crew .cr-presence.asking { background: var(--amber); }
+.atlas-crew .cr-presence.working::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 1.5px solid var(--green-3, #6f8f75); opacity: 0.5; animation: atlas-crew-pulse 2.4s ease infinite; }
+@keyframes atlas-crew-pulse { 0% { transform: scale(0.7); opacity: 0.6; } 70% { transform: scale(1.5); opacity: 0; } 100% { opacity: 0; } }
+.atlas-crew .cr-name { margin-top: 6px; font-size: 12px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.atlas-crew .cr-doing { margin-top: 4px; max-width: 138px; padding: 3px 9px; border: 1px solid var(--green-line); border-radius: 7px; background: var(--green-tint); color: var(--green); font-size: 10.5px; line-height: 1.3; }
+.atlas-crew .cr-doing.idle { color: var(--ink-3); background: var(--paper-2); border-color: var(--line-2); }
+.atlas-crew .cr-doing.asking { color: var(--amber-ink); background: var(--amber-soft); border-color: var(--amber-line); }
+@media (prefers-reduced-motion: reduce) { .atlas-crew .cr-presence.working::before { animation: none; } }
+
+/* ---- CAPABILITY NODE (instrument on stage) — the composite's icon well + label + on/off ---- */
+.atlas-capability { width: 178px; }
+.atlas-capability-button { display: flex; align-items: center; gap: 10px; width: 178px; padding: 11px 13px; border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--card-resting); box-shadow: var(--shadow-card); cursor: pointer; text-align: left; transition: box-shadow var(--dur-fast, 140ms) ease, border-color var(--dur-fast, 140ms) ease; }
+.atlas-capability-button:hover { box-shadow: var(--shadow-lift, var(--shadow-pop)); }
+.atlas-capability[data-selected="true"] .atlas-capability-button { border-color: var(--green-2); box-shadow: var(--shadow-lift, var(--shadow-pop)), 0 0 0 3px rgba(88,122,95,0.14); }
+.atlas-capability .cap-icon { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: var(--r-sm); }
+.atlas-capability .cap-icon svg { width: 15px; height: 15px; }
+.atlas-capability .cap-icon.on { background: var(--green-soft, #e0e8de); color: var(--green); }
+.atlas-capability .cap-icon.off { background: var(--paper-2); color: var(--ink-4-warm, #a8a498); }
+.atlas-capability .cap-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.atlas-capability .cap-label { font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; color: var(--ink); }
+.atlas-capability .cap-state { font-family: var(--font-mono, monospace); font-size: 9.5px; letter-spacing: 0.02em; }
+.atlas-capability .cap-state.on { color: var(--green-2); }
+.atlas-capability .cap-state.off { color: var(--ink-4-warm, #a8a498); }
 
 .atlas-legend { position: absolute; bottom: 128px; left: 202px; z-index: 15; width: 260px; max-height: 340px; overflow-y: auto; padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-pop); }
 .atlas-legend header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
@@ -552,14 +589,14 @@
 
 .atlas-intent-node {
   display: flex;
-  width: 280px;
-  height: 280px;
+  width: 208px;
+  height: 208px;
   box-sizing: border-box;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: var(--space-2);
-  padding: 0 42px;
+  gap: var(--space-1);
+  padding: 0 26px;
   border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
   border-radius: 50%;
   background: radial-gradient(circle at 42% 34%, #f6f3ec, #ece7de 68%, #e6e0d6);
@@ -593,41 +630,94 @@
 }
 .venture-atlas:has(.atlas-proposal-surface) .atlas-legend { display: none; }
 
-.atlas-bet-node {
-  width: 180px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: 0 5px 20px color-mix(in srgb, var(--ink) 8%, transparent);
-  color: var(--ink);
+/* ── EFFORT CARD ── the workhorse node, lifted from composite .effort. Warm raised card on paper,
+   content title, draft chip, instrument footer with faces. Selected keeps its resting size; detail
+   lives in the inspector, not an inline balloon (composite §effort; fixes the left-clip containment
+   bug). Width matches the composite 204px so the collision engine's footprint stays accurate. */
+.atlas-effort {
+  width: 204px;
+  color: var(--ink-warm);
 }
-.atlas-bet-node.atlas-element[data-kind="bet"] { width: 180px; }
-.atlas-bet-node[data-expanded="true"] { width: 566px; box-shadow: var(--shadow-pop); }
-.atlas-bet-node.atlas-element[data-kind="bet"][data-expanded="true"] { width: 566px; }
-.atlas-bet-node[data-expanded="true"][data-orbit-side="left"] { transform: translateX(-434px); }
-.atlas-bet-node[data-band="settled"] { border-color: color-mix(in srgb, var(--proven) 48%, var(--line)); }
-.atlas-bet-node[data-band="approaching-wall"] { border-right: 3px solid var(--gap); }
-.atlas-bet-summary {
-  display: flex;
+.atlas-effort.atlas-element[data-kind="bet"] { width: 204px; }
+.atlas-effort-card {
+  display: block;
   width: 100%;
-  min-height: 104px;
   box-sizing: border-box;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px;
-  border: 0;
-  background: transparent;
+  overflow: hidden;
+  border: 1px solid var(--line-2-warm);
+  border-radius: var(--r-card);
+  background: var(--card-raised);
+  box-shadow: var(--sh-rest);
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition: box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
-.atlas-bet-summary:focus-visible { outline: 2px solid var(--link); outline-offset: -3px; }
-.atlas-bet-summary > span { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.atlas-bet-summary > span small { overflow: hidden; color: var(--ink-3); font-size: var(--text-meta); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.atlas-bet-summary > span em { color: var(--ink-3); font-size: var(--text-xs); font-style: normal; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
-.atlas-bet-summary > strong { max-width: 46ch; overflow-wrap: normal; hyphens: none; font-size: var(--text-md); line-height: var(--leading-tight); text-wrap: balance; }
-.atlas-bet-node[data-expanded="false"] .atlas-bet-summary > strong { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+@media (hover: hover) {
+  .atlas-effort-card:hover { box-shadow: var(--sh-lift); transform: translateY(-2px); }
+}
+.atlas-effort[data-tone="underway"] .atlas-effort-card { border-color: var(--green-line); }
+.atlas-effort[data-tone="needs"] .atlas-effort-card { border-color: var(--amber-line); }
+.atlas-effort[data-tone="settled"] .atlas-effort-card { opacity: 0.62; filter: saturate(0.78); }
+.atlas-effort[data-expanded="true"] .atlas-effort-card {
+  border-color: var(--green-2);
+  box-shadow: var(--sh-lift), 0 0 0 3px rgba(88,122,95,0.14);
+}
+.atlas-effort-card:focus-visible { outline: 2px solid var(--green-2); outline-offset: 3px; }
+
+.atlas-effort .e-body { display: block; padding: 13px 15px 12px; }
+.atlas-effort .e-kicker {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: var(--track-mono); text-transform: uppercase;
+  color: var(--ink-3-warm);
+}
+.atlas-effort .e-kicker .kdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); flex: none; }
+.atlas-effort[data-tone="needs"] .e-kicker { color: var(--amber); }
+.atlas-effort[data-tone="needs"] .e-kicker .kdot { background: var(--amber); }
+.atlas-effort[data-tone="settled"] .e-kicker .kdot { background: var(--ink-4-warm); }
+.atlas-effort .e-title {
+  display: block; font-size: 14px; font-weight: 600; color: var(--ink-warm);
+  line-height: var(--leading-tight); letter-spacing: -0.012em; text-wrap: balance;
+}
+.atlas-effort[data-expanded="true"] .e-title { font-size: 15.5px; }
+.atlas-effort .e-summary { display: block; margin-top: 7px; font-size: 12px; color: var(--ink-2-warm); line-height: 1.48; }
+.atlas-effort .e-need {
+  display: flex; align-items: flex-start; gap: 7px; margin-top: 9px; padding: 7px 9px;
+  border-radius: var(--r-well); background: var(--amber-soft); border: 1px solid var(--amber-line);
+  font-size: 11.5px; color: var(--amber-ink); line-height: 1.35;
+}
+.atlas-effort .e-need svg { flex: none; width: 13px; height: 13px; margin-top: 1px; }
+.atlas-effort .e-draft {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 10px;
+  font-family: var(--mono); font-size: 10px; color: var(--ink-2-warm);
+  border: 1px solid var(--line-2-warm); background: var(--card-resting); border-radius: var(--r-chip); padding: 4px 9px;
+  max-width: 100%;
+}
+.atlas-effort .e-draft .stack { position: relative; width: 15px; height: 12px; flex: none; }
+.atlas-effort .e-draft .stack span { position: absolute; width: 11px; height: 9px; border-radius: 2px; border: 1px solid var(--line-2-warm); background: var(--card-raised); }
+.atlas-effort .e-draft .stack span:nth-child(1) { left: 0; top: 3px; }
+.atlas-effort .e-draft .stack span:nth-child(2) { left: 2px; top: 1.5px; }
+.atlas-effort .e-draft .stack span:nth-child(3) { left: 4px; top: 0; background: var(--green-tint); border-color: var(--green-line); }
+.atlas-effort .e-draft b { color: var(--ink-warm); font-weight: 600; }
+.atlas-effort .e-draft-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-effort .e-foot {
+  display: flex; align-items: center; gap: 8px; padding: 9px 15px;
+  border-top: 1px solid var(--hair); background: color-mix(in srgb, var(--card-resting) 55%, transparent);
+}
+.atlas-effort .e-state { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-2-warm); font-weight: 500; }
+.atlas-effort .e-state .sdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); flex: none; }
+.atlas-effort .e-state.needs .sdot { background: var(--amber); }
+.atlas-effort[data-tone="settled"] .e-state .sdot { background: var(--ink-4-warm); }
+.atlas-effort .e-faces { margin-left: auto; display: flex; align-items: center; }
+.atlas-effort .e-faces .face { width: 21px; height: 21px; border-radius: 50%; overflow: hidden; border: 1.5px solid var(--card-raised); margin-left: -6px; flex: none; }
+.atlas-effort .e-faces .face:first-child { margin-left: 0; }
+.atlas-effort .kdot.pulse { position: relative; }
+.atlas-effort .kdot.pulse::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid var(--green-3); opacity: 0.55; animation: atlas-effort-pulse 2.4s var(--ease-out) infinite; }
+@keyframes atlas-effort-pulse { 0% { transform: scale(0.7); opacity: 0.6; } 70% { transform: scale(1.5); opacity: 0; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .atlas-effort .kdot.pulse::after { animation: none; opacity: 0.4; }
+  .atlas-effort-card { transition-duration: 0.01ms; }
+}
 
 .atlas-machinery-glyph { display: flex; align-items: center; gap: var(--space-2); margin-top: auto; color: var(--ink-3); }
 .atlas-machinery-glyph > span { display: flex; align-items: center; gap: 4px; }

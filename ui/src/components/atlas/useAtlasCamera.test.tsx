@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactFlowInstance, Viewport } from "@xyflow/react";
 import type { AtlasNode } from "./atlasTypes";
 import { useAtlasCamera } from "./useAtlasCamera";
@@ -33,6 +33,78 @@ describe("useAtlasCamera", () => {
       configurable: true,
       value: (callback: FrameRequestCallback) => { callback(0); return 1; },
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  it("reveals nodes before hub-centered framing on mount, resize, and fit-whole", async () => {
+    let resize: ResizeObserverCallback | null = null;
+    class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) { resize = callback; }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
+    const canvas = document.createElement("div");
+    canvas.className = "atlas-canvas";
+    Object.defineProperties(canvas, {
+      clientWidth: { configurable: true, value: 1200 },
+      clientHeight: { configurable: true, value: 800 },
+    });
+    canvas.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 1200,
+      bottom: 800,
+      width: 1200,
+      height: 800,
+      toJSON: () => ({}),
+    });
+    document.body.append(canvas);
+
+    const nodes = [node("atlas:intent", -104, -104, 208, 208), node("bet:one", 260, -105, 204, 210)];
+    const flow = flowInstance(nodes, { x: 0, y: 0, zoom: 0.8 });
+    const { result } = renderHook(() => useAtlasCamera(nodes, "venture-reveal"));
+    const flushFrame = async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+    const expectRevealBeforeFrame = () => {
+      expect(flow.fitView).toHaveBeenCalledWith({ duration: 0 });
+      expect(flow.setViewport).toHaveBeenCalled();
+      expect(flow.fitView.mock.invocationCallOrder[0]).toBeLessThan(flow.setViewport.mock.invocationCallOrder[0]);
+    };
+
+    await act(async () => {
+      result.current.onInit(flow.instance);
+      await flushFrame();
+    });
+    expectRevealBeforeFrame();
+
+    flow.fitView.mockClear();
+    flow.setViewport.mockClear();
+    await act(async () => {
+      resize?.([], {} as ResizeObserver);
+      await flushFrame();
+    });
+    expectRevealBeforeFrame();
+
+    flow.fitView.mockClear();
+    flow.setViewport.mockClear();
+    await act(async () => {
+      result.current.fitWhole();
+      await flushFrame();
+    });
+    expectRevealBeforeFrame();
   });
 
   it("reveals an externally selected exact target and restores the prior camera when selection clears", async () => {

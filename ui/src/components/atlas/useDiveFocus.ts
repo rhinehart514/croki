@@ -23,7 +23,7 @@ export function useDiveFocus(diveId: string | null, setDiveId: Dispatch<SetState
     // focus once: we re-assert focus on the bet's summary across a short window (until the button holds
     // focus, or the founder moves focus elsewhere), so keyboard focus reliably returns to the work that
     // was open rather than being blurred by the post-return re-render.
-    const selector = `.react-flow__node[data-id="${CSS.escape(returnId)}"] .atlas-bet-summary`;
+    const selector = `.react-flow__node[data-id="${CSS.escape(returnId)}"] .atlas-effort-card`;
     let frame = 0;
     let attempts = 0;
     const reassert = () => {

@@ -47,20 +47,36 @@ export type LayoutInput = {
 /** Minimum clear space guaranteed between any two node boxes (composite: every adjacent pair >= 20px). */
 export const LAYOUT_GAP = 22;
 
+/** Minimum clear space around the hub's full resting box. */
+export const HUB_CLEARANCE = 24;
+
+// A hair of slack past LAYOUT_GAP that the separation pass leaves between boxes. Separation converges
+// to *exactly* the target clearance; without this margin a pair can settle at precisely LAYOUT_GAP,
+// which a strict "> LAYOUT_GAP clear space" check (or a box-inflation test) reads as touching under
+// floating-point rounding. Sub-pixel, so it never changes the composition — it only guarantees the
+// clearance is strictly greater than LAYOUT_GAP.
+const SEPARATION_EPS = 0.5;
+
 // Ring radii by kind, in flow units. The hub sits at the origin; everything else rings it outward.
 // Efforts form the primary ring, teammates tuck inside it near the hub, capabilities and records sit
 // further out, and the wall sits on the far edge (outward acts stop there). Tuned so the resting field
 // reads at the composite's proportions: efforts ring the hub closely enough that the whole
 // constellation fills the stage cell at a legible zoom, rather than scattering into empty canvas.
+// Radii tuned so the settled field lands near the composite's near-square plane (~980x764 flow
+// units): efforts ring the 190px hub at ~330 center-to-center (the composite's structure), teammates
+// tuck inside that ring near the hub, capabilities and the wall sit just outside. Kept deliberately
+// tight — a sprawling field forces fitView to zoom far out and shrink every card to illegibility
+// (the failure the composite replaced). At a ~1000-wide field the camera fits a desktop stage at a
+// legible ~0.8 zoom, so a 180px effort renders ~150px.
 const RING_RADIUS: Record<LayoutKind, number> = {
   hub: 0,
-  teammate: 250,
-  effort: 400,
-  architecture: 400,
-  satellite: 400,
-  record: 440,
-  capability: 470,
-  wall: 470,
+  teammate: 205,
+  effort: 330,
+  architecture: 330,
+  satellite: 330,
+  record: 360,
+  capability: 380,
+  wall: 380,
 };
 
 const RADIAL_STRENGTH: Record<LayoutKind, number> = {
@@ -82,20 +98,22 @@ const TICKS = 420;
  *  than the composite's near-square plane — a flatter constellation fills this stage at a legible zoom
  *  instead of being shrunk to fit a too-tall field. Widening X only ever increases clearance, so it
  *  cannot introduce a collision and the separation pass stays exact. */
-const FIELD_ASPECT_BIAS = 2.3;
+const FIELD_ASPECT_BIAS = 1.52;
+// Vertical compression paired with the X stretch — together they reshape the circular constellation
+// into the wide, short ellipse the docked stage cell wants. Compression can create overlaps; the
+// exact separation pass that follows removes them, so this stays collision-free.
+const FIELD_VERTICAL_BIAS = 0.74;
 
 type Size = { width: number; height: number };
 
-// Selected-effort expansion clearance. React Flow positions an effort by its resting 180px box, so
-// its center is 90px from the left edge. Expanded, the 566px DOM box spans centerX - 90 through
-// centerX + 476 (right-side card, grows right), or — via translateX(-434) — centerX - 524 through
-// centerX + 42 (left-side card, grows left). Crucially the card only ever expands *outward* (toward
-// the open side of the field, stamped as orbitSide from the settled position), never both ways at
-// once. So the resting field reserves the expansion envelope ASYMMETRICALLY on the outward side only
-// — not a symmetric 1048px box that balloons the resting constellation into empty canvas. This keeps
-// the selected card collision-free while letting the resting field read at composite density.
-const EFFORT_EXPAND_OUTWARD = 476; // extra width past the resting box on the expansion side
-const EFFORT_EXPAND_HEIGHT = 300; // expanded card height envelope
+// Selected-effort clearance. The selected effort card does NOT balloon inline (composite §9 /
+// firm-journey: the selected card holds its resting width and its full detail opens in the docked
+// inspector, not by growing the card on the stage). So there is no expansion envelope to reserve — a
+// small slack keeps a hair of extra breathing room around the selected card without inflating the
+// resting ring into empty canvas. This is what lets the efforts ring the hub at composite density
+// instead of being blown apart by clearance the selected state never actually needs.
+const EFFORT_EXPAND_OUTWARD = 0; // the card does not grow outward on the stage
+const EFFORT_EXPAND_HEIGHT = 190; // no vertical growth beyond the resting card
 
 type SimNode = SimulationNodeDatum & LayoutInput & {
   collisionWidth: number;
@@ -150,6 +168,10 @@ function boxEdges(node: SimNode, other: SimNode): { left: number; right: number;
   return { left: halfW + reachLeft, right: halfW + reachRight, top: restHalfH, bottom: restHalfH + reachDown };
 }
 
+function pairGap(a: SimNode, b: SimNode): number {
+  return a.kind === "hub" || b.kind === "hub" ? Math.max(LAYOUT_GAP, HUB_CLEARANCE) : LAYOUT_GAP;
+}
+
 function overlaps(a: SimNode, b: SimNode): boolean {
   const ax = a.x ?? 0;
   const bx = b.x ?? 0;
@@ -157,12 +179,13 @@ function overlaps(a: SimNode, b: SimNode): boolean {
   const by = b.y ?? 0;
   const ae = boxEdges(a, b);
   const be = boxEdges(b, a);
+  const gap = pairGap(a, b);
   // Directional AABB: separation on each axis must clear a's extent against b's opposite extent.
   const gapNeededX = ax <= bx ? ae.right + be.left : ae.left + be.right;
   const gapNeededY = ay <= by ? ae.bottom + be.top : ae.top + be.bottom;
   return (
-    Math.abs(ax - bx) < gapNeededX + LAYOUT_GAP &&
-    Math.abs(ay - by) < gapNeededY + LAYOUT_GAP
+    Math.abs(ax - bx) < gapNeededX + gap + SEPARATION_EPS &&
+    Math.abs(ay - by) < gapNeededY + gap + SEPARATION_EPS
   );
 }
 
@@ -183,10 +206,11 @@ function separateBoxes(nodes: SimNode[]): void {
         const by = b.y ?? 0;
         const ae = boxEdges(a, b);
         const be = boxEdges(b, a);
+        const gap = pairGap(a, b);
         const gapNeededX = ax <= bx ? ae.right + be.left : ae.left + be.right;
         const gapNeededY = ay <= by ? ae.bottom + be.top : ae.top + be.bottom;
-        const overlapX = gapNeededX + LAYOUT_GAP - Math.abs(ax - bx);
-        const overlapY = gapNeededY + LAYOUT_GAP - Math.abs(ay - by);
+        const overlapX = gapNeededX + gap + SEPARATION_EPS - Math.abs(ax - bx);
+        const overlapY = gapNeededY + gap + SEPARATION_EPS - Math.abs(ay - by);
         // Push along the axis with the smaller penetration (least work to clear).
         if (overlapX < overlapY) {
           const dir = ax <= bx ? -1 : 1;
@@ -307,14 +331,17 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
   for (let tick = 0; tick < TICKS; tick += 1) simulation.tick();
   simulation.stop();
 
-  // Bias the settled constellation into a wide ellipse so the field matches the ~16:9 desktop stage
-  // cell: a radial layout is naturally circular, which fits a widescreen stage poorly (fitView must
-  // zoom far out to contain a tall field, shrinking every card). Spreading X *outward* (never
-  // compressing Y) widens the field to the stage's aspect while only ever *increasing* the clearance
-  // between nodes — so it can never introduce a collision, and the separation pass stays exact.
+  // Bias the settled constellation into a wide ellipse so the field matches the wide-and-short desktop
+  // stage cell (a docked rail + inspector leave a ~2.4:1 canvas). A radial layout is naturally
+  // circular, which fits that stage poorly — fitView must zoom far out to contain a too-tall field,
+  // shrinking every card to illegibility (the failure the composite replaced). Stretching X and
+  // compressing Y reshapes the circle to the stage's aspect so the field fills it at a legible zoom.
+  // Compression can push a pair into contact, but the exact AABB separation pass runs immediately
+  // after and re-guarantees the >= LAYOUT_GAP clearance, so the ellipse is always collision-free.
   for (const node of sim) {
     if (node.pinned) continue;
     node.x = (node.x ?? 0) * FIELD_ASPECT_BIAS;
+    node.y = (node.y ?? 0) * FIELD_VERTICAL_BIAS;
   }
 
   // Re-derive each effort's expansion direction from its settled side of the field (the hub is pinned
@@ -376,11 +403,11 @@ const GROUP_FRAME_PAD = { x: 40, y: 44 };
 // The browser's measured resting size wins once known. Effort expansion clearance is intentionally
 // separate in COLLISION_SIZE_MINIMUM so it cannot make the inactive field bounds over-zoom.
 const KIND_SIZE: Record<LayoutKind, Size> = {
-  hub: { width: 280, height: 280 },
-  effort: { width: 180, height: 180 },
-  teammate: { width: 210, height: 140 },
-  capability: { width: 210, height: 140 },
-  wall: { width: 230, height: 130 },
+  hub: { width: 208, height: 208 },
+  effort: { width: 204, height: 210 },
+  teammate: { width: 138, height: 118 },
+  capability: { width: 178, height: 62 },
+  wall: { width: 230, height: 150 },
   architecture: { width: 224, height: 160 },
   // Records (concrete/staged work cards) render tall and narrow — match the real DOM so the engine
   // reserves the right footprint and the camera's vertical fit is accurate.

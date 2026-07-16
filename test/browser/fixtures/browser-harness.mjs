@@ -348,10 +348,16 @@ export async function assertDesktopViewports(client, assertFixtureState, { evide
     assert.equal(layout.height, scenario.height);
     assert.equal(layout.reduced, scenario.motion === "reduce");
     assert.ok(layout.rail && layout.canvas, "desktop conversation and canvas must both remain mounted");
-    assert.ok(layout.rail.width >= 360, `conversation compressed below a usable desktop width: ${layout.rail.width}`);
+    // The ADE shell docks the conversation rail at the composite's 336px track (stage-maximal by
+    // design — the stage holds ~85%). The rail element measures the track minus its border, so the
+    // usable-width floor is the composite rail width, not the pre-ADE ≥360 assumption.
+    assert.ok(layout.rail.width >= 320, `conversation compressed below a usable desktop width: ${layout.rail.width}`);
     assert.ok(layout.canvas.width > layout.rail.width, `canvas must remain the larger working plane: ${JSON.stringify({ conversation: layout.rail, canvas: layout.canvas })}`);
     assert.ok(layout.visibleCanvasNodes > 0, `canvas topology exists but no node is visible in the working plane: ${JSON.stringify({ canvas: layout.canvas, firstNode: layout.firstNode })}`);
-    assert.ok(layout.rail.left >= layout.canvas.left && layout.rail.right <= layout.canvas.right, "floating conversation escaped the canvas working plane");
+    // In the ADE docked grid the conversation rail is its own cell to the LEFT of the stage — it no
+    // longer floats inside the canvas (the pre-ADE flex model). The correct invariant is that the two
+    // cells are side by side and never overlap: the rail sits at or before the stage's left edge.
+    assert.ok(layout.rail.right <= layout.canvas.left + 1, `conversation rail overlaps the canvas stage cell: ${JSON.stringify({ rail: layout.rail, canvas: layout.canvas })}`);
     assert.ok(layout.canvas.right <= scenario.width + 1, "canvas escapes the desktop viewport");
     assert.ok(layout.bodyOverflow <= 1, `page has ${layout.bodyOverflow}px horizontal overflow`);
     await assertFixtureState(scenario);

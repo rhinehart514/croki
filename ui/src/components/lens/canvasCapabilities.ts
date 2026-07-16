@@ -4,14 +4,19 @@ import { getCredentials } from "@/api";
 export const CANVAS_ITEM_MIME = "application/x-drover-canvas-item";
 
 export type CanvasCapability = {
-  id: "product-truth" | "product-change" | "gmail";
+  id: "product-truth" | "gmail";
   name: string;
   description: string;
   source: string;
   authority: "read" | "wall";
-  icon: "database" | "git" | "mail";
+  icon: "database" | "mail";
+  connected: boolean;
 };
 
+// The two real ports today, rendered as the composite's warm instruments: the bound product
+// repository (always connected — it is how the crew reads product truth) and Gmail (connected only
+// when the founder has wired the account; shown "not connected" otherwise so the port is visible, not
+// hidden). No invented connectors; unavailable stays honestly unavailable (contract §2.6).
 export function useCanvasCapabilities(repository = "Product repository", refreshKey = 0) {
   const [gmailConnected, setGmailConnected] = useState(false);
 
@@ -29,27 +34,21 @@ export function useCanvasCapabilities(repository = "Product repository", refresh
   return useMemo<CanvasCapability[]>(() => [
     {
       id: "product-truth",
-      name: "Product truth",
+      name: "Product repository",
       description: "Read the bound repository and cite the evidence behind product claims.",
       source: repository,
       authority: "read",
       icon: "database",
+      connected: true,
     },
     {
-      id: "product-change",
-      name: "Product changes",
-      description: "Prepare isolated local changes; applying them still waits for your review.",
-      source: repository,
-      authority: "wall",
-      icon: "git",
-    },
-    ...(gmailConnected ? [{
-      id: "gmail" as const,
+      id: "gmail",
       name: "Gmail",
       description: "Read replies and prepare sends; delivery still waits for your release.",
-      source: "Connected account",
-      authority: "wall" as const,
-      icon: "mail" as const,
-    }] : []),
+      source: gmailConnected ? "Connected account" : "Not connected",
+      authority: "wall",
+      icon: "mail",
+      connected: gmailConnected,
+    },
   ], [gmailConnected, repository]);
 }

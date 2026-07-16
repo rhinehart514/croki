@@ -133,17 +133,21 @@ test("WT6 keyboard journey: picker to exact consequence and one-layer return", a
     await assertVisibleKeyboardFocus(client, "exact work direction");
     await pressKeyboardKey(client, "Enter");
     await client.evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
+    // Selecting an effort keeps the card at its resting size (no inline balloon) and opens its detail
+    // in the docked inspector (composite §9). The card marks itself selected; the inspector carries the
+    // named "Inspect this work" action that reaches the full run record (Dive).
     const unfolded = await client.evaluate(`(() => {
       const node = document.querySelector('.react-flow__node[data-id=${JSON.stringify(BET_SCENE_ID)}]');
       return {
-        expanded: node?.querySelector('.atlas-bet-node')?.getAttribute('data-expanded'),
-        pressed: node?.querySelector('.atlas-bet-summary')?.getAttribute('aria-pressed'),
+        expanded: node?.querySelector('.atlas-effort')?.getAttribute('data-expanded'),
+        pressed: node?.querySelector('.atlas-effort-card')?.getAttribute('aria-pressed'),
         activeClass: document.activeElement?.className?.baseVal || document.activeElement?.className || '',
       };
     })()`);
-    assert.equal(unfolded.expanded, "true", `Enter on the bet's first focus owner did not unfold exact work: ${JSON.stringify(unfolded)}`);
+    assert.equal(unfolded.expanded, "true", `Enter on the effort's focus owner did not select exact work: ${JSON.stringify(unfolded)}`);
+    await waitForDom(client, `Boolean(document.querySelector('.firm-app-inspector .insp-inspect-work'))`, "selecting the effort did not open its detail in the inspector");
 
-    await focusKeyboardTarget(client, (target) => /Inspect this work/i.test(target.name), "the unfolded work has no named keyboard Dive action");
+    await focusKeyboardTarget(client, (target) => /Inspect this work/i.test(target.name), "the inspector has no named keyboard Dive action");
     await pressKeyboardKey(client, "Enter");
     await waitForDom(client, `Boolean(document.querySelector('.atlas-dive'))`, "the named nested action did not enter Dive");
     assert.equal(await client.evaluate(`document.querySelector('.atlas-dive')?.contains(document.activeElement) || false`), true, "Dive entry must move focus into Dive");
@@ -226,9 +230,9 @@ test("WT6 reduced motion settles on Orbit, correction, Dive, and consequence sur
     await assertReducedMotionSettled(client, { context: "document.querySelector('.firm-app-composer')", label: "correction" });
     await assertAxeNoCritical(client, { context: "document.querySelector('.firm-app-composer')", label: "reduced-motion correction" });
 
-    await client.evaluate(`document.querySelector('.react-flow__node[data-id=${JSON.stringify(BET_SCENE_ID)}] .atlas-bet-summary')?.click()`);
-    await waitForDom(client, `Boolean([...document.querySelectorAll('button')].find((entry) => /Inspect this work/i.test(entry.textContent || '')))`, "the reduced-motion Dive action did not render");
-    await client.evaluate(`[...document.querySelectorAll('button')].find((entry) => /Inspect this work/i.test(entry.textContent || ''))?.click()`);
+    await client.evaluate(`document.querySelector('.react-flow__node[data-id=${JSON.stringify(BET_SCENE_ID)}] .atlas-effort-card')?.click()`);
+    await waitForDom(client, `Boolean(document.querySelector('.firm-app-inspector .insp-inspect-work'))`, "the reduced-motion Dive action did not render in the inspector");
+    await client.evaluate(`document.querySelector('.firm-app-inspector .insp-inspect-work')?.click()`);
     await waitForDom(client, `Boolean(document.querySelector('.atlas-dive'))`, "reduced-motion Dive did not render");
     await client.evaluate(`document.querySelector('.atlas-dive [aria-label="Close gate inspector"]')?.click()`);
     await assertReducedMotionSettled(client, { context: "document.querySelector('.atlas-dive')", label: "Dive" });

@@ -170,9 +170,8 @@ describe("FirmLens", () => {
     const trayToggle = screen.getByRole("button", { name: /Canvas tray/i });
     expect(document.getElementById(trayToggle.getAttribute("aria-controls")!)).toHaveAttribute("hidden");
     fireEvent.click(trayToggle);
-    expect(screen.getByRole("region", { name: "Canvas tray" })).toHaveTextContent(/Sable.*Product truth.*Product changes/i);
-    expect(screen.queryByRole("button", { name: /Place Gmail on canvas/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Place Product truth on canvas" }));
+    expect(screen.getByRole("region", { name: "Canvas tray" })).toHaveTextContent(/Sable.*Product repository.*Gmail/i);
+    fireEvent.click(screen.getByRole("button", { name: "Place Product repository on canvas" }));
 
     await waitFor(() => expect(putPlacement).toHaveBeenCalledOnce());
     expect(putPlacement).toHaveBeenCalledWith("v1", expect.objectContaining({
@@ -181,11 +180,15 @@ describe("FirmLens", () => {
     }));
   });
 
-  it("adds Gmail to the tray only when the real connection exists", async () => {
+  it("shows Gmail in the tray as connected only when the real connection exists", async () => {
     getCredentials.mockResolvedValue({ credentials: [{ provider: "gmail" }] });
     render(<FirmLens ventureId="v1" />);
     fireEvent.click(await screen.findByRole("button", { name: /Canvas tray/i }));
-    expect(await screen.findByRole("button", { name: "Place Gmail on canvas" })).toBeTruthy();
+    // Gmail is always a real port on the canvas; the tray reflects the honest connection state, so a
+    // wired credential reads "Connected" rather than the default "Not connected".
+    const gmail = await screen.findByRole("button", { name: "Place Gmail on canvas" });
+    await waitFor(() => expect(gmail).toHaveTextContent(/Connected/i));
+    expect(gmail).not.toHaveTextContent(/Not connected/i);
   });
 
   it("lifts only the ephemeral canvas selection and clears it on the pane", async () => {

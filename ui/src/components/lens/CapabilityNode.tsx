@@ -1,4 +1,4 @@
-import { Database, Mail, ShieldCheck, Split, X, type LucideIcon } from "lucide-react";
+import { Database, Mail, ShieldCheck, X, type LucideIcon } from "lucide-react";
 import type { NodeProps } from "@xyflow/react";
 import type { CanvasAltitude } from "./lensScene";
 import type { CanvasCapability } from "./canvasCapabilities";
@@ -12,13 +12,11 @@ export type CapabilityNodeData = {
 
 const ICONS: Record<CanvasCapability["icon"], LucideIcon> = {
   database: Database,
-  git: Split,
   mail: Mail,
 };
 
 const OUTPUT: Record<CanvasCapability["id"], string> = {
   "product-truth": "Cited product evidence",
-  "product-change": "Isolated prepared changes",
   gmail: "Joined replies and prepared sends",
 };
 

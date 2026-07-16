@@ -1,10 +1,10 @@
 import type { FirmArchitectureProjection, FirmLens } from "@/types";
 import type { AtlasNode, AtlasScene } from "./atlasTypes";
 import { atlasInertData, projectAtlasSemanticLayer } from "./atlasSemanticProjection";
-import { decisionBandForBet, motionLabelForBet } from "./betBand";
+import { decisionBandForBet, effortKicker, effortStateLabel, effortTone, motionLabelForBet } from "./betBand";
 import { projectWorkingTheory } from "./workingTheoryProjection";
 
-type Capability = { id: string; name: string; description: string; authority: "read" | "wall" };
+type Capability = { id: string; name: string; description: string; authority: "read" | "wall"; connected?: boolean };
 
 // The hub anchors the field; the layout engine pins it at the origin and rings everything else
 // around it. These are placeholder coordinates only — every placeable card's real position is
@@ -61,23 +61,45 @@ function pathNameByBet(projection: FirmArchitectureProjection | null, lens: Firm
   return byBet;
 }
 
+// One line of what a teammate is doing right now, and the presence tone that colors the dot/chip.
+// Deterministic (code, not model): a teammate who owns an effort awaiting the founder's read is
+// "asking"; one who owns any live effort is "working"; otherwise idle. This is the composite's crew
+// "now-doing" line ("drawing the taxonomy", "waiting on your read").
+function crewActivity(lens: FirmLens, ref: string): { presence: "working" | "asking" | "idle"; doing: string } {
+  const owned = lens.bets.filter((bet) => bet.teammateRef === ref);
+  const asking = owned.find((bet) => decisionBandForBet(bet, lens) === "approaching-wall" || bet.position === "at-wall");
+  if (asking) return { presence: "asking", doing: "waiting on your read" };
+  const working = owned.find((bet) => bet.position === "live");
+  if (working) {
+    const draft = working.staged[0]?.title?.trim();
+    return { presence: "working", doing: draft ? `on ${working.intent.length > 26 ? "this effort" : working.intent.toLowerCase()}` : "moving this forward" };
+  }
+  return { presence: "idle", doing: "with you on this venture" };
+}
+
 function placedNodes(lens: FirmLens, capabilities: Capability[]) {
   const nodes: AtlasNode[] = [];
   for (const member of lens.crew) {
     const id = `crew:${member.ref}`;
     // Placement is engine-owned; teammates and capabilities are auto-placed by the layout engine
     // (the founder never drags). The placeholder position is overwritten downstream.
-    nodes.push({ id, type: "architectureElement", position: HUB_ANCHOR, draggable: false, data: {
+    const activity = crewActivity(lens, member.ref);
+    nodes.push({ id, type: "atlasCrew", position: HUB_ANCHOR, draggable: false, data: {
       ...atlasInertData("teammate", member.soul?.name?.trim() || member.ref),
       statement: "Working this venture with you", agentRef: member.ref,
+      crewPresence: activity.presence, crewDoing: activity.doing,
     } });
   }
   for (const capability of capabilities) {
     const id = `capability:${capability.id}`;
-    nodes.push({ id, type: "architectureElement", position: HUB_ANCHOR, draggable: false, data: {
+    // Gmail is a wall-authority outbound port that is "connected" only when the founder has wired it;
+    // the bound product repository is a read port that is always connected. The founder-facing state
+    // word is ordinary language (connected / not connected), never authority jargon.
+    const isGmail = /gmail|mail/i.test(capability.id) || /gmail|mail/i.test(capability.name);
+    const connected = capability.authority === "read" || Boolean(capability.connected);
+    nodes.push({ id, type: "atlasCapability", position: HUB_ANCHOR, draggable: false, data: {
       ...atlasInertData("capability", capability.name), statement: capability.description, authority: capability.authority,
-      stateLabel: capability.authority === "wall" ? "Founder-controlled" : "Read only",
-      outputLabel: capability.authority === "wall" ? "Outward actions need your hand" : "Supplies grounded context", verbLabel: "Reach",
+      capabilityConnected: connected, capabilityKind: isGmail ? "gmail" : "repo",
     } });
   }
   return nodes;
@@ -116,13 +138,35 @@ export function projectAtlas(
     data: { ...atlasInertData("intent", namedIntent || "What should change?"), betCount: lens.bets.length, revision: projection?.revision, intentNamed: Boolean(namedIntent), provisional: Boolean(projection?.workingTheory) },
   }];
 
+  const crewNameByRef = new Map(lens.crew.map((member) => [member.ref, member.soul?.name?.trim() || member.ref]));
   for (const bet of lens.bets) {
+    const band = decisionBandForBet(bet, lens);
+    // Attribution as faces: the teammate who owns the effort, plus any who contributed to a draft.
+    // These drive the footer facepile — the firm reads as staffed (composite §effort delogo).
+    const contributorRefs = new Set<string>();
+    if (bet.teammateRef) contributorRefs.add(bet.teammateRef);
+    for (const draft of bet.staged) {
+      for (const ref of [...(draft.ownerRefs ?? []), ...(draft.contributorRefs ?? [])]) contributorRefs.add(ref);
+    }
+    const teammateRefs = [...contributorRefs];
+    const draftCount = bet.staged.length;
+    // Titled by content, never the staged-… ID (contract §4). The ID lives under a disclosure in the
+    // inspector — here the founder sees what the draft *is*. When the single draft carries no content
+    // title yet, the chip shows just "1 draft" (no filler word); attribution reads from the facepile.
+    const draftTitle = draftCount === 1 ? (bet.staged[0]?.title?.trim() || null) : null;
     nodes.push({
       id: `bet:${bet.id}`, type: "atlasBet", position: HUB_ANCHOR, selectable: true, draggable: false,
       data: {
         ...atlasInertData("bet", bet.intent), bet,
         motionLabel: motionLabelForBet(bet, pathByBet),
-        decisionBand: decisionBandForBet(bet, lens),
+        decisionBand: band,
+        // Founder-facing card copy — ordinary words only (the raw band token stays as a seam above).
+        effortKicker: effortKicker(band),
+        effortTone: effortTone(band),
+        stateLabel: effortStateLabel(bet, band),
+        draftCount,
+        draftTitle,
+        teammates: teammateRefs.map((ref) => ({ ref, name: crewNameByRef.get(ref) ?? ref })),
         // orbitSide is stamped from the engine's settled position (which side of the field center
         // the card lands) so the in-place expansion grows toward open space — see the engine adapter.
         workflow: bet.workflow ?? [], machineryCounts: bet.machineryCounts ?? [],

@@ -157,7 +157,9 @@ test("overnight return: held work, attributable proof, and offline recovery rema
 
     await setNetworkOffline(client, false);
     await client.evaluate(`[...document.querySelectorAll('.firm-freshness button')].find((entry) => /retry now/i.test(entry.textContent || ''))?.click()`);
-    await waitForDom(client, `/Current/i.test(document.querySelector('.firm-freshness')?.textContent || '')`, "the Atlas did not recover after connectivity returned");
+    // Recovery is signalled by the freshness warning clearing (contract §2.8: the founder surface
+    // renders the live state — there is no persistent "Current" chip; a cleared warning is recovery).
+    await waitForDom(client, `!/Offline|Reconnecting/i.test(document.querySelector('.firm-freshness')?.textContent || '')`, "the Atlas did not recover after connectivity returned");
     await waitForDom(client, `[...document.querySelectorAll('.firm-wall-review-actions button')].some((button) => !button.disabled)`, "founder decisions did not recover after reconnect");
     const recovered = await client.evaluate(`(() => ({ target: document.querySelector('.firm-app-direction-target')?.textContent || '', draft: document.querySelector('.firm-app-composer textarea')?.value }))()`);
     assert.deepEqual(recovered, { target: targetBeforeWall, draft: recoveryDraft });

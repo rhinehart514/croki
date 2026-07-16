@@ -79,6 +79,8 @@
   --r-2xl: 24px;
   --shadow-sm: 0 1px 2px rgba(38, 33, 26, 0.05);
   --shadow-card: 0 1px 0 rgba(38, 33, 26, 0.03), 0 4px 12px -7px rgba(38, 33, 26, 0.16);
+  /* selected / hover-raised node lift — the composite's warm two-part shadow (never neutral grey) */
+  --shadow-lift: 0 2px 6px rgba(38, 37, 31, 0.08), 0 20px 50px rgba(38, 37, 31, 0.13);
   --shadow-pop: 0 4px 12px rgba(38, 33, 26, 0.07), 0 12px 32px -10px rgba(38, 33, 26, 0.18);
   --shadow-modal: 0 8px 24px -12px rgba(38, 33, 26, 0.22), 0 24px 64px -20px rgba(38, 33, 26, 0.28);
   --shadow-rail: 4px 0 18px -14px rgba(38, 33, 26, 0.22);
@@ -109,6 +111,65 @@
   --input: var(--line-2);
   --ring: var(--ink);
   --radius: var(--r-md);
+
+  /* ── ADE composite token layer (lifted byte-for-byte from ade-frame-round2/composite.html;
+     composite wins on look). These are the authored surface the node archetypes and shell draw
+     from. Old names above stay as compatibility aliases during the transition. ── */
+  --paper: #eae6df;      /* room / app background */
+  --paper-2: #e3ded5;    /* recessed / inset well */
+  --paper-3: #ded8cd;    /* deepest recess */
+  --card-resting: #f4f1ea;   /* resting card / chip */
+  --card-raised: #faf8f3;    /* lifted card (effort, handoff, inspector draft) */
+  --card-warm: #f6f2e9;      /* warm instrument surface */
+
+  --ink-warm: #26251f;   /* composite primary ink */
+  --ink-2-warm: #4a4840;
+  --ink-3-warm: #78756a;
+  --ink-4-warm: #a8a498;
+  --ink-5-warm: #bdb9ac;
+  --line-warm: #d8d2c6;
+  --line-2-warm: #cbc4b5;
+  --line-soft: #e0dacf;
+  --hair: #e2dcd0;
+
+  /* muted green — living / connected / affirm */
+  --green: #3f5c46;
+  --green-2: #587a5f;
+  --green-3: #6f8f75;
+  --green-soft: #e0e8de;
+  --green-tint: #eef2ea;
+  --green-line: #c4d4c2;
+
+  /* one amber — needs-you only, never decorative */
+  --amber: #9a6b2f;
+  --amber-ink: #7a5322;
+  --amber-soft: #f0e4d0;
+  --amber-line: #e4d2ae;
+  --clay: #a86b52;
+
+  /* crew accents — a distinct person per teammate */
+  --yara: #587a5f;   --yara-soft: #e2ebe1;
+  --mira: #8a6d34;   --mira-soft: #efe4cf;
+  --soren: #4f6d86;  --soren-soft: #dfe7ed;
+  --kai: #8a5a63;    --kai-soft: #eddfe1;
+
+  /* warm-tinted shadow ladder — every shadow is ink-brown, never neutral grey */
+  --sh-rest: 0 1px 2px rgba(38,37,31,0.05), 0 8px 22px rgba(38,37,31,0.07);
+  --sh-lift: 0 2px 6px rgba(38,37,31,0.08), 0 20px 50px rgba(38,37,31,0.13);
+  --sh-hub:  0 3px 8px rgba(38,37,31,0.09), 0 24px 60px rgba(38,37,31,0.13);
+  --sh-chip: 0 1px 2px rgba(38,37,31,0.04);
+  --sh-panel: -18px 0 44px rgba(38,37,31,0.045);
+  --sh-rail-edge: 18px 0 44px rgba(38,37,31,0.04);
+  --inset-top: inset 0 1px 0 rgba(255,255,255,0.5);
+
+  --font-serif-voice: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --track-mono: 0.09em;
+
+  /* composite radii — the effort/composer/inspector-draft land at 13, capability at 11 */
+  --r-card: 13px;
+  --r-cap: 11px;
+  --r-well: 8px;
+  --r-chip: 7px;
 }
 
 @theme inline {

@@ -124,6 +124,14 @@ function keepAtlasChromeClear(instance: ReactFlowInstance<AtlasNode>) {
   return instance.setViewport({ x, y, zoom }, { duration: 0 });
 }
 
+// React Flow keeps measured nodes hidden until fitView runs. Use it only as the reveal trigger, then
+// immediately restore the atlas's authoritative hub-centered framing and chrome clearance.
+function revealThenFrame(instance: ReactFlowInstance<AtlasNode>) {
+  return Promise.resolve(instance.fitView({ duration: 0 }))
+    .then(() => fitFieldToStage(instance))
+    .then(() => keepAtlasChromeClear(instance));
+}
+
 export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
   const instanceRef = useRef<ReactFlowInstance<AtlasNode> | null>(null);
   const nodesRef = useRef(nodes);
@@ -177,17 +185,34 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
   useEffect(() => {
     const instance = instanceRef.current;
     if (!instance || !readyRef.current) return;
-    // Double-rAF so React Flow has measured the freshly-rendered nodes before we fit — a fit against
-    // unmeasured nodes (right after a dive folds back and the atlas re-renders) frames the wrong box.
-    let inner = 0;
-    const frame = window.requestAnimationFrame(() => {
-      inner = window.requestAnimationFrame(() => {
-        const target = targetIdRef.current;
-        if (target) frameTarget(target);
-        else void Promise.resolve(fitFieldToStage(instance)).then(() => keepAtlasChromeClear(instance));
-      });
-    });
-    return () => { window.cancelAnimationFrame(frame); window.cancelAnimationFrame(inner); };
+    // Fit only once React Flow has actually measured the freshly-rendered nodes. React Flow keeps a
+    // node `visibility:hidden` until its DOM is measured, and a manual setViewport does not trigger
+    // that reveal — so if we fit before measurement completes, the cards can stay invisible (a real
+    // race seen at some viewport sizes on a cold mount). We poll a few frames for measurement; the
+    // moment it lands we run React Flow's own fitView once (this is the call that reveals the measured
+    // nodes) and then refine with the hub-centered framing. If measurement never lands within the
+    // budget we fit anyway against fallback sizes rather than hang.
+    let raf = 0;
+    let cancelled = false;
+    const measured = () => {
+      const rendered = instance.getNodes();
+      return rendered.length > 0 && rendered.every((node) => (node.measured?.width ?? node.width ?? 0) > 0);
+    };
+    const settle = () => {
+      const target = targetIdRef.current;
+      if (target) { frameTarget(target); return; }
+      // React Flow's fitView reveals any still-hidden measured nodes; the hub-centered fit then frames.
+      void revealThenFrame(instance);
+    };
+    let attempts = 0;
+    const tick = () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (measured() || attempts >= 8) { settle(); return; }
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => { cancelled = true; window.cancelAnimationFrame(raf); };
   }, [frameTarget, nodes]);
 
   useEffect(() => {
@@ -204,8 +229,7 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
         if (!readyRef.current) return;
         const target = targetIdRef.current;
         if (target) frameTarget(target);
-        else void Promise.resolve(fitFieldToStage(instance))
-          .then(() => keepAtlasChromeClear(instance));
+        else void revealThenFrame(instance);
       });
     };
     const observer = new ResizeObserver(reframe);
@@ -257,10 +281,8 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
       // remounts the atlas) is stale against the current layout and would leave the field off-stage.
       // Session pan/zoom still persists via onMoveEnd for in-session continuity; cross-mount framing
       // is owned by fitView. (A durable "return to my frame" is a later camera-persistence concern.)
-      const opening = fitFieldToStage(instance);
-      void Promise.resolve(opening)
+      void revealThenFrame(instance)
         .then(() => new Promise<void>((resolve) => { window.requestAnimationFrame(() => resolve()); }))
-        .then(() => keepAtlasChromeClear(instance))
         .then(() => {
         readyRef.current = true;
         setCameraReady(true);
@@ -340,7 +362,7 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     // "Whole venture" frames the entire engine-placed field (efforts, wall, returned reality) into
     // the stage cell — excluding the decorative background field, which would otherwise dominate the
     // fit and shove the real cards off to one side.
-    if (instanceRef.current) void fitFieldToStage(instanceRef.current);
+    if (instanceRef.current) void revealThenFrame(instanceRef.current);
   }, []);
 
   return {

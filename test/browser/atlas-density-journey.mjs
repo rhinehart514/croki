@@ -86,7 +86,9 @@ test("living venture atlas: dense architecture stays canvas-like across semantic
       })),
       consequenceLegibility: Object.fromEntries(['bet', 'work', 'outcome'].map((kind) => {
         const element = document.querySelector('.atlas-element[data-kind="' + kind + '"]');
-        const title = element?.querySelector('strong');
+        // The effort card is the composite .effort: its content title is a span (.e-title), not a
+        // <strong>. Other kinds keep their <strong> title. Fall back to whichever this kind renders.
+        const title = element?.querySelector('.e-title, strong');
         const style = element ? getComputedStyle(element) : null;
         // Structural title size (un-zoomed): fitView frames the whole engine-placed field, so on-screen
         // size scales with camera zoom (zoom-responsive reading is the design). The intrinsic title size

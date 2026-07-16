@@ -18,6 +18,9 @@ import { Button } from "@/components/ui/button";
 import type { CanvasSelection } from "@/components/firm/GoalComposer";
 import { targetArchitecture, targetBet, targetTeammates } from "@/components/firm/directionTarget";
 import { VenturePicker } from "@/components/firm/VenturePicker";
+import { InspectorEffort } from "@/components/firm/InspectorEffort";
+import { inspectorHeader } from "@/components/firm/inspectorContent";
+import { decisionBandForBet, effortStateLabel } from "@/components/atlas/betBand";
 import { TeammateRail } from "@/components/firm/TeammateRail";
 import { FirmWorkbenchCanvas } from "@/components/firm/FirmWorkbenchCanvas";
 import "@/styles/firm-app.css";
@@ -45,7 +48,12 @@ export default function FirmApp() {
   const [architecture, setArchitecture] = useState<FirmArchitectureProjection | null>(null);
   const { lens, messages, activeDrives, connection, refresh, setLens } = useFirmConnection(venture?.id ?? null);
   const stale = connection.phase === "stale" || connection.phase === "offline";
-  const readOnly = connection.phase !== "fresh";
+  // "read-only" is the web dev/test harness's expected phase (no founder host to sign writes). It is
+  // NOT a founder-facing degraded state (contract §2.8): the founder surface renders live, the
+  // composer stays enabled, no degraded chrome. A write still fails server-side without the host
+  // capability — the authority model is untouched — but the UI never pre-disables on the harness's
+  // account. Only a genuine stale/offline connection holds the surface read-only.
+  const readOnly = connection.phase === "stale" || connection.phase === "offline";
   const [returnCursor, setReturnCursor] = useState<string | null>(null);
   const returnAccount = useMemo(
     () => lens ? buildReturnBrief(lens, messages, returnCursor, architecture) : null,
@@ -57,43 +65,21 @@ export default function FirmApp() {
   // It opens when the founder selects something on the stage and closes to give the stage full
   // width. Copy is ordinary founder language; the deep content views (payload, record) are Phase 2.
   const inspectorOpen = Boolean(canvasSelection) && !wallOpen;
-  const inspectorContent = useMemo(() => {
-    if (!canvasSelection) return { kicker: "Selection", title: "Nothing selected", note: "" };
-    if (canvasSelection.theoryId) {
-      return {
-        kicker: "Drover’s current read",
-        title: canvasSelection.theoryLabel ?? "A provisional idea",
-        note: "A provisional read of the venture — it changes as real work and evidence return.",
-      };
-    }
-    if (canvasSelection.architectureId) {
-      const element = architecture?.elements.find((candidate) => candidate.id === canvasSelection.architectureId);
-      return {
-        kicker: "Venture direction",
-        title: element?.name ?? "Selected direction",
-        note: element?.does ?? "A part of how this venture creates and reaches value.",
-      };
-    }
-    if (canvasSelection.betId) {
-      const bet = lens?.bets.find((candidate) => candidate.id === canvasSelection.betId);
-      return {
-        kicker: canvasSelection.workRef ? "Draft" : "Effort",
-        title: bet?.intent ?? "Selected effort",
-        note: canvasSelection.workRef
-          ? "A draft prepared for this. The exact payload and its record open here."
-          : "Work underway toward this. Selecting it opens what it can reach.",
-      };
-    }
-    if (canvasSelection.teammateRefs.length) {
-      const member = lens?.crew.find((candidate) => canvasSelection.teammateRefs.includes(candidate.ref));
-      return {
-        kicker: "Teammate",
-        title: member?.soul?.name?.trim() || canvasSelection.teammateRefs.join(", "),
-        note: "What this teammate is working on right now.",
-      };
-    }
-    return { kicker: "Selection", title: "Selected", note: "" };
-  }, [architecture, canvasSelection, lens]);
+  // The selected effort, when the selection is an effort (not a draft/theory/architecture). Its full
+  // detail — the draft's actual content, who's on it, the staged-… id under a disclosure — renders in
+  // the docked inspector, never by ballooning the card inline on the stage (composite §9).
+  const selectedEffort = useMemo(() => {
+    if (!canvasSelection?.betId || canvasSelection.workRef || !lens) return null;
+    return lens.bets.find((candidate) => candidate.id === canvasSelection.betId) ?? null;
+  }, [canvasSelection, lens]);
+  const crewNameByRef = useMemo(
+    () => new Map((lens?.crew ?? []).map((member) => [member.ref, member.soul?.name?.trim() || member.ref])),
+    [lens],
+  );
+  const inspectorContent = useMemo(
+    () => inspectorHeader(canvasSelection, lens, architecture),
+    [architecture, canvasSelection, lens],
+  );
 
   useEffect(() => {
     const heartbeat = () => { void markFounderPresent().catch(() => undefined); };
@@ -200,13 +186,11 @@ export default function FirmApp() {
         </div>
         <div className="firm-app-workbench-status" data-attention={lens?.wall.count ? "true" : "false"}>
           <FirmFreshness connection={connection} onRetry={refresh} />
-          <strong>{lens && connection.phase !== "fresh"
-            ? `Last known: ${lens.bets.filter((bet) => bet.position === "live").length} ${lens.bets.filter((bet) => bet.position === "live").length === 1 ? "line" : "lines"} underway · pending decisions not current`
-            : lens
+          <strong>{lens
             ? lens.wall.count
               ? `${lens.wall.count} ${lens.wall.count === 1 ? "decision needs" : "decisions need"} you`
               : lens.bets.some((bet) => bet.position === "live")
-                ? `${lens.bets.filter((bet) => bet.position === "live").length} ${lens.bets.filter((bet) => bet.position === "live").length === 1 ? "line" : "lines"} underway · nothing needs you`
+                ? `${lens.bets.filter((bet) => bet.position === "live").length} ${lens.bets.filter((bet) => bet.position === "live").length === 1 ? "effort" : "efforts"} underway · nothing needs you`
                 : "Ready for the first direction"
             : "Opening the venture…"}</strong>
         </div>
@@ -288,7 +272,15 @@ export default function FirmApp() {
             </div>
             <div className="firm-app-inspector-body">
               <h2 className="firm-app-inspector-title">{inspectorContent.title}</h2>
-              <p className="firm-app-inspector-note">{inspectorContent.note}</p>
+              {selectedEffort && lens ? (
+                <InspectorEffort
+                  bet={selectedEffort}
+                  stateLabel={effortStateLabel(selectedEffort, decisionBandForBet(selectedEffort, lens))}
+                  crewNameByRef={crewNameByRef}
+                />
+              ) : (
+                <p className="firm-app-inspector-note">{inspectorContent.note}</p>
+              )}
             </div>
           </aside>
         ) : null}

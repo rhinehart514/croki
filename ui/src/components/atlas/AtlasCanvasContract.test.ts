@@ -5,12 +5,17 @@ const css = readFileSync("src/styles/venture-atlas.css", "utf8");
 const proposalCss = readFileSync("src/components/atlas/propose/architecture-proposal.css", "utf8");
 
 describe("venture atlas canvas contract", () => {
-  // Placement is engine-owned now (atlasLayoutEngine); the retired orbit layout's decorative ring is
-  // gone. What remains load-bearing for legibility is the in-place unfold of a selected effort.
-  it("keeps the effort legible and unfolds a selected bet in place", () => {
-    expect(css).toContain('.atlas-bet-node[data-expanded="true"]');
-    expect(css).toContain("width: 566px");
-    expect(css).toContain(".atlas-bet-workflow");
+  // Placement is engine-owned (atlasLayoutEngine). The effort card is the composite .effort: a warm
+  // raised card that keeps its RESTING size when selected — its detail opens in the docked inspector,
+  // never by ballooning inline (which was the left-edge clip bug). So the card must NOT grow to 566px.
+  it("renders the effort as a warm raised card and never balloons inline on selection", () => {
+    expect(css).toContain(".atlas-effort-card");
+    expect(css).toMatch(/\.atlas-effort-card\s*\{[^}]*background:\s*var\(--card-raised\)/);
+    expect(css).toMatch(/\.atlas-effort-card\s*\{[^}]*box-shadow:\s*var\(--sh-rest\)/);
+    // The instrument footer with attribution faces is the composite signature.
+    expect(css).toContain(".atlas-effort .e-faces");
+    // No inline expansion: the selected card stays at its resting width; detail lives in the inspector.
+    expect(css).not.toContain("width: 566px");
   });
 
   it("keeps causal labels readable and motion settled", () => {
@@ -20,11 +25,12 @@ describe("venture atlas canvas contract", () => {
     expect(css).not.toMatch(/\[data-atlas-altitude="venture"\] \.react-flow__edge-text[^}]*opacity:\s*0/);
   });
 
-  it("reserves amber for the wall and gate state", () => {
-    // The wall (outward boundary) and a gated workflow step read in amber; the effort card's
-    // approaching-wall accent shares the token. The retired orbit ring's wall arc is gone.
-    expect(css).toMatch(/\.atlas-bet-node\[data-band="approaching-wall"\]\s*\{[^}]*var\(--gap\)/);
-    expect(css).toMatch(/\.atlas-bet-workflow li\[data-state="gate"\] > i\s*\{[^}]*var\(--gap\)/);
+  it("reserves amber for the wall and needs-you effort state", () => {
+    // Amber is the one "needs you" hue. On the effort card it carries the needs tone (border, kicker,
+    // dot, and the need banner naming what's wanted); the wall marks the outward boundary in the same
+    // token. Never decorative — green carries living/connected, ink carries hierarchy.
+    expect(css).toMatch(/\.atlas-effort\[data-tone="needs"\] \.atlas-effort-card\s*\{[^}]*var\(--amber-line\)/);
+    expect(css).toMatch(/\.atlas-effort \.e-need\s*\{[^}]*var\(--amber-soft\)/);
   });
 
   it("docks the return band to the stage-cell top and keeps staged proposals neutral", () => {

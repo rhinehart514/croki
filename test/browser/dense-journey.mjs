@@ -58,6 +58,11 @@ test("dense firm: legacy operating scale stays durable while Atlas compresses ma
         renderedBets: document.querySelectorAll('.atlas-bet-node').length,
         exactWork: document.querySelectorAll('.atlas-element[data-kind="work"]').length,
         returnedReality: document.querySelectorAll('.atlas-element[data-kind="outcome"]').length,
+        // The ADE canvas places teammates and capabilities as their own nodes (P1 moved them onto the
+        // stage), plus the hub and the wall. These are real react-flow nodes and must be accounted for
+        // when reconciling the total against the consequence nodes.
+        placedAnchors: document.querySelectorAll('.atlas-element[data-kind="teammate"], .atlas-element[data-kind="capability"]').length,
+        landmarks: document.querySelectorAll('.atlas-intent-node, [data-atlas-kind="wall"]').length,
         primaryAgents: document.querySelectorAll('.firm-lens-crew-node, .firm-lens-participant-card').length,
         wallText: document.querySelector('[data-atlas-wall]')?.textContent,
         composer: Boolean(document.querySelector('.firm-app-composer textarea')),
@@ -68,7 +73,7 @@ test("dense firm: legacy operating scale stays durable while Atlas compresses ma
       assert.equal(state.returnedReality, 30, "returned reality was dropped at legacy scale");
       assert.equal(state.renderedBets, 120, "a durable bet was dropped at legacy scale");
       assert.equal(state.exactWork, 15, "exact staged work was dropped at legacy scale");
-      assert.equal(state.renderedNodes, state.renderedBets + state.returnedReality + state.exactWork + 3, "Atlas scene contains an unexplained or missing semantic node");
+      assert.equal(state.renderedNodes, state.renderedBets + state.returnedReality + state.exactWork + state.placedAnchors + state.landmarks, "Atlas scene contains an unexplained or missing semantic node");
       assert.equal(state.primaryAgents, 0, "configured machinery returned as primary far-view objects");
       assert.match(state.wallText ?? "", /20 decisions need you/i);
       assert.equal(state.composer, true);

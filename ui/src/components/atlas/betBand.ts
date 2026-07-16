@@ -20,3 +20,39 @@ export function motionLabelForBet(
 ): string {
   return campaignNameByBet.get(bet.id) ?? "No path named";
 }
+
+// Founder-facing words for an effort card. These are the *rendered copy* for the kicker (top of the
+// card) and the footer state — ordinary language, never the internal decision-band tokens
+// (near-intent / drifting / approaching-wall / settled) which stay as compatibility seams below.
+// "drifting" — the audit's flagged badge — becomes the honest founder sentence.
+export type EffortTone = "underway" | "needs" | "settled";
+
+export function effortTone(band: AtlasDecisionBand): EffortTone {
+  if (band === "approaching-wall") return "needs";
+  if (band === "settled") return "settled";
+  return "underway";
+}
+
+// The mono kicker at the top of the card, in founder words.
+export function effortKicker(band: AtlasDecisionBand): string {
+  switch (band) {
+    case "approaching-wall":
+      return "Needs your read";
+    case "settled":
+      return "Finished";
+    case "drifting":
+      // The audit's "DRIFTING" badge, retired into an honest sentence: work is moving but the
+      // direction is not yet named. This is the founder-word replacement the contract §4 calls for.
+      return "Underway";
+    default:
+      return "Underway";
+  }
+}
+
+// The plain state word on the card footer (status dot + this label).
+export function effortStateLabel(bet: FirmBet, band: AtlasDecisionBand): string {
+  if (band === "approaching-wall") return "Blocked on your read";
+  if (band === "settled") return "Complete";
+  if (bet.staged.length) return "Draft ready";
+  return "In progress";
+}

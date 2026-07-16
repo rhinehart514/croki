@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from "react";
-import { Database, GripVertical, Library, Mail, Settings2, Split } from "lucide-react";
+import { Database, GripVertical, Library, Mail, Settings2 } from "lucide-react";
 import type { FirmConfiguration, FirmCrewMember } from "@/types";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { CANVAS_ITEM_MIME, type CanvasCapability } from "./canvasCapabilities";
 
 function CapabilityIcon({ kind }: { kind: CanvasCapability["icon"] }) {
   if (kind === "mail") return <Mail aria-hidden="true" />;
-  if (kind === "git") return <Split aria-hidden="true" />;
   return <Database aria-hidden="true" />;
 }
 
@@ -66,7 +65,7 @@ export function CanvasTray({
                 <button key={key} type="button" draggable={!readOnly} disabled={readOnly} onDragStart={(event) => beginDrag(event, key)} onClick={() => onPlace(key)} aria-label={`Place ${capability.name} on canvas`}>
                   <GripVertical aria-hidden="true" />
                   <i><CapabilityIcon kind={capability.icon} /></i>
-                  <span><strong>{capability.name}</strong><small>{placedKeys.has(key) ? "On canvas · move" : capability.authority === "wall" ? "Founder review" : "Read only"}</small></span>
+                  <span><strong>{capability.name}</strong><small>{placedKeys.has(key) ? "On canvas · move" : capability.connected ? "Connected" : "Not connected"}</small></span>
                 </button>
               );
             })}

@@ -9,10 +9,10 @@ function AtlasIntentNodeView({ data }: NodeProps<AtlasNode>) {
           source of every effort spoke and the anchor for theory anchors. */}
       <Handle type="source" position={Position.Right} className="atlas-hidden-handle" isConnectable={false} />
       <Handle type="target" position={Position.Left} className="atlas-hidden-handle" isConnectable={false} />
-      <span>{data.provisional ? "Drover’s current read" : "What should change"}</span>
+      <span>{data.provisional ? "Drover’s current read" : "the venture"}</span>
       <strong>{data.title}</strong>
-      <small>{data.betCount} concrete {data.betCount === 1 ? "line" : "lines"} underway{data.provisional ? " · provisional" : ""}</small>
-      {!data.intentNamed ? <p>{data.betCount ? "Current work remains visible while the wider direction is still open." : "Tell Drover what should change. It will read the venture, show its current understanding, and begin useful inward work."}</p> : null}
+      <small>{data.betCount} {data.betCount === 1 ? "effort" : "efforts"} underway{data.provisional ? " · provisional" : ""}</small>
+      {!data.intentNamed ? <p>{data.betCount ? "Current work stays visible while the wider direction is still open." : "Tell Drover what should change. It will read the venture, show its current understanding, and begin useful inward work."}</p> : null}
     </article>
   );
 }

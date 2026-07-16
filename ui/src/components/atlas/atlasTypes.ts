@@ -30,6 +30,10 @@ export type AtlasNodeData = Record<string, unknown> & {
   provisional?: boolean;
   arrivalReceiptId?: string;
   bet?: FirmBet;
+  effortKicker?: string;
+  effortTone?: "underway" | "needs" | "settled";
+  draftCount?: number;
+  draftTitle?: string | null;
   outcome?: FirmOutcome;
   join?: FirmArchitectureJoin;
   active?: boolean;
@@ -41,6 +45,10 @@ export type AtlasNodeData = Record<string, unknown> & {
   continuation?: string | null;
   agentRef?: string;
   authority?: "read" | "wall";
+  crewPresence?: "working" | "asking" | "idle";
+  crewDoing?: string;
+  capabilityConnected?: boolean;
+  capabilityKind?: string;
   decisionBand?: AtlasDecisionBand;
   orbitSide?: "left" | "right";
   motionLabel?: string;

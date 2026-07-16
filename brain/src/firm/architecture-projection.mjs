@@ -109,7 +109,9 @@ function derivePressure(document, joins) {
     if (annotation.stance === "challenges") pressure.push({ subjectId: id, reason: "challenged-claim", sourceRef: annotation.evidenceRef, detail: annotation.note });
   }
   for (const item of joins.wall.filter((entry) => !entry.decision)) {
-    pressure.push({ subjectId: item.campaignId, reason: "held-release", sourceRef: `wall-item:${item.id}`, detail: "An exact consequence is waiting at the wall." });
+    // Founder-facing detail is ordinary language (contract §4): the internal "wall" noun never
+    // renders. sourceRef keeps the wall-item: identifier — a compatibility seam, never shown as copy.
+    pressure.push({ subjectId: item.campaignId, reason: "held-release", sourceRef: `wall-item:${item.id}`, detail: "An exact act is waiting for your hand." });
   }
   for (const motion of motions) {
     if (!list(motion.productRefs).length) pressure.push({ subjectId: motion.id, reason: "missing-product-capability", sourceRef: null, detail: "This route is not yet grounded in how the product creates value." });
@@ -125,7 +127,9 @@ function derivePressure(document, joins) {
   }
   for (const betJoin of joins.bets) {
     const work = joins.work.filter((entry) => entry.betId === betJoin.id);
-    if (!work.length && !betJoin.endedAt) pressure.push({ subjectId: betJoin.campaignId, reason: "blocked-work", sourceRef: `bet:${betJoin.id}`, detail: "The campaign's bet has no exact staged work yet." });
+    // Founder-facing detail is ordinary language (contract §4): "effort", not the internal "bet".
+    // sourceRef keeps the bet: identifier — a compatibility seam, never rendered as copy.
+    if (!work.length && !betJoin.endedAt) pressure.push({ subjectId: betJoin.campaignId, reason: "blocked-work", sourceRef: `bet:${betJoin.id}`, detail: "This effort has no prepared work yet." });
   }
   for (const outcome of joins.outcomes.filter((entry) => entry.join.level === "unattributed")) {
     pressure.push({ subjectId: null, reason: "unattributed-return", sourceRef: `outcome:${outcome.id}`, detail: "Reality returned without a supported architecture join." });

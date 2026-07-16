@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeAtlasLayout, LAYOUT_GAP, type LayoutInput } from "./atlasLayoutEngine";
+import { computeAtlasLayout, HUB_CLEARANCE, LAYOUT_GAP, type LayoutInput } from "./atlasLayoutEngine";
 
 // A realistic venture field: one hub, seven efforts, four teammates, two capabilities, one wall —
 // the composite composition, at the real rendered node sizes.
@@ -75,6 +75,34 @@ describe("computeAtlasLayout", () => {
     expect(hub.y + 190 / 2).toBeCloseTo(0);
   });
 
+  it("keeps every node at least HUB_CLEARANCE from the hub's full resting box", () => {
+    const nodes: LayoutInput[] = [
+      { id: "atlas:intent", kind: "hub", width: 208, height: 208, pinned: true },
+      { id: "bet:top", kind: "effort", width: 204, height: 210 },
+      { id: "bet:bottom", kind: "effort", width: 204, height: 210 },
+      { id: "crew:yara", kind: "teammate", width: 138, height: 118 },
+      { id: "capability:gmail", kind: "capability", width: 178, height: 62 },
+      { id: "atlas:wall", kind: "wall", width: 230, height: 150 },
+    ];
+    const { positions } = computeAtlasLayout(nodes);
+    const hub = nodes[0];
+    const hubPosition = positions.get(hub.id)!;
+
+    for (const other of nodes.slice(1)) {
+      const otherPosition = positions.get(other.id)!;
+      const clearsHorizontally =
+        hubPosition.x + hub.width + HUB_CLEARANCE <= otherPosition.x ||
+        otherPosition.x + other.width + HUB_CLEARANCE <= hubPosition.x;
+      const clearsVertically =
+        hubPosition.y + hub.height + HUB_CLEARANCE <= otherPosition.y ||
+        otherPosition.y + other.height + HUB_CLEARANCE <= hubPosition.y;
+      expect(
+        clearsHorizontally || clearsVertically,
+        `${other.id} is within ${HUB_CLEARANCE}px of the hub`,
+      ).toBe(true);
+    }
+  });
+
   it("is deterministic — identical input yields byte-identical positions", () => {
     const first = computeAtlasLayout(field());
     const second = computeAtlasLayout(field());
@@ -92,33 +120,26 @@ describe("computeAtlasLayout", () => {
     expect(anyOverlap(positions, nodes)).toBeNull();
   });
 
-  it("keeps every selected effort's expansion clear of all resting nodes", () => {
-    // An effort only ever expands OUTWARD — toward its orbitSide, the open side of the field the card
-    // was placed on (sign of its settled center x, hub pinned at origin). The engine reserves the
-    // expansion envelope on exactly that side; this proves a selected card never overlaps a neighbor.
+  it("keeps a selected effort clear of all resting nodes at its resting footprint", () => {
+    // Selecting an effort no longer balloons the card on the stage — the card holds its resting width
+    // and its full detail opens in the docked inspector (composite §9; firm-journey asserts the
+    // selected card stays ≤ 260px). So there is no expansion envelope to reserve: the selected card's
+    // footprint IS its resting footprint, and the resting field is already collision-free. This proves
+    // that selecting any effort can never introduce an overlap.
     const nodes = field();
     const { positions } = computeAtlasLayout(nodes);
 
     for (const effort of nodes.filter((node) => node.kind === "effort")) {
       const restingPosition = positions.get(effort.id)!;
-      const centerX = restingPosition.x + effort.width / 2;
-      // orbitSide === "left" when the card center is left of the field center (origin): it grows left
-      // via translateX(-434); otherwise it grows right from its resting left edge.
-      const expandsLeft = centerX < 0;
-      const expandedLeft = expandsLeft ? restingPosition.x - 434 : restingPosition.x;
-
       for (const other of nodes) {
         if (other.id === effort.id) continue;
         const otherPosition = positions.get(other.id)!;
         const overlap =
-          expandedLeft < otherPosition.x + other.width &&
-          expandedLeft + 566 > otherPosition.x &&
+          restingPosition.x < otherPosition.x + other.width &&
+          restingPosition.x + effort.width > otherPosition.x &&
           restingPosition.y < otherPosition.y + other.height &&
-          restingPosition.y + 300 > otherPosition.y;
-        expect(
-          overlap,
-          `${effort.id} overlaps ${other.id} when expanded ${expandsLeft ? "left" : "right"}`,
-        ).toBe(false);
+          restingPosition.y + effort.height > otherPosition.y;
+        expect(overlap, `${effort.id} overlaps ${other.id} when selected`).toBe(false);
       }
     }
   });

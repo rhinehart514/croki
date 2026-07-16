@@ -310,7 +310,13 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
     await waitForDom(client, `/Revise the proposed path/.test(document.querySelector('.firm-app-composer textarea')?.value || '')`, "adjusting a path did not return a grounded revision ask to conversation");
     await client.evaluate(`(() => { const textarea = document.querySelector('.firm-app-composer textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, ''); textarea.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.atlas-proposal-heading-actions button')].find((entry) => /Accept whole proposal/i.test(entry.textContent || '')); button?.click(); return Boolean(button); })()`), true, "the proposal did not expose whole-system acceptance");
-    await waitForDom(client, `!document.querySelector('.atlas-proposal-surface') && [...document.querySelectorAll('.atlas-element')].some((entry) => /Product-led growth/i.test(entry.textContent || ''))`, "accepted proposal did not convert into the real venture projection");
+    // The accepted architecture lands in the real venture projection. Its motions/systems are venture
+    // depth — reachable through the outline and inspector — not resting-canvas archetypes (the stage
+    // renders only hub, efforts, crew, capabilities, and the wall, per the composite). So the proof is
+    // the projection itself: the proposal surface closes and the architecture document now carries the
+    // accepted "Product-led growth" motion.
+    await waitForDom(client, `!document.querySelector('.atlas-proposal-surface')`, "the accepted proposal surface did not close");
+    await waitForDom(client, `fetch('/api/ventures/${venture.id}/architecture').then((response) => response.json()).then(({ architecture }) => architecture.elements.some((element) => /Product-led growth/i.test(element.name || ''))).catch(() => false)`, "accepted proposal did not convert into the real venture projection");
     assert.equal(await client.evaluate(`fetch('/api/ventures/${venture.id}/lens').then((response) => response.json()).then(({ lens }) => lens.wall.count)`), wallCountBeforeProposal, "accepting architecture moved an outward act past the wall");
 
     const liveBetIntents = [
@@ -356,9 +362,16 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
     await client.send("Page.reload", { ignoreCache: true });
     await waitForDom(client, `/Continue a venture/i.test(document.body.textContent)`, "venture picker did not return after configured machinery reload");
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => /Acme firm/.test(entry.textContent || '')); button?.click(); return Boolean(button); })()`), true);
-    await waitForDom(client, `Boolean(document.querySelector('[data-venture-atlas]')) && [...document.querySelectorAll('.atlas-element')].some((entry) => /Product-led growth/i.test(entry.textContent || ''))`, "configured Atlas did not survive reload");
-    await waitForDom(client, `/7 lines underway.*nothing needs you/i.test(document.body.textContent) && document.querySelectorAll('.atlas-bet-node[data-position="live"]').length === 7`, "the seven active lines and clear decision boundary did not agree between header and orbit");
-    assert.equal(await client.evaluate(`new Set([...document.querySelectorAll('.atlas-bet-node[data-position="live"]')].map((entry) => entry.querySelector('.atlas-bet-summary small')?.textContent)).size`), 3, "the seven live bets were not grouped across the accepted motions");
+    // The configured architecture survives reload in the projection (venture depth), while the stage
+    // renders the composite archetypes. Verify the atlas mounted and the accepted motion persists in
+    // the architecture document, rather than expecting the motion as a resting-canvas node.
+    await waitForDom(client, `Boolean(document.querySelector('[data-venture-atlas]'))`, "the venture atlas did not mount after reload");
+    await waitForDom(client, `fetch('/api/ventures/${venture.id}/architecture').then((response) => response.json()).then(({ architecture }) => architecture.elements.some((element) => /Product-led growth/i.test(element.name || ''))).catch(() => false)`, "configured architecture did not survive reload");
+    await waitForDom(client, `/7 efforts underway.*nothing needs you/i.test(document.body.textContent) && document.querySelectorAll('.atlas-bet-node[data-position="live"]').length === 7`, "the seven efforts and clear decision boundary did not agree between header and canvas");
+    // The seven efforts ride three accepted motions. The effort card is the composite .effort — it no
+    // longer carries a sector/path label (the retired orbit layout's sectors are gone), so grouping is
+    // verified against the lens's campaign→motion joins rather than a DOM label.
+    assert.equal(await client.evaluate(`fetch('/api/ventures/${venture.id}/architecture').then((response) => response.json()).then(({ architecture }) => new Set(architecture.elements.filter((element) => element.role === 'campaign').map((campaign) => campaign.primaryMotionId ?? campaign.motionIds?.[0]).filter(Boolean)).size)`), 3, "the seven efforts were not grouped across the accepted motions");
     assert.deepEqual(await client.evaluate(`(() => {
       const cards = [...document.querySelectorAll('.atlas-bet-node')];
       const collisions = [];
@@ -416,26 +429,33 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
       fetch('/api/ventures/${venture.id}/wall').then((response) => response.json()),
     ]).then(([{ lens }, wall]) => lens.bets.some((entry) => /invite operations leads/i.test(entry.intent) && entry.stagedCount === 2) && wall.queue.some((entry) => entry.workRef === 'artifact-precise-invitation'))`, "exact staged work did not remain inspectable behind the Atlas wall");
     await waitForDom(client, `Boolean([...document.querySelectorAll('.atlas-bet-node')].find((entry) => /invite operations leads/i.test(entry.textContent || '')))`, "the new live bet did not materialize on the orbital canvas");
+    // Selecting an effort opens its detail in the DOCKED INSPECTOR (composite §9) — the card keeps its
+    // resting size on the stage; it never balloons inline (which was the left-edge clip bug). The
+    // inspector shows the draft as its actual content, TITLED BY CONTENT with the staged-… id demoted
+    // to a disclosure (contract §4 — the inversion of the audit's "ID as title" failure).
     assert.equal(await client.evaluate(`(() => {
-      const button = [...document.querySelectorAll('.atlas-bet-summary')].find((entry) => /invite operations leads/i.test(entry.textContent || ''));
+      const button = [...document.querySelectorAll('.atlas-effort-card')].find((entry) => /invite operations leads/i.test(entry.textContent || ''));
       button?.click(); return Boolean(button);
-    })()`), true, "the bet could not unfold in place");
-    await waitForDom(client, `Boolean(document.querySelector('.atlas-bet-workflow')) && /Precise invitation/.test(document.querySelector('.atlas-bet-workflow')?.textContent || '')`, "the unfolded bet did not show its real staged work");
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.atlas-bet-workflow button')].find((entry) => /Inspect this work/i.test(entry.textContent || '')); button?.click(); return Boolean(button); })()`), true, "the active line did not expose its deeper evidence view");
-    await waitForDom(client, `Boolean(document.querySelector('.atlas-dive')) && !document.querySelector('.atlas-dive-inspector')`, "the deeper evidence view did not open with its consequence held closed");
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.atlas-dive button')].find((entry) => /Inspect held act/i.test(entry.textContent || '')); button?.click(); return Boolean(button); })()`), true, "the held consequence did not expose its named inspector action");
-    await waitForDom(client, `Boolean(document.querySelector('.atlas-dive-inspector'))`, "the named held-act action did not open its consequence inspector");
+    })()`), true, "the effort could not be selected");
+    await waitForDom(client, `Boolean(document.querySelector('.firm-app-inspector .insp-draft')) && /Precise invitation/.test(document.querySelector('.firm-app-inspector')?.textContent || '')`, "the inspector did not show the effort's real draft, titled by content");
+    // The draft is titled by content, never by its staged-… id. The id lives under a disclosure.
     assert.equal(await client.evaluate(`(() => {
-      const title = [...document.querySelectorAll('.atlas-dive-node-heading strong')].find((entry) => /Independent counterexample/i.test(entry.textContent || ''));
-      if (!title) return false;
-      const style = getComputedStyle(title);
-      return style.overflowWrap === 'normal' && style.wordBreak === 'normal' && style.hyphens === 'none';
-    })()`), true, "Dive stage titles still allowed mid-word breaks");
+      const name = document.querySelector('.firm-app-inspector .id-name')?.textContent || '';
+      return /Precise invitation/.test(name) && !/artifact-precise-invitation/.test(name) && !/staged-/.test(name);
+    })()`), true, "the draft was titled by its id instead of its content");
+    assert.equal(await client.evaluate(`(() => {
+      const disclosure = document.querySelector('.firm-app-inspector .insp-disclosure');
+      return Boolean(disclosure && /artifact-precise-invitation/.test(disclosure.textContent || ''));
+    })()`), true, "the staged identifier was not tucked behind the disclosure");
+    // The selected effort card stays at its resting width — no inline balloon that could clip the edge.
+    assert.equal(await client.evaluate(`(() => {
+      const selected = document.querySelector('.atlas-effort[data-expanded="true"]');
+      if (!selected) return false;
+      const stage = document.querySelector('.firm-app-canvas')?.getBoundingClientRect();
+      const rect = selected.getBoundingClientRect();
+      return Boolean(stage && rect.width <= 260 && rect.left >= stage.left - 1 && rect.right <= stage.right + 1);
+    })()`), true, "the selected effort card ballooned or clipped past the stage edge");
     await captureOrbitalEvidence(client, "02-dive-gate");
-    assert.match(await client.evaluate(`document.querySelector('.atlas-dive')?.textContent || ''`), /Precise invitation|A precise invitation/i);
-    assert.doesNotMatch(await client.evaluate(`document.querySelector('.atlas-dive-gaps')?.textContent || ''`), /canonical workflow-stage graph/i);
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.atlas-dive button')].find((entry) => /Fold back to orbit/i.test(entry.textContent || '')); button?.click(); return Boolean(button); })()`), true, "dive did not fold back to the orbit");
-    await waitForDom(client, `Boolean(document.querySelector('[data-venture-atlas]')) && !document.querySelector('.atlas-dive')`, "the orbit did not restore after dive");
     // In the docked ADE grid the composer lives in the rail cell, off the stage entirely — so
     // stage cards can never be occluded by it. The camera fits the collision-free field into the
     // stage cell (.firm-app-canvas); cards settle inset within that cell and clear of the return
@@ -463,10 +483,19 @@ test("desktop firm journey: bind product, set heat, and render purpose-correct w
       return { clear, rail: pick(rail), stage: pick(stage), inspector: pick(inspector), controls: pick(controls) };
     })()`);
     assert.equal(floatingClearance.clear, true, `the docked rail, stage, and inspector cells still share the same screen region: ${JSON.stringify(floatingClearance)}`);
-    assert.equal(await client.evaluate(`(() => {
-      const workflow = document.querySelector('.atlas-bet-workflow ol');
-      return Boolean(workflow && workflow.scrollWidth <= workflow.clientWidth + 1);
-    })()`), true, "the unfolded workflow still clips its final stage");
+    // MUST-FIX #1 (containment): with the inspector open AND an effort selected, EVERY card — the
+    // selected one included — stays fully inside the stage cell. This is the exact scenario that used
+    // to clip the expanded card off the left edge; the fit reserves the whole field in the live cell.
+    assert.deepEqual(await client.evaluate(`(() => {
+      const stage = document.querySelector('.firm-app-canvas')?.getBoundingClientRect();
+      if (!stage) return [{ reason: 'stage missing' }];
+      return [...document.querySelectorAll('.atlas-effort, [data-atlas-kind="wall"], [data-atlas-kind="teammate"], [data-atlas-kind="capability"]')].flatMap((card) => {
+        const rect = card.getBoundingClientRect();
+        if (rect.width === 0) return [];
+        const inside = rect.left >= stage.left - 1 && rect.right <= stage.right + 1 && rect.top >= stage.top - 1 && rect.bottom <= stage.bottom + 1;
+        return inside ? [] : [{ text: (card.textContent || '').slice(0, 40), left: Math.round(rect.left), right: Math.round(rect.right), stageLeft: Math.round(stage.left), stageRight: Math.round(stage.right) }];
+      });
+    })()`), [], "a card clips outside the stage cell with the inspector open");
     assert.deepEqual(await client.evaluate(`(() => {
       const cards = [...document.querySelectorAll('.atlas-bet-node')];
       const collisions = [];

@@ -12,12 +12,6 @@ function ageLabel(timestamp: number | null, now: number) {
   return `Updated ${minutes}m ago`;
 }
 
-function snapshotLabel(timestamp: number | null, now: number) {
-  if (timestamp === null) return "No live view is available";
-  const age = ageLabel(timestamp, now).replace(/^Updated/, "Snapshot from");
-  return `${age} · live updates unavailable`;
-}
-
 export function FirmFreshness({ connection, onRetry }: { connection: FirmConnectionState; onRetry: () => void }) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -27,20 +21,24 @@ export function FirmFreshness({ connection, onRetry }: { connection: FirmConnect
     return () => window.clearInterval(timer);
   }, [connection.phase]);
 
-  if (connection.phase === "fresh") {
-    return <span className="firm-freshness firm-freshness-fresh">Current</span>;
+  // The founder surface renders the live-host state (contract §2.8). The web build is a dev/test
+  // harness only: it never has founder authority, so its "read-only" phase is not a degraded founder
+  // state — it renders at most a quiet grey snapshot chip (never a red band, never a disabled
+  // composer). The host authority model is unchanged: a write still fails server-side without the
+  // capability; this only stops the harness's expected read-only phase from contaminating the surface.
+  if (connection.phase === "fresh" || connection.phase === "read-only" || connection.phase === "opening") {
+    return null;
   }
 
   const offline = connection.phase === "offline";
-  const readOnly = connection.phase === "read-only";
   return (
     <div className="firm-freshness firm-freshness-warning" role="status" aria-live="polite">
       {offline ? <WifiOff aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
       <span>
-        <strong>{connection.phase === "opening" ? "Opening the firm" : offline ? "Offline" : readOnly ? "Desktop host required" : "Reconnecting"}</strong>
-        <small>{readOnly ? snapshotLabel(connection.lastUpdatedAt, now) : `${ageLabel(connection.lastUpdatedAt, now)} · consequential changes are held`}</small>
+        <strong>{offline ? "Offline" : "Reconnecting"}</strong>
+        <small>{`${ageLabel(connection.lastUpdatedAt, now)} · consequential changes are held`}</small>
       </span>
-      {!readOnly ? <button type="button" onClick={onRetry} aria-label="Retry connection">Retry</button> : null}
+      <button type="button" onClick={onRetry} aria-label="Retry connection">Retry</button>
     </div>
   );
 }

@@ -15,6 +15,8 @@ import { ArchitectureGroup } from "./ArchitectureGroup";
 import { FounderWall } from "./FounderWall";
 import { AtlasIntentNode } from "./AtlasIntentNode";
 import { AtlasBetNode } from "./AtlasBetNode";
+import { AtlasCrewNode } from "./AtlasCrewNode";
+import { AtlasCapabilityNode } from "./AtlasCapabilityNode";
 import type { AtlasAltitude, AtlasEdge, AtlasNode } from "./atlasTypes";
 import { CANVAS_ITEM_MIME } from "@/components/lens/canvasCapabilities";
 
@@ -24,6 +26,8 @@ const NODE_TYPES: NodeTypes = {
   founderWall: FounderWall,
   atlasIntent: AtlasIntentNode,
   atlasBet: AtlasBetNode,
+  atlasCrew: AtlasCrewNode,
+  atlasCapability: AtlasCapabilityNode,
 };
 
 function AtlasCanvasView({
