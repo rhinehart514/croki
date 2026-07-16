@@ -19,6 +19,7 @@ import { now, getVentureDoc, setVentureDoc, listVentureDocs } from "./venture-st
 import { recordOutcomeIntoSoul } from "../soul-wiring.mjs";
 import { park } from "./wall.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
+import { reportJoinedOutcome as reportJoinedOutcomeDefault } from "./outcome-report.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -119,7 +120,15 @@ function buildOutcome({ ventureId, joinKey, workRef, outcomeKind, body, from, so
 // note), dedupe it against what is already recorded, join it to the bet whose joinKey matches, append it
 // to that bet's evidence, and park ONE decide-together item at the wall regardless of whether the join
 // resolved. Returns { outcome, joined, bet, queued, deduped }.
-export function recordOutcome(outcome = {}, options = {}) {
+//
+// `deps.reportJoinedOutcome` (injectable for tests; production uses outcome-report.mjs statically —
+// synchronous, so recordOutcome's own synchronous contract is untouched: market-poll.mjs and every test
+// destructure its return directly) surfaces a real join in the conversation as the teammate reporting it.
+// It fires only on a genuine, non-deduped join with a teammate to speak as — never on an unattributed
+// signal (which would be guessing) and never on a dedupe re-observation (so a poller re-reading the same
+// reply each tick reports it once, not once per tick). Non-fatal, same posture as the soul writeback
+// below: recording the outcome is the truth that must hold even if the report hiccups.
+export function recordOutcome(outcome = {}, options = {}, deps = {}) {
   const ventureId = trimOrNull(outcome.ventureId);
   if (!ventureId) throw new Error("recordOutcome() needs a ventureId.");
   if (isAdministrativeReceipt(outcome)) {
@@ -163,6 +172,17 @@ export function recordOutcome(outcome = {}, options = {}) {
       } catch (error) {
         console.warn(`[firm/market] soul writeback skipped: ${error?.message ?? error}`);
       }
+    }
+
+    // Evidence-to-cause: report this real join in the conversation as the teammate reporting the reply,
+    // attached to the effort that caused it and linking down to the outcome record. Only on a genuine
+    // join (we are inside `if (bet)` and past the dedupe early-return, so this is a first observation).
+    // Non-fatal: a failed report never unrecords the outcome or blocks the wall park below.
+    try {
+      const reportJoinedOutcome = deps.reportJoinedOutcome ?? reportJoinedOutcomeDefault;
+      reportJoinedOutcome({ ventureId, outcome: recorded, bet }, options, deps);
+    } catch (error) {
+      console.warn(`[firm/market] outcome report skipped: ${error?.message ?? error}`);
     }
   }
 

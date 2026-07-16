@@ -110,6 +110,14 @@ export type FirmConversationMessage = {
     model: string | null;
     configurationRevision: number | null;
   } | null;
+  // Present only on a teammate message that reports a joined market reply (evidence to cause). Links the
+  // reported reply down to its outcome record so the founder can open the full receipt from the thread.
+  outcomeReport?: {
+    outcomeId: string;
+    outcomeKind: string | null;
+    channel: string | null;
+    from: string | null;
+  } | null;
   createdAt: string;
 };
 
