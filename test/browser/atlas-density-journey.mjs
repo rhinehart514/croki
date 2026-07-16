@@ -202,3 +202,78 @@ test("living venture atlas: dense architecture stays canvas-like across semantic
     await drover.close();
   }
 });
+
+test("living venture atlas: card detail responds to zoom continuously, with no mode chrome (contract §3)", async () => {
+  const drover = await bootFixture(createDenseAtlasPortfolioFixture);
+  const chrome = await openAtlasFixture(drover);
+  try {
+    const { client } = chrome;
+    // Wait for the effort cards to settle on the stage — they are the workhorse zoom-responsive card.
+    await waitForAtlas(client, `[...document.querySelectorAll('.atlas-effort')].some((card) => card.dataset.expanded !== 'true')`, "no resting effort card reached the stage");
+
+    // No named-altitude switcher / mode selector exists anywhere — §3 cut them. Density is a rendering
+    // function of zoom, not a navigable state, so there is no control to change it.
+    const modeChrome = await client.evaluate(`Boolean(document.querySelector('[data-altitude-switcher], .atlas-altitude-switcher, .atlas-mode-selector, [data-atlas-mode-selector]'))`);
+    assert.equal(modeChrome, false, "a named-altitude switcher / mode selector leaked onto the stage (contract §3 cut it)");
+
+    const restingCard = `[...document.querySelectorAll('.atlas-effort')].find((card) => card.dataset.expanded !== 'true')`;
+    // The card renders at the shipping-default density at rest, and its footer is present (standard).
+    const resting = await client.evaluate(`(() => {
+      const card = ${restingCard};
+      const foot = card?.querySelector('.e-foot');
+      return { canvasDensity: document.querySelector('.atlas-canvas')?.dataset.atlasDensity, cardDensity: card?.dataset.density, footShown: Boolean(foot) && getComputedStyle(foot).display !== 'none' };
+    })()`);
+    assert.ok(["standard", "editorial", "detailed"].includes(resting.cardDensity), "the effort card did not carry a live zoom-density tier");
+    assert.equal(resting.cardDensity, resting.canvasDensity, "the card density and the live canvas density disagreed at rest");
+
+    // Zoom in (ctrl+wheel = the pinch-zoom seam React Flow drives) over the pane: card detail re-details
+    // continuously — the live canvas density and the card both reach `detailed`, and the footer shows.
+    const pane = await client.evaluate(`(() => { const rect = document.querySelector('.react-flow__pane').getBoundingClientRect(); return { x: Math.round(rect.left + 20), y: Math.round(rect.top + 20) }; })()`);
+    for (let i = 0; i < 26; i += 1) {
+      await client.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: pane.x, y: pane.y, deltaX: 0, deltaY: -100, modifiers: 2 });
+    }
+    await waitForAtlas(client, `document.querySelector('.atlas-canvas')?.dataset.atlasDensity === 'detailed'`, "zooming in did not re-detail the field (live density never reached detailed)");
+    const detailed = await client.evaluate(`(() => {
+      const card = ${restingCard};
+      if (!card) return null;
+      const foot = card.querySelector('.e-foot');
+      const title = card.querySelector('.e-title');
+      return { cardDensity: card.dataset.density, titleShown: Boolean(title) && getComputedStyle(title).display !== 'none', footShown: Boolean(foot) && getComputedStyle(foot).display !== 'none' };
+    })()`);
+    assert.ok(detailed, "no resting effort card was available at detailed zoom");
+    assert.equal(detailed.cardDensity, "detailed", "the effort card did not re-detail when zoomed in");
+    assert.equal(detailed.titleShown, true, "detailed zoom hid the effort title");
+    assert.equal(detailed.footShown, true, "the effort footer stayed hidden at detailed zoom");
+
+    // Selection forces full detail regardless of zoom (contract §3: "selecting an effort expands it").
+    // Zoom back out toward the resting fit, then select the effort — it must still read at full detail
+    // (density detailed, footer shown) even though the resting zoom tier is not detailed. This proves
+    // selection overrides the zoom-density tier rather than the founder having to zoom in to read it.
+    for (let i = 0; i < 30; i += 1) {
+      await client.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: pane.x, y: pane.y, deltaX: 0, deltaY: 100, modifiers: 2 });
+    }
+    await waitForAtlas(client, `document.querySelector('.atlas-canvas')?.dataset.atlasDensity !== 'detailed'`, "the field never eased back below detailed density");
+    await client.evaluate(`(() => { const card = ${restingCard}; card?.querySelector('.atlas-effort-card')?.click(); return true; })()`);
+    await waitForAtlas(client, `[...document.querySelectorAll('.atlas-effort')].some((card) => card.dataset.expanded === 'true')`, "selecting an effort did not expand it");
+    const focused = await client.evaluate(`(() => {
+      const selected = document.querySelector('.atlas-effort[data-expanded="true"]');
+      const f = selected?.querySelector('.e-foot');
+      return {
+        canvasDensity: document.querySelector('.atlas-canvas')?.dataset.atlasDensity,
+        selectedDensity: selected?.dataset.density,
+        selectedFootShown: Boolean(f) && getComputedStyle(f).display !== 'none',
+        selectedPresent: selected ? Number(getComputedStyle(selected).opacity) > 0 : false,
+      };
+    })()`);
+    assert.notEqual(focused.canvasDensity, "detailed", "the field did not ease back below detailed before selection — the override is untested");
+    assert.equal(focused.selectedDensity, "detailed", "a selected effort must read at full detail regardless of the zoom-density tier");
+    assert.equal(focused.selectedFootShown, true, "the selected effort did not show its footer at full detail");
+    assert.equal(focused.selectedPresent, true, "the selected effort receded to invisible instead of expanding");
+
+    await captureAtlasEvidence(client, "zoom-responsive-density-1920x1080");
+    await assertAtlasAccessibility(client);
+  } finally {
+    await chrome.close();
+    await drover.close();
+  }
+});

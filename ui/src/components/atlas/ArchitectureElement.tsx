@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { CampaignPressure } from "./CampaignPressure";
 import { MotionRoute } from "./MotionRoute";
+import { useAtlasDensity, type AtlasDensity } from "./atlasDensity";
 import { ATLAS_EASE, ATLAS_MOTION } from "./atlasMotion";
 import type { AtlasNode } from "./atlasTypes";
 
@@ -26,9 +27,9 @@ const ROLE_LABELS = {
   capability: "Capability",
 } as const;
 
-function ElementMaterial({ data }: { data: AtlasNode["data"] }) {
+function ElementMaterial({ data, density }: { data: AtlasNode["data"]; density: AtlasDensity }) {
   const element = data.element;
-  const compact = data.altitude === "venture" && data.kind !== "intent" && data.kind !== "theory";
+  const compact = density === "editorial" && data.kind !== "intent" && data.kind !== "theory";
   if (data.kind === "motion" && element) return <MotionRoute motion={element} compact={compact} active={Boolean(data.active)} />;
   if (data.kind === "campaign" && element) return <CampaignPressure campaign={element} pressure={data.pressure} compact={compact} active={Boolean(data.active)} teammates={data.teammates ?? []} continuation={data.continuation} />;
   if (data.kind === "system") return <span className="atlas-system-strata" aria-hidden="true"><Database /><span><i /><i /><i /></span></span>;
@@ -56,7 +57,13 @@ function ArchitectureElementView({ data, id, selected }: NodeProps<AtlasNode>) {
   const element = data.element;
   const isSelected = Boolean(selected || data.selected);
   const isCanvasAnchor = data.kind === "teammate" || data.kind === "capability";
-  const compact = !isSelected && data.kind !== "theory" && (data.altitude === "venture" || (data.altitude === "architecture" && isCanvasAnchor));
+  // Live zoom tier (contract §3) drives how much the card renders, continuously as the wheel turns —
+  // not the settled altitude, which only lands when a gesture ends. A selected card is always full.
+  // editorial (zoomed out) quiets every non-anchor card to its title; standard/detailed re-detail as
+  // the founder zooms in. Anchors (teammate/capability) also quiet one tier earlier so the zoomed-out
+  // reading stays a legible constellation rather than a wall of instrument chrome.
+  const density = useAtlasDensity();
+  const compact = !isSelected && data.kind !== "theory" && (density === "editorial" || (density === "standard" && isCanvasAnchor));
   const canConnect = Boolean(element);
   const reducedMotion = useReducedMotion();
   const arrival = data.kind === "outcome" ? 16 : data.kind === "work" ? -12 : 0;
@@ -88,7 +95,7 @@ function ArchitectureElementView({ data, id, selected }: NodeProps<AtlasNode>) {
         onDoubleClick={(event) => { event.stopPropagation(); data.onFocus(id); }}
       >
         <span className="atlas-element-eyebrow">{ROLE_LABELS[data.kind]}</span>
-        <ElementMaterial data={data} />
+        <ElementMaterial data={data} density={density} />
         <strong>{data.title}</strong>
         {!compact && data.statement ? <span className="atlas-element-statement">{data.statement}</span> : null}
         {data.kind === "theory" && !compact ? (

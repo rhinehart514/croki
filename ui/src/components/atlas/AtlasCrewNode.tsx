@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { CrewFace } from "@/components/crew/CrewFace";
+import { useAtlasDensity } from "./atlasDensity";
 import type { AtlasNode } from "./atlasTypes";
 
 // A teammate on the stage — the composite's crew node: a face with a live presence dot, the name, and
@@ -13,12 +14,17 @@ function AtlasCrewNodeView({ data, id, selected }: NodeProps<AtlasNode>) {
   const presence = (data.crewPresence as "working" | "asking" | "idle" | undefined) ?? "idle";
   const doing = (data.crewDoing as string | undefined)?.trim() || "with you on this venture";
   const isSelected = Boolean(selected || data.selected);
+  // At the zoomed-out (editorial) tier the field reads as a face-and-name constellation; the "doing"
+  // line re-details as the founder zooms in (contract §3). A selected teammate always shows it.
+  const density = useAtlasDensity();
+  const cardDensity = isSelected ? "detailed" : density;
   return (
     <div
       className="atlas-crew"
       data-atlas-kind="teammate"
       data-atlas-id={id}
       data-presence={presence}
+      data-density={cardDensity}
       data-selected={isSelected ? "true" : "false"}
       data-focus-role={data.focusRole}
     >

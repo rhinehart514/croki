@@ -56,6 +56,7 @@ export type AtlasNodeData = Record<string, unknown> & {
   workflow?: AtlasWorkflowStage[];
   machineryCounts?: Array<{ label: string; count: number }>;
   expanded?: boolean;
+  materializing?: boolean;
   betCount?: number;
   revision?: number;
   intentNamed?: boolean;

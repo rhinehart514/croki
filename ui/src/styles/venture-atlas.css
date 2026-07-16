@@ -401,6 +401,9 @@
 .atlas-crew .cr-doing { margin-top: 4px; max-width: 138px; padding: 3px 9px; border: 1px solid var(--green-line); border-radius: 7px; background: var(--green-tint); color: var(--green); font-size: 10.5px; line-height: 1.3; }
 .atlas-crew .cr-doing.idle { color: var(--ink-3); background: var(--paper-2); border-color: var(--line-2); }
 .atlas-crew .cr-doing.asking { color: var(--amber-ink); background: var(--amber-soft); border-color: var(--amber-line); }
+/* Zoom-responsive density (contract §3): at the zoomed-out tier the field reads as a face-and-name
+   constellation; the live "doing" line re-appears as the founder zooms in. Selected crew stay detailed. */
+.atlas-crew[data-density="editorial"] .cr-doing { display: none; }
 @media (prefers-reduced-motion: reduce) { .atlas-crew .cr-presence.working::before { animation: none; } }
 
 /* ---- CAPABILITY NODE (instrument on stage) — the composite's icon well + label + on/off ---- */
@@ -417,6 +420,9 @@
 .atlas-capability .cap-state { font-family: var(--font-mono, monospace); font-size: 9.5px; letter-spacing: 0.02em; }
 .atlas-capability .cap-state.on { color: var(--green-2); }
 .atlas-capability .cap-state.off { color: var(--ink-4-warm, #a8a498); }
+/* Zoomed out, the instrument reads as its lit/unlit icon + name; the on/off state word re-details as
+   the founder zooms in (contract §3). Selected capabilities always show it. */
+.atlas-capability[data-density="editorial"] .cap-state { display: none; }
 
 .atlas-legend { position: absolute; bottom: 128px; left: 202px; z-index: 15; width: 260px; max-height: 340px; overflow-y: auto; padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-pop); }
 .atlas-legend header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
@@ -714,6 +720,30 @@
 .atlas-effort .kdot.pulse { position: relative; }
 .atlas-effort .kdot.pulse::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid var(--green-3); opacity: 0.55; animation: atlas-effort-pulse 2.4s var(--ease-out) infinite; }
 @keyframes atlas-effort-pulse { 0% { transform: scale(0.7); opacity: 0.6; } 70% { transform: scale(1.5); opacity: 0; } 100% { opacity: 0; } }
+
+/* Kinetic materialization (contract §3): a node still held back by the staged unfold sits invisible and
+   inert; when the sequencer reveals it (removing this class) it fades up into place, so the working
+   theory is born node-by-node rather than snapping in. Only opacity is transitioned on the React Flow
+   node wrapper — its transform is owned by React Flow for positioning, so animating it would lag every
+   pan. The subtle rise lives on the card's own arrival animation (arrivalReceiptId). Reduced motion is
+   handled upstream: the hook reveals the whole burst at once, so this class is never applied. */
+.react-flow__node { transition: opacity 0.34s var(--ease-out); }
+.react-flow__node.atlas-node-materializing { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node { transition: none; }
+  .react-flow__node.atlas-node-materializing { opacity: 1; }
+}
+
+/* Zoom-responsive density (contract §3, design system: same tokens, less revealed). Density is the
+   live zoom tier written on the card by useAtlasDensity — editorial at low zoom (title + kicker only),
+   standard is the shipping default (body + draft + footer), detailed shows everything. A selected card
+   is forced to detailed in the component, so this only quiets resting cards as the founder zooms out.
+   Cards simplify continuously as zoom crosses a tier, never on a mode selector. */
+.atlas-effort[data-density="editorial"] .e-summary,
+.atlas-effort[data-density="editorial"] .e-need,
+.atlas-effort[data-density="editorial"] .e-draft,
+.atlas-effort[data-density="editorial"] .e-foot { display: none; }
+.atlas-effort[data-density="editorial"] .e-body { padding-bottom: 13px; }
 @media (prefers-reduced-motion: reduce) {
   .atlas-effort .kdot.pulse::after { animation: none; opacity: 0.4; }
   .atlas-effort-card { transition-duration: 0.01ms; }

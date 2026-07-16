@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { Database, Mail } from "lucide-react";
+import { useAtlasDensity } from "./atlasDensity";
 import type { AtlasNode } from "./atlasTypes";
 
 // A capability on the stage — the composite's capability node: a warm instrument the firm can reach
@@ -18,12 +19,17 @@ function AtlasCapabilityNodeView({ data, id, selected }: NodeProps<AtlasNode>) {
   const isSelected = Boolean(selected || data.selected);
   const stateWord = connected ? "connected" : "not connected";
   const agentKind = (data.capabilityKind as string | undefined) ?? "repo";
+  // Zoomed out, the capability reads as its lit/unlit icon + name; the on/off state word re-details as
+  // the founder zooms in (contract §3). A selected capability always shows it.
+  const density = useAtlasDensity();
+  const cardDensity = isSelected ? "detailed" : density;
   return (
     <div
       className="atlas-capability"
       data-atlas-kind="capability"
       data-atlas-id={id}
       data-connected={connected ? "true" : "false"}
+      data-density={cardDensity}
       data-selected={isSelected ? "true" : "false"}
       data-focus-role={data.focusRole}
     >

@@ -1,6 +1,7 @@
 import { memo, type KeyboardEvent } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { CrewFace } from "@/components/crew/CrewFace";
+import { useAtlasDensity } from "./atlasDensity";
 import type { AtlasNode } from "./atlasTypes";
 
 // The effort card — the workhorse node. A piece of work the crew is attempting, rendered as a page
@@ -41,6 +42,12 @@ function AtlasBetNodeView({ data, id, selected }: NodeProps<AtlasNode>) {
   const summary = (data.statement ?? "").trim() || null;
   const faces = (data.teammates ?? []).slice(0, 3);
   const working = tone === "underway" && !data.draftCount;
+  // Card detail responds to zoom continuously (contract §3): title/glyph at low zoom, body and footer
+  // re-detailing as the founder zooms in. Density is the CSS variant that reveals or quiets each part.
+  // A selected/expanded card is always fully detailed regardless of zoom — selection is the founder's
+  // request to read this effort in full, not a zoom tier. This is a render function of zoom, not a mode.
+  const density = useAtlasDensity();
+  const cardDensity = expanded ? "detailed" : density;
   return (
     <article
       className="atlas-effort atlas-bet-node atlas-element"
@@ -50,6 +57,7 @@ function AtlasBetNodeView({ data, id, selected }: NodeProps<AtlasNode>) {
       data-position={data.bet?.position}
       data-band={data.decisionBand}
       data-tone={tone}
+      data-density={cardDensity}
       data-expanded={expanded ? "true" : "false"}
     >
       {/* Hidden, centered handles so the hub spoke and draft edges route to this effort. */}

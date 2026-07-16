@@ -29,6 +29,7 @@ import { projectAtlasTrace } from "./atlasTrace";
 import { ATLAS_EASE, ATLAS_MOTION } from "./atlasMotion";
 import type { AtlasNode } from "./atlasTypes";
 import { useAtlasArrivalTracker } from "./useAtlasArrivalTracker";
+import { useAtlasMaterialization } from "./useAtlasMaterialization";
 import { architectureId, atlasNodeIdForSelection, canvasArchetypeScene, omissionSummary, promotionFields, stableId } from "./ventureAtlasModel";
 import "@/styles/venture-atlas.css";
 export function VentureAtlas({
@@ -73,6 +74,11 @@ export function VentureAtlas({
     return { ...stage, nodes: placed };
   }, [fullScene]);
   const markAtlasArrivals = useAtlasArrivalTracker(ventureId, Boolean(projection));
+  // Kinetic materialization (contract §3): when a composer direction lands a burst of new stage nodes
+  // (the working theory), unfold them node-by-node over ~2–3s instead of snapping them in at once. The
+  // hook returns which arrived nodes are still held back; the decorator marks them so CSS hides them
+  // until their staged reveal. Reduced motion reveals instantly (handled inside the hook).
+  const { materializingIds } = useAtlasMaterialization(scene.nodes, Boolean(reducedMotion));
   const [nodes, setNodes, onNodesChange] = useNodesState<AtlasNode>(scene.nodes);
   const [edges, setEdges] = useEdgesState(scene.edges);
   const [outlineOpen, setOutlineOpen] = useState(false);
@@ -165,8 +171,13 @@ export function VentureAtlas({
     selected: node.id === selectedNodeId,
     // Placement is engine-owned; the founder never drags a node into place (contract §2.2).
     draggable: false,
+    // A node still held back by the staged materialization gets a class on its React Flow wrapper so
+    // CSS can hide it (and animate its birth) until its turn in the unfold. Centralized here rather
+    // than in each archetype so the four node types stay unaware of the sequencing.
+    className: materializingIds.has(node.id) ? "atlas-node-materializing" : undefined,
     data: {
       ...node.data, altitude, selected: node.id === selectedNodeId, expanded: node.id === selectedNodeId, readOnly,
+      materializing: materializingIds.has(node.id),
       focusRole: cameraFocusedId === node.id ? "focus" as const : cameraFocusedId && focusedTrace.has(node.id) ? "related" as const : "context" as const,
       onSelect: selectNode, onFocus: focusNode,
       onPromote: (element: FirmArchitectureElement) => setMutationDraft({ kind: "promote", element }),
@@ -176,7 +187,7 @@ export function VentureAtlas({
       onFold: () => onSelectionChange(null),
       onDive: enterDive,
     },
-  })), [altitude, cameraFocusedId, enterDive, focusNode, focusedTrace, nodes, onSelectionChange, onWallOpenChange, readOnly, selectNode, selectedNodeId]);
+  })), [altitude, cameraFocusedId, enterDive, focusNode, focusedTrace, materializingIds, nodes, onSelectionChange, onWallOpenChange, readOnly, selectNode, selectedNodeId]);
 
   // The inspector (in FirmApp, outside this tree) asks to open an effort's full run record — the Dive
   // near-detail surface — via a custom event. Keeping Dive here (it owns the atlas remount + camera)

@@ -9,7 +9,8 @@ import {
   type OnMoveEnd,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { memo, useCallback, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
+import { useAtlasDensity } from "./atlasDensity";
 import { ArchitectureElement } from "./ArchitectureElement";
 import { ArchitectureGroup } from "./ArchitectureGroup";
 import { FounderWall } from "./FounderWall";
@@ -29,6 +30,22 @@ const NODE_TYPES: NodeTypes = {
   atlasCrew: AtlasCrewNode,
   atlasCapability: AtlasCapabilityNode,
 };
+
+// A store-context child that mirrors the live zoom→density tier onto the canvas element as a data
+// attribute, so density-conditional CSS responds continuously to the wheel (contract §3). Kept as a
+// tiny bridge — it renders nothing — because useAtlasDensity must run inside <ReactFlow>, but the
+// attribute belongs on the canvas root the CSS targets. It writes to the closest .atlas-canvas
+// ancestor (the ReactFlow root) rather than to a portal so the attribute lands on the element the
+// altitude/density selectors already key off.
+function AtlasDensityBridge() {
+  const density = useAtlasDensity();
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    const canvas = anchorRef.current?.closest<HTMLElement>(".atlas-canvas");
+    if (canvas) canvas.dataset.atlasDensity = density;
+  }, [density]);
+  return <span ref={anchorRef} className="atlas-density-bridge" aria-hidden="true" style={{ display: "none" }} />;
+}
 
 function AtlasCanvasView({
   nodes,
@@ -106,6 +123,7 @@ function AtlasCanvasView({
       data-atlas-altitude={altitude}
     >
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
+      <AtlasDensityBridge />
     </ReactFlow>
   );
 }
