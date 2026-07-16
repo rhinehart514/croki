@@ -10,6 +10,7 @@
     "build": "npm --prefix ui run build",
     "lint": "npm --prefix ui run lint",
     "test": "npm --prefix brain test && npm --prefix ui run test:unit && npm run lint && npm run build",
+    "test:electron": "node --test electron/window-state.test.cjs",
     "test:firm:browser": "npm --prefix ui run build -- --configLoader runner && node --test test/browser/firm-journey.mjs",
     "test:firm:acceptance-browser": "npm --prefix ui run build -- --configLoader runner && node --test --test-concurrency=1 --test-force-exit test/browser/firm-journey.mjs test/browser/return-journey.mjs test/browser/dense-journey.mjs test/browser/wall-journey.mjs",
     "test:atlas:fixtures": "node --test test/browser/atlas-fixtures.test.mjs",
