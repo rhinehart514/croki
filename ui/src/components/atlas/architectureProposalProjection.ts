@@ -289,7 +289,7 @@ export function projectArchitectureProposalGhostScene(
   if ([...ghostElements.values()].some((entry) => entry.role === "motion" || entry.role === "campaign")) {
     addGap(
       gaps,
-      "Architecture proposal operations do not define a sequence of steps, approval counts, or teammate assignments.",
+      "Architecture proposal operations do not define a sequence of steps, approval counts, or agent assignments.",
     );
   }
 

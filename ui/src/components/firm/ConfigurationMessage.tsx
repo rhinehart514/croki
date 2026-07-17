@@ -65,7 +65,7 @@ export function ConfigurationMessage({
     const applied = proposal.status === "applied" || settled;
     const stale = currentRevision !== proposal.baseRevision;
     return (
-      <article className="firm-app-configuration-card" aria-label="Firm configuration proposal">
+      <article className="firm-app-configuration-card" aria-label="Venture configuration proposal">
         <header>
           <span><Settings2 aria-hidden="true" /> Proposed configuration</span>
           <strong>v{proposal.baseRevision} → v{proposal.proposedRevision}</strong>
@@ -76,7 +76,7 @@ export function ConfigurationMessage({
         <AutoHeight deps={[applied, error, stale, readOnly]}>
           <div className="firm-app-configuration-actions">
             {applied ? (
-              <span role="status"><Check aria-hidden="true" /> Applied to the live firm</span>
+              <span role="status"><Check aria-hidden="true" /> Applied to your venture</span>
             ) : (
               <Button type="button" size="sm" onClick={() => void apply()} disabled={busy || stale || readOnly}>
                 {busy ? "Applying…" : "Apply change"}
@@ -93,7 +93,7 @@ export function ConfigurationMessage({
 
   if (!receipt) return null;
   return (
-    <article className="firm-app-configuration-card firm-app-configuration-receipt" aria-label="Firm configuration receipt">
+    <article className="firm-app-configuration-card firm-app-configuration-receipt" aria-label="Venture configuration receipt">
       <header>
         <span><Check aria-hidden="true" /> Configuration applied</span>
         <strong>v{receipt.revision}</strong>

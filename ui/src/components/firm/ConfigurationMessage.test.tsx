@@ -40,7 +40,7 @@ describe("ConfigurationMessage", () => {
     expect(screen.getByText("independent verification")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Apply change" }));
     await waitFor(() => expect(applyConfigurationProposal).toHaveBeenCalledWith("v1", "proposal-1", 3));
-    expect(await screen.findByText("Applied to the live firm")).toBeTruthy();
+    expect(await screen.findByText("Applied to your venture")).toBeTruthy();
     expect(onChanged).toHaveBeenCalledOnce();
   });
 

@@ -19,6 +19,7 @@ import type { CanvasSelection } from "@/components/firm/GoalComposer";
 import { targetArchitecture, targetBet, targetTeammates } from "@/components/firm/directionTarget";
 import { VenturePicker } from "@/components/firm/VenturePicker";
 import { ImmersiveShell } from "@/components/immersive/ImmersiveShell";
+import { NowShell } from "@/components/now/NowShell";
 import { InspectorEffort } from "@/components/firm/InspectorEffort";
 import { inspectorHeader } from "@/components/firm/inspectorContent";
 import { decisionBandForBet, effortStateLabel } from "@/components/atlas/betBand";
@@ -42,6 +43,13 @@ function conversationKey(ventureId: string, field: "open") {
 function legacyShellRequested() {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("shell") === "legacy";
+}
+
+// The immersive warm-paper world is now a reachable Map lens, not the home surface. `?shell=world`
+// still opens it edge-to-edge for regression and for looking at the venture from altitude directly.
+function worldShellRequested() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("shell") === "world";
 }
 
 function readConversationOpen(ventureId: string) {
@@ -184,10 +192,12 @@ export default function FirmApp() {
     );
   }
 
-  // Default shell: the edge-to-edge warm-paper immersive world, consuming the same backend seams as the
-  // retired triptych. The legacy triptych below renders only under the explicit `?shell=legacy` opt-out.
+  // Default shell: the Now workspace — direction composer + consequence stream + artifact-first review,
+  // with the world available as a Map lens. `?shell=world` opens the immersive world directly; the
+  // legacy triptych below renders only under the explicit `?shell=legacy` opt-out.
   if (!legacyShellRequested()) {
-    return <ImmersiveShell venture={venture} />;
+    if (worldShellRequested()) return <ImmersiveShell venture={venture} />;
+    return <NowShell venture={venture} onOpenVenture={openVenture} />;
   }
 
   return (

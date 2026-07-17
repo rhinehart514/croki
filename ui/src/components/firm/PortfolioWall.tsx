@@ -7,12 +7,12 @@ function text(value: unknown) {
 
 function accountFor(item: WallQueueItemView) {
   const effect = item.effect ?? {};
-  if (item.purpose === "answer") return text(effect.question) ?? "A teammate needs your answer.";
+  if (item.purpose === "answer") return text(effect.question) ?? "An agent needs your answer.";
   if (item.purpose === "review-outcome") {
     const outcome = effect.outcome as Record<string, unknown> | undefined;
     return text(outcome?.body) ?? text(effect.body) ?? "The market spoke; review what returned.";
   }
-  if (item.purpose === "end-bet") return text(effect.reason) ?? "A teammate is asking whether this work should end.";
+  if (item.purpose === "end-bet") return text(effect.reason) ?? "An agent is asking whether this work should end.";
   if (effect.kind === "product-change") return text(effect.diffStat) ?? "A product change is ready for exact review.";
   if (effect.kind === "deploy") return text(effect.destination) ?? "A deploy is held for explicit authorization.";
   const message = text(effect.message);

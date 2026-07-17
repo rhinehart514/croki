@@ -254,15 +254,15 @@ describe("FirmLens", () => {
     const outlineToggle = await screen.findByRole("button", { name: /^outline/i });
     fireEvent.click(outlineToggle);
     expect(outlineToggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("region", { name: "Firm outline" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Venture outline" })).toBeTruthy();
 
     const wallToggle = screen.getByRole("button", { name: /waiting for you/i });
     fireEvent.click(wallToggle);
-    expect(screen.queryByRole("region", { name: "Firm outline" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Venture outline" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^outline/i })).toBeNull();
 
     fireEvent.click(wallToggle);
-    expect(screen.getByRole("region", { name: "Firm outline" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Venture outline" })).toBeTruthy();
     expect(outlineToggle).toHaveAttribute("aria-expanded", "true");
   });
 

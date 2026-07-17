@@ -43,7 +43,7 @@ function receiptLines(view: ArchitectureProposalViewModel) {
   const lines = [quantity(counts.operations, "operation")];
   for (const role of ROLE_ORDER) {
     const count = counts.createdRoles[role];
-    if (count) lines.push(quantity(count, role === "product-loop" ? "product loop" : role === "motion" ? "route" : role));
+    if (count) lines.push(quantity(count, role === "product-loop" ? "product loop" : role === "motion" ? "route" : role === "campaign" ? "outreach effort" : role));
   }
   if (counts.createdConnections) lines.push(quantity(counts.createdConnections, "connection"));
   if (counts.createdGroups) lines.push(quantity(counts.createdGroups, "group"));

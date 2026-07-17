@@ -76,7 +76,7 @@ export function Teleport({
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Type to find any effort, teammate, or the gate…"
+            placeholder="Type to find any effort, agent, or the gate…"
             aria-label="Search the venture"
             onKeyDown={(event) => {
               if (event.key === "Enter" && filtered[0]) { event.preventDefault(); pick(filtered[0].id); }

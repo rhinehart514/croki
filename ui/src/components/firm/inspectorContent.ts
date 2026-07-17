@@ -42,9 +42,9 @@ export function inspectorHeader(
   if (selection.teammateRefs.length) {
     const member = lens?.crew.find((candidate) => selection.teammateRefs.includes(candidate.ref));
     return {
-      kicker: "Teammate",
+      kicker: "Agent",
       title: member?.soul?.name?.trim() || selection.teammateRefs.join(", "),
-      note: "What this teammate is working on right now.",
+      note: "What this agent is working on right now.",
     };
   }
   return { kicker: "Selection", title: "Selected", note: "" };

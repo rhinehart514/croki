@@ -31,8 +31,8 @@ export function AtlasOutline({
   }, [open]);
   if (!open) return null;
   return (
-    <aside id="atlas-outline-panel" className="atlas-outline" aria-label="Venture atlas outline">
-      <header><ListTree aria-hidden="true" /><span><small>Deterministic access</small><strong>Venture outline</strong></span><Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close atlas outline"><X /></Button></header>
+    <aside id="atlas-outline-panel" className="atlas-outline" aria-label="Venture map outline">
+      <header><ListTree aria-hidden="true" /><span><small>Deterministic access</small><strong>Venture outline</strong></span><Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close map outline"><X /></Button></header>
       <div role="listbox" aria-label="Current read, concrete work, and returned evidence">
         {rows.map((row, index) => (
           <button

@@ -100,11 +100,11 @@ export function GateReading({
             autoComplete="off"
             value={say}
             onChange={(event) => { setSay(event.target.value); if (error) setError(null); }}
-            placeholder={isDeploy && !authorized ? "Say “authorize” to arm the deploy…" : "Tell the firm — “send it” or “hold it”…"}
-            aria-label="Tell the firm what to do — send it or hold it"
+            placeholder={isDeploy && !authorized ? "Say “authorize” to arm the deploy…" : "Tell your venture — “send it” or “hold it”…"}
+            aria-label="Tell your venture what to do — send it or hold it"
             disabled={busy !== null}
           />
-          <button type="submit" className="iw-reading-say-go" disabled={busy !== null || !say.trim()} aria-label="Tell the firm">
+          <button type="submit" className="iw-reading-say-go" disabled={busy !== null || !say.trim()} aria-label="Tell your venture">
             {busy ? "…" : "→"}
           </button>
         </div>

@@ -134,7 +134,7 @@ export function BetTerritory({ data }: NodeProps & { data: BetTerritoryData }) {
       ) : (
         <div className="workyard-territory-empty">
           <strong>No durable work yet</strong>
-          <span>The area is real; the teammate is still interpreting this direction.</span>
+          <span>The area is real; the agent is still interpreting this direction.</span>
         </div>
       )}
 

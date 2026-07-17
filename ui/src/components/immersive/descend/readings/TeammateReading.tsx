@@ -30,7 +30,7 @@ export function TeammateReading({ node }: { node: AtlasNode }) {
         <p className="iw-reading-p">{data.crewDoing ?? "Nothing yet — waiting for a direction to claim."}</p>
       </section>
       <div className="iw-reading-note">
-        <span className="iw-reading-note-k">How the firm routes</span>
+        <span className="iw-reading-note-k">How your venture routes</span>
         You don&apos;t assign work. {data.title} claims a direction in the conversation and says why — you&apos;ll see it land in the thread.
       </div>
     </div>

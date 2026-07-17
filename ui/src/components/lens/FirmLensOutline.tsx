@@ -68,7 +68,7 @@ export function FirmLensOutline({
   };
 
   return (
-    <section className={`firm-lens-outline ${open ? "open" : ""}`} aria-label="Firm outline">
+    <section className={`firm-lens-outline ${open ? "open" : ""}`} aria-label="Venture outline">
       <button
         type="button"
         className="firm-lens-outline-toggle"
@@ -85,10 +85,10 @@ export function FirmLensOutline({
         <div className="firm-lens-outline-panel" id="firm-lens-outline-panel">
           <header>
             <div>
-              <strong>Firm outline</strong>
+              <strong>Venture outline</strong>
               <span>Crew, current directions, exact work, and founder decisions</span>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close firm outline"><X size={15} /></button>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close venture outline"><X size={15} /></button>
           </header>
           {rows.length ? (
             <ol aria-label="Crew, current directions, and exact work">

@@ -45,7 +45,7 @@ export function SummonableThread({
       {/* The collapsed pill — always glanceable, never a column. */}
       <Dialog.Trigger
         className="iw-thread-pill"
-        aria-label="Open the conversation with the firm"
+        aria-label="Open the conversation with your venture"
       >
         <span className="iw-thread-pill-glyph" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -56,9 +56,9 @@ export function SummonableThread({
         <span className="iw-thread-pill-count">{conversation.length}</span>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Popup className="iw-thread-ribbon" aria-label="Conversation with the firm">
+        <Dialog.Popup className="iw-thread-ribbon" aria-label="Conversation with your venture">
           <header className="iw-thread-head">
-            <Dialog.Title className="iw-thread-title">Conversation with the firm</Dialog.Title>
+            <Dialog.Title className="iw-thread-title">Conversation with your venture</Dialog.Title>
             <Dialog.Close className="iw-thread-close" aria-label="Dismiss the conversation">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </Dialog.Close>

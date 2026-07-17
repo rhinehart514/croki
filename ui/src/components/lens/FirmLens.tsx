@@ -213,7 +213,7 @@ export function FirmLens({
     await reload();
   }, [actionsDisabled, reload, ventureId]);
   if (!lens) {
-    return error ? <div className="firm-lens-error" role="alert">{error}</div> : <div className="firm-lens-loading">Loading the firm…</div>;
+    return error ? <div className="firm-lens-error" role="alert">{error}</div> : <div className="firm-lens-loading">Loading your venture…</div>;
   }
 
   return (

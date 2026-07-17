@@ -1,0 +1,47 @@
+// Adapter: a raw wall effect or staged artifact → the concrete thing the founder reviews. A code change
+// becomes a real diff; a drafted message/page/list becomes a preview. This is the "review the produced
+// thing, not the explanation" seam — it decides which review primitive the detail surface renders.
+import type { ReviewArtifact } from "@/components/review";
+
+export type ResolvedArtifact =
+  | { kind: "diff"; diff: string; stat: string | null }
+  | { kind: "preview"; artifact: ReviewArtifact }
+  | null;
+
+function str(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export function resolveEffectArtifact(effect: Record<string, unknown>): ResolvedArtifact {
+  const diff = str(effect.diff) ?? str(effect.patch) ?? str(effect.artifact);
+  const kind = str(effect.kind)?.toLowerCase();
+  if (diff && (kind === "product-change" || diff.includes("@@") || diff.startsWith("diff --git") || diff.startsWith("--- "))) {
+    return { kind: "diff", diff, stat: str(effect.diffStat) ?? str(effect.summary) };
+  }
+  const image = str(effect.image) ?? str(effect.screenshot);
+  if (image && (image.startsWith("data:image") || /\.(png|jpe?g|gif|webp|svg)$/i.test(image))) {
+    return { kind: "preview", artifact: { kind: "image", src: image, caption: str(effect.title) ?? undefined } };
+  }
+  const html = str(effect.html) ?? str(effect.preview);
+  if (html && html.includes("<")) return { kind: "preview", artifact: { kind: "html", content: html } };
+  const body = str(effect.body) ?? str(effect.message) ?? str(effect.draft) ?? str(effect.content) ?? str(effect.text);
+  if (body) {
+    const markdownish = /(^|\n)#{1,3}\s|\n\n|\*\*|\n[-*]\s/.test(body);
+    return { kind: "preview", artifact: { kind: markdownish ? "markdown" : "text", content: body } };
+  }
+  return null;
+}
+
+/** A bet's staged artifact content is unknown-typed; coerce to a reviewable preview. */
+export function resolveStagedArtifact(content: unknown): ResolvedArtifact {
+  if (content == null) return null;
+  if (typeof content === "object") {
+    return resolveEffectArtifact(content as Record<string, unknown>)
+      ?? { kind: "preview", artifact: { kind: "text", content: JSON.stringify(content, null, 2) } };
+  }
+  const text = String(content).trim();
+  if (!text) return null;
+  if (text.includes("@@") || text.startsWith("diff --git")) return { kind: "diff", diff: text, stat: null };
+  const markdownish = /(^|\n)#{1,3}\s|\n\n|\*\*/.test(text);
+  return { kind: "preview", artifact: { kind: markdownish ? "markdown" : "text", content: text } };
+}

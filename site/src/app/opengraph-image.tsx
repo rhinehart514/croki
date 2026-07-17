@@ -103,7 +103,7 @@ export default function OpenGraphImage() {
               }}
             >
               <span style={{ color: "#a9791a", fontWeight: 700 }}>
-                Founder wall
+                Needs you
               </span>
               Nothing leaves until you approve it.
             </div>

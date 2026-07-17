@@ -36,7 +36,7 @@ export function CampaignReading({ ventureId, node, onBranched }: {
         setNote("A new approach is on the way. It will arrive on the world.");
         onBranched?.();
       } catch {
-        setError(cause instanceof Error ? cause.message : "The firm could not branch this campaign.");
+        setError(cause instanceof Error ? cause.message : "Your venture could not branch this outreach.");
       }
     } finally {
       setBusy(false);

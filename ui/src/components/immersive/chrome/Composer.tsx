@@ -95,7 +95,7 @@ export function Composer({
         <button
           type="submit"
           className="iw-composer-send"
-          aria-label="Send to the firm"
+          aria-label="Send to your venture"
           disabled={busy || readOnly || !draft.trim()}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

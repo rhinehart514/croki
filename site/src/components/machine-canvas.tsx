@@ -82,7 +82,7 @@ export function MachineCanvas() {
               </span>
               <span>
                 <small>Opening · informed read</small>
-                <strong>Turn product truth into a testable bet</strong>
+                <strong>Turn product truth into a testable venture</strong>
               </span>
             </div>
             <p>
@@ -101,7 +101,7 @@ export function MachineCanvas() {
         <article className="machine-node crew-node">
           <div className="crew-node-head">
             <span>
-              <small>Pipeline 03</small>
+              <small>Step 03</small>
               <strong>Prove the wedge</strong>
             </span>
             <span className="run-state">Prepared</span>
@@ -123,7 +123,7 @@ export function MachineCanvas() {
         </article>
 
         <div className="founder-wall-line" aria-hidden="true">
-          <span>Your wall</span>
+          <span>Needs you</span>
         </div>
 
         <div className="machine-result-column">
@@ -150,11 +150,11 @@ export function MachineCanvas() {
                 <Flag />
               </span>
               <span>
-                <small>Outcome returns</small>
+                <small>What happened</small>
                 <strong>What changed in the world</strong>
               </span>
             </div>
-            <p>No scoreboard. The result lands back on the bet that caused it.</p>
+            <p>No scoreboard. The result lands back on the venture that caused it.</p>
           </article>
         </div>
       </div>

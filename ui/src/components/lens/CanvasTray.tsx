@@ -52,7 +52,7 @@ export function CanvasTray({
                 <button key={key} type="button" draggable={!readOnly} disabled={readOnly} onDragStart={(event) => beginDrag(event, key)} onClick={() => onPlace(key)} aria-label={`Place ${name} on canvas`}>
                   <GripVertical aria-hidden="true" />
                   <CrewFace agentRef={member.ref} size={28} />
-                  <span><strong>{name}</strong><small>Move teammate</small></span>
+                  <span><strong>{name}</strong><small>Move agent</small></span>
                 </button>
               );
             })}

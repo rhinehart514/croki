@@ -6,7 +6,7 @@ const ROLE_LABELS: Record<ArchitectureRole, string> = {
   "product-loop": "Product loop",
   system: "Shared capability",
   motion: "Route",
-  campaign: "Campaign",
+  campaign: "Outreach",
 };
 
 const CHANGE_LABELS = {

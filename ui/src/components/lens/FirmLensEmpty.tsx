@@ -10,7 +10,7 @@ export function FirmLensEmpty() {
     <section className="firm-lens-empty" aria-labelledby="firm-lens-empty-title">
       <div className="firm-lens-empty-kicker"><span aria-hidden="true" /> First work</div>
       <h2 id="firm-lens-empty-title">Start with one open direction.</h2>
-      <p>Use the composer beside this canvas. Drover reads the bound repository, cites what it finds, and teammates begin useful work worth trying. Nothing leaves without your hand.</p>
+      <p>Use the composer beside this canvas. Drover reads the bound repository, cites what it finds, and agents begin useful work worth trying. Nothing leaves without your hand.</p>
       <Button
         type="button"
         variant="ghost"

@@ -119,7 +119,7 @@ function AtlasCanvasView({
       minZoom={0.18}
       maxZoom={1.7}
       proOptions={{ hideAttribution: true }}
-      aria-label="Living venture atlas. Pan and zoom the venture architecture, or open the outline for deterministic access."
+      aria-label="Living venture map. Pan and zoom the venture map, or open the outline for deterministic access."
       data-atlas-altitude={altitude}
     >
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} />

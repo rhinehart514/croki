@@ -33,7 +33,7 @@ function proposal(
     affectedExecutionContexts: ["whole venture"],
     evidenceRefs: ["repository:src/product.ts#L4"],
     unresolvedAssumptions: ["The founder has not confirmed the first audience."],
-    expectedExecutionEffect: "Semantic proposal only; no campaign or outward act starts.",
+    expectedExecutionEffect: "Semantic proposal only; no outreach or outward act starts.",
     proposedBy: { authority: "agent", id: "operator" },
     configurationRevision: 3,
     status: "pending",
@@ -100,7 +100,7 @@ describe("architecture proposal projection", () => {
     });
     expect(view.assumptions).toEqual(["The founder has not confirmed the first audience."]);
     expect(view.scene.gaps).toContain(
-      "Architecture proposal operations do not define a sequence of steps, approval counts, or teammate assignments.",
+      "Architecture proposal operations do not define a sequence of steps, approval counts, or agent assignments.",
     );
     expect(JSON.stringify(view.scene)).not.toMatch(/stageCount|gateCount|teammateAssignments|reasoningProgress/);
   });

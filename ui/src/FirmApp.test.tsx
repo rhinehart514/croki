@@ -19,6 +19,7 @@ const getConversation = vi.fn();
 const getActiveDrives = vi.fn();
 const getHealth = vi.fn();
 const stopActiveDrive = vi.fn();
+const getWallQueue = vi.fn();
 const getPortfolioWall = vi.fn();
 const driveTeammate = vi.fn();
 const getRuntimeStatuses = vi.fn();
@@ -40,6 +41,7 @@ vi.mock("@/api", () => ({
   getActiveDrives: (...args: unknown[]) => getActiveDrives(...args),
   getHealth: (...args: unknown[]) => getHealth(...args),
   stopActiveDrive: (...args: unknown[]) => stopActiveDrive(...args),
+  getWallQueue: (...args: unknown[]) => getWallQueue(...args),
   getPortfolioWall: (...args: unknown[]) => getPortfolioWall(...args),
   driveTeammate: (...args: unknown[]) => driveTeammate(...args),
   getRuntimeStatuses: (...args: unknown[]) => getRuntimeStatuses(...args),
@@ -90,6 +92,15 @@ vi.mock("@/components/immersive/ImmersiveShell", () => ({
   ),
 }));
 
+// The Now workspace is the default founder surface. Its internals (composer, stream, work detail, gate,
+// Map) have their own tests; here we stub it so these tests prove FirmApp's OWN routing responsibility —
+// open a venture → mount the Now shell — without dragging in the stream/data layer.
+vi.mock("@/components/now/NowShell", () => ({
+  NowShell: ({ venture }: { venture: { id: string; name: string } }) => (
+    <div data-testid="now-shell-stub" data-venture={venture.id} data-venture-name={venture.name} />
+  ),
+}));
+
 import FirmApp from "./FirmApp";
 
 // The cutover routes on ?shell — default is immersive, ?shell=legacy is the retained escape hatch.
@@ -131,6 +142,7 @@ describe("FirmApp", () => {
     getArchitectureProjection.mockReset().mockRejectedValue(new Error("Architecture fixture not supplied by this shell test."));
     getConversation.mockReset().mockResolvedValue({ messages: [] });
     getActiveDrives.mockReset().mockResolvedValue({ drives: [] });
+    getWallQueue.mockReset().mockResolvedValue({ queue: [] });
     getHealth.mockReset().mockResolvedValue({ founderAuthority: { available: true } });
     stopActiveDrive.mockReset().mockResolvedValue({ drive: { abortRequestedAt: "2026-07-14T12:01:00.000Z" } });
     getPortfolioWall.mockReset().mockResolvedValue({
@@ -175,22 +187,22 @@ describe("FirmApp", () => {
     const row = await screen.findByRole("button", { name: /LocalSeoData pipeline/i });
     expect(row).toHaveTextContent(/open canvas/i);
     fireEvent.click(row);
-    // Cutover: opening a venture mounts the immersive shell by default — not the triptych.
-    expect(await screen.findByTestId("immersive-shell-stub")).toHaveAttribute(
+    // Cutover: opening a venture mounts the Now workspace by default — not the triptych.
+    expect(await screen.findByTestId("now-shell-stub")).toHaveAttribute(
       "data-venture-name",
       "LocalSeoData pipeline",
     );
   });
 
-  it("opens the immersive world by default and ships no legacy triptych selectors", async () => {
+  it("opens the Now workspace by default and ships no legacy triptych selectors", async () => {
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
     const { container } = render(<FirmApp />);
     fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
 
-    // The immersive shell is the default founder surface.
-    expect(await screen.findByTestId("immersive-shell-stub")).toHaveAttribute("data-venture", "v1");
+    // The Now workspace is the default founder surface.
+    expect(await screen.findByTestId("now-shell-stub")).toHaveAttribute("data-venture", "v1");
     // The retired triptych presentation is absent from the shipped DOM.
     expect(container.querySelector(".firm-app-rail")).toBeNull();
     expect(container.querySelector(".firm-app-inspector")).toBeNull();
@@ -257,7 +269,7 @@ describe("FirmApp", () => {
     fireEvent.click(screen.getByRole("button", { name: /start venture/i }));
 
     await waitFor(() => expect(createVenture).toHaveBeenCalledWith("A new venture", "/products/new"));
-    await screen.findByTestId("immersive-shell-stub");
+    await screen.findByTestId("now-shell-stub");
   });
 
   it("offers trusted local folders as explicit choices and keeps the derived name in sync", async () => {

@@ -3,7 +3,7 @@ import { getHeatSettings, setHeatSettings, type FirmHeatSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function FirmHeatControl({ ventureId, readOnly = false, readOnlyReason = "Reconnecting before heat can change…" }: {
+export function FirmHeatControl({ ventureId, readOnly = false, readOnlyReason = "Reconnecting before always-on work can change…" }: {
   ventureId: string;
   readOnly?: boolean;
   readOnlyReason?: string;
@@ -44,7 +44,7 @@ export function FirmHeatControl({ ventureId, readOnly = false, readOnlyReason = 
       <div className="firm-always-on-head">
         <span>
           <strong id="always-on-title">Always-on work</strong>
-          <small>Let teammates revisit work already underway without another direction from you.</small>
+          <small>Let agents revisit work already underway without another direction from you.</small>
         </span>
         <label className="firm-settings-switch">
           <input
@@ -66,7 +66,7 @@ export function FirmHeatControl({ ventureId, readOnly = false, readOnlyReason = 
           <Input disabled={readOnly} type="number" min="0" step="0.01" value={draft.dailySpendUsd} onChange={(event) => setDraft({ ...draft, dailySpendUsd: Number(event.target.value) })} />
         </label>
       ) : (
-        <p>Teammates only work when you direct them. Reply capture still checks connected accounts.</p>
+        <p>Agents only work when you direct them. Reply capture still checks connected accounts.</p>
       )}
       <div className="firm-always-on-actions">
         <small>{enabled ? `$${draft.dailySpendUsd.toFixed(2)} maximum per day` : "No unattended model work"}</small>

@@ -72,7 +72,7 @@ describe("EventFeed", () => {
     render(<EventFeed lens={lens} />);
 
     expect(hasVisibleActivity(lens)).toBe(false);
-    expect(screen.getByText("Your first teammate is ready")).toBeTruthy();
+    expect(screen.getByText("Your first agent is ready")).toBeTruthy();
     expect(screen.getByText(/say what this venture should accomplish/i)).toBeTruthy();
     expect(screen.queryByText(/stage_outward|vendor_specific|runtime_cache|opaque-runtime/i)).toBeNull();
   });

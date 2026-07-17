@@ -228,7 +228,7 @@ describe("ConversationFeed", () => {
     renderFeed([globalReceipt, sableReceipt], { selection: { betId: null, workRef: null, teammateRefs: ["sable"] } });
 
     expect(screen.queryByText("Changed the firm")).toBeNull();
-    expect(screen.getByRole("article", { name: "Firm configuration receipt" })).toHaveTextContent("Changed Sable's context");
+    expect(screen.getByRole("article", { name: "Venture configuration receipt" })).toHaveTextContent("Changed Sable's context");
   });
 
   it("keeps the configuration receipt that formed a selected bet", () => {
@@ -243,7 +243,7 @@ describe("ConversationFeed", () => {
       selection: { betId: "bet-1", workRef: null, teammateRefs: [] },
     });
 
-    const article = screen.getByRole("article", { name: "Firm configuration receipt" });
+    const article = screen.getByRole("article", { name: "Venture configuration receipt" });
     expect(article).toHaveTextContent("The definition that formed this bet");
     expect(article.closest("li")).toHaveAttribute("data-message-id", "receipt-2");
   });

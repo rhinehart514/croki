@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 // also fail on `staged-…` identifiers and the `DRIFTING` decision-band token leaking into rendered
 // copy — the two the audit flagged. `staged-` matches the `staged-2026…` id shape a draft must never
 // be titled by; `drifting` matches the retired effort badge.
-const FORBIDDEN = /\b(?:bets?|motions?|fork(?:s|ed|ing)?|outcomes?|pipeline|stages?|staged|work items?|drifting)\b|\bthe wall\b|staged-\d/i;
-const INTERNAL_TOKEN = /^(?:bet|bets|motion|motions|outcome|outcomes|stage|staged|fork|forks|drifting)$/;
+const FORBIDDEN = /\b(?:bets?|motions?|fork(?:s|ed|ing)?|outcomes?|pipeline|stages?|staged|work items?|drifting|teammates?|atlas|campaigns?)\b|\bthe wall\b|staged-\d/i;
+const INTERNAL_TOKEN = /^(?:bet|bets|motion|motions|outcome|outcomes|stage|staged|fork|forks|drifting|teammate|teammates|atlas|campaign|campaigns)$/;
 const CODE_TOKEN = /^\.?[a-z0-9]+(?:-[a-z0-9]+)+(?:\s+[a-z0-9]+(?:-[a-z0-9]+)+)*$/;
 
 function filesUnder(directory: string): string[] {

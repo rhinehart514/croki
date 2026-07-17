@@ -85,7 +85,7 @@ function proposal(overrides: Partial<FirmArchitectureProposal> = {}): FirmArchit
     affectedExecutionContexts: ["whole venture"],
     evidenceRefs: ["repository:src/product.ts#L4"],
     unresolvedAssumptions: ["The founder has not confirmed the first audience."],
-    expectedExecutionEffect: "Architecture changes only; no campaign or outward act starts.",
+    expectedExecutionEffect: "Architecture changes only; no outreach or outward act starts.",
     proposedBy: { authority: "agent", id: "operator" },
     configurationRevision: 3,
     status: "pending",
@@ -112,16 +112,16 @@ describe("ArchitectureProposalCard", () => {
     expect(screen.getByText("Founder-led outbound")).toBeVisible();
     expect(screen.getByText("Product-led invitation")).toBeVisible();
     expect(screen.getByText("First outbound proof")).toBeVisible();
-    expect(screen.getByText("Architecture changes only; no campaign or outward act starts.")).toBeVisible();
+    expect(screen.getByText("Architecture changes only; no outreach or outward act starts.")).toBeVisible();
     expect(screen.getByText("The founder has not confirmed the first audience.")).toBeVisible();
-    expect(screen.getByText(/do not define a sequence of steps, approval counts, or teammate assignments/i)).toBeVisible();
+    expect(screen.getByText(/do not define a sequence of steps, approval counts, or agent assignments/i)).toBeVisible();
     expect(screen.getByRole("heading", { name: "Verified assembly progress" })).toBeVisible();
     expect(screen.getByText(/full proposal validated before this ordered batch was recorded/i)).toBeVisible();
     expect(screen.getByRole("list", { name: "Validated proposal operations" }).children).toHaveLength(6);
     expect(screen.queryByText(/reasoning progress/i)).not.toBeInTheDocument();
     expect(screen.getByText("6 operations")).toBeVisible();
     expect(screen.getByText("2 routes")).toBeVisible();
-    expect(screen.getByText("1 campaign")).toBeVisible();
+    expect(screen.getByText("1 outreach effort")).toBeVisible();
     expect(screen.queryByText(/5 stages|3 gates/i)).not.toBeInTheDocument();
   });
 

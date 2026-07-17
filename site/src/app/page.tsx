@@ -219,7 +219,7 @@ export default function Home() {
             <div className="loop-heading">
               <InView>
                 <p className="section-index">The experiment machine</p>
-                <h2 id="loop-title">Build more bets. Keep one honest picture.</h2>
+                <h2 id="loop-title">Build more ventures. Keep one honest picture.</h2>
                 <p>
                   Drover keeps the product, the work, the decisions, and what came
                   back in the same field. A pipeline appears only when execution
@@ -251,7 +251,7 @@ export default function Home() {
           <section className="wall-section" id="wall" aria-labelledby="wall-title">
             <div className="wall-copy">
               <InView>
-                <span className="wall-number">04 / THE WALL</span>
+                <span className="wall-number">04 / NEEDS YOU</span>
                 <h2 id="wall-title">
                   The fast lane ends where your authority begins.
                 </h2>
@@ -448,7 +448,7 @@ export default function Home() {
           <section className="final-cta" aria-labelledby="final-title">
             <InView>
               <DroverWordmark />
-              <h2 id="final-title">Give the next bet somewhere to live.</h2>
+              <h2 id="final-title">Give the next venture somewhere to live.</h2>
               <p>
                 Start with the product. Keep the work visible. Make every outward
                 move yours.

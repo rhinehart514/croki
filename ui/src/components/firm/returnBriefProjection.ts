@@ -40,7 +40,7 @@ export type ReturnBriefProjection = {
 
 export function projectReturnBrief(
   records: ReturnBriefRecord[],
-  { heading = "Return to the firm", limitPerGroup = 1 }: { heading?: string; limitPerGroup?: number } = {},
+  { heading = "Return to your venture", limitPerGroup = 1 }: { heading?: string; limitPerGroup?: number } = {},
 ): ReturnBriefProjection {
   const visible: ReturnBriefRecord[] = [];
   let omittedCount = 0;
@@ -65,7 +65,7 @@ export function projectReturnBrief(
     reviewableCount: records.filter((record) => !record.persistent).length,
     omittedCount,
     omission: omittedCount
-      ? `${omittedCount} more durable ${omittedCount === 1 ? "record is" : "records are"} available in the wider firm.`
-      : "This account prioritizes consequential records; routine work remains available in the wider firm.",
+      ? `${omittedCount} more durable ${omittedCount === 1 ? "record is" : "records are"} available in the wider venture.`
+      : "This account prioritizes consequential records; routine work remains available in the wider venture.",
   };
 }

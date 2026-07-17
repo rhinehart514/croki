@@ -124,10 +124,10 @@ export function FirmSettings({
           <section className="firm-settings-section" aria-labelledby="crew-capabilities-title">
             <header>
               <span>
-                <small>Teammate capabilities</small>
+                <small>Agent capabilities</small>
                 <h3 id="crew-capabilities-title">Real sources and actions</h3>
               </span>
-              <p>Connections determine what teammates can actually read or do. World-touching actions still wait for your hand.</p>
+              <p>Connections determine what agents can actually read or do. World-touching actions still wait for your hand.</p>
             </header>
 
             <article className="firm-settings-connection">

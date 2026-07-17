@@ -23,7 +23,7 @@ const ROLE_LABELS = {
   intent: "What should change",
   group: "Named area",
   wall: "Needs your hand",
-  teammate: "Teammate",
+  teammate: "Agent",
   capability: "Capability",
 } as const;
 

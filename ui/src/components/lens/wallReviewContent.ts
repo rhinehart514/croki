@@ -112,7 +112,7 @@ function outcomeJoin(outcome: Record<string, unknown>): string {
   const joined = outcome.joined === true || structural.joined === true;
   if (readable(outcome.providerEventId) || readable(outcome.providerSourceId)) return "Provider-backed join";
   if (joined) return "Evidence-supported join";
-  if (readable(outcome.source)?.toLowerCase().includes("infer")) return "Teammate inference";
+  if (readable(outcome.source)?.toLowerCase().includes("infer")) return "Agent inference";
   return "Unattributed return";
 }
 
@@ -123,8 +123,8 @@ export function reviewContent(item: WallQueueItemView): ReviewContent {
   if (item.purpose === "answer") {
     return {
       eyebrow: "Needs your input",
-      title: "A teammate needs your answer",
-      why: firstReadable(effect, ["reason", "why"]) ?? "The teammate stopped before making a founder judgment on your behalf.",
+      title: "An agent needs your answer",
+      why: firstReadable(effect, ["reason", "why"]) ?? "The agent stopped before making a founder judgment on your behalf.",
       details: [
         { label: "Question", value: readable(effect.question) ?? "The question could not be shown safely." },
         { label: "Consequence", value: "Answer returns your words to this direction. Dismiss records no answer." },

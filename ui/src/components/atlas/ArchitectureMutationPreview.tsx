@@ -37,7 +37,7 @@ export function ArchitectureMutationPreview({
   const [campaign, setCampaign] = useState({ name: "", audience: "", objective: "", uncertainty: "", observation: "", window: "" });
   const campaignComplete = Object.values(campaign).every((entry) => entry.trim());
   return (
-    <section className="atlas-mutation-preview" role="dialog" aria-modal="false" aria-label={draft.kind === "create" ? "Create a venture thought" : draft.kind === "connect" ? "Name this relationship" : draft.kind === "campaign" ? "Start a campaign" : "Use this thought in Drover"}>
+    <section className="atlas-mutation-preview" role="dialog" aria-modal="false" aria-label={draft.kind === "create" ? "Create a venture thought" : draft.kind === "connect" ? "Name this relationship" : draft.kind === "campaign" ? "Start outreach" : "Use this thought in Drover"}>
       <header>
         <span aria-hidden="true">{draft.kind === "create" ? <Sparkles /> : draft.kind === "connect" ? <Link2 /> : <ArrowRight />}</span>
         <div>
@@ -49,15 +49,15 @@ export function ArchitectureMutationPreview({
       {draft.kind === "campaign" ? (
         <form className="atlas-campaign-form" onSubmit={(event) => { event.preventDefault(); if (campaignComplete) onStartCampaign(campaign); }}>
           {([
-            ["name", "Campaign name", "A bounded activation with a clear end"],
+            ["name", "Outreach name", "A bounded activation with a clear end"],
             ["audience", "Audience", "Who this route is for now"],
             ["objective", "Objective", "What should change"],
             ["uncertainty", "Governing uncertainty", "The claim Drover will explore"],
             ["observation", "What will we observe?", "A concrete returned behavior or condition"],
             ["window", "Observation boundary", "For example: first twenty accepted entries"],
           ] as const).map(([field, label, placeholder]) => <label key={field}><span>{label}</span><Input value={campaign[field]} onChange={(event) => setCampaign((current) => ({ ...current, [field]: event.target.value }))} placeholder={placeholder} /></label>)}
-          <p>This creates one campaign inside “{draft.motion.name}” and one question to learn from. Nothing leaves without your hand.</p>
-          <Button type="submit" disabled={!campaignComplete || busy}>Start campaign</Button>
+          <p>This creates one outreach effort inside “{draft.motion.name}” and one question to learn from. Nothing leaves without your hand.</p>
+          <Button type="submit" disabled={!campaignComplete || busy}>Start</Button>
         </form>
       ) : draft.kind === "promote" ? (
         <div className="atlas-role-choices">
@@ -66,7 +66,7 @@ export function ArchitectureMutationPreview({
               <strong>{choice.label}</strong><span>{choice.description}</span>
             </button>
           ))}
-          <p>A thought can become a reusable capability directly. Product loops and routes need their actor-to-value contract; campaigns start from a selected route.</p>
+          <p>A thought can become a reusable capability directly. Product loops and routes need their actor-to-value contract; outreach efforts start from a selected route.</p>
         </div>
       ) : (
         <form onSubmit={(event) => {

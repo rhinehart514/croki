@@ -263,7 +263,7 @@ export function VentureAtlas({
       data-intent-named={(projection?.workingTheory?.intent || projection?.document.intent?.statement)?.trim() ? "true" : "false"}
       data-working-theory={projection?.workingTheory ? "true" : "false"}
       className="venture-atlas"
-      aria-label="Living venture atlas"
+      aria-label="Living venture map"
     >
       {showReturnBand && projection ? <AtlasReturnBand projection={projection} lens={lens} onFocusOutcome={(id) => focusNode(`outcome:${id}`)} onFocusPressure={(subjectRef) => focusNode(subjectRef.startsWith("architecture:") || subjectRef.startsWith("theory:") ? subjectRef : `architecture:${subjectRef}`)} /> : null}
       {loading && !projection ? <div className="venture-atlas-loading-overlay" role="status">Loading the venture map…</div> : null}
@@ -305,7 +305,7 @@ export function VentureAtlas({
           campaign: { name: value.name, audience: value.audience, objective: value.objective, measurement: { observation: value.observation, window: value.window }, bounds: { startsAt: new Date().toISOString(), endsAt: null } },
           bet: { intent: value.uncertainty },
           reason: `Activated “${mutationDraft.motion.name}” as “${value.name}”.`,
-        }).then((result) => { mutation.adoptRevision(result.revision); setMutationDraft(null); reload(); onRefresh(); }).catch((cause) => setCampaignError(cause instanceof Error ? cause.message : "The campaign could not start.")).finally(() => setCampaignBusy(false));
+        }).then((result) => { mutation.adoptRevision(result.revision); setMutationDraft(null); reload(); onRefresh(); }).catch((cause) => setCampaignError(cause instanceof Error ? cause.message : "The outreach could not start.")).finally(() => setCampaignBusy(false));
       }} /> : null}
       <AnimatePresence>{revisionReceipt.value ? <motion.div key={revisionReceipt.value.receipt.revision} className="atlas-revision-receipt" initial={reducedMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reducedMotion ? 0 : 8 }} transition={{ duration: reducedMotion ? 0 : ATLAS_MOTION.settle, ease: ATLAS_EASE }}><span><small>Architecture revision {revisionReceipt.value.receipt.revision}</small><strong>{revisionReceipt.value.receipt.reason}</strong></span>{revisionReceipt.value.undo ? <Button type="button" variant="ghost" size="sm" onClick={() => { const undo = revisionReceipt.value?.undo; if (!undo) return; void mutation.apply(undo.operations, undo.reason).then((result) => { revisionReceipt.keep({ revision: result.revision, reason: undo.reason, affectedContexts: result.affectedContexts }, null); reload(); }); }}><RotateCcw aria-hidden="true" /> Undo</Button> : null}<Button type="button" variant="ghost" size="icon-sm" onClick={revisionReceipt.clear} aria-label="Dismiss architecture receipt"><X /></Button></motion.div> : null}</AnimatePresence>
       <div data-atlas-wall><AtlasWallPanel queue={wallQueue} wallCount={lens.wall.count} liveBetCount={lens.bets.filter((bet) => bet.position === "live").length} open={wallOpen} onOpenChange={onWallOpenChange} onDecide={onDecideWall} onInspectProductChange={inspectWallProductChange} onApproveProductChange={approveWallProductChange} readOnly={readOnly} unavailableReason={error && !projection ? error : null} /></div>

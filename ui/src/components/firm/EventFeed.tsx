@@ -6,7 +6,7 @@ import { configurationForLens } from "@/lib/firmConfiguration";
 
 function teammateName(lens: FirmLens, ref: string | null) {
   const member = lens.crew.find((candidate) => candidate.ref === ref);
-  return configuredParticipantName(configurationForLens(lens), ref, member, "The teammates");
+  return configuredParticipantName(configurationForLens(lens), ref, member, "The agents");
 }
 
 export function EventFeed({
@@ -31,7 +31,7 @@ export function EventFeed({
   if (bets.length === 0) {
     const first = lens.crew[0];
     const ref = first?.ref ?? "founding-teammate";
-    const name = first ? teammateName(lens, first.ref) : "Your first teammate";
+    const name = first ? teammateName(lens, first.ref) : "Your first agent";
     return (
       <div className="firm-app-feed-empty">
         <CrewFace agentRef={ref} size={54} />

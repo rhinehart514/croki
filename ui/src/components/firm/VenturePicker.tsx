@@ -104,7 +104,7 @@ export function VenturePicker({ onOpen }: {
         <div className="firm-app-picker-orbit" aria-hidden="true">
           <i /><i /><i />
           <strong>{ventures === null ? "Opening the firm" : `${ventures.length} ${ventures.length === 1 ? "venture" : "ventures"}`}</strong>
-          <small>one firm</small>
+          <small>one venture</small>
         </div>
       </div>
 

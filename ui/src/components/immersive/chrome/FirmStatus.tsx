@@ -32,7 +32,7 @@ export function FirmStatus({
   }, [lens.bets, lens.outcomes, projection?.joins.outcomes.length]);
 
   return (
-    <div className="iw-status" aria-label="Firm operating picture">
+    <div className="iw-status" aria-label="Venture operating picture">
       {glyphs.map((glyph) => (
         <span key={glyph.key} className="iw-status-glyph" data-key={glyph.key}>
           <span className="iw-status-dot" data-key={glyph.key} aria-hidden="true" />

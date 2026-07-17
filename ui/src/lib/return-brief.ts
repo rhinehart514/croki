@@ -20,13 +20,13 @@ function wallTruth(purpose: string, effect: Record<string, unknown>) {
     const destination = text(effect.to) ?? text(effect.destination) ?? text(effect.channel);
     return destination ? `An outward act to ${destination} is waiting for your review.` : "An outward act is waiting for your review.";
   }
-  if (purpose === "answer") return text(effect.question) ?? "A teammate needs your judgment.";
+  if (purpose === "answer") return text(effect.question) ?? "An agent needs your judgment.";
   if (purpose === "review-outcome") {
     const outcome = effect.outcome && typeof effect.outcome === "object" ? effect.outcome as Record<string, unknown> : {};
     return text(outcome.body) ?? "A market return needs your read.";
   }
-  if (purpose === "end-bet") return text(effect.reason) ?? "A teammate proposes ending this work.";
-  return "The firm needs your decision.";
+  if (purpose === "end-bet") return text(effect.reason) ?? "An agent proposes ending this work.";
+  return "Drover needs your decision.";
 }
 
 function latestDurableTimestamp(lens: FirmLens, messages: FirmConversationMessage[], architecture?: FirmArchitectureProjection | null) {
@@ -45,7 +45,8 @@ export function buildReturnBrief(
   messages: FirmConversationMessage[],
   cursor: string | null,
   architecture?: FirmArchitectureProjection | null,
-): { projection: ReturnBriefProjection | null; reviewedThrough: string | null } {
+  options?: { limitPerGroup?: number; heading?: string },
+): { projection: ReturnBriefProjection | null; records: ReturnBriefRecord[]; reviewedThrough: string | null } {
   const records: ReturnBriefRecord[] = [];
   const betById = new Map(lens.bets.map((bet) => [bet.id, bet]));
   const configuration = lens.configuration;
@@ -66,7 +67,7 @@ export function buildReturnBrief(
         attribution: `${element.role === "motion" ? "route" : element.role.replace("-", " ")} · ${element.name}`,
         occurredAt: architecture.document.updatedAt,
         provenance: `Architecture revision v${architecture.revision} · derived pressure, not a health score`,
-        actionLabel: "Inspect on the atlas",
+        actionLabel: "Inspect on the map",
         target: { kind: "architecture", architectureId, architectureRevision: architecture.revision },
       });
     }
@@ -88,10 +89,10 @@ export function buildReturnBrief(
         ? "Held safely. Nothing leaves until you release this exact act."
         : item.purpose === "end-bet"
           ? "Only you can end the line; keeping it leaves the work underway."
-          : "The firm cannot make this judgment for you.",
+          : "Drover cannot make this judgment for you.",
       attribution: [participant, bet?.intent].filter(Boolean).join(" · ") || null,
       occurredAt: item.parkedAt,
-      provenance: item.configurationRevision ? `Firm revision v${item.configurationRevision}` : "Exact founder-review record",
+      provenance: item.configurationRevision ? `Venture revision v${item.configurationRevision}` : "Exact founder-review record",
       actionLabel: "Review now",
       target: { kind: "wall" },
     });
@@ -111,7 +112,7 @@ export function buildReturnBrief(
         : "Unattributed — Drover has not claimed that this work caused it.",
       attribution: [outcome.from, outcome.channel].filter(Boolean).join(" · ") || null,
       occurredAt: outcome.observedAt,
-      provenance: [outcome.source, outcome.configurationRevision ? `firm revision v${outcome.configurationRevision}` : null]
+      provenance: [outcome.source, outcome.configurationRevision ? `venture revision v${outcome.configurationRevision}` : null]
         .filter(Boolean).join(" · ") || "Durable market return",
       actionLabel: joined ? "Open on canvas" : "Review now",
       target: joined ? { kind: "bet", betId: bet.id } : { kind: "wall" },
@@ -124,7 +125,7 @@ export function buildReturnBrief(
     if (!latestEvent && (!changed || (bet.stagedCount === 0 && !bet.forkedFrom))) continue;
     const participant = bet.teammateRef
       ? configuredParticipantName(configuration, bet.teammateRef, lens.crew.find((entry) => entry.ref === bet.teammateRef))
-      : "The firm";
+      : "Drover";
     const truth = text(latestEvent?.detail)
       ?? (bet.stagedCount > 0
         ? `${participant} prepared work for “${bet.intent}”.`
@@ -137,7 +138,7 @@ export function buildReturnBrief(
       whyNow: bet.stagedCount > 0 ? `${bet.stagedCount} durable ${bet.stagedCount === 1 ? "artifact is" : "artifacts are"} inspectable now.` : "The originating line remains intact.",
       attribution: participant,
       occurredAt: latestEvent?.at ?? bet.updatedAt,
-      provenance: [latestEvent ? "Exact activity record" : "Durable work record", bet.configurationRevision ? `firm revision v${bet.configurationRevision}` : null]
+      provenance: [latestEvent ? "Exact activity record" : "Durable work record", bet.configurationRevision ? `venture revision v${bet.configurationRevision}` : null]
         .filter(Boolean).join(" · "),
       actionLabel: "Open on canvas",
       target: { kind: "bet", betId: bet.id },
@@ -163,7 +164,13 @@ export function buildReturnBrief(
   }
 
   return {
-    projection: records.length ? projectReturnBrief(records, { heading: "Since you left" }) : null,
+    projection: records.length
+      ? projectReturnBrief(records, {
+          heading: options?.heading ?? "Since you left",
+          ...(options?.limitPerGroup != null ? { limitPerGroup: options.limitPerGroup } : {}),
+        })
+      : null,
+    records,
     reviewedThrough: latestDurableTimestamp(lens, messages, architecture),
   };
 }

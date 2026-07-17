@@ -35,7 +35,7 @@ export function LensCameraControls({
         <ArrowRight aria-hidden="true" />
       </Button>
       <span aria-hidden="true" />
-      <Button variant="secondary" size="icon-sm" onClick={onFitFirm} aria-label="Fit firm">
+      <Button variant="secondary" size="icon-sm" onClick={onFitFirm} aria-label="Fit venture">
         <Maximize2 aria-hidden="true" />
       </Button>
       <Button variant="secondary" size="icon-sm" disabled={!canFocus} onClick={onBackToFocus} aria-label="Back to focused work">

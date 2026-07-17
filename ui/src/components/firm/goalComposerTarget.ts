@@ -178,7 +178,7 @@ export function targetForComposer(
       title: teammateRefs.length === 1 ? `Direct ${name}` : `Direct ${label}`,
       prompt: teammateRefs.length === 1 ? "What should change?" : "What should they work through together?",
       consequence: `${label} will turn this direction into visible, attributable work.`,
-      buttonLabel: teammateRefs.length === 1 ? `Direct ${name}` : "Direct selected teammates",
+      buttonLabel: teammateRefs.length === 1 ? `Direct ${name}` : "Direct selected agents",
     };
   }
 

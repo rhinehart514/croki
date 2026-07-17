@@ -145,7 +145,7 @@ describe("FirmWallReview", () => {
 
     const answerButton = screen.getByRole("button", { name: "Answer" });
     expect((answerButton as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByRole("textbox", { name: "Note for A teammate needs your answer" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Note for An agent needs your answer" }), {
       target: { value: "Start with finance leaders." },
     });
     fireEvent.click(answerButton);

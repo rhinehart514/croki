@@ -24,7 +24,7 @@ export function DiveWorkflowNode({ node, onInspectGate }: { node: DiveNode; onIn
     </span>
     {node.body ? <p title={node.body}>{node.body}</p> : null}
     <dl>
-      {node.teammateNames.length ? <div><dt>Teammate</dt><dd>{node.teammateNames.join(" + ")}</dd></div> : null}
+      {node.teammateNames.length ? <div><dt>Agent</dt><dd>{node.teammateNames.join(" + ")}</dd></div> : null}
       {node.runningTeammateNames.length ? <div><dt>Here now</dt><dd>{node.runningTeammateNames.join(" + ")}</dd></div> : null}
       {node.runningSince ? <div><dt>Since</dt><dd><time dateTime={node.runningSince}>{displayedTime(node.runningSince)}</time></dd></div> : null}
       {node.at ? <div><dt>Receipt</dt><dd><time dateTime={node.at}>{displayedTime(node.at)}</time></dd></div> : null}

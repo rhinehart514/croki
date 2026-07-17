@@ -34,7 +34,7 @@ const MESSAGE_TIME = new Intl.DateTimeFormat(undefined, { hour: "numeric", minut
 
 function teammateName(lens: FirmLens, ref: string | null) {
   const member = lens.crew.find((candidate) => candidate.ref === ref);
-  return configuredParticipantName(configurationForLens(lens), ref, member, "The teammates");
+  return configuredParticipantName(configurationForLens(lens), ref, member, "The agents");
 }
 
 function messageContext(message: FirmConversationMessage, lens: FirmLens) {

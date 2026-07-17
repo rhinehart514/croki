@@ -19,7 +19,7 @@ describe("AtlasWallPanel", () => {
     expect(onOpenChange).toHaveBeenCalledWith(true);
 
     view.rerender(<AtlasWallPanel {...props} open />);
-    expect(screen.getByRole("heading", { name: /the firm is still here/i })).toBeVisible();
+    expect(screen.getByRole("heading", { name: /your venture is still here/i })).toBeVisible();
     expect(screen.getByText(/3 lines are still moving inward/i)).toBeVisible();
   });
 });

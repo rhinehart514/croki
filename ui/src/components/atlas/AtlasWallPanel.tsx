@@ -63,7 +63,7 @@ export function AtlasWallPanel({
               <ShieldCheck aria-hidden="true" />
               <span>
                 <small>Founder decisions</small>
-                <h2 id="atlas-wall-clear-title">The firm is still here.</h2>
+                <h2 id="atlas-wall-clear-title">Your venture is still here.</h2>
                 <p>Nothing is waiting for your hand. {liveBetCount ? `${liveBetCount} ${liveBetCount === 1 ? "line is" : "lines are"} still moving inward.` : "Give the venture a direction to begin."}</p>
               </span>
             </section>

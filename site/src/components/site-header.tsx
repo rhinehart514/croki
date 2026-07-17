@@ -24,7 +24,7 @@ export function SiteHeader() {
 
       <nav className="desktop-nav" aria-label="Primary navigation">
         <a href="#machine">The machine</a>
-        <a href="#wall">Founder wall</a>
+        <a href="#wall">Needs you</a>
         <a href="#local">Run locally</a>
         <a href="#pricing">Pricing</a>
       </nav>
@@ -66,7 +66,7 @@ export function SiteHeader() {
           </SheetHeader>
           <nav className="mobile-nav" aria-label="Mobile navigation">
             <SheetClose render={<a href="#machine" />}>The machine</SheetClose>
-            <SheetClose render={<a href="#wall" />}>Founder wall</SheetClose>
+            <SheetClose render={<a href="#wall" />}>Needs you</SheetClose>
             <SheetClose render={<a href="#local" />}>Run locally</SheetClose>
             <SheetClose render={<a href="#pricing" />}>Pricing</SheetClose>
           </nav>

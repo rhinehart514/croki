@@ -29,7 +29,7 @@ export function WorkAttribution({
     contributorNames.length ? `${contributorNames.join(", ")} contributed` : null,
   ].filter(Boolean).join("; ");
 
-  if (!all.length) return <span className="workyard-attribution-empty">No teammate attributed</span>;
+  if (!all.length) return <span className="workyard-attribution-empty">No agent attributed</span>;
 
   return (
     <div className="workyard-attribution" aria-label={label}>

@@ -37,7 +37,7 @@ function threadFocus(selection: CanvasSelection, lens: FirmLens | null, architec
     return {
       eyebrow: selection.teammateRefs.length === 1
         ? `${configuration.presentation.participantLabel} conversation`
-        : "Selected teammates",
+        : "Selected agents",
       title: names.join(" + "),
     };
   }
@@ -180,7 +180,7 @@ export function TeammateRail({
             <>
               {showWiderFirm && returnBrief ? (
                 <div className="firm-app-return-continuation" role="status">
-                  <span><strong>The wider firm is open</strong><small>You can finish this return briefing without retracing it.</small></span>
+                  <span><strong>The wider venture is open</strong><small>You can finish this return briefing without retracing it.</small></span>
                   <div>
                     <Button type="button" variant="ghost" size="sm" onClick={() => setShowWiderFirm(false)}>Return to briefing</Button>
                     {onReviewReturnBrief ? <Button type="button" size="sm" onClick={onReviewReturnBrief}>Finish briefing</Button> : null}

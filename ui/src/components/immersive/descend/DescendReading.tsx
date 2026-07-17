@@ -65,13 +65,13 @@ function archetypeKicker(node: AtlasNode, wallItem: WallQueueItemView | null): s
   const { kind } = node.data;
   switch (kind) {
     case "teammate":
-      return "Teammate · current work";
+      return "Agent · current work";
     case "outcome":
       return "What the market said";
     case "capability":
       return "Capability";
     case "campaign":
-      return "A live campaign";
+      return "A live outreach effort";
     case "motion":
       return "A way to reach people";
     case "concept":

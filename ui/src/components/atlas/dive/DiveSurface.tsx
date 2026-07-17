@@ -68,7 +68,7 @@ export function DiveSurface({ bet, wallItems, outcomes, configuration, onReturnT
         <section className="atlas-dive-bet-summary" aria-labelledby="atlas-dive-bet-intent">
           <span>{bet.position === "at-wall" ? <><Shield aria-hidden="true" /> Needs your hand</> : POSITION_LABEL[bet.position]}</span>
           <h1 id="atlas-dive-bet-intent">{bet.intent}</h1>
-          <p><time dateTime={bet.createdAt}>Opened {new Date(bet.createdAt).toLocaleDateString()}</time>{bet.teammateRef ? ` · ${configuration?.agents.find((agent) => agent.ref === bet.teammateRef)?.name ?? bet.teammateRef}` : ""}{bet.workflowMeasurementWindow ? ` · Campaign envelope ${bet.workflowMeasurementWindow}` : ""}</p>
+          <p><time dateTime={bet.createdAt}>Opened {new Date(bet.createdAt).toLocaleDateString()}</time>{bet.teammateRef ? ` · ${configuration?.agents.find((agent) => agent.ref === bet.teammateRef)?.name ?? bet.teammateRef}` : ""}{bet.workflowMeasurementWindow ? ` · Reach window ${bet.workflowMeasurementWindow}` : ""}</p>
         </section>
 
         <div className="atlas-dive-graph-scroll" data-sparse={sparse ? "true" : "false"} role="region" aria-label="Durable workflow evidence" tabIndex={0}>

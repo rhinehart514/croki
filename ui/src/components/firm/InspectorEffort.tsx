@@ -86,7 +86,7 @@ export function InspectorEffort({
 
       <div className="insp-note">
         <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8l3 3 5.5-6" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        <span>This is a draft in your firm. Read it and say what you think — nothing here touches the world until you say so.</span>
+        <span>This is a draft in your venture. Read it and say what you think — nothing here touches the world until you say so.</span>
       </div>
 
       <button

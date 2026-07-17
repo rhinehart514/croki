@@ -98,7 +98,7 @@ export function FirmLensCanvas({
       edgesFocusable={false}
       panOnDrag
       proOptions={{ hideAttribution: true }}
-      aria-label="The firm: configured participants, their work, and founder decisions."
+      aria-label="Your venture: configured specialists, their work, and your decisions."
     >
       <Background />
       <Controls showInteractive={false} position="bottom-right" />
