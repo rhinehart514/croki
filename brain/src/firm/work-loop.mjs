@@ -26,6 +26,7 @@ import { createWorkLoopReceipts } from "./work-loop-receipts.mjs";
 import { buildWorkHandoff } from "./work-loop-handoff.mjs";
 import { captureWorkingTheoryBaseline, checkWorkingTheoryCompletion } from "./working-theory-completion.mjs";
 import { loadWork, saveWork } from "./work-loop-state.mjs";
+import { beginDriveRun, finishDriveRun } from "./work-loop-run.mjs";
 import { drainSteer } from "./work-loop-steer.mjs";
 import { withParticipantDriveLease } from "./work-loop-drive-lease.mjs";
 import {
@@ -147,6 +148,7 @@ async function driveTeammateLeased({
   coordination = null,
   target = null,
   recordInitiation = true,
+  originMessageRef = null,
   options = {},
   deps = {},
 } = {}, lease) {
@@ -199,8 +201,12 @@ async function driveTeammateLeased({
   // The initiating message is recorded once. A caller that already durably wrote the founder direction
   // (e.g. dialogue-routes records it before routing) passes recordInitiation: false so the direction is
   // not duplicated in the thread.
+  // The initiating message id becomes the run's originMessageRef. When this loop records the direction
+  // itself we capture the appended id; when a caller (e.g. dialogue-routes) already wrote it and passes
+  // recordInitiation:false, that caller supplies originMessageRef so the join stays exact rather than guessed.
+  let initiatingMessageId = originMessageRef;
   if ((initiatedBy === "founder" || initiatedBy === "agent") && recordInitiation) {
-    appendConversationMessage({
+    const initiation = appendConversationMessage({
       ventureId,
       role: initiatedBy,
       content: goal,
@@ -208,6 +214,7 @@ async function driveTeammateLeased({
       betId,
       target,
     }, options);
+    initiatingMessageId = initiation?.id ?? initiatingMessageId;
   }
   const priorTeammateMessageIds = new Set(
     listConversation(ventureId, options)
@@ -338,6 +345,18 @@ async function driveTeammateLeased({
     ventureId, betId: targetBetId, activeDriveId: activeDrive.id, adapter: selection.adapter, options,
     stepIndex: () => Number(currentWork.stepCount) || 0,
     monotonicNow: deps.monotonicNow,
+  });
+  // Durable Run lifecycle (FIRM-SPEC rail #1): a founder-authorized drive records a canonical run joined to
+  // the venture root thread BEFORE provider dispatch — founder intent → run → returned evidence becomes
+  // inspectable history. Fail-safe by construction (beginDriveRun swallows its own errors): driveRun is null
+  // when this drive does not record or when recording failed, and a null handle changes nothing downstream.
+  const driveRun = beginDriveRun({
+    ventureId,
+    runId: activeDrive.id,
+    initiatedBy,
+    betId: targetBetId,
+    originMessageId: initiatingMessageId,
+    options,
   });
   const externallyCancelled = deps.isCancelled ?? (() => false);
 
@@ -489,11 +508,12 @@ async function driveTeammateLeased({
     coordination?.request ?? null,
   );
 
+  const afterWallItems = pendingWallItems(ventureStore, ventureId, options);
   const handoffDraft = buildWorkHandoff({
     beforeBets,
     afterBets: ventureStore.listVentureDocs(ventureId, "bets", options),
     beforeWallItems,
-    afterWallItems: pendingWallItems(ventureStore, ventureId, options),
+    afterWallItems,
   });
   const handoff = handoffDraft ? appendConversationMessage({
     ventureId,
@@ -506,6 +526,19 @@ async function driveTeammateLeased({
     changes: handoffDraft.changes,
   }, options) : null;
   const completion = checkWorkingTheoryCompletion({ ventureId, baseline: theoryBaseline, outcome, target, required: workingTheoryDrive }, options);
+
+  // Terminal Run completion: add the durable decision joins parked during this drive and mint an immutable
+  // WorkflowExecutionReceipt for a bet-scoped terminal. Only a drive that reached here (a real terminal
+  // outcome) completes its run; an interrupted/cancelled drive threw before this point, leaving its run
+  // completedAt:null — historical-unknown, never a false completion. Fail-safe: finishDriveRun swallows its
+  // own errors so a completion failure never changes the drive's already-built return.
+  finishDriveRun(driveRun, {
+    outcome,
+    beforeWallItems,
+    afterWallItems,
+    runtime: runtimeReceipt,
+    modelRevision: configuration.revision,
+  });
 
   return {
     outcome,

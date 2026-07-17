@@ -43,6 +43,14 @@ export type LayoutInput = {
   /** Optional pin — the hub is anchored so the constellation never drifts off it. */
   pinned?: boolean;
   /**
+   * Optional fixed centre for a pinned node. When set (canvas seed path only), the node is pinned at this
+   * coordinate instead of the origin — used to feed a dragged founder placement in as an immovable
+   * OBSTACLE the seed separates around. Absent (the world atlas, the hub) keeps the origin pin, so the
+   * world path is byte-unchanged. Only read when `pinned` is true.
+   */
+  fixedX?: number;
+  fixedY?: number;
+  /**
    * Optional territory bias, in [-1, 0, +1]. When set on the canvas seed path, the node is seeded into
    * that half-plane and pulled toward it by a per-territory forceX INSIDE the simulation — so the exact
    * separation pass runs last and the field is collision-free-by-construction while product-rooted objects
@@ -328,10 +336,15 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
       y: Math.sin(angle) * radius,
     };
     if (node.pinned || node.kind === "hub") {
-      datum.x = 0;
-      datum.y = 0;
-      datum.fx = 0;
-      datum.fy = 0;
+      // A pinned node with an explicit fixed centre (a dragged-card obstacle on the canvas seed path)
+      // anchors THERE; the hub and every world-path pin have no fixed centre and anchor at the origin, so
+      // the world atlas is byte-unchanged.
+      const fx = node.fixedX ?? 0;
+      const fy = node.fixedY ?? 0;
+      datum.x = fx;
+      datum.y = fy;
+      datum.fx = fx;
+      datum.fy = fy;
       datum.pinned = true;
     }
     return datum;

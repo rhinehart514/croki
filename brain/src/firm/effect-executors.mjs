@@ -51,7 +51,16 @@ function executeProductChange(effect, item, { founderActor, options }) {
     throw new Error("product-change effect is missing workspaceId/revisionId — nothing to apply.");
   }
   const actor = founderActor ?? item?.decidedBy ?? "founder";
-  return applyProductBetChange(effect.workspaceId, effect.revisionId, actor, { confirm: true }, options);
+  // Normalize an apply failure to the same { ok:false, executionError } contract message/deploy return, so
+  // decide()'s persist-failure path handles a product-change failure identically: the still-queued wall item
+  // keeps lastExecutionError and the founder can retry, instead of the throw bypassing that path entirely.
+  // applyProductBetChange already rewound the "applying" flip in its own catch before rethrowing.
+  try {
+    const applied = applyProductBetChange(effect.workspaceId, effect.revisionId, actor, { confirm: true }, options);
+    return { ok: true, revisionId: applied.id, status: applied.status };
+  } catch (error) {
+    return { ok: false, executionError: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 // deploy: the SECOND heavy outward class. Unlike message, no reusable transport exists in this tree yet

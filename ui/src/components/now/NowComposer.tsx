@@ -40,6 +40,7 @@ export function NowComposer({
   hasWork,
   variant = "hero",
   readOnly = false,
+  readOnlyReason,
   autoFocus = false,
   placeholder: placeholderOverride,
   onClearScope,
@@ -53,6 +54,9 @@ export function NowComposer({
   hasWork: boolean;
   variant?: "hero" | "dock";
   readOnly?: boolean;
+  // Why the composer is held (stale/offline). Shown as a quiet honest line under the disabled field so a
+  // founder never faces a dead input with no explanation (DESIGN.md: precise reason when blocked/stale).
+  readOnlyReason?: string | null;
   autoFocus?: boolean;
   // Optional placeholder override. The default (below) is unchanged, so every existing mount is
   // byte-identical; the venture canvas passes the spec's "Direct the venture".
@@ -107,7 +111,11 @@ export function NowComposer({
     }
   };
 
-  const showChips = variant === "hero" && !hasWork && !busy && !scopeLabel;
+  // First-direction affordance: the empty-venture suggestion chips. Shown on the hero (the Now landing)
+  // and, for the empty canvas, on the dock — an empty venture has nothing to click, so the dock offers the
+  // first moves rather than a bare "Direct the venture" field over an empty plane. Never while a scope is
+  // attached, mid-run, or held (read-only), on either variant.
+  const showChips = !hasWork && !busy && !scopeLabel && !readOnly;
 
   return (
     <section className="now-composer" data-variant={variant} data-busy={busy ? "true" : "false"} aria-label="Direct this venture">
@@ -175,6 +183,9 @@ export function NowComposer({
         {speech.recording ? <span role="status">Listening…</span> : null}
         {busy ? <span role="status">Starting work…</span> : null}
         {error ? <span role="alert">{error}</span> : null}
+        {readOnly && readOnlyReason && !error ? (
+          <span className="now-composer-held" role="status">{readOnlyReason}</span>
+        ) : null}
       </div>
 
       {receipt ? (

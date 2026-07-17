@@ -291,6 +291,12 @@
 .now-chip:hover { background: var(--n-hover); border-color: var(--n-ink-4); color: var(--n-ink); }
 .now-composer-feedback { min-height: 1.1em; padding: 0 var(--space-1); font-size: var(--text-sm); color: var(--n-ink-3); }
 .now-composer-feedback [role="alert"] { color: var(--danger); }
+/* The held-composer line (stale/offline): a quiet honest reason under the disabled field, not an alarm. */
+.now-composer-held { color: var(--n-ink-3); }
+
+/* On the dock the first-direction chips sit ABOVE the field (there is no plane below the dock), spaced a
+   hair looser so they read as offered first moves over the empty canvas, not attached provenance. */
+.now-composer[data-variant="dock"] .now-composer-chips { margin-bottom: var(--space-1); }
 
 /* The post-submit receipt — a composed confirmation of what the drive made concrete, in place of a status
    line into a void. Green by default (work landed); amber when a decision now waits on the founder. */

@@ -573,4 +573,19 @@ export function createCanvasVentureFixture({ root, repository } = {}) {
   };
 }
 
+// A freshly created venture with no bets, no crew, no staged work — the empty canvas state. The plane
+// must still read as named geography: the intent hub takes the venture name, both territory kickers
+// render, and the composer offers first directions. No lorem, no tutorial checklist (spec empty state).
+export function createEmptyCanvasVentureFixture({ root, repository } = {}) {
+  const options = { root, seedFoundingCrew: false };
+  const venture = createVenture({
+    id: "fixture-empty-canvas-venture",
+    name: "Empty canvas venture",
+    repository: fixtureRepository(repository),
+    createdAt: at(0),
+    updatedAt: at(0),
+  }, options);
+  return { venture, bets: [], wall: [], expected: { bets: 0, territories: ["gtm", "product"] } };
+}
+
 export { LONG_COPY as DENSE_FIXTURE_LONG_COPY };

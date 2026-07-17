@@ -167,8 +167,10 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
   const drive = deps.driveTeammate ?? driveTeammate;
   const result = await drive({
     ventureId, teammateRef, goal: direction, initiatedBy: "founder",
-    // The founder direction was already recorded above, so the work loop must not write it again.
+    // The founder direction was already recorded above, so the work loop must not write it again — but its
+    // id still becomes the run's originMessageRef so founder intent → run stays an exact join.
     recordInitiation: false,
+    originMessageRef: fromMessageId ?? null,
     options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
   });
   json(res, 200, {

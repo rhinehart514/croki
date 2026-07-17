@@ -37,8 +37,13 @@ export async function parkOutwardAtWall({
     purpose: "release", configurationRevision, architectureRevision,
     ...(grantSkips ? { blocksBet: false } : {}),
     architectureTarget: target?.architectureId ? { id: target.architectureId, stepId: target.architectureStepId ?? null } : null,
+    // The pre-authorization marker is a HOST claim: pass it as park()'s own item field so it lands on the
+    // wall item, not on parker-controlled effect content (park strips any preAuthorizedGrantId from the
+    // effect). actType stays on the effect — it is a description, not an authorization, and park re-derives
+    // consequences deterministically regardless.
+    ...(grantSkips ? { preAuthorizedGrantId: grant.id } : {}),
     effect: grantSkips
-      ? stampKnownEffectConsequences({ ...effect, preAuthorizedGrantId: grant.id, actType }, options)
+      ? stampKnownEffectConsequences({ ...effect, actType }, options)
       : stampKnownEffectConsequences(effect, options),
   }, options);
   if (grantSkips) {

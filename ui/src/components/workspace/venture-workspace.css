@@ -120,6 +120,26 @@
   min-height: 0;
 }
 
+/* Freshness chip floats at the top-centre of the plane — honest, quiet, out of the way of the cards. It
+   holds no space when fresh (FirmFreshness renders null), so at rest the canvas is unobstructed. */
+.venture-workspace-freshness {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  z-index: 7;
+  translate: -50% 0;
+  display: flex;
+  pointer-events: none;
+}
+.venture-workspace-freshness .firm-freshness {
+  pointer-events: auto;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border: 1px solid var(--n-line-2);
+  border-radius: var(--r-lg);
+  background: var(--n-panel);
+  box-shadow: var(--shadow-card, 0 8px 30px rgba(20, 20, 24, 0.12));
+}
+
 /* The composer floats over the map, centred, distinct from the plane behind it — the founder's hand. */
 .venture-workspace-dock {
   position: absolute;

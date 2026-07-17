@@ -98,13 +98,68 @@
   padding: var(--space-3) var(--space-4) var(--space-2);
 }
 
+/* Loading is calm, never a bare spinner flash: a settled mark, the venture name, and a line that already
+   names the geography the founder is about to see — so the frame reads as composing the map, not stalling.
+   Reduced motion drops the pulse and shows the settled frame (the mark holds at full opacity). */
 .venture-canvas-loading {
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  color: var(--ink-3);
+  text-align: center;
+}
+/* A settled ring, NOT a spinner — the calm comes from naming the geography, never from ambient motion
+   (release bar: no infinite/ambient animation). The mark is a quiet static disc that reads as "the map is
+   assembling here", present identically in the reduced-motion frame. */
+.venture-canvas-loading-mark {
+  width: 30px;
+  height: 30px;
+  margin-bottom: var(--space-2);
+  border: 2px solid color-mix(in srgb, var(--ink-3) 42%, transparent);
+  border-top-color: var(--ink-2);
+  border-radius: 50%;
+}
+.venture-canvas-loading-lead {
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.venture-canvas-loading-note {
+  max-width: 34ch;
   color: var(--ink-3);
   font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* ── Card height containment — keep the DOM within the seed's reserved envelope ──────────────────────
+   The seed reserves each card's LARGEST-band FOOTPRINT (a fixed height per archetype) and separates boxes
+   at that height. But the world-atlas title/statement clamps are scoped to [data-atlas-altitude="venture"],
+   a data attribute the canvas stage does not set — so on the canvas a long bet intent or a verbose
+   statement grew the card UNBOUNDED vertically, past its reserved height, and dense fields overlapped in
+   the DOM even though the seed had cleared every reserved box. These canvas-scoped clamps bound the title
+   and statement to a fixed number of lines so a card never grows past the height the seed reserved for it.
+   Scoped under .venture-canvas-stage only — the world atlas keeps its own altitude-scoped clamps
+   byte-unchanged. Text stays >=var(--text-sm), so nothing shrinks below the legibility floor. */
+.venture-canvas-stage .atlas-canvas .atlas-element-main > strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.venture-canvas-stage .atlas-canvas .atlas-element-statement,
+.venture-canvas-stage .atlas-canvas .atlas-campaign-pressure > span:not(.atlas-campaign-team) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+/* The intent hub carries the venture name only; keep it fully legible (it is the anchor, never clamped). */
+.venture-canvas-stage .atlas-canvas .atlas-element[data-kind="intent"] .atlas-element-main > strong {
+  -webkit-line-clamp: 2;
 }
 
 @media (prefers-reduced-motion: reduce) {

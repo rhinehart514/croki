@@ -58,7 +58,10 @@ describe("stage_outward + trust grant", () => {
     assert.equal(item.blocksBet, false, "a granted act does not block the effort");
     assert.equal(item.decision, null, "the grant never releases the item — it stays for the founder's own release");
     assert.equal(item.releasedAt, null, "nothing was sent by the grant path");
-    assert.equal(item.effect.preAuthorizedGrantId != null, true, "the item is stamped pre-authorized by the grant");
+    // The pre-authorization marker is a HOST-stamped ITEM field, never parker-controlled effect content —
+    // so a forged preAuthorizedGrantId on the effect could never display a bet's own act as founder-blessed.
+    assert.equal(item.preAuthorizedGrantId != null, true, "the item is stamped pre-authorized by the grant (host field)");
+    assert.equal(item.effect.preAuthorizedGrantId, undefined, "the marker never rides on parker-controlled effect content");
     assert.ok(reloaded.events.some((e) => e.type === "parked_pre_authorized"));
     // The conversation is HONEST: it references the standing permission but never claims a send happened.
     const teammateMsg = messages.find((m) => m.role === "teammate" && /you told me I could/i.test(m.content));
@@ -88,6 +91,7 @@ describe("stage_outward + trust grant", () => {
     assert.equal(result.outcome.kind, "paused", "deploy keeps its wait even with a deploy grant on file");
     const item = queued.find((q) => q.betId === reloaded.id);
     assert.ok(item, "the deploy is parked for the founder");
-    assert.equal(item.effect.preAuthorizedGrantId, undefined, "a deploy is never stamped pre-authorized");
+    assert.equal(item.effect.preAuthorizedGrantId, undefined, "a deploy is never stamped pre-authorized on the effect");
+    assert.equal(item.preAuthorizedGrantId, null, "a deploy is never pre-authorized on the item either");
   });
 });

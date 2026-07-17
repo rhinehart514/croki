@@ -65,7 +65,12 @@ function saveItem(ventureId, item, options) {
 // The parker is whoever staged the bet's work — a teammate, a composed run, in time a model. None of
 // them are the founder, so no field they write can ever BE a founder authorization. Stripped on the way
 // in; the effect a parker controls must never carry the confirmation.
-const AUTHORIZATION_CLAIM_FIELDS = ["deployConfirmed", "deployAuthorization", "deployAuthorized", "authorized"];
+// preAuthorizedGrantId is a HOST-stamped pre-authorization marker (a live founder grant lets an act skip the
+// WAIT — grant-stage-outward.mjs). Like deployConfirmed and its kin it is an authorization claim, so the
+// parker must never be able to ride it in on the effect it authored: a forged preAuthorizedGrantId would
+// display a bet's own act as founder-blessed. It is stripped here and re-stamped only by park()'s own
+// host-side `preAuthorizedGrantId` parameter, never from parker-controlled content.
+const AUTHORIZATION_CLAIM_FIELDS = ["deployConfirmed", "deployAuthorization", "deployAuthorized", "authorized", "preAuthorizedGrantId"];
 
 function stripAuthorizationClaims(effect) {
   const clean = { ...effect };
@@ -96,7 +101,7 @@ function inferPurpose(effect) {
 // parker is never the founder, so authorization state can never ride in on the effect it authored; the
 // founder's second deploy confirmation is its own act, stamped on the ITEM by decide() below, never
 // content the effect's author supplies.
-export function park({ ventureId, betId = null, workRef = null, purpose = null, blocksBet = null, configurationRevision = null, architectureRevision = null, architectureTarget = null, effect }, options = {}) {
+export function park({ ventureId, betId = null, workRef = null, purpose = null, blocksBet = null, configurationRevision = null, architectureRevision = null, architectureTarget = null, preAuthorizedGrantId = null, effect }, options = {}) {
   if (!trimOrNull(ventureId)) throw new Error("park() needs a ventureId.");
   if (!effect || typeof effect !== "object") throw new Error("park() needs an effect to queue.");
   const parkedAt = now();
@@ -130,6 +135,9 @@ export function park({ ventureId, betId = null, workRef = null, purpose = null, 
     purpose: resolvedPurpose,
     blocksBet: blocksBet == null ? resolvedPurpose !== "review-outcome" : blocksBet === true,
     effect: stampedEffect,
+    // Host-stamped pre-authorization marker — set only by grant-stage-outward's own host path, never from
+    // the parker's effect content (which has any preAuthorizedGrantId stripped above). null when no live grant.
+    preAuthorizedGrantId: trimOrNull(preAuthorizedGrantId),
     parkedAt,
     decision: null,
     decidedAt: null,

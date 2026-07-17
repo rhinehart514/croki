@@ -63,17 +63,27 @@ export function applyProductBetChange(workspaceId, revisionId, actor, input = {}
   // Without it, the "applying" flip below would stamp intent onto a never-reviewed revision, and a
   // failed apply's recovery could then leave the revision looking approved — self-approving content the
   // founder never saw. Refuse here, before any status is touched, so an unapproved release is inert.
-  if (revision.status !== "approved") {
+  //
+  // RECOVERY FROM A STUCK APPLY: a process that dies AFTER the `applying` flip but before the terminal
+  // write leaves the revision `applying` forever, and a strict approved-only gate would then refuse every
+  // retry (fail-closed but stuck). `applying` is only ever reached from an already-approved revision (this
+  // gate ran first), so re-attempting from `applying` re-enters ONLY genuinely-approved work — it never
+  // self-approves anything the founder did not review. A never-approved revision still cannot reach here.
+  if (revision.status !== "approved" && revision.status !== "applying") {
     const error = new Error("Release requires the founder's prior review approval — review this revision first.");
     error.code = "product_change_not_approved";
     throw error;
   }
   // Persist intent before touching files. If the process dies after git apply but before the final
-  // write, durable state says `applying` instead of falsely leaving an approved/no-op receipt.
-  const priorStatus = revision.status;
+  // write, durable state says `applying` instead of falsely leaving an approved/no-op receipt. A recovery
+  // re-attempt rewinds to `approved` on failure — never hardcoded, but a stuck `applying` truly was approved.
+  const priorStatus = revision.status === "applying" ? "approved" : revision.status;
   updateRevision(workspace.id, revision.id, (current) => ({ ...current, status: "applying", applyStartedAt: now() }), options);
   try {
-    const applied = applyRevision(workspace, revision, true);
+    // applyRevision's readiness gate reads revision.status === "approved"; a stuck-applying re-attempt was
+    // provably approved before its flip (priorStatus), so hand applyRevision that approved snapshot rather
+    // than the "applying" one — the diff/base/worktree checks are unchanged, only the already-earned status.
+    const applied = applyRevision(workspace, { ...revision, status: priorStatus }, true);
     updateRevision(workspace.id, revision.id, () => applied, options);
     addDecision(workspace.id, {
       type: "product_change_apply", revisionId: revision.id, sourceReceiptId: revision.sourceReceiptId,
@@ -89,6 +99,33 @@ export function applyProductBetChange(workspaceId, revisionId, actor, input = {}
     }), options);
     throw error;
   }
+}
+
+// Explicit founder recovery for a revision left `applying` by a crash mid-apply. Founder-only, same
+// boundary as every other decide here. It rewinds the stuck `applying` flip back to `approved` (the state
+// the revision provably held before the flip — the gate above requires approval before `applying` is ever
+// set), so the founder can retry the release cleanly. It never advances a never-approved revision and never
+// touches files; a revision not currently `applying` is refused so this is not a general status override.
+export function resetStuckProductBetChange(workspaceId, revisionId, actor, input = {}, options = {}) {
+  assertFounderActor(actor, "Recovering a stuck product change");
+  if (input.confirm !== true) throw new Error("Recovering a stuck product change requires explicit confirmation.");
+  const workspace = getWorkspace(workspaceId, options);
+  const revision = findRevision(workspace, revisionId);
+  if (revision.status !== "applying") {
+    const error = new Error(`Revision ${revisionId} is not stuck applying (status "${revision.status}") — nothing to recover.`);
+    error.code = "product_change_not_stuck";
+    throw error;
+  }
+  const recovered = updateRevision(workspace.id, revision.id, (current) => ({
+    ...current, status: "approved", recoveredFromStuckAt: now(),
+    applyError: "Recovered from an interrupted apply; retry the release when ready.",
+  }), options);
+  addDecision(recovered.id, {
+    type: "product_change_recover", revisionId: revision.id, sourceReceiptId: revision.sourceReceiptId,
+    decision: "recover", decidedBy: actorRef(actor),
+    summary: `Recovered stuck product change on bet ${revision.betId} from an interrupted apply.`,
+  }, options);
+  return findRevision(getWorkspace(workspace.id, options), revisionId);
 }
 
 export function revertProductBetChange(workspaceId, revisionId, actor, input = {}, options = {}) {

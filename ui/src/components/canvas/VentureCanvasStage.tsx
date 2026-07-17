@@ -7,7 +7,7 @@
 // The one connection lives above (VentureWorkspace); `useAtlasProjection` stays here because only the
 // stage reads the architecture projection (its own 1.5s cadence, independent of the lens poll).
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlowProvider, useEdgesState, useNodesState, type Node, type NodeChange } from "@xyflow/react";
 import { SemanticBandProvider } from "@/components/atlas/SemanticBandProvider";
 import type { FirmVenture } from "@/api";
@@ -20,6 +20,7 @@ import { applyFounderPositions, carryMeasuredDimensions } from "@/components/atl
 import { indexContext, epistemicStateForNode, edgeTreatmentForSceneEdge } from "@/components/atlas/epistemicScene";
 import type { AtlasNode } from "@/components/atlas/atlasTypes";
 import { targetArchitecture, targetBet, targetTeammates, targetTheory, targetWork, type CanvasSelection } from "@/components/firm/directionTarget";
+import { AtlasOutline } from "@/components/atlas/AtlasOutline";
 import { VentureCanvasFlow } from "./VentureCanvasFlow";
 import { foldPlacement } from "./canvasSeedLayout";
 import "@/styles/venture-atlas.css";
@@ -159,22 +160,64 @@ function VentureCanvasStageInner({
     if (target && onDescend) onDescend(target);
   }, [onDescend, resolveTarget]);
 
+  // Deterministic keyboard access to every placed card: the same AtlasOutline the world atlas ships (a
+  // role=listbox with arrow/Home/End movement and visible focus), so every object on the plane is
+  // reachable and selectable without a pointer — a hard release-bar requirement the bare canvas lacked.
+  // "o"/"L" toggles it; Enter selects (single) / descends (double) exactly like the pointer; Escape closes
+  // the outline first, then leaves selection to the workspace's Escape ladder. Skipped while typing.
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.matches("input, textarea, [contenteditable='true']")) return;
+      const key = event.key.toLowerCase();
+      if (key === "o" || key === "l") { event.preventDefault(); setOutlineOpen((open) => !open); }
+      else if (event.key === "Escape" && outlineOpen) { event.preventDefault(); setOutlineOpen(false); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [outlineOpen]);
+
   return (
     <div className="venture-canvas-stage" data-dimmed={dimmed ? "true" : "false"}>
       {lens && scene ? (
-        <VentureCanvasFlow
-          nodes={decorated as unknown as Node[]}
-          edges={epistemicEdges}
-          onInit={onInit}
-          onNodesChange={onNodesChange as unknown as (changes: NodeChange[]) => void}
-          onNodeDragStop={onNodeDragStop}
-          onNodeClick={selectNode}
-          onNodeDoubleClick={onDescend ? descendNode : undefined}
-          onPaneClick={() => onSelect(null)}
-          onMoveEnd={() => undefined}
-        />
+        <>
+          <VentureCanvasFlow
+            nodes={decorated as unknown as Node[]}
+            edges={epistemicEdges}
+            onInit={onInit}
+            onNodesChange={onNodesChange as unknown as (changes: NodeChange[]) => void}
+            onNodeDragStop={onNodeDragStop}
+            onNodeClick={selectNode}
+            onNodeDoubleClick={onDescend ? descendNode : undefined}
+            onPaneClick={() => onSelect(null)}
+            onMoveEnd={() => undefined}
+          />
+          {/* A single screen-reader-only control keeps the outline discoverable without keyboard-map
+              knowledge (a11y), mirroring the world atlas. Visible only on focus. */}
+          <button
+            type="button"
+            className="atlas-outline-sr-toggle"
+            aria-expanded={outlineOpen}
+            aria-controls={outlineOpen ? "atlas-outline-panel" : undefined}
+            onClick={() => setOutlineOpen((open) => !open)}
+          >
+            {outlineOpen ? "Close" : "Open"} the venture outline
+          </button>
+          <AtlasOutline
+            open={outlineOpen}
+            nodes={decorated}
+            selectedId={selectedNodeId}
+            onSelect={(id, focus) => (focus ? descendNode(id) : selectNode(id))}
+            onClose={() => setOutlineOpen(false)}
+          />
+        </>
       ) : (
-        <div className="venture-canvas-loading" role="status">Opening {venture.name}…</div>
+        <div className="venture-canvas-loading" role="status" aria-live="polite">
+          <span className="venture-canvas-loading-mark" aria-hidden="true" />
+          <span className="venture-canvas-loading-lead">Opening {venture.name}</span>
+          <span className="venture-canvas-loading-note">Laying out the Product and Go-to-market territories…</span>
+        </div>
       )}
     </div>
   );

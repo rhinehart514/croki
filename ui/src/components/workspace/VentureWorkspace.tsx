@@ -21,6 +21,7 @@ import { targetBet, type CanvasSelection } from "@/components/firm/directionTarg
 import { readReturnCursor } from "@/lib/return-cursor";
 import { buildDirections, buildDirectionSections, directionsNeedingYou, type Direction } from "@/components/now/directionModel";
 import { NowComposer } from "@/components/now/NowComposer";
+import { FirmFreshness } from "@/components/FirmFreshness";
 import { VentureCanvasStage } from "@/components/canvas/VentureCanvasStage";
 import { StageWorkspace } from "@/components/stage/StageWorkspace";
 import { WorkspaceIndex } from "./WorkspaceIndex";
@@ -138,6 +139,10 @@ export function VentureWorkspace({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // If a nearer handler already consumed this Escape (the outline closes itself and calls
+      // preventDefault), do NOT also broaden the scope — one press does one thing. The next Escape,
+      // uncontested, runs the broaden ladder.
+      if (event.defaultPrevented) return;
       const target = event.target;
       if (target instanceof Element && target.matches("input, textarea, [contenteditable='true']")) return;
       if (!descended && !selection) return;
@@ -184,6 +189,14 @@ export function VentureWorkspace({
       />
 
       <main className="venture-workspace-canvas">
+        {/* Stale/offline honesty on the plane: the same FirmFreshness chip the legacy shell shows, so a
+            frozen canvas is never presented as live. It renders nothing when fresh/opening (contract
+            §2.8), an aria-live "Reconnecting / Offline · consequential changes are held" chip with a Retry
+            otherwise. The surface stays legible behind it — the composer holds, the last lens is frozen,
+            never a broken screen (release bar: stale/offline explicitly designed). */}
+        <div className="venture-workspace-freshness">
+          <FirmFreshness connection={connection} onRetry={refresh} />
+        </div>
         <VentureCanvasStage
           venture={venture}
           lens={lens}
@@ -221,6 +234,7 @@ export function VentureWorkspace({
               hasWork={lens.bets.length > 0}
               variant="dock"
               readOnly={readOnly}
+              readOnlyReason={readOnly ? readOnlyReason : null}
               placeholder={scopeLabel ? undefined : "Direct the venture"}
               onClearScope={selection ? clearScope : undefined}
               onDriven={onDriven}
