@@ -62,35 +62,58 @@ try {
   const opened = await client.evaluate(clickByText("button", VENTURE));
   if (!opened) throw new Error(`venture "${VENTURE}" not found in picker`);
 
-  // Now shell.
+  // Now shell — home (no direction selected): centred composer + recent list, rail is the index.
   const shell = await poll(client, `!!document.querySelector('.now')`);
   if (!shell) throw new Error("Now shell never rendered after opening venture");
-  await poll(client, `!!document.querySelector('.now-section, .now-empty')`);
+  await poll(client, `!!document.querySelector('.now-rail-dir, .now-empty')`);
 
   for (const w of WIDTHS) { await width(client, w); await shot(client, `02-now-${w}`); }
 
-  // A direction workspace.
+  // A direction workspace (a specific one when --open text is given, else the first rail direction).
   await width(client, 1440);
-  const row = await client.evaluate(`(() => { const r = document.querySelector('.now-row'); if (r) { r.click(); return true; } return false; })()`);
+  const openExpr = args.open
+    ? `(() => { const r = [...document.querySelectorAll('.now-rail-dir')].find(n => n.textContent.includes(${JSON.stringify(args.open)})); if (r) { r.click(); return true; } return false; })()`
+    : `(() => { const r = document.querySelector('.now-rail-dir'); if (r) { r.click(); return true; } return false; })()`;
+  const row = await client.evaluate(openExpr);
   if (row) {
-    const detail = await poll(client, `!!document.querySelector('.now-detail')`);
+    const detail = await poll(client, `!!document.querySelector('.now-doc')`);
     if (detail) {
-      for (const w of [1440, 1100, 1000]) { await width(client, w); await shot(client, `03-direction-${w}`); }
+      for (const w of [1440, 1100, 1000, 960]) { await width(client, w); await shot(client, `03-direction-${w}`); }
       // Scroll to the decision so the attached founder-held act is captured, not just the artifact.
       await width(client, 1440);
       await client.evaluate(`(() => { const g = document.querySelector('.now-gate'); if (g) g.scrollIntoView({ block: 'center' }); return true; })()`);
       await new Promise((r) => setTimeout(r, 300));
       await shot(client, "03-direction-decision");
+      // The persistent composer docked at the bottom of the active workspace.
+      await client.evaluate(`(() => { const d = document.querySelector('.now-dock'); if (d) d.scrollIntoView({ block: 'end' }); return true; })()`);
+      await new Promise((r) => setTimeout(r, 200));
+      await shot(client, "03-direction-dock");
     }
   } else {
     console.log("no direction rows to open (venture may be empty)");
   }
 
-  // Needs-you view.
+  // Needs-you filter on the rail.
   await width(client, 1440);
-  await client.evaluate(clickByText(".now-nav-item", "Needs you"));
+  await client.evaluate(clickByText(".now-rail-needs", "Needs you"));
   await new Promise((r) => setTimeout(r, 300));
   await shot(client, "04-needs-you");
+
+  // Stale/offline: fail every /api request in THIS headless browser only (the server keeps running),
+  // so the poll goes stale and the honest stale treatment can be captured.
+  if (args.stale) {
+    await width(client, 1440);
+    await client.evaluate(clickByText(".now-nav-item", "Now"));
+    await new Promise((r) => setTimeout(r, 300));
+    await client.send("Fetch.enable", { patterns: [{ urlPattern: "*/api/*", requestStage: "Request" }] });
+    client.on("Fetch.requestPaused", ({ requestId }) => { void client.send("Fetch.failRequest", { requestId, errorReason: "Failed" }).catch(() => {}); });
+    const banner = await poll(client, `!!document.querySelector('.now-stale')`, { tries: 80, gap: 200 });
+    console.log("stale banner:", banner ? "shown" : "MISSING");
+    await shot(client, "05-stale-now");
+    await client.evaluate(`(() => { const r = document.querySelector('.now-row'); if (r) r.click(); return true; })()`);
+    await new Promise((r) => setTimeout(r, 400));
+    await shot(client, "05-stale-direction");
+  }
 
   const rejections = await client.evaluate(`JSON.stringify(window.__droverUnhandledRejections || [])`);
   const parsed = JSON.parse(rejections || "[]");

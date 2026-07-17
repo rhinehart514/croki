@@ -170,6 +170,26 @@
   --r-cap: 11px;
   --r-well: 8px;
   --r-chip: 7px;
+
+  /* ── Cool application-shell neutrals — the Now direction workspace. Cursor-benchmark
+     density and restraint: cooler surfaces, stronger text contrast, smaller radii,
+     minimal shadow. Scoped by usage to the Now shell; the warm ADE world above is
+     untouched. Kept mirrored in design-system/styles.css. ── */
+  --n-app: #ffffff;      /* workspace canvas — the lightest plane */
+  --n-rail: #f7f8f9;     /* rail + docked chrome */
+  --n-panel: #fcfcfd;    /* raised card / composer surface */
+  --n-sunk: #f1f3f5;     /* recessed well — diffs, previews, code */
+  --n-hover: #eef0f2;    /* row / control hover */
+  --n-selected: #e6e9ed; /* selected row */
+  --n-line: #e8eaed;     /* hairline separator */
+  --n-line-2: #d8dce1;   /* stronger border / input */
+  --n-ink: #16181c;      /* primary text — high contrast */
+  --n-ink-2: #3a3f46;    /* secondary text */
+  --n-ink-3: #5b6069;    /* tertiary / meta */
+  --n-ink-4: #8a9099;    /* faint / placeholder / disabled */
+  --r-tool: 6px;         /* the application radius — compact, precise */
+  --n-shadow: 0 1px 2px rgba(20, 24, 31, 0.05), 0 8px 24px -14px rgba(20, 24, 31, 0.18);
+  --n-shadow-pop: 0 6px 16px -8px rgba(20, 24, 31, 0.16), 0 20px 48px -22px rgba(20, 24, 31, 0.28);
 }
 
 @theme inline {

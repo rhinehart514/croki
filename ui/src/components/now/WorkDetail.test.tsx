@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { WorkDetail } from "./WorkDetail";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { WorkbenchView } from "./WorkbenchView";
 import type { Direction } from "./directionModel";
 import type { FirmBet, FirmLens } from "@/types";
 import type { WallQueueItemView } from "@/api";
@@ -40,24 +40,48 @@ const wallItems: WallQueueItemView[] = [
     effect: { kind: "message", to: "roofers@acme.com", body: "Revised outreach that matches the new flow." } },
 ];
 
-describe("WorkDetail", () => {
-  it("leads with the exact repository change and holds each decision independently", () => {
+describe("WorkbenchView", () => {
+  it("pins the direction head + independent decisions above the representation pane", () => {
     render(
-      <WorkDetail
-        ventureId="v1" ventureName="Buffalo Projects" direction={direction} lens={lens}
+      <WorkbenchView
+        ventureId="v1" direction={direction} lens={lens}
         wallItems={wallItems} activeDrives={[]} projection={null}
-        onBack={() => {}} onChanged={() => {}} onSteered={() => {}} onStop={() => {}}
+        onBack={() => {}} onChanged={() => {}} onStop={() => {}}
       />,
     );
-    // The exact change is first-class, titled by the direction sentence.
+    // The direction sentence is the pinned identity.
     expect(screen.getByRole("heading", { name: "Fix why signups stalled" })).toBeTruthy();
+    // The overview representation leads with the exact repository change.
     expect(screen.getByText("Exact changes")).toBeTruthy();
-    // Two independent decisions, not one.
+    // Two independent decisions, pinned by the host, not one.
     expect(screen.getByText("Your decisions")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /Approve & send/ })).toHaveLength(2);
     // The diff is shown once (Exact changes: FilesChanged + DiffView), not duplicated inside its gate.
     expect(screen.getAllByText(/src\/App\.tsx/)).toHaveLength(2);
     // The message decision keeps its own proof.
     expect(screen.getAllByText(/Revised outreach that matches the new flow/).length).toBeGreaterThan(0);
+    // The chip strip offers only representations backed by real truth: overview + exact-change + who's
+    // working (one member bet). Not approach-comparison (single attempt), not working-result (no preview).
+    expect(screen.getByRole("button", { name: "Exact change" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Compare approaches" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Working result" })).toBeNull();
+  });
+
+  it("keeps the exact diff on screen for a product-change decision under a non-diff representation", () => {
+    render(
+      <WorkbenchView
+        ventureId="v1" direction={direction} lens={lens}
+        wallItems={wallItems} activeDrives={[]} projection={null}
+        onBack={() => {}} onChanged={() => {}} onStop={() => {}}
+      />,
+    );
+    // Switch the pane away from any representation that renders the change (overview / exact-change).
+    fireEvent.click(screen.getByRole("button", { name: "Who's working" }));
+    // The pane no longer shows the "Exact changes" block…
+    expect(screen.queryByText("Exact changes")).toBeNull();
+    // …so the pinned product-change gate MUST render the diff itself — a repository change is never
+    // released with the diff nowhere on screen. Approve & send stays available only alongside the diff.
+    expect(screen.getAllByText(/src\/App\.tsx/).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Approve & send/ })).toHaveLength(2);
   });
 });

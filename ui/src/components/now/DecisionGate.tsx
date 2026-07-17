@@ -44,14 +44,25 @@ export function DecisionGate({
     } finally { setBusy(null); }
   };
 
-  // Detail rows minus the raw-diff row (we render the diff visually), and minus consequence noise.
-  const rows = content.details.filter((detail) => detail.tone !== "artifact");
+  // A judgment request is presented as concise founder-facing language, not the raw agent question.
+  const isAnswer = item.purpose === "answer";
+  const rawQuestion = typeof item.effect.question === "string" ? item.effect.question.trim() : null;
+  const options = Array.isArray(item.effect.options)
+    ? (item.effect.options as unknown[]).filter((option): option is string => typeof option === "string")
+    : [];
+  const conciseAsk = rawQuestion && rawQuestion.length <= 140 && !rawQuestion.includes("_")
+    ? rawQuestion
+    : "Drover needs your judgment on how to proceed.";
+
+  // Detail rows minus the raw-diff row (rendered visually) and, for a judgment request, minus the raw
+  // question rows (surfaced as concise language + provenance instead).
+  const rows = isAnswer ? [] : content.details.filter((detail) => detail.tone !== "artifact");
 
   return (
     <div className="now-gate">
       <div className="now-gate-head">
-        <span className="now-gate-eyebrow">{content.eyebrow}</span>
-        <span className="now-gate-title">{content.title}</span>
+        <span className="now-gate-eyebrow">{isAnswer ? "Drover needs your judgment" : content.eyebrow}</span>
+        <span className="now-gate-title">{isAnswer ? conciseAsk : content.title}</span>
       </div>
       {artifact?.kind === "diff" ? (
         <div className="now-detail-block">
@@ -102,13 +113,29 @@ export function DecisionGate({
             {busy === "reject" ? "Holding…" : "Reject"}
           </button>
         </div>
-      ) : item.purpose === "answer" ? (
+      ) : isAnswer ? (
         <div className="now-detail-block">
+          <p className="now-detail-why">Your answer steers this direction — Drover stopped rather than decide it for you.</p>
+          {options.length ? (
+            <div className="now-gate-actions">
+              {options.map((option) => (
+                <button key={option} type="button" className="now-gate-btn" data-intent="release" disabled={busy !== null} onClick={() => decide("answer", option)}>{option}</button>
+              ))}
+            </div>
+          ) : null}
           <div className="now-gate-words">
-            <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Your answer…" aria-label="Your answer" />
+            <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={options.length ? "…or answer in your own words" : "Your answer…"} aria-label="Your answer" />
             <button type="button" className="now-gate-btn" data-intent="release" disabled={busy !== null || !note.trim()} onClick={() => decide("answer", note.trim())}>Send answer</button>
           </div>
-          <button type="button" className="now-gate-btn" data-intent="reject" disabled={busy !== null} onClick={() => decide("dismiss")}>Dismiss</button>
+          <div className="now-gate-actions">
+            <button type="button" className="now-gate-btn" data-intent="reject" disabled={busy !== null} onClick={() => decide("dismiss")}>Dismiss</button>
+          </div>
+          {rawQuestion && rawQuestion !== conciseAsk ? (
+            <details className="now-machinery">
+              <summary>The exact question Drover asked</summary>
+              <p className="now-detail-why">{rawQuestion}</p>
+            </details>
+          ) : null}
         </div>
       ) : item.purpose === "end-bet" ? (
         <div className="now-gate-actions">

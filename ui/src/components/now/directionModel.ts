@@ -54,7 +54,13 @@ function wallTruth(item: WallQueueItemView): string {
     const to = text(effect.to) ?? text(effect.destination) ?? text(effect.channel);
     return to ? `An outward act to ${to} is waiting for your release.` : "An outward act is waiting for your release.";
   }
-  if (item.purpose === "answer") return text(effect.question) ?? "A judgment is waiting on you.";
+  if (item.purpose === "answer") {
+    // Never surface a raw agent-authored question as the founder-facing line. A short, plain question
+    // can stand; verbose or jargon-laden internal text collapses to a judgment prompt (the exact text
+    // stays available under the decision's provenance).
+    const question = text(effect.question);
+    return question && question.length <= 140 && !question.includes("_") ? question : "Drover needs your judgment on how to proceed.";
+  }
   if (item.purpose === "end-bet") return text(effect.reason) ?? "A decision to end this work is waiting on you.";
   return "A decision is waiting on you.";
 }
@@ -260,4 +266,17 @@ export function buildDirectionSections(directions: Direction[], cursor: string |
 
 export function directionsNeedingYou(sections: DirectionSection[]): number {
   return sections.find((section) => section.key === "needs-you")?.directions.length ?? 0;
+}
+
+/** Compact relative age used by the rail and the recent list — "just now", "12m", "3h", "2d". */
+export function relativeAge(since: string | null, now: number): string | null {
+  if (!since) return null;
+  const started = Date.parse(since);
+  if (!Number.isFinite(started)) return null;
+  const mins = Math.max(0, Math.round((now - started) / 60_000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 }

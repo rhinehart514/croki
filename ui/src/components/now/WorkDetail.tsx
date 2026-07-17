@@ -1,158 +1,72 @@
-// The direction workspace — repository-native. Opening a direction focuses the same surface on one
-// founder intent and returns one coherent change set: what changed in plain language, the working
-// result, the EXACT repository change (files, diff, tests, preview — never reduced to a summary), what
-// else in the venture it affects, and every outward decision held independently. A direction may hold
-// several parallel attempts and several decisions; they are aggregated here, never fragmented.
+// The direction's block vocabulary — repository-native and continuous. A direction returns one coherent
+// change set: what Drover now understands, the working result, the EXACT repository change (files, diff,
+// tests, preview — never reduced to a summary), what else in the venture it affects, what it learned, and
+// how it was done. These blocks were once a single fixed stack; they are now the render bodies the
+// representation registry composes. WorkbenchView owns the head, the working-now pulse, and the pinned
+// decision; the blocks below are pure over the shared DirectionRenderContext so legacy and panes cannot
+// diverge. OverviewBody is the default "overview" representation — the same blocks, same order, same
+// now.css classes as before (parity). Steering happens in the persistent composer docked below.
 import { Fragment } from "react";
-import { ArrowLeft, Square } from "lucide-react";
-import type { FirmActiveDrive, WallQueueItemView } from "@/api";
-import type { FirmArchitectureProjection, FirmBet, FirmLens } from "@/types";
-import { targetBet } from "@/components/firm/directionTarget";
+import type { FirmOutcome } from "@/types";
 import { DiffView, FilesChanged, ArtifactPreview } from "@/components/review";
-import { DecisionGate } from "./DecisionGate";
-import { NowComposer } from "./NowComposer";
-import { resolveStagedArtifact } from "./reviewArtifact";
-import { buildDirectionImpact } from "./directionImpact";
-import type { Direction } from "./directionModel";
+import type { DirectionRenderContext, ExactChange, PreviewEntry } from "./projectDirection";
 
-const str = (value: unknown): string | null => (typeof value === "string" && value.trim() ? value.trim() : null);
-
-type ExactChange = { key: string; title: string | null; diff: string; stat: string | null; tests: string | null; preview: string | null; repository: string | null };
-
-function machineryRows(bets: FirmBet[], drive: FirmActiveDrive | null, approaches: number): Array<[string, string]> {
-  const rows: Array<[string, string]> = [];
-  if (approaches > 1) rows.push(["Approaches", String(approaches)]);
-  const agent = bets[0]?.teammateRef ?? drive?.teammateRef;
-  if (agent) rows.push(["Agent", agent]);
-  if (drive?.runtime) rows.push(["Runtime", drive.runtime]);
-  const steps = bets.reduce((sum, bet) => sum + (bet.events?.length ?? 0), 0);
-  if (steps > 0) rows.push(["Steps", String(steps)]);
-  const cost = bets.flatMap((bet) => bet.events ?? []).reduce((sum, event) => sum + (event.costUsd ?? 0), 0);
-  if (cost > 0) rows.push(["Cost", `$${cost.toFixed(2)}`]);
-  const revision = bets.find((bet) => bet.configurationRevision != null)?.configurationRevision;
-  if (revision != null) rows.push(["Venture revision", `v${revision}`]);
-  return rows;
+// Returned reality keeps its honest lineage — Drover never invents causal attribution.
+function attributionLine(outcome: FirmOutcome): string {
+  if (outcome.providerEventId) return "Joined to this direction by captured provider identity — causality is not claimed.";
+  if (outcome.joined) return "Joined by captured evidence — causality is not claimed.";
+  return "Unattributed — Drover has not claimed this work caused it.";
 }
 
-function productChangeMeta(effect: Record<string, unknown>): Omit<ExactChange, "key" | "diff"> {
-  const tests = str(effect.tests) ?? (effect.testsPassed === true ? "Tests passed" : effect.testsPassed === false ? "Tests failed" : null);
-  return {
-    title: str(effect.title) ?? str(effect.intent),
-    stat: str(effect.diffStat) ?? str(effect.summary),
-    tests,
-    preview: str(effect.preview) ?? str(effect.previewUrl) ?? str(effect.previewPath),
-    repository: str(effect.repository) ?? str(effect.repo),
-  };
-}
-
-export function WorkDetail({
-  ventureId,
-  ventureName,
-  direction,
-  lens,
-  wallItems,
-  activeDrives,
-  projection,
-  onBack,
-  onChanged,
-  onSteered,
-  onStop,
-}: {
-  ventureId: string;
-  ventureName: string;
-  direction: Direction;
-  lens: FirmLens;
-  wallItems: WallQueueItemView[];
-  activeDrives: FirmActiveDrive[];
-  projection: FirmArchitectureProjection | null;
-  onBack: () => void;
-  onChanged: () => void;
-  onSteered: () => void;
-  onStop: (driveId: string) => void;
-}) {
-  const own = new Set(direction.betIds);
-  const memberBets = lens.bets.filter((bet) => own.has(bet.id));
-  const drive = activeDrives.find((entry) => direction.activeDriveIds.includes(entry.id)) ?? null;
-  const waiting = wallItems.filter((item) => direction.waitingWallItemIds.includes(item.id) && item.decision === null);
-
-  // Split staged work into working-result previews and exact code changes. Product-change wall items
-  // contribute their exact diff too, deduped by diff text so it is shown once.
-  const previews: Array<{ title: string | null; artifact: Extract<ReturnType<typeof resolveStagedArtifact>, { kind: "preview" }> }> = [];
-  const changeByDiff = new Map<string, ExactChange>();
-  for (const bet of memberBets) {
-    for (const staged of bet.staged ?? []) {
-      const resolved = resolveStagedArtifact(staged.content);
-      if (!resolved) continue;
-      if (resolved.kind === "diff") {
-        changeByDiff.set(resolved.diff, { key: resolved.diff.slice(0, 40), title: staged.title ?? null, diff: resolved.diff, stat: resolved.stat, tests: null, preview: null, repository: null });
-      } else {
-        previews.push({ title: staged.title ?? null, artifact: resolved });
-      }
-    }
-  }
-  for (const item of waiting) {
-    if (String(item.effect.kind ?? "").toLowerCase() !== "product-change") continue;
-    const diff = str(item.effect.diff) ?? str(item.effect.patch) ?? str(item.effect.artifact);
-    if (!diff) continue;
-    changeByDiff.set(diff, { key: diff.slice(0, 40), diff, ...productChangeMeta(item.effect) });
-  }
-  const exactChanges = [...changeByDiff.values()];
-
-  const impact = buildDirectionImpact(direction.betIds, lens, projection);
-  const learning = memberBets.map((bet) => bet.learning).find((value): value is string => Boolean(value)) ?? null;
-  const machinery = machineryRows(memberBets, drive, direction.approaches);
-  const eyebrow = waiting.length ? "Needs your decision" : drive ? "Working" : direction.state === "from-market" ? "The market answered" : "Direction";
-
+/** Returned reality — what the outside world sent back to this same direction. */
+export function ReturnedBlock({ outcomes }: { outcomes: FirmOutcome[] }) {
+  if (!outcomes.length) return null;
   return (
-    <div className="now-detail" data-tone={waiting.length ? "needs-you" : direction.state}>
-      <button type="button" className="now-detail-back" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" /> Back to Now
-      </button>
-
-      {/* 1 · What changed — the whole consequence, in ordinary language. */}
-      <div>
-        <div className="now-detail-crumbs">
-          <span>{ventureName}</span>
-          <span aria-hidden="true">/</span>
-          <span>This direction</span>
+    <div className="now-detail-block">
+      <span className="now-detail-block-label">The market answered</span>
+      {outcomes.map((outcome) => (
+        <div key={outcome.id} className="now-returned">
+          <p className="now-detail-why">{outcome.body ?? `A ${outcome.outcomeKind ?? "market"} return came back.`}</p>
+          <p className="now-change-meta">
+            {[outcome.from, outcome.channel].filter(Boolean).join(" · ") || "Market return"} · {attributionLine(outcome)}
+          </p>
         </div>
-        <div className="now-detail-eyebrow">{eyebrow}</div>
-        <h1 className="now-detail-title">{direction.sentence}</h1>
+      ))}
+    </div>
+  );
+}
+
+/** Working result — the primary artifact (preview, page, campaign, research). */
+export function WorkingResultBlock({ previews }: { previews: PreviewEntry[] }) {
+  if (!previews.length) return null;
+  return (
+    <div className="now-detail-block">
+      <span className="now-detail-block-label">
+        {previews.length > 1 ? `Working result · ${previews.length} versions` : "Working result"}
+      </span>
+      <div className="now-detail-block">
+        {previews[0].title ? <p className="now-detail-why">{previews[0].title}</p> : null}
+        <div className="now-artifact-cap"><ArtifactPreview artifact={previews[0].artifact.artifact} /></div>
       </div>
-      <p className="now-detail-why">{direction.understanding}</p>
+      {previews.slice(1).map((entry, index) => (
+        <details key={index} className="now-secondary">
+          <summary>{entry.title ?? `Version ${index + 2}`}</summary>
+          <div className="now-artifact-cap"><ArtifactPreview artifact={entry.artifact.artifact} /></div>
+        </details>
+      ))}
+    </div>
+  );
+}
 
-      {drive ? (
-        <div className="now-detail-block">
-          <span className="now-detail-block-label">In progress</span>
-          <p className="now-detail-why">Drover is working on this now. It will return an artifact and stop at any outward step.</p>
-          {drive.abortSupported ? (
-            <div className="now-gate-actions">
-              <button type="button" className="now-gate-btn" data-intent="reject" onClick={() => onStop(drive.id)} disabled={Boolean(drive.abortRequestedAt)}>
-                <Square aria-hidden="true" style={{ width: 12, height: 12 }} /> {drive.abortRequestedAt ? "Stopping…" : "Stop this work"}
-              </button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* 2 · Working result — the primary artifact (preview, page, campaign, research). */}
-      {previews.length ? (
-        <div className="now-detail-block">
-          <span className="now-detail-block-label">Working result</span>
-          {previews.map((entry, index) => (
-            <div key={index} className="now-detail-block">
-              {entry.title ? <p className="now-row-detail">{entry.title}</p> : null}
-              <div className="now-artifact-cap"><ArtifactPreview artifact={entry.artifact.artifact} /></div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {/* 3 · Exact changes — repository-native, never reduced to a summary. */}
-      {exactChanges.map((change) => (
+/** Exact changes — repository-native, never reduced to a summary. */
+export function ExactChangeBlock({ changes }: { changes: ExactChange[] }) {
+  if (!changes.length) return null;
+  return (
+    <>
+      {changes.map((change) => (
         <div key={change.key} className="now-detail-block">
           <span className="now-detail-block-label">Exact changes</span>
-          {change.title ? <p className="now-row-detail">{change.title}</p> : null}
+          {change.title ? <p className="now-detail-why">{change.title}</p> : null}
           {change.repository ? <p className="now-change-meta">{change.repository}</p> : null}
           <FilesChanged diff={change.diff} />
           {change.tests || change.preview ? (
@@ -167,62 +81,61 @@ export function WorkDetail({
           </details>
         </div>
       ))}
+    </>
+  );
+}
 
-      {/* 4 · Broader impact — what else in the venture this change means. */}
-      {impact.length ? (
-        <div className="now-detail-block">
-          <span className="now-detail-block-label">What this affects</span>
-          <ul className="now-detail-list">
-            {impact.map((line, index) => <li key={index}><span>{line.text}</span></li>)}
-          </ul>
-        </div>
-      ) : null}
-
-      {/* 5 · Decisions — each outward consequence held independently. */}
-      {waiting.length ? (
-        <div className="now-detail-block">
-          <span className="now-detail-block-label">{waiting.length === 1 ? "Your decision" : "Your decisions"}</span>
-          {waiting.map((item) => (
-            <DecisionGate
-              key={item.id}
-              ventureId={ventureId}
-              item={item}
-              onDecided={onChanged}
-              showArtifact={String(item.effect.kind ?? "").toLowerCase() !== "product-change"}
-            />
-          ))}
-        </div>
-      ) : null}
-
-      {direction.primaryBetId ? (
-        <div className="now-detail-block">
-          <span className="now-detail-block-label">Keep directing this</span>
-          <NowComposer
-            ventureId={ventureId}
-            ventureName={ventureName}
-            selection={targetBet(direction.primaryBetId)}
-            scopeLabel={direction.sentence.length > 44 ? `${direction.sentence.slice(0, 44).trimEnd()}…` : direction.sentence}
-            hasWork
-            onDriven={onSteered}
-          />
-        </div>
-      ) : null}
-
-      {learning ? (
-        <div className="now-detail-block">
-          <span className="now-detail-block-label">What Drover learned</span>
-          <p className="now-detail-why">{learning}</p>
-        </div>
-      ) : null}
-
-      {machinery.length ? (
-        <details className="now-machinery">
-          <summary>How this was done</summary>
-          <dl className="now-machinery-grid">
-            {machinery.map(([label, value]) => (<Fragment key={label}><dt>{label}</dt><dd>{value}</dd></Fragment>))}
-          </dl>
-        </details>
-      ) : null}
+/** Broader impact — what else in the venture this change means. */
+export function ImpactBlock({ impact }: { impact: DirectionRenderContext["impact"] }) {
+  if (!impact.length) return null;
+  return (
+    <div className="now-detail-block">
+      <span className="now-detail-block-label">What this affects</span>
+      <ul className="now-detail-list">
+        {impact.map((line, index) => <li key={index}><span>{line.text}</span></li>)}
+      </ul>
     </div>
+  );
+}
+
+/** What Drover learned — the durable lesson a bet recorded. */
+export function LearningBlock({ learning }: { learning: string | null }) {
+  if (!learning) return null;
+  return (
+    <div className="now-detail-block">
+      <span className="now-detail-block-label">What Drover learned</span>
+      <p className="now-detail-why">{learning}</p>
+    </div>
+  );
+}
+
+/** How this was done — machinery demoted below the fold; never the primary movement signal. */
+export function MachineryBlock({ machinery }: { machinery: Array<[string, string]> }) {
+  if (!machinery.length) return null;
+  return (
+    <details className="now-machinery">
+      <summary>How this was done</summary>
+      <dl className="now-machinery-grid">
+        {machinery.map(([label, value]) => (<Fragment key={label}><dt>{label}</dt><dd>{value}</dd></Fragment>))}
+      </dl>
+    </details>
+  );
+}
+
+/**
+ * The default richest representation — the same block stack WorkDetail rendered before, in the same order
+ * and with the same now.css classes (parity). The head, working-now pulse, and pinned decisions moved up
+ * to WorkbenchView so they never hide behind a non-active chip; everything else composes from ctx here.
+ */
+export function OverviewBody({ ctx }: { ctx: DirectionRenderContext }) {
+  return (
+    <>
+      <ReturnedBlock outcomes={ctx.outcomes} />
+      <WorkingResultBlock previews={ctx.previews} />
+      <ExactChangeBlock changes={ctx.exactChanges} />
+      <ImpactBlock impact={ctx.impact} />
+      <LearningBlock learning={ctx.learning} />
+      <MachineryBlock machinery={ctx.machinery} />
+    </>
   );
 }

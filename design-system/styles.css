@@ -153,6 +153,72 @@
   --input: var(--line-2);
   --ring: var(--ink);
   --radius: var(--r-md);
+
+  /* ── ADE composite layer + cool Now-shell neutrals — mirrored byte-for-byte from
+     ui/src/index.css (canonical). Keep in sync when either file's token set changes. ── */
+  --shadow-lift: 0 2px 6px rgba(38, 37, 31, 0.08), 0 20px 50px rgba(38, 37, 31, 0.13);
+  --paper: #eae6df;
+  --paper-2: #e3ded5;
+  --paper-3: #ded8cd;
+  --card-resting: #f4f1ea;
+  --card-raised: #faf8f3;
+  --card-warm: #f6f2e9;
+  --ink-warm: #26251f;
+  --ink-2-warm: #4a4840;
+  --ink-3-warm: #78756a;
+  --ink-4-warm: #a8a498;
+  --ink-5-warm: #bdb9ac;
+  --line-warm: #d8d2c6;
+  --line-2-warm: #cbc4b5;
+  --line-soft: #e0dacf;
+  --hair: #e2dcd0;
+  --green: #3f5c46;
+  --green-2: #587a5f;
+  --green-3: #6f8f75;
+  --green-soft: #e0e8de;
+  --green-tint: #eef2ea;
+  --green-line: #c4d4c2;
+  --amber: #9a6b2f;
+  --amber-ink: #7a5322;
+  --amber-soft: #f0e4d0;
+  --amber-line: #e4d2ae;
+  --clay: #a86b52;
+  --yara: #587a5f;
+  --yara-soft: #e2ebe1;
+  --mira: #8a6d34;
+  --mira-soft: #efe4cf;
+  --soren: #4f6d86;
+  --soren-soft: #dfe7ed;
+  --kai: #8a5a63;
+  --kai-soft: #eddfe1;
+  --sh-rest: 0 1px 2px rgba(38,37,31,0.05), 0 8px 22px rgba(38,37,31,0.07);
+  --sh-lift: 0 2px 6px rgba(38,37,31,0.08), 0 20px 50px rgba(38,37,31,0.13);
+  --sh-hub: 0 3px 8px rgba(38,37,31,0.09), 0 24px 60px rgba(38,37,31,0.13);
+  --sh-chip: 0 1px 2px rgba(38,37,31,0.04);
+  --sh-panel: -18px 0 44px rgba(38,37,31,0.045);
+  --sh-rail-edge: 18px 0 44px rgba(38,37,31,0.04);
+  --inset-top: inset 0 1px 0 rgba(255,255,255,0.5);
+  --font-serif-voice: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --track-mono: 0.09em;
+  --r-card: 13px;
+  --r-cap: 11px;
+  --r-well: 8px;
+  --r-chip: 7px;
+  --n-app: #ffffff;
+  --n-rail: #f7f8f9;
+  --n-panel: #fcfcfd;
+  --n-sunk: #f1f3f5;
+  --n-hover: #eef0f2;
+  --n-selected: #e6e9ed;
+  --n-line: #e8eaed;
+  --n-line-2: #d8dce1;
+  --n-ink: #16181c;
+  --n-ink-2: #3a3f46;
+  --n-ink-3: #5b6069;
+  --n-ink-4: #8a9099;
+  --r-tool: 6px;
+  --n-shadow: 0 1px 2px rgba(20, 24, 31, 0.05), 0 8px 24px -14px rgba(20, 24, 31, 0.18);
+  --n-shadow-pop: 0 6px 16px -8px rgba(20, 24, 31, 0.16), 0 20px 48px -22px rgba(20, 24, 31, 0.28);
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────

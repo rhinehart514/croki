@@ -1,85 +1,161 @@
-// The rail — the whole permanent navigation. New work is the one loud action; Now, Needs you, Map, and
-// Automations are the only destinations. Everything else (agents, evidence, settings, decisions) is a
-// scope or a disclosure reached from the work itself, not a fixed door. Ventures switch here; search
-// reaches everything.
-import { Bell, Home, Plus, Search, Zap } from "lucide-react";
+// The rail — the whole permanent navigation, and an index of continuing founder directions rather
+// than a menu of product modules. A compact venture switcher, one strong New direction action, a
+// restrained Needs-you count, universal search, then the founder's recent and active directions with
+// quiet state markers. Automations is a secondary utility at the foot. No Now / Map / Product / Work
+// doors — everything reachable is a direction or a disclosure inside one.
+import { useEffect, useRef, useState } from "react";
+import { Bell, ChevronsUpDown, Plus, Search, Zap } from "lucide-react";
 import type { FirmVenture } from "@/api";
-import type { NowView } from "./NowShell";
+import { relativeAge, type Direction, type DirectionSection } from "./directionModel";
 
 export function NowRail({
   venture,
   ventures,
-  view,
+  sections,
+  selectedId,
   needsYou,
   search,
+  needsOnly,
+  automationsOpen,
+  now,
   onSearch,
-  onNewWork,
-  onNavigate,
+  onToggleNeeds,
+  onNewDirection,
+  onSelectDirection,
   onSwitchVenture,
+  onOpenAutomations,
 }: {
   venture: FirmVenture;
   ventures: FirmVenture[];
-  view: NowView;
+  sections: DirectionSection[];
+  selectedId: string | null;
   needsYou: number;
   search: string;
+  needsOnly: boolean;
+  automationsOpen: boolean;
+  now: number;
   onSearch: (value: string) => void;
-  onNewWork: () => void;
-  onNavigate: (view: NowView) => void;
+  onToggleNeeds: () => void;
+  onNewDirection: () => void;
+  onSelectDirection: (direction: Direction) => void;
   onSwitchVenture: (venture: FirmVenture) => void;
+  onOpenAutomations: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const ventureRef = useRef<HTMLDivElement | null>(null);
   const others = ventures.filter((entry) => entry.id !== venture.id);
   const repo = venture.repository.replace(/^https?:\/\/(www\.)?/, "");
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!ventureRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [menuOpen]);
+
   return (
-    <nav className="now-rail" aria-label="Venture navigation">
-      <div className="now-rail-venture">
-        <span className="now-rail-name">{venture.name}</span>
-        <span className="now-rail-repo" title={venture.repository}>{repo}</span>
-      </div>
-
-      <button type="button" className="now-rail-new" onClick={onNewWork}>
-        <Plus aria-hidden="true" /> New work
-      </button>
-
-      <div className="now-rail-nav">
-        <button type="button" className="now-nav-item" aria-current={view === "now"} onClick={() => onNavigate("now")}>
-          <Home aria-hidden="true" /> Now
+    <nav className="now-rail" aria-label="Directions">
+      <div className="now-rail-venture" ref={ventureRef}>
+        <button
+          type="button"
+          className="now-rail-venture-btn"
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          disabled={others.length === 0}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span className="now-rail-venture-glyph" aria-hidden="true">{venture.name.charAt(0).toUpperCase()}</span>
+          <span className="now-rail-venture-meta">
+            <span className="now-rail-venture-name">{venture.name}</span>
+            <span className="now-rail-venture-repo" title={venture.repository}>{repo}</span>
+          </span>
+          {others.length ? <ChevronsUpDown aria-hidden="true" /> : null}
         </button>
-        <button type="button" className="now-nav-item" aria-current={view === "needs"} onClick={() => onNavigate("needs")}>
-          <Bell aria-hidden="true" /> Needs you
-          {needsYou > 0 ? <span className="now-nav-badge" aria-label={`${needsYou} waiting`}>{needsYou}</span> : null}
-        </button>
-        <button type="button" className="now-nav-item" aria-current={view === "automations"} onClick={() => onNavigate("automations")}>
-          <Zap aria-hidden="true" /> Automations
-        </button>
-      </div>
-
-      {others.length ? (
-        <div className="now-rail-ventures">
-          <div className="now-rail-heading">Ventures</div>
-          <div className="now-rail-nav">
+        {menuOpen && others.length ? (
+          <div className="now-rail-venture-menu" role="menu">
+            <button type="button" role="menuitemradio" aria-current="true" onClick={() => setMenuOpen(false)}>
+              {venture.name}
+            </button>
             {others.map((entry) => (
-              <button key={entry.id} type="button" className="now-nav-item" onClick={() => onSwitchVenture(entry)}>
+              <button
+                key={entry.id}
+                type="button"
+                role="menuitemradio"
+                aria-current="false"
+                onClick={() => { setMenuOpen(false); onSwitchVenture(entry); }}
+              >
                 {entry.name}
               </button>
             ))}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
+
+      <button type="button" className="now-rail-new" onClick={onNewDirection}>
+        <Plus aria-hidden="true" /> New direction
+      </button>
+
+      <div className="now-rail-quick">
+        <button
+          type="button"
+          className="now-rail-needs"
+          aria-pressed={needsOnly}
+          data-attention={needsYou > 0 ? "true" : undefined}
+          onClick={onToggleNeeds}
+        >
+          <Bell aria-hidden="true" /> Needs you
+          {needsYou > 0 ? <span className="now-rail-needs-count">{needsYou}</span> : null}
+        </button>
+      </div>
 
       <div className="now-rail-search">
-        <label className="sr-only" htmlFor="now-search">Search this venture</label>
-        <div style={{ position: "relative" }}>
-          <Search aria-hidden="true" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--ink-5-warm)", pointerEvents: "none" }} />
-          <input
-            id="now-search"
-            type="search"
-            value={search}
-            onChange={(event) => onSearch(event.target.value)}
-            placeholder="Search"
-            style={{ paddingLeft: 30 }}
-          />
-        </div>
+        <Search aria-hidden="true" />
+        <label className="sr-only" htmlFor="now-search">Search directions</label>
+        <input
+          id="now-search"
+          type="search"
+          value={search}
+          onChange={(event) => onSearch(event.target.value)}
+          placeholder="Search"
+        />
+      </div>
+
+      <div className="now-rail-list">
+        {sections.length === 0 ? (
+          <div className="now-rail-group">
+            <span className="now-rail-group-label">{search || needsOnly ? "Nothing matches" : "No directions yet"}</span>
+          </div>
+        ) : (
+          sections.map((section) => (
+            <div key={section.key}>
+              <div className="now-rail-group">
+                <span className="now-rail-group-label">{section.label}</span>
+              </div>
+              {section.directions.map((direction) => (
+                <button
+                  key={direction.id}
+                  type="button"
+                  className="now-rail-dir"
+                  data-state={direction.state}
+                  aria-current={direction.id === selectedId}
+                  onClick={() => onSelectDirection(direction)}
+                >
+                  <span className="now-rail-dir-mark" aria-hidden="true" />
+                  <span className="now-rail-dir-title">{direction.sentence}</span>
+                  <span className="now-rail-dir-age">{relativeAge(direction.updatedAt, now)}</span>
+                </button>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="now-rail-foot">
+        <button type="button" className="now-rail-auto" aria-current={automationsOpen} onClick={onOpenAutomations}>
+          <Zap aria-hidden="true" /> Automations
+        </button>
       </div>
     </nav>
   );

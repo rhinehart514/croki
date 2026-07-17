@@ -1,24 +1,51 @@
-// The Now shell — the default founder surface. One stable frame (rail + mutating centre) over the same
-// backend the immersive world consumes. Home is an index of living founder directions; opening one
-// focuses the same surface on that intent. Relationships surface as ordinary-language impact inside a
-// direction, never as a graph the founder must operate. Two write verbs out; no new durable state.
+// The Now shell — a continuous direction workspace. One stable frame (rail + mutating centre) over
+// the same backend the immersive world consumes. The rail is an index of continuing founder
+// directions; the centre is either the home composer (no direction open) or one owned direction with
+// a persistent composer docked at the bottom. Now survives as an internal aggregation and route, not
+// as the founder's dominant mental model. Freshness is a workspace-level treatment; consequential
+// actions are held while stale. Two write verbs out; no new durable state.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useReducedMotion } from "motion/react";
+import { RefreshCw, WifiOff } from "lucide-react";
 import {
   getWallQueue, listVentures, stopActiveDrive,
   type FirmVenture, type WallQueueItemView,
 } from "@/api";
-import { useFirmConnection } from "@/hooks/use-firm-connection";
+import { useFirmConnection, type FirmConnectionState } from "@/hooks/use-firm-connection";
 import { useAtlasProjection } from "@/components/atlas/useAtlasProjection";
+import { targetBet, type CanvasSelection } from "@/components/firm/directionTarget";
 import { readReturnCursor } from "@/lib/return-cursor";
 import { buildDirections, buildDirectionSections, directionsNeedingYou, type Direction } from "./directionModel";
 import { NowRail } from "./NowRail";
 import { NowComposer } from "./NowComposer";
 import { NowStream } from "./NowStream";
-import { WorkDetail } from "./WorkDetail";
+import { WorkbenchView } from "./WorkbenchView";
 import "./now.css";
 
-export type NowView = "now" | "needs" | "automations" | "detail";
+function verifiedAge(timestamp: number | null, now: number): string {
+  if (timestamp === null) return "not verified yet";
+  const seconds = Math.max(0, Math.round((now - timestamp) / 1_000));
+  if (seconds < 60) return "last verified moments ago";
+  const minutes = Math.floor(seconds / 60);
+  return `last verified ${minutes}m ago`;
+}
+
+// One restrained workspace-level freshness treatment — ordinary language, held actions. Absent when
+// the surface is live (the web harness's read-only phase is not a founder-facing degraded state).
+function NowFreshness({ connection, now, onRetry }: { connection: FirmConnectionState; now: number; onRetry: () => void }) {
+  if (connection.phase !== "stale" && connection.phase !== "offline") return null;
+  const offline = connection.phase === "offline";
+  return (
+    <div className="now-fresh" data-tone={offline ? "offline" : "stale"} role="status" aria-live="polite">
+      {offline ? <WifiOff aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
+      <strong>{offline ? "Offline" : "Reconnecting"}</strong>
+      <span className="now-fresh-detail">
+        {verifiedAge(connection.lastUpdatedAt, now)} · decisions that change the world are paused until this is current
+      </span>
+      <button type="button" className="now-fresh-retry" onClick={onRetry}>Retry</button>
+    </div>
+  );
+}
 
 export function NowShell({
   venture,
@@ -31,9 +58,13 @@ export function NowShell({
   const { projection, reload } = useAtlasProjection(venture.id);
   const reducedMotion = useReducedMotion();
 
-  const [view, setView] = useState<NowView>("now");
-  const [selected, setSelected] = useState<Direction | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [automationsOpen, setAutomationsOpen] = useState(false);
+  const [needsOnly, setNeedsOnly] = useState(false);
   const [search, setSearch] = useState("");
+  // A representation selection can narrow the composer's scope to one file or one sibling attempt. This is
+  // pure intent, non-durable, and reset to the whole direction whenever the selection changes.
+  const [composerSelection, setComposerSelection] = useState<CanvasSelection>(null);
   const [ventures, setVentures] = useState<FirmVenture[]>([venture]);
   const [focusKey, setFocusKey] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -61,9 +92,10 @@ export function NowShell({
   const sections = useMemo(() => buildDirectionSections(directions, cursor), [directions, cursor]);
   const needsYou = directionsNeedingYou(sections);
 
-  const visibleSections = useMemo(() => {
+  // The rail index: sections filtered by the Needs-you toggle and the search query.
+  const railSections = useMemo(() => {
     let result = sections;
-    if (view === "needs") result = result.filter((section) => section.key === "needs-you");
+    if (needsOnly) result = result.filter((section) => section.key === "needs-you");
     const query = search.trim().toLowerCase();
     if (query) {
       result = result
@@ -73,83 +105,150 @@ export function NowShell({
         .filter((section) => section.directions.length > 0);
     }
     return result;
-  }, [sections, view, search]);
+  }, [sections, needsOnly, search]);
+
+  // The home recent list: the most recently touched directions, honouring the same filters.
+  const recent = useMemo(() => {
+    let result = directions;
+    if (needsOnly) result = result.filter((direction) => direction.needsYou);
+    const query = search.trim().toLowerCase();
+    if (query) result = result.filter((direction) => `${direction.sentence} ${direction.understanding}`.toLowerCase().includes(query));
+    return [...result].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")).slice(0, 6);
+  }, [directions, needsOnly, search]);
 
   // Keep the open direction in sync with fresh data so a decision or steer updates it in place.
   const openDirection = useMemo(
-    () => (selected ? directions.find((direction) => direction.id === selected.id) ?? selected : null),
-    [directions, selected],
+    () => (selectedId ? directions.find((direction) => direction.id === selectedId) ?? null : null),
+    [directions, selectedId],
   );
 
   const onDriven = useCallback(() => { refresh(); reload(); loadWall(); }, [refresh, reload, loadWall]);
-  const newWork = useCallback(() => { setSelected(null); setView("now"); setFocusKey((key) => key + 1); }, []);
-  const selectDirection = useCallback((direction: Direction) => { setSelected(direction); setView("detail"); }, []);
+  const newDirection = useCallback(() => { setSelectedId(null); setAutomationsOpen(false); setNeedsOnly(false); setComposerSelection(null); setFocusKey((key) => key + 1); }, []);
+  const selectDirection = useCallback((direction: Direction) => { setSelectedId(direction.id); setAutomationsOpen(false); setComposerSelection(null); }, []);
+  const openAutomations = useCallback(() => { setAutomationsOpen(true); setSelectedId(null); }, []);
   const stop = useCallback(async (driveId: string) => { await stopActiveDrive(venture.id, driveId).catch(() => undefined); onDriven(); }, [venture.id, onDriven]);
 
-  const composerVisible = view === "now" || view === "needs";
+  // The composer's scope: a representation pick narrows it (a file or one sibling attempt); otherwise it
+  // is the whole direction via its primary bet. Non-durable and consequential only when the founder sends.
+  const composerScope = useMemo<CanvasSelection>(
+    () => composerSelection ?? (openDirection?.primaryBetId ? targetBet(openDirection.primaryBetId) : null),
+    [composerSelection, openDirection],
+  );
+  const clearScope = useCallback(() => setComposerSelection(null), []);
+  // Name the exact narrowed scope so the founder sees WHICH attempt/change is targeted before sending —
+  // a representation pick carries the sibling bet (its intent) or a specific work reference.
+  const scopePickLabel = useMemo<string | null>(() => {
+    if (!composerSelection) return null;
+    if (composerSelection.betId) {
+      const intent = lens?.bets.find((bet) => bet.id === composerSelection.betId)?.intent?.trim();
+      if (intent) return intent.length > 44 ? `${intent.slice(0, 44).trimEnd()}…` : intent;
+    }
+    if (composerSelection.workRef) return "One change in this direction";
+    return "This attempt";
+  }, [composerSelection, lens]);
+  const scopeLabel = openDirection
+    ? (composerSelection
+        ? scopePickLabel
+        : (openDirection.sentence.length > 52 ? `${openDirection.sentence.slice(0, 52).trimEnd()}…` : openDirection.sentence))
+    : null;
 
   return (
     <div className="now" data-reduced-motion={reducedMotion ? "true" : "false"}>
       <NowRail
         venture={venture}
         ventures={ventures}
-        view={view}
+        sections={railSections}
+        selectedId={selectedId}
         needsYou={needsYou}
         search={search}
+        needsOnly={needsOnly}
+        automationsOpen={automationsOpen}
+        now={now}
         onSearch={setSearch}
-        onNewWork={newWork}
-        onNavigate={(next) => { setView(next); if (next !== "detail") setSelected(null); }}
+        onToggleNeeds={() => setNeedsOnly((value) => !value)}
+        onNewDirection={newDirection}
+        onSelectDirection={selectDirection}
         onSwitchVenture={onOpenVenture}
+        onOpenAutomations={openAutomations}
       />
-      <main className="now-center">
-        {view === "detail" && openDirection && lens ? (
-          <div className="now-page">
-            <WorkDetail
-              ventureId={venture.id}
-              ventureName={venture.name}
-              direction={openDirection}
-              lens={lens}
-              wallItems={wallItems}
-              activeDrives={activeDrives}
-              projection={projection}
-              onBack={() => { setView("now"); setSelected(null); }}
-              onChanged={() => { onDriven(); setView("now"); setSelected(null); }}
-              onSteered={onDriven}
-              onStop={stop}
-            />
+
+      <main className="now-main">
+        <NowFreshness connection={connection} now={now} onRetry={refresh} />
+
+        {automationsOpen ? (
+          <div className="now-home">
+            <div className="now-panel">
+              <h1 className="now-panel-title">Automations</h1>
+              <p className="now-panel-why">
+                An automation is a direction with a trigger — the same as anything you ask, plus when to run it.
+                It returns the same proof and stops at the same decisions. This surface is coming next.
+              </p>
+              <div className="now-automation-card" aria-label="Example automation, not yet active">
+                <span className="now-automation-tag">Example · not yet active</span>
+                <span className="now-automation-when">Every weekday morning</span>
+                <span className="now-automation-do">Find the strongest next move for {venture.name} and prepare it for review.</span>
+              </div>
+            </div>
           </div>
-        ) : view === "automations" ? (
-          <div className="now-page">
-            <h1 className="now-detail-title">Automations</h1>
-            <p className="now-detail-why">
-              An automation is a direction with a trigger — the same as anything you ask, plus when to run it.
-              It returns the same proof and stops at the same decisions. This surface is coming next.
-            </p>
-            <div className="now-automation-card" data-example="true" aria-label="Example automation, not yet active">
-              <span className="now-automation-tag">Example · not yet active</span>
-              <span className="now-automation-when">Every weekday morning</span>
-              <span className="now-automation-do">Find the strongest next move for {venture.name} and prepare it for review.</span>
+        ) : openDirection && lens ? (
+          <div className="now-workspace">
+            <div className="now-workspace-scroll">
+              <WorkbenchView
+                key={openDirection.id}
+                ventureId={venture.id}
+                direction={openDirection}
+                lens={lens}
+                wallItems={wallItems}
+                activeDrives={activeDrives}
+                projection={projection}
+                onBack={newDirection}
+                onChanged={onDriven}
+                onStop={stop}
+                onScopePick={setComposerSelection}
+              />
+            </div>
+            <div className="now-dock">
+              <div className="now-dock-inner">
+                <NowComposer
+                  ventureId={venture.id}
+                  ventureName={venture.name}
+                  selection={composerScope}
+                  scopeLabel={scopeLabel}
+                  hasWork
+                  variant="dock"
+                  readOnly={readOnly}
+                  onClearScope={composerSelection ? clearScope : undefined}
+                  onDriven={onDriven}
+                />
+              </div>
             </div>
           </div>
         ) : (
-          <div className="now-page">
-            {composerVisible && lens ? (
-              <NowComposer
-                ventureId={venture.id}
-                ventureName={venture.name}
-                selection={null}
-                scopeLabel={null}
-                hasWork={Boolean(lens.bets.length)}
-                readOnly={readOnly}
-                autoFocus={focusKey > 0}
-                onDriven={onDriven}
-              />
-            ) : null}
-            {lens ? (
-              <NowStream sections={visibleSections} now={now} onSelect={selectDirection} />
-            ) : (
-              <div className="now-empty" role="status"><span>Opening {venture.name}…</span></div>
-            )}
+          <div className="now-home">
+            <div className="now-home-inner">
+              <div className="now-home-head">
+                <span className="now-home-title">What should Drover accomplish for {venture.name}?</span>
+                <span className="now-home-sub">Say one plain sentence. Drover starts real work and stops at every decision that's yours.</span>
+              </div>
+              {lens ? (
+                <NowComposer
+                  ventureId={venture.id}
+                  ventureName={venture.name}
+                  selection={null}
+                  scopeLabel={null}
+                  hasWork={Boolean(lens.bets.length)}
+                  variant="hero"
+                  readOnly={readOnly}
+                  autoFocus={focusKey > 0}
+                  onDriven={onDriven}
+                />
+              ) : null}
+              {lens ? (
+                <NowStream directions={recent} now={now} onSelect={selectDirection} />
+              ) : (
+                <div className="now-empty" role="status"><span>Opening {venture.name}…</span></div>
+              )}
+            </div>
           </div>
         )}
       </main>

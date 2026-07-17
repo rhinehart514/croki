@@ -1,7 +1,8 @@
 // The direction composer — the primary object in the product. One plain-words ask starts real work.
-// Scope is an attachment (the selected effort), not a mode; model/tools/agents are inferred and shown
-// only as quiet provenance. Voice is equal to typing where the browser supports it. Wires straight to
-// driveTeammate; the stream shows what forms.
+// Scope is an attachment (the selected direction), not a mode; model/tools/agents are inferred and
+// shown only as quiet provenance. Voice is equal to typing where the browser supports it. Two states:
+// a centred `hero` when no direction is open, and a persistent `dock` anchored to the bottom of the
+// active workspace. Freshness lives at the workspace level, never inside the field.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowUp, Mic, Paperclip, X } from "lucide-react";
 import { driveTeammate, type DriveTeammateResult } from "@/api";
@@ -36,6 +37,7 @@ export function NowComposer({
   selection,
   scopeLabel,
   hasWork,
+  variant = "hero",
   readOnly = false,
   autoFocus = false,
   onClearScope,
@@ -46,6 +48,7 @@ export function NowComposer({
   selection: CanvasSelection;
   scopeLabel: string | null;
   hasWork: boolean;
+  variant?: "hero" | "dock";
   readOnly?: boolean;
   autoFocus?: boolean;
   onClearScope?: () => void;
@@ -71,7 +74,7 @@ export function NowComposer({
   }, [draft]);
 
   const placeholder = scopeLabel
-    ? `Steer “${scopeLabel}” — try another angle, send it, refine…`
+    ? `Steer this direction — try another angle, send it, refine…`
     : `What should Drover accomplish for ${ventureName}?`;
 
   const submit = async (value: string) => {
@@ -80,7 +83,7 @@ export function NowComposer({
     setBusy(true); setError(null); setResult(null); setDraft("");
     try {
       const response = await driveTeammate(ventureId, scopedBody(goal, selection));
-      setResult("Work started. It will appear below as it forms.");
+      setResult("Work started — it will appear as it forms.");
       onDriven?.(response);
     } catch (cause) {
       setDraft(goal);
@@ -95,55 +98,61 @@ export function NowComposer({
     }
   };
 
+  const showChips = variant === "hero" && !hasWork && !busy && !scopeLabel;
+
   return (
-    <section className="now-composer" data-busy={busy ? "true" : "false"} aria-label="Direct this venture">
-      {scopeLabel ? (
-        <span className="now-composer-scope">
-          {scopeLabel}
-          {onClearScope ? (
-            <button type="button" aria-label="Clear scope — direct the whole venture" onClick={onClearScope}>
-              <X aria-hidden="true" />
+    <section className="now-composer" data-variant={variant} data-busy={busy ? "true" : "false"} aria-label="Direct this venture">
+      <div className="now-composer-shell">
+        {scopeLabel ? (
+          <span className="now-composer-scope">
+            {scopeLabel}
+            {onClearScope ? (
+              <button type="button" aria-label="Clear scope — direct the whole venture" onClick={onClearScope}>
+                <X aria-hidden="true" style={{ width: 13, height: 13 }} />
+              </button>
+            ) : null}
+          </span>
+        ) : null}
+        <form className="now-composer-field" onSubmit={(event) => { event.preventDefault(); void submit(draft); }}>
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={draft}
+            onChange={(event) => { setDraft(event.target.value); setError(null); setResult(null); }}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            aria-label="Say what you want for this venture"
+            disabled={readOnly}
+          />
+          <div className="now-composer-tools">
+            <button type="button" className="now-icon-btn" aria-label="Attach context" disabled title="Attach context (coming soon)">
+              <Paperclip aria-hidden="true" />
             </button>
-          ) : null}
-        </span>
-      ) : null}
-      <form className="now-composer-field" onSubmit={(event) => { event.preventDefault(); void submit(draft); }}>
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={draft}
-          onChange={(event) => { setDraft(event.target.value); setError(null); setResult(null); }}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          aria-label="Say what you want for this venture"
-          disabled={readOnly}
-        />
-        <div className="now-composer-tools">
-          <button type="button" className="now-icon-btn" aria-label="Attach context" disabled title="Attach context (coming soon)">
-            <Paperclip aria-hidden="true" />
-          </button>
-          {speech.supported ? (
-            <button
-              type="button"
-              className="now-icon-btn"
-              data-recording={speech.recording ? "true" : undefined}
-              aria-label={speech.recording ? "Stop dictation" : "Speak your direction"}
-              aria-pressed={speech.recording}
-              onClick={speech.toggle}
-              disabled={readOnly}
-            >
-              <Mic aria-hidden="true" />
+            {speech.supported ? (
+              <button
+                type="button"
+                className="now-icon-btn"
+                data-recording={speech.recording ? "true" : undefined}
+                aria-label={speech.recording ? "Stop dictation" : "Speak your direction"}
+                aria-pressed={speech.recording}
+                onClick={speech.toggle}
+                disabled={readOnly}
+              >
+                <Mic aria-hidden="true" />
+              </button>
+            ) : null}
+            <button type="submit" className="now-composer-send" aria-label="Start work" disabled={busy || readOnly || !draft.trim()}>
+              <ArrowUp aria-hidden="true" />
             </button>
-          ) : null}
-          <button type="submit" className="now-composer-send" aria-label="Start work" disabled={busy || readOnly || !draft.trim()}>
-            <ArrowUp aria-hidden="true" />
-          </button>
-        </div>
-      </form>
+          </div>
+        </form>
+      </div>
+
       <div className="now-composer-provenance" aria-hidden="true">
         Drover picks the agents, model, and tools. Nothing leaves without your decision.
       </div>
-      {!hasWork && !busy && !scopeLabel ? (
+
+      {showChips ? (
         <div className="now-composer-chips">
           {EMPTY_SUGGESTIONS.map((intent) => (
             <button key={intent} type="button" className="now-chip" onClick={() => void submit(intent)} disabled={readOnly}>
@@ -152,8 +161,8 @@ export function NowComposer({
           ))}
         </div>
       ) : null}
+
       <div className="now-composer-feedback" aria-live="polite">
-        {readOnly ? <span role="status">Reconnecting before changes can be sent…</span> : null}
         {speech.recording ? <span role="status">Listening…</span> : null}
         {busy ? <span role="status">Starting work…</span> : null}
         {result ? <span role="status">{result}</span> : null}

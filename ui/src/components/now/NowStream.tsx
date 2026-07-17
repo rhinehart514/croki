@@ -1,30 +1,25 @@
-// The consequence stream — an index of living founder directions and meaningful returns. Each row is
-// one direction (the founder's sentence), its latest understanding, whether it needs you, and how many
-// approaches are running underneath — never one row per internal record. Quiet when the venture is quiet.
-import type { Direction, DirectionSection } from "./directionModel";
+// The recent-work list beneath the home composer — a compact index of the founder's living
+// directions. One row per direction (the founder's sentence), its latest understanding, whether it
+// needs you, and its age. Separators, not cards; amber marks attention as a dot, never a fill.
+import { relativeAge, type Direction } from "./directionModel";
 
-function elapsed(since: string | null, now: number): string | null {
-  if (!since) return null;
-  const started = Date.parse(since);
-  if (!Number.isFinite(started)) return null;
-  const mins = Math.max(0, Math.round((now - started) / 60000));
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
+function stateLabel(direction: Direction): string {
+  if (direction.state === "needs-you") return "Needs you";
+  if (direction.state === "from-market") return "Replied";
+  if (direction.state === "working") return "Working";
+  return "Changed";
 }
 
 export function NowStream({
-  sections,
+  directions,
   now,
   onSelect,
 }: {
-  sections: DirectionSection[];
+  directions: Direction[];
   now: number;
   onSelect: (direction: Direction) => void;
 }) {
-  if (sections.length === 0) {
+  if (directions.length === 0) {
     return (
       <div className="now-empty" role="status">
         <strong>This is your venture. Tell it what to do.</strong>
@@ -34,39 +29,29 @@ export function NowStream({
   }
 
   return (
-    <>
-      {sections.map((section) => (
-        <section className="now-section" data-tone={section.tone} key={section.key} aria-label={section.label}>
-          <header className="now-section-head">
-            <span>{section.label}</span>
-            <span className="now-section-count">{section.directions.length}</span>
-          </header>
-          {section.directions.map((direction) => {
-            const time = elapsed(direction.updatedAt, now);
-            return (
-              <button key={direction.id} type="button" className="now-row" data-tone={direction.state} onClick={() => onSelect(direction)}>
-                <span className="now-row-dot" aria-hidden="true" />
-                <span className="now-row-body">
-                  <span className="now-row-title">{direction.sentence}</span>
-                  <span className="now-row-detail">{direction.understanding}</span>
-                </span>
-                <span className="now-row-aside">
-                  <span className="now-row-state">{sectionState(section.tone, direction)}</span>
-                  {time ? <span className="now-row-state">{time}</span> : null}
-                </span>
-              </button>
-            );
-          })}
-        </section>
-      ))}
-    </>
+    <div className="now-home-recent">
+      <span className="now-home-recent-label">Recent directions</span>
+      <div className="now-list">
+        {directions.map((direction) => (
+          <button
+            key={direction.id}
+            type="button"
+            className="now-item"
+            data-state={direction.state}
+            onClick={() => onSelect(direction)}
+          >
+            <span className="now-item-mark" aria-hidden="true" />
+            <span className="now-item-body">
+              <span className="now-item-title">{direction.sentence}</span>
+              <span className="now-item-sub">{direction.understanding}</span>
+            </span>
+            <span className="now-item-aside">
+              <span className="now-item-state">{stateLabel(direction)}</span>
+              {relativeAge(direction.updatedAt, now) ? <span className="now-item-age">{relativeAge(direction.updatedAt, now)}</span> : null}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
-}
-
-function sectionState(tone: Direction["state"], direction: Direction): string {
-  if (tone === "needs-you") return "Needs you";
-  if (tone === "from-market") return "Replied";
-  if (tone === "working") return "Working";
-  void direction;
-  return "Changed";
 }
