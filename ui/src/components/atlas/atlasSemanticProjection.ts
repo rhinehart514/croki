@@ -51,8 +51,38 @@ function text(value: unknown) {
   return null;
 }
 
+// Mine a distinct, founder-legible title from the artifact's own content: the first markdown heading, else
+// the first non-empty line (trimmed to a card-legible length). This is what de-duplicates the scatter — the
+// staged-… ID never reaches founder copy; every artifact opens with what it IS.
+function contentTitle(content: unknown): string | null {
+  const body = text(content);
+  if (!body) return null;
+  for (const raw of body.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const heading = line.replace(/^#{1,6}\s+/, "").trim();
+    const candidate = heading || line;
+    if (candidate) return candidate.length > 72 ? `${candidate.slice(0, 71).trimEnd()}…` : candidate;
+  }
+  return null;
+}
+
+// Never leak a staged-… ID into founder copy: prefer the artifact's own title, then a content-derived
+// heading, then the join title, and only fall back to a generic ordinal ("Prepared work 3") — never the ID.
 function workTitle(work: FirmStagedArtifact | null, join: FirmArchitectureJoin, index: number) {
-  return work?.title?.trim() || join.title?.trim() || (join.workRef ? `Prepared work ${join.workRef}` : `Prepared work ${index + 1}`);
+  return work?.title?.trim()
+    || contentTitle(work?.content ?? work)
+    || join.title?.trim()
+    || `Prepared work ${index + 1}`;
+}
+
+// Per-kind resting anatomy so a staged product change, a text draft, and a returned outcome do NOT render
+// as the same "Concrete work" card. The kind comes from the artifact's own content shape (a diff vs prose),
+// which the UI currently never reads.
+function workKind(work: FirmStagedArtifact | null): "product-change" | "draft" {
+  const body = text(work?.content ?? work);
+  if (body && (body.includes("@@") || body.startsWith("diff --git") || body.startsWith("--- "))) return "product-change";
+  return "draft";
 }
 
 function teammateNames(lens: FirmLens, refs: Array<string | null | undefined>) {
@@ -174,13 +204,19 @@ export function projectAtlasSemanticLayer(projection: FirmArchitectureProjection
     const work = stagedWork(bet, workRef);
     const wallJoin = projection?.joins.wall.find((candidate) => candidate.workRef === workRef);
     const atWall = Boolean(wallJoin && (lens.wallItems ?? []).some((item) => item.id === wallJoin.wallItemId || item.workRef === workRef));
+    // Differentiate a staged product change from a text draft: distinct output word so the resting cards
+    // stop reading as identical stickies. A code change reads "Product change"; a draft reads "Draft".
+    const kind = workKind(work);
     nodes.push({
       id: `work:${workRef}`, type: "architectureElement",
       position: PLACEHOLDER, selectable: true, draggable: false,
       data: {
         ...atlasInertData("work", workTitle(work, join, index)), join, statement: text(work?.content ?? work), atWall,
+        workKind: kind,
         teammates: teammateNames(lens, [...(work?.ownerRefs ?? []), ...(work?.contributorRefs ?? []), bet?.teammateRef]),
-        stateLabel: atWall ? "Needs you" : "Prepared", outputLabel: "Exact work", verbLabel: atWall ? "Held for your decision" : "Attached to this direction",
+        stateLabel: atWall ? "Needs you" : "Prepared",
+        outputLabel: kind === "product-change" ? "Product change" : "Draft",
+        verbLabel: atWall ? "Held for your decision" : "Attached to this direction",
       },
     });
     if (join.betId) edges.push(edge(`staged:${join.betId}:${workRef}`, `bet:${join.betId}`, `work:${workRef}`, "prepared", "atlas-edge-work"));

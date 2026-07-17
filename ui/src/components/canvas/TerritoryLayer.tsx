@@ -13,7 +13,7 @@
 
 import { useMemo } from "react";
 import { ViewportPortal, useStore, type Edge, type Node } from "@xyflow/react";
-import { nodeTerritory, TERRITORY_LABEL, TERRITORY_SIDE, type Territory } from "./canvasTerritory";
+import { resolveTerritories, TERRITORY_LABEL, TERRITORY_SIDE, type Territory } from "./canvasTerritory";
 
 // STRUCTURE band ceiling — the region kickers belong to the far map read and fade out as the founder
 // zooms into relationships/components (matches the atlas' own venture-altitude structure read).
@@ -71,7 +71,9 @@ export function TerritoryLayer({ nodes, edges }: { nodes: Node[]; edges: Edge[] 
 
   const { kickers, crossings } = useMemo(() => {
     const boxes = nodes.map(nodeBox);
-    const territoryById = new Map<string, Territory | null>(nodes.map((node) => [node.id, nodeTerritory(node)]));
+    // Territory inherits through the ownership chain (record → bet → campaign/motion), so bet/work/outcome
+    // cards populate the two territories instead of piling on the seam under empty kickers.
+    const territoryById = resolveTerritories(nodes);
     const centreById = new Map(boxes.map((box) => [box.id, { x: box.x + box.width / 2, y: box.y + box.height / 2 }]));
 
     // Both territories are always named. A populated territory anchors at its members' centroid-top and

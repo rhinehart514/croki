@@ -69,6 +69,7 @@ export function VentureCanvasFlow({
   onNodesChange,
   onNodeDragStop,
   onNodeClick,
+  onNodeDoubleClick,
   onPaneClick,
   onMoveEnd,
 }: {
@@ -78,6 +79,7 @@ export function VentureCanvasFlow({
   onNodesChange: (changes: NodeChange[]) => void;
   onNodeDragStop: (event: unknown, node?: Node) => void;
   onNodeClick: (id: string) => void;
+  onNodeDoubleClick?: (id: string) => void;
   onPaneClick: () => void;
   onMoveEnd: OnMoveEnd;
 }) {
@@ -96,6 +98,17 @@ export function VentureCanvasFlow({
       onNodesChange={onNodesChange}
       onNodeDragStop={onNodeDragStop}
       onNodeClick={(_, node) => onNodeClick(node.id)}
+      onNodeDoubleClick={onNodeDoubleClick ? (_, node) => onNodeDoubleClick(node.id) : undefined}
+      onKeyDown={onNodeDoubleClick ? (event) => {
+        // Enter on a keyboard-focused node descends into it (the double-click equivalent for keyboard),
+        // matching the spec's 1-click select / double-click-or-Enter descend interaction contract.
+        if (event.key !== "Enter") return;
+        const focused = event.target;
+        if (!(focused instanceof HTMLElement)) return;
+        const wrapper = focused.closest<HTMLElement>(".react-flow__node[data-id]");
+        const id = wrapper?.getAttribute("data-id");
+        if (id) { event.preventDefault(); onNodeDoubleClick(id); }
+      } : undefined}
       onPaneClick={(event) => {
         const target = event.target;
         if (target instanceof Element && target.classList.contains("react-flow__pane")) onPaneClick();

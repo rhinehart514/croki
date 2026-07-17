@@ -20,7 +20,7 @@ import { targetArchitecture, targetBet, targetTeammates } from "@/components/fir
 import { VenturePicker } from "@/components/firm/VenturePicker";
 import { ImmersiveShell } from "@/components/immersive/ImmersiveShell";
 import { NowShell } from "@/components/now/NowShell";
-import { VentureCanvasShell } from "@/components/canvas/VentureCanvasShell";
+import { VentureWorkspace } from "@/components/workspace/VentureWorkspace";
 import { InspectorEffort } from "@/components/firm/InspectorEffort";
 import { inspectorHeader } from "@/components/firm/inspectorContent";
 import { decisionBandForBet, effortStateLabel } from "@/components/atlas/betBand";
@@ -53,9 +53,10 @@ function worldShellRequested() {
   return new URLSearchParams(window.location.search).get("shell") === "world";
 }
 
-// The unified venture canvas (Phase 4/5). `?shell=canvas` opens the flag-gated VentureCanvasShell — one
-// React Flow plane over the single atlas scene with rendered Product / Go-to-market territories and
-// founder-final drag placement. Additive and behind the flag; the NowShell default stays untouched.
+// The unified venture canvas (Phase 4/5). `?shell=canvas` opens the flag-gated VentureWorkspace — the
+// Cursor-like frame: a left workspace index (directions + the venture conversation) around the venture
+// canvas plane, with a selection-scoped composer docked below. Additive and behind the flag; the
+// NowShell default and ?shell=world/legacy stay untouched.
 function canvasShellRequested() {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("shell") === "canvas";
@@ -208,7 +209,7 @@ export default function FirmApp() {
   // selection, composer draft, or wall queue — a stale draft can never submit against the new venture
   // (venture isolation + founder authority).
   if (!legacyShellRequested()) {
-    if (canvasShellRequested()) return <VentureCanvasShell key={venture.id} venture={venture} />;
+    if (canvasShellRequested()) return <VentureWorkspace key={venture.id} venture={venture} onOpenVenture={openVenture} />;
     if (worldShellRequested()) return <ImmersiveShell key={venture.id} venture={venture} />;
     return <NowShell key={venture.id} venture={venture} onOpenVenture={openVenture} />;
   }

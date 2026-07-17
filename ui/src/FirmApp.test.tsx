@@ -101,11 +101,12 @@ vi.mock("@/components/now/NowShell", () => ({
   ),
 }));
 
-// The unified venture canvas (Phase 4/5 Slice 1) is flag-gated behind ?shell=canvas. Stub it so this
-// test proves only FirmApp's routing responsibility — open a venture with the flag → mount the canvas —
-// without dragging in ReactFlow.
-vi.mock("@/components/canvas/VentureCanvasShell", () => ({
-  VentureCanvasShell: ({ venture }: { venture: { id: string; name: string } }) => (
+// The unified venture canvas (Phase 4/5) is flag-gated behind ?shell=canvas — now the framed
+// VentureWorkspace (Cursor-like frame around the canvas). Stub it so this test proves only FirmApp's
+// routing responsibility — open a venture with the flag → mount the workspace — without dragging in
+// ReactFlow. The frame's own composition is proven in VentureWorkspace.test.tsx.
+vi.mock("@/components/workspace/VentureWorkspace", () => ({
+  VentureWorkspace: ({ venture }: { venture: { id: string; name: string } }) => (
     <div data-testid="venture-canvas-stub" data-venture={venture.id} data-venture-name={venture.name} />
   ),
 }));

@@ -80,3 +80,70 @@ export function nodeTerritory(node: TerritoryNode): Territory | null {
   if (kind && KIND_TERRITORY[kind]) return KIND_TERRITORY[kind]!;
   return null;
 }
+
+// The ownership chain that carries territory to bet/work/outcome cards, which are territory-null on their
+// own (a bets-only venture would pile every card on the seam under two empty kickers). The rule, mirroring
+// the brain's objectTerritory intent:
+//   • a staged product change (workKind "product-change") is built product value → PRODUCT;
+//   • a draft (message/page/positioning) is go-to-market work → GTM;
+//   • a bet inherits from its own records — any product change makes the direction product-territory, else
+//     a bet carrying only drafts is gtm; a bet the projection already labels with a motion path is gtm;
+//   • an outcome/work inherits its owning bet's territory.
+// This is the seam until the brain's objectTerritory facet is surfaced through the projection; it keeps the
+// two territories populated in a bets-only venture so the resting canvas reads as the Product+GTM machine.
+type ChainNode = { id: string; data?: unknown };
+
+function betRecordTerritory(node: ChainNode): Territory | null {
+  const data = (node.data ?? {}) as { kind?: unknown; workKind?: unknown };
+  if (data.kind !== "work") return null;
+  return data.workKind === "product-change" ? "product" : "gtm";
+}
+
+function ownerBetId(node: ChainNode): string | null {
+  const data = (node.data ?? {}) as { kind?: unknown; join?: { betId?: unknown }; outcome?: { betId?: unknown } };
+  const betId = data.join?.betId ?? data.outcome?.betId;
+  return typeof betId === "string" && betId ? betId : null;
+}
+
+// Resolve territory for the WHOLE node set, inheriting through the ownership chain. Returns a map keyed by
+// node id. A node with its own facet keeps it; bet/work/outcome inherit as above.
+export function resolveTerritories(nodes: ChainNode[]): Map<string, Territory | null> {
+  const result = new Map<string, Territory | null>();
+
+  // First pass: own facet, and collect each bet's record territories.
+  const betTerritory = new Map<string, Territory>();
+  for (const node of nodes) {
+    const own = nodeTerritory(node as TerritoryNode);
+    result.set(node.id, own);
+    const betId = ownerBetId(node);
+    const recordTerritory = betRecordTerritory(node);
+    if (betId && recordTerritory) {
+      // Any product change on a bet makes the whole direction product-territory (built value dominates).
+      if (recordTerritory === "product" || !betTerritory.has(betId)) betTerritory.set(betId, recordTerritory);
+    }
+  }
+
+  // A bet already labelled with a motion path reads as go-to-market even before records arrive.
+  for (const node of nodes) {
+    const data = (node.data ?? {}) as { kind?: unknown; bet?: { id?: unknown }; motionLabel?: unknown };
+    if (data.kind !== "bet") continue;
+    const betId = typeof data.bet?.id === "string" ? data.bet.id : node.id.replace(/^bet:/, "");
+    if (data.motionLabel && !betTerritory.has(betId)) betTerritory.set(betId, "gtm");
+  }
+
+  // Second pass: fill bet/work/outcome territories from the inherited bet territory.
+  for (const node of nodes) {
+    if (result.get(node.id)) continue;
+    const data = (node.data ?? {}) as { kind?: unknown; bet?: { id?: unknown } };
+    if (data.kind === "bet") {
+      const betId = typeof data.bet?.id === "string" ? data.bet.id : node.id.replace(/^bet:/, "");
+      const inherited = betTerritory.get(betId) ?? null;
+      result.set(node.id, inherited);
+      continue;
+    }
+    const ownerId = ownerBetId(node);
+    if (ownerId && betTerritory.has(ownerId)) result.set(node.id, betTerritory.get(ownerId)!);
+  }
+
+  return result;
+}

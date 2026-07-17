@@ -42,6 +42,14 @@ export type LayoutInput = {
   height: number;
   /** Optional pin — the hub is anchored so the constellation never drifts off it. */
   pinned?: boolean;
+  /**
+   * Optional territory bias, in [-1, 0, +1]. When set on the canvas seed path, the node is seeded into
+   * that half-plane and pulled toward it by a per-territory forceX INSIDE the simulation — so the exact
+   * separation pass runs last and the field is collision-free-by-construction while product-rooted objects
+   * settle clearly on one side and gtm on the other. Absent/0 keeps the territory-blind radial placement
+   * the world atlas uses (its geometry is unchanged). See canvasSeedLayout.
+   */
+  territorySide?: -1 | 0 | 1;
 };
 
 /** Minimum clear space guaranteed between any two node boxes (composite: every adjacent pair >= 20px). */
@@ -103,6 +111,17 @@ const FIELD_ASPECT_BIAS = 1.52;
 // into the wide, short ellipse the docked stage cell wants. Compression can create overlaps; the
 // exact separation pass that follows removes them, so this stays collision-free.
 const FIELD_VERTICAL_BIAS = 0.74;
+
+// Half-plane pull for territory-biased nodes (canvas seed path only). A node with territorySide ±1 is
+// seeded into that half-plane and pulled toward this x target so Product settles clearly left of the seam
+// and GTM clearly right — a felt spatial split, not a constant post-separation offset. The pull is a
+// simulation force, so the exact AABB separation pass still runs LAST and the field stays collision-free.
+// Zero/absent territorySide keeps the origin-centred forceX the world atlas relies on. Sized past the
+// widest reserved card so the two populations read as distinct geography under the region kickers.
+const TERRITORY_FORCE_X = 320;
+// Territory pull strength — firm enough to hold sidedness against the radial ring, gentle enough that the
+// hub-centred constellation still reads as one field rather than two disconnected clusters.
+const TERRITORY_X_STRENGTH = 0.09;
 
 type Size = { width: number; height: number };
 
@@ -289,7 +308,10 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
         + ((ringIndex.get(node.id) ?? 0) / total) * Math.PI * 2
         + (hashAngle(node.id) - Math.PI) * 0.06 // tiny deterministic jitter, ±~11°
       : hashAngle(node.id);
-    const startX = Math.cos(angle) * radius;
+    const side = node.territorySide ?? 0;
+    // A territory-biased node is seeded into its half-plane (magnitude only, its side chosen by `side`) so
+    // it starts on the correct side and the forceX pull below never has to drag it across the seam.
+    const startX = side !== 0 ? side * Math.abs(Math.cos(angle) * radius) : Math.cos(angle) * radius;
     const datum: SimNode = {
       ...node,
       // Collision uses the resting render size; efforts additionally reserve their selected-card
@@ -325,7 +347,11 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
     .force("rings", forceRadial<SimNode>((node) => RING_RADIUS[node.kind] ?? RING_RADIUS.effort, 0, 0)
       .strength((node) => RADIAL_STRENGTH[node.kind] ?? 0.8))
     .force("charge", forceManyBody<SimNode>().strength(-140))
-    .force("x", forceX<SimNode>(0).strength(0.014))
+    // Territory-biased nodes are pulled to their half-plane target; everyone else keeps the gentle
+    // origin recentre. Per-node target + strength so the two paths coexist in one force (the world atlas
+    // passes no territorySide, so it keeps the origin pull at the original 0.014 — its field is unchanged).
+    .force("x", forceX<SimNode>((node) => (node.territorySide ? node.territorySide * TERRITORY_FORCE_X : 0))
+      .strength((node) => (node.territorySide ? TERRITORY_X_STRENGTH : 0.014)))
     .force("y", forceY<SimNode>(0).strength(0.014));
 
   for (let tick = 0; tick < TICKS; tick += 1) simulation.tick();

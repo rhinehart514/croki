@@ -41,6 +41,7 @@ export type AtlasNodeData = Record<string, unknown> & {
   stateLabel?: string;
   outputLabel?: string;
   verbLabel?: string;
+  workKind?: "product-change" | "draft";
   teammates?: Array<{ ref: string; name: string }>;
   continuation?: string | null;
   agentRef?: string;

@@ -495,4 +495,82 @@ export function createWallVentureFixture({ root, repository } = {}) {
   };
 }
 
+// A compact venture shaped for the ?shell=canvas resting read: a genuine Product+GTM split (a staged
+// product change biases its bet to the Product territory; prose drafts bias theirs to GTM), distinct work
+// kinds (a diff renders as a product change, prose as a draft — so the cards do not read as duplicate
+// stickies), and one card held at the wall so rank-and-reveal has something to surface first at rest.
+const CANVAS_DIFF = [
+  "diff --git a/src/pricing.ts b/src/pricing.ts",
+  "@@ -1,3 +1,3 @@",
+  "-export const monthlyPrice = 9;",
+  "+export const monthlyPrice = 12;",
+].join("\n");
+
+export function createCanvasVentureFixture({ root, repository } = {}) {
+  const options = { root, seedFoundingCrew: false };
+  const venture = createVenture({
+    id: "fixture-canvas-venture",
+    name: "Canvas venture",
+    repository: fixtureRepository(repository),
+    createdAt: at(0),
+    updatedAt: at(0),
+  }, options);
+
+  for (const [index, ref] of ["scout", "maker", "closer"].entries()) {
+    summon(venture.id, ref, { name: ["Iris", "Moss", "Nia"][index] }, options);
+  }
+
+  const bets = [
+    // Product territory: a staged code change is built product value.
+    seedBet({
+      ventureId: venture.id,
+      id: "canvas-bet-pricing",
+      intent: "Raise the monthly price to reflect the narrower promise",
+      teammateRef: "maker",
+      minute: 4,
+      staged: [{ id: "canvas-artifact-pricing", content: `## Raise the price to $12\n\n${CANVAS_DIFF}`, stagedAt: at(6) }],
+      events: [{ type: "staged", detail: "Pricing change staged" }],
+    }, options),
+    // GTM territory: a prose draft is go-to-market work.
+    seedBet({
+      ventureId: venture.id,
+      id: "canvas-bet-launch",
+      intent: "Invite operations leads to the repository-backed preview",
+      teammateRef: "scout",
+      minute: 8,
+      staged: [{ id: "canvas-artifact-launch", content: "## Launch email to operations leads\n\nYour weekly handoff still looks manual — would the repository-backed shortcut help?", stagedAt: at(10) }],
+      events: [{ type: "staged", detail: "Launch email staged" }],
+    }, options),
+    // GTM territory, held at the wall: the card rank-and-reveal surfaces first at rest.
+    seedBet({
+      ventureId: venture.id,
+      id: "canvas-bet-headline",
+      intent: "Rewrite the landing headline around the recurring handoff",
+      teammateRef: "closer",
+      minute: 12,
+      staged: [{ id: "canvas-artifact-headline", content: "## Rewrite the landing headline\n\nLead with the recurring handoff, not broad automation.", stagedAt: at(14) }],
+      events: [{ type: "stage_outward", detail: "Headline held before publication" }],
+    }, options),
+  ];
+
+  const wall = [
+    seedWallItem({
+      ventureId: venture.id,
+      id: "canvas-wall-headline",
+      betId: "canvas-bet-headline",
+      workRef: "canvas-artifact-headline",
+      purpose: "release",
+      minute: 20,
+      effect: { kind: "page", destination: "private-preview", diff: "Narrow the headline to the recurring handoff." },
+    }, options),
+  ];
+
+  return {
+    venture,
+    bets,
+    wall,
+    expected: { bets: 3, stagedArtifacts: 3, wallItems: 1, territories: ["gtm", "product"] },
+  };
+}
+
 export { LONG_COPY as DENSE_FIXTURE_LONG_COPY };

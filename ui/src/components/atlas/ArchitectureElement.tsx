@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { ArrowDownToLine, ArrowUpRight, BookOpenText, Database, Focus, Layers3, Link2, Play, ReceiptText, Sparkles } from "lucide-react";
+import { ArrowDownToLine, ArrowUpRight, BookOpenText, Database, FileDiff, FileText, Focus, Layers3, Link2, Play, ReceiptText, Sparkles } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { CrewFace } from "@/components/crew/CrewFace";
@@ -37,10 +37,22 @@ function ElementMaterial({ data, density }: { data: AtlasNode["data"]; density: 
   if (data.kind === "teammate" && data.agentRef) return <span className="atlas-anchor-teammate" aria-hidden="true"><CrewFace agentRef={data.agentRef} size={34} /></span>;
   if (data.kind === "capability") return <span className="atlas-anchor-capability" aria-hidden="true"><Database /></span>;
   if (data.kind === "outcome") return <span className="atlas-outcome-receipt" aria-hidden="true"><ReceiptText /> Recorded return</span>;
+  // A staged product change and a text draft render distinct material so the resting cards stop reading as
+  // duplicate stickies: a diff glyph for a code change, a document glyph for prose.
+  if (data.kind === "work") return data.workKind === "product-change"
+    ? <span className="atlas-work-material" data-work-kind="product-change" aria-hidden="true"><FileDiff /> Product change</span>
+    : <span className="atlas-work-material" data-work-kind="draft" aria-hidden="true"><FileText /> Draft</span>;
   if (data.kind === "theory") return <span className="atlas-theory-mark" aria-hidden="true"><BookOpenText /> Provisional</span>;
   if (data.kind === "bet") return <span className="atlas-bet-aperture" aria-hidden="true" />;
   if (data.kind === "product-loop") return <span className="atlas-loop-return" aria-hidden="true">↻</span>;
   return null;
+}
+
+// The eyebrow (kicker) — per-kind, and for staged work per its object kind, so a product change and a
+// positioning draft carry different labels instead of a constant "Concrete work".
+function eyebrowFor(data: AtlasNode["data"]): string {
+  if (data.kind === "work") return data.workKind === "product-change" ? "Product change" : "Prepared draft";
+  return ROLE_LABELS[data.kind];
 }
 
 function InstrumentReading({ data }: { data: AtlasNode["data"] }) {
@@ -94,12 +106,12 @@ function ArchitectureElementView({ data, id, selected }: NodeProps<AtlasNode>) {
       <button
         type="button"
         className="atlas-element-main"
-        aria-label={`${ROLE_LABELS[data.kind]}: ${data.title}${data.pressure.length ? `, ${data.pressure.length} pressure reason` : ""}`}
+        aria-label={`${eyebrowFor(data)}: ${data.title}${data.pressure.length ? `, ${data.pressure.length} pressure reason` : ""}`}
         aria-pressed={isSelected}
         onClick={(event) => { event.stopPropagation(); data.onSelect(id); }}
         onDoubleClick={(event) => { event.stopPropagation(); data.onFocus(id); }}
       >
-        <span className="atlas-element-eyebrow">{ROLE_LABELS[data.kind]}</span>
+        <span className="atlas-element-eyebrow">{eyebrowFor(data)}</span>
         <ElementMaterial data={data} density={density} />
         <strong>{data.title}</strong>
         {!compact && data.statement ? <span className="atlas-element-statement">{data.statement}</span> : null}
@@ -127,7 +139,12 @@ function ArchitectureElementView({ data, id, selected }: NodeProps<AtlasNode>) {
             <small>{data.teammates.map((teammate) => teammate.name).join(" + ")}</small>
           </span>
         ) : null}
-        <InstrumentReading data={data} />
+        {/* Rank-and-reveal at rest (spec §3): the "PREPARED · DRAFT · Attached" instrument line is the
+            chip that made every resting card read identically. At the far map read it surfaces ONLY on the
+            cards that need the founder first — a card held at the wall, or the selected card — so the
+            whole-venture read stays calm; every other card reveals its instrument line on approach as the
+            band re-details. */}
+        {!compact || data.atWall || isSelected ? <InstrumentReading data={data} /> : null}
         {data.pressure.length ? (
           <span className="atlas-pressure-mark">
             <ArrowDownToLine aria-hidden="true" /> {data.pressure[0].detail || data.pressure[0].reason.replaceAll("-", " ")}
