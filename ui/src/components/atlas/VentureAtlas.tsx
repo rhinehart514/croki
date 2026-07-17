@@ -29,6 +29,7 @@ import { projectAtlasTrace } from "./atlasTrace";
 import { ATLAS_EASE, ATLAS_MOTION } from "./atlasMotion";
 import type { AtlasNode } from "./atlasTypes";
 import { useAtlasArrivalTracker } from "./useAtlasArrivalTracker";
+import { carryMeasuredDimensions } from "./atlasNodeReconcile";
 import { useAtlasMaterialization } from "./useAtlasMaterialization";
 import { architectureId, atlasNodeIdForSelection, canvasArchetypeScene, omissionSummary, promotionFields, stableId } from "./ventureAtlasModel";
 import "@/styles/venture-atlas.css";
@@ -124,7 +125,11 @@ export function VentureAtlas({
 
   useEffect(() => onArchitectureChange(projection), [onArchitectureChange, projection]);
   useEffect(() => {
-    setNodes(markAtlasArrivals(scene.nodes));
+    // Rebuild the controlled node array from the freshly-projected scene, but carry React Flow's
+    // last measured sizes forward so replacing the array does not drop every node to
+    // `visibility:hidden` (F1 — see carryMeasuredDimensions). The functional updater reads the prior
+    // nodes state, which holds the measurements React Flow mirrored back via onNodesChange.
+    setNodes((previous) => carryMeasuredDimensions(previous, markAtlasArrivals(scene.nodes)));
     setEdges(scene.edges);
   }, [markAtlasArrivals, scene, setEdges, setNodes]);
   useEffect(() => {

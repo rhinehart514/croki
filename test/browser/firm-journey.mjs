@@ -169,11 +169,45 @@ function setControl(selector, value) {
   })()`;
 }
 
-test("desktop firm journey: bind product, set heat, and render purpose-correct wall decisions", async () => {
+test("cutover: opening a venture lands the immersive world, not the retired triptych", async () => {
   const drover = await bootDrover();
   const chrome = await launchChrome({
     port: await freePort(),
-    url: drover.base,
+    url: drover.base, // no ?shell param → the default shell, which is now immersive
+    beforeNavigate: (client) => installFounderHost(client, drover.base, drover.founderCapability),
+  });
+  try {
+    const { client } = chrome;
+    await client.send("Emulation.setDeviceMetricsOverride", { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
+    await waitForDom(client, `/Start your first venture/i.test(document.body.textContent)`, "venture picker did not render");
+    assert.equal(await client.evaluate(setControl('[aria-label="New venture name"]', "Immersive firm")), true);
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => /start venture/i.test(entry.textContent)); button?.click(); return !!button; })()`), true);
+
+    // The immersive shell mounts edge-to-edge: its world layer and floating composer, never the triptych.
+    await waitForDom(client, `!!document.querySelector('.immersive-shell')`, "the immersive shell did not mount by default");
+    await waitForDom(client, `!!document.querySelector('.immersive-world .atlas-canvas')`, "the immersive world stage did not fill the shell");
+    await waitForDom(client, `!!document.querySelector('.iw-composer textarea')`, "the floating immersive composer did not render");
+
+    // No legacy triptych presentation ships in the default DOM (Phase 5 acceptance).
+    assert.equal(await client.evaluate(`!document.querySelector('.firm-app-rail')`), true, "a retired conversation rail leaked into the immersive DOM");
+    assert.equal(await client.evaluate(`!document.querySelector('.firm-app-inspector')`), true, "a retired inspector cell leaked into the immersive DOM");
+    assert.equal(await client.evaluate(`!document.querySelector('.firm-app-body')`), true, "the retired triptych grid leaked into the immersive DOM");
+  } finally {
+    await chrome.close();
+    await drover.close();
+  }
+});
+
+test("desktop firm journey: bind product, set heat, and render purpose-correct wall decisions", async () => {
+  const drover = await bootDrover();
+  // Phase 5 cutover: the immersive warm-paper world is the default shell. This end-to-end journey was
+  // authored against the retired triptych DOM (rail · canvas · inspector · legacy Atlas nodes); it now
+  // runs against that composition through the retained `?shell=legacy` escape hatch, so its full
+  // backend + decision coverage stays green. The immersive default is smoke-checked by the sibling test
+  // below; a full immersive-DOM rewrite of this journey is the next-phase follow-up.
+  const chrome = await launchChrome({
+    port: await freePort(),
+    url: `${drover.base}/?shell=legacy`,
     beforeNavigate: (client) => installFounderHost(client, drover.base, drover.founderCapability),
   });
   try {

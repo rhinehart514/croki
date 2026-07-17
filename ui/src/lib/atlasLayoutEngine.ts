@@ -387,6 +387,11 @@ type FlowNodeLike = {
   position: { x: number; y: number };
   width?: number | null;
   height?: number | null;
+  // React Flow seeds a node's size from initialWidth/initialHeight until the browser measures its DOM.
+  // Stamping these makes the node "dimensioned" from the first frame, so React Flow never marks it
+  // visibility:hidden while it waits to measure. Real measured size still wins for framing once known.
+  initialWidth?: number | null;
+  initialHeight?: number | null;
   measured?: { width?: number; height?: number } | null;
   style?: { width?: number | string; height?: number | string } | null;
   zIndex?: number;
@@ -486,6 +491,17 @@ export function layoutAtlasNodes<T extends FlowNodeLike>(
     if (kind) sizeById.set(node.id, measuredSize(node, KIND_SIZE[kind]));
   }
 
+  // Seed React Flow's dimension check on every placed card. React Flow marks a node visibility:hidden
+  // until it can measure the node's DOM; on each fresh node array (the 900ms lens poll, a cold mount,
+  // a resize-driven re-render) the new node object arrives without `measured`, so without a seed the
+  // whole field flashes hidden every poll and can be left hidden entirely if measurement never lands.
+  // initialWidth/initialHeight make the node dimensioned from the first frame, so it is never hidden;
+  // the browser's real measured size still wins for framing once known (measuredSize prefers it above).
+  const seededSize = (node: T): Size | null => {
+    const kind = layoutKindFor(node.data.kind);
+    return kind ? measuredSize(node, KIND_SIZE[kind]) : null;
+  };
+
   const laidOut = nodes.map((node) => {
     if (node.data.kind === "group") {
       const memberRefs = node.data.memberRefs ?? [];
@@ -497,16 +513,30 @@ export function layoutAtlasNodes<T extends FlowNodeLike>(
       const minY = Math.min(...boxes.map((box) => box.position.y)) - GROUP_FRAME_PAD.y;
       const maxX = Math.max(...boxes.map((box) => box.position.x + box.size.width)) + GROUP_FRAME_PAD.x;
       const maxY = Math.max(...boxes.map((box) => box.position.y + box.size.height)) + GROUP_FRAME_PAD.y;
-      return { ...node, position: { x: minX, y: minY }, style: { ...node.style, width: maxX - minX, height: maxY - minY } };
+      // Group frames have a computed extent, not a per-kind default; seed from that so the frame is
+      // never hidden either.
+      const width = maxX - minX;
+      const height = maxY - minY;
+      return {
+        ...node,
+        position: { x: minX, y: minY },
+        style: { ...node.style, width, height },
+        initialWidth: node.initialWidth ?? width,
+        initialHeight: node.initialHeight ?? height,
+      };
     }
     const position = positions.get(node.id);
     if (!position) return node;
+    const seed = seededSize(node);
+    const seededDimensions = seed
+      ? { initialWidth: node.initialWidth ?? seed.width, initialHeight: node.initialHeight ?? seed.height }
+      : {};
     if (node.data.kind === "bet") {
       const center = position.x + (sizeById.get(node.id)?.width ?? KIND_SIZE.effort.width) / 2;
       const orbitSide: "left" | "right" = center < fieldCenterX ? "left" : "right";
-      return { ...node, position, data: { ...node.data, orbitSide } };
+      return { ...node, position, ...seededDimensions, data: { ...node.data, orbitSide } };
     }
-    return { ...node, position };
+    return { ...node, position, ...seededDimensions };
   });
   return { nodes: laidOut, bounds };
 }

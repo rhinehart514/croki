@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import type { CanvasSelection } from "@/components/firm/GoalComposer";
 import { targetArchitecture, targetBet, targetTeammates } from "@/components/firm/directionTarget";
 import { VenturePicker } from "@/components/firm/VenturePicker";
+import { ImmersiveShell } from "@/components/immersive/ImmersiveShell";
 import { InspectorEffort } from "@/components/firm/InspectorEffort";
 import { inspectorHeader } from "@/components/firm/inspectorContent";
 import { decisionBandForBet, effortStateLabel } from "@/components/atlas/betBand";
@@ -32,6 +33,15 @@ import type { FirmArchitectureProjection } from "@/types";
 
 function conversationKey(ventureId: string, field: "open") {
   return `drover:conversation:${ventureId}:${field}`;
+}
+
+// Cutover (Phase 5): the immersive warm-paper world is now the DEFAULT founder shell. The legacy
+// triptych (workbench bar · conversation rail · inspector cell) is retired from the shipped surface;
+// it survives only as an explicit `?shell=legacy` escape hatch for regression, never in the default
+// DOM. Read once at module load so a reload picks up the flag.
+function legacyShellRequested() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("shell") === "legacy";
 }
 
 function readConversationOpen(ventureId: string) {
@@ -172,6 +182,12 @@ export default function FirmApp() {
         <VenturePicker onOpen={openVenture} />
       </div>
     );
+  }
+
+  // Default shell: the edge-to-edge warm-paper immersive world, consuming the same backend seams as the
+  // retired triptych. The legacy triptych below renders only under the explicit `?shell=legacy` opt-out.
+  if (!legacyShellRequested()) {
+    return <ImmersiveShell venture={venture} />;
   }
 
   return (

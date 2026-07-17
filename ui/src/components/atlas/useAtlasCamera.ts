@@ -4,9 +4,20 @@ import type { AtlasAltitude, AtlasNode } from "./atlasTypes";
 
 function cameraKey(receiptKey: string) { return `drover:atlas-camera:v6:${receiptKey}`; }
 
-function altitudeForZoom(zoom: number): AtlasAltitude {
-  if (zoom <= 0.78) return "venture";
-  if (zoom < 1.1) return "architecture";
+// Canonical zoom-band boundaries, shared by the altitude readout (altimeter) and the per-node
+// semantic-zoom detail band (useSemanticZoom imports these). A single source of truth so the label
+// can never disagree with the detail the founder actually sees:
+//   zoom <= ORBIT_MAX_ZOOM  → venture   (glyphs: kicker + title only)      → "Orbit"
+//   zoom <  GROUND_MAX_ZOOM → architecture (full resting card anatomy)     → "Ground"
+//   zoom >= GROUND_MAX_ZOOM → detail    (every line, footer/last-touched)  → "Inside"
+// GROUND_MAX_ZOOM sits above the resting/reveal zoom caps (RESTING_MAX_ZOOM 1.0, frameTarget 0.95)
+// so a framed card rests in the Ground band, not spuriously in Inside.
+export const ORBIT_MAX_ZOOM = 0.78;
+export const GROUND_MAX_ZOOM = 1.1;
+
+export function altitudeForZoom(zoom: number): AtlasAltitude {
+  if (zoom <= ORBIT_MAX_ZOOM) return "venture";
+  if (zoom < GROUND_MAX_ZOOM) return "architecture";
   return "detail";
 }
 
@@ -153,6 +164,17 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     window.localStorage.setItem(cameraKey(receiptKey), JSON.stringify(viewport));
   }, [receiptKey]);
 
+  // Re-derive the altitude readout from the camera's *current* zoom. onMoveEnd only fires on founder
+  // gestures (wheel/drag); every programmatic reframe below moves the camera via setViewport({duration:0}),
+  // which does NOT fire onMoveEnd. Without this, a reveal/fit/reframe can leave the camera in the Ground
+  // (architecture) band — cards showing full anatomy via the live useSemanticZoom store subscription —
+  // while the altimeter stays on the stale band and still reads "Orbit". Reading the same live zoom the
+  // per-node band reads keeps label and detail from disagreeing. Camera motion is untouched.
+  const syncAltitude = useCallback(() => {
+    const instance = instanceRef.current;
+    if (instance) setAltitude(altitudeForZoom(instance.getZoom()));
+  }, []);
+
   const frameTarget = useCallback((id: string) => {
     const instance = instanceRef.current;
     if (!instance) return false;
@@ -164,7 +186,8 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     const zoom = Math.min(0.95, Math.max(0.72, instance.getZoom()));
     const canvas = document.querySelector<HTMLElement>(".atlas-canvas");
     if (!canvas) {
-      void instance.setCenter(anchor.position.x + width / 2, anchor.position.y + height / 2, { zoom, duration: 0 });
+      void instance.setCenter(anchor.position.x + width / 2, anchor.position.y + height / 2, { zoom, duration: 0 })
+        .then(syncAltitude);
       return true;
     }
     const bounds = visibleCanvasBounds(canvas);
@@ -174,9 +197,9 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
       x: screenCenterX - (anchor.position.x + width / 2) * zoom,
       y: screenCenterY - (anchor.position.y + height / 2) * zoom,
       zoom,
-    }, { duration: 0 }).then(() => keepAtlasChromeClear(instance));
+    }, { duration: 0 }).then(() => keepAtlasChromeClear(instance)).then(syncAltitude);
     return true;
-  }, []);
+  }, [syncAltitude]);
 
   // Whenever the node set settles and no selection is being framed, re-fit the engine-placed field
   // to the stage cell. This is the authoritative framing guarantee: it holds regardless of mount
@@ -202,7 +225,7 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
       const target = targetIdRef.current;
       if (target) { frameTarget(target); return; }
       // React Flow's fitView reveals any still-hidden measured nodes; the hub-centered fit then frames.
-      void revealThenFrame(instance);
+      void revealThenFrame(instance).then(syncAltitude);
     };
     let attempts = 0;
     const tick = () => {
@@ -213,7 +236,7 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     };
     raf = window.requestAnimationFrame(tick);
     return () => { cancelled = true; window.cancelAnimationFrame(raf); };
-  }, [frameTarget, nodes]);
+  }, [frameTarget, nodes, syncAltitude]);
 
   useEffect(() => {
     const instance = instanceRef.current;
@@ -229,7 +252,7 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
         if (!readyRef.current) return;
         const target = targetIdRef.current;
         if (target) frameTarget(target);
-        else void revealThenFrame(instance);
+        else void revealThenFrame(instance).then(syncAltitude);
       });
     };
     const observer = new ResizeObserver(reframe);
@@ -245,7 +268,7 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
       window.removeEventListener("resize", reframe);
       window.cancelAnimationFrame(frame);
     };
-  }, [cameraReady, frameTarget]);
+  }, [cameraReady, frameTarget, syncAltitude]);
 
   const reveal = useCallback((id: string) => {
     const instance = instanceRef.current;
@@ -311,9 +334,10 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     const centerY = traceNodes.length
       ? (Math.min(...traceNodes.map((node) => node.position.y)) + Math.max(...traceNodes.map((node) => node.position.y))) / 2
       : anchor.position.y;
-    void instance.setCenter(anchor.position.x + downstreamOffset, Math.max(anchor.position.y, centerY), { zoom, duration: 0 });
+    void instance.setCenter(anchor.position.x + downstreamOffset, Math.max(anchor.position.y, centerY), { zoom, duration: 0 })
+      .then(syncAltitude);
     return true;
-  }, []);
+  }, [syncAltitude]);
 
   const unfocus = useCallback(() => {
     const instance = instanceRef.current;
@@ -321,9 +345,9 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     setFocusedId(null);
     const previous = previousFocusViewport.current;
     previousFocusViewport.current = null;
-    if (instance && previous) void instance.setViewport(previous, { duration: 0 });
+    if (instance && previous) void instance.setViewport(previous, { duration: 0 }).then(syncAltitude);
     else if (targetIdRef.current) frameTarget(targetIdRef.current);
-  }, [frameTarget]);
+  }, [frameTarget, syncAltitude]);
 
   const broaden = useCallback(() => {
     const instance = instanceRef.current;
@@ -337,9 +361,9 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     const previous = previousViewport.current;
     previousViewport.current = null;
     // Broadening to the overview re-fits the whole engine-placed field to the stage cell.
-    if (previous) void instance.setViewport(previous, { duration: 0 });
-    else void fitFieldToStage(instance);
-  }, []);
+    if (previous) void instance.setViewport(previous, { duration: 0 }).then(syncAltitude);
+    else void fitFieldToStage(instance).then(syncAltitude);
+  }, [syncAltitude]);
 
   const syncSelection = useCallback((id: string | null) => {
     requestedTargetIdRef.current = id;
@@ -362,8 +386,8 @@ export function useAtlasCamera(nodes: AtlasNode[], receiptKey: string) {
     // "Whole venture" frames the entire engine-placed field (efforts, wall, returned reality) into
     // the stage cell — excluding the decorative background field, which would otherwise dominate the
     // fit and shove the real cards off to one side.
-    if (instanceRef.current) void revealThenFrame(instanceRef.current);
-  }, []);
+    if (instanceRef.current) void revealThenFrame(instanceRef.current).then(syncAltitude);
+  }, [syncAltitude]);
 
   return {
     altitude,

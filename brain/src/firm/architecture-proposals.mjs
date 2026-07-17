@@ -7,7 +7,7 @@ import { ARCHITECTURE_KEY, ARCHITECTURE_OPERATIONS, applyArchitectureMutations, 
 import { listConversation } from "./conversation.mjs";
 
 const OPERATIONS = new Set(ARCHITECTURE_OPERATIONS);
-const THEORY_OPERATIONS = new Set(["upsert-subject", "remove-subject", "upsert-relationship", "remove-relationship"]);
+export const THEORY_OPERATIONS = new Set(["upsert-subject", "remove-subject", "upsert-relationship", "remove-relationship"]);
 
 function text(value) {
   const normalized = String(value ?? "").trim();

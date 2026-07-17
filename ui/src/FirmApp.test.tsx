@@ -81,7 +81,22 @@ vi.mock("@/components/atlas/VentureAtlas", () => ({
   VentureAtlas: ({ fallback }: { fallback: ReactNode }) => fallback,
 }));
 
+// Phase 5 cutover: the immersive warm-paper world is the default shell. Its internals (world, chrome,
+// descent, gate) have their own component tests; here we stub it so these tests prove FirmApp's OWN
+// routing responsibility — open a venture → mount the immersive shell — without dragging in ReactFlow.
+vi.mock("@/components/immersive/ImmersiveShell", () => ({
+  ImmersiveShell: ({ venture }: { venture: { id: string; name: string } }) => (
+    <div data-testid="immersive-shell-stub" data-venture={venture.id} data-venture-name={venture.name} />
+  ),
+}));
+
 import FirmApp from "./FirmApp";
+
+// The cutover routes on ?shell — default is immersive, ?shell=legacy is the retained escape hatch.
+// FirmApp reads window.location.search at render, so tests set it before rendering.
+function setShell(shell: "immersive" | "legacy") {
+  window.history.replaceState({}, "", shell === "legacy" ? "/?shell=legacy" : "/");
+}
 
 const fixtureLens: FirmLensPayload = {
   ventureId: "v1",
@@ -105,6 +120,7 @@ describe("FirmApp", () => {
   beforeEach(() => {
     delete window.droverDesktop;
     localStorage.clear();
+    setShell("immersive");
     advanceReturnCursor("v1", "2026-07-02T00:00:00.000Z");
     listVentures.mockReset().mockResolvedValue({ ventures: [] });
     listRepositoryChoices.mockReset().mockResolvedValue({
@@ -159,11 +175,45 @@ describe("FirmApp", () => {
     const row = await screen.findByRole("button", { name: /LocalSeoData pipeline/i });
     expect(row).toHaveTextContent(/open canvas/i);
     fireEvent.click(row);
+    // Cutover: opening a venture mounts the immersive shell by default — not the triptych.
+    expect(await screen.findByTestId("immersive-shell-stub")).toHaveAttribute(
+      "data-venture-name",
+      "LocalSeoData pipeline",
+    );
+  });
+
+  it("opens the immersive world by default and ships no legacy triptych selectors", async () => {
+    listVentures.mockResolvedValue({
+      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
+    });
+    const { container } = render(<FirmApp />);
+    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
+
+    // The immersive shell is the default founder surface.
+    expect(await screen.findByTestId("immersive-shell-stub")).toHaveAttribute("data-venture", "v1");
+    // The retired triptych presentation is absent from the shipped DOM.
+    expect(container.querySelector(".firm-app-rail")).toBeNull();
+    expect(container.querySelector(".firm-app-inspector")).toBeNull();
+    expect(container.querySelector(".firm-app-body")).toBeNull();
+    expect(container.querySelector(".firm-app-workbench-bar")).toBeNull();
+  });
+
+  it("routes an open venture to the retired triptych only behind ?shell=legacy", async () => {
+    setShell("legacy");
+    listVentures.mockResolvedValue({
+      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
+    });
+    render(<FirmApp />);
+    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
+
+    // The escape hatch still mounts the legacy lens + docked rail for regression coverage.
     await screen.findByTestId("firm-lens-stub");
-    expect(screen.getByText("lens for v1")).toBeTruthy();
+    expect(screen.queryByTestId("immersive-shell-stub")).toBeNull();
+    expect(screen.getByRole("complementary", { name: /firm conversation/i })).toBeTruthy();
   });
 
   it("opens a portfolio wall item in its owning venture and canonical bet context", async () => {
+    setShell("legacy");
     const venture = { id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" };
     listVentures.mockResolvedValue({ ventures: [venture] });
     getPortfolioWall.mockResolvedValue({
@@ -207,7 +257,7 @@ describe("FirmApp", () => {
     fireEvent.click(screen.getByRole("button", { name: /start venture/i }));
 
     await waitFor(() => expect(createVenture).toHaveBeenCalledWith("A new venture", "/products/new"));
-    await screen.findByTestId("firm-lens-stub");
+    await screen.findByTestId("immersive-shell-stub");
   });
 
   it("offers trusted local folders as explicit choices and keeps the derived name in sync", async () => {
@@ -264,6 +314,7 @@ describe("FirmApp", () => {
   });
 
   it("keeps direction in the teammate rail and targets the selected canvas teammate", async () => {
+    setShell("legacy");
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
@@ -292,6 +343,7 @@ describe("FirmApp", () => {
   });
 
   it("docks the conversation rail as a grid cell and collapses it to an icon strip", async () => {
+    setShell("legacy");
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
@@ -315,6 +367,7 @@ describe("FirmApp", () => {
   });
 
   it("opens the inspector cell on canvas selection and closes it to reclaim the stage", async () => {
+    setShell("legacy");
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
@@ -335,6 +388,7 @@ describe("FirmApp", () => {
   });
 
   it("keeps always-on work and real crew connections inside venture settings", async () => {
+    setShell("legacy");
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
@@ -354,6 +408,7 @@ describe("FirmApp", () => {
   });
 
   it("keeps the composer available beside the open wall without discarding scope or draft", async () => {
+    setShell("legacy");
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
@@ -378,6 +433,7 @@ describe("FirmApp", () => {
   });
 
   it("keeps the whole firm as the default even when there is only one teammate", async () => {
+    setShell("legacy");
     getLens.mockResolvedValue({ lens: { ...fixtureLens, crew: [fixtureLens.crew[0]] } });
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
@@ -401,6 +457,7 @@ describe("FirmApp", () => {
   });
 
   it("addresses an empty firm without inventing an internal teammate reference", async () => {
+    setShell("legacy");
     getLens.mockResolvedValue({ lens: { ...fixtureLens, crew: [] } });
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
@@ -424,6 +481,7 @@ describe("FirmApp", () => {
   });
 
   it("keeps founder-facing progress visible in the teammate line", async () => {
+    setShell("legacy");
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
@@ -439,6 +497,7 @@ describe("FirmApp", () => {
   });
 
   it("opens return proof without reviewing unrelated durable work", async () => {
+    setShell("legacy");
     localStorage.clear();
     advanceReturnCursor("v1", "2026-06-30T00:00:00.000Z");
     listVentures.mockResolvedValue({
@@ -463,6 +522,7 @@ describe("FirmApp", () => {
   });
 
   it("shows active provider work and stops only that run without ending its bet", async () => {
+    setShell("legacy");
     getActiveDrives.mockResolvedValue({
       drives: [{
         id: "drive-1", ventureId: "v1", teammateRef: "outreach-writer", betId: "bet-1",
@@ -485,6 +545,7 @@ describe("FirmApp", () => {
   });
 
   it("retries a failed move through the selected bet composer instead of restarting silently", async () => {
+    setShell("legacy");
     getLens.mockResolvedValue({
       lens: {
         ...fixtureLens,
@@ -517,6 +578,7 @@ describe("FirmApp", () => {
   });
 
   it("keeps the durable founder and teammate chat in the left rail", async () => {
+    setShell("legacy");
     getConversation.mockResolvedValue({
       messages: [
         {
@@ -545,6 +607,7 @@ describe("FirmApp", () => {
   });
 
   it("hands a single new bet from the conversation back to the focused canvas", async () => {
+    setShell("legacy");
     driveTeammate.mockResolvedValue({
       outcome: { kind: "completed" },
       work: {},
@@ -577,6 +640,7 @@ describe("FirmApp", () => {
   });
 
   it("uses the teammate character to orient an empty line", async () => {
+    setShell("legacy");
     getLens.mockResolvedValue({ lens: { ...fixtureLens, bets: [] } });
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
@@ -591,6 +655,7 @@ describe("FirmApp", () => {
   });
 
   it("the back control returns to the venture picker", async () => {
+    setShell("legacy");
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });

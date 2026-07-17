@@ -34,7 +34,18 @@ export default async function handle({ req, res, url }) {
       try {
         authorizeFounderWriteForRequest(req, "Marking the founder present");
       } catch (err) {
-        json(res, err?.status === 403 ? 403 : 400, { error: err instanceof Error ? err.message : String(err) });
+        // A page not opened by the desktop host cannot mark the founder present — but a heartbeat is a
+        // benign keep-alive, not a decision, and this is a VALID state (a dev/browser harness, or the
+        // desktop host not yet attached). The conservative default already models it: the lease simply
+        // is not renewed and lapses to "away". So answer the heartbeat with the current presence (200),
+        // never a 400/503 the browser logs as if the app were broken. A genuine refusal — an
+        // agent-stamped request or non-local origin (403) — still fails closed so a model cannot lift
+        // the away hold.
+        if (err?.status === 403) {
+          json(res, 403, { error: err instanceof Error ? err.message : String(err) });
+          return true;
+        }
+        json(res, 200, getPresence());
         return true;
       }
     }

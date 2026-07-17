@@ -2,9 +2,51 @@
 // existing proposal-only write seam; they cannot mutate current architecture, create execution work,
 // start a campaign, or decide a proposal.
 
-import { getArchitecture } from "./architecture.mjs";
-import { getCurrentWorkingTheory, proposeArchitectureChange, recordWorkingTheory } from "./architecture-proposals.mjs";
+import { ARCHITECTURE_OPERATIONS, getArchitecture } from "./architecture.mjs";
+import { THEORY_OPERATIONS, getCurrentWorkingTheory, proposeArchitectureChange, recordWorkingTheory } from "./architecture-proposals.mjs";
 import { appendConversationMessage, listConversation } from "./conversation.mjs";
+
+// The operation items for these tools were once typed as a bare `{ type: "object" }`, which told a
+// driving teammate nothing about the vocabulary — so it guessed `op` values ("assert", "note",
+// "observe", …) and every guess was rejected as an "Unsupported working-theory operation" (a real
+// teammate blocker seen in the field). Declare the exact `op` enum the validator enforces (kept in sync
+// by importing the validator's own vocabulary) and the operation shape, so the contract is discoverable
+// from the schema itself rather than by trial and error.
+const THEORY_OPERATION_ITEM_SCHEMA = {
+  type: "object",
+  properties: {
+    op: { type: "string", enum: [...THEORY_OPERATIONS] },
+    id: {
+      type: "string",
+      description:
+        "Stable id — a letter or digit followed by [A-Za-z0-9._-], ≤120 chars. Reuse the same id to update or remove a subject/relationship you already recorded.",
+    },
+    value: {
+      type: "object",
+      description:
+        "The subject or relationship body. upsert-subject: { name, statement }. upsert-relationship: { fromRef: 'theory:<subjectId>', toRef: 'theory:<subjectId>', label }. Omit for remove-subject / remove-relationship.",
+      properties: {
+        name: { type: "string" },
+        statement: { type: "string" },
+        fromRef: { type: "string", description: "Source subject ref, 'theory:<subjectId>'." },
+        toRef: { type: "string", description: "Target subject ref, 'theory:<subjectId>'." },
+        label: { type: "string" },
+      },
+    },
+  },
+  required: ["op", "id"],
+};
+
+const ARCHITECTURE_OPERATION_ITEM_SCHEMA = {
+  type: "object",
+  description:
+    "One semantic operation. Call read_venture_architecture first for the exact element ids, roles, and refs each op expects.",
+  properties: {
+    op: { type: "string", enum: [...ARCHITECTURE_OPERATIONS] },
+    id: { type: "string", description: "Target element/connection/group id for update/remove/change ops." },
+  },
+  required: ["op"],
+};
 
 function readVentureArchitecture({ ventureId, options, trackCall }) {
   return {
@@ -30,14 +72,14 @@ function recordVentureWorkingTheory({
 }) {
   return {
     name: "record_working_theory",
-    description: "Record or supersede Drover's provisional, source-bearing current read. This cannot create durable architecture, campaigns, sends, deploys, or spend.",
+    description: "Record or supersede Drover's provisional, source-bearing current read. Each operation's `op` is one of upsert-subject, remove-subject, upsert-relationship, remove-relationship. This cannot create durable architecture, campaigns, sends, deploys, or spend.",
     input_schema: {
       type: "object",
       properties: {
         baseRevision: { type: "integer", minimum: 0 },
         intent: { type: "string" },
         supersedes: { type: ["string", "null"] },
-        operations: { type: "array", minItems: 1, items: { type: "object" } },
+        operations: { type: "array", minItems: 1, items: THEORY_OPERATION_ITEM_SCHEMA },
         anchors: {
           type: "array",
           minItems: 1,
@@ -115,7 +157,7 @@ function proposeVentureArchitecture({
       properties: {
         baseRevision: { type: "integer", minimum: 0 },
         intent: { type: "string" },
-        operations: { type: "array", items: { type: "object" }, minItems: 1 },
+        operations: { type: "array", items: ARCHITECTURE_OPERATION_ITEM_SCHEMA, minItems: 1 },
         affectedExecutionContexts: { type: "array", items: { type: "string" } },
         evidenceRefs: { type: "array", items: { type: "string" } },
         unresolvedAssumptions: { type: "array", items: { type: "string" } },

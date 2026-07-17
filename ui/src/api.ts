@@ -502,6 +502,10 @@ export const driveTeammate = (
     teammateRefs?: string[];
     goal: string;
     betId?: string | null;
+    // branchFrom names a parent bet to fork a genuinely distinct sibling from before the drive begins —
+    // the deterministic HTTP fork verb behind "try another approach". The brain seeds the child bet and
+    // scopes the drive to it (work-routes.mjs), so a sibling is guaranteed rather than prompt-dependent.
+    branchFrom?: string | null;
     workRef?: string | null;
     architectureTarget?: { id: string; stepId?: string | null; revision: number };
     theoryTarget?: { theoryId: string; subjectId: string };
@@ -512,7 +516,7 @@ export const driveTeammate = (
   `/api/ventures/${encodeURIComponent(ventureId)}/drive`,
   body,
 ).then((result) => {
-  if (body.betId) recordUxMetric("correction_sent", ventureId);
+  if (body.betId || body.branchFrom) recordUxMetric("correction_sent", ventureId);
   return result;
 });
 

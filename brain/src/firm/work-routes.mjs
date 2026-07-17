@@ -17,10 +17,11 @@ import { listConversation } from "./conversation.mjs";
 import { getFirmConfiguration } from "./configuration.mjs";
 import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { abortActiveDrive, listActiveDrives } from "./active-drives.mjs";
-import { getVentureDoc, listVentureDocs } from "./venture-store.mjs";
+import { getVentureDoc, listVentureDocs, setVentureDoc } from "./venture-store.mjs";
 import { buildArchitectureContext, buildWorkingTheoryContext } from "./architecture-context.mjs";
 import { routeDirection } from "./direction-routing.mjs";
 import { appendConversationMessage } from "./conversation.mjs";
+import { fork } from "./bet.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -113,7 +114,8 @@ export default async function handle({ req, res, url, deps = {} }) {
     // deterministic cases are behavior-identical. Only a genuinely fuzzy multi-crew match uses the model
     // (deps.routingClassify, defaulted to null so nothing hits the network here); when it does, the
     // claim is made visible in the thread with a one-line why BEFORE work starts.
-    const unscopedDirection = !primaryTeammateRef && !targetedTeammateRefs.length && !trimOrNull(body?.betId);
+    const unscopedDirection = !primaryTeammateRef && !targetedTeammateRefs.length
+      && !trimOrNull(body?.betId) && !trimOrNull(body?.branchFrom);
     let routedWhy = null;
     let teammateRef;
     if (unscopedDirection) {
@@ -149,13 +151,36 @@ export default async function handle({ req, res, url, deps = {} }) {
       error.status = 409;
       throw error;
     }
-    if (body?.workRef && !body?.betId) {
+    if (body?.workRef && !body?.betId && !body?.branchFrom) {
       const error = new Error("Targeting durable work also needs its betId.");
       error.status = 400;
       throw error;
     }
-    const betId = trimOrNull(body?.betId);
-    const workRef = trimOrNull(body?.workRef);
+    // "Try another approach" is a deterministic HTTP fork verb: branchFrom (or intent:"branch" with a
+    // betId) seeds a genuinely distinct child bet from the named parent BEFORE the drive begins, so a
+    // sibling is guaranteed rather than left to prompt-level phrasing inside the loop. The drive is then
+    // scoped to the new child. This is the only place the route creates domain state, and it stays a
+    // pure fork() + persist — the wall/decision seams are untouched.
+    const requestedBranchFrom = trimOrNull(body?.branchFrom)
+      ?? (String(body?.intent ?? "").trim().toLowerCase() === "branch" ? trimOrNull(body?.betId) : null);
+    let branchedBetId = null;
+    if (requestedBranchFrom) {
+      const parentBet = getVentureDoc(ventureId, "bets", requestedBranchFrom);
+      if (!parentBet) {
+        const error = new Error(`No bet ${requestedBranchFrom} belongs to this venture to branch from.`);
+        error.status = 404;
+        throw error;
+      }
+      const branchIntent = trimOrNull(body?.goal) ?? `Try another approach to ${parentBet.intent}`;
+      const child = fork(parentBet, branchIntent, {
+        teammateRef,
+        configurationRevision: configuration.revision,
+      });
+      setVentureDoc(ventureId, "bets", child.id, child);
+      branchedBetId = child.id;
+    }
+    const betId = branchedBetId ?? trimOrNull(body?.betId);
+    const workRef = branchedBetId ? null : trimOrNull(body?.workRef);
     const architectureId = trimOrNull(body?.architectureTarget?.id ?? body?.architectureId);
     const architectureStepId = trimOrNull(body?.architectureTarget?.stepId ?? body?.architectureStepId);
     const requestedArchitectureRevision = Number.isInteger(body?.architectureTarget?.revision)

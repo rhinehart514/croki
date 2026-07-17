@@ -98,7 +98,19 @@ export default async function handle({ req, res, url }) {
         eligibility,
         groups: eligibility.status === "eligible" ? groupedPortfolioWall() : [],
       });
-    } catch (err) { fail(res, err); }
+    } catch (err) {
+      // A page not opened by the desktop host is a VALID read state, not a failure: this route's own
+      // contract is "reads remain available" (see founder-authority.mjs). The founder-write boundary
+      // here only protects the cross-venture AGGREGATION; when the host is simply absent, the honest
+      // answer is the same empty, proof-gated payload the UI already renders as "nothing to show" — a
+      // 200, never a 503 the browser logs as if the app were broken. A genuine refusal (agent-stamped
+      // request → 403) or any other authority failure still fails closed below.
+      if (err?.code === "founder_host_unavailable") {
+        json(res, 200, { eligibility: portfolioFrontierEligibility(), groups: [] });
+        return true;
+      }
+      fail(res, err);
+    }
     return true;
   }
 
