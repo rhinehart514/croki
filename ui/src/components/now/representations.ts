@@ -6,16 +6,18 @@
 // beside the persistent composer without knowing what kind it is. A representation holds no durable state
 // and is recomputed from ctx, so switching or dismissing it can never touch bets/staged/outcomes.
 //
-// Seeded: overview (always), exact-change, working-result, approach-comparison, agent-collaboration. The
-// GTM shapes the spec names (pipeline/funnel/audience/journey) are deliberately NOT seeded — no backend
-// collection backs them yet, so offering them would be nodes with no throughput. When that truth exists,
-// each is one more object here.
+// Deliberately RESTRAINED, not maximal. The registry is open, but the product rule is subtraction: a
+// direction shows ONE default body (its result/consequence) and offers alternates only when they add
+// something the founder cannot already see. Seeded: result (default), exact-change, approach-comparison.
+// "Who's working" is NOT a peer view — live agents surface as the working-now pulse plus the "How this was
+// done" activity disclosure, never machinery as a top-level tab. GTM shapes (pipeline/funnel/audience) are
+// not seeded: no backend collection backs them yet, so offering them would be nodes with no throughput.
 import { createElement, type ReactNode } from "react";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
+import type { FirmBet } from "@/types";
 import type { DirectionRenderContext } from "./projectDirection";
-import { OverviewBody, WorkingResultBlock, ExactChangeBlock } from "./WorkDetail";
+import { ResultBody, ExactChangeBlock } from "./WorkDetail";
 import { ApproachComparison } from "./ApproachComparison";
-import { CollaborationView } from "./CollaborationView";
 
 // Callbacks a representation may use to express founder intent — never to mutate durable truth.
 export type RepresentationActions = {
@@ -30,13 +32,19 @@ export type Representation = {
   render(ctx: DirectionRenderContext, actions: RepresentationActions): ReactNode;
 };
 
-// The seed list. Order here is the chip order. Kinds stay open: this is a plain array of objects.
+// An approach is "genuinely active" only while it is still open — ended/killed attempts are history and do
+// not, by themselves, earn a comparison view.
+function activeApproaches(bets: FirmBet[]): number {
+  return bets.filter((bet) => !bet.endedAt).length;
+}
+
+// The seed list. Order here is the chip order; SEED[0] is the default body. Kinds stay open: plain objects.
 const SEED: Representation[] = [
   {
-    id: "overview",
-    label: "Overview",
+    id: "result",
+    label: "Result",
     available: () => true,
-    render: (ctx) => createElement(OverviewBody, { ctx }),
+    render: (ctx) => createElement(ResultBody, { ctx }),
   },
   {
     id: "exact-change",
@@ -45,22 +53,10 @@ const SEED: Representation[] = [
     render: (ctx) => createElement(ExactChangeBlock, { changes: ctx.exactChanges }),
   },
   {
-    id: "working-result",
-    label: "Working result",
-    available: (ctx) => ctx.previews.length > 0,
-    render: (ctx) => createElement(WorkingResultBlock, { previews: ctx.previews }),
-  },
-  {
     id: "approach-comparison",
     label: "Compare approaches",
-    available: (ctx) => ctx.memberBets.length > 1,
+    available: (ctx) => activeApproaches(ctx.memberBets) > 1,
     render: (ctx, actions) => createElement(ApproachComparison, { ctx, onScopePick: actions.onScopePick }),
-  },
-  {
-    id: "agent-collaboration",
-    label: "Who's working",
-    available: (ctx) => ctx.drives.length > 0 || ctx.memberBets.length > 0,
-    render: (ctx, actions) => createElement(CollaborationView, { ctx, onScopePick: actions.onScopePick, onStop: actions.onStop }),
   },
 ];
 
@@ -69,7 +65,7 @@ export function buildRepresentations(ctx: DirectionRenderContext): Representatio
   return SEED.filter((representation) => representation.available(ctx));
 }
 
-/** Null-safe selection: the requested id if present, else the first (overview) — never undefined. */
+/** Null-safe selection: the requested id if present, else the first (result) — never undefined. */
 export function getRepresentation(list: Representation[], id: string | null): Representation {
   return list.find((representation) => representation.id === id) ?? list[0];
 }

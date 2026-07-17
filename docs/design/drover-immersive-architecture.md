@@ -1,19 +1,15 @@
 # Drover — Immersive Shell: Production Architecture
 
-**Status: build-ready architecture, 2026-07-16.** Implements the determined change-set in
-`docs/design/drover-immersive-redesign.md` (authoritative UI/UX). Data model, six nouns, wall/gate
-semantics, and founder-language contract are unchanged (`FIRM-SPEC.md`, `STATE.md`,
-`ux-divergence-2026.html` §5). Every seam cited below is grounded in the three discovery maps
-(BACKEND INTEGRATION CONTRACT, UI REUSE MAP, DEPENDENCY + TECHNIQUE BRIEF) and verified against the
-live repo. **No endpoint, hook, or data shape here is invented.**
+> **Superseded implementation architecture — 2026-07-17.** This is not current product direction. Current
+> experience authority is root `DESIGN.md`; current proof is `docs/STATE.md`. Permanent AI crew, ambient
+> conversation, and the immersive shell are migration debt. Reuse only grounded component/data seams.
 
-Orientation for a cold reader: Drover is the operating system for a one-person holding company. The
-founder drives a living venture by talking to it; a permanent AI crew researches, drafts, and builds;
-everything that would touch the world waits at *the wall* for the founder's hand. This document
-rebuilds the **shell** — the edge-to-edge warm-paper world, floating glass chrome, descend-in-place
-reading, ambient conversation, and the gate — while consuming the existing domain/data layer unchanged.
+**Historical status:** this plan was considered build-ready on 2026-07-16 and was superseded on
+2026-07-17. It is non-executable. The remaining component tree, phase tables, and acceptance instructions
+preserve the then-grounded implementation record only; they cannot override root `DESIGN.md`,
+`docs/FIRM-SPEC.md`, or `docs/STATE.md`.
 
-Stack: React 19.2, `@xyflow/react` 12.11, `motion` 12.42, Base UI 1.6, Tailwind 4.3, d3-force 3.
+Stack at the time: React 19.2, `@xyflow/react` 12.11, `motion` 12.42, Base UI 1.6, Tailwind 4.3, d3-force 3.
 
 ---
 
@@ -139,7 +135,7 @@ Specified fix above (add `branchFrom` to `POST /drive`). Everything else binds t
 
 ---
 
-## 4 · Phased build plan
+## 4 · Historical phased plan — do not execute
 
 Ordering guarantee: `immersive/` is additive and independently mountable behind a route/flag; the legacy
 `VentureAtlas` triptych keeps building and running until Phase 5 retires it. Each phase ends green
@@ -190,8 +186,8 @@ Ordering guarantee: `immersive/` is additive and independently mountable behind 
   reduced-motion emulated asserts nodes still change state but camera does not travel; "try another
   approach" fires a scoped `driveTeammate` and a dashed sibling appears on next poll.
 
-### Phase 5 — Cut over + retire triptych
-- **Edits:** flip default shell to `immersive`; delete/retire `FirmApp` triptych grid CSS + `VentureAtlas`
+### Historical Phase 5 — proposed cutover
+- **Rejected proposal:** the 2026-07-16 plan would have flipped the default shell to immersive and retired the `FirmApp` triptych CSS + `VentureAtlas`
   triptych composition (keep the reused hooks); confirm `npm test` (brain + ui + lint + build) green.
 - **Acceptance:** full `npm test` passes; browser journey `npm run test:firm:browser` passes end-to-end
   against the immersive shell; no legacy `.firm-app-rail`/`.firm-app-inspector` selectors remain in the

@@ -2,8 +2,8 @@
 // the architecture mutation kernel so accepting a proposal has exactly the same invariants and CAS.
 
 import crypto from "node:crypto";
-import { getVentureDoc, listVentureDocs, now, venturePersistence } from "./venture-store.mjs";
-import { ARCHITECTURE_KEY, ARCHITECTURE_OPERATIONS, applyArchitectureMutations, getArchitectureState, validateArchitectureProposalOperations } from "./architecture.mjs";
+import { listVentureDocs, now } from "./venture-store.mjs";
+import { ARCHITECTURE_OPERATIONS, applyArchitectureMutations, getArchitectureState, validateArchitectureProposalOperations, writeArchitectureCompatibilityState } from "./architecture.mjs";
 import { listConversation } from "./conversation.mjs";
 
 const OPERATIONS = new Set(ARCHITECTURE_OPERATIONS);
@@ -174,16 +174,7 @@ function operationAssemblyEvent(operation, operationIndex) {
 }
 
 function writeState(ventureId, state, currentState, options) {
-  const value = { ...state, revision: currentState.storageRevision + 1 };
-  if (!currentState.storageRevisionPresent) {
-    return venturePersistence(options, ventureId).set("architecture", ARCHITECTURE_KEY, value);
-  }
-  return venturePersistence(options, ventureId).compareAndSet(
-    "architecture",
-    ARCHITECTURE_KEY,
-    currentState.storageRevision,
-    value,
-  );
+  return writeArchitectureCompatibilityState(ventureId, currentState, state, options);
 }
 
 export function proposeArchitectureChange({
@@ -365,6 +356,6 @@ export function decideArchitectureProposal({ ventureId, proposalId: id, decision
   const after = getArchitectureState(ventureId, options);
   const decided = { ...proposal, status: decision === "accept" ? "accepted" : "partially-accepted", decision, reason: text(reason), decidedAt, decidedBy: actor, appliedRevision: result.revision };
   const proposals = after.proposals.map((entry) => entry.id === id ? decided : entry);
-  venturePersistence(options, ventureId).compareAndSet("architecture", ARCHITECTURE_KEY, after.storageRevision, { current: after.current, revisions: after.revisions, proposals, revision: after.storageRevision + 1 });
+  writeArchitectureCompatibilityState(ventureId, after, { current: after.current, revisions: after.revisions, proposals }, options);
   return { ...result, proposal: decided };
 }

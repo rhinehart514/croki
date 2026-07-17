@@ -1,13 +1,13 @@
-// The workbench host — the one pane that replaces the fixed WorkDetail stack. It is the stable spine
-// around a swappable representation: the direction head (identity), the single working-now pulse
-// (movement, never a step counter), and the pinned waiting DecisionGate (authority) all live HERE, ABOVE
-// the pane, so they can never hide behind a non-active chip. Below them a quiet per-direction chip strip
-// offers only the representations whose durable truth exists, and the selected one renders. Switching a
-// chip is pure view-state (activeRepresentationId) — never a route change, never a drive — so the
-// composer docked below and the conversation spine do not fragment. The host hardcodes only safe
-// rendering, which id is active, and the authority boundary; the model/registry proposes the pane.
+// The workbench host — the stable spine around ONE default body. The direction head (identity), the single
+// working-now pulse (movement, never a step counter), and the pinned waiting DecisionGate (authority) live
+// HERE, above the body, so they are never hidden. Below them the direction shows its result by default; a
+// single contextual "View" control — not a persistent tab strip — offers the alternates that genuinely add
+// something (the exact diff, a live approach comparison), and only when more than one exists. Switching a
+// view is pure view-state (activeRepresentationId): never a route change, never a drive, so the composer
+// docked below and the conversation spine do not fragment. The host hardcodes only safe rendering, which id
+// is active, and the authority boundary; the registry proposes the body.
 import { useMemo, useState } from "react";
-import { ChevronLeft, Square } from "lucide-react";
+import { ChevronLeft, Layers, Square } from "lucide-react";
 import type { FirmActiveDrive, WallQueueItemView } from "@/api";
 import type { FirmArchitectureProjection, FirmLens } from "@/types";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
@@ -45,19 +45,23 @@ export function WorkbenchView({
   );
   const list = useMemo(() => buildRepresentations(ctx), [ctx]);
 
-  // Own the active representation. Reconcile if the current id is no longer available (truth changed, or
-  // the direction was re-selected) — falling back to overview, never a blank pane.
-  const [activeId, setActiveId] = useState<string>(list[0]?.id ?? "overview");
+  // Own the active representation. Default to the result body (SEED[0]); reconcile to it if the current id
+  // is no longer available (truth changed, or the direction was re-selected) — never a blank pane.
+  const [activeId, setActiveId] = useState<string>(list[0]?.id ?? "result");
+  const [viewOpen, setViewOpen] = useState(false);
   const active = getRepresentation(list, activeId);
-  const activeResolvedId = active?.id ?? "overview";
-  // Evidence honesty: the pinned gate suppresses its own diff ONLY when the active representation is
-  // already showing that exact change (overview or exact-change). Under any other representation the
-  // diff is nowhere on screen, so the gate must render it — a repository change is never released unseen.
-  const activeShowsExactChange = activeResolvedId === "overview" || activeResolvedId === "exact-change";
+  const activeResolvedId = active?.id ?? "result";
+  // Evidence honesty: only the exact-change view renders the diff, so on EVERY other view the pinned gate
+  // must render it itself — a repository change is never released with the diff nowhere on screen. This is
+  // also how "exact change stays behind the result until a decision requires it" holds: when a product
+  // change is waiting, the gate surfaces the diff on the result view without the founder switching.
+  const gateShowsDiff = (kind: string) => kind !== "product-change" || activeResolvedId !== "exact-change";
 
   const { drive, waiting } = ctx;
   const tone = waiting.length ? "needs-you" : direction.state;
   const eyebrow = waiting.length ? "Needs your decision" : drive ? "Working now" : direction.state === "from-market" ? "The market answered" : "Direction";
+
+  const pick = (id: string) => { setActiveId(id); setViewOpen(false); };
 
   return (
     <div className="now-doc" data-tone={tone}>
@@ -72,7 +76,8 @@ export function WorkbenchView({
         <p className="now-doc-why">{direction.understanding}</p>
       </div>
 
-      {/* Movement — one calm working-now pulse when a live drive exists, never a machinery counter. */}
+      {/* Movement — one calm working-now pulse when a live drive exists, never a machinery counter. This is
+          also where live agents surface: work-before-worker, with detail behind the machinery disclosure. */}
       {drive ? (
         <div className="now-progress">
           <span className="now-progress-dot" aria-hidden="true" />
@@ -85,7 +90,7 @@ export function WorkbenchView({
         </div>
       ) : null}
 
-      {/* Authority — pinned above the pane so a decision is never buried behind a non-active chip. */}
+      {/* Authority — pinned above the body so a decision is never buried behind a non-active view. */}
       {waiting.length ? (
         <div className="now-detail-block">
           <span className="now-detail-block-label">{waiting.length === 1 ? "Your decision" : "Your decisions"}</span>
@@ -95,32 +100,46 @@ export function WorkbenchView({
               ventureId={ventureId}
               item={item}
               onDecided={onChanged}
-              showArtifact={String(item.effect.kind ?? "").toLowerCase() !== "product-change" || !activeShowsExactChange}
+              showArtifact={gateShowsDiff(String(item.effect.kind ?? "").toLowerCase())}
             />
           ))}
         </div>
       ) : null}
 
-      {/* The per-direction chip strip — a quiet segmented control, never a global tab bar. Only shown
-          when there is a real choice (more than the always-present overview). */}
+      {/* One contextual View control — shown only when there is a real alternate, never a persistent tab
+          strip. It names the current body and discloses the others on demand. */}
       {list.length > 1 ? (
-        <div className="now-reps" role="group" aria-label="How to view this direction" data-tone={tone}>
-          {list.map((representation) => (
-            <button
-              key={representation.id}
-              type="button"
-              className="now-rep-chip"
-              aria-pressed={representation.id === activeResolvedId}
-              onClick={() => setActiveId(representation.id)}
-            >
-              {representation.label}
-            </button>
-          ))}
+        <div className="now-view">
+          <button
+            type="button"
+            className="now-view-toggle"
+            aria-haspopup="menu"
+            aria-expanded={viewOpen}
+            onClick={() => setViewOpen((open) => !open)}
+          >
+            <Layers aria-hidden="true" /> View · {active.label}
+          </button>
+          {viewOpen ? (
+            <div className="now-view-menu" role="menu">
+              {list.map((representation) => (
+                <button
+                  key={representation.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={representation.id === activeResolvedId}
+                  className="now-view-option"
+                  onClick={() => pick(representation.id)}
+                >
+                  {representation.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
-      {/* The swappable pane — the only thing that repaints on a chip switch. */}
-      {active.render(ctx, { onScopePick, onStop })}
+      {/* The body — the default result, or the alternate the founder chose. */}
+      {active.render(ctx, { onScopePick })}
     </div>
   );
 }

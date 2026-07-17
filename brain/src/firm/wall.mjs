@@ -233,7 +233,7 @@ export function decide(
   }
 
   // DEPLOY KEEPS ITS SECOND EXPLICIT AUTHORIZATION. A deploy effect is heavier than an ordinary send —
-  // mirrors connectors/execute/deploy.mjs's two-authorization contract, re-seated so the SECOND
+  // its two-authorization contract is re-seated so the SECOND
   // authorization is the founder's own act on the ITEM (a prior decide({decision:"authorize-deploy"})
   // call), never a field the parker could pre-stamp onto the effect it authored. The founder's release
   // call is authorization #1; `deployAuthorizedAt` on the item — writable only through this same
@@ -270,7 +270,31 @@ export function decide(
       throw new Error("decide() cannot release without an executeEffect executor wired for this effect.");
     }
     const executionResult = executeEffect(released, item);
-    receipt = { ...receipt, releasedAt: decidedAt, executionResult: executionResult ?? null };
+    // A failed transport (Gmail 500, revoked token, no deploy provider) must NOT be recorded as a
+    // completed release. Do not consume the decision: persist the failure onto the still-QUEUED item so
+    // it stays in the founder's queue for an explicit retry/reconnect, and throw so the release call
+    // reports failure honestly instead of returning a success the world never saw. Only a genuine
+    // success below stamps releasedAt and decides the item.
+    if (executionResult && executionResult.ok === false) {
+      const failedItem = {
+        ...item,
+        decision: null,
+        lastExecutionError: executionResult.executionError ?? "The outward release failed.",
+        needsReconnect: executionResult.needsReconnect === true,
+        lastAttemptAt: decidedAt,
+      };
+      saveItem(ventureId, failedItem, options);
+      // Surface the durable failure to live surfaces just like a decided item — the item document changed.
+      emitFirmEvent(trimOrNull(ventureId), "wall", { betId: item.betId });
+      const error = new Error(executionResult.executionError ?? "The outward release failed to execute.");
+      error.code = "wall_release_execution_failed";
+      error.status = 502;
+      error.needsReconnect = executionResult.needsReconnect === true;
+      throw error;
+    }
+    // A genuine success clears any failure markers a prior failed attempt persisted on this item, so the
+    // release receipt does not carry a stale error/reconnect flag for a send the world actually saw.
+    receipt = { ...receipt, releasedAt: decidedAt, executionResult: executionResult ?? null, lastExecutionError: null, needsReconnect: false, lastAttemptAt: null };
   }
 
   if (decision === "kill") {

@@ -4,8 +4,9 @@
 // how it was done. These blocks were once a single fixed stack; they are now the render bodies the
 // representation registry composes. WorkbenchView owns the head, the working-now pulse, and the pinned
 // decision; the blocks below are pure over the shared DirectionRenderContext so legacy and panes cannot
-// diverge. OverviewBody is the default "overview" representation — the same blocks, same order, same
-// now.css classes as before (parity). Steering happens in the persistent composer docked below.
+// diverge. ResultBody is the default representation — it leads with what was produced and omits the exact
+// diff (that is its own view, and the pinned gate surfaces it when a release needs it). Steering happens in
+// the persistent composer docked below.
 import { Fragment } from "react";
 import type { FirmOutcome } from "@/types";
 import { DiffView, FilesChanged, ArtifactPreview } from "@/components/review";
@@ -123,16 +124,17 @@ export function MachineryBlock({ machinery }: { machinery: Array<[string, string
 }
 
 /**
- * The default richest representation — the same block stack WorkDetail rendered before, in the same order
- * and with the same now.css classes (parity). The head, working-now pulse, and pinned decisions moved up
- * to WorkbenchView so they never hide behind a non-active chip; everything else composes from ctx here.
+ * The default body — the direction's CONSEQUENCE, led by what was produced. It deliberately does NOT stack
+ * the exact repository diff: that lives behind the View control (the `exact-change` representation), and the
+ * pinned DecisionGate still renders it whenever a release actually needs it (WorkbenchView's evidence-honesty
+ * rule). This is the subtraction from the old everything-at-once overview — one coherent result, not every
+ * system displayed simultaneously. The head, working-now pulse, and pinned decisions live in WorkbenchView.
  */
-export function OverviewBody({ ctx }: { ctx: DirectionRenderContext }) {
+export function ResultBody({ ctx }: { ctx: DirectionRenderContext }) {
   return (
     <>
       <ReturnedBlock outcomes={ctx.outcomes} />
       <WorkingResultBlock previews={ctx.previews} />
-      <ExactChangeBlock changes={ctx.exactChanges} />
       <ImpactBlock impact={ctx.impact} />
       <LearningBlock learning={ctx.learning} />
       <MachineryBlock machinery={ctx.machinery} />

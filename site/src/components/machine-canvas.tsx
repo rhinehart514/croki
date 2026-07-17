@@ -1,5 +1,4 @@
 import {
-  ArrowDown,
   Check,
   FileCode2,
   Flag,
@@ -8,7 +7,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-function CrewLine({ name, task }: { name: string; task: string }) {
+function RunLine({ runtime, task }: { runtime: string; task: string }) {
   return (
     <div className="crew-line">
       <span className="crew-portrait" aria-hidden="true">
@@ -16,7 +15,7 @@ function CrewLine({ name, task }: { name: string; task: string }) {
         <span className="crew-head" />
       </span>
       <span>
-        <strong>{name}</strong>
+        <strong>{runtime}</strong>
         <small>{task}</small>
       </span>
       <Check className="crew-check" aria-hidden="true" />
@@ -29,7 +28,7 @@ export function MachineCanvas() {
     <div
       className="machine-shell"
       role="img"
-      aria-label="A Drover experiment moving from cited product truth, through a working crew and founder approval, to a real outcome"
+      aria-label="A Drover venture canvas joining Product and go-to-market work, bounded Claude and Codex execution, an exact founder consequence, and returned evidence"
     >
       <div className="machine-topbar">
         <div className="machine-product">
@@ -37,16 +36,16 @@ export function MachineCanvas() {
             D
           </span>
           <span>
-            Your product
-            <small>living terrain</small>
+            Buffalo Projects
+            <small>one canonical venture</small>
           </span>
         </div>
         <div className="machine-mode">
-          <span>Canvas</span>
-          <span className="machine-mode-active">Experiments</span>
+          <span className="machine-mode-active">Product</span>
+          <span>Go-to-market</span>
         </div>
         <span className="machine-status">
-          <span /> 3 bets moving
+          <span /> illustrative scenario
         </span>
       </div>
 
@@ -58,20 +57,20 @@ export function MachineCanvas() {
                 <FileCode2 />
               </span>
               <span>
-                <small>Product truth</small>
-                <strong>What the code proves</strong>
+                <small>Product · evidence-backed</small>
+                <strong>Project discovery</strong>
               </span>
             </div>
             <div className="evidence-line">
               <span>README.md:55</span>
-              <p>Product claims carry file and line receipts.</p>
+              <p>The repository proves the current discovery path.</p>
             </div>
             <div className="evidence-line">
-              <span>README.md:138</span>
-              <p>Repository scan stays read-only and local.</p>
+              <span>Telemetry</span>
+              <p>Builders leave before viewing a complete brief.</p>
             </div>
             <div className="node-foot">
-              <ScanSearch /> 43 cited files
+              <ScanSearch /> cited Product truth
             </div>
           </article>
 
@@ -81,49 +80,44 @@ export function MachineCanvas() {
                 <Sparkles />
               </span>
               <span>
-                <small>Opening · informed read</small>
-                <strong>Turn product truth into a testable venture</strong>
+                <small>Go-to-market · inferred</small>
+                <strong>Founder interviews</strong>
               </span>
             </div>
             <p>
-              The first useful artifact should prove demand before the team adds
-              another surface.
+              The current promise may be ahead of the Product experience it asks
+              builders to trust.
             </p>
-            <span className="uncertainty">Medium confidence</span>
+            <span className="uncertainty">Interpretation · not fact</span>
           </article>
-        </div>
-
-        <div className="machine-flow" aria-hidden="true">
-          <span />
-          <ArrowDown />
         </div>
 
         <article className="machine-node crew-node">
           <div className="crew-node-head">
             <span>
-              <small>Step 03</small>
-              <strong>Prove the wedge</strong>
+              <small>Selected relationship</small>
+              <strong>Promise → Product capability</strong>
             </span>
-            <span className="run-state">Prepared</span>
+            <span className="run-state">Directed</span>
           </div>
           <div className="crew-list">
-            <CrewLine name="Pilot lead" task="mapped the opening" />
-            <CrewLine name="Readiness auditor" task="checked every claim" />
+            <RunLine runtime="Claude Code" task="implemented the Product change" />
+            <RunLine runtime="Codex" task="independently verified the claim" />
           </div>
           <div className="artifact-row">
             <span className="artifact-icon">
               <FileCode2 />
             </span>
             <span>
-              <strong>Launch artifact</strong>
-              <small>Preview and source ready</small>
+              <strong>Landing-page and onboarding revision</strong>
+              <small>Exact diff, preview, and evidence ready</small>
             </span>
             <span className="artifact-count">v4</span>
           </div>
         </article>
 
         <div className="founder-wall-line" aria-hidden="true">
-          <span>Needs you</span>
+          <span>Founder consequence</span>
         </div>
 
         <div className="machine-result-column">
@@ -133,14 +127,14 @@ export function MachineCanvas() {
                 <LockKeyhole />
               </span>
               <span>
-                <small>Needs your call</small>
-                <strong>Publish launch artifact</strong>
+                <small>Needs your hand</small>
+                <strong>Publish the revised promise</strong>
               </span>
             </div>
-            <p>Review the exact page, destination, and claim receipts.</p>
+            <p>Review the exact page, destination, evidence, and rollback path.</p>
             <div className="gate-actions" aria-hidden="true">
               <span>Keep staged</span>
-              <span className="approve-action">Approve</span>
+              <span className="approve-action">Publish artifact</span>
             </div>
           </article>
 
@@ -150,18 +144,18 @@ export function MachineCanvas() {
                 <Flag />
               </span>
               <span>
-                <small>What happened</small>
-                <strong>What changed in the world</strong>
+                <small>Illustrative evidence</small>
+                <strong>Example replies challenge the audience claim</strong>
               </span>
             </div>
-            <p>No scoreboard. The result lands back on the venture that caused it.</p>
+            <p>The evidence contests the relationship; it does not claim causality.</p>
           </article>
         </div>
       </div>
 
       <div className="machine-caption">
+        <span>One model.</span>
         <span>Evidence stays evidence.</span>
-        <span>Judgment stays labeled.</span>
         <span>Authority stays yours.</span>
       </div>
     </div>

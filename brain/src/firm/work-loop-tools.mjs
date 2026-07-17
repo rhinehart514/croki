@@ -16,12 +16,11 @@ import { assertMoatConsulted } from "../consult-guard.mjs";
 import { classifyCapabilityEffects, CAPABILITY_LANES } from "../capability-registry.mjs";
 import { readRepositoryTruth } from "./truth.mjs";
 import { hasOutwardSignal } from "./outward-guard.mjs";
-import { grantSkipsWait } from "./grants.mjs";
 import { appendConversationMessage } from "./conversation.mjs";
 import { getFirmConfiguration, proposeFirmConfiguration } from "./configuration.mjs";
 import { buildArchitectureWorkLoopTools } from "./architecture-work-loop-tools.mjs";
-import { stampKnownEffectConsequences } from "./effect-consequences.mjs";
 import { buildRepositoryWorkLoopTools } from "./repository-work-loop-tools.mjs";
+import { parkOutwardAtWall } from "./grant-stage-outward.mjs";
 
 const MAX_EVENTS_PER_BET = 200;
 
@@ -356,37 +355,15 @@ function makeStageOutward({ ventureId, configurationRevision, architectureRevisi
       // provenance—so leave the act unjoined and let wall.park give it its own durable identity.
       const unambiguousWorkRef = stagedWorkRefs.length === 1 ? stagedWorkRefs[0] : null;
 
-      // TRUST GRANT CHECK (deterministic, host-owned; §4A.3). Before parking a blocking wait, ask
-      // whether the founder already blessed this exact act type in remembered dialogue. A live grant
-      // lets the act proceed WITHOUT the effort waiting on the founder — the item still parks (every
-      // outward act is a durable record, and the release still flows through the host-issued decide()
-      // path, never minted here), but it is stamped pre-authorized and non-blocking, and the founder
-      // sees "you told me I could" in the conversation. A grant NEVER mints the wall's release
-      // capability (invariant §5.8) and NEVER skips a deploy (deploy keeps its second authorization).
-      const { skip: grantSkips, actType, grant } = grantSkipsWait(ventureId, effect, options);
-      const park = deps?.park ?? (await import("./wall.mjs")).park;
-      const queueItem = await park({
-        ventureId, betId, workRef: requestedWorkRef ?? unambiguousWorkRef,
-        purpose: "release", configurationRevision, architectureRevision,
-        ...(grantSkips ? { blocksBet: false } : {}),
-        architectureTarget: target?.architectureId ? { id: target.architectureId, stepId: target.architectureStepId ?? null } : null,
-        effect: grantSkips
-          ? stampKnownEffectConsequences({ ...effect, preAuthorizedGrantId: grant.id, actType }, options)
-          : stampKnownEffectConsequences(effect, options),
-      }, options);
-      if (grantSkips) {
-        appendEvent(ventureId, betId, { type: "parked_pre_authorized", detail: actType }, options);
-        appendConversationMessage({
-          ventureId,
-          role: "teammate",
-          content: "Sending this — you told me I could.",
-          teammateRef: bet.teammateRef ?? null,
-          betId,
-        }, options);
-        return { lane, parked: true, waiting: false, preAuthorized: true, actType, queueItem };
-      }
-      appendEvent(ventureId, betId, { type: "parked", detail: null }, options);
-      return { lane, parked: true, waiting: true, queueItem };
+      // The trust-grant check + honest wall-park lives in grant-stage-outward.mjs (keeps this service
+      // under its size budget). It parks the effect at the founder wall and, for a granted act type,
+      // skips the WAIT (not the RELEASE) without ever claiming a send it did not perform.
+      return parkOutwardAtWall({
+        ventureId, betId, bet, lane, effect,
+        requestedWorkRef, unambiguousWorkRef,
+        configurationRevision, architectureRevision, target,
+        options, deps, appendEvent,
+      });
     },
   };
 }

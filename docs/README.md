@@ -1,77 +1,60 @@
 # Drover documentation map
 
-This map prevents historical implementation packages from becoming accidental product direction.
-When documents conflict, the higher authority below wins.
+This map prevents historical implementation packages and design explorations from becoming accidental
+product direction. Authority is domain-specific rather than a winner-takes-all ranking; disagreements must
+be surfaced and reconciled.
 
 ## Authority
 
-1. [`../AGENTS.md`](../AGENTS.md) — repository invariants, founder language, platform stance, and
-   exact commands.
-2. [`FIRM-SPEC.md`](FIRM-SPEC.md) — the single product and build spec of record.
-3. [`STATE.md`](STATE.md) — the dated boundary between implemented proof and unproven claims.
+- [`FIRM-SPEC.md`](FIRM-SPEC.md) governs durable Product and build physics.
+- [`../DESIGN.md`](../DESIGN.md) governs the intended Electron desktop experience within those laws.
+- [`STATE.md`](STATE.md) reports only what the current tree proves, plus known gaps and legacy behavior.
+- [`../AGENTS.md`](../AGENTS.md) governs repository operating boundaries, platform constraints, and commands.
 
-No other document may redefine Drover's ontology or claim that work exists.
+None is a general override for the others. A current limitation in `STATE.md` does not weaken a requirement;
+a design intention cannot claim proof; an operating instruction cannot silently redefine Product law.
 
 ## Current translations
 
-- [`../README.md`](../README.md) — public repository entry and local start.
-- [`../PRODUCT.md`](../PRODUCT.md) — compact product and UX contract.
-- [`FEATURES-AND-VALUE.md`](FEATURES-AND-VALUE.md) — feature hierarchy, value hypotheses, and the
-  boundary between implementation proof and founder value.
+- [`../README.md`](../README.md) — repository entry and local start.
+- [`../PRODUCT.md`](../PRODUCT.md) — compact product contract.
+- [`FEATURES-AND-VALUE.md`](FEATURES-AND-VALUE.md) — consequence-led capability and value hypotheses.
 - [`VISION.md`](VISION.md) — destination and proof standard.
-- [`../DESIGN.md`](../DESIGN.md) — current desktop visual and interaction doctrine.
-- [`design/venture-architecture-adaptation/LIVING-VENTURE-ATLAS-SPEC.md`](design/venture-architecture-adaptation/LIVING-VENTURE-ATLAS-SPEC.md)
-  — the build-ready decision contract behind the current Atlas; FIRM-SPEC and STATE remain higher
-  authority.
-- [`design/PRODUCTION-FOUNDER-SCRIPT.md`](design/PRODUCTION-FOUNDER-SCRIPT.md) — the current
-  outside-founder proof protocol.
-- [`EVALS.md`](EVALS.md) — acceptance criteria and proof gates.
-- [`DISTRIBUTION.md`](DISTRIBUTION.md) — dated delivery mechanics.
-- [`../RUN.md`](../RUN.md) — durable resume and verification contract, not a roadmap.
-- [`../ui/README.md`](../ui/README.md) — interface-specific projection and platform contract.
+- [`EVALS.md`](EVALS.md) — evaluation and readiness criteria; reconcile when implementation changes.
+- [`DISTRIBUTION.md`](DISTRIBUTION.md) — dated source/package delivery mechanics.
+- [`../RUN.md`](../RUN.md) — durable resume and run-verification contract.
+- [`../ui/README.md`](../ui/README.md) — interface projection and platform contract.
+- [`design/DESIGN.md`](design/DESIGN.md) — current-code design-system record, subordinate to root `DESIGN.md`.
+- [`design/PRODUCTION-FOUNDER-SCRIPT.md`](design/PRODUCTION-FOUNDER-SCRIPT.md) — outside-founder proof protocol;
+  it is not implementation proof.
 
-These files translate the authorities for a narrower audience. If one drifts, fix it; do not treat
-the disagreement as a product choice.
+These files compress the authorities for a narrower audience. If one drifts, fix it; the disagreement is
+not a product option.
 
-## Historical material
+## Historical and design evidence
 
-The following are preserved evidence only. They may explain why a rail exists, but they cannot supply
-current nouns, workflows, acceptance criteria, or implementation tasks:
+Files under `docs/design/`, `docs/history/`, `harness/`, `gtm-graph/`, `production-direction/`, and completed
+or superseded `firm-build/` packages are evidence unless an authority file explicitly adopts a decision.
+They may explain why a rail exists, but cannot supply current product nouns, workflows, acceptance criteria,
+or implementation tasks.
 
-- [`OPEN-CANVAS-SPEC.md`](OPEN-CANVAS-SPEC.md)
-- [`EXPERIMENT-MACHINE-SPEC.md`](EXPERIMENT-MACHINE-SPEC.md)
-- `design/` except explicitly labeled current exploratory artifacts
-- `harness/`
-- `gtm-graph/`
-- `production-direction/`
-- `history/`
-- completed or superseded work packages under `firm-build/`
+The current approved direction supersedes prior Atlas-first, Now/direction-first, immersive, legacy
+triptych, experiment-machine, configurable-firm, permanent-AI-staff, ambient-loop, and workflow-builder
+interpretations. Useful mechanics—one canonical model, provisional structure, direct manipulation, spatial
+focus, exact receipts, provider provenance, founder authority, no default DAG—must be folded into authority
+before use.
 
-Read historical files only when tracing a decision or compatibility seam. Translate any surviving
-finding through FIRM-SPEC before using it. Terms such as graph, node kind, object, goal, path, run,
-stage, gate, workflow, and pipeline do not re-enter the current product merely because a receipt
-contains them.
+Historical documents should receive explicit superseded/non-authoritative banners as their replacement
+coverage lands. Git history is the archive; do not maintain a corrected parallel product specification.
 
 ## Proposals and explorations
 
-An explicitly labeled proposal or design exploration is neither current direction nor implementation
-proof. It may challenge the spec, but changing direction requires amending `FIRM-SPEC.md` and then
-reconciling `STATE.md` and the current translations. Customer examples never redefine Drover as a
-customer-specific product.
+An explicitly labeled proposal or exploration may challenge the spec, but changing direction requires
+amending `FIRM-SPEC.md`, then reconciling root `DESIGN.md`, `STATE.md`, and every current translation. Customer
+examples never redefine Drover as customer-specific.
 
-- [`MISSION-AND-VISION-EXPLORATION.md`](MISSION-AND-VISION-EXPLORATION.md) — alternative mission
-  territories, a provisional recommendation, and the decisions required before changing the current
-  vision.
+## Compatibility identifiers
 
-Within `design/`, the Living Venture Atlas package is the current decision record. Its authority
-changeset and alternative analysis are preserved receipts; its Atlas spec and polish gate remain the
-design-level contract. The Workyard survives only as the near bet/work altitude, not as a competing
-opening model. `design/PRODUCTION-UX-PLAN.md` preserves the completed pre-Atlas production pass and is
-not a current backlog.
-
-## Historical compatibility
-
-Do not rename `gtm-ide`, `channel`, or `~/.gtm-ide` as incidental cleanup. They are implementation
-identifiers retained across product directions and may appear in source, storage, migrations, and
-historical receipts while founder-facing language stays Drover, venture, teammate, bet, outcome,
-fork, and the wall.
+Do not rename `gtm-ide`, `channel`, `bet`, `fork`, or `~/.gtm-ide` as incidental cleanup. They may remain in
+source, storage, routes, migrations, tests, and historical receipts until an intentional migration proves
+safe. They are not product identity or required founder vocabulary.

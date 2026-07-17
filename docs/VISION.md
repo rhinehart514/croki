@@ -1,66 +1,64 @@
 # VISION — Drover
 
-Revised 2026-07-15 for the Living Venture Atlas direction.
-
-[FIRM-SPEC.md](FIRM-SPEC.md) is the product and build contract. [STATE.md](STATE.md) records what the
-current tree proves. The open-canvas and experiment-machine documents are historical inputs, not
-parallel directions.
+**Reconciled:** 2026-07-17.
+[`FIRM-SPEC.md`](FIRM-SPEC.md) owns durable product physics. [`STATE.md`](STATE.md) records proof.
 
 ## The destination
 
-**Drover is the operating system for one-person holding companies.**
+**Drover makes the full Product and go-to-market system visible, understandable, manipulable, and
+executable by one founder.**
 
-A permanent set of AI teammates runs any number of ventures around the clock. Product change and
-go-to-market motion are one loop. The founder's work compresses to conviction: direct the firm,
-answer what only they can answer, release exact outward acts, and end bets that no longer deserve
-life.
+The venture canvas is the founder's durable visual model of the company. One continuous venture
+conversation and persistent scoped branches direct and interrogate it. Claude and Codex expand what the
+founder can accomplish, but do not decide what the venture should pursue or become a simulated staff.
 
-The wedge is **vibe code your go-to-market** for one venture. It proves the same primitives needed by
-the destination: persistent teammates, open bets, isolated product worktrees, one wall, returned
-outcomes, learned taste, local venture files, and a portfolio surface.
+Product and go-to-market remain distinct territories over one canonical open model. The founder can trace
+how a market need relates to a Product promise, how a capability supports that promise, how a campaign or
+asset carries it outward, what evidence returned, and what understanding changed.
 
 ## The experience
 
-The founder binds a venture to a product repository. Drover begins from cited truth rather than a
-blank prompt and opens on a Living Venture Atlas: venture intent, product value, reusable systems,
-active motions, campaign pressure, held releases, and returned reality before agent machinery.
-Founder-defined concepts may remain open; operational architecture changes execution only through
-explicit founder action or an accepted proposal.
+A founder binds a venture to real Product truth and gives one direction. Drover makes its interpretation and
+operating freedom visible, composes useful work, and may generate a complete provisional visual model in the
+same turn. The founder can manipulate it directly or correct it in ordinary language.
 
-Teammates work through that architecture, fork genuinely different bets, stage real work, and keep
-the inward loop moving under one heat dial and spend rail. The canvas projects the venture without
-becoming a second source of truth.
+Understand, Design, Execute, and Learn are reversible lenses, not stages. Generated visual answers are
+temporary unless explicitly saved as synchronized live views, captured as immutable snapshots, or promoted
+into canonical truth.
 
-When work would touch the world, it reaches the wall. The wall distinguishes four kinds of founder
-attention: release outward work, answer a teammate, review an outcome, or end a bet. These share one
-surface and one authority boundary, but never masquerade as the same decision.
+Deep artifacts open in a temporary workbench while canvas, conversation, selection, and relationships stay
+intact. Multiple agents may work in parallel within the direction's scope; their scopes, branches, artifacts,
+verification, and provenance remain inspectable and steerable without turning the canvas into an org chart.
 
-What the world says returns as a durable outcome. It joins to the bet that provoked it when evidence
-supports the join and remains unattributed otherwise. Outcomes are language and evidence, not a
-founder-facing scoreboard. They feed teammate memory and the next fork.
+Safe inward work may proceed after the founder starts it. Sends, publish, deployment, spending, destructive
+or irreversible acts, ambiguous material canonical changes, and ending active work remain with the founder.
 
 ## Why this compounds
 
-Teammates persist beyond one task. Founder-blessed lessons can graduate from a venture instance into
-a reusable teammate template. Ventures remain isolated and transferable; only those blessed patterns
-cross. Product and market work share the same bet, wall, and outcome physics, so expansion into support,
-pricing, partnerships, and operations does not require new workflow systems.
+Every use can leave durable cited Product truth, evidence, interpretations, exact artifacts, reusable views,
+workflow contracts, founder decisions, and provenance. The venture becomes easier to understand and act on
+because its history and relationships accumulate without fragmenting into chats, boards, dashboards, or
+provider-owned state.
 
-The long game has four axes: more ventures behind one wall, ventures that can move between owners,
-founder-blessed pattern exchange, and more business functions expressed through the same loop.
+A portfolio may later place several isolated ventures behind the same founder authority. Portfolio breadth
+is an application of the model, not Drover's category definition. Ventures never bleed; only explicit,
+permissioned patterns may cross.
 
 ## What never changes
 
-- Nothing goes outward without the founder's explicit hand.
-- Only the founder ends a bet.
-- Away holds outward work but never stops inward preparation.
-- Ventures never bleed.
-- Product claims are grounded in cited repository truth or labeled inference.
-- Founder decisions become taste, never ambient authorization.
-- Drover stays desktop-only and local-first.
+- Work starts only from explicit founder direction or a founder-invoked workflow.
+- Autonomy is bounded to that direction or workflow.
+- The canvas is the main founder surface; conversation directs and interrogates it.
+- Product and go-to-market share one canonical model without losing their distinction.
+- Facts, evidence, and interpretation remain separate.
+- Generated structure remains provisional until authority or evidence strengthens it.
+- Every major action is reversible until it crosses into the world.
+- Exact world-touching consequences remain founder-held.
+- Ventures remain isolated, local-first, readable, and transferable.
 
 ## Proof standard
 
-Passing deterministic tests proves the harness and mechanics, not the company. Alpha is proven only
-when an outside founder can bind a real product, direct the firm, release a real act, receive an
-attributable positive, negative, or zero outcome, and understand what to do next without intervention.
+Passing deterministic tests proves mechanics, not the company. Alpha is proven only when an outside founder
+can bind a real venture, understand and manipulate its Product/go-to-market model, direct bounded work,
+inspect Claude/Codex provenance, authorize a real consequence, receive evidence, see what understanding
+changed, and decide what to do next without intervention.

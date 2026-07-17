@@ -87,14 +87,16 @@ test("the local founder page can release an item through the route — the route
   );
   // The route now wires decideWithExecution -> a real executor (effect-executors.mjs), so a release
   // actually reaches message-send.mjs instead of throwing "cannot release without an executeEffect
-  // executor". No Gmail credential is connected in this test venture, so the SEND itself refuses
-  // honestly (executionError, never a throw) — proving the executor was truly invoked, not merely
-  // present.
-  assert.equal(res.status, 200);
-  assert.equal(res.body.receipt.decision, "release");
-  assert.ok(res.body.receipt.releasedAt);
-  assert.equal(res.body.receipt.executionResult.ok, false);
-  assert.match(res.body.receipt.executionResult.executionError, /No connected Gmail account/i);
+  // executor". No Gmail credential is connected in this test venture, so the SEND fails honestly — and
+  // a failed send is NOT recorded as a completed release: the route reports 502 and the item stays
+  // queued for the founder to reconnect and retry, never a fake success.
+  assert.equal(res.status, 502);
+  assert.match(res.body.error, /No connected Gmail account/i);
+  const stillQueued = (await call("GET", `/api/ventures/${venture.id}/wall`)).body.queue;
+  const failed = stillQueued.find((entry) => entry.id === item.id);
+  assert.ok(failed, "a failed send stays queued for retry, never consumed as released");
+  assert.equal(failed.decision, null);
+  assert.match(failed.lastExecutionError, /No connected Gmail account/i);
 });
 
 test("the local founder page can kill an item through the route", async () => {
@@ -151,9 +153,10 @@ test("deploy still needs its second explicit act through the real route — rele
   assert.equal(res.status, 409);
   assert.match(res.body.error, /second explicit founder authorization/i);
 
-  // Authorize, then release — now it reaches the real executor. "deploy" is not itself a recognized
-  // effect kind in effect-executors.mjs's switch (only "product-change"/"message"/"send" are), so this
-  // proves the executor was truly invoked (not stubbed) via its own honest unrecognized-kind refusal.
+  // Authorize, then release — now it reaches the real executor. The deploy branch exists and is
+  // fail-closed: no deploy provider is configured for this venture, so it returns an honest ok:false.
+  // decide() refuses to record that as a completed release — the route reports 502 and the deploy
+  // stays queued, never a fake success and never a dead "unrecognized kind" throw.
   await call(
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
@@ -166,8 +169,10 @@ test("deploy still needs its second explicit act through the real route — rele
     { decision: "release" },
     {},
   );
-  assert.equal(released.status, 400);
-  assert.match(released.body.error, /No executor is wired for effect kind "deploy"/);
+  assert.equal(released.status, 502);
+  assert.match(released.body.error, /No deploy provider is configured/);
+  const stillQueued = (await call("GET", `/api/ventures/${venture.id}/wall`)).body.queue;
+  assert.ok(stillQueued.some((entry) => entry.id === item.id), "the unshipped deploy stays queued");
 });
 
 test("self-approval is still refused through the real route — agent-stamped release fails before the executor", async () => {

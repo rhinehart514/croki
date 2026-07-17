@@ -2,7 +2,7 @@
   "name": "gtm-ide-brain",
   "version": "0.2.0",
   "type": "module",
-  "description": "The local runtime for Drover's firm loop.",
+  "description": "Drover's local runtime for founder-directed Product and go-to-market work.",
   "scripts": {
     "start": "node src/server.mjs",
     "test": "node ./scripts/run-tests.mjs",

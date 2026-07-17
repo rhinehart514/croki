@@ -96,7 +96,7 @@ describe("effect-executors — end to end: fork -> stage -> review -> release ->
       { isFounderPresent: () => true },
       options,
     );
-    assert.throws(prematureRelease, /not approved/i);
+    assert.throws(prematureRelease, /prior review approval/i);
 
     // Founder act #1: review + approve the staged revision.
     const reviewed = reviewProductBetChange(workspaceId, revision.id, "founder", { decision: "approve" }, options);

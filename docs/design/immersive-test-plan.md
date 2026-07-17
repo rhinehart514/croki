@@ -1,6 +1,10 @@
 # Drover Immersive Shell — Tester Checklist
 
-**What a tester should be able to do and see.** Status keys: **✓** verified live · **○** built, not yet eyes-on · **⚠** known defect/gap · **◇** intentional divergence from this checklist (design note, not a bug). Run against a Drover server (`node brain/src/server.mjs`) opened on the **default shell** (no flag — immersive is now the default; `?shell=legacy` is the escape hatch). Venture **Buffalo Projects** is the richest data; a **fresh venture** exercises the empty state. 1920×1080. Each item is `action → the pass criterion (what you must SEE)`.
+> **Obsolete acceptance checklist — 2026-07-17.** The immersive shell is no longer approved product
+> direction. These checks are historical regression evidence only and must not define release readiness.
+> Remove or relocate this checklist after equivalent unified canvas/conversation coverage lands.
+
+**Historical tester receipt.** Status keys: **✓** verified in the dated pass · **○** built, not then eyes-on · **⚠** known defect/gap · **◇** intentional divergence. To inspect the still-present historical immersive surface, run the browser harness and open `?shell=world`; the current default is Now and `?shell=legacy` opens the older triptych. Venture **Buffalo Projects** was the richest fixture; a fresh venture exercised the empty state. 1920×1080. This is not current acceptance doctrine.
 
 **Drive-through verification 2026-07-16:** every item below was checked against a real render (a live browser over an isolated copy of the store at 1920×1080) and the deterministic `test/browser/immersive-shell-journey.mjs` (now green end-to-end, all 4 phases). Evidence: `docs/design/evidence/ade-run/verify-round1/*.png`. The two prior craft ⚠ (altimeter lag, descend kicker/header) are resolved; the polling-error ⚠ did not reproduce (all poll endpoints 200).
 
@@ -89,16 +93,16 @@
 - ○ Icon-only controls have accessible names; color never the sole signal; live regions announce activity/altitude. *(aria-labels present in source; not audited live.)*
 
 ## 12 · Cross-cutting
-- ✓ `?shell=legacy` → the old triptych still loads (fallback intact, with its conversation rail); default (no flag) is the immersive shell.
-- ✓ No legacy `.firm-app-rail` / `.firm-app-inspector` selectors in the default shipped DOM.
+- Historical pass: `?shell=legacy` loaded the old triptych while immersive was then the default. Current routing instead opens immersive with `?shell=world` and Now with no flag.
+- Historical pass: no legacy `.firm-app-rail` / `.firm-app-inspector` selectors appeared in the then-default immersive DOM.
 - ✓ `prefers-reduced-motion` → the world and every node-state band survive the emulation (state preserved; motion dropped).
 - ○ Resolution: recomposes cleanly 1280 → 5K (fit reserves the docked chrome band). *(1920 verified; extremes not tested.)*
 
 ---
-**Verified live this pass (✓):** the whole world + all chrome, color rationing, zoom/fit/pan, the detail-band re-detailing with the altimeter now aligned, ⌘K teleport, descend-in-place into a real effort with drafts + code refs, the gate's exact payload with the deploy two-act lock, the materialization + branch bloom with provisional nodes, receipts + summonable thread + checkpoint seal, the empty-venture calm world, clean polling, the immersive default + legacy fallback, no-legacy-selectors, and reduced-motion survival. The deterministic journey is green end-to-end.
+**Historically verified in that pass (✓):** the whole world + then-current chrome, color rationing, zoom/fit/pan, detail-band re-detailing, ⌘K teleport, descend-in-place, gate payload, materialization, receipts, summonable thread, empty-venture state, polling, then-default immersive routing, legacy fallback, and reduced-motion survival. This receipt does not verify current routing or the approved unified workspace.
 
 **Open (○):** cross-venture switch, per-archetype reading content beyond effort, the steer control, the blocked→conversation ask, a full away/return cycle with fresh evidence, live agent step-lists (needs a real drive), send-failure/budget/loading states, the full keyboard/a11y audit, and extreme resolutions.
 
 **Design calls (◇) — both resolved this pass:** the descend now grows out of the clicked node (true morph, verified numerically), and the gate release is now pure words-not-buttons (deterministic interpreter, unit-tested). Neither is an open call anymore.
 
-**Note on the instrument:** `immersive-shell-journey.mjs` was written pre-cutover and had never run green — it waited for the retired triptych, reloaded (losing venture state), raced the repo auto-select, and hard-failed its own lenient phases on a fresh venture. Fixed in this pass to exercise the shipped Phase-5 default; product code was not touched.
+**Historical note on the instrument:** `immersive-shell-journey.mjs` was repaired in the 2026-07-16 pass to exercise the then-shipped immersive default. Product code was not touched. The journey is now historical coverage and must not define current release readiness.

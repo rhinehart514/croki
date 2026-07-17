@@ -15,6 +15,11 @@ function cameraKey(receiptKey: string) { return `drover:atlas-camera:v6:${receip
 export const ORBIT_MAX_ZOOM = 0.78;
 export const GROUND_MAX_ZOOM = 1.1;
 
+// The container altitude (venture/architecture/detail) is now a LOOKUP from the shared semantic band, so
+// the altitude word and the card anatomy read from one source. Both COMPONENTS and ARTIFACTS map to the
+// single "detail" container altitude the legacy CSS keys off; the altimeter distinguishes all four bands.
+// Kept here (rather than importing the band module) to avoid a cycle — semanticBand.ts imports the two
+// cutpoints above. This is the raw (no-hysteresis) reading the camera's cold-start altitude uses.
 export function altitudeForZoom(zoom: number): AtlasAltitude {
   if (zoom <= ORBIT_MAX_ZOOM) return "venture";
   if (zoom < GROUND_MAX_ZOOM) return "architecture";

@@ -37,37 +37,37 @@ const loopSteps = [
   {
     number: "01",
     icon: ScanSearch,
-    title: "Read the real product",
-    body: "A deterministic scan builds cited product terrain before a model is connected. Claims remain tied to the files that prove them.",
-    detail: "Evidence first",
+    title: "See the whole venture",
+    body: "Drover is being built to keep Product and go-to-market visible as distinct territories in one canonical model, with unsupported claims and missing links exposed.",
+    detail: "One model",
   },
   {
     number: "02",
-    icon: Sparkles,
-    title: "Find an opening worth testing",
-    body: "Claude or Codex adds hypotheses, tensions, and unknowns. Drover keeps those reads visibly separate from product fact.",
-    detail: "Judgment stays labeled",
+    icon: MousePointer2,
+    title: "Point at what should change",
+    body: "The current alpha can focus available canvas objects and related work. One durable conversation with persistent scoped branches is still being unified.",
+    detail: "Context stays intact",
   },
   {
     number: "03",
-    icon: MousePointer2,
-    title: "Build the bet on the canvas",
-    body: "Research, artifacts, product changes, and repeatable paths stay editable in place instead of disappearing into a transcript.",
-    detail: "Work stays visible",
+    icon: Sparkles,
+    title: "Expand what you can accomplish",
+    body: "Claude and Codex research, build, compare, and verify inside the founder's direction. Their work stays inspectable instead of becoming an org chart.",
+    detail: "Bounded execution",
   },
   {
     number: "04",
     icon: LockKeyhole,
-    title: "Stop at the founder wall",
-    body: "A pipeline can prepare the work. Sending, publishing, deploying, spending, or applying a change still requires your explicit call.",
+    title: "Hold the exact consequence",
+    body: "Sending, publishing, deploying, spending, destructive change, and ambiguous canonical truth remain under the founder's explicit hand.",
     detail: "Authority stays yours",
   },
   {
     number: "05",
     icon: CheckCircle2,
-    title: "Return the outcome",
-    body: "A reply, miss, win, or no-signal result lands back on the experiment that caused it and changes what the machine tries next.",
-    detail: "The loop learns",
+    title: "Let evidence change understanding",
+    body: "Returned outcomes keep their source and attribution. Founder-applied evidence can support or challenge the relevant understanding without claiming causation.",
+    detail: "Learning stays visible",
   },
 ];
 
@@ -75,20 +75,20 @@ const principles = [
   {
     number: "I",
     icon: FileCheck2,
-    title: "Truth does not need a model.",
-    body: "The first product picture comes from a read-only repository scan. Inference is useful, but it never gets dressed up as fact.",
+    title: "Facts, evidence, and interpretation stay separate.",
+    body: "Repository truth remains cited, measured returns keep their source, and Claude or Codex interpretations stay visibly provisional.",
   },
   {
     number: "II",
     icon: ShieldCheck,
-    title: "The crew cannot approve itself.",
-    body: "Outward effects stop at a visible wall with the exact artifact, destination, and consequence ready for your review.",
+    title: "Founder direction must begin every run.",
+    body: "That is the governing requirement. Direct founder-driven work exists today; legacy founder-enabled heat can still wake work unattended, and outcome-contract workflows are not yet implemented.",
   },
   {
     number: "III",
     icon: Sparkles,
-    title: "Your corrections become taste.",
-    body: "Approvals, edits, rejections, and real outcomes form durable context that survives a change of model or runtime.",
+    title: "Every consequence stays under your hand.",
+    body: "Safe inward work can move quickly, but exact world-boundary actions and ambiguous canonical changes remain yours.",
   },
 ];
 
@@ -120,27 +120,27 @@ const faqs = [
   {
     question: "What is Drover, exactly?",
     answer:
-      "Drover is a local-first experiment machine for product and go-to-market work. It gives founders one living canvas for product truth, parallel bets, agent work, approvals, and real outcomes.",
+      "Drover is building the founder-controlled Product and go-to-market system: one venture canvas for understanding, manipulating, and executing the whole system, directed through one continuous conversation. The current alpha proves the local runtime and authority substrate while the unified canvas is still being completed.",
   },
   {
     question: "Do I need Claude or Codex to start?",
     answer:
-      "No. The deterministic product scan and existing terrain work without an AI runtime. Connect Codex or Claude Code when you want model-generated reads, composition, or crew work.",
+      "Drover's durable venture model and repository truth are local. Connect Codex or Claude Code when you want founder-directed research, design, implementation, comparison, or verification.",
   },
   {
     question: "What does local-first mean here?",
     answer:
-      "Drover runs on your machine and keeps its working state there. It uses your local product repository and can work through the model subscription you already have.",
+      "Drover runs on your machine and keeps canonical venture state there. It binds to your local product repository and uses the model subscription you already have.",
   },
   {
-    question: "Can Drover send, publish, or deploy by itself?",
+    question: "Can Drover work or act by itself?",
     answer:
-      "No. A pipeline may prepare an outward effect, but it stops at the founder wall. Agents cannot approve their own work through the browser, API, or MCP surface.",
+      "Founder direction beginning every run is the governing requirement. Direct work is available today; legacy founder-enabled heat can still wake work unattended, and outcome-contract workflows are not yet implemented. Exact sends, publish, deploy, spend, destructive actions, and ambiguous canonical changes remain founder-held.",
   },
   {
     question: "Is this a hosted product?",
     answer:
-      "Not yet. Drover is a source-available alpha that currently runs on macOS or Linux with Node.js and Git. The honest next proof is an outside founder producing a real-world result with it.",
+      "Not yet. Drover is a source-available alpha whose shipped founder product is Electron desktop. The honest next proof is an outside founder completing a real Product and go-to-market loop with it.",
   },
 ];
 
@@ -160,11 +160,11 @@ export default function Home() {
                 <span className="live-dot" aria-hidden="true" />
                 Local-first alpha
               </Badge>
-              <h1 id="hero-title">Vibe code your go-to-market.</h1>
+              <h1 id="hero-title">See and shape the whole venture.</h1>
               <p className="hero-lede">
-                Turn the product you already built into a living field of product
-                and go-to-market experiments. Claude and Codex do the legwork. You
-                stay on the canvas, at the wheel, and at the wall.
+                Drover is building one living canvas for the full Product and
+                go-to-market system. Conversation directs it. Claude and Codex expand
+                what one founder can accomplish. Every consequence stays under your hand.
               </p>
               <div className="hero-actions">
                 <Button
@@ -181,11 +181,12 @@ export default function Home() {
                   size="lg"
                   render={<a href="#machine" />}
                 >
-                  See the machine
+                  See the system
                 </Button>
               </div>
               <p className="hero-note">
-                Source available. macOS or Linux. Node.js and Git.
+                Current alpha: local venture state, repository-grounded work, and founder-gated authority.
+                The unified Product/GTM canvas is in active development.
               </p>
             </AnimatedGroup>
 
@@ -199,7 +200,7 @@ export default function Home() {
               <span className="proof-mark" aria-hidden="true">
                 D
               </span>
-              <strong>A small harness around rented intelligence.</strong>
+              <strong>One founder-controlled system around connected intelligence.</strong>
             </div>
             <div className="proof-item">
               <Code2 />
@@ -218,12 +219,12 @@ export default function Home() {
           <section className="loop-section" id="machine" aria-labelledby="loop-title">
             <div className="loop-heading">
               <InView>
-                <p className="section-index">The experiment machine</p>
-                <h2 id="loop-title">Build more ventures. Keep one honest picture.</h2>
+                <p className="section-index">The product being built</p>
+                <h2 id="loop-title">One model. Product and go-to-market together.</h2>
                 <p>
-                  Drover keeps the product, the work, the decisions, and what came
-                  back in the same field. A pipeline appears only when execution
-                  actually needs one.
+                  Drover is being built to keep Product truth, market understanding,
+                  work, exact consequences, and returned evidence in one manipulable
+                  system—so different lenses remain views of the same venture.
                 </p>
               </InView>
             </div>
@@ -251,16 +252,17 @@ export default function Home() {
           <section className="wall-section" id="wall" aria-labelledby="wall-title">
             <div className="wall-copy">
               <InView>
-                <span className="wall-number">04 / NEEDS YOU</span>
+                <span className="wall-number">EXACT CONSEQUENCE / NEEDS YOU</span>
                 <h2 id="wall-title">
-                  The fast lane ends where your authority begins.
+                  Capability expands. Authority stays yours.
                 </h2>
                 <p>
-                  Let the crew move quickly inside the workspace. The moment work
-                  wants to leave it, Drover turns the exact effect into a decision
-                  you can inspect.
+                  Claude and Codex can research, build, and verify inside your
+                  direction. The moment work would send, publish, deploy, spend,
+                  destroy, or materially rewrite ambiguous venture truth, Drover
+                  presents the exact consequence for your call.
                 </p>
-                <p className="wall-maxim">Agents prepare. Founders release.</p>
+                <p className="wall-maxim">The system prepares. The founder decides.</p>
               </InView>
             </div>
 
@@ -274,7 +276,7 @@ export default function Home() {
                     <LockKeyhole />
                   </span>
                   <span>
-                    <small>Founder decision 03</small>
+                    <small>Illustrative scenario · founder consequence</small>
                     <strong>Publish launch artifact</strong>
                   </span>
                   <Badge className="waiting-badge" variant="outline">
@@ -289,7 +291,7 @@ export default function Home() {
                   </div>
                   <div>
                     <dt>Prepared by</dt>
-                    <dd>Pilot lead</dd>
+                    <dd>Claude Code · verified run</dd>
                   </div>
                   <div>
                     <dt>Changes</dt>
@@ -299,13 +301,13 @@ export default function Home() {
                 <div className="approval-receipt">
                   <Check />
                   <p>
-                    Claims checked against 43 cited files. Preview and rollback
-                    path are ready.
+                    Claims linked to cited repository evidence. Preview and
+                    rollback path are ready.
                   </p>
                 </div>
                 <div className="approval-actions" aria-hidden="true">
                   <span>Keep staged</span>
-                  <span className="approve-button">Approve release</span>
+                  <span className="approve-button">Publish artifact</span>
                 </div>
               </article>
             </InView>
@@ -343,9 +345,9 @@ export default function Home() {
               </Badge>
               <h2 id="local-title">Your machine. Your model. Your state.</h2>
               <p>
-                Run the current alpha on your own machine. The deterministic scan
-                works without a model. Connect Codex or Claude Code when you want
-                the crew to work.
+                Run the current alpha on your own machine. Canonical venture state
+                and repository truth stay local. Connect Codex or Claude Code when
+                you direct research, design, implementation, or verification.
               </p>
               <ul className="local-checks">
                 <li>
@@ -355,7 +357,7 @@ export default function Home() {
                   <Check /> Existing model subscription
                 </li>
                 <li>
-                  <Check /> Founder-only approval code
+                  <Check /> Founder-only consequence authority
                 </li>
               </ul>
             </InView>
@@ -376,10 +378,10 @@ export default function Home() {
                   {"\n"}
                   <span className="terminal-prompt">$</span> npm install
                   {"\n"}
-                  <span className="terminal-prompt">$</span> npm start
+                  <span className="terminal-prompt">$</span> npm run app
                   {"\n\n"}
-                  <span className="terminal-success">✓</span> Drover is ready at
-                  {"\n"}  http://127.0.0.1:4317
+                  <span className="terminal-success">✓</span> Drover desktop is opening
+                  {"\n"}  Electron + local Brain
                 </code>
               </pre>
               <div className="terminal-footer">
@@ -448,10 +450,10 @@ export default function Home() {
           <section className="final-cta" aria-labelledby="final-title">
             <InView>
               <DroverWordmark />
-              <h2 id="final-title">Give the next venture somewhere to live.</h2>
+              <h2 id="final-title">Give the whole venture one place to live.</h2>
               <p>
-                Start with the product. Keep the work visible. Make every outward
-                move yours.
+                See Product and go-to-market together. Direct the right context.
+                Keep every consequence yours.
               </p>
               <Button
                 className="final-button"
@@ -470,7 +472,7 @@ export default function Home() {
           <a href="#top" aria-label="Back to top">
             <DroverWordmark />
           </a>
-          <p>Local-first experiment machinery for founders.</p>
+          <p>The founder-controlled Product and go-to-market system.</p>
           <div>
             <a href={`${githubUrl}#run-locally`}>Setup</a>
             <a href={githubUrl}>Source</a>

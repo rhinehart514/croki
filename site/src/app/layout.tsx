@@ -16,24 +16,24 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://scaffoldweb.com"),
-  title: "Drover | Vibe code your go-to-market",
+  title: "Drover | The founder-controlled Product and GTM system",
   description:
-    "Drover is a local-first experiment machine for founders. Ground product and go-to-market bets in the real product, keep the work visible, and approve every outward move.",
+    "Drover is building one founder-controlled venture canvas for understanding, manipulating, and executing the full Product and go-to-market system, with exact authority at the world boundary.",
   applicationName: "Drover",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     url: "/",
     siteName: "Drover",
-    title: "Drover | Vibe code your go-to-market",
+    title: "Drover | The founder-controlled Product and GTM system",
     description:
-      "A local-first experiment machine for product and go-to-market work.",
+      "Drover is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Drover | Vibe code your go-to-market",
+    title: "Drover | The founder-controlled Product and GTM system",
     description:
-      "A local-first experiment machine for product and go-to-market work.",
+      "Drover is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
   },
 };
 

@@ -20,6 +20,7 @@ import { targetArchitecture, targetBet, targetTeammates } from "@/components/fir
 import { VenturePicker } from "@/components/firm/VenturePicker";
 import { ImmersiveShell } from "@/components/immersive/ImmersiveShell";
 import { NowShell } from "@/components/now/NowShell";
+import { VentureCanvasShell } from "@/components/canvas/VentureCanvasShell";
 import { InspectorEffort } from "@/components/firm/InspectorEffort";
 import { inspectorHeader } from "@/components/firm/inspectorContent";
 import { decisionBandForBet, effortStateLabel } from "@/components/atlas/betBand";
@@ -50,6 +51,14 @@ function legacyShellRequested() {
 function worldShellRequested() {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("shell") === "world";
+}
+
+// The unified venture canvas (Phase 4/5). `?shell=canvas` opens the flag-gated VentureCanvasShell — one
+// React Flow plane over the single atlas scene with rendered Product / Go-to-market territories and
+// founder-final drag placement. Additive and behind the flag; the NowShell default stays untouched.
+function canvasShellRequested() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("shell") === "canvas";
 }
 
 function readConversationOpen(ventureId: string) {
@@ -195,9 +204,13 @@ export default function FirmApp() {
   // Default shell: the Now workspace — direction composer + consequence stream + artifact-first review,
   // with the world available as a Map lens. `?shell=world` opens the immersive world directly; the
   // legacy triptych below renders only under the explicit `?shell=legacy` opt-out.
+  // `key={venture.id}` forces a full remount on venture switch, so no shell keeps the prior venture's
+  // selection, composer draft, or wall queue — a stale draft can never submit against the new venture
+  // (venture isolation + founder authority).
   if (!legacyShellRequested()) {
-    if (worldShellRequested()) return <ImmersiveShell venture={venture} />;
-    return <NowShell venture={venture} onOpenVenture={openVenture} />;
+    if (canvasShellRequested()) return <VentureCanvasShell key={venture.id} venture={venture} />;
+    if (worldShellRequested()) return <ImmersiveShell key={venture.id} venture={venture} />;
+    return <NowShell key={venture.id} venture={venture} onOpenVenture={openVenture} />;
   }
 
   return (

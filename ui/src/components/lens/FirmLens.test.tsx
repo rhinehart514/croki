@@ -28,7 +28,7 @@ vi.mock("@xyflow/react", () => ({
     fitViewOptions?: { padding?: unknown };
     onInit?: (instance: unknown) => void;
     onMoveEnd?: (event: null, viewport: { x: number; y: number; zoom: number }) => void;
-    onNodeDragStop?: () => void;
+    onNodeDragStop?: (event: unknown, node: { id: string }) => void;
     onNodeClick?: (event: unknown, node: { id: string; type: string; data: unknown }) => void;
     onPaneClick?: () => void;
     [key: string]: unknown;
@@ -40,7 +40,8 @@ vi.mock("@xyflow/react", () => ({
         data-fit-padding={JSON.stringify(fitViewOptions?.padding)}
         data-canvas-altitude={String(props["data-canvas-altitude"])}
       >
-        <button type="button" data-testid="trigger-drag-stop" onClick={() => onNodeDragStop?.()} />
+        {/* Real React Flow passes (event, node) — the dragged node. The founder dragged crew:outreach-writer. */}
+        <button type="button" data-testid="trigger-drag-stop" onClick={() => onNodeDragStop?.({}, { id: "crew:outreach-writer" })} />
         <button type="button" data-testid="trigger-pane-click" onClick={() => onPaneClick?.()} />
         <button type="button" data-testid="trigger-far-zoom" onClick={() => onMoveEnd?.(null, { x: 40, y: 20, zoom: 0.3 })} />
         {nodes.map((node) => <button type="button" key={node.id} data-testid={`node-${node.id}`} data-node-type={node.type} data-position={JSON.stringify((node as { position?: unknown }).position)} onClick={(event) => onNodeClick?.(event, node)} />)}
@@ -379,7 +380,7 @@ describe("FirmLens", () => {
     ));
   });
 
-  it("a drag-stop persists the settled arrangement as placement (compareAndSet from revision 0)", async () => {
+  it("a drag-stop persists ONLY the dragged node, never the untouched siblings (Law 6)", async () => {
     render(<FirmLens ventureId="v1" />);
     await screen.findByTestId("node-crew:outreach-writer");
     fireEvent.click(screen.getByTestId("trigger-drag-stop"));
@@ -387,21 +388,26 @@ describe("FirmLens", () => {
     const [ventureId, body] = putPlacement.mock.calls[0];
     expect(ventureId).toBe("v1");
     expect(body.expectedRevision).toBe(0);
-    expect(Object.keys(body.positions)).toEqual(
-      expect.arrayContaining(["crew:outreach-writer", "crew:closer", "bet:bet-1", "bet:bet-2"]),
-    );
+    // The founder dragged one crew node; its seed siblings are NOT frozen into founder placement.
+    expect(Object.keys(body.positions)).toEqual(["crew:outreach-writer"]);
+    expect(body.positions["crew:outreach-writer"]).toBeDefined();
   });
 
-  it("restores a saved placement instead of the fallback grid layout", async () => {
+  it("restores a saved placement and folds a new drag over it without disturbing the rest", async () => {
     getLens.mockResolvedValue({
-      lens: { ...fixtureLens, placement: { positions: { "crew:outreach-writer": { x: 42, y: 7 } }, revision: 3 } },
+      lens: {
+        ...fixtureLens,
+        placement: { positions: { "crew:outreach-writer": { x: 42, y: 7 }, "crew:closer": { x: 9, y: 9 } }, revision: 3 },
+      },
     });
     render(<FirmLens ventureId="v1" />);
     await screen.findByTestId("node-crew:outreach-writer");
     fireEvent.click(screen.getByTestId("trigger-drag-stop"));
     await waitFor(() => expect(putPlacement).toHaveBeenCalledTimes(1));
     const [, body] = putPlacement.mock.calls[0];
-    expect(body.positions["crew:outreach-writer"]).toEqual({ x: 42, y: 7 });
+    // The dragged node folds its live position over stored placement; the other stored node survives.
+    expect(body.positions["crew:outreach-writer"]).toBeDefined();
+    expect(body.positions["crew:closer"]).toEqual({ x: 9, y: 9 });
     expect(body.expectedRevision).toBe(3);
   });
 

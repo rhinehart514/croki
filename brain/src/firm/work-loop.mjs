@@ -146,6 +146,7 @@ async function driveTeammateLeased({
   initiatedBy = null,
   coordination = null,
   target = null,
+  recordInitiation = true,
   options = {},
   deps = {},
 } = {}, lease) {
@@ -195,7 +196,10 @@ async function driveTeammateLeased({
         relationshipId: target.theoryRelationshipId,
       }, options)
     : null;
-  if (initiatedBy === "founder" || initiatedBy === "agent") {
+  // The initiating message is recorded once. A caller that already durably wrote the founder direction
+  // (e.g. dialogue-routes records it before routing) passes recordInitiation: false so the direction is
+  // not duplicated in the thread.
+  if ((initiatedBy === "founder" || initiatedBy === "agent") && recordInitiation) {
     appendConversationMessage({
       ventureId,
       role: initiatedBy,

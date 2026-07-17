@@ -1,6 +1,6 @@
 ---
 status: canonical-current-code-record
-refreshed: 2026-07-15
+refreshed: 2026-07-17
 experience_direction: ../../DESIGN.md
 token_source: ../../ui/src/index.css
 feature_styles:
@@ -76,9 +76,23 @@ no production glass skin.
 
 ## Creative north star
 
-**The firm speaks; the canvas proves.** The visual system is a quiet warm room for a living venture
-atlas. Product value, founder-shaped architecture, exact differences, market language, evidence, and
-the founder wall create specificity. Agent machinery and decoration do not.
+**The canvas holds the venture. Conversation directs and interrogates it.** The visual system is a quiet
+warm room for one canonical Product and go-to-market model. Direct manipulation, exact differences,
+evidence, interpretation, runtime provenance, and the founder-held consequence boundary create
+specificity. Agent machinery and decoration do not.
+
+## Current-code boundary
+
+This file records what the current UI can render; it does not bless the current product composition. The
+working tree still contains Now, immersive, and legacy shells, closed Atlas roles, a teammate-oriented
+configuration model, a non-draggable resting Atlas, and heat/always-on controls. Those are migration debt
+under root `DESIGN.md` and `docs/FIRM-SPEC.md`, not approved information architecture.
+
+The approved missing capabilities are: one canvas-first founder workspace, one venture conversation with
+persistent branches, open Product/go-to-market objects and relationships, reversible Understand / Design /
+Execute / Learn lenses, direct canvas manipulation, disposable/live/snapshot view semantics, founder-started
+runs, outcome-contract workflows, and complete consequence execution. Until code and acceptance receipts
+exist, none may be listed as current foundation truth.
 
 ## Stack
 
@@ -163,9 +177,10 @@ and its expanded inventory remains scrollable inside the viewport.
 The rail and avatar use the earned `--shadow-rail` and `--avatar-inset` roles. Do not create a
 speculative shadow catalog.
 
-## Living atlas grammar
+## Current legacy Atlas grammar
 
-The production surface remains an infinite React Flow canvas, not a dashboard composition:
+The current Atlas implementation is an infinite React Flow canvas. These treatments are reusable spatial
+and craft evidence, but their closed role set is not the approved canonical model:
 
 - **Open concept:** a plain fragment or label with an incomplete edge; no role glyph.
 - **Named area:** a quiet irregular territorial boundary with its title embedded in the boundary.
@@ -216,7 +231,7 @@ the same contract and becomes immediate when `prefers-reduced-motion` is active.
 - **`CrewFace`** — one participant-identity door. States: `idle`, `working`; monogram exists only as
   an error fallback. Reused across roster, canvas, composer, and conversation.
 
-### Feature primitives that carry product meaning
+### Feature primitives carrying current or migration behavior
 
 - **`VenturePicker`** — existing venture, create another venture, repository selection, loading,
   empty, busy, and error.
@@ -249,8 +264,10 @@ the same contract and becomes immediate when `prefers-reduced-motion` is active.
   release, answer, outcome review, product-change review, deploy authorization, keep, and end actions.
 - **`FirmHeatControl`** — heat, daily spend, dirty, saving, saved, and error.
 
-Feature primitives are not a request to extract a component package. They remain local until a second
-live surface needs the same behavior.
+Feature primitives are not a request to extract a component package. `TeammateRail`, `CrewNode`,
+`BetNode`, `FirmHeatControl`, Workyard, and the current closed-role Atlas are legacy/migration primitives,
+not approved navigation or ontology. Their useful mechanics should be folded into the unified workspace;
+the old components should be deleted after parity rather than preserved as a second surface.
 
 ## Current foundation state
 
@@ -285,11 +302,17 @@ live surface needs the same behavior.
 - Raw 999px pill radius and scattered 1-3px gaps/padding.
 - Raw fixed control and node dimensions where a semantic density role would be clearer.
 
-### Missing by current need
+### Missing by approved direction
 
-- No additional shared primitive is earned by current reuse. Freshness, consequence-first
-  configuration summaries, and far/middle/near canvas representations remain feature-local because
-  they encode product behavior rather than generic component vocabulary.
+- One unified workspace frame, persistent venture/branch conversation, unified composer, canonical canvas,
+  contextual workbench, and contextual founder gate.
+- Direct canvas manipulation, hybrid semantic interpretation, undo/restore, semantic zoom, and complete
+  epistemic grammar.
+- Product/go-to-market territories, reversible operating lens, generated/live/snapshot views, and full
+  search across model, evidence, conversation, views, and work.
+- Visible multi-agent scope/provenance without roster or org-chart primacy.
+
+These remain feature-local product behavior rather than generic design-system primitives.
 
 ## Foundation ledger
 
@@ -305,10 +328,10 @@ Closed in the 2026-07-14 foundation pass:
 - Offscreen first-frame canvas nodes, non-spatial bet focus, raw return timestamps, animated
   reduced-motion camera travel, and low-contrast active wall text.
 
-Remaining foundation debt includes the historical package component duplicate, incidental raw
-geometry already named above, and the production build's oversized shared vendor chunk. The current
-operating and Atlas browser receipts pass; product-proof gates live in `docs/STATE.md`. Do not convert
-them into speculative design-system primitives.
+Remaining foundation debt includes the historical package component duplicate, incidental raw geometry,
+the oversized shared vendor chunk, and current token-parity failures in immersive, Now, firm-app, and Atlas
+CSS. On 2026-07-17 `npm run test:acceptance` stopped at token parity before browser journeys; see
+`docs/STATE.md`. Do not convert historical receipts into current proof or speculative primitives.
 
 ## Local rules
 
@@ -320,7 +343,7 @@ Checkable rules for this repository:
   must fail the process on drift, not merely print "failed" with exit code zero.
 - Extend `ui/src/components/ui` before hand-rolling a repeated control state. Keep product-specific
   semantics in feature components.
-- Use `CrewFace` for every teammate portrait. No alternate initials, icon, or avatar system.
+- While legacy participant portraits remain, use `CrewFace`; do not create another identity system or make portraits approved navigation.
 - The wall owns amber. Interaction owns forest. Outcomes own neither.
 - Readable operating surfaces are opaque; no glass over the canvas.
 - Mono is for machine material only.
@@ -349,10 +372,11 @@ The token parity command reads all production CSS, rejects undefined production 
 all 78 canonical tokens with the compatibility projection, validates the extension registry, and
 exits nonzero on any drift.
 
-The acceptance browser pass covers 1440x900 and 1280x800, 80–200% browser zoom, keyboard focus,
-reduced motion, Atlas overview and architecture traces, teammate and bet/work focus, a populated and
-clear wall, dense and empty ventures, loading, stale/offline recovery, error, and long content. Any
-unavailable live fixture is named rather than assumed.
+The intended acceptance browser coverage includes 1440x900 and 1280x800, 80–200% browser zoom, keyboard
+focus, reduced motion, canonical canvas/branch/workbench behavior, founder consequence, dense/empty states,
+stale/offline recovery, errors, and long content. The current 2026-07-17 readiness run did not reach browser
+journeys because token parity failed; no acceptance coverage is claimed current until the complete command
+passes.
 
 Refresh this record only from current code and a current render. Promote inline values and
 consolidate duplicates by observed reuse; do not build a speculative component library.

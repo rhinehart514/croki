@@ -336,13 +336,46 @@ describe("DEPLOY TWO-STEP — pre-stamped confirmation on the parked effect neve
       /second explicit founder authorization/i,
     );
     decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: founderRequest() }, {}, options);
-    // No real "deploy" executor branch exists in effect-executors.mjs today (only product-change/
-    // message) — the release now clears the wall-level gate and fails one level deeper on the
-    // dispatcher's own "no executor wired for this kind" refusal, never on a silent no-op success.
+    // The deploy branch now EXISTS and is fail-closed: with no deploy provider configured (the tree's
+    // live default), the executor returns an honest { ok:false, executionError } — never a fake success.
+    // decide() refuses to consume that as a completed release: it throws wall_release_execution_failed
+    // and leaves the item queued for the founder, so the two-step terminates in a real, retryable
+    // failure receipt instead of shipping a deploy that never happened.
+    let thrown = null;
+    try {
+      decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: founderRequest() }, { executeEffect, isFounderPresent: () => true }, options);
+    } catch (error) {
+      thrown = error;
+    }
+    assert.ok(thrown, "an unwired deploy fails honestly rather than silently succeeding");
+    assert.equal(thrown.code, "wall_release_execution_failed");
+    assert.match(thrown.message, /No deploy provider is configured/);
+    const stillQueued = queue(venture.id, options).find((q) => q.id === item.id);
+    assert.ok(stillQueued, "the deploy stays queued after a failed release — never consumed as shipped");
+    assert.equal(stillQueued.decision, null, "no fake release was recorded for a deploy that never shipped");
+  });
+
+  it("a WIRED deploy transport ships the deploy through the two-step and lands a real deployment receipt", () => {
+    const { venture, bet } = freshVenture("Wired deploy two-step");
+    const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "deploy", target: "prod" } }, options);
+    __resetPresence();
+    const calls = [];
+    const deployTransport = (args) => { calls.push(args); return { ok: true, deploymentId: "dep-1" }; };
+    const executeEffect = createEffectExecutor({ founderActor: "founder", options, deployDeps: { transport: deployTransport } });
+
+    // Still refused without the second authorization — the wired transport never runs on release alone.
     assert.throws(
       () => decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: founderRequest() }, { executeEffect, isFounderPresent: () => true }, options),
-      /No executor is wired/,
+      /second explicit founder authorization/i,
     );
+    assert.equal(calls.length, 0, "the deploy transport never runs before authorize-deploy");
+
+    decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: founderRequest() }, {}, options);
+    const receipt = decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: founderRequest() }, { executeEffect, isFounderPresent: () => true }, options);
+    assert.equal(receipt.decision, "release");
+    assert.equal(receipt.executionResult.ok, true);
+    assert.equal(receipt.executionResult.deploymentId, "dep-1");
+    assert.equal(calls.length, 1, "the deploy transport ran exactly once, only after both authorizations");
   });
 });
 

@@ -244,6 +244,38 @@ describe("product-change — wall decide → apply is founder-gated exactly as t
     fs.rmSync(options.root, { recursive: true, force: true });
   });
 
+  it("releasing (apply) WITHOUT a prior review approval is refused — and never stamps the revision approved", async () => {
+    const { repo, options, workspaceId, revisionId } = await stagedFixture();
+    // The revision is only "proposed" (staged, never reviewed). A release attempt must refuse.
+    assert.throws(
+      () => applyProductBetChange(workspaceId, revisionId, "founder", { confirm: true }, options),
+      /prior review approval/i,
+    );
+    // The failed release left the revision UNTOUCHED — never self-approved, and the source repo is clean.
+    const workspace = getWorkspace(workspaceId, options);
+    const revision = workspace.revisions.find((r) => r.id === revisionId);
+    assert.equal(revision.status, "proposed", "an unapproved revision stays proposed after a refused release — never stamped approved");
+    assert.equal(fs.readFileSync(path.join(repo, "a.txt"), "utf8"), "before\n", "the source repo is untouched by a refused release");
+    // A SECOND release attempt still refuses — the first failure never opened a self-approving door.
+    assert.throws(
+      () => applyProductBetChange(workspaceId, revisionId, "founder", { confirm: true }, options),
+      /prior review approval/i,
+    );
+    fs.rmSync(options.root, { recursive: true, force: true });
+  });
+
+  it("approve-then-release applies exactly once — one apply receipt, the patch on the source repo", async () => {
+    const { repo, options, workspaceId, revisionId } = await stagedFixture();
+    reviewProductBetChange(workspaceId, revisionId, "founder", { decision: "approve" }, options);
+    const applied = applyProductBetChange(workspaceId, revisionId, "founder", { confirm: true }, options);
+    assert.equal(applied.status, "applied");
+    assert.equal(fs.readFileSync(path.join(repo, "a.txt"), "utf8"), "after\n");
+    const workspace = getWorkspace(workspaceId, options);
+    const applies = workspace.decisions.filter((d) => d.type === "product_change_apply");
+    assert.equal(applies.length, 1, "exactly one apply receipt — the diff applied once, not twice");
+    fs.rmSync(options.root, { recursive: true, force: true });
+  });
+
   it("the founder can review, confirm apply readiness, and apply onto the source repo — a receipt lands on the workspace", async () => {
     const { repo, options, workspaceId, revisionId } = await stagedFixture();
     reviewProductBetChange(workspaceId, revisionId, "founder", { decision: "approve" }, options);

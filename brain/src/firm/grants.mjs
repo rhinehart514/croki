@@ -4,9 +4,12 @@
 // an ACT TYPE, checked before an outward act waits at the wall. Trust lives in the conversation (trust
 // = remembered dialogue); the `grants` collection is its durable, revocable projection — NOT a control
 // surface, NOT a policy object, and NOT a new authority. A grant only ever skips the WAIT for a
-// matching act type; it NEVER mints the wall's OUTWARD_RELEASE capability, and the release still flows
-// through the host-issued path (wall.mjs). Deploy keeps its second authorization regardless of any
-// grant (invariant §5.8: a trust grant never mints host authority).
+// matching act type: the act stops BLOCKING the effort. It NEVER mints the wall's OUTWARD_RELEASE
+// capability and NEVER performs the release itself — the wall's release capability is minted only inside
+// wall.decide(), reachable only from a real founder request, and a background drive holds no such
+// request. So a granted act still parks non-blocking and the FOUNDER still releases it through their own
+// authority; the grant buys "don't wait on me to unblock", not "send without me". Deploy keeps its
+// second authorization regardless of any grant (invariant §5.8: a trust grant never mints host authority).
 //
 // A grant is created only from a founder conversation message that says so (dialogue-act.mjs classifies
 // it as a standing "you can do this yourself" approve). The classifier proposes; the founder's own
@@ -110,11 +113,12 @@ export function revokeGrant({ ventureId, actType } = {}, options = {}) {
 
 // THE GUARD CHECK (deterministic). Before an outward effect parks at the wall, ask: does a live,
 // non-revoked grant match this effect's act type? If yes AND the act type is not a never-skippable one
-// (deploy), the act may proceed WITHOUT WAITING — the founder pre-authorized it by remembered dialogue.
-// This returns only whether the WAIT is skipped; it never returns or mints the release capability. The
-// caller (work-loop-tools.mjs stage_outward) still routes a skipped act through the host-issued release
-// path, now founder-pre-authorized. A non-matching act type, or any deploy, returns { skip: false } and
-// the effect parks normally.
+// (deploy), the effort may proceed WITHOUT WAITING on the founder — the founder pre-authorized skipping
+// the wait by remembered dialogue. This returns only whether the WAIT is skipped; it never returns or
+// mints the release capability, and it never sends anything. The caller (work-loop-tools.mjs
+// stage_outward) parks the act non-blocking and pre-authorized; the FOUNDER still performs the release
+// through their own authority (the wall's release capability is minted only inside wall.decide()). A
+// non-matching act type, or any deploy, returns { skip: false } and the effect parks blocking as normal.
 export function grantSkipsWait(ventureId, effect, options = {}) {
   const actType = actTypeForEffect(effect);
   if (!actType) return { skip: false, actType: null, grant: null };

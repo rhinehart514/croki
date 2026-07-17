@@ -1,9 +1,11 @@
 // Read-only Atlas projection: durable architecture plus live bet/work/wall/outcome truth. Projection
 // reasons are derived and explicit; no score, confidence field, or causal claim is persisted here.
 
-import { getArchitecture } from "./architecture.mjs";
+import { getArchitectureState } from "./architecture.mjs";
 import { getCurrentWorkingTheory } from "./architecture-proposals.mjs";
 import { listVentureDocs } from "./venture-store.mjs";
+import { deriveVentureTraceability, objectTerritory } from "./venture-traceability.mjs";
+import { ventureEvidenceResolvers } from "./venture-evidence.mjs";
 
 function list(value) {
   return Array.isArray(value) ? value : [];
@@ -184,12 +186,30 @@ function projectWorkingTheory(ventureId, options) {
   return { ...visible, joins: { work, wall, outcomes: returned } };
 }
 
+// Territory is a FACET derived from the canonical object (venture-traceability.objectTerritory), never
+// from role or position. The projection element id equals its canonical object id (compatibility
+// projection carries object.id through unchanged), so we look territory up by element.id. Compatibility
+// elements without a canonical object (or without a territory signal) project territory: null.
+function territoryByObjectId(model) {
+  const byId = new Map();
+  for (const object of list(model?.objects)) byId.set(object.id, object);
+  return (id) => objectTerritory(byId.get(id) ?? null);
+}
+
 export function buildArchitectureProjection(ventureId, options = {}) {
-  const document = getArchitecture(ventureId, options);
+  const state = getArchitectureState(ventureId, options);
+  const document = state.current;
+  const model = state.semanticModel;
+  const territoryFor = territoryByObjectId(model);
   const workingTheory = projectWorkingTheory(ventureId, options);
   const joins = joinedLiveState(ventureId, document, options);
   const pressure = derivePressure(document, joins);
-  const elements = document.elements.map((element) => ({ ...element, live: elementLive(element, document, joins, pressure) }));
+  const elements = document.elements.map((element) => ({
+    ...element,
+    // Additive optional facet: the real product/gtm territory of this object, or null when unset.
+    territory: territoryFor(element.id),
+    live: elementLive(element, document, joins, pressure),
+  }));
   const outline = elements.map((element) => ({
     id: element.id,
     role: element.role,
@@ -197,6 +217,12 @@ export function buildArchitectureProjection(ventureId, options = {}) {
     relationshipCount: document.connections.filter((entry) => entry.fromRef.includes(element.id) || entry.toRef.includes(element.id)).length,
     pressureReasons: pressure.filter((entry) => entry.subjectId === element.id).map((entry) => entry.reason),
   }));
+  // Additive venture-level cross-boundary traceability (Product Law 7). A pure DERIVATION over the same
+  // canonical model — never a second source of truth — with venture-scoped evidence resolvers so gaps
+  // fail toward VISIBILITY against real evidence rather than an absent resolver. A legacy-only venture
+  // (no v2 semantic objects) still derives honest gaps from what exists.
+  const { resolveEvidenceRef, enumerateEvidenceRefs } = ventureEvidenceResolvers(ventureId, options);
+  const traceability = deriveVentureTraceability(model, { resolveEvidenceRef, enumerateEvidenceRefs });
   return {
     ventureId,
     document,
@@ -209,6 +235,7 @@ export function buildArchitectureProjection(ventureId, options = {}) {
     joins,
     outline,
     workingTheory,
+    traceability,
     omissions: {
       historicalRevisions: true,
       machinery: true,

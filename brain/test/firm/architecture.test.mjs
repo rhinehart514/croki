@@ -342,7 +342,7 @@ describe("living venture architecture domain", () => {
 
     const poisoned = structuredClone(transfer);
     poisoned.venture.manifest.id = `${fx.venture.id}-poisoned`;
-    poisoned.venture.documents.architecture[0].current.ventureId = "another-venture";
+    poisoned.venture.documents.architecture[0].ventureId = "another-venture";
     assert.throws(
       () => importVentureTransfer(poisoned, { root: directory("drover-architecture-poisoned-"), repository: directory("drover-architecture-poisoned-repo-") }),
       (error) => error.code === "venture_transfer_cross_scope" && error.status === 404,

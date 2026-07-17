@@ -4,7 +4,6 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { recoverStaleBuilds } from "./feature-builder.mjs";
-import { startHeatScheduler } from "./firm/heat.mjs";
 import { devFounderAuthorityEnabled } from "./routes/founder-authority.mjs";
 import { json, serveFile } from "./routes/util.mjs";
 
@@ -74,22 +73,14 @@ const server = http.createServer(async (req, res) => {
 // Exported so a test can boot the real route handler on an ephemeral port and close it cleanly.
 export { server };
 
-// The firm's always-on heat scheduler (F7) handle, so shutdown can clear the timer cleanly.
-let heatScheduler = null;
+// No ambient loop runs at boot. Work begins ONLY through explicit founder direction or a founder-
+// invoked workflow (FIRM-SPEC rail #1; STATE.md); there is no perpetual firm loop to arm here, and no
+// timer for shutdown to clear. heat.mjs still owns the founder dial + spend rail + a founder-invokable
+// runHeatTick, but nothing starts it on a schedule by default.
 let shutdownPromise = null;
 let shutdownFailSafe = null;
 
 const SHUTDOWN_GRACE_MS = 5_000;
-
-function stopHeatScheduler() {
-  const scheduler = heatScheduler;
-  heatScheduler = null;
-  try {
-    scheduler?.stop();
-  } catch {
-    /* best-effort: never block shutdown on the heat scheduler timer */
-  }
-}
 
 function closeHttpServer() {
   if (!server.listening) return Promise.resolve();
@@ -111,7 +102,6 @@ function closeHttpServer() {
 function shutdownServer() {
   if (shutdownPromise) return shutdownPromise;
 
-  stopHeatScheduler();
   shutdownPromise = closeHttpServer().catch((err) => {
     server.closeAllConnections?.();
     process.exitCode = 1;
@@ -147,9 +137,9 @@ function startServer() {
     if (devFounderAuthorityEnabled()) {
       console.warn("  Development founder writes enabled for non-agent loopback browser requests.");
     }
-    // Start the firm's always-on loop. Every open venture's heat dial defaults to "off" (getHeatSettings)
-    // until the founder turns it up, so a fresh install wakes nothing until explicitly asked to.
-    heatScheduler = startHeatScheduler();
+    // No ambient loop is armed here. Work starts only through an explicit founder direction or a
+    // founder-invoked workflow (the /drive route with founder authority, or a founder-invoked call into
+    // heat.mjs's runHeatTick). A fresh boot wakes nothing.
     // Dogfood crash recovery: no feature build survives a restart, so flip stale queued/building
     // items to `interrupted` and salvage any orphaned worktree work onto its branch. Best-effort.
     try {
@@ -163,8 +153,8 @@ function startServer() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   startServer();
-  // Stop recurring work and release the listening socket. The shared promise makes repeated signals
-  // join the same shutdown instead of racing multiple server.close() calls.
+  // Release the listening socket on signal. The shared promise makes repeated signals join the same
+  // shutdown instead of racing multiple server.close() calls.
   for (const signal of ["SIGTERM", "SIGINT"]) {
     process.on(signal, shutdownAfterSignal);
   }

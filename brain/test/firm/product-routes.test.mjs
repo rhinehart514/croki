@@ -108,11 +108,11 @@ test("an agent-stamped review POST is refused", async () => {
   assert.equal(res.status, 403);
 });
 
-test("a local page apply POST reaches normal readiness validation", async () => {
+test("a local page apply POST on an unreviewed revision is refused for prior review approval", async () => {
   const { workspaceId, revisionId } = await stagedFixture();
   const res = await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/apply`, { confirm: true });
   assert.equal(res.status, 400);
-  assert.match(res.body.error, /approved/i);
+  assert.match(res.body.error, /prior review approval/i);
 });
 
 test("a local page discard POST does not need an unlock session", async () => {

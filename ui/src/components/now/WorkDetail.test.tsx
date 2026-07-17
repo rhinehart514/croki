@@ -41,7 +41,7 @@ const wallItems: WallQueueItemView[] = [
 ];
 
 describe("WorkbenchView", () => {
-  it("pins the direction head + independent decisions above the representation pane", () => {
+  it("pins identity + independent decisions, defaults to the result body, and offers one View control", () => {
     render(
       <WorkbenchView
         ventureId="v1" direction={direction} lens={lens}
@@ -51,23 +51,18 @@ describe("WorkbenchView", () => {
     );
     // The direction sentence is the pinned identity.
     expect(screen.getByRole("heading", { name: "Fix why signups stalled" })).toBeTruthy();
-    // The overview representation leads with the exact repository change.
-    expect(screen.getByText("Exact changes")).toBeTruthy();
     // Two independent decisions, pinned by the host, not one.
     expect(screen.getByText("Your decisions")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /Approve & send/ })).toHaveLength(2);
-    // The diff is shown once (Exact changes: FilesChanged + DiffView), not duplicated inside its gate.
-    expect(screen.getAllByText(/src\/App\.tsx/)).toHaveLength(2);
     // The message decision keeps its own proof.
     expect(screen.getAllByText(/Revised outreach that matches the new flow/).length).toBeGreaterThan(0);
-    // The chip strip offers only representations backed by real truth: overview + exact-change + who's
-    // working (one member bet). Not approach-comparison (single attempt), not working-result (no preview).
-    expect(screen.getByRole("button", { name: "Exact change" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Compare approaches" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Working result" })).toBeNull();
+    // ONE contextual View control (not a tab strip), defaulting to the result body; the exact-change view
+    // exists as a disclosed alternate, NOT a persistent chip, and is closed at rest.
+    expect(screen.getByRole("button", { name: /View · Result/ })).toBeTruthy();
+    expect(screen.queryByRole("menuitemradio", { name: "Exact change" })).toBeNull();
   });
 
-  it("keeps the exact diff on screen for a product-change decision under a non-diff representation", () => {
+  it("never hides a repository change: the pinned gate shows the diff on the result view, the body on exact-change", () => {
     render(
       <WorkbenchView
         ventureId="v1" direction={direction} lens={lens}
@@ -75,12 +70,14 @@ describe("WorkbenchView", () => {
         onBack={() => {}} onChanged={() => {}} onStop={() => {}}
       />,
     );
-    // Switch the pane away from any representation that renders the change (overview / exact-change).
-    fireEvent.click(screen.getByRole("button", { name: "Who's working" }));
-    // The pane no longer shows the "Exact changes" block…
-    expect(screen.queryByText("Exact changes")).toBeNull();
-    // …so the pinned product-change gate MUST render the diff itself — a repository change is never
-    // released with the diff nowhere on screen. Approve & send stays available only alongside the diff.
+    // Default result view does NOT stack the diff in the body — but the pinned product-change gate renders
+    // it, so the founder can never Approve & send a repository change with the diff nowhere on screen.
+    expect(screen.getAllByText(/src\/App\.tsx/).length).toBeGreaterThan(0);
+    // Disclose the View control and switch to the exact-change view.
+    fireEvent.click(screen.getByRole("button", { name: /View · Result/ }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Exact change" }));
+    // The change is now shown in the body (labelled "Exact changes"), and the decisions are still pinned.
+    expect(screen.getByText("Exact changes")).toBeTruthy();
     expect(screen.getAllByText(/src\/App\.tsx/).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Approve & send/ })).toHaveLength(2);
   });

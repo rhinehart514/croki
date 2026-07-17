@@ -12,9 +12,12 @@ import {
   setVentureDoc,
   VENTURE_COLLECTIONS,
 } from "./venture-store.mjs";
+import { validateSemanticModel } from "./semantic-model.mjs";
+import { isRepositoryRef } from "./repository-ref.mjs";
 
 export const VENTURE_TRANSFER_FORMAT = "drover-venture-transfer";
-export const VENTURE_TRANSFER_VERSION = 1;
+export const VENTURE_TRANSFER_VERSION = 2;
+const SUPPORTED_TRANSFER_VERSIONS = new Set([1, VENTURE_TRANSFER_VERSION]);
 
 const MACHINE_KEYS = new Set([
   "cwd",
@@ -122,7 +125,7 @@ function transferError(message, code = "venture_transfer_invalid", status = 400)
 }
 
 function validateTransfer(file) {
-  if (file?.format !== VENTURE_TRANSFER_FORMAT || file?.version !== VENTURE_TRANSFER_VERSION) {
+  if (file?.format !== VENTURE_TRANSFER_FORMAT || !SUPPORTED_TRANSFER_VERSIONS.has(file?.version)) {
     throw transferError("This is not a supported Drover venture transfer file.");
   }
   const ventureId = String(file?.venture?.manifest?.id ?? "").trim();
@@ -136,6 +139,11 @@ function validateTransfer(file) {
   const unknownCollection = collections.find((collection) => !VENTURE_COLLECTIONS.includes(collection));
   if (unknownCollection) {
     throw transferError(`Transfer collection ${unknownCollection} is not supported by this version.`);
+  }
+  for (const collection of ["architecture", "placement", "configuration"]) {
+    if ((file.venture.documents?.[collection] ?? []).length > 1) {
+      throw transferError(`Transfer collection ${collection} contains more than one singleton document.`);
+    }
   }
   for (const [collection, docs] of Object.entries(file.venture.documents ?? {})) {
     if (!Array.isArray(docs)) throw transferError(`Transfer collection ${collection} must be a list.`);
@@ -157,8 +165,41 @@ function validateTransfer(file) {
 }
 
 function validateTransferredArchitecture(documents, ventureId) {
-  const atlas = (documents.architecture ?? []).find((entry) => entry?.current);
+  const atlas = (documents.architecture ?? [])[0];
   if (!atlas) return;
+  if (atlas.schemaVersion === 2) {
+    const refs = new Set([`venture:${ventureId}`, "placement:canvas"]);
+    for (const bet of documents.bets ?? []) {
+      refs.add(`bet:${bet.id}`);
+      for (const work of [...(bet.staged ?? []), ...(bet.evidence ?? [])]) if (work?.id) refs.add(`work:${work.id}`);
+      for (const event of bet.events ?? []) if (event?.id) refs.add(`event:${event.id}`);
+    }
+    for (const outcome of documents.outcomes ?? []) refs.add(`outcome:${outcome.id}`);
+    for (const decision of documents.decisions ?? []) {
+      refs.add(`wall-item:${decision.id}`);
+      refs.add(`decision:${decision.id}`);
+    }
+    for (const message of documents.conversation ?? []) refs.add(`conversation:${message.id}`);
+    const roster = (documents.crew ?? []).find((entry) => !entry?.id) ?? {};
+    for (const participant of roster.teammates ?? roster.crew ?? []) {
+      const id = participant?.ref ?? participant?.id;
+      if (id) {
+        refs.add(`participant:${id}`);
+        refs.add(`teammate:${id}`);
+      }
+    }
+    try {
+      validateSemanticModel(atlas, {
+        ventureId,
+        externalRefExists: (ref) => (String(ref).startsWith("repository:") ? isRepositoryRef(ref) : refs.has(String(ref).split("#")[0])),
+      });
+    } catch (error) {
+      const crossScope = error?.code === "semantic_model_cross_scope";
+      throw transferError(error.message, crossScope ? "venture_transfer_cross_scope" : "venture_transfer_invalid", crossScope ? 404 : 400);
+    }
+    return;
+  }
+  if (!atlas.current) throw transferError("Transferred architecture has an unsupported format.");
   const current = atlas.current;
   if (current.ventureId !== ventureId) {
     throw transferError("Transferred architecture belongs to a different venture.", "venture_transfer_cross_scope", 404);
@@ -197,7 +238,7 @@ function validateTransferredArchitecture(documents, ventureId) {
   }
   for (const annotation of current.evidenceAnnotations ?? []) {
     const outcomeId = String(annotation.evidenceRef ?? "").replace(/^outcome:/, "");
-    const repositoryEvidence = annotation.basis === "repository-citation" && String(annotation.evidenceRef ?? "").startsWith("repository:");
+    const repositoryEvidence = annotation.basis === "repository-citation" && isRepositoryRef(annotation.evidenceRef);
     if (!hasArchitectureRef(annotation.subjectRef) || (!repositoryEvidence && !outcomeIds.has(outcomeId))) {
       throw transferError("Transferred architecture evidence has a missing source.", "venture_transfer_cross_scope", 404);
     }

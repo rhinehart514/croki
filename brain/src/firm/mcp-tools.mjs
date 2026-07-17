@@ -71,12 +71,13 @@ export function createFirmTools({ brainGet, brainPost }) {
     return brainPost(`/api/ventures/${encodeURIComponent(ventureId)}/bets/${encodeURIComponent(betId)}/product-changes/fork`, { intent });
   }
 
-  // Starts/resumes one drive of a teammate — stages bets/drafts/evidence and parks anything outward at
-  // the wall; it can never release what it parks. The one write this door has beyond staging, and it
-  // stays inward by the wall's own construction (F3), not by anything this tool enforces itself.
-  async function driveTeammate({ ventureId, teammateRef, teammateRefs, goal, betId, workRef, model }) {
+  // Continues or steers a teammate on EXISTING founder-authorized work — stages bets/drafts/evidence and
+  // parks anything outward at the wall; it can never release what it parks. This door may only resume a
+  // bet (betId) or diverge from one (branchFrom); it cannot start fresh work, because nothing begins
+  // without founder direction (FIRM-SPEC rail #1). It stays inward by the wall's own construction (F3).
+  async function driveTeammate({ ventureId, teammateRef, teammateRefs, goal, betId, branchFrom, workRef, model }) {
     return brainPost(`/api/ventures/${encodeURIComponent(ventureId)}/drive`, {
-      teammateRef, teammateRefs, goal, betId, workRef, model,
+      teammateRef, teammateRefs, goal, betId, branchFrom, workRef, model,
     });
   }
 
@@ -178,15 +179,16 @@ export function createFirmTools({ brainGet, brainPost }) {
     },
     {
       name: "drive_teammate",
-      description: "Start or resume one drive of a teammate on a venture: it may fork divergent bets, stage drafts/evidence, and consult taste — anything that would touch the world parks at the wall for the founder to decide, and this tool cannot decide it. Omit betId to start fresh from a goal; pass betId to resume a specific bet's paused work.",
+      description: "Continue or steer a teammate on EXISTING founder-authorized work: it may fork divergent bets, stage drafts/evidence, and consult taste — anything that would touch the world parks at the wall for the founder to decide, and this tool cannot decide it. It cannot start fresh work: pass betId to resume a specific bet's paused work, or branchFrom to diverge from a named parent bet. A goal with neither is refused, because only the founder can begin new work.",
       inputSchema: {
         type: "object",
         properties: {
           ventureId: VENTURE_ID,
           teammateRef: { type: "string", description: "The teammate to drive." },
           teammateRefs: { type: "array", items: { type: "string" }, description: "Optional additional configured teammates explicitly targeted by this direction." },
-          goal: { type: "string", description: "The goal this drive works toward." },
-          betId: { type: "string", description: "Optional. Resume this bet's paused work instead of starting fresh." },
+          goal: { type: "string", description: "The goal this drive works toward, scoped to the existing bet." },
+          betId: { type: "string", description: "Resume this bet's paused work. Required unless branchFrom is given — an agent cannot start fresh work." },
+          branchFrom: { type: "string", description: "Diverge from this existing parent bet's id, seeding a distinct child bet before the drive begins. Use instead of betId to try another approach." },
           workRef: { type: "string", description: "Optional durable work id inside betId. Keeps revisions, wall acts, and returns attached to the exact work." },
           model: { type: "string", description: "Optional model override." },
         },

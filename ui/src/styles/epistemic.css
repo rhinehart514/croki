@@ -1,0 +1,172 @@
+/* Epistemic truth grammar (Slice 3, Drover Law 11 + Law 10). Every distinction here is carried by SHAPE
+   — icon silhouette, node-shape geometry, line style, glyph, and a FIXED corner position — so a greyscale
+   screenshot separates all eight states. Colour is rationed and never load-bearing: --proven tints only
+   returned reality (measured), --gap only founder consequence; the seven other states read in ink. */
+
+/* Every token-bearing node root is a positioning context so the absolutely-placed slot pins to the same
+   card corner across archetypes (the atlas-element family already declares this; the others get it here). */
+.atlas-intent-node,
+.atlas-crew,
+.atlas-capability,
+.atlas-wall,
+.atlas-group {
+  position: relative;
+}
+
+/* ── The reserved corner slot ─────────────────────────────────────────────────────────────────────── */
+/* ALWAYS rendered, at the same top-right corner across every archetype and band. Absolute so the four
+   redundant channels never reflow the card; the node roots are already positioned contexts (React Flow
+   node wrappers) so the slot pins to the card corner. */
+.epi-token {
+  position: absolute;
+  top: calc(var(--space-2) * -0.5);
+  right: calc(var(--space-2) * -0.5);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 6px 2px 3px;
+  max-width: 82%;
+  border-radius: 999px;
+  background: var(--card-raised);
+  border: 1px solid var(--line-2-warm);
+  color: var(--ink-2-warm);
+  font-size: var(--text-xs);
+  line-height: 1.15;
+  pointer-events: none;
+}
+
+/* The icon well — the one channel present at every band (STRUCTURE = icon alone). */
+.epi-token-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--ink-1);
+  flex: 0 0 auto;
+}
+.epi-token-slot svg { display: block; }
+
+/* Hollow placeholder: an unfilled slot (provenance-absent / unsupported / Drover's read). A dashed ring
+   so absence is a VISIBLE claim, not less clutter — the card that establishes nothing reads Drover's read. */
+.epi-token[data-hollow="true"] .epi-token-slot,
+.epi-token-empty .epi-token-slot {
+  border: 1.4px dashed var(--ink-4-warm);
+  color: var(--ink-3-warm);
+}
+.epi-token-empty {
+  padding: 3px;
+  border-color: var(--line-soft);
+  background: color-mix(in srgb, var(--card-raised) 82%, transparent);
+}
+
+.epi-token-label {
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.epi-token-basis {
+  flex-basis: 100%;
+  color: var(--ink-3-warm);
+  font-weight: 500;
+}
+
+/* Rationed colour — advisory tint only, on top of the always-present shape channels. */
+.epi-token[data-epi-tone="proven"] .epi-token-slot { color: var(--proven); }
+.epi-token[data-epi-tone="proven"] { border-color: var(--proven-soft); }
+.epi-token[data-epi-tone="contested"] .epi-token-slot { color: var(--danger); }
+.epi-token[data-epi-tone="stale"] .epi-token-slot { color: var(--ink-4-warm); }
+.epi-token[data-epi-tone="historical"] .epi-token-slot { color: var(--ink-3-warm); }
+.epi-token[data-epi-tone="founder"] .epi-token-slot { color: var(--ink-1); }
+.epi-token[data-epi-tone="repository"] .epi-token-slot { color: var(--ember-ink); }
+
+/* ── Node-shape treatment (the third non-colour channel) ──────────────────────────────────────────── */
+/* Keyed off data-epi-state on the card root — a geometry change (border weight/style/notch), never a hue.
+   Applied on the atlas card families so the shape reads the same whatever the archetype. */
+.atlas-element[data-epi-state="contested"],
+.atlas-effort[data-epi-state="contested"] .atlas-effort-card {
+  border-style: solid;
+  box-shadow: inset 0 0 0 1px var(--danger), var(--sh-rest);
+}
+.atlas-element[data-epi-state="stale"],
+.atlas-effort[data-epi-state="stale"] .atlas-effort-card {
+  border-style: dashed;
+  border-color: var(--ink-5-warm);
+}
+.atlas-element[data-epi-state="unsupported"],
+.atlas-effort[data-epi-state="unsupported"] .atlas-effort-card {
+  border-style: dotted;
+  border-color: var(--ink-4-warm);
+}
+.atlas-element[data-epi-state="historical"] {
+  border-style: solid;
+  opacity: 0.82;
+  filter: saturate(0.7);
+}
+.atlas-element[data-epi-state="measured"] {
+  border-left: 3px solid var(--proven);
+}
+.atlas-element[data-epi-state="repository-backed"] {
+  border-left: 3px solid var(--ember-line);
+}
+.atlas-element[data-epi-state="founder-established"] {
+  border-left: 3px solid var(--ink-2-warm);
+}
+.atlas-element[data-epi-state="drovers-read"] {
+  border-style: dashed;
+  border-color: var(--ink-4-warm);
+}
+
+/* ── Edge treatments (Law 10) ─────────────────────────────────────────────────────────────────────── */
+/* Join truth on the line. An inference is NEVER a clean solid arrow; an unsupported relationship draws no
+   line at all (handled in EpistemicEdge by returning null). The rung is the DISCRETE strength ladder as
+   stroke-width, never opacity/gradient. */
+.epi-edge { stroke: var(--ink-3-warm); fill: none; }
+.epi-edge[data-rung="3"] { stroke-width: 2.2; }
+.epi-edge[data-rung="2"] { stroke-width: 1.7; }
+.epi-edge[data-rung="1"] { stroke-width: 1.1; }
+.epi-edge[data-rung="0"] { stroke-width: 1; }
+
+.epi-edge-exact { stroke: var(--ink-2-warm); }
+/* Solid double line: the base rail plus a second offset rail rendered as .epi-edge-double. */
+.epi-edge-double { stroke: var(--ink-2-warm); stroke-width: 1; transform: translateY(2.4px); opacity: 0.85; }
+.epi-edge-contextual { stroke: var(--ink-2-warm); }
+.epi-edge-founder { stroke: var(--ink-2-warm); }
+/* Inferred: hairline dashed — the tell that this is interpretation, not a receipt. */
+.epi-edge-inferred { stroke: var(--ink-4-warm); stroke-dasharray: 5 4; }
+/* Unattributed / joined-not-caused: dotted. */
+.epi-edge-unattributed { stroke: var(--ink-4-warm); stroke-dasharray: 1.5 4; }
+/* Stale: dotted grey with the clock notch glyph. */
+.epi-edge-stale { stroke: var(--ink-5-warm); stroke-dasharray: 2 4; }
+
+/* The midpoint glyph + optional disclosure tag. */
+.epi-edge-badge {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: var(--card-raised);
+  border: 1px solid var(--line-2-warm);
+  color: var(--ink-2-warm);
+  font-size: var(--text-xs);
+  line-height: 1;
+  pointer-events: none;
+}
+.epi-edge-badge svg { display: block; }
+.epi-edge-tag {
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink-3-warm);
+}
+.epi-edge-badge[data-treatment="unattributed"] .epi-edge-tag { color: var(--ink-3-warm); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* No motion is introduced by the grammar; the states are settled, static frames by construction. */
+  .epi-token, .epi-edge-badge { transition: none; }
+}

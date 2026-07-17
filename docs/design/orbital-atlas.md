@@ -1,15 +1,17 @@
 # Orbital Atlas — the picked canvas direction (2026-07-15)
 
-> **Refined 2026-07-15.** [`immediate-working-theory.md`](immediate-working-theory.md) supersedes
-> this document's proposal-first signature moment and founder-facing `bet` / `motion` / `fork` /
-> `outcome` vocabulary. The deep Atlas, semantic altitude, unfold-in-place, evidence receipts, and
-> founder-authority visualization remain selected.
+> **Superseded design evidence — 2026-07-17.** Orbit metaphysics, workflow glyphs, AI crew, staged pipeline,
+> and founder-never-drags assumptions are rejected. Semantic depth, focus restoration, evidence receipts,
+> and founder-authority visualization remain useful craft evidence under root `DESIGN.md`.
 
-Founder-picked direction for the whole-journey UI/UX rebuild, chosen from a scored audit (IA 25 · Flow 37 · Craft 48 · Consistency 63) and two diverge rounds. Supersedes the calm-status-board reading of the canvas. The founder's intent, verbatim, is the brief: *"I want to see and visualize my agentic workflows within a GTM standard and be able to explore and iterate on GTM systems and product systems… the orbit should feel deep and complex — but chat makes it easy to use."* Wow moment: *"project X, I want my GTM system to have 3–5 motions of PLG, outbound, etc. and set up these campaigns"* → the whole system materializes on the canvas as a staged, gated proposal.
+**Historical context:** this was the founder-picked canvas exploration on 2026-07-15. It was superseded
+as a Product direction. The remaining body preserves the original orbital layout, workflow, and staged
+proposal ideas as a receipt; they must not be executed. Current authority adopts only semantic depth,
+in-place focus/restoration, evidence receipts, and founder-boundary visualization.
 
-## The decision
+## The superseded decision
 
-**Dive (altitudes like a map) is the spine; unfold-in-place is the graft.**
+**Historical proposal:** dive was the spine and unfold-in-place was the graft.
 
 - **Venture altitude**: intent fixed at center (serif, the one focal), motions as labeled angular sectors of the orbit, bets on altitude rings where **radius = proximity to a decision**, the wall as the outer amber arc. Every bet carries a **machinery glyph** — a live miniature of its workflow chain (filled = done/running, ringed amber = held at gate, hollow = queued) with real counts. Bets are ALWAYS projected; the canvas may never contradict the header.
 - **Unfold graft**: selecting a bet at venture altitude unfolds its workflow chain in place (read without leaving); diving is the commitment.

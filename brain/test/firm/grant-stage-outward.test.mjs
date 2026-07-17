@@ -44,20 +44,27 @@ async function driveStageOutward(effect, { grantActType = null } = {}) {
 }
 
 describe("stage_outward + trust grant", () => {
-  it("a matching granted act proceeds WITHOUT the effort waiting, and says 'you told me I could'", async () => {
+  it("a matching granted act proceeds WITHOUT the effort waiting, is stamped pre-authorized, and NEVER falsely claims it sent", async () => {
     const { result, queued, reloaded, messages } = await driveStageOutward(
       { kind: "message", channel: "gmail", to: "buyer@acme.com", body: "hi" },
       { grantActType: "message:gmail" },
     );
     // The drive completes rather than pausing at the wall.
     assert.equal(result.outcome.kind, "completed", "a pre-authorized act does not pause the drive");
-    // The act still parks for the record, but non-blocking and pre-authorized.
+    // The act still parks for the record, but non-blocking and pre-authorized — and STILL UNDECIDED:
+    // a grant skips the wait, it never performs the release, so nothing was sent.
     const item = queued.find((q) => q.betId === reloaded.id);
     assert.ok(item, "the act is still recorded at the wall");
     assert.equal(item.blocksBet, false, "a granted act does not block the effort");
+    assert.equal(item.decision, null, "the grant never releases the item — it stays for the founder's own release");
+    assert.equal(item.releasedAt, null, "nothing was sent by the grant path");
     assert.equal(item.effect.preAuthorizedGrantId != null, true, "the item is stamped pre-authorized by the grant");
-    assert.ok(messages.some((m) => m.role === "teammate" && /you told me I could/i.test(m.content)));
     assert.ok(reloaded.events.some((e) => e.type === "parked_pre_authorized"));
+    // The conversation is HONEST: it references the standing permission but never claims a send happened.
+    const teammateMsg = messages.find((m) => m.role === "teammate" && /you told me I could/i.test(m.content));
+    assert.ok(teammateMsg, "the teammate references the standing grant honestly");
+    assert.equal(/sending this/i.test(teammateMsg.content), false, "it never claims to be sending something it did not send");
+    assert.match(teammateMsg.content, /your release|waiting for your release|ready to go/i);
   });
 
   it("a non-matching act type still WAITS with its exact payload at the wall (the drive pauses)", async () => {

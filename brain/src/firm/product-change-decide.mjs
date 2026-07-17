@@ -58,8 +58,19 @@ export function applyProductBetChange(workspaceId, revisionId, actor, input = {}
   if (input.confirm !== true) throw new Error("Applying isolated product work requires explicit confirmation.");
   const workspace = getWorkspace(workspaceId, options);
   const revision = findRevision(workspace, revisionId);
+  // A release can only ever act on a revision the founder ALREADY reviewed and approved as its own
+  // separate act (reviewProductBetChange). This gate is the ordering law: review-approve BEFORE apply.
+  // Without it, the "applying" flip below would stamp intent onto a never-reviewed revision, and a
+  // failed apply's recovery could then leave the revision looking approved — self-approving content the
+  // founder never saw. Refuse here, before any status is touched, so an unapproved release is inert.
+  if (revision.status !== "approved") {
+    const error = new Error("Release requires the founder's prior review approval — review this revision first.");
+    error.code = "product_change_not_approved";
+    throw error;
+  }
   // Persist intent before touching files. If the process dies after git apply but before the final
   // write, durable state says `applying` instead of falsely leaving an approved/no-op receipt.
+  const priorStatus = revision.status;
   updateRevision(workspace.id, revision.id, (current) => ({ ...current, status: "applying", applyStartedAt: now() }), options);
   try {
     const applied = applyRevision(workspace, revision, true);
@@ -71,8 +82,10 @@ export function applyProductBetChange(workspaceId, revisionId, actor, input = {}
     }, options);
     return findRevision(getWorkspace(workspace.id, options), revisionId);
   } catch (error) {
+    // Restore the pre-apply status — never hardcode "approved". Recovery must not stamp an approval the
+    // founder never gave; it only rewinds the "applying" flip back to whatever the revision truly was.
     updateRevision(workspace.id, revision.id, (current) => ({
-      ...current, status: "approved", applyError: error instanceof Error ? error.message : String(error),
+      ...current, status: priorStatus, applyError: error instanceof Error ? error.message : String(error),
     }), options);
     throw error;
   }

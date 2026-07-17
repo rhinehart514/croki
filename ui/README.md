@@ -1,39 +1,44 @@
 # Drover interface
 
-The interface is the desktop founder workbench for the firm defined in
-[`docs/FIRM-SPEC.md`](../docs/FIRM-SPEC.md). [`docs/STATE.md`](../docs/STATE.md) is the dated proof
-record; the root [`DESIGN.md`](../DESIGN.md) governs the visual system.
+The interface is the Electron desktop founder workbench defined by
+[`docs/FIRM-SPEC.md`](../docs/FIRM-SPEC.md) and root [`DESIGN.md`](../DESIGN.md).
+[`docs/STATE.md`](../docs/STATE.md) records what the current tree proves.
 
 ## Surface contract
 
-- One persistent venture conversation occupies the left rail; the live infinite canvas is the main
-  work surface at a 2:3 working ratio.
-- The composer is the action spine. With no selection it addresses the venture; selecting an
-  architecture element, teammate, bet, or exact workpiece sends an exact scope chip into the
-  composer. A command leaves through that scope and its resulting act settles onto the canvas.
-- The canvas is the Living Venture Atlas. Its opening view projects venture intent, product loops,
-  reusable systems, motions, campaigns, wall pressure, and returned reality before teammate
-  machinery. It owns placement only; semantic architecture and consequential records remain durable
-  venture truth outside React Flow.
-- A bet may be live, at the wall, or ended by the founder. The position is derived, never edited as
-  a stored status. At-wall work remains inspectable, discussable, and forkable; the staged effect
-  itself stays immutable until its wall decision.
-- Configuration proposals and receipts appear in the conversation with readable before/after
-  differences. Only the founder applies or restores a version.
-- Teammate turns render as structured acts: the act, what changed, and its receipt. Runtime, model,
-  cost, and configuration revision remain quiet provenance rather than navigation chrome.
-- Wall controls are purpose-specific: release outward work, answer a teammate, review an outcome,
-  or end a bet. No generic approval action crosses those purposes.
+- The venture canvas is the main work surface over one canonical open Product/go-to-market model.
+- One continuous venture conversation and persistent scoped branches direct and interrogate the canvas.
+- A compact workspace index organizes branches, views, snapshots, active runs, and founder-required
+  decisions without duplicating the venture into another tree.
+- Selection focuses an object, reveals relevant relationships, restores its branch/artifacts, and scopes the
+  same composer while the wider venture remains visible.
+- Understand, Design, Execute, and Learn are reversible lenses, never workflow stages or duplicate stores.
+- Generated visual answers are temporary. Saved live views remain synchronized; snapshots are immutable.
+- The canvas owns presentation state—placement, camera, route bends, visual-only groups—not semantic truth.
+- Direct manipulation is reversible. Ambiguous semantic gestures expose Drover's interpretation before
+  changing the canonical model.
+- Deep code, diffs, previews, campaign assets, research, telemetry, comparisons, workflows, and exact
+  founder consequences open in a temporary resizable workbench that preserves canvas and conversation
+  context.
+- Claude/Codex runs remain visible through scoped work, milestones, provenance, verification, cost, and
+  failures. They do not become roster navigation or an AI org chart.
+- Founder controls use exact consequence verbs; no generic approval action crosses send, publish, deploy,
+  spend, destructive/irreversible change, canonical-truth resolution, evidence review, or work ending.
 
-Founder-facing defaults say Drover, venture, teammate, bet, outcome, fork, and the wall. A configured
-participant label may replace **teammate** consistently. **Outcome** always means returned reality.
-Historical identifiers such as `gtm-ide` and `channel` are compatibility seams, not copy guidance.
+The current source still contains Now, immersive, and legacy shells plus compatibility-era teammate/bet
+components. They are migration debt under the approved direction, not alternate product options.
+
+## Founder language
+
+Product-owned copy names the concrete Product or go-to-market object, work, artifact, evidence, and
+consequence. Historical identifiers such as `gtm-ide`, `bet`, `fork`, `channel`, and `~/.gtm-ide` may remain
+in source and storage until a safe migration; they are not required founder vocabulary.
 
 ## Platform contract
 
-Desktop only. The shell has a 960-pixel minimum width; phone and tablet responsiveness is not a
-target. Keyboard operation, visible focus, reduced motion, semantic control names, contrast, and
-unclipped primary actions remain required at supported desktop sizes.
+Desktop only. The shell has a 960-pixel compatibility minimum and is judged at 1440×900 and 1280×800,
+including browser zoom through 200%. Phone and tablet responsiveness is not a target. Keyboard operation,
+visible focus, reduced motion, semantic names, contrast, and unclipped primary actions remain required.
 
 ## Commands
 
@@ -48,5 +53,5 @@ npm run test:firm:browser
 npm run test:acceptance
 ```
 
-The single Firm journey is the shortest deterministic founder-flow receipt. Run
-`npm run test:acceptance` before claiming the full interface is locally ready with the current brain.
+Browser journeys are deterministic regression receipts. The Electron product, outside-founder
+comprehension, real effects, and market value require separate evidence.

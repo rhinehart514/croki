@@ -151,31 +151,68 @@ describe("executeMessage — refused at BOTH layers for an unreleased/forged eff
   });
 });
 
-describe("executeMessage — a transport failure lands an honest executionError, never a throw, never a retry", () => {
-  it("records executionError on the receipt and never throws out of decide()", () => {
+describe("executeMessage — a transport failure is NOT swallowed: the item stays queued as a durable failed/retryable record and the release call fails honestly", () => {
+  it("a failed send leaves the item in the founder's queue with a durable failure + reconnect state, decision still null, and throws wall_release_execution_failed", () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Transport fails" }, options);
     const bet = createBet({ ventureId: venture.id, intent: "angle", teammateRef: "closer" });
     setVentureDoc(venture.id, "bets", bet.id, bet, options);
     const queued = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "message", to: "x@acme.com", body: "hi" } }, options);
-    const { transport } = fakeSendTransport({ fail: { error: "Gmail API 500: internal error" } });
+    // A 401-shaped failure so needsReconnect rides through: the founder must see reconnect, not a false send.
+    const { transport } = fakeSendTransport({ fail: { error: "Gmail API 401: invalid credentials", needsReconnect: true } });
     const executeEffect = createEffectExecutor({ founderActor: "founder", options, messageDeps: { transport, token: "fake-token" } });
 
-    const receipt = decide(
-      { ventureId: venture.id, itemId: queued.id, decision: "release" },
-      { req: browserReq() },
-      { executeEffect, isFounderPresent: () => true },
-      options,
-    );
-    assert.equal(receipt.decision, "release", "decide() itself completes — the failure is on the execution result, not a thrown decide()");
-    assert.equal(receipt.executionResult.ok, false);
-    assert.match(receipt.executionResult.executionError, /internal error/);
-    // The item fell out of the live queue once decided, exactly as any other decided item does — a
-    // failed send is not silently retried by re-queuing.
-    assert.equal(queue(venture.id, options).some((item) => item.id === queued.id), false);
+    let thrown = null;
+    try {
+      decide(
+        { ventureId: venture.id, itemId: queued.id, decision: "release" },
+        { req: browserReq() },
+        { executeEffect, isFounderPresent: () => true },
+        options,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    // The release call reports failure honestly — it never returns a success the world never saw.
+    assert.ok(thrown, "the release throws on a failed transport rather than returning a fake success");
+    assert.equal(thrown.code, "wall_release_execution_failed");
+    assert.equal(thrown.status, 502);
+    assert.match(thrown.message, /invalid credentials/);
+
+    // The item is STILL in the founder's live queue — a failed send is durable and retryable, not dropped.
+    const stillQueued = queue(venture.id, options).find((item) => item.id === queued.id);
+    assert.ok(stillQueued, "a failed send stays queued for an explicit retry — never consumed as released");
+    assert.equal(stillQueued.decision, null, "the decision was NOT consumed by a failed send");
+    assert.equal(stillQueued.releasedAt, null, "nothing was released — releasedAt is never stamped on a failed send");
+    assert.match(stillQueued.lastExecutionError, /invalid credentials/);
+    assert.equal(stillQueued.needsReconnect, true, "the reconnect signal is durable on the item, not buried in a receipt");
+    assert.ok(stillQueued.lastAttemptAt, "the failed attempt is timestamped for the founder");
   });
 
-  it("no recipient on the effect refuses honestly before ever calling the transport", () => {
+  it("a recoverable retry: once the transport succeeds, the same still-queued item releases exactly once", () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Retry after failure" }, options);
+    const bet = createBet({ ventureId: venture.id, intent: "angle", teammateRef: "closer" });
+    setVentureDoc(venture.id, "bets", bet.id, bet, options);
+    const queued = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "message", to: "x@acme.com", body: "hi" } }, options);
+
+    const failing = createEffectExecutor({ founderActor: "founder", options, messageDeps: { transport: fakeSendTransport({ fail: { error: "Gmail API 500" } }).transport, token: "fake-token" } });
+    assert.throws(
+      () => decide({ ventureId: venture.id, itemId: queued.id, decision: "release" }, { req: browserReq() }, { executeEffect: failing, isFounderPresent: () => true }, options),
+      /wall_release_execution_failed|Gmail API 500/,
+    );
+
+    // The founder retries after reconnecting; the transport now succeeds — the same item releases.
+    const { transport, calls } = fakeSendTransport({ messageId: "gmsg-retry-1" });
+    const executeEffect = createEffectExecutor({ founderActor: "founder", options, messageDeps: { transport, token: "fake-token" } });
+    const receipt = decide({ ventureId: venture.id, itemId: queued.id, decision: "release" }, { req: browserReq() }, { executeEffect, isFounderPresent: () => true }, options);
+    assert.equal(receipt.decision, "release");
+    assert.equal(receipt.executionResult.messageId, "gmsg-retry-1");
+    assert.equal(calls.length, 1, "the successful retry sent exactly once");
+    assert.equal(queue(venture.id, options).some((item) => item.id === queued.id), false, "the item leaves the queue only on a real success");
+  });
+
+  it("no recipient on the effect refuses honestly before ever calling the transport — and keeps the item queued", () => {
     const options = freshRoot();
     const venture = createVenture({ name: "No recipient" }, options);
     const bet = createBet({ ventureId: venture.id, intent: "angle", teammateRef: "closer" });
@@ -183,10 +220,15 @@ describe("executeMessage — a transport failure lands an honest executionError,
     const queued = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "message", body: "hi" } }, options);
     const { transport, calls } = fakeSendTransport();
     const executeEffect = createEffectExecutor({ founderActor: "founder", options, messageDeps: { transport, token: "fake-token" } });
-    const receipt = decide({ ventureId: venture.id, itemId: queued.id, decision: "release" }, { req: browserReq() }, { executeEffect, isFounderPresent: () => true }, options);
-    assert.equal(receipt.executionResult.ok, false);
-    assert.match(receipt.executionResult.executionError, /no recipient/i);
-    assert.equal(calls.length, 0);
+    assert.throws(
+      () => decide({ ventureId: venture.id, itemId: queued.id, decision: "release" }, { req: browserReq() }, { executeEffect, isFounderPresent: () => true }, options),
+      /no recipient/i,
+    );
+    assert.equal(calls.length, 0, "the transport is never called when there is no recipient");
+    const stillQueued = queue(venture.id, options).find((item) => item.id === queued.id);
+    assert.ok(stillQueued, "an unsendable item stays queued rather than being consumed as released");
+    assert.equal(stillQueued.decision, null);
+    assert.match(stillQueued.lastExecutionError, /no recipient/i);
   });
 });
 

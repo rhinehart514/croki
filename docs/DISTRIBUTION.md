@@ -17,8 +17,8 @@ version and does not count as one.
 | Build `npm run app:dist` | Configured for arm64 macOS | Produces an unsigned, ad-hoc-signed local DMG; reverify before handoff |
 | Download a signed, notarized app | Does not exist | Requires founder-owned Apple identity and hosting decisions |
 
-Drover is local software, not bundled intelligence. Real teammate work needs at least one connected
-runtime:
+Drover is local software, not bundled intelligence. Founder-directed Product and go-to-market work needs
+at least one connected runtime:
 
 - Claude Code through the bundled Agent SDK, using an existing Claude Code login or configured
   Anthropic credential; or
@@ -78,9 +78,9 @@ Run the product gates against the source tree first:
 npm run test:acceptance
 ```
 
-This reruns the mechanical suite, design-token parity, four preserved operating journeys, and three
-Living Venture Atlas journeys. It is the source-tree readiness receipt, not a packaged-app or
-outside-founder proof.
+This reruns the repository's mechanical, token, and deterministic browser readiness gates. The exact
+journey inventory must match `package.json` and the current `STATE.md`; legacy Now/Atlas/immersive journey
+names are migration coverage, not product direction. It is not packaged-app or outside-founder proof.
 
 For a desktop artifact, build from that same verified tree, launch the packaged app, bind a disposable
 repository, confirm runtime readiness, restart, and complete the deterministic Firm journey. Record

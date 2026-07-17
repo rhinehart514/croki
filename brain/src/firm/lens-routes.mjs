@@ -36,7 +36,10 @@ export default async function handle({ req, res, url }) {
       try {
         authorizeFounderWriteForRequest(req, "Starting a venture");
         const body = await readBody(req);
-        const venture = createVenture({ name: body?.name, repository: body?.repository });
+        // A new founder venture must not silently imply a pre-existing crew (Product Law 1, §Anti-laws:
+        // no permanent AI staff). It opens with connected Claude/Codex runtime capability and no persistent
+        // specialist; the first founder direction forms the first participant explicitly.
+        const venture = createVenture({ name: body?.name, repository: body?.repository }, { seedFoundingCrew: false });
         // First run (Phase 7): read the bound product back on the canvas as a correctable working theory
         // and offer concrete repo-derived directions in the conversation. It never sends anything outward.
         // A first-run failure must not fail the create — the venture still opens; the read-back is a

@@ -139,6 +139,52 @@ describe("venture transfer file", () => {
     assert.equal(getVentureDoc(source.venture.id, "settings", "transfer", options).receiptId, result.receipt.receiptId);
   });
 
+  it("emits transfer v2 while still accepting a v1 bundle", () => {
+    const source = fixture();
+    const transfer = createVentureTransfer(source.venture.id, source.options);
+    assert.equal(transfer.version, 2);
+    transfer.version = 1;
+    const destinationRoot = directory("drover-transfer-v1-");
+    const destinationRepository = directory("drover-transfer-v1-repo-");
+    const result = importVentureTransfer(transfer, { root: destinationRoot, repository: destinationRepository });
+    assert.equal(result.venture.id, source.venture.id);
+  });
+
+  it("accepts a real legacy v1 atlas and preserves it for lazy migration", () => {
+    const source = fixture();
+    const transfer = createVentureTransfer(source.venture.id, source.options);
+    transfer.version = 1;
+    transfer.venture.documents.architecture = [{
+      current: { schemaVersion: 1, ventureId: source.venture.id, revision: 0, intent: { statement: "Legacy", constraints: [] }, elements: [], connections: [], groups: [], evidenceAnnotations: [], updatedAt: null, updatedBy: null },
+      revisions: [], proposals: [], revision: 0,
+    }];
+    const destinationRoot = directory("drover-transfer-real-v1-");
+    importVentureTransfer(transfer, { root: destinationRoot, repository: directory("drover-transfer-real-v1-repo-") });
+    assert.ok(getVentureDoc(source.venture.id, "architecture", "atlas", { root: destinationRoot }).current);
+  });
+
+  it("rejects duplicate or malformed atlas singletons before writing the destination", () => {
+    const source = fixture();
+    const destinationRepository = directory("drover-transfer-singleton-repo-");
+    const duplicate = createVentureTransfer(source.venture.id, source.options);
+    duplicate.venture.documents.architecture = [{ schemaVersion: 2 }, { schemaVersion: 99 }];
+    const duplicateRoot = directory("drover-transfer-singleton-");
+    assert.throws(
+      () => importVentureTransfer(duplicate, { root: duplicateRoot, repository: destinationRepository }),
+      (error) => error.code === "venture_transfer_invalid" && error.status === 400,
+    );
+    assert.equal(openVenture(source.venture.id, { root: duplicateRoot }), null);
+
+    const malformed = createVentureTransfer(source.venture.id, source.options);
+    malformed.venture.documents.architecture = [{ schemaVersion: 2, ventureId: source.venture.id, revision: 0 }];
+    const malformedRoot = directory("drover-transfer-malformed-v2-");
+    assert.throws(
+      () => importVentureTransfer(malformed, { root: malformedRoot, repository: directory("drover-transfer-malformed-v2-repo-") }),
+      (error) => error.code === "venture_transfer_invalid" && error.status === 400,
+    );
+    assert.equal(openVenture(source.venture.id, { root: malformedRoot }), null);
+  });
+
   it("rejects nested cross-venture references before writing any destination record", () => {
     const source = fixture();
     const transfer = structuredClone(createVentureTransfer(source.venture.id, source.options));

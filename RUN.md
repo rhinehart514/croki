@@ -1,29 +1,39 @@
 # Drover run contract
 
-**Status:** current routing document. It does not define product direction or claim implementation
-status.
+**Status:** current routing and verification document. It does not define product direction or claim
+implementation status.
 
 ## Resume order
 
-1. Read `AGENTS.md` for repository invariants and founder-facing language.
-2. Read `docs/FIRM-SPEC.md` for the product and build contract.
-3. Read `docs/STATE.md` for the dated boundary between working software and unproven claims.
-4. Inspect `git status` and the relevant diff. Preserve every pre-existing change unless the task
-   explicitly owns it.
+1. Read `AGENTS.md` for repository invariants and platform boundaries.
+2. Read `docs/FIRM-SPEC.md` for durable Product/build physics.
+3. Read root `DESIGN.md` for intended desktop experience.
+4. Read `docs/STATE.md` for the boundary between current proof, unproven requirements, and legacy behavior.
+5. Inspect `git status` and the relevant diff. Preserve every pre-existing change unless the task explicitly
+   owns it.
 
-No independent roadmap lives here. The previous outcome-first canvas run is preserved at
-`docs/history/OUTCOME-FIRST-CANVAS-RUN.md`; none of its incomplete boxes are current work.
+No independent roadmap lives here. Historical run plans are evidence only.
 
-## Invariants for every run
+## Invariants for every implementation run
 
-- Keep Drover product-agnostic and desktop-only.
-- Use the founder language: Drover, venture, teammate, bet, outcome, fork, and the wall.
-- Reserve **outcome** for what the world returned. A founder gives direction; a bet attempts it.
-- Do not reintroduce workflow, graph, pipeline, stage, status, or object taxonomies as the work
-  model. Historical identifiers such as `gtm-ide`, `channel`, and `~/.gtm-ide` remain unchanged.
-- Preserve venture isolation, cited truth, founder-only outward authority, learned taste, and the
-  rule that only the founder ends a bet.
-- Do not commit, publish, deploy, spend, or take another external action without explicit approval.
+- Keep Drover product- and venture-agnostic, Electron-desktop-first, and local-first.
+- The canvas is the main founder surface; one venture conversation and persistent scoped branches direct
+  and interrogate it.
+- Product and go-to-market remain permanent territories over one canonical open model.
+- Work begins only from explicit founder direction or a founder-invoked workflow.
+- A workflow is an outcome contract, not a default DAG, pipeline, or stage machine.
+- A run records its founder direction/workflow origin, branch, scope, intended result, authority envelope,
+  participants, provider/model provenance, tools/actions/outputs, cost where available, completion evidence,
+  stopping condition, and world-boundary holds.
+- Claude and Codex are execution identities in provenance and run inspection, not product ontology or an AI
+  org chart.
+- Generated structure remains provisional; facts, evidence, and interpretation remain separate.
+- Direct manipulation remains reversible until an exact consequence crosses into the world.
+- Preserve venture isolation, cited Product truth, exact work lineage, founder-only consequence authority,
+  and founder-only work ending.
+- Historical identifiers such as `gtm-ide`, `bet`, `fork`, `channel`, and `~/.gtm-ide` remain compatibility
+  seams, not founder-language requirements.
+- Do not commit, publish, deploy, spend, send, or take another external action without explicit approval.
 
 ## Verification
 
@@ -32,13 +42,16 @@ Use the smallest relevant check while iterating, then the complete gate when the
 ```sh
 npm --prefix brain test
 npm --prefix ui run test:unit
+npm run lint
+npm run build
 npm test
 npm run test:firm:browser
 npm run test:acceptance
 ```
 
-`npm run test:acceptance` is the complete local-readiness receipt: mechanical tests, token parity,
-four preserved operating journeys, and three Living Venture Atlas journeys.
+`npm run test:acceptance` is the complete local-readiness receipt: mechanical tests, token parity, and
+browser journeys. It is not outside-founder, packaged-Electron, real-effect, causal, or market proof.
 
-A handoff states the outcome first, lists changed files and verification, then names any remaining
-unproven behavior. Passing deterministic tests does not prove the outside-founder alpha bet.
+A handoff states the user-visible outcome first, lists exact verification, distinguishes observed behavior
+from inference, and names remaining unproven behavior. Meaningful Product/design work ends with an
+evidence-grounded release note and the highest-leverage next move.

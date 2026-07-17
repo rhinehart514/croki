@@ -1,476 +1,436 @@
-# The Firm — build spec of record
+# Drover firm specification
 
-**Status:** spec of record for the physics rebuild and the holding-company north star.
-**Derived from:** founder ideation session, 2026-07-14, on top of the experiment-machine discovery
-interviews (2026-07-12) and a full-tree machinery audit (seven scouting passes over the current code).
-**Last reconciled:** 2026-07-15 for immediate working theory and ordinary founder language.
+**Status:** durable product and build physics.
+**Last reconciled:** 2026-07-17 from Jacob's Product and Experience Laws.
 **Scope:** product-agnostic and venture-agnostic. **Stage:** alpha.
 
-This spec supersedes [OPEN-CANVAS-SPEC.md](OPEN-CANVAS-SPEC.md) and
-[EXPERIMENT-MACHINE-SPEC.md](EXPERIMENT-MACHINE-SPEC.md) as the build direction. It keeps their
-harness whole — truth, the founder wall, learned taste — and keeps their firm rails. Where those
-documents grew object systems, stage skeletons, or enums, this spec deletes them. "Open" means the
-host must not decide the founder's organization or the substance of what an agent may notice. One
-readable firm configuration may record the founder's choices; a host-owned workflow taxonomy,
-status enum, or compiled graph still re-creates the cage this rebuild exists to remove.
+This is the product specification of record. [`STATE.md`](STATE.md) records what the current tree proves.
+[`../DESIGN.md`](../DESIGN.md) owns the intended desktop experience. Historical implementation and design
+records are evidence only and cannot override this file.
 
-## The destination
+## North star
 
-Drover is the operating system for one-person holding companies.
+**Drover makes the full product and go-to-market system visible, understandable, manipulable, and
+executable by one founder.**
 
-A permanent AI staff runs any number of ventures around the clock. Product change and reaching the
-market are one act. Every world-touching decision waits for the founder, whose job compresses to
-judgment: stop, continue, or release — minutes a day, not hours. Each venture is a small, readable,
-transferable artifact.
+It does not run the company for the founder. It gives the founder the depth, memory, leverage, and visual
+cognition of a complete product and go-to-market organization.
 
-Named so no early choice caps them, the four scale axes of that destination:
+> **The canvas holds the venture. Conversation directs and interrogates it. Claude and Codex expand what
+> the founder can accomplish.**
 
-1. **Across ventures** — a portfolio of isolated machines behind one decision wall.
-2. **Across transfer** — a running venture is a file: exportable, importable, sellable, forkable.
-3. **Across founders** — an opt-in, pattern-level exchange of what actually worked (never venture
-   data; late-game, earned only after there are many firms).
-4. **Across functions** — support, pricing, partnerships, operations: the same loop with zero new
-   nouns, entered later because the wall built for cold outbound already exceeds what back-office
-   functions need.
+The first proof is one real venture. The destination may span a portfolio, but each venture remains an
+isolated, readable, transferable operating environment behind the founder's authority.
 
-The wedge is one venture: vibe code your go-to-market. The wedge exercises every primitive below and
-expands along all four axes without rework. The ease of the wedge never redefines the destination.
+## Product principles
 
-## The physics
+### Founder capability over agent autonomy
 
-Drover is a living venture atlas over one operating loop and one founder harness. The atlas lets the
-founder preserve concepts and relationships in their own language, then gives only a small operational
-kernel host-defined meaning when that meaning must change execution, attribution, prioritization, or
-evidence. The canvas shows the venture before it shows the machinery.
+Drover makes the founder more capable, not less involved. Claude, Codex, and configured specialists may
+research, reason, design, implement, test, and prepare work after a founder direction. They do not decide
+what the venture should pursue.
 
-The signature first-use moment is immediate. One plain-language direction produces a complete,
-editable working theory of the venture on the canvas and begins useful inward work in the same turn.
-The theory may include who the venture helps, how value happens, several ways to reach people,
-campaigns worth trying, and concrete product or market actions. It appears as Drover's provisional
-reading—not as durable truth, a taxonomy, or a plan the founder must approve before anything useful
-happens. Real work and returned evidence strengthen or revise the theory; only the founder makes
-structure durable or authorizes an act that crosses into the world.
+### Product and go-to-market are one venture
 
-Founder language is a separate invariant from the internal model. The interface uses the founder's
-words and concrete descriptions such as “rewrite onboarding,” “contact these buyers,” “launch this
-campaign,” “review what changed,” and “try another approach.” It never requires **bet**, **motion**,
-**fork**, **outcome**, **the wall**, **pipeline**, **stage**, or another Drover noun. Familiar domain words remain
-available when the founder uses them. Historical names such as `bet` and `fork` remain in storage,
-routes, tests, and the technical sections of this spec until an intentional migration; they are
-compatibility identifiers, not founder-facing product concepts.
+Product creates and delivers value. Go-to-market identifies, communicates, distributes, and captures that
+value. Drover keeps both visually distinct while making every meaningful dependency traceable across the
+boundary.
 
-Open architecture material is not a hidden workflow. A concept, labeled relationship, or named area
-may remain descriptive forever. Drover may infer and display a full working theory immediately, but
-inferred structure remains provisional. It can guide inward work without becoming durable
-architecture or granting authority. Exact work, founder decisions, and returned evidence remain the
-consequential loop beneath the theory.
+### One model, many views
 
-Supporting records such as a venture manifest, firm configuration, founder-attention item, placement,
-heat setting, product-change receipt, or architecture revision may exist internally when they preserve
-a rail. They must not become parallel stores, workflow stages, score systems, or administrative
-taxonomies.
+The venture has one shared underlying model. The canvas, generated answers, operating arrangements, saved
+views, snapshots, conversation projections, and workbenches are projections of that model, never parallel
+sources of truth.
 
-### The internal architecture kernel
+### Visual understanding precedes administration
 
-These distinctions let Drover reason about reuse, attribution, and consequences. They do not dictate
-canvas labels, navigation, or words the founder must learn. The visible name should describe the
-specific business meaning, usually in the founder's own language.
+Drover produces an ambitious provisional interpretation of the venture immediately. The founder does not
+construct an ontology, configure a workflow, approve an empty plan, or maintain a database before seeing
+value.
 
-**Concept.** Founder-defined architecture material with stable identity and open language. Actors,
-needs, promises, offerings, product capabilities, surfaces, distribution doors, constraints, and
-venture-specific ideas can remain concepts without acquiring host-level types. Concepts may be
-selected, connected, grouped, discussed, and proposed for an operational role. They do not alter
-runtime priority, attribution, return ordering, or wall behavior by themselves.
+### Structure exists to create leverage
 
-**Product loop.** The intended actor-to-value mechanism: an actor, entry, ordered founder-written
-steps, value, and intended change. Repository-backed product claims cite product truth or remain
-visible inference. The steps are addressable context, not host stages.
+Anything may begin as open text, a shape, an artifact, or a relationship. An object gains operational
+meaning only when that meaning enables real behavior: implementation, execution, measurement, evidence,
+context, or reuse.
 
-**System.** A persistent reusable capability. One capability may support several ways of reaching
-people without
-duplication and may support product-loop steps. It has no host-owned kind, owner, maturity, health,
-stage, or score.
+## Product laws
 
-**Motion.** An internal name for a repeatable actor-to-value route composed from reusable capabilities
-and coupled to product value. Its
-ordered systems state intended architecture, not an executable workflow. Activation, evidence, and
-pressure are derived rather than stored statuses.
+### 1. Founder direction starts work
 
-**Campaign.** A bounded activation of one primary way of reaching people for an audience and
-objective, joined to one primary thread of work and an explicit observation contract. It may touch
-additional routes and supporting work without weakening primary attribution. Campaign is acceptable
-founder language when it describes a recognizable campaign, never merely a Drover container.
+Nothing begins without explicit founder intent. A direction or founder-invoked workflow is the initiating
+act. There are no ambient agents, automatic roadmaps, unsolicited campaigns, automatic product work, or
+perpetual company simulation.
 
-### The consequential records
+### 2. Intent determines operating freedom
 
-**Teammate.** Drover's default presentation of a durable configured participant: a persistent agent
-with a soul (memory of lessons), a voice, and a track record of real outcomes. A founder may instead
-present the same participant as an employee, direct model, specialist, team, automation, or their own
-language. That choice changes the firm people experience; it does not create a second actor system.
-Teammate refs and souls remain the compatibility seam, and founder-blessed lessons may still graduate
-from a venture instance to a reusable template. Drover imposes no role, seniority, org chart, or
-manager agent. If those relationships exist, they are open founder configuration—not host doctrine.
+The founder communicates naturally, as they would with Claude or Codex. Drover infers whether the request
+is an exact change, expanded implementation, investigation, open mission, or workflow invocation. The
+interpretation remains visible and correctable. No model may silently widen it.
 
-**Work thread (`bet` in current code).** The addressable envelope around whatever a teammate is
-currently attempting: a message, an audience, a channel push, a price, a landing page, or a product
-diff. The founder sees the concrete attempt, never “a bet.” The record carries only what the host
-needs to preserve identity, venture scope, initial direction, time, joins, and optional branch
-lineage. Evidence, prepared work, and returned-evidence references attach without becoming required
-domain fields. Beyond that envelope, the thread has no host-owned substantive schema, kind, or stage.
-Its position is derived from reality: active, waiting for the founder, or ended by the founder. When
-it touches the product, its work lives in an isolated git worktree. Product work and market work use
-the same envelope; Drover does not create two separate operating systems for them.
+### 3. Autonomy belongs to the direction
 
-Attached work is not a fourth domain noun. A draft, list, page, diff, or other durable local result
-may carry a small technical envelope so the founder can address and revise the exact same work:
-stable identity, open content, owner and contributor references, timestamps, and provenance. It has
-no required kind, stage, or workflow position. Revising attached work preserves its identity and
-adds attribution rather than replacing it with an unrelated record.
+Freedom is scoped to the current direction or workflow, not globally assigned to an agent. One direction
+may be exact; another may permit broad research, branching, implementation, and verification.
 
-**Returned evidence (`outcome` in current code).** What the world said back. A reply, a no-reply,
-churn, activation, or a close is joined to the work that provoked it only as strongly as evidence
-supports. Positive, negative, and zero results are equally first-class; unjoined signals stay
-unattributed rather than being claimed. The founder sees what happened, in ordinary language, never
-a scoreboard, sentiment number, or generic “outcome” container.
+### 4. Authority follows consequence
 
-Returned evidence is its own durable venture record. A work thread may reference it, but does not embed a
-second copy. Provider event identity deduplicates both joined and unattributed outcomes.
-When a result answers one exact piece of work, an optional work reference preserves that lineage
-through the outward act and the return; the work thread remains the broader join context.
+Safe, reversible inward work may proceed after direction begins. The founder retains authority over sends,
+publishing, deployment, spending, destructive changes, irreversible external actions, and material changes
+to canonical venture truth when intent is unclear. Approval applies to the exact consequence, not a vague
+plan.
 
-**Release** is founder-facing but deliberately derived from exact staged work, its wall effect, the
-founder decision receipt, and the execution result. It is not a duplicate durable record.
+### 5. The venture model is singular
 
-### Branching work
+Every object and relationship has one durable identity. Editing it anywhere updates it everywhere. Deleting
+a layout or view never deletes the underlying venture.
 
-The machine may branch into genuinely different approaches. Founder copy names the consequence—
-**try another approach**, **make a version for agencies**, **scale this**, **change the offer**—rather
-than exposing the internal verb `fork`. Branching is the only structural operation on work; there is
-no compose-a-graph, wire-a-pipeline, or configure-a-workflow. Configuring who participates and how
-they interact changes the firm, not the substance or stages of its work. When the work is code, a
-branch is literally an isolated git worktree.
+### 6. Product and go-to-market are permanent territories
 
-### The one loop
+The canonical venture has two primary spatial regions.
 
-Internally: **diverge → prepare → founder decision → act → observe → adapt**. Founder copy describes
-the actual action and consequence rather than naming these steps.
+**Product** may contain experiences, surfaces, capabilities, systems, implementation, releases, telemetry,
+and insights.
 
-Teammates try materially different approaches. Work forms locally — drafts, lists, pages, diffs —
-with nothing outward. Any next act that would touch the world pauses for the founder. The founder
-decides. The real result returns, joins to the originating work only where evidence supports it,
-feeds teammate memory, and shapes what happens next. An outward act retains the exact originating
-work reference; if no prior attachment exists, the approval record becomes that durable reference.
-Returned evidence carries the same reference.
+**Go-to-market** may contain markets, audiences, positioning, offers, motions, channels, campaigns, assets,
+responses, revenue, and insights.
 
-Founder direction carries explicit context for the whole venture, any selected architecture element,
-selected teammates, an active thread, or exact attached work. Targeting changes what the participants receive,
-what return briefs prioritize, and what resulting records point back to; it never compiles a host
-workflow or decides how participants should reason together. Teammates do not define the venture's
-far view. Runtime, model, configuration, coordination, tools, costs, and work logs remain inspectable
-machinery behind the selected architecture.
+Neither territory is subordinate. These nouns are earned roles over open records, not mandatory host types.
 
-The loop never idles while a venture is open. The wall is not a brake on the machine; it is the
-license for everything inside it to run at full autonomy around the clock. While the founder is
-away, inward work keeps branching — researching, drafting, revising weak approaches, and building
-product diffs — while consequential decisions accumulate for the founder. The founder wakes up to
-decisions, not busywork.
+### 7. Cross-boundary traceability is mandatory
 
-### The one lens
+Drover must expose relationships such as positioning to product promise, promise to capability, audience
+need to experience, release to campaign opportunity, campaign asset to product claim, market response to
+product or positioning insight, revenue to campaign/offer/product value, and telemetry to audience or
+market understanding. Unsupported claims, unexpressed capabilities, and disconnected evidence remain
+visible gaps.
 
-**The living canvas.** A continuous infinite spatial world where the founder sees and shapes how the
-venture creates value, reaches the market, acts, and learns. It is not a page containing a diagram.
-Pan, zoom, direct placement, drag relationships, stable landmarks, camera history, and focus that
-expands in place are primary product behaviors. Backing out returns to the same camera and mental map.
+### 8. Understand, Design, Execute, and Learn are lenses
 
-Far away, the canvas shows venture intent, how value happens, active ways to reach people, current campaigns,
-the nearest held release, returned reality, and founder judgment. At architecture depth it shows open
-concepts, named areas, product-loop detail, reusable systems, shared routes, and qualified evidence.
-Near a route or campaign it exposes the trace into concrete work, founder decisions, and returned evidence.
-Near exact work it retains the Workyard's evidence, diffs, lineage, contributors, and decisions.
+They are a shared operating grammar across Product and go-to-market, never workflow stages.
 
-The canvas owns placement memory and nothing else. Semantic architecture lives in the venture state;
-coordinates, route bends, z-order, camera, and decorative strokes remain presentation. Deleting
-placement regenerates a deterministic atlas without losing meaning. The founder can always drag,
-arrange, connect, focus, broaden, and use the deterministic outline. A table, route change, permanent
-inspector, or dashboard may never replace this spatial operating surface.
+| Lens | Product | Go-to-market |
+| --- | --- | --- |
+| Understand | experiences, users, behavior, repository truth | markets, demand, buyers, competitors |
+| Design | surfaces, capabilities, systems | audiences, positioning, offers, motions |
+| Execute | implementation, tests, releases | campaigns, channels, assets, distribution |
+| Learn | telemetry and insights | responses, conversion, revenue and insights |
 
-### The one harness
+Objects may skip, cross, loop backward, or occupy several layers. Reorganizing the canvas into this lens
+never duplicates an object or mutates the founder's free layout.
 
-Unchanged in authority, re-seated on the loop:
+### 9. Generated structure is provisional
 
-- **Truth.** Claims about what the product already does come from cited repository evidence or are
-  labeled inference. Grounding is captured at generation time.
-- **The wall.** One non-forgeable, founder-only checkpoint. The outward-release capability is
-  host-issued at decision time, never persisted, never mintable by a model, browser read, API call,
-  or MCP actor. Presence is a short volatile lease that lapses to away; away holds all outward
-  effects and anything unrecognized, without pausing inward work. Deploy keeps its second explicit
-  authorization.
-- **Founder attention.** The wall is one surface, not one ambiguous action. An item declares whether it
-  asks the founder to release outward work, answer a teammate, review returned evidence, or end active
-  work. Each purpose admits only its own decisions; reviewing evidence does not block the work or
-  pretend to release it.
-- **Taste.** Founder approvals, rejections, edits, and kills feed the decision ledger and teammate
-  souls. Drafting work must consult taste before it reaches the founder.
+Claude and Codex may generate a complete first visual model. Generated objects and relationships remain
+visibly inferred until strengthened by founder action, repository evidence, telemetry, market evidence, or
+explicit promotion. Generation is cheap. Authority is earned.
 
-## Firm rails (founder-held, never automated away)
+### 10. Facts and interpretations remain separate
 
-1. **Nothing goes outward without the founder's explicit hand** — every send, publish, deploy, and
-   any spend. Away-state holds outward work unattended, always.
-2. **Only the founder ends active work.** The machine may explain what it learned and propose a
-   materially different approach; it never closes work itself.
-3. **The founder releases each outward act with one decision.** Batch review is a convenience, not a
-   delegation.
-4. **The founder can see and refine anything, at any altitude, with no gatekeeping.**
-5. **On a real reply, the machine alerts the founder and they decide together.**
-6. **One venture is an isolated machine.** Ventures never bleed. Only founder-blessed lessons cross,
-   through teammate souls, as patterns — never as venture data.
-7. **The firm's heat is one founder dial.** How hard the inward loop runs — and what it may spend —
-   is a single founder-owned setting with a spend rail. It never becomes a scheduler config surface.
-8. **A venture is a file.** Local-first, readable, exportable. Nothing durable lives in provider
-   state, opaque infrastructure, or a second remote authority. This rail is cheap today and is the
-   entire transfer axis later; it is never traded away for convenience.
-9. **The founder configures the firm.** Presentation, participants, organization, runtimes,
-   capabilities, context, memory, coordination, activation, evaluation, budgets, and authority are
-   one readable, versioned, attributable, reversible venture document. Agents may propose changes;
-   they cannot apply them or expand their own authority. Configuration may make the firm more
-   restrictive, but it never mints the host capability that crosses an outward boundary.
+Drover distinguishes what happened, the evidence proving it, what a model or founder believes it means,
+and what action may follow. A real response may attach automatically during founder-directed work. Its
+interpretation remains provisional.
 
-Every venture manifest binds to one product repository. Truth reads and product worktrees resolve from
-that binding, never from Drover's process directory. Import requires a valid destination repository;
-machine-local worktree paths are stripped while review history remains readable and explicitly needs
-rebinding.
+### 11. Exploration cannot pollute the venture
 
-## What stays open (agent-judged, never hardcoded)
+Temporary generated views may contain speculative relationships, missing capabilities, alternatives,
+contradictions, and hypotheses. Those findings remain local to the view until individually promoted.
+Exploration is unconstrained. Canonicalization is intentional.
 
-Teammates judge these by context. Building host structure for any of them is a regression:
+### 12. Views are disposable; useful questions persist
 
-- What a unit of active work is, how big it is, and what it contains.
-- What useful divergence means in the moment — how many approaches, along which dimensions. No fixed N, no forced
-  axes, no divergence quota.
-- What counts as signal, how it returns, and what a winner spawns.
-- The firm configuration's founder/domain vocabulary. The founder may configure composition in
-  advance or let the first work form it; presentation labels, relationships, capability language,
-  context, memory, and evaluation language remain open. The host supplies no required org model,
-  personality taxonomy, work taxonomy, or routing table.
-- Finite host adapter and safety mechanics may name only real supported choices: runtime adapters,
-  activation modes, enabled coordination protocols, enforceable budgets, and authority
-  restrictions. Their closed values make execution honest and rails enforceable; they cannot
-  classify people or work, constrain what the market may say, or mint host authority.
-- Kinds, labels, relationship words, and other substantive founder/domain vocabulary are open strings
-  wherever they appear. Technical identifiers and the finite adapter/safety choices above are not a
-  second product ontology.
-- What the market's voice says. It speaks in language or it is silent — no sentiment scores, no
-  aggregate numbers surfaced to the founder.
+A generated visual answer is temporary. The founder may explicitly save it as a synchronized **live view**
+or an immutable historical **snapshot**. A saved view preserves a way of looking at the venture, not
+another copy of it.
 
-## Fatal modes (every build choice is checked against all five)
+### 13. Workflows are outcome contracts
 
-1. **Busywork machine** — motion without closes.
-2. **Generic output** — anything that reads like any AI rather than this product meeting its market.
-3. **Too much to operate or decide** — overwhelm instead of flow. Divergence runs wide below the
-   fold; the founder's attention is pulled, never flooded.
-4. **Flow-killing** — friction, setup ceremony, nagging, or mental-state drag. Natural-language and
-   direct-manipulation configuration should feel like using the firm, not administering software.
-5. **Machinery and jargon creep** — any new authority, collection, enum, stage, score, executable generic edge,
-   required substantive work field, founder-facing internal noun, or fragmented configuration surface that does not protect
-   execution, attribution, evidence, or founder authority. Open founder language is not machinery;
-   silently turning it into host workflow or exposing the host's ontology is.
+A workflow defines the intended result, constraints, required artifacts, proof, founder checkpoints, and
+completion conditions. Claude and Codex retain freedom over method. Explicit orchestration exists only
+where sequencing, independent verification, separation of responsibility, or reproducibility materially
+matters. A workflow never runs continuously unless a future founder decision introduces that authority.
 
-## The deletion ledger
+### 14. Open work uses adaptive composition
 
-This rebuild is a delete-and-reset, not a refactor. The measure of correctness is that the brain
-gets small enough to read in an afternoon: on the order of a dozen source files around the harness,
-in place of the current ~120.
+An ordinary direction may use one model, consultation, handoff, parallel approaches, independent critique,
+or verification. Composition remains visible and steerable but is not configured before every run. A
+founder-authored workflow may determine a specific composition.
 
-### Dies
+### 15. Work remains primary over AI identity
 
-- **The enum'd object graph** — `object-graph-store.mjs`, `object-graph-operations.mjs`,
-  `object-graph-projection.mjs`, `object-funnel.mjs` and their `domain`/`maturity`/edge-type enums.
-- **The executable graph as the product** — `graph.mjs` DAG execution, `channel-graph.mjs`,
-  `flow-store.mjs`, `contracts.mjs` field-contract auditing, `graph-operations.mjs`,
-  `step-runners.mjs`, `workflow-composer.mjs`, `candidate-composer.mjs` and the candidate-pipeline
-  opening move. Teammates do work directly through the runtime adapters and tools; multi-step
-  structure is the content of a bet, not a host-compiled artifact.
-- **The operator session machine** — the 40-field session record, the five pause states and their
-  five separate resolvers, run reconciliation, and the session/run/flow triplication. One loop, one
-  wall queue, one "the founder decides" step.
-- **The woven projection layer** — `woven-graph.mjs`, `operating-view.mjs`, object chips, kind
-  clusters, lanes, and the objects/type axis machinery. The living canvas projects one architecture
-  document plus live consequential records; it does not revive those parallel authorities.
-- **Boards, plans, and derived read models** — `board.mjs`, `motion-plan.mjs`,
-  `promote-motion.mjs`, `path-portfolio.mjs`, `program-projection.mjs`, `signal-weights-store.mjs`,
-  `reallocation.mjs`, `reallocation-tunables-store.mjs`, `run-compare.mjs`, `run-compile.mjs`,
-  `run-derivation.mjs`, `run-summary.mjs`.
-- **Goal and work-object authorities as separate stores** — `goal-store.mjs`,
-  `goal-conflicts.mjs`, `goal-conflict-decision-store.mjs`, `work-artifact-store.mjs`'s parallel
-  revision machinery, `canvas-structure-history.mjs`, `canvas-proposal.mjs`,
-  `open-canvas-projection.mjs`. Founder direction is what the founder said — content teammates fork
-  under. Work products are the content of bets.
-- **The zero-AI terrain floor as a product claim** — the no-runtime grounded home and its fixtures.
-  The scan survives as truth infrastructure; the "useful before any model" posture does not.
-- **Storage sprawl** — the 23-store pattern, the Convex write-behind mirror, and the JSON/SQLite/
-  Convex/cache four-layer stack. One local store per venture (rail 8), one persistence seam.
-- **Composition/ideation scaffolding** — `ideation.mjs` angle machinery, `idea-bar.mjs` floors,
-  `idea-store.mjs`, `idea-derivation.mjs`, `composer-router.mjs` keyword routing,
-  `composer-briefing.mjs` assembly, `microproduct-composer.mjs` as a special case. Divergence is
-  what teammates do, not a host pipeline.
+Claude and Codex remain visible in conversation, provenance, verification, and run inspection. They do not
+dominate the canvas as fictional employees. Persistent specialists exist only when the founder intentionally
+creates reusable identity, context, or operating methods.
 
-### Survives (the keep-list, ported not rewritten)
+## Canonical product physics
 
-- **Wall mechanics** — `tool-safety.mjs` name-blocking at every runtime door; the `OUTWARD_RELEASE`
-  host-issued capability pattern (re-seated from `node.runtime` onto the bet's execution context);
-  loopback page authority with model/MCP actor-stamp refusal; venture-scoped access that fails closed;
-  the second deploy
-  authorization; actor stamping on the MCP door.
-- **Presence** — `presence.mjs` volatile lease, defaults and lapses to away, any caller may make the
-  system more conservative.
-- **Taste** — venture decision receipts distilled by `firm/taste.mjs`, plus `consult-guard.mjs`
-  (drafting must consult taste). The wall receipt is the source; there is no parallel feedback authority.
-- **Truth** — `scan.mjs` cited repository scan, evidence discipline (uncited "derived" demotes to
-  "speculative"), `product-model-generator.mjs` as interpretation clearly labeled.
-- **Souls and teammate identity** — `teammate-soul.mjs`, `teammate-soul-store.mjs` two-tier learning
-  (instance + template, founder-blessed graduation), voice allowlisting that never leaks prompts,
-  the deterministic illustrated teammate faces in the UI.
-- **The product-change worktree contract** — the isolated, no-authority worktree door, diff
-  retention, staged review, explicit apply. This becomes fork-is-a-worktree unchanged in security
-  posture.
-- **Runtime adapters** — the provider-neutral Claude/Codex drive seam, subscription auth,
-  normalized failure vocabulary. One product behavior through both providers; provider identity is
-  a receipt, not a record.
-- **Reply capture and outcome joins** — the connected-account reply path, join lineage, and the
-  decide-together interruption, re-targeted from run items to bets.
-- **Ambient scheduling** — `firm/heat.mjs` runs the 24/7 inward loop from the single heat dial and spend
-  rail; it does not expose scheduler internals.
-- **The spatial substrate of the canvas** — pan/zoom/selection/drag/virtualization/regions and the
-  gate review surface, re-pointed at venture architecture plus live bets, work, wall, and outcomes.
-- **The anti-cage test doctrine** — the static guards, rewritten for the new physics (see
-  Verification).
+### Durable entities
+
+Durable identity may exist for a venture, open object, relationship, product or go-to-market role,
+direction, workflow, run/attempt, artifact, implementation, release, evidence, insight, conversation branch,
+live view, and snapshot.
+
+These are not all mandatory host types. The minimum durable envelopes protect identity, venture scope,
+open content, lineage, attribution, provenance, revision, and authority. Substantive founder/domain language
+stays open.
+
+### Epistemic conditions
+
+An object or relationship may be:
+
+- **Open:** founder-created without operational classification.
+- **Inferred:** generated by Claude or Codex.
+- **Established:** explicitly adopted or edited by the founder.
+- **Evidence-backed:** supported by repository, telemetry, or market evidence.
+- **Contested:** contradicted by evidence or another established claim.
+- **Stale:** based on information no longer current.
+- **Historical:** preserved in a snapshot or prior revision.
+
+These are truth conditions, not workflow statuses. Provenance must name the founder action, repository
+citation, measured source, provider event, model inference, conflict, or missing basis that supports the
+condition.
+
+### Direction lifecycle
+
+```text
+Founder intent
+→ visible interpretation
+→ scoped reasoning and inward work
+→ approaches and artifacts
+→ verification
+→ exact founder-held consequence
+→ external action
+→ evidence
+→ changed venture understanding
+```
+
+The system may loop, branch, pause, or stop anywhere. Runtime completion does not silently end a direction;
+only the founder ends active work.
+
+### View lifecycle
+
+```text
+Question
+→ temporary generated view
+→ founder manipulation
+→ dismiss
+   or save as live view
+   or capture as snapshot
+   or promote selected findings
+```
+
+Dismissal restores the prior camera, layout, scope, and selection exactly.
+
+### Workflow lifecycle
+
+```text
+Founder invocation
+→ outcome contract
+→ model composition
+→ artifacts and checkpoints
+→ verification
+→ founder-held consequences
+→ completion evidence
+```
+
+Completion belongs to the contract. A model finishing a turn is only a run event.
+
+## Execution and authority harness
+
+### Venture isolation and local truth
+
+A venture is a readable local file tree. Every durable record is venture-scoped. Cross-venture reads,
+writes, decisions, and references fail closed. Export/import preserves durable identity and history while
+stripping machine-local worktree paths and requiring an explicit destination repository rebind.
+
+### Repository truth and product work
+
+Each venture binds to a real product repository. Product claims cite repository evidence or remain visible
+inference. Product changes occur in isolated git worktrees, retain exact diffs and verification, and require
+founder review before local apply. Deploy is a separate exact consequence with a second authorization.
+
+### Founder wall
+
+One non-forgeable founder boundary holds every world-touching consequence. Electron owns the volatile
+founder secret and signs short-lived, single-use method-and-path claims below the renderer. Model, MCP,
+unstamped browser, cross-origin, stale, replayed, forged, and prior-process claims fail closed. Presence is a
+volatile lease and may only make authority more conservative.
+
+The founder sees exact purpose-specific verbs: release a message, apply a product change, authorize a
+deploy, spend, answer, review evidence, keep, end, or perform a destructive act. A grant, configuration,
+prompt, conversation, or model claim can never mint the host release capability.
+
+### Claude, Codex, and configured participants
+
+Claude and Codex share one provider-neutral capability surface. Runtime identity, model, authentication,
+cost, configuration revision, and participant contributions are receipts, not product ontology. A
+participant may involve another configured participant within the current direction's authority and budget;
+the host enforces membership, cycles, protocols, spend, and attribution without deciding whose substantive
+perspective matters.
+
+New ventures do not invent permanent fictional staff. A founder may create a persistent specialist when
+reusable identity, memory, methods, or context earns it.
+
+### Exact work and returned evidence
+
+An artifact or exact workpiece keeps stable identity across revisions, contributors, decisions, releases,
+and returns. Evidence is a durable record of what happened and its source. Attribution joins only where
+provider identity or other captured evidence supports it. Silence and unattributed signals remain
+first-class rather than being guessed from chronology.
+
+### One event and projection model
+
+Durable truth lives only in the venture store. Live events announce that a scoped record changed; clients
+re-read through venture-scoped APIs. Canvas, conversation, return account, operating lens, workbench, and
+MCP reads project the same identities. Placement owns coordinates, camera, route bends, z-order, and
+visual-only grouping, never business truth.
+
+## Compatibility seams
+
+Historical identifiers and record names such as `bet`, `fork`, `teammate`, `gtm-ide`, the legacy
+`channel` workflow/storage record, and `~/.gtm-ide` may remain in storage, routes, tests, and adapters until
+an intentional migration proves safe. Those compatibility identifiers are not product identity or required
+founder-facing vocabulary. This does not prohibit the ordinary go-to-market role **channel** defined above.
+
+Current records remain authoritative where they already carry real truth:
+
+- `bet` is the compatibility envelope for a direction attempt and exact work lineage;
+- `outcome` is the compatibility record for returned evidence;
+- the architecture document carries current open semantic objects, relationships, groups, and evidence
+  annotations until migrated additively;
+- wall items and product-change records retain exact consequence and review history;
+- conversation remains the durable utterance/event record and gains branch identity rather than being
+  replaced.
+
+Compatibility adapters must converge these records into the canonical model. They may not create another
+truth store.
+
+## Product and go-to-market integrity
+
+Product and go-to-market work share the same direction, run, artifact, consequence, evidence, and learning
+physics. Drover does not impose a CRM pipeline, product roadmap stage machine, or fixed four-stage process.
+It may render fitting projections when durable truth supports them.
+
+The defining causal chain is inspectable:
+
+```text
+product understanding or change
+→ market artifact or campaign
+→ exact founder release
+→ response, telemetry, or revenue evidence
+→ revised object, relationship, or insight
+→ next founder direction
+```
+
+A generated artifact, dashboard, recommendation, completed model turn, or internal activity is not progress
+unless it improves understanding, forms usable work, reveals a contradiction, crosses through founder-held
+consequence, returns evidence, or changes venture judgment.
+
+## Interaction invariants
+
+1. One click selects; Enter or double-click descends; Escape restores the prior camera and scope.
+2. Typing with no selection directs the venture; typing with a selection directs that object.
+3. Moving, resizing, and visual grouping update placement immediately and remain reversible.
+4. An obvious semantic connection may apply directly and remains undoable.
+5. An ambiguous gesture exposes Drover's interpretation before semantic truth changes.
+6. Generated layouts never overwrite founder placement.
+7. Saving a live view, capturing a snapshot, and promoting an inferred finding are explicit acts.
+8. Every external act presents the exact consequence.
+9. Closing conversation, a branch, or a workbench never loses canvas context.
+10. Switching lenses never duplicates objects.
+11. Search reaches the whole venture model, evidence, conversations, views, snapshots, and work.
+12. Raw internal identifiers never become required founder vocabulary.
+13. Agent work attaches to the Product or go-to-market object it changes.
+14. A result without visible consequence or evidence is incomplete.
+15. Every major action remains reversible until it crosses into the world.
+
+## Firm rails
+
+1. Nothing sends, publishes, deploys, spends, destroys, or performs another irreversible external act
+   without the founder's exact authorization.
+2. Only the founder ends active work.
+3. One venture never reads or writes another venture's data.
+4. The founder can inspect and refine any consequential work, evidence, interpretation, or authority at
+   any altitude.
+5. Configuration is readable, versioned, attributable, reversible, and incapable of minting host authority.
+6. Provider state is never the only durable copy of venture truth.
+7. Safe inward work remains bounded by the initiating direction or workflow.
+8. Models may propose changes to canonical truth; unclear material changes require founder interpretation
+   and confirmation.
+9. Product and go-to-market evidence retain their original language, source, attribution strength, and
+   uncertainty.
+10. A product capability that the UI exposes must exist end to end or remain visibly unavailable.
+
+## Anti-laws
+
+Drover must never become:
+
+- an autonomous company simulator;
+- an agent activity dashboard;
+- a task or issue tracker with a decorative graph;
+- a CRM pipeline;
+- a workflow-node editor as the default experience;
+- a chat wrapper that buries durable understanding in transcripts;
+- a canvas requiring constant taxonomy maintenance;
+- an AI org chart;
+- a collection of disconnected boards;
+- a fixed four-stage process;
+- a system that equates generation with truth;
+- a product that hides ambiguity behind confident edges;
+- a product that makes the founder approve empty plans;
+- a product that simplifies by removing necessary depth;
+- a product that shows complexity without making it manipulable.
 
 ## Delivery sequence
 
-Build order for the reset. Each stage names what done means. Stages F1–F3 are the spine; nothing
-founder-visible ships before F3.
+Each phase is a vertical completion gate. Nothing is called complete from component rendering alone.
 
-**F0 — Reconcile the contract.** This spec becomes the direction; OPEN-CANVAS-SPEC and
-EXPERIMENT-MACHINE-SPEC get banners pointing here; STATE.md records the reset honestly. Done when
-the repository has one answer to what Drover is.
-
-**F1 — The firm core.** One venture store (architecture, configuration, teammate roster, bets, outcomes,
-decisions, settings, product-change history, conversation, placement) on one local
-persistence seam, with the harness ported: wall capability, presence, taste, truth, venture
-isolation. Done when a venture directory is a readable file tree, the harness tests pass against
-the new store, and the old stores are not imported by any new code.
-
-**F2 — Configured participants work.** A participant drives real work through the existing runtime adapters directly
-— no operator session, no compiled graph. Fork creates bets; staged artifacts attach to bets;
-everything inward runs; anything outward classifies (by capability effect, not name) and parks at
-the wall. Done when one teammate can take founder direction, fork divergent bets, and stage real drafts
-with taste consulted, on both Claude and Codex adapters.
-
-Participants may involve another configured participant during that same work through one generic
-deliberation primitive. The caller chooses the participant, an enabled protocol, and a focused
-question; the requested participant contributes through their own configured runtime, capability,
-authority, and budget boundary. The contribution returns to the caller so they can answer, challenge,
-seek another pass, or stop. A founder-configured pass budget bounds the interaction. The host enforces
-membership, protocols, budgets, and cycles; it never supplies a role-specific routing table or decides
-whose perspective is substantively relevant.
-
-**F3 — The wall queue.** One decision surface with typed attention: outward release, teammate answer,
-outcome review, and bet ending.
-Per-item decide, batch convenience, receipts, presence hold, promote-by-replay for proven patterns.
-Done when the security matrix passes: no self-approval from browser/API/MCP/model, away holds
-everything outward, forged autonomy rejected, cross-venture access fails closed.
-
-**F4 — Fork is a worktree.** Product bets run through the surviving worktree contract: isolated
-change, retained diff, staged review, explicit apply, deploy's second authorization. Done when one
-bet carries a real verified code diff to the wall and back.
-
-**F5 — The market speaks.** Reply capture joins to bets; outcomes return as the market's voice in
-the room; the decide-together interruption fires on real replies; losers mutate on founder kill.
-Done when a real reply lands on its bet and the founder can decide from the voice alone, with no
-aggregate metric anywhere on a founder surface.
-
-**F6 — The living venture atlas.** The continuous canvas renders venture intent, open founder-defined
-architecture, concrete ways value reaches people, current campaigns, exact work, founder decisions,
-and returned evidence over the one venture store. It preserves infinite pan/zoom, direct placement,
-stable camera history, semantic zoom, focus-in-place, and outline parity. Done when one plain-language
-direction immediately draws a coherent provisional theory, starts useful inward work, lets the
-founder trace any claim to concrete work or evidence without leaving the canvas, and deleting
-placement loses only placement.
-
-**F7 — The always-on firm.** The ambient loop runs teammates around the clock under the heat dial and
-spend rail; away accumulates conviction at the wall. Done when a founder returns after hours away to
-staged divergence and a decision queue, with zero outward motion having occurred.
-
-**F8 — The portfolio proof.** Two real ventures through one wall; venture export/import proves rail
-8 (a moved venture resumes durable work on another machine after binding its destination repository;
-provider sessions cold-resume and live worktrees explicitly re-fork). Done when both receipts exist on real
-founder ventures.
-
-The alpha gate is unchanged in spirit: an outside founder survives the loop on a real product, and a
-real-world answer returns. Deterministic tests never stand in for that.
+1. **Authority:** reconcile this specification, `DESIGN.md`, `STATE.md`, public documentation, and agent
+   context around these laws.
+2. **Canonical model:** add durable open objects, relationships, branches, runs, views/snapshots, and
+   evidence/insight separation through additive compatibility migration.
+3. **Direction and workflow execution:** unify intent, direction-scoped autonomy, outcome contracts,
+   adaptive multi-agent composition, steering, stopping, branching, closing, and persistent run receipts.
+4. **Consequence execution:** make product apply, deploy, send, spending, destructive actions, failure,
+   retry, and MCP/Electron topology truthful under the founder wall.
+5. **One founder shell:** ship one workspace index, continuous conversation, canonical canvas, scoped
+   composer, contextual workbench, search, and contextual founder gate.
+6. **Manipulable canvas:** direct editing, semantic zoom, provisional theory, reversible interpretation,
+   provenance, and honest dense-scale behavior.
+7. **Product/GTM loop:** permanent territories, reversible operating lens, cross-boundary traceability,
+   temporary/live/snapshot views, and evidence-driven learning.
+8. **Deletion:** remove competing shells, duplicate data paths, dead controls, stale docs, and obsolete
+   compatibility UI after parity.
+9. **Release proof:** mechanical, browser, Electron, security, migration, accessibility, performance, and
+   outside-founder evidence appropriate to alpha.
 
 ## Verification
 
-### Invariants carried forward (existing tests keep passing, re-targeted)
+At minimum, the completed product must prove:
 
-- Wall: only founder-decided items cross; execute-equivalents refuse without the host capability;
-  self-approval rejected from every door; deploy requires the second authorization.
-- Isolation: cross-venture reads and decisions fail closed as 404.
-- Autonomy: promotion is founder-only, revocable, and never forgeable through content, config, or
-  context.
-- Taste: drafting that reaches the founder consulted taste; gate decisions land in the ledger and
-  return to future work.
-- Truth: uncited product claims demote; founder register stays plain (no machinery vocabulary on
-  founder surfaces).
-- Voice: souls never leak prompts or internals through narration.
-
-### New anti-cage guards (static, in the spirit of the current guard families)
-
-- Founder-language guard: product-owned interface copy does not expose `bet`, `motion`, `fork`,
-  `outcome`, `the wall`, `pipeline`, `stage`, or `work item`. User-authored content and historical API/storage
-  identifiers are excluded.
-- First-use guard: a broad plain-language direction produces a provisional whole-venture projection
-  plus useful inward work without requiring architecture acceptance; every world-touching effect
-  still waits for the founder.
-- No empty theater: every generated grouping projects concrete work, an artifact, evidence, or a
-  real relationship. A complete-looking arrangement of empty containers fails.
-- One architecture document inside the venture store; no system, motion, campaign, graph, or canvas
-  business-truth store.
-- Only concept, product-loop, system, motion, and campaign have architecture role semantics. No
-  actor, need, promise, offering, capability, surface, release, metric, task, milestone, owner,
-  maturity, stage, score, or workflow collection.
-- Open concepts and connections cannot alter execution until the founder explicitly applies an
-  operational role or structural relationship.
-- Teammates and MCP clients can propose architecture changes but cannot apply them or forge founder
-  provenance.
-- No generic executable edge taxonomy. Open relationship labels remain founder language; operational
-  joins live in finite role fields and evidence annotations.
-- No substantive bet schema: the technical envelope may require identity, venture scope, an initial
-  open-text direction seed, and addressability/lineage references; it may not require a hypothesis,
-  kind, domain taxonomy, or stage field.
-- No attached-work taxonomy: durable work may require identity, attribution, and provenance so it can
-  be targeted and joined; it may not require a work kind, stage, template, or host-owned progression.
-  Lineage may be inferred only when one origin is possible; chronology is never provenance.
-- No status enum: a bet's position is derivable from the loop (live / at wall / ended), never a
-  stored lifecycle machine.
-- No imposed org chart: no host-required role, seniority, hierarchy, or manager fields. User-defined
-  open relationships may live in the single firm configuration and project through the lens.
-- No numbers in the market's mouth: no sentiment scores or aggregate metrics on founder surfaces.
-- One dial: ambient behavior configured by at most one founder setting plus one spend rail.
-- No stored campaign/motion health or status, no durable release duplicate, and no causal outcome
-  claim without an explicit evidence basis.
-- Placement deletion loses no semantic architecture, evidence, execution context, or history.
-- Smallness: architecture validation/mutation, projection, and context remain separate bounded
-  services; adding another store or operational role fails the guard until this spec is amended.
+- founder intent is required before every run;
+- the interpretation and autonomy envelope are visible and correctable;
+- multiple agents can work in parallel, remain inspectable/steerable, and cannot expand authority;
+- one ID joins canvas, conversation, exact work, consequence, evidence, and saved views;
+- direct manipulation and ambiguous relationship interpretation are reversible;
+- temporary views dismiss without mutation, live views stay synchronized, and snapshots are immutable;
+- Product/GTM traceability exposes unsupported claims and disconnected evidence;
+- product apply, deploy, send, spend, and destructive effects fail closed without exact founder authority;
+- transport failure remains visible and retryable rather than being recorded as success;
+- restart, export/import, and venture switching preserve isolation and never expose stale venture truth;
+- keyboard, reduced-motion, dense, empty, loading, partial, stale, offline, overflow, and 200% zoom states
+  remain usable;
+- repository architecture checks, unit tests, browser journeys, Electron integration, and the complete
+  acceptance suite pass without suppression.
 
 ## Evidence that would change the direction
 
-Reconsider this direction if: the founder cannot trust work they did not watch being made (the 24/7
-inward loop produces piles the founder will not review); divergence-below-the-fold still overwhelms
-at real volume; the atlas requires manual grooming to stay legible; open architecture becomes hidden
-workflow; selecting architecture does not change later work; the canvas becomes a dashboard or page;
-or the one-file venture proves incompatible with a real collaboration need.
-Until observed on a real venture, the default holds:
+Reconsider the implementation, not these founder laws, if the canvas requires constant manual grooming,
+Product/GTM traceability cannot be represented without a closed taxonomy, direct manipulation creates more
+administration than leverage, generated provisional structure overwhelms first value, or the canonical
+model cannot preserve identity and evidence across real venture change. Use returned founder behavior and
+market evidence to revise the mechanism while preserving founder capability, singular truth, and exact
+authority.
 
-> Build the open venture atlas that changes what the firm does next, prove it on the founder's own
-> ventures behind one wall, and keep machinery behind the venture model.
+> **Drover should leave the founder with a more complete mental model, stronger judgment, and greater
+> ability to act than either Claude, Codex, or a static canvas could provide alone.**

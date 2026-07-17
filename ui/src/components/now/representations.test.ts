@@ -52,15 +52,12 @@ describe("projectDirection", () => {
 });
 
 describe("buildRepresentations", () => {
-  it("always offers overview and gates the others on real truth", () => {
+  it("offers ONLY the result body when nothing else has backing truth — no machinery peer view", () => {
     const ctx = project([bet({ id: "b1", intent: "root" })], direction({ id: "f1", betIds: ["b1"] }));
     const ids = buildRepresentations(ctx).map((r) => r.id);
-    // overview always; agent-collaboration honest at rest with one member bet; no diff/preview/siblings.
-    expect(ids).toContain("overview");
-    expect(ids).toContain("agent-collaboration");
-    expect(ids).not.toContain("exact-change");
-    expect(ids).not.toContain("working-result");
-    expect(ids).not.toContain("approach-comparison");
+    // The default result is always present; "Who's working" is NOT a peer view; nothing else is invented.
+    expect(ids).toEqual(["result"]);
+    expect(ids).not.toContain("agent-collaboration");
   });
 
   it("offers exact-change only when a staged diff exists", () => {
@@ -70,30 +67,31 @@ describe("buildRepresentations", () => {
     expect(buildRepresentations(withoutDiff).map((r) => r.id)).not.toContain("exact-change");
   });
 
-  it("offers approach-comparison only with more than one member bet", () => {
+  it("offers approach-comparison only while more than one approach is genuinely active", () => {
     const single = project([bet({ id: "b1", intent: "root" })], direction({ id: "f1", betIds: ["b1"] }));
     expect(buildRepresentations(single).map((r) => r.id)).not.toContain("approach-comparison");
-    const forked = project(
+
+    const twoActive = project(
       [bet({ id: "b1", intent: "root" }), bet({ id: "b2", intent: "sibling", forkedFrom: "b1" })],
       direction({ id: "f1", betIds: ["b1", "b2"] }),
     );
-    expect(buildRepresentations(forked).map((r) => r.id)).toContain("approach-comparison");
-  });
+    expect(buildRepresentations(twoActive).map((r) => r.id)).toContain("approach-comparison");
 
-  it("offers agent-collaboration when a live drive exists", () => {
-    const drive: FirmActiveDrive = { id: "d1", ventureId: "v1", teammateRef: "t1", betId: "b1", runtime: "codex", startedAt: "2026-01-01T00:00:00Z", abortSupported: true, abortRequestedAt: null };
-    const ctx = project([bet({ id: "b1", intent: "root" })], direction({ id: "f1", betIds: ["b1"], activeDriveIds: ["d1"] }), [drive]);
-    expect(ctx.drives).toHaveLength(1);
-    expect(buildRepresentations(ctx).map((r) => r.id)).toContain("agent-collaboration");
+    // A second attempt that has ended is history, not an active approach — no comparison view.
+    const oneEnded = project(
+      [bet({ id: "b1", intent: "root" }), bet({ id: "b2", intent: "sibling", forkedFrom: "b1", endedAt: "2026-01-02T00:00:00Z" })],
+      direction({ id: "f1", betIds: ["b1", "b2"] }),
+    );
+    expect(buildRepresentations(oneEnded).map((r) => r.id)).not.toContain("approach-comparison");
   });
 });
 
 describe("getRepresentation", () => {
-  it("falls back to overview (the first entry) for an unknown or removed id", () => {
+  it("falls back to result (the first entry) for an unknown or removed id", () => {
     const ctx = project([bet({ id: "b1", intent: "root" })], direction({ id: "f1", betIds: ["b1"] }));
     const list = buildRepresentations(ctx);
-    expect(getRepresentation(list, "missing-id").id).toBe("overview");
-    expect(getRepresentation(list, null).id).toBe("overview");
-    expect(getRepresentation(list, "overview").id).toBe("overview");
+    expect(getRepresentation(list, "missing-id").id).toBe("result");
+    expect(getRepresentation(list, null).id).toBe("result");
+    expect(getRepresentation(list, "result").id).toBe("result");
   });
 });

@@ -1,10 +1,11 @@
 // The rail — the whole permanent navigation, and an index of continuing founder directions rather
 // than a menu of product modules. A compact venture switcher, one strong New direction action, a
 // restrained Needs-you count, universal search, then the founder's recent and active directions with
-// quiet state markers. Automations is a secondary utility at the foot. No Now / Map / Product / Work
-// doors — everything reachable is a direction or a disclosure inside one.
+// quiet state markers. No Now / Map / Product / Work doors — everything reachable is a direction or a
+// disclosure inside one. (Automations is not shown until it actually works — an unavailable capability
+// does not earn permanent navigation.)
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronsUpDown, Plus, Search, Zap } from "lucide-react";
+import { Bell, ChevronsUpDown, Plus, Search } from "lucide-react";
 import type { FirmVenture } from "@/api";
 import { relativeAge, type Direction, type DirectionSection } from "./directionModel";
 
@@ -16,14 +17,12 @@ export function NowRail({
   needsYou,
   search,
   needsOnly,
-  automationsOpen,
   now,
   onSearch,
   onToggleNeeds,
   onNewDirection,
   onSelectDirection,
   onSwitchVenture,
-  onOpenAutomations,
 }: {
   venture: FirmVenture;
   ventures: FirmVenture[];
@@ -32,14 +31,12 @@ export function NowRail({
   needsYou: number;
   search: string;
   needsOnly: boolean;
-  automationsOpen: boolean;
   now: number;
   onSearch: (value: string) => void;
   onToggleNeeds: () => void;
   onNewDirection: () => void;
   onSelectDirection: (direction: Direction) => void;
   onSwitchVenture: (venture: FirmVenture) => void;
-  onOpenAutomations: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const ventureRef = useRef<HTMLDivElement | null>(null);
@@ -150,12 +147,6 @@ export function NowRail({
             </div>
           ))
         )}
-      </div>
-
-      <div className="now-rail-foot">
-        <button type="button" className="now-rail-auto" aria-current={automationsOpen} onClick={onOpenAutomations}>
-          <Zap aria-hidden="true" /> Automations
-        </button>
       </div>
     </nav>
   );

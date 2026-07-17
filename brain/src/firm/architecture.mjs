@@ -3,7 +3,12 @@
 // own authorities. This module validates and mutates semantic truth only.
 
 import crypto from "node:crypto";
-import { getVentureDoc, listVentureDocs, now, venturePersistence } from "./venture-store.mjs";
+import { listVentureDocs, now } from "./venture-store.mjs";
+import {
+  projectArchitectureCompatibility,
+  replaceArchitectureCompatibility,
+} from "./semantic-model.mjs";
+import { getSemanticModelState, writeSemanticModelState } from "./semantic-model-store.mjs";
 
 export const ARCHITECTURE_KEY = "atlas";
 export const ARCHITECTURE_SCHEMA_VERSION = 1;
@@ -66,14 +71,16 @@ export function emptyArchitecture(ventureId, intent = null) {
 }
 
 export function getArchitectureState(ventureId, options = {}) {
-  const stored = getVentureDoc(ventureId, "architecture", ARCHITECTURE_KEY, options);
-  if (!stored) return { current: emptyArchitecture(ventureId), revisions: [], proposals: [], storageRevision: 0, storageRevisionPresent: true };
+  const semanticState = getSemanticModelState(ventureId, options);
+  const compatibility = projectArchitectureCompatibility(semanticState.model);
   const state = {
-    current: stored.current ?? emptyArchitecture(ventureId),
-    revisions: list(stored.revisions),
-    proposals: list(stored.proposals),
-    storageRevision: Number.isInteger(stored.revision) ? stored.revision : (stored.current?.revision ?? 0),
-    storageRevisionPresent: Number.isInteger(stored.revision),
+    current: compatibility.current,
+    revisions: compatibility.revisions,
+    proposals: compatibility.proposals,
+    storageRevision: semanticState.storageRevision,
+    storageRevisionPresent: semanticState.storageRevisionPresent,
+    semanticModel: semanticState.model,
+    sourceFormat: semanticState.sourceFormat,
   };
   validateArchitecture(state.current, { ventureId, options });
   return structuredClone(state);
@@ -84,9 +91,25 @@ export function getArchitecture(ventureId, options = {}) {
 }
 
 function writeArchitectureState(ventureId, state, stored, options) {
-  const provider = venturePersistence(options, ventureId);
-  if (!state.storageRevisionPresent) return provider.set("architecture", ARCHITECTURE_KEY, stored);
-  return provider.compareAndSet("architecture", ARCHITECTURE_KEY, state.storageRevision, stored);
+  const model = replaceArchitectureCompatibility(state.semanticModel, stored, {
+    revision: stored.revision,
+    updatedAt: stored.current.updatedAt,
+    updatedBy: stored.current.updatedBy,
+  });
+  return writeSemanticModelState(ventureId, {
+    model: state.semanticModel,
+    storageRevision: state.storageRevision,
+    storageRevisionPresent: state.storageRevisionPresent,
+  }, model, options);
+}
+
+export function writeArchitectureCompatibilityState(ventureId, state, value, options = {}) {
+  return writeArchitectureState(ventureId, state, {
+    current: value.current,
+    revisions: list(value.revisions),
+    proposals: list(value.proposals),
+    revision: state.storageRevision + 1,
+  }, options);
 }
 
 function architectureRefId(ref) {

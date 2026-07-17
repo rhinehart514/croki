@@ -8,6 +8,7 @@ import { CampaignPressure } from "./CampaignPressure";
 import { MotionRoute } from "./MotionRoute";
 import { useAtlasDensity, type AtlasDensity } from "./atlasDensity";
 import { ATLAS_EASE, ATLAS_MOTION } from "./atlasMotion";
+import { EpistemicToken } from "./EpistemicToken";
 import type { AtlasNode } from "./atlasTypes";
 
 const ROLE_LABELS = {
@@ -80,11 +81,15 @@ function ArchitectureElementView({ data, id, selected }: NodeProps<AtlasNode>) {
       data-active={data.active ? "true" : "false"}
       data-at-wall={data.atWall ? "true" : "false"}
       data-provisional={data.provisional ? "true" : "false"}
+      data-epi-state={data.epistemic ?? "empty"}
       data-arrival-receipt={data.arrivalReceiptId}
       initial={arrivesFromReceipt ? { opacity: 0, x: arrival, scale: 0.98 } : false}
       animate={{ opacity: 1, x: 0, scale: 1 }}
       transition={{ duration: arrivesFromReceipt ? ATLAS_MOTION.settle : 0, ease: ATLAS_EASE }}
     >
+      {/* The reserved epistemic corner slot (Law 11) — ALWAYS rendered, hollow when unfilled, at a fixed
+          corner across every archetype and band; only its disclosure grows with the band. */}
+      <EpistemicToken state={data.epistemic ?? null} />
       {canConnect ? <Handle className="atlas-relationship-handle" type="target" position={Position.Left} /> : null}
       <button
         type="button"

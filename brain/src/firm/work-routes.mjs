@@ -1,9 +1,12 @@
 // work-routes.mjs — the firm's inward-work HTTP surface (thin; venture-scoped; fails closed).
 //
 // GET the passive venture conversation, or POST one drive of driveTeammate (F2's work-loop.mjs) — the
-// only route in the firm core that starts or resumes a teammate. An agent-stamped drive remains an
-// allowed inward act; an unstamped request must carry desktop founder authority before its direction
-// can be attributed to the founder. Either kind of drive can only stage local work
+// only route in the firm core that starts or resumes a teammate. An unstamped request must carry
+// desktop founder authority before its direction can be attributed to the founder. An agent-stamped
+// drive remains an allowed inward act, but ONLY to continue or steer existing founder-authorized work:
+// it must target an existing bet (betId to resume, branchFrom to diverge from a named parent). An
+// agent-stamped drive that carries only a fresh goal — no betId, no branch target — is refused, because
+// nothing may begin without founder direction (FIRM-SPEC rail #1). Either kind of drive can only stage local work
 // (fork bets, stage drafts/evidence) and, for anything that would touch the world, park at the wall
 // (F3) — it can never release, decide, kill, or set heat. That is the wall's own construction (this
 // route adds no capability of its own), so it is safe for the MCP agent door (mcp-tools.mjs) to reach
@@ -97,6 +100,27 @@ export default async function handle({ req, res, url, deps = {} }) {
     const initiatedByAgent = String(req.headers?.["x-gtm-actor"] ?? "").trim().toLowerCase() === "agent";
     if (!initiatedByAgent) authorizeFounderWriteForRequest(req, "Giving the firm direction");
     const body = await readBody(req);
+    // The agent/MCP door may CONTINUE or steer existing founder-authored work, but it may never
+    // INITIATE fresh work with no founder lineage (FIRM-SPEC rail #1; STATE.md initiation law). A
+    // founder-created bet is the lineage anchor: only a founder can create the first bet (a fresh agent
+    // drive is refused here, and a killed bet only mutates after a founder-only end). So an agent-
+    // stamped drive must target an existing bet — a `betId` to resume, or a `branchFrom`/intent:"branch"
+    // to diverge from a named parent. An agent-stamped drive carrying only a goal (no betId and no
+    // branch target) is a fresh start with no founder direction behind it, and is refused. This is a
+    // pure initiation gate; it adds no outward capability (the wall (F3) still governs everything
+    // outward exactly as before).
+    if (initiatedByAgent) {
+      const agentBetId = trimOrNull(body?.betId);
+      const agentBranchFrom = trimOrNull(body?.branchFrom)
+        ?? (String(body?.intent ?? "").trim().toLowerCase() === "branch" ? trimOrNull(body?.betId) : null);
+      if (!agentBetId && !agentBranchFrom) {
+        const error = new Error(
+          "An agent-initiated drive must continue existing founder-authorized work: pass betId to resume a bet, or branchFrom to diverge from one. Only the founder can start fresh work.",
+        );
+        error.status = 403;
+        throw error;
+      }
+    }
     const configuration = getFirmConfiguration(ventureId);
     const primaryTeammateRef = trimOrNull(body?.teammateRef);
     const targetedTeammateRefs = [...new Set(

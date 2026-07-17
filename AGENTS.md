@@ -12,8 +12,9 @@ blending them. Design explorations remain evidence until an authority file adopt
 - Keep Drover product- and venture-agnostic. A customer or portfolio product may supply examples, but
   it does not redefine Drover.
 - Founder-facing copy uses concrete business language and the founder's own words. Historical names
-  such as `bet`, `fork`, `gtm-ide`, `channel`, and `~/.gtm-ide` remain compatibility seams until an
-  intentional migration; do not promote them into product identity or required vocabulary.
+  such as `bet`, `fork`, `gtm-ide`, the legacy `channel` workflow/storage record, and `~/.gtm-ide`
+  remain compatibility seams until an intentional migration; do not promote them into product identity
+  or required vocabulary. This does not prohibit the ordinary go-to-market role **channel**.
 - Preserve founder-only outward authority, venture isolation, cited product truth, and the founder's
   exclusive right to end active work.
 - The shipped founder product is Electron desktop. The browser build is a development and

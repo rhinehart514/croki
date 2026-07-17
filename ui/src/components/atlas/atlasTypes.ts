@@ -61,6 +61,9 @@ export type AtlasNodeData = Record<string, unknown> & {
   revision?: number;
   intentNamed?: boolean;
   pressure: FirmArchitecturePressure[];
+  // Slice 3: the derived epistemic state for this node's token (deriveEpistemicState), or null when the
+  // node carries no epistemic claim of its own (the slot renders as the reserved hollow placeholder).
+  epistemic?: import("./deriveEpistemicState").EpistemicState | null;
   altitude: AtlasAltitude;
   focusRole: "focus" | "related" | "context";
   selected: boolean;

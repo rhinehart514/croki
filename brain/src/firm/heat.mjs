@@ -1,20 +1,25 @@
-// heat.mjs — the always-on firm (FIRM-SPEC.md firm rail #7: "The firm's heat is one founder dial.
-// How hard the inward loop runs — and what it may spend — is a single founder-owned setting with a
-// spend rail. It never becomes a scheduler config surface.").
+// heat.mjs — the firm's ONE founder dial + ONE spend rail, and a founder-invokable batch tick.
 //
-// ONE dial (heat: off | steady | full) + ONE spend rail (dailySpendUsd), both venture-scoped and
-// founder-writable only. ambient-scheduler.mjs's createTickBudget triad (maxScorerPerTick,
-// dailyProbeCap, motionProbeCadenceMs) does NOT get a second life here as three more knobs — the one
-// HEAT_TICK_SHAPE table below is the only place that triad's shape survives, folded into what each
-// heat word means internally. A caller never sets maxWakesPerTick directly; they set heat.
+// The perpetual firm loop is gone (FIRM-SPEC.md rail #1; STATE.md: "no ambient scheduling, heat-
+// controlled autonomy, automatic activation, or around-the-clock inward work"). Nothing in this file
+// arms a timer, and nothing at server boot calls into it on a schedule. What survives is:
+//   - the founder-writable dial (heat: off | steady | full) + spend rail (dailySpendUsd),
+//   - the durable per-UTC-day spend ledger,
+//   - runHeatTick: a founder-invokable batch pass that, GIVEN an explicit founder invocation, wakes up
+//     to HEAT_TICK_SHAPE[heat].maxWakesPerTick live bets. It is NOT called by any recurring scheduler;
+//     the only way it runs is an explicit founder-invoked path handing it a ventureId. Absent that
+//     invocation, no work begins — there is no ambient starter left.
 //
-// The tick wakes teammates on live bets that have a next inward move — every wake is an ordinary
-// driveTeammate (F2) call, so everything outward still parks at the wall (F3) exactly as a founder-
-// initiated drive would. This file adds no new door past the wall; it only decides WHEN driveTeammate
-// runs unattended. Away changes nothing here: the scheduler never reads presence (FIRM-SPEC.md: "the
-// scheduler never reads presence to decide inward work"; away-safety is the wall's own construction —
-// decide({decision:"release"}) already refuses a release while away, so an away-parked item just
-// waits, same as a founder-initiated drive's parked item would).
+// ONE dial + ONE spend rail, both venture-scoped and founder-writable only. ambient-scheduler.mjs's
+// createTickBudget triad (maxScorerPerTick, dailyProbeCap, motionProbeCadenceMs) does NOT get a second
+// life here as three more knobs — the one HEAT_TICK_SHAPE table below is the only place that triad's
+// shape survives, folded into what each heat word means internally. A caller never sets maxWakesPerTick
+// directly; they set heat.
+//
+// Every wake runHeatTick makes is an ordinary driveTeammate (F2) call, so everything outward still
+// parks at the wall (F3) exactly as a founder-initiated drive would. This file adds no new door past
+// the wall. Away changes nothing here: it never reads presence (FIRM-SPEC.md); away-safety is the
+// wall's own construction — decide({decision:"release"}) already refuses a release while away.
 //
 // The spend rail durably tracks dollars per UTC calendar day (ports ambient-scheduler.mjs's
 // probe-ledger pattern verbatim: read/write through persistence.mjs directly, survives restart, resets
@@ -26,7 +31,6 @@
 import {
   getVentureDoc,
   setVentureDoc,
-  listVentures,
   listVentureDocs,
   openVenture,
 } from "./venture-store.mjs";
@@ -148,12 +152,13 @@ function liveWakeCandidates(ventureId, options) {
 
 // ── The tick ─────────────────────────────────────────────────────────────────────────────────────────
 
-// Runs one tick for one venture: wakes up to HEAT_TICK_SHAPE[heat].maxWakesPerTick live bets (stopping
-// early if the day's spend rail is hit), then always runs the read-only reply poller regardless of
-// heat — a founder with heat off still gets replies read and parked, never anything drafted or spent.
-// `deps.driveTeammate` and `deps.pollReplies` are injectable (fake runtime, fake clock in tests); the
-// live defaults lazily import work-loop.mjs / market.mjs at call time so this module never statically
-// depends on either — same lazy-injection convention F2's stage_outward already uses for wall.mjs.
+// Runs one founder-invoked batch tick for one venture: wakes up to HEAT_TICK_SHAPE[heat].maxWakesPerTick
+// live bets (stopping early if the day's spend rail is hit), then always runs the read-only reply poller
+// regardless of heat — a founder with heat off still gets replies read and parked, never anything drafted
+// or spent. This function only ever runs when an explicit founder-invoked path calls it; nothing arms it
+// on a timer. `deps.driveTeammate` and `deps.pollReplies` are injectable (fake runtime, fake clock in
+// tests); the live defaults lazily import work-loop.mjs / market.mjs at call time so this module never
+// statically depends on either — same lazy-injection convention F2's stage_outward already uses for wall.mjs.
 export async function runHeatTick(ventureId, { nowMs = Date.now(), options = {}, deps = {} } = {}) {
   const settings = getHeatSettings(ventureId, options);
   const shape = HEAT_TICK_SHAPE[settings.heat] ?? HEAT_TICK_SHAPE[DEFAULT_HEAT];
@@ -204,53 +209,9 @@ export async function runHeatTick(ventureId, { nowMs = Date.now(), options = {},
   return { ventureId, heat: settings.heat, woken, polled };
 }
 
-// ── The scheduler ────────────────────────────────────────────────────────────────────────────────────
-
-const DEFAULT_TICK_MS = 5 * 60 * 1000;
-let active = null;
-
-function resolveIntervalMs(options) {
-  if (typeof options.intervalMs === "number") return options.intervalMs;
-  const raw = process.env.GTM_IDE_HEAT_TICK_MS;
-  if (raw !== undefined && raw !== "") {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return DEFAULT_TICK_MS;
-}
-
-function isDisabled(intervalMs) {
-  if (process.env.GTM_IDE_DISABLE_HEAT === "1") return true;
-  return !(intervalMs > 0);
-}
-
-// One unref'd in-process timer across every open venture (mirrors ambient-scheduler.mjs's discipline:
-// never keeps the process alive, a double start is idempotent, the kill switch stops it entirely).
-// `listVentureIds` is injectable so a test can scope a tick run to a fixed set without touching the
-// real venture manifest collection.
-export function startHeatScheduler(options = {}) {
-  const intervalMs = resolveIntervalMs(options);
-  if (isDisabled(intervalMs)) return { stop() {} };
-  if (active) return active;
-
-  const listVentureIds = options.listVentureIds ?? (() => listVentures(options).map((v) => v.id));
-
-  const timer = setInterval(() => {
-    for (const ventureId of listVentureIds()) {
-      Promise.resolve(runHeatTick(ventureId, { options, deps: options.deps })).catch(() => {});
-    }
-  }, intervalMs);
-
-  if (typeof timer.unref === "function") timer.unref();
-
-  const handle = {
-    stop() {
-      if (active === handle) {
-        clearInterval(timer);
-        active = null;
-      }
-    },
-  };
-  active = handle;
-  return handle;
-}
+// No scheduler. The always-on timer (startHeatScheduler / setInterval over every venture) was removed:
+// a perpetual firm loop is exactly what the Product Laws reject (FIRM-SPEC.md rail #1). runHeatTick
+// above remains a founder-invokable batch pass, but nothing in this tree arms it on a timer, and there
+// is no env switch (formerly GTM_IDE_DISABLE_HEAT / GTM_IDE_HEAT_TICK_MS) that can re-enable an ambient
+// loop by default. If a founder-granted always-on authority is ever designed, it must reintroduce an
+// explicit, founder-authorized entry point here — not a boot-time default.

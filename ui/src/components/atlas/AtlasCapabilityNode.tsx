@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { Database, Mail } from "lucide-react";
 import { useAtlasDensity } from "./atlasDensity";
+import { EpistemicToken } from "./EpistemicToken";
 import type { AtlasNode } from "./atlasTypes";
 
 // A capability on the stage — the composite's capability node: a warm instrument the firm can reach
@@ -32,7 +33,10 @@ function AtlasCapabilityNodeView({ data, id, selected }: NodeProps<AtlasNode>) {
       data-density={cardDensity}
       data-selected={isSelected ? "true" : "false"}
       data-focus-role={data.focusRole}
+      data-epi-state={data.epistemic ?? "empty"}
     >
+      {/* Reserved epistemic corner slot (Law 11), hollow — a capability port carries no epistemic claim. */}
+      <EpistemicToken state={data.epistemic ?? null} />
       <button
         type="button"
         className="atlas-capability-button"

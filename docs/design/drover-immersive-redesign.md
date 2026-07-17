@@ -1,12 +1,13 @@
-# Drover — The Immersive Redesign (determined UI/UX change-set)
+# Drover — The Immersive Redesign (historical 2026-07-16 change-set)
 
-**Status: direction, decided 2026-07-16. Supersedes the docked-ADE-triptych shell in `ux-divergence-2026.html` §3
-Move 1 and its component grids in §4.** Builds on `drover-experience-system.md` (same day) and its three converged
-bold moves. This document is the authoritative UI/UX determination for the shell; the venture data model, the six
-nouns, the wall/gate semantics, and the founder-language contract are unchanged and remain governed by
-`FIRM-SPEC.md`, `STATE.md`, and `ux-divergence-2026.html` §5.
+> **Superseded design evidence — 2026-07-17.** The immersive shell, ambient conversation, permanent crew,
+> automatic next-cycle behavior, and founder-never-drags doctrine are rejected. Preserve only edge-to-edge
+> canvas craft, spatial focus, restrained motion, and exact founder-boundary inspection as historical input.
 
-Audience: Opus build agents (build) + Jacob (taste). Written to stand alone.
+**Historical status:** on 2026-07-16 this was the decided shell direction and superseded the docked ADE
+triptych. It was superseded on 2026-07-17 and is no longer authoritative or executable. Root `DESIGN.md` now
+owns UI/UX direction; `docs/FIRM-SPEC.md` owns Product/build physics; `docs/STATE.md` owns current proof. The
+remaining body preserves the original decision and imperative language as historical evidence only.
 
 ---
 

@@ -4,9 +4,10 @@
 // a centred `hero` when no direction is open, and a persistent `dock` anchored to the bottom of the
 // active workspace. Freshness lives at the workspace level, never inside the field.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowUp, Mic, Paperclip, X } from "lucide-react";
+import { ArrowRight, ArrowUp, Mic, Paperclip, X } from "lucide-react";
 import { driveTeammate, type DriveTeammateResult } from "@/api";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
+import { readDriveReceipt, type DriveReceipt } from "./driveReceipt";
 import { useSpeechInput } from "./useSpeechInput";
 
 const EMPTY_SUGGESTIONS = [
@@ -40,8 +41,10 @@ export function NowComposer({
   variant = "hero",
   readOnly = false,
   autoFocus = false,
+  placeholder: placeholderOverride,
   onClearScope,
   onDriven,
+  onOpenResult,
 }: {
   ventureId: string;
   ventureName: string;
@@ -51,13 +54,18 @@ export function NowComposer({
   variant?: "hero" | "dock";
   readOnly?: boolean;
   autoFocus?: boolean;
+  // Optional placeholder override. The default (below) is unchanged, so every existing mount is
+  // byte-identical; the venture canvas passes the spec's "Direct the venture".
+  placeholder?: string;
   onClearScope?: () => void;
   onDriven?: (result: DriveTeammateResult) => void;
+  // When provided (the home composer), the receipt offers a way into the direction the drive produced.
+  onOpenResult?: (targetBetId: string | null) => void;
 }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<DriveReceipt | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const speech = useSpeechInput((text) => {
@@ -73,17 +81,18 @@ export function NowComposer({
     node.style.height = `${Math.min(node.scrollHeight, window.innerHeight * 0.4)}px`;
   }, [draft]);
 
-  const placeholder = scopeLabel
-    ? `Steer this direction — try another angle, send it, refine…`
-    : `What should Drover accomplish for ${ventureName}?`;
+  const placeholder = placeholderOverride
+    ?? (scopeLabel
+      ? `Steer this direction — try another angle, send it, refine…`
+      : `What should Drover accomplish for ${ventureName}?`);
 
   const submit = async (value: string) => {
     const goal = value.trim();
     if (!goal || busy || readOnly) return;
-    setBusy(true); setError(null); setResult(null); setDraft("");
+    setBusy(true); setError(null); setReceipt(null); setDraft("");
     try {
       const response = await driveTeammate(ventureId, scopedBody(goal, selection));
-      setResult("Work started — it will appear as it forms.");
+      setReceipt(readDriveReceipt(response));
       onDriven?.(response);
     } catch (cause) {
       setDraft(goal);
@@ -118,7 +127,7 @@ export function NowComposer({
             ref={textareaRef}
             rows={1}
             value={draft}
-            onChange={(event) => { setDraft(event.target.value); setError(null); setResult(null); }}
+            onChange={(event) => { setDraft(event.target.value); setError(null); setReceipt(null); }}
             onKeyDown={onKeyDown}
             placeholder={placeholder}
             aria-label="Say what you want for this venture"
@@ -165,9 +174,23 @@ export function NowComposer({
       <div className="now-composer-feedback" aria-live="polite">
         {speech.recording ? <span role="status">Listening…</span> : null}
         {busy ? <span role="status">Starting work…</span> : null}
-        {result ? <span role="status">{result}</span> : null}
         {error ? <span role="alert">{error}</span> : null}
       </div>
+
+      {receipt ? (
+        <div className="now-drive-receipt" data-waiting={receipt.waiting ? "true" : "false"} role="status">
+          <div className="now-drive-receipt-body">
+            <span className="now-drive-receipt-headline">{receipt.headline}</span>
+            {receipt.detail ? <span className="now-drive-receipt-detail">{receipt.detail}</span> : null}
+          </div>
+          {onOpenResult && receipt.targetBetId ? (
+            <button type="button" className="now-drive-receipt-open" onClick={() => onOpenResult(receipt.targetBetId)}>
+              {receipt.waiting ? "Make the decision" : "Open this direction"}
+              <ArrowRight aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

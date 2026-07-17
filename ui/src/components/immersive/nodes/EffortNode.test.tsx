@@ -16,6 +16,7 @@ vi.mock("@xyflow/react", () => ({
 }));
 
 import { EffortNode } from "./EffortNode";
+import { SemanticBandProvider } from "@/components/atlas/SemanticBandProvider";
 import type { AtlasNode } from "@/components/atlas/atlasTypes";
 
 function makeData(): AtlasNode["data"] {
@@ -47,7 +48,13 @@ function makeData(): AtlasNode["data"] {
 function renderAt(bandZoom: number) {
   zoom = bandZoom;
   const props = { id: "bet:b1", data: makeData() } as unknown as ComponentProps<typeof EffortNode>;
-  const { container } = render(<EffortNode {...props} />);
+  // The band now comes from the shared SemanticBandProvider (reading the mocked store zoom), not a raw
+  // transform read in the node — so the node is rendered under the provider, exactly as on the surface.
+  const { container } = render(
+    <SemanticBandProvider>
+      <EffortNode {...props} />
+    </SemanticBandProvider>,
+  );
   return container.querySelector(".iw-node") as HTMLElement;
 }
 

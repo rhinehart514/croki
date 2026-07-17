@@ -1,15 +1,19 @@
 # ADE Hybrid Routing — direction decision (2026-07-16)
 
-Founder-selected navigation architecture for the Drover ADE. Supersedes the flat radial "effort cloud"
-that projected every semantic role (product loop, system, motion, campaign, outcome) into one
-undifferentiated field. Decision reached by building both candidate worlds as a clickable prototype on
-real Buffalo data and letting the founder feel them.
+> **Superseded decision evidence — 2026-07-17.** Routed workspaces, direction/Now primacy, and relationship-map
+> demotion are rejected. The surviving decisions are one persistent conversation, one swapping precision
+> workbench, exact founder consequences, keyboard-first routing, and shared-record projections. Current
+> authority is `docs/FIRM-SPEC.md` plus root `DESIGN.md`.
 
-Prototype (source of visual + interaction truth for the build):
+Historical founder-selected navigation exploration from 2026-07-16. It compared a routed workspace with
+a dense relationship world using a clickable prototype on Buffalo fixture data. The decision was
+superseded on 2026-07-17.
+
+Prototype (historical visual and interaction evidence only; not build authority):
 `scratchpad/drover-routing.html` → artifact `c4b58bd8-22d0-4fb4-b3a6-e37ba8fe1879`. Built in Drover's
 own token system (`ui/src/index.css`), so it is a faithful preview, not a separate identity.
 
-## The decision
+## The superseded 2026-07-16 decision
 
 **Hybrid.** Two altitudes of one product: *route to operate, orbit to understand.*
 
@@ -225,7 +229,7 @@ powers that motion, which runs this campaign, which returned this evidence, now 
 which no dashboard or list can show. Dense and alive so it feels like commanding a real machine;
 hover-focus + a simple intent model keep it legible.
 
-## Build sequencing (proposed)
+## Historical build sequencing — do not execute
 
 1. **Shell + routing** — introduce the workspace spine + route state (extend the existing state-based
    nav; no URL router needed) with the inspector and console rail intact. Atlas route renders today's

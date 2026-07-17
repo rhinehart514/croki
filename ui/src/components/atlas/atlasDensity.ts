@@ -1,30 +1,27 @@
-import { useStore } from "@xyflow/react";
+import { useSemanticBand } from "./semanticBandContext";
+import { rawBandForZoom, type SemanticBand } from "./semanticBand";
 
-// Zoom-responsive card density (contract §3): card detail responds to the canvas zoom *continuously*,
-// on the existing render seam — there are no named-altitude modes and no switcher. As the founder zooms
-// out, cards simplify to title + glyph (editorial); as they zoom in, body then footer re-detail
-// (standard → detailed). This is a pure rendering function of zoom, not a navigable state the founder
-// sets. The density-tier thresholds mirror the coarse `altitudeForZoom` seam in useAtlasCamera so the
-// two agree, but density reads the *live* React Flow transform (useStore) rather than the settled
-// altitude, so cards re-detail while the wheel is still turning instead of snapping only when the
-// gesture ends.
+// Card density tier (contract §3), now DERIVED from the one shared semantic band rather than a second
+// raw-transform read — so the density a card renders and the altimeter word can never disagree at a
+// boundary, and hysteresis applies once (in the provider) instead of per selector. editorial: title/glyph
+// only; standard: + body/draft/footer; detailed: everything. STRUCTURE → editorial, RELATIONSHIPS →
+// standard, COMPONENTS/ARTIFACTS → detailed.
 
 export type AtlasDensity = "editorial" | "standard" | "detailed";
 
-// Continuous zoom → three revealed tiers. editorial: title/glyph only (dense, zoomed-out reading).
-// standard: title + summary + draft + footer, the shipping default. detailed: everything, incl. the
-// last-touched line. The bands align with altitudeForZoom (<=0.78 venture, <1.1 architecture, else
-// detail) so the CSS keyed on data-atlas-altitude and the live density never disagree at a boundary.
-export function densityForZoom(zoom: number): AtlasDensity {
-  if (zoom <= 0.78) return "editorial";
-  if (zoom < 1.1) return "standard";
+export function densityForBand(band: SemanticBand): AtlasDensity {
+  if (band === "structure") return "editorial";
+  if (band === "relationships") return "standard";
   return "detailed";
 }
 
-// Live density from the React Flow store. Must be called inside <ReactFlow> (store context). React Flow
-// re-renders the subscriber only when the *selector result* changes, so mapping zoom → tier here means a
-// node re-renders on a tier crossing, not on every sub-pixel wheel delta — continuous response without a
-// render storm.
+// Pure quantizer kept for tests: the raw (no-hysteresis) band → density. The live hook reads the shared
+// provider band so density tracks the same hysteresis-settled state everything else does.
+export function densityForZoom(zoom: number): AtlasDensity {
+  return densityForBand(rawBandForZoom(zoom));
+}
+
+// Live density from the shared SemanticBandProvider. Must run under a mounted provider (inside <ReactFlow>).
 export function useAtlasDensity(): AtlasDensity {
-  return useStore((state) => densityForZoom(state.transform[2]));
+  return densityForBand(useSemanticBand());
 }

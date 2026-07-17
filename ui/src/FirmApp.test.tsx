@@ -101,12 +101,23 @@ vi.mock("@/components/now/NowShell", () => ({
   ),
 }));
 
+// The unified venture canvas (Phase 4/5 Slice 1) is flag-gated behind ?shell=canvas. Stub it so this
+// test proves only FirmApp's routing responsibility — open a venture with the flag → mount the canvas —
+// without dragging in ReactFlow.
+vi.mock("@/components/canvas/VentureCanvasShell", () => ({
+  VentureCanvasShell: ({ venture }: { venture: { id: string; name: string } }) => (
+    <div data-testid="venture-canvas-stub" data-venture={venture.id} data-venture-name={venture.name} />
+  ),
+}));
+
 import FirmApp from "./FirmApp";
 
-// The cutover routes on ?shell — default is immersive, ?shell=legacy is the retained escape hatch.
-// FirmApp reads window.location.search at render, so tests set it before rendering.
-function setShell(shell: "immersive" | "legacy") {
-  window.history.replaceState({}, "", shell === "legacy" ? "/?shell=legacy" : "/");
+// The cutover routes on ?shell — default is Now, ?shell=legacy is the retained escape hatch,
+// ?shell=canvas is the flag-gated venture canvas. FirmApp reads window.location.search at render, so
+// tests set it before rendering.
+function setShell(shell: "immersive" | "legacy" | "canvas") {
+  const search = shell === "legacy" ? "/?shell=legacy" : shell === "canvas" ? "/?shell=canvas" : "/";
+  window.history.replaceState({}, "", search);
 }
 
 const fixtureLens: FirmLensPayload = {
@@ -222,6 +233,20 @@ describe("FirmApp", () => {
     await screen.findByTestId("firm-lens-stub");
     expect(screen.queryByTestId("immersive-shell-stub")).toBeNull();
     expect(screen.getByRole("complementary", { name: /firm conversation/i })).toBeTruthy();
+  });
+
+  it("mounts the venture canvas behind ?shell=canvas and leaves the Now default untouched", async () => {
+    setShell("canvas");
+    listVentures.mockResolvedValue({
+      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
+    });
+    render(<FirmApp />);
+    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
+
+    // The flag mounts the canvas with the venture, keyed for isolation; the Now default does not render.
+    expect(await screen.findByTestId("venture-canvas-stub")).toHaveAttribute("data-venture", "v1");
+    expect(screen.queryByTestId("now-shell-stub")).toBeNull();
+    expect(screen.queryByTestId("immersive-shell-stub")).toBeNull();
   });
 
   it("opens a portfolio wall item in its owning venture and canonical bet context", async () => {

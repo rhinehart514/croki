@@ -135,6 +135,10 @@ export type FirmArchitectureElement = {
   name: string;
   statement?: string | null;
   provenance?: FirmArchitectureProvenance;
+  // Additive optional facet the brain bridge now supplies (architecture-projection.mjs): the real
+  // product/gtm territory of this object, or null when unset. Invisible before Slice 3; read by the
+  // epistemic derivation's traceability alignment. Never written back onto a record.
+  territory?: "product" | "gtm" | null;
   actor?: string | null;
   entry?: string | null;
   value?: string | null;
@@ -243,6 +247,30 @@ export type FirmArchitectureProjection = {
     [key: string]: unknown;
   };
   workingTheory?: FirmWorkingTheory | null;
+  // Additive venture-level cross-boundary traceability the brain bridge now supplies verbatim
+  // (venture-traceability.mjs deriveVentureTraceability). The gap list is LAW: the UI epistemic table
+  // consumes these gaps for the Unsupported state rather than re-deriving it, so a tentative
+  // connection WITH resolved evidence never wrongly reads unsupported. Gaps live INSIDE traceability,
+  // never as a top-level projection.gaps.
+  traceability?: FirmVentureTraceability | null;
+};
+
+export type FirmTraceabilityGap =
+  | { kind: "unsupported-claim"; objectRef: string; type: string | null; territory: "product" | "gtm" | null; statement?: string | null; reason: string }
+  | { kind: "unsupported-link"; relationshipId: string; fromRef: string; toRef: string; pair: string | null; reason: string }
+  | { kind: "unexpressed-capability"; objectRef: string; type: string | null; statement?: string | null; reason: string }
+  | { kind: "disconnected-evidence"; evidenceRef: string; state?: string; reason: string };
+
+export type FirmVentureTraceability = {
+  traceLinks: unknown[];
+  relationshipLinks: unknown[];
+  insightLinks: unknown[];
+  gaps: FirmTraceabilityGap[];
+  gapsByKind: {
+    unsupportedClaims: FirmTraceabilityGap[];
+    unexpressedCapabilities: FirmTraceabilityGap[];
+    disconnectedEvidence: FirmTraceabilityGap[];
+  };
 };
 
 export type FirmWorkingTheorySubject = {

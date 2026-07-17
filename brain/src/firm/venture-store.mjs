@@ -97,17 +97,19 @@ function normalizeManifest(input = {}) {
   };
 }
 
-// Create a venture: writes its manifest at the product home, seeds the founding crew, and returns the
-// manifest. The venture's own subdirectory is created lazily on first document write (persistence.mjs's
-// atomic write already mkdir -p's the collection directory).
+// Create a venture: writes its manifest at the product home and returns the manifest. The venture's own
+// subdirectory is created lazily on first document write (persistence.mjs's atomic write already mkdir -p's
+// the collection directory).
 //
-// By default the venture opens with the firm's four named teammates already present (ADE build contract
-// Phase 8, Reading A): a new venture is seeded from the firm-level templates so Yara/Mira/Soren/Kai are the
-// SAME CHARACTERS everywhere, each born carrying its template's graduated lens while its own work stays
-// strictly venture-scoped (rail 6 holds — no venture's data crosses). Pass `{ seedFoundingCrew: false }` to
-// skip seeding when a test exercises the low-level primitives in isolation (crew.summon, the empty-start
-// work-loop first-participant path, the transfer round-trip); the real venture-create route leaves the
-// default on and gets the four.
+// The product venture-create route (lens-routes.mjs) passes `{ seedFoundingCrew: false }`: a new founder
+// venture must not silently imply a pre-existing crew (Product Law 1). It opens with connected Claude/Codex
+// runtime capability and no persistent specialist; the first founder direction forms the first participant
+// explicitly (ensureInitialFirmParticipant / the work-loop first-participant path).
+//
+// The legacy fictional founding crew (Yara/Mira/Soren/Kai as the SAME CHARACTERS across ventures) remains an
+// explicit opt-in seam so existing seeded ventures stay readable and low-level tests can exercise a
+// pre-populated roster. It is NOT the product default. `seedFoundingCrew` defaults to on only for that
+// legacy/test convenience; the shipped product never reaches it.
 export function createVenture(input = {}, options = {}) {
   const manifest = normalizeManifest(input);
   manifestPersistence(options).set(MANIFEST_COLLECTION, safeId(manifest.id), manifest);

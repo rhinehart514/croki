@@ -18,6 +18,7 @@ import {
   useNodesState,
   type ReactFlowInstance,
 } from "@xyflow/react";
+import { SemanticBandProvider } from "@/components/atlas/SemanticBandProvider";
 import { useReducedMotion } from "motion/react";
 import { projectAtlas } from "@/components/atlas/AtlasProjection";
 import { canvasArchetypeScene } from "@/components/atlas/ventureAtlasModel";
@@ -188,7 +189,11 @@ export function VentureWorld(props: {
   return (
     <div className="immersive-world">
       <ReactFlowProvider>
-        <VentureWorldStage {...props} />
+        {/* One shared band state (Slice 2), inside the store and above the nodes, so the world's card
+            anatomies read the same hysteresis-aware band as the altimeter. */}
+        <SemanticBandProvider>
+          <VentureWorldStage {...props} />
+        </SemanticBandProvider>
       </ReactFlowProvider>
     </div>
   );

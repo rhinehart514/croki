@@ -1,14 +1,14 @@
 # Drover — The Product-Experience System
 
-**Owned, decided, single system.** Synthesized 2026-07-16 from three grounded Opus experience-architecture
-ideations (canvas-primary · generative-ideation · intent-console), each read against FIRM-SPEC.md, STATE.md,
-the real `atlasSemanticProjection.ts` / `atlasLayoutEngine.ts` seam, and the agent tool surface. This is the
-authoritative experience system; `ade-hybrid-routing.md` holds the prior decision log it builds on.
+> **Superseded design evidence — 2026-07-17.** This is not current authority. Root `DESIGN.md` now owns the
+> canvas-first workspace, one venture conversation with persistent branches, Product/go-to-market
+> territories, founder-started work, outcome-contract workflows, and complete view semantics. Mine this
+> document only for shared-record projection, provenance, reversible receipts, and no-default-DAG lessons.
 
-The three ideations converged hard and independently on the same rejections and guards (kill the tab spine;
-home is the calm operating picture; divergence runs wide-but-quiet below the fold; build Flow 1 first; ground
-in the real projection). Their *bold moves* are complementary and compose into one system. That convergence,
-not a coin-flip between them, is the decision.
+**Historical status at synthesis (2026-07-16):** this was then treated as the owned experience system,
+built from canvas-primary, generative-ideation, and intent-console explorations. It was superseded on
+2026-07-17. Root `DESIGN.md` is the only current experience authority; the remaining body preserves the
+original reasoning and imperative language as a dated receipt and must not be executed as a build plan.
 
 ---
 

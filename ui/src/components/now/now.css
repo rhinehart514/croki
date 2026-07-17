@@ -170,18 +170,6 @@
 .now-rail-dir[aria-current="true"] .now-rail-dir-title { color: var(--n-ink); }
 .now-rail-dir-age { font-size: var(--text-xs); color: var(--n-ink-4); font-variant-numeric: tabular-nums; }
 
-.now-rail-foot { border-top: 1px solid var(--n-line); padding-top: var(--space-1); margin-top: var(--space-1); }
-.now-rail-auto {
-  display: flex; align-items: center; gap: var(--space-2);
-  width: 100%; padding: var(--space-2);
-  border: none; border-radius: var(--r-tool); background: none;
-  color: var(--n-ink-3); font-size: var(--text-sm); cursor: pointer; text-align: left;
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
-}
-.now-rail-auto svg { width: 15px; height: 15px; color: var(--n-ink-4); flex: none; }
-.now-rail-auto:hover { background: var(--n-hover); color: var(--n-ink); }
-.now-rail-auto[aria-current="true"] { background: var(--n-selected); color: var(--n-ink); }
-
 /* ─────────────────────────────────────────────────────────────────────────
    Main — mutating centre.
    ───────────────────────────────────────────────────────────────────────── */
@@ -304,6 +292,37 @@
 .now-composer-feedback { min-height: 1.1em; padding: 0 var(--space-1); font-size: var(--text-sm); color: var(--n-ink-3); }
 .now-composer-feedback [role="alert"] { color: var(--danger); }
 
+/* The post-submit receipt — a composed confirmation of what the drive made concrete, in place of a status
+   line into a void. Green by default (work landed); amber when a decision now waits on the founder. */
+.now-drive-receipt {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--green-line, var(--n-line-2)); border-radius: var(--r-md);
+  background: var(--green-tint);
+  animation: now-receipt-in var(--dur-med, 240ms) var(--ease) both;
+}
+.now-drive-receipt[data-waiting="true"] {
+  border-color: var(--amber-line); background: var(--amber-soft);
+}
+.now-drive-receipt-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.now-drive-receipt-headline { font-size: var(--text-sm); font-weight: 550; color: var(--n-ink); }
+.now-drive-receipt[data-waiting="true"] .now-drive-receipt-headline { color: var(--amber-ink); }
+.now-drive-receipt-detail { font-size: var(--text-xs); color: var(--n-ink-3); }
+.now-drive-receipt-open {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px var(--space-3); border: none; border-radius: var(--r-tool);
+  background: var(--n-ink); color: var(--n-app); cursor: pointer;
+  font-size: var(--text-xs); font-weight: 550; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease);
+}
+.now-drive-receipt-open svg { width: 13px; height: 13px; }
+.now-drive-receipt-open:hover { background: #000; }
+.now[data-reduced-motion="true"] .now-drive-receipt { animation: none; }
+@keyframes now-receipt-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Compact work rows — home recent + any list. Separators, not cards. Amber marks
    attention as a dot, never a fill.
@@ -380,18 +399,35 @@
 }
 .now-doc-why { font-size: var(--text-md); color: var(--n-ink-2); line-height: var(--leading-normal); }
 
-/* Representation chip strip — a quiet per-direction segmented control (NOT a global tab bar). Reuses the
-   chip grammar; the active chip reads as pressed, toned to the direction's state. */
-.now-reps { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.now-rep-chip {
+/* View control — ONE quiet, contextual control (NOT a persistent tab strip). It names the current body and
+   discloses the alternates on demand; it is rendered only when a real alternate exists. */
+.now-view { position: relative; align-self: flex-start; }
+.now-view-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
   padding: 4px var(--space-3);
   border: 1px solid var(--n-line-2); border-radius: var(--r-tool);
-  background: var(--n-panel); color: var(--n-ink-3);
+  background: var(--n-panel); color: var(--n-ink-2);
   font-size: var(--text-sm); cursor: pointer;
   transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-.now-rep-chip:hover { background: var(--n-hover); border-color: var(--n-ink-4); color: var(--n-ink); }
-.now-rep-chip[aria-pressed="true"] { background: var(--n-sunk); border-color: var(--n-ink-4); color: var(--n-ink); font-weight: 560; }
+.now-view-toggle svg { width: 14px; height: 14px; color: var(--n-ink-4); }
+.now-view-toggle:hover { background: var(--n-hover); border-color: var(--n-ink-4); color: var(--n-ink); }
+.now-view-menu {
+  /* Opens upward: the View control sits low in the scroll area, so a downward menu is clipped by the
+     docked composer. Upward keeps every option on screen. */
+  position: absolute; bottom: calc(100% + 4px); left: 0; z-index: 20;
+  min-width: 200px; padding: var(--space-1);
+  display: flex; flex-direction: column;
+  background: var(--n-panel); border: 1px solid var(--n-line-2); border-radius: var(--r-panel);
+  box-shadow: var(--shadow-pop, 0 8px 24px rgb(0 0 0 / 0.10));
+}
+.now-view-option {
+  padding: 6px var(--space-3); border: none; border-radius: var(--r-tool);
+  background: none; color: var(--n-ink-2); text-align: left;
+  font-size: var(--text-sm); cursor: pointer;
+}
+.now-view-option:hover { background: var(--n-hover); color: var(--n-ink); }
+.now-view-option[aria-checked="true"] { color: var(--n-ink); font-weight: 560; background: var(--n-sunk); }
 
 /* Approach comparison — each sibling attempt as a quiet clickable row, toned by its position. */
 .now-approach {
@@ -406,15 +442,6 @@
 .now-approach-state { font-size: var(--text-xs); color: var(--n-ink-4); white-space: nowrap; }
 .now-approach[data-tone="working"] .now-approach-state { color: var(--green); }
 .now-approach[data-tone="needs-you"] .now-approach-state { color: var(--amber-ink); font-weight: 600; }
-
-/* Agent collaboration — a live drive row: work first (focus button), worker demoted to meta. */
-.now-collab-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) 0; }
-.now-collab-focus {
-  background: none; border: none; padding: 0; cursor: pointer;
-  font-size: var(--text-base); color: var(--n-ink); text-align: left;
-}
-.now-collab-focus:hover:not(:disabled) { color: var(--green); }
-.now-collab-focus:disabled { cursor: default; }
 
 /* generic labelled block */
 .now-detail-block { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -540,23 +567,6 @@
 }
 .now-gate-hint { font-size: var(--text-xs); color: var(--n-ink-3); }
 .now-gate-error { font-size: var(--text-sm); color: var(--danger); }
-
-/* ── Automations (secondary utility) ── */
-.now-panel { max-width: 720px; margin: 0 auto; padding: var(--space-8) var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); }
-.now-panel-title { font-size: var(--text-xl); font-weight: 600; color: var(--n-ink); letter-spacing: var(--tracking-tight); }
-.now-panel-why { font-size: var(--text-base); color: var(--n-ink-2); line-height: var(--leading-normal); }
-.now-automation-card {
-  padding: var(--space-4); border-radius: var(--r-tool);
-  border: 1px dashed var(--n-line-2); background: var(--n-sunk);
-  display: flex; flex-direction: column; gap: 6px;
-}
-.now-automation-tag {
-  align-self: flex-start; padding: 2px 8px; border-radius: 999px;
-  background: var(--n-hover); color: var(--n-ink-3);
-  font-size: var(--text-xs); letter-spacing: 0.04em; text-transform: uppercase;
-}
-.now-automation-when { font-size: var(--text-sm); color: var(--green); font-weight: 550; }
-.now-automation-do { font-size: var(--text-base); color: var(--n-ink); }
 
 /* ─────────────────────────────────────────────────────────────────────────
    Cool the shared review artifacts inside the Now workspace. The diff, changed

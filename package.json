@@ -2,7 +2,7 @@
   "name": "gtm-ide",
   "private": true,
   "version": "0.3.3",
-  "description": "Drover — the operating system for one-person holding companies.",
+  "description": "Drover — the founder-controlled Product and go-to-market system.",
   "author": "Drover",
   "main": "electron/main.cjs",
   "scripts": {

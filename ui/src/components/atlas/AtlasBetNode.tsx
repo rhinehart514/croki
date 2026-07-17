@@ -2,6 +2,7 @@ import { memo, type KeyboardEvent } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { useAtlasDensity } from "./atlasDensity";
+import { EpistemicToken } from "./EpistemicToken";
 import type { AtlasNode } from "./atlasTypes";
 
 // The effort card — the workhorse node. A piece of work the crew is attempting, rendered as a page
@@ -59,7 +60,12 @@ function AtlasBetNodeView({ data, id, selected }: NodeProps<AtlasNode>) {
       data-tone={tone}
       data-density={cardDensity}
       data-expanded={expanded ? "true" : "false"}
+      data-epi-state={data.epistemic ?? "empty"}
     >
+      {/* Reserved epistemic corner slot (Law 11) — a sibling of the effort card button, not inside it,
+          so the editorial tier that quiets the card body can never hide the slot. Hollow when the effort
+          carries no independent epistemic claim yet. */}
+      <EpistemicToken state={data.epistemic ?? null} />
       {/* Hidden, centered handles so the hub spoke and draft edges route to this effort. */}
       <Handle type="target" position={Position.Left} className="atlas-hidden-handle" isConnectable={false} />
       <Handle type="source" position={Position.Right} className="atlas-hidden-handle" isConnectable={false} />

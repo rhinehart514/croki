@@ -59,7 +59,10 @@ export function NowShell({
   const reducedMotion = useReducedMotion();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [automationsOpen, setAutomationsOpen] = useState(false);
+  // A just-driven direction is opened by the bet the drive landed on, resolved during render — the fold that
+  // turns that bet into a direction only settles once the post-drive refresh lands, so this bridges the gap
+  // without an effect. Cleared on any explicit navigation.
+  const [pendingOpenBet, setPendingOpenBet] = useState<string | null>(null);
   const [needsOnly, setNeedsOnly] = useState(false);
   const [search, setSearch] = useState("");
   // A representation selection can narrow the composer's scope to one file or one sibling attempt. This is
@@ -116,16 +119,23 @@ export function NowShell({
     return [...result].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")).slice(0, 6);
   }, [directions, needsOnly, search]);
 
-  // Keep the open direction in sync with fresh data so a decision or steer updates it in place.
-  const openDirection = useMemo(
-    () => (selectedId ? directions.find((direction) => direction.id === selectedId) ?? null : null),
-    [directions, selectedId],
-  );
+  // Keep the open direction in sync with fresh data so a decision or steer updates it in place. An explicit
+  // selection wins; otherwise a pending just-driven bet opens its direction the moment the fold produces it.
+  const openDirection = useMemo(() => {
+    if (selectedId) return directions.find((direction) => direction.id === selectedId) ?? null;
+    if (pendingOpenBet) return directions.find((direction) => direction.betIds.includes(pendingOpenBet)) ?? null;
+    return null;
+  }, [directions, selectedId, pendingOpenBet]);
 
   const onDriven = useCallback(() => { refresh(); reload(); loadWall(); }, [refresh, reload, loadWall]);
-  const newDirection = useCallback(() => { setSelectedId(null); setAutomationsOpen(false); setNeedsOnly(false); setComposerSelection(null); setFocusKey((key) => key + 1); }, []);
-  const selectDirection = useCallback((direction: Direction) => { setSelectedId(direction.id); setAutomationsOpen(false); setComposerSelection(null); }, []);
-  const openAutomations = useCallback(() => { setAutomationsOpen(true); setSelectedId(null); }, []);
+  const newDirection = useCallback(() => { setSelectedId(null); setPendingOpenBet(null); setNeedsOnly(false); setComposerSelection(null); setFocusKey((key) => key + 1); }, []);
+  const selectDirection = useCallback((direction: Direction) => { setSelectedId(direction.id); setPendingOpenBet(null); setComposerSelection(null); }, []);
+  // The home receipt's way into the direction the drive just produced — the bet resolves to its direction in
+  // the openDirection memo above, whether the refresh has landed yet or not.
+  const openDrivenDirection = useCallback((targetBetId: string | null) => {
+    if (!targetBetId) return;
+    setSelectedId(null); setPendingOpenBet(targetBetId); setComposerSelection(null);
+  }, []);
   const stop = useCallback(async (driveId: string) => { await stopActiveDrive(venture.id, driveId).catch(() => undefined); onDriven(); }, [venture.id, onDriven]);
 
   // The composer's scope: a representation pick narrows it (a file or one sibling attempt); otherwise it
@@ -162,35 +172,18 @@ export function NowShell({
         needsYou={needsYou}
         search={search}
         needsOnly={needsOnly}
-        automationsOpen={automationsOpen}
         now={now}
         onSearch={setSearch}
         onToggleNeeds={() => setNeedsOnly((value) => !value)}
         onNewDirection={newDirection}
         onSelectDirection={selectDirection}
         onSwitchVenture={onOpenVenture}
-        onOpenAutomations={openAutomations}
       />
 
       <main className="now-main">
         <NowFreshness connection={connection} now={now} onRetry={refresh} />
 
-        {automationsOpen ? (
-          <div className="now-home">
-            <div className="now-panel">
-              <h1 className="now-panel-title">Automations</h1>
-              <p className="now-panel-why">
-                An automation is a direction with a trigger — the same as anything you ask, plus when to run it.
-                It returns the same proof and stops at the same decisions. This surface is coming next.
-              </p>
-              <div className="now-automation-card" aria-label="Example automation, not yet active">
-                <span className="now-automation-tag">Example · not yet active</span>
-                <span className="now-automation-when">Every weekday morning</span>
-                <span className="now-automation-do">Find the strongest next move for {venture.name} and prepare it for review.</span>
-              </div>
-            </div>
-          </div>
-        ) : openDirection && lens ? (
+        {openDirection && lens ? (
           <div className="now-workspace">
             <div className="now-workspace-scroll">
               <WorkbenchView
@@ -241,6 +234,7 @@ export function NowShell({
                   readOnly={readOnly}
                   autoFocus={focusKey > 0}
                   onDriven={onDriven}
+                  onOpenResult={openDrivenDirection}
                 />
               ) : null}
               {lens ? (

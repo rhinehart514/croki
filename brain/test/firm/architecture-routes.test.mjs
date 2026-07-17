@@ -89,7 +89,7 @@ test("projection response has the stable atlas contract", async () => {
   const response = await call("GET", `/api/ventures/${venture.id}/architecture/projection`);
   assert.equal(response.status, 200);
   assert.deepEqual(Object.keys(response.body.projection).sort(), [
-    "connections", "document", "elements", "evidenceAnnotations", "groups", "joins", "omissions", "outline", "pressure", "revision", "ventureId", "workingTheory",
+    "connections", "document", "elements", "evidenceAnnotations", "groups", "joins", "omissions", "outline", "pressure", "revision", "traceability", "ventureId", "workingTheory",
   ]);
   assert.deepEqual(Object.keys(response.body.projection.joins).sort(), ["bets", "outcomes", "wall", "work"]);
   assert.equal(response.body.projection.document.ventureId, venture.id);

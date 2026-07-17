@@ -14,6 +14,22 @@ import type { AtlasNode } from "./atlasTypes";
 // identity-stable node; we restore it for the identity-churned case. React Flow still re-measures and
 // overwrites `measured` whenever a card's real rendered size actually changes, so this cannot pin a
 // stale size — it only prevents the spurious hidden flash from becoming permanent.
+// Overlay the founder's committed positions onto a freshly-reconciled node array. The venture canvas
+// replaces `nodes` from `foldPlacement(scene, lens.placement.positions)` on every ~1.2s poll; a poll GET
+// that races a drop can return a lens whose placement has not yet absorbed the drop, which would snap the
+// just-dropped card back (Law 6 / feel non-negotiable). Re-applying the founder-moved positions here keeps
+// the founder's hand final until authoritative placement catches up. A node with no founder position is
+// untouched, so a seed node is never rewritten.
+export function applyFounderPositions(
+  nodes: AtlasNode[],
+  founderPositions: Record<string, { x: number; y: number }>,
+): AtlasNode[] {
+  if (!Object.keys(founderPositions).length) return nodes;
+  return nodes.map((node) => (
+    founderPositions[node.id] ? { ...node, position: founderPositions[node.id] } : node
+  ));
+}
+
 export function carryMeasuredDimensions(previous: AtlasNode[], next: AtlasNode[]): AtlasNode[] {
   const measuredById = new Map<string, AtlasNode["measured"]>();
   for (const node of previous) {

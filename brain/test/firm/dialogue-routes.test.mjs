@@ -106,6 +106,18 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.ok(claim, "the claim is visible in the thread before work begins");
   });
 
+  it("records the founder direction exactly once when routing through the real work loop", async () => {
+    const venture = createVenture({ name: "reply new direction once" }, options);
+    const direction = "new idea: pilot the referral partner motion";
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: direction,
+    }, { deps: { workLoopDeps: { client: { messages: { async create() { return { content: [{ type: "text", text: "on it" }] }; } } } } } });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.act, "new-direction");
+    const founderMessages = listConversation(venture.id, options).filter((m) => m.role === "founder" && m.content === direction);
+    assert.equal(founderMessages.length, 1, "the founder direction is not duplicated by the work loop");
+  });
+
   it("fails closed for an unknown venture", async () => {
     const res = await call("POST", "/api/ventures/no-such-venture/conversation/reply", { message: "hi" });
     assert.equal(res.status, 404);

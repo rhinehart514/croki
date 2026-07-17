@@ -1,6 +1,10 @@
-// heat.test.mjs — F7 acceptance: heat on wakes inward work and never releases anything outward; the
-// spend rail durably stops wakes once the day's ledger is crossed; heat off leaves only the read-only
-// reply poller; and the static guard proves exactly one heat setting + one spend rail survive.
+// heat.test.mjs — the founder dial + spend rail, and the founder-invokable batch tick. The perpetual
+// firm loop is GONE (FIRM-SPEC rail #1; STATE.md): heat.mjs no longer arms any timer, exposes no
+// startHeatScheduler, and carries no env switch that could re-enable an ambient loop by default. What
+// this suite proves: a founder-INVOKED runHeatTick wakes inward work and never releases anything
+// outward; the spend rail durably stops wakes once the day's ledger is crossed; heat off leaves only
+// the read-only reply poller; the static guard keeps exactly one heat setting + one spend rail; and the
+// ambient-loop guard proves nothing in heat.mjs can start work on a schedule.
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -239,6 +243,35 @@ describe("heat — static guard: at most one heat setting + one spend rail are f
     const setSignature = stripped.match(/export function setHeatSettings\(\{([^}]*)\}/)?.[1] ?? "";
     const fields = setSignature.split(",").map((s) => s.trim().split(/[:=]/)[0].trim()).filter(Boolean);
     assert.deepEqual(fields.sort(), ["dailySpendUsd", "heat", "ventureId"].sort());
+  });
+});
+
+describe("heat — the perpetual firm loop is gone: no scheduler, no timer, no ambient re-enable", () => {
+  it("heat.mjs exports no scheduler and no ambient-loop entry point", async () => {
+    const mod = await import("../../src/firm/heat.mjs");
+    // The always-on scheduler was removed. Work begins only through an explicit founder-invoked path
+    // (runHeatTick, given a ventureId) — never a boot-time timer over every venture.
+    assert.equal(mod.startHeatScheduler, undefined, "startHeatScheduler must not exist — no ambient loop");
+    assert.equal(mod.stopHeatScheduler, undefined, "no scheduler handle to stop");
+    assert.equal(typeof mod.runHeatTick, "function", "runHeatTick survives as a founder-invokable batch pass");
+  });
+
+  it("heat.mjs arms no timer and carries no env switch that could re-enable an ambient loop by default", () => {
+    const src = fs.readFileSync(path.join(import.meta.dirname, "../../src/firm/heat.mjs"), "utf8");
+    const stripped = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    assert.ok(!/setInterval\s*\(/.test(stripped), "heat.mjs must arm no recurring timer");
+    assert.ok(!stripped.includes("startHeatScheduler"), "no scheduler function survives in source");
+    // The former kill/tick env switches are gone too — a loop that can be turned back on by env is not
+    // structurally off. Their absence proves the default is off with no code path re-enabling it.
+    assert.ok(!stripped.includes("GTM_IDE_DISABLE_HEAT"), "no ambient kill switch env survives");
+    assert.ok(!stripped.includes("GTM_IDE_HEAT_TICK_MS"), "no ambient tick-interval env survives");
+  });
+
+  it("the server boot path arms no ambient loop — startHeatScheduler is neither imported nor called", () => {
+    const src = fs.readFileSync(path.join(import.meta.dirname, "../../src/server.mjs"), "utf8");
+    const stripped = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    assert.ok(!stripped.includes("startHeatScheduler"), "server.mjs must not import or call startHeatScheduler");
+    assert.ok(!stripped.includes("heatScheduler"), "server.mjs holds no ambient scheduler handle");
   });
 });
 

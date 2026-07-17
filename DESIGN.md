@@ -2,384 +2,434 @@
 product: Drover
 surface: desktop-founder-workbench
 stage: alpha
-north_star: "The firm speaks; the canvas proves."
-layout: "full-bleed living venture atlas with resizable and collapsible conversation"
-signature_interaction: immediate-working-theory
+north_star: "The canvas holds the venture. Conversation directs and interrogates it."
+layout: "Cursor-like workspace index and conversation beside a full venture canvas; contextual workbench in place"
+signature_interaction: founder-direction-materializes-a-provisional-venture-model-and-useful-work
 token_source: ui/src/index.css
 system_record: docs/design/DESIGN.md
-research_record: docs/design/frontier-ux-research.md
-verified_viewports:
+target_viewports:
   - 1440x900
   - 1280x800
-last_rebuilt: 2026-07-15
+last_reconciled: 2026-07-17
 ---
 
 # Drover experience doctrine
 
 ## Authority
 
-[`docs/FIRM-SPEC.md`](docs/FIRM-SPEC.md) defines the product physics and
-[`docs/STATE.md`](docs/STATE.md) names what the current tree proves. This file owns the intended
-desktop experience and the design judgments used to get there; it does not convert direction into
-implementation proof.
+[`docs/FIRM-SPEC.md`](docs/FIRM-SPEC.md) defines product and build physics. [`docs/STATE.md`](docs/STATE.md)
+records what the current tree proves. This file owns the intended Electron desktop experience. It does not
+turn aspiration into implementation proof.
 
-[`ui/src/index.css`](ui/src/index.css) is the production token source. The code-extracted system
-record is [`docs/design/DESIGN.md`](docs/design/DESIGN.md). Other files under `docs/design/` are
-research, per-surface proposals, or historical receipts unless they explicitly declare current
-authority.
+[`ui/src/index.css`](ui/src/index.css) is the production token source. [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
+is the extracted current-code design-system record. Other `docs/design/` files are research or historical
+receipts unless this file explicitly adopts them.
 
-## Creative north star: the firm speaks; the canvas proves
+## North star
 
-Drover should feel like returning to a capable firm already in motion. The firm gives the founder a
-short account of what materially changed, what the market said, and which exact acts need their hand.
-The canvas makes every consequential sentence inspectable: who acted, which work it belongs to, what
-evidence formed it, what changed, what authority is held, and what reality returned.
+**Drover makes the full product and go-to-market system visible, understandable, manipulable, and
+executable by one founder.**
 
-Conversation without proof becomes an AI chat wrapper. A canvas without an account becomes a diagram
-the founder must operate. Drover is the join: **the conversation tells; the canvas proves; the founder
-changes the work in place.**
+> **The canvas holds the venture. Conversation directs and interrogates it. Claude and Codex expand what
+> the founder can accomplish.**
 
-The primary product moment is the return, not the prompt. In three seconds after opening a venture,
-the founder should understand:
+Drover is not a dashboard, task manager, chat wrapper, workflow-node builder, agent org chart, or diagram
+that the founder must maintain. It is a durable visual model of the venture, a continuous intelligence
+layer for directing and interrogating it, and a precise workbench for consequential detail.
 
-1. what the venture is trying to make true and how product value happens;
-2. which ways of reaching people are active and which campaigns are underway;
-3. what materially changed while they were away;
-4. what, if anything, needs only them; and
-5. what the world said back.
+The primary return moment answers within ten seconds:
 
-Routine activity stays available by pull. It never earns prominence merely because an agent produced
-it.
+1. What changed while the founder was away?
+2. Which work and agents are active, and where?
+3. What needs the founder's judgment?
+4. What exact artifacts or changes came back?
+5. What crossed into the world?
+6. What evidence returned?
+7. What understanding should change next?
 
-## The frontier claim
+The composer remains continuously available, but after first use it is not the hero. A capable venture
+opens by showing what moved and what it means.
 
-Parallel agents, worktrees, activity logs, review queues, and canvas-native prompting are becoming
-category infrastructure. Drover does not win by showing more agents or more activity. It wins by
-making unattended work compressible without hiding its evidence or blurring authority.
+## Experience principles
 
-Current product research is recorded in
-[`docs/design/frontier-ux-research.md`](docs/design/frontier-ux-research.md). The durable moves are:
+### The canvas is the venture
 
-- Isolated work returns to the object that caused it, with the exact artifact still reviewable.
-- Selection is the supervision language. The founder points at a visible part of the venture,
-  teammate, campaign, sentence, or difference; the same composer inherits that scope.
-- Contribution, ownership, and authority stay visibly separate. A teammate can do the work; only the
-  founder releases or ends it.
-- Configuration, capability, spend, and runtime truth leave attributable, reversible receipts.
-- Direct manipulation remains available while agents work. Cheap local corrections do not require a
-  full regenerate cycle.
-- The canvas remains a continuous infinite spatial world and the primary product surface. Semantic
-  architecture is durable venture truth; placement and camera are presentation only.
+The main surface is the founder's durable visual model of the company. It is not a page containing a
+diagram and not an optional map route.
 
-Reject the converging category machinery: agent grids, issue/status ontologies, per-agent scheduler
-builders, executable workflow nodes, separate review inboxes, dashboards whose main information is
-activity, and pages that merely contain architecture diagrams.
+### Conversation is the intelligence layer
 
-## One surface, five attention states
+Conversation handles ambiguity, reasoning, critique, generation, and direction. It never becomes the only
+place where important Product or go-to-market understanding exists.
 
-These are arrangements of one surface, not routes or product modes.
+> **Chat carries intent. The canvas carries consequence.**
 
-### Return
+### Stable orientation, adaptive depth
 
-With no selection, the conversation opens on a terse account derived from durable venture records.
-It foregrounds new evidence, returned reality, held outward acts, and prior founder judgments that
-changed current work. Each sentence can focus its proof on the canvas.
+The founder always knows where they are. Complexity appears through semantic zoom, selection, generated
+lenses, and summoned workbenches, not permanent clutter or false simplicity.
 
-The account must expose an omission boundary such as **Show the wider firm**. It may prioritize; it
-may not imply completeness. A generated summary with no navigable receipts is not a return state.
+### Direct control remains available
 
-### Work focus
+The founder can manipulate the venture directly. Claude and Codex resolve ambiguity; they do not confiscate
+control behind prompts and regeneration.
 
-Concrete work is the bounded focus context; an exact durable workpiece is the local focus unit.
-Selecting either keeps it in place, pulls its necessary context near, and scopes the same
-conversation and composer. Work expands as a territory containing independently targetable,
-open-shaped artifacts and evidence, never as one mega-card or a host-owned stage board. At useful
-reading distance the founder can see:
+### Progress means the venture changed
 
-- why the work exists and what earlier approach produced it;
-- the evidence and firm revision that formed the work;
-- staged artifacts and the exact difference under consideration;
-- decisions already made and the authority still held;
-- joined outcomes, zero results, or the explicit absence of a return;
-- what the teammate proposes to change or try next.
+Agent busyness is not progress. Progress is improved understanding, a formed artifact, changed
+implementation, a discovered contradiction, returned evidence, a founder decision, or a revised Product or
+go-to-market model.
 
-Evidence, artifact, decision, and return stay connected inside the territory and to exact durable
-work; they do not become four inspector tabs. The founder can challenge evidence, refine prepared
-work, ask for another approach, answer, release, or end from this context through purpose-correct controls.
+## The one desktop frame
 
-### Teammate focus
+Drover ships one Electron founder workspace.
 
-A teammate is an attribution lens, not a fake linear story. Selecting one reveals the work and
-contributions attributable to that teammate, their current capability boundary, and the outcomes
-that informed their judgment. It does not invent one causal chain across simultaneous work.
+### Workspace index
 
-Persistent illustrated identity matters because the firm persists. `CrewFace` is the only portrait
-door. Initials remain a render-failure fallback.
+A compact left side organizes attention through:
 
-### Wall focus
+- the venture conversation;
+- persistent scoped branches;
+- saved live views;
+- snapshots;
+- active directions and recent runs;
+- decisions requiring the founder.
 
-The wall is the visible boundary around world-touching authority. Accumulated attention may be
-ordered for review, but it must not turn Drover into a queue product.
+It is a chronological and operational index, not another venture navigation tree. It may compress and
+filter attention; it never duplicates the canvas model.
 
-Every item states the exact effect, destination or recipient, evidence, consequence, and reason the
-founder is needed. Release, answer, review, deploy authorization, keep, and end remain distinct verbs.
-A clear wall stays quiet and compact; it does not command modal elevation or replace the composer.
+### Conversation
 
-### Broad canvas
+Each venture has one continuous top-level conversation. A product surface, capability, system, audience,
+campaign, artifact, direction, evidence item, or saved view may have a persistent scoped branch. Branches
+inherit venture context without fragmenting the venture into separate workspaces.
 
-The founder can always pan, arrange, compare, and pull the wider firm near. Manual placement is
-durable. Generated return or focus arrangements are temporary and must never become a second store.
-The outline remains the deterministic keyboard and scale fallback.
+Conversation is a resizable working surface. It may collapse for spatial work and must restore selection,
+draft, branch, scope, and scroll position. Important founder turns, model interpretations, consequential
+returns, decisions, and evidence remain visible; raw work logs live behind disclosure.
 
-The living atlas is composed but never locked. The founder can type anywhere, arrange open concepts,
-name a meaningful area, drag a tentative relationship, move stable landmarks, and zoom continuously.
-No type chooser interrupts ordinary expression. When an edit would gain operational meaning, Drover
-names the consequence and preserves the founder action as an undoable architecture revision.
+### Main canvas
 
-## Immediate working theory: the signature interaction
+The canvas owns the remaining room and remains present through selection and review. The founder may pan,
+zoom, select, arrange, group, create, connect, compare, and return to a stable camera. The canvas projects
+one canonical venture model and live consequential work; it never owns a second business-truth store.
 
-A broad sentence such as **Help this venture grow** immediately composes a complete, editable
-working theory on the canvas and starts useful inward work. The first frame makes visible who may
-benefit, how value happens, several concrete ways to reach people, the first campaigns worth trying,
-and the product or market work already underway. The canvas does not wait behind an architecture
-approval overlay and does not materialize empty containers to simulate completeness.
+### Contextual workbench
 
-The theory is unmistakably provisional. Tentative relationships have a distinct visual grammar,
-every grouping is anchored to concrete work or evidence, and the founder can revise it in ordinary
-language. Continued work may strengthen, split, or weaken the theory; only founder action makes
-structure durable or sends, publishes, deploys, or spends.
+Deep artifacts open in a temporary, resizable workbench: code, diffs, previews, campaign assets, research,
+telemetry, positioning, comparisons, workflows, and exact founder consequences. The workbench preserves the
+canvas, selection, conversation branch, composer scope, and surrounding relationships.
 
-Clicking a consequential sentence or selecting any visible element or workpiece creates a temporary
-evidence-backed scene. The selected landmark stays spatially anchored while the relevant path from
-customer and product value through concrete work, founder decisions, and returned evidence expands
-in place. Unrelated breadth recedes, but context is never hidden merely to make a cleaner picture.
-Escape restores the previous camera and selection.
+> **The canvas supplies meaning. The workbench supplies precision.**
 
-The canvas changes by meaning, not by uniform scale:
+### Contextual founder gate
 
-- **Venture:** intent, a silhouette of how value happens, reusable capability landmarks, active ways
-  to reach people, current campaigns, approaching founder decisions, returned reality, and founder judgment. Text that
-  cannot remain legible becomes a semantic mark; tiny paragraphs are never the far view.
-- **Architecture:** open concepts, named areas, product-value detail, reusable capabilities, shared
-  routes, tentative relationships, missing links, and qualified evidence.
-- **Route/campaign:** actor-to-value path, participating capabilities, product dependencies, audience,
-  objective, governing uncertainty, exact releases, outcomes, and pressure reasons.
-- **Work:** independently targetable workpieces, evidence, prepared artifact or diff, configuration
-  provenance, decisions, market voice, and local refinement.
+The founder boundary appears on the exact object, artifact, or release that needs a decision. It may expand
+into the workbench but never becomes a separate inbox product. A clear boundary stays quiet.
 
-Selection must not open a permanent inspector, replace the canvas with a detail page, or persist a
-machine-authored layout. The conversation and canvas remain two views over the same records.
+## Experience laws
 
-Crew and host-backed capabilities enter the scene through one compact canvas tray. Dragging a
-teammate repositions the existing participant; dragging a capability makes that real source or
-action legible in placement only. It never summons a participant, grants authority, or creates a
-second capability registry. Repository truth and staged product changes are always real; an external
-connection appears only while its credential is actually connected.
+### 1. Cursor-like frame, venture-specific center
 
-## Truth has visible grammar
+The frame borrows Cursor's high-level interaction physics: persistent sessions, scoped context, parallel
+work, exact review, visible evidence, and keyboard-first control. The center is not files or an agent list;
+it is the evolving causal model of a venture.
 
-Lineage, chronology, attribution, and causality are not interchangeable. The interface must make
-these epistemic differences obvious in text and shape, never color alone:
+### 2. One venture conversation with persistent branches
 
-- **Exact receipt:** a durable event Drover can prove—who acted, the firm revision, the artifact or
-  difference, cost where available, and the founder decision.
-- **Evidence-supported join:** a return linked to originating work by provider identity or other
-  captured evidence. Say that it is joined; do not claim the work caused it.
-- **Teammate inference:** an interpretation or proposed explanation. It remains editable and visibly
-  different from recorded fact.
-- **Unattributed:** a real signal with no defensible join. Keep it unjoined instead of drawing a
-  confident edge.
+The root conversation and scoped branches share one durable record. Scope changes the projection, not the
+source of truth.
 
-Every claim about the bound product is one gesture from cited repository evidence or visibly labeled
-inference. Provenance is part of the primary composition, not a footnote inside a log.
+### 3. Selection scopes the entire environment
 
-## The conversation is continuous, not chronological
+Selecting an object:
 
-There is one durable conversation surface per venture, but the founder is never required to consume
-one endlessly growing transcript. Scope changes the projection, not the underlying record.
+1. focuses it visually;
+2. reveals relevant relationships;
+3. scopes the composer;
+4. surfaces its existing branch;
+5. restores related artifacts and work;
+6. keeps the wider venture visible.
 
-- Venture focus shows the return account, firm-level direction, configuration proposals, and the
-  consequential handoffs that changed the firm.
-- Work focus shows the relevant founder turns, teammate work, attached receipts, and local discussion.
-  Global configuration appears only when it formed or changed that work.
-- Teammate focus shows attributable contributions and direct direction without claiming all firm
-  configuration belongs to that teammate.
-- The raw work log remains secondary. A message is prominent because it changes understanding or
-  action, not because it is recent.
+Selection never sends the founder to a disconnected details page.
 
-The composer is the action spine and a direct-manipulation command line into the current scope.
-Selection flows in as one exact scope chip; clearing selection clears that inherited scope. Commands
-flow out as structured acts and settle onto their consequential place on the canvas. The composer
-always says whom or what the founder is directing and the exact next consequence, using truthful
-verbs such as direct, refine, try another approach, answer, release, review, keep, and end. Teammate turns expose the
-act, what changed, and its receipt instead of becoming prose blobs. Runtime identity, model, cost,
-and configuration revision are quiet receipts; they do not become the product's main navigation.
+### 4. Progressive depth changes representation
 
-Conversation is a working surface, not a fixed tax on the canvas. The founder can resize it for a
-long exchange, collapse it for spatial work, and restore it without losing selection, draft, or
-venture scope. Crew navigation belongs on the canvas and in its tray, not in a second roster above
-the transcript.
+Zoom is semantic, not merely geometric.
 
-## Work must remain watchable and leaveable
+- **Far:** venture intent, Product value, go-to-market reach, active pressure, founder-held consequence,
+  and returned reality.
+- **Middle:** relationships, components, capabilities, audiences, campaigns, work, conflicts, and evidence.
+- **Near:** exact artifacts, implementation, telemetry, decisions, provenance, contributors, verification,
+  and line-level differences.
 
-Design first for the founder leaving and returning. When they do watch, show honest work rather than
-productivity theater:
+Tiny text is never a substitute for meaningful level-of-detail behavior. The deterministic outline preserves
+access to every object at every altitude.
 
-- a real plan or next action only when the runtime actually has one;
-- the current step and elapsed time;
-- staged artifacts appearing as they become durable;
-- runtime and cost as quiet receipts;
-- a redirect or stop path when the host can honor it.
+### 5. Product and go-to-market can reorganize into operating view
 
-An anonymous pulse is insufficient for meaningful work. Never fabricate steps to make a run appear
-legible. On connection loss, keep stale content visible but mark its age, show reconnection, and
-disable world-touching actions until freshness is restored. Drover must never look confidently live
-when its brain is unreachable.
+The free canvas has two permanent territories: Product and go-to-market. One action rearranges the same
+objects into the Understand / Design / Execute / Learn lens defined by `FIRM-SPEC.md`. The lens is not a
+process. Returning restores the exact free layout, camera, scope, and selection.
+
+### 6. Generated visual answers are temporary
+
+A question such as “Show why our positioning is unsupported” may temporarily rearrange relevant claims,
+capabilities, evidence, campaigns, and contradictions. Dismissal restores the prior view exactly. Generated
+layouts never overwrite founder placement.
+
+The founder may explicitly save the result as a synchronized live view, capture an immutable snapshot, or
+promote selected findings into canonical truth.
+
+### 7. Direct manipulation uses hybrid semantics
+
+Clear, cheap, reversible gestures apply immediately: move, resize, rename, edit, visual group, soft delete
+and restore, save, promote, and connect an obvious relationship.
+
+Ambiguous or consequential gestures expose Drover's interpretation before semantic truth changes:
+
+```text
+You connected “AI audit” to “Buffalo contractors.”
+
+Drover understands:
+This offer is designed for this audience.
+
+Apply · Change relationship · Keep visual only
+```
+
+No schema form or configuration wizard is required.
+
+### 8. Creation is open
+
+The founder may type, paste, draw, group, connect, or ask Claude/Codex without choosing a type first.
+Suggested roles remain quiet. Promotion names the behavior it unlocks: bind to repository implementation,
+use as a capability, track as a campaign, attach telemetry, execute through a channel, or provide agent
+context.
+
+### 9. Detail expands in place before opening tools
+
+Selection reveals enough local detail to understand and manipulate the object on the canvas. Only deep
+precision opens the temporary workbench.
+
+### 10. Agent visibility is adaptive
+
+By default, Drover surfaces consequential progress only:
+
+- approach formed;
+- evidence found;
+- artifact ready;
+- contradiction discovered;
+- implementation changed;
+- verification completed;
+- decision required.
+
+The founder may descend into model interpretation, gathered context, approaches, sources, tools,
+verification, cost, failures, and blockers. Agent identity never becomes the canvas's primary content.
+
+When several agents work, the canvas shows their claims on real scopes, dependencies, branches, conflicts,
+and artifacts. The founder can inspect, steer, stop, or redirect each run. Completed agents collapse into
+provenance rather than becoming permanent fictional employees.
+
+### 11. Every visible claim has provenance
+
+The interface distinguishes founder-established truth, repository-backed truth, measured evidence, model
+inference, conflict, weak or stale interpretation, unsupported relationship, and historical state. Color is
+never the only signal; text, icon, shape, line treatment, and position carry the distinction.
+
+### 12. Learning visibly changes understanding
+
+Evidence never disappears into analytics or a report. It strengthens, weakens, contests, or revises the
+relevant Product and go-to-market objects. The founder can see what changed because of what was learned.
+
+## Signature interaction: direction materializes the venture
+
+A broad direction such as “Help this venture grow” immediately creates a complete, editable provisional
+interpretation on the canvas and begins useful inward work. The first useful frame may show who may benefit,
+how Product value occurs, ways to reach people, campaigns worth trying, current evidence, missing links, and
+concrete Product or market work.
+
+The structure is unmistakably inferred. It does not wait behind architecture approval, create empty
+containers, or silently become canonical. The founder can correct it directly or in ordinary language.
+Useful inward work begins in the same turn; every external consequence still waits for the founder.
+
+The signature multi-agent moment is causal rather than theatrical: a founder direction branches into
+visible scoped work, agents produce inspectable artifacts, verification completes, exact consequences stop
+at the founder boundary, and returned evidence changes the venture model.
+
+## Direct interaction contract
+
+1. One click selects.
+2. Double-click or Enter descends into detail.
+3. Escape restores the prior camera and scope.
+4. Typing with nothing selected directs the venture.
+5. Typing with selection directs that object.
+6. Dragging changes placement immediately.
+7. Obvious semantic connections apply directly and remain undoable.
+8. Ambiguous gestures expose interpretation before semantic truth changes.
+9. Generated layouts never overwrite founder layouts.
+10. Saving a view is explicit.
+11. Capturing a snapshot is explicit and immutable.
+12. Promoting an inferred finding is explicit and preserves provenance.
+13. Every external act presents the exact consequence.
+14. Closing conversation, a branch, or a workbench never loses canvas context.
+15. Switching lenses never duplicates objects.
+16. Search reaches the entire venture model, evidence, conversations, views, snapshots, and work.
+17. Raw internal identifiers never become required founder vocabulary.
+18. Agent work attaches to the Product or go-to-market object it changes.
+19. A result without visible consequence or evidence is incomplete.
+20. Every major action is reversible until it crosses into the world.
+
+## Work and return behavior
+
+Design first for leaving and returning. When the founder watches, show honest work rather than productivity
+theater:
+
+- the visible interpretation and autonomy envelope;
+- a real plan or next action only when the runtime has one;
+- current consequential milestone and elapsed time;
+- durable artifacts as they form;
+- participant, runtime, model, cost, configuration, and verification as quiet receipts;
+- per-run redirect and stop only where the host can honor them;
+- a precise explanation when work is blocked, stale, offline, or budget-limited.
+
+No anonymous spinner, invented step list, looping avatar, ambient pulse, or activity metric may simulate work.
+
+## Truth grammar
+
+Lineage, chronology, attribution, causality, evidence, and interpretation are different visual claims.
+
+- **Exact receipt:** a durable event Drover can prove.
+- **Evidence-supported join:** a real return linked to originating work by captured identity or evidence.
+- **Established truth:** explicitly adopted or edited by the founder.
+- **Repository-backed truth:** supported by a cited repository source.
+- **Measured evidence:** supported by telemetry, market response, revenue, or another captured observation.
+- **Model inference:** editable interpretation with visible source and uncertainty.
+- **Contested:** contradicted by evidence or another established claim.
+- **Stale:** no longer safely current.
+- **Unsupported:** an important claim or edge without defensible evidence.
+- **Historical:** preserved in a snapshot or prior revision.
+
+Every Product claim is one gesture from cited repository evidence or visibly labeled inference. Every market
+claim keeps its source, words, attribution strength, and uncertainty.
 
 ## Visual hand
 
-The composition is **The Living Venture Atlas**: a full-bleed, continuously pannable and zoomable
-spatial world under one venture header, with the world boundary explicit wherever an act needs the
-founder. Product value is terrain, reusable capabilities are stable landmarks, ways to reach people
-are routes, campaigns are bounded pressure, and open founder material can live between them without
-classification. At exact-work depth, the existing
-**Workyard** remains the exact-work territory.
+### Composition
 
-Conversation opens at a readable working width, resizes between 360 and 680 pixels, and can collapse
-completely. The canvas owns the remaining room. Its compact tray expands only while placing crew or
-real capabilities. This is a desktop spatial workbench, not a responsive dashboard or a page with a
-diagram.
+This is a desktop spatial workbench, not a responsive dashboard. The workspace index is compact. Conversation
+opens at a readable working width and can resize or collapse. The canvas owns the main field. The contextual
+workbench appears only when precision is required.
+
+Product and go-to-market remain distinguishable territories without becoming rigid columns. The operating
+lens may temporarily align them. Relationships and whitespace create structure before cards and chrome do.
 
 ### Color
 
-- Warm mineral planes are the room: `#e3e0da` room, `#e9e6e0` canvas, `#f4f2ee` lifted surface,
-  `#dcd8d0` inset surface.
-- `#23211d` ink and its quiet umber ramp carry almost everything.
-- `#1e5245` marks interaction and focus, never generic AI mood.
-- `#a9791a` belongs to work held for a founder decision.
+- `#e3e0da` room, `#e9e6e0` canvas, `#f4f2ee` lifted surface, `#dcd8d0` inset surface.
+- `#23211d` and its warm umber ramp carry operating content.
+- `#1e5245` marks interaction and focus.
+- `#a9791a` belongs to founder-held consequence.
 - `#b4443a` belongs to destructive or failed states.
-- Outcomes never receive positive/negative sentiment colors. Their words and evidence carry meaning.
 
-Color is a second signal. Text, shape, position, and action language must preserve the same meaning
-in monochrome.
+Evidence conditions never rely on positive/negative sentiment color. Color is always reinforced by words,
+shape, icon, line treatment, or position.
 
 ### Type
 
-Use three explicit roles:
+- Geist Variable for venture titles and major focus headings.
+- System sans for body, controls, and sustained reading.
+- Geist Mono for code, paths, revisions, identifiers, and exact diffs only.
 
-- **Display and headings:** Geist Variable, restrained to venture titles, empty-state claims, and
-  major focus headings.
-- **Body and controls:** the system sans stack for dense, durable reading.
-- **Machine text:** Geist Mono for code, paths, revisions, exact identifiers, and diffs only.
+Metadata stays readable. Tiny prose is not calm density.
 
-Metadata must remain readable. Nine- and ten-pixel prose is not calm density; it is hidden
-information. Muted text must meet WCAG 2.2 AA on both canvas and surface planes.
+### Material
 
-### Material and elevation
-
-The canvas is ground. Concepts read as fragments, named areas as territories, reusable capabilities
-as landmarks, ways to reach people as routes, campaigns as pressure envelopes, and concrete work as
-near-depth territories.
-Hairlines, topology, and space group content before another card or shadow does. Uniform rectangular
-nodes are a failure.
-
-- Resting nodes and review content are opaque warm surfaces.
-- Popovers and transient toolbars may float one level.
-- Modal elevation is reserved for a decision that genuinely blocks the workbench.
-- The founder-decision boundary may rise when it contains real decisions; when clear, it remains a
-  small boundary marker.
-- No glass behind readable operating content, decorative gradients, glow, nested-card stacks, or
-  elevation used as status.
+The canvas is ground. Readable operating content is opaque. Hairlines, topology, and space group content
+before another panel does. Popovers and transient tools may float one level. Modal elevation is reserved for
+an exact blocking consequence. No glass behind operating text, decorative gradients, glow, nested-card
+stacks, or elevation used as status.
 
 ### Motion
 
-The motion personality is **settling with consequence**. Motion supplies spatial continuity and makes
-the atlas feel precise, responsive, and alive without simulating work.
+The motion personality is **settling with consequence**.
 
-- Pan and zoom respond directly to input; released momentum is short and damped, never floaty.
-- Focus travels from the selected landmark and restores the exact previous camera on escape.
-- A concept promotion resolves fragment → landmark once while connected routes settle around it.
-- A campaign applies pressure along its route rather than fading in as an unrelated card.
-- Trying another approach visibly separates one line into two; release travels only to its founder
-  decision; return travels inward
-  from the world along its supported join; an accepted architecture change briefly reveals affected
-  context before settling.
-- New durable work may land into place once. No looping avatar bob, pulsing “agent working” state,
-  parallax decoration, or ambient canvas motion.
-- Use transform and opacity for continuous movement, layout animation only when topology changes, and
-  never `transition: all`.
-- Motion durations and easing come from shared tokens; interruption by direct input is immediate.
-- Reduced motion removes travel while preserving selection, causality, and status in the final frame.
+- Pan and zoom respond directly and stop quickly.
+- Focus travels from a selected landmark and Escape restores the exact prior camera.
+- Direction branches visibly separate.
+- An exact release travels only to its founder boundary.
+- Evidence returns along the defensible join and changes the affected object.
+- Semantic and operating views rearrange once and restore exactly.
+- No ambient drift, bouncing, parallax, looping work animation, or `transition: all`.
+- Reduced motion preserves every causal and status signal in the settled frame.
 
-## Language
+## Founder language
 
-Founder-facing copy uses the founder's words and names the concrete business action, artifact,
-audience, consequence, or returned evidence. No one should have to learn **bet**, **motion**,
-**fork**, **outcome**, **the wall**, **pipeline**, **stage**, **work item**, or any other Drover noun to understand
-the canvas. **Campaign** is appropriate when there is a recognizable campaign; otherwise say what
-the work actually does. A configured participant label replaces teammate consistently across the
-whole surface.
+Product-owned copy names the concrete object, artifact, audience, consequence, or evidence. Historical
+implementation terms such as `bet`, `fork`, `outcome`, `gtm-ide`, `pipeline`, `stage`, `work item`, or “the
+wall” never become required founder vocabulary.
 
-Desired futures and generated deliverables are never described as returned reality. Prefer refine,
-direct, try another approach, answer, release, review, keep, and end when those verbs name the exact
-consequence. Historical implementation identifiers remain unchanged in code until an intentional
-migration, but never leak into product-owned copy.
+Use verbs that name the exact effect: direct, investigate, refine, try another approach, compare, answer,
+release, apply change, authorize deploy, review evidence, keep, restore, end, or stop current work. Avoid
+generic Approve, Continue, Confirm, or Submit where a more truthful verb exists.
 
-Copy names the exact next consequence. Avoid generic verbs such as Continue, Confirm, Approve, or
-Submit when a more truthful verb exists.
-
-## Local anti-patterns
+## Anti-laws
 
 Any of these is a design regression:
 
-- **Chat plus diagram:** the conversation narrates while the canvas merely shows topology.
-- **Confident causality:** a line or summary implies proof Drover does not possess.
-- **Activity as importance:** agent output, recency, or volume earns attention without consequence.
-- **Overview as miniaturization:** fit-view shrinks full cards until text becomes texture.
-- **Schema before meaning:** configuration review leads with dozens of raw field paths or no-op
-  defaults.
-- **Silent staleness:** failed polling leaves a surface that still claims to be live.
-- **Thread contamination:** every scoped conversation repeats global configuration and unrelated
-  founder turns.
-- **Clear-wall theater:** an empty boundary opens a large modal, adds amber chrome, or replaces the
-  composer.
-- **Tiny quiet text:** 9-10px metadata and low-contrast muted copy carry essential meaning.
-- **Parallel primitive systems:** feature CSS, `ui/src/components/ui`, and the standalone design
-  system each implement the same control differently.
+- autonomous-company theater;
+- an agent activity dashboard;
+- a task tracker with a decorative graph;
+- a CRM pipeline as the venture;
+- a workflow-node editor as the default experience;
+- chat that contains understanding unavailable elsewhere;
+- a canvas that requires taxonomy maintenance;
+- an AI org chart;
+- disconnected boards or duplicate models;
+- Understand/Design/Execute/Learn presented as a fixed process;
+- generated structure styled as truth;
+- confident edges without evidence;
+- empty-plan approval;
+- simplification that removes necessary depth;
+- complexity that cannot be manipulated;
+- a permanent property inspector;
+- miniaturized cards pretending to be semantic zoom;
+- stale data presented as live;
+- world-touching controls without a real executor.
 
 ## Desktop and accessibility
 
-Judge the whole surface at 1440x900 and 1280x800. The 960px shell minimum is a compatibility floor,
-not a request to design for phone or tablet.
+The shipped founder product is Electron desktop. The browser is a development and deterministic-test
+harness. Judge at 1440×900 and 1280×800, plus browser zoom through 200%. No phone or tablet design work.
 
-- Every founder action is a semantic control with visible focus and a useful accessible name.
-- Selection, outline traversal, canvas navigation, and returning to the wider firm have deterministic
-  keyboard paths.
-- The roster never clips a participant without an explicit scroll affordance.
-- Zoom never removes access to the same information through the outline or conversation.
-- Loading, stale, offline, empty, partial, error, long content, ten-times data, and pending-wall states
-  are deliberately designed.
-- Primary actions stay visible at both supported desktop sizes and at browser zoom.
+- Every action is a semantic control with visible focus and an accessible name.
+- Selection, canvas navigation, branch navigation, search, outline traversal, workbench, and restoring the
+  wider venture have deterministic keyboard paths.
+- Zoom never removes access to the same information through outline, conversation, or search.
+- Loading, stale, offline, empty, partial, error, long content, dense scale, transport failure, and
+  founder-held states are explicitly designed.
+- Interactive targets, contrast, reduced motion, and screen-reader structure meet the global accessibility
+  floor.
 
 ## Shipping tests
 
 Before shipping a founder-visible change, verify:
 
-1. **Return:** in three seconds, can the founder say what changed, what needs them, and what reality
-   returned?
-2. **Proof:** can they verify one surprising claim without searching a raw transcript or leaving the
-   focused scene?
-3. **Truth:** can they distinguish a receipt, an evidence-supported join, an inference, and an
-   unattributed signal?
-4. **Action:** can they refine, try another approach, answer, release, review, keep, or end through the same context,
-   with exact consequences?
-5. **Breadth:** can they recover important work the return account did not foreground?
-6. **Authority:** does the founder-decision boundary make the unavailable outward capability and the founder's exact
-   decision unmistakable?
-7. **Failure:** if the brain becomes unreachable, does the workbench become honestly stale instead
-   of confidently wrong?
-8. **Identity:** with logos and brand color removed, do the living firm, market voice, evidence
-   trail, and wall still make the product recognizably Drover?
+1. **Return:** can the founder answer the seven return questions within ten seconds?
+2. **Orientation:** does selection preserve the wider venture and restore the prior camera/scope?
+3. **Proof:** can every surprising claim reach its source or evidence in one gesture?
+4. **Truth:** can the founder distinguish established, repository-backed, measured, inferred, contested,
+   stale, unsupported, and historical states without color alone?
+5. **Action:** can they direct, branch, steer, stop, inspect, release, review, restore, and end through the
+   same context with exact consequences?
+6. **Product/GTM:** can they trace one Product value/change through a market artifact and release to returned
+   evidence and changed understanding?
+7. **Views:** can a generated view dismiss without mutation, save live, and snapshot immutably?
+8. **Authority:** does every external consequence stop at the real founder boundary and fail closed from
+   browser, model, MCP, stale, away, or forged contexts?
+9. **Failure:** does the product remain honest and recoverable through provider, network, transport,
+   migration, and dense-scale failures?
+10. **Substitution:** with the logo and brand color removed, do the canvas, conversation, evidence grammar,
+    Product/GTM traceability, and founder boundary still make the product recognizably Drover?
 
-The alpha proof remains an outside founder returning to a real unattended venture and surviving this
-loop without a walkthrough. Deterministic screenshots and tests prove mechanics, not comprehension.
+Deterministic tests prove mechanics, not comprehension or market value. Alpha still requires a real founder
+using a real venture, completing a consequential Product/GTM loop, and returning without a walkthrough.

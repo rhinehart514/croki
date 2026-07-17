@@ -15,6 +15,7 @@ process.env.GTM_IDE_PERSISTENCE = "json";
 
 const { default: lensRoutes } = await import("../../src/firm/lens-routes.mjs");
 const { createVenture } = await import("../../src/firm/venture-store.mjs");
+const { listCrew } = await import("../../src/firm/crew.mjs");
 const { createBet } = await import("../../src/firm/bet.mjs");
 const { setVentureDoc } = await import("../../src/firm/venture-store.mjs");
 const { park } = await import("../../src/firm/wall.mjs");
@@ -100,4 +101,12 @@ test("the local Drover page can start a new venture without an unlock ceremony",
 
   const list = await call("GET", "/api/ventures");
   assert.ok(list.body.ventures.some((v) => v.id === res.body.venture.id));
+});
+
+test("a new founder venture opens with no fictional founding crew", async () => {
+  const res = await call("POST", "/api/ventures", { name: "Crewless venture" });
+  assert.equal(res.status, 200);
+  // Product Law 1 / anti-laws: no permanent AI staff. The venture must not silently imply a pre-existing
+  // crew; the first founder direction forms the first participant explicitly.
+  assert.deepEqual(listCrew(res.body.venture.id, options), []);
 });
