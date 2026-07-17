@@ -1,86 +1,125 @@
-// Work detail — selecting a row transforms the center here. Order is deliberate and the reverse of most
-// AI tools: the conclusion and the produced artifact come first, the decision next, and the machinery
-// (agents, runtime, cost, events) last, behind a disclosure. A decision that reaches into the rest of
-// the venture links to the smallest useful neighbourhood on the Map — the one place structure earns its
-// keep.
-import { Fragment, useMemo } from "react";
+// The direction workspace — repository-native. Opening a direction focuses the same surface on one
+// founder intent and returns one coherent change set: what changed in plain language, the working
+// result, the EXACT repository change (files, diff, tests, preview — never reduced to a summary), what
+// else in the venture it affects, and every outward decision held independently. A direction may hold
+// several parallel attempts and several decisions; they are aggregated here, never fragmented.
+import { Fragment } from "react";
 import { ArrowLeft, Square } from "lucide-react";
 import type { FirmActiveDrive, WallQueueItemView } from "@/api";
-import type { FirmBet, FirmLens } from "@/types";
+import type { FirmArchitectureProjection, FirmBet, FirmLens } from "@/types";
+import { targetBet } from "@/components/firm/directionTarget";
 import { DiffView, FilesChanged, ArtifactPreview } from "@/components/review";
 import { DecisionGate } from "./DecisionGate";
+import { NowComposer } from "./NowComposer";
 import { resolveStagedArtifact } from "./reviewArtifact";
-import type { NowRow } from "./nowModel";
+import { buildDirectionImpact } from "./directionImpact";
+import type { Direction } from "./directionModel";
 
-function waitingWallItem(items: WallQueueItemView[], betId: string | null): WallQueueItemView | null {
-  return items.find((item) => item.decision === null && (betId ? item.betId === betId : true)) ?? null;
-}
+const str = (value: unknown): string | null => (typeof value === "string" && value.trim() ? value.trim() : null);
 
-function machineryRows(bet: FirmBet | null, drive: FirmActiveDrive | null): Array<[string, string]> {
+type ExactChange = { key: string; title: string | null; diff: string; stat: string | null; tests: string | null; preview: string | null; repository: string | null };
+
+function machineryRows(bets: FirmBet[], drive: FirmActiveDrive | null, approaches: number): Array<[string, string]> {
   const rows: Array<[string, string]> = [];
-  const agent = bet?.teammateRef ?? drive?.teammateRef;
+  if (approaches > 1) rows.push(["Approaches", String(approaches)]);
+  const agent = bets[0]?.teammateRef ?? drive?.teammateRef;
   if (agent) rows.push(["Agent", agent]);
   if (drive?.runtime) rows.push(["Runtime", drive.runtime]);
-  if (bet?.events?.length) {
-    rows.push(["Steps", String(bet.events.length)]);
-    const cost = bet.events.reduce((sum, event) => sum + (event.costUsd ?? 0), 0);
-    if (cost > 0) rows.push(["Cost", `$${cost.toFixed(2)}`]);
-  }
-  if (bet?.configurationRevision != null) rows.push(["Venture revision", `v${bet.configurationRevision}`]);
-  if (bet?.forkedFrom) rows.push(["Branched from", bet.forkedFrom]);
+  const steps = bets.reduce((sum, bet) => sum + (bet.events?.length ?? 0), 0);
+  if (steps > 0) rows.push(["Steps", String(steps)]);
+  const cost = bets.flatMap((bet) => bet.events ?? []).reduce((sum, event) => sum + (event.costUsd ?? 0), 0);
+  if (cost > 0) rows.push(["Cost", `$${cost.toFixed(2)}`]);
+  const revision = bets.find((bet) => bet.configurationRevision != null)?.configurationRevision;
+  if (revision != null) rows.push(["Venture revision", `v${revision}`]);
   return rows;
+}
+
+function productChangeMeta(effect: Record<string, unknown>): Omit<ExactChange, "key" | "diff"> {
+  const tests = str(effect.tests) ?? (effect.testsPassed === true ? "Tests passed" : effect.testsPassed === false ? "Tests failed" : null);
+  return {
+    title: str(effect.title) ?? str(effect.intent),
+    stat: str(effect.diffStat) ?? str(effect.summary),
+    tests,
+    preview: str(effect.preview) ?? str(effect.previewUrl) ?? str(effect.previewPath),
+    repository: str(effect.repository) ?? str(effect.repo),
+  };
 }
 
 export function WorkDetail({
   ventureId,
-  row,
+  ventureName,
+  direction,
   lens,
   wallItems,
   activeDrives,
+  projection,
   onBack,
   onChanged,
-  onRevise,
+  onSteered,
   onStop,
-  onOpenMap,
 }: {
   ventureId: string;
-  row: NowRow;
+  ventureName: string;
+  direction: Direction;
   lens: FirmLens;
   wallItems: WallQueueItemView[];
   activeDrives: FirmActiveDrive[];
+  projection: FirmArchitectureProjection | null;
   onBack: () => void;
   onChanged: () => void;
-  onRevise: (betId: string | null) => void;
+  onSteered: () => void;
   onStop: (driveId: string) => void;
-  onOpenMap: () => void;
 }) {
-  const target = row.target;
-  const betId = target.kind === "bet" ? target.betId : target.kind === "drive" ? target.betId : null;
-  const bet = useMemo(() => (betId ? lens.bets.find((candidate) => candidate.id === betId) ?? null : null), [betId, lens.bets]);
-  const drive = target.kind === "drive" ? activeDrives.find((entry) => entry.id === target.driveId) ?? null : null;
+  const own = new Set(direction.betIds);
+  const memberBets = lens.bets.filter((bet) => own.has(bet.id));
+  const drive = activeDrives.find((entry) => direction.activeDriveIds.includes(entry.id)) ?? null;
+  const waiting = wallItems.filter((item) => direction.waitingWallItemIds.includes(item.id) && item.decision === null);
 
-  const gateItem = target.kind === "wall"
-    ? waitingWallItem(wallItems, null)
-    : betId ? waitingWallItem(wallItems, betId) : null;
+  // Split staged work into working-result previews and exact code changes. Product-change wall items
+  // contribute their exact diff too, deduped by diff text so it is shown once.
+  const previews: Array<{ title: string | null; artifact: Extract<ReturnType<typeof resolveStagedArtifact>, { kind: "preview" }> }> = [];
+  const changeByDiff = new Map<string, ExactChange>();
+  for (const bet of memberBets) {
+    for (const staged of bet.staged ?? []) {
+      const resolved = resolveStagedArtifact(staged.content);
+      if (!resolved) continue;
+      if (resolved.kind === "diff") {
+        changeByDiff.set(resolved.diff, { key: resolved.diff.slice(0, 40), title: staged.title ?? null, diff: resolved.diff, stat: resolved.stat, tests: null, preview: null, repository: null });
+      } else {
+        previews.push({ title: staged.title ?? null, artifact: resolved });
+      }
+    }
+  }
+  for (const item of waiting) {
+    if (String(item.effect.kind ?? "").toLowerCase() !== "product-change") continue;
+    const diff = str(item.effect.diff) ?? str(item.effect.patch) ?? str(item.effect.artifact);
+    if (!diff) continue;
+    changeByDiff.set(diff, { key: diff.slice(0, 40), diff, ...productChangeMeta(item.effect) });
+  }
+  const exactChanges = [...changeByDiff.values()];
 
-  const stagedArtifacts = (bet?.staged ?? [])
-    .map((staged) => ({ title: staged.title ?? null, resolved: resolveStagedArtifact(staged.content) }))
-    .filter((entry) => entry.resolved !== null);
-
-  const machinery = machineryRows(bet, drive);
-  const eyebrow = gateItem ? "Needs your decision" : drive ? "Working" : row.stateLabel;
+  const impact = buildDirectionImpact(direction.betIds, lens, projection);
+  const learning = memberBets.map((bet) => bet.learning).find((value): value is string => Boolean(value)) ?? null;
+  const machinery = machineryRows(memberBets, drive, direction.approaches);
+  const eyebrow = waiting.length ? "Needs your decision" : drive ? "Working" : direction.state === "from-market" ? "The market answered" : "Direction";
 
   return (
-    <div className="now-detail" data-tone={gateItem ? "needs-you" : row.state}>
+    <div className="now-detail" data-tone={waiting.length ? "needs-you" : direction.state}>
       <button type="button" className="now-detail-back" onClick={onBack}>
         <ArrowLeft aria-hidden="true" /> Back to Now
       </button>
 
+      {/* 1 · What changed — the whole consequence, in ordinary language. */}
       <div>
+        <div className="now-detail-crumbs">
+          <span>{ventureName}</span>
+          <span aria-hidden="true">/</span>
+          <span>This direction</span>
+        </div>
         <div className="now-detail-eyebrow">{eyebrow}</div>
-        <h1 className="now-detail-title">{bet?.intent ?? row.title}</h1>
+        <h1 className="now-detail-title">{direction.sentence}</h1>
       </div>
-      {row.detail ? <p className="now-detail-why">{row.detail}</p> : null}
+      <p className="now-detail-why">{direction.understanding}</p>
 
       {drive ? (
         <div className="now-detail-block">
@@ -96,43 +135,83 @@ export function WorkDetail({
         </div>
       ) : null}
 
-      {!drive && !gateItem && stagedArtifacts.length ? (
+      {/* 2 · Working result — the primary artifact (preview, page, campaign, research). */}
+      {previews.length ? (
         <div className="now-detail-block">
-          <span className="now-detail-block-label">What was produced</span>
-          {stagedArtifacts.map((entry, index) => (
+          <span className="now-detail-block-label">Working result</span>
+          {previews.map((entry, index) => (
             <div key={index} className="now-detail-block">
               {entry.title ? <p className="now-row-detail">{entry.title}</p> : null}
-              {entry.resolved!.kind === "diff" ? (
-                <><FilesChanged diff={entry.resolved!.diff} /><DiffView diff={entry.resolved!.diff} /></>
-              ) : (
-                <ArtifactPreview artifact={entry.resolved!.artifact} />
-              )}
+              <div className="now-artifact-cap"><ArtifactPreview artifact={entry.artifact.artifact} /></div>
             </div>
           ))}
         </div>
       ) : null}
 
-      {bet?.architectureTarget || bet?.campaignId ? (
+      {/* 3 · Exact changes — repository-native, never reduced to a summary. */}
+      {exactChanges.map((change) => (
+        <div key={change.key} className="now-detail-block">
+          <span className="now-detail-block-label">Exact changes</span>
+          {change.title ? <p className="now-row-detail">{change.title}</p> : null}
+          {change.repository ? <p className="now-change-meta">{change.repository}</p> : null}
+          <FilesChanged diff={change.diff} />
+          {change.tests || change.preview ? (
+            <p className="now-change-meta">
+              {change.tests ? <span>{change.tests}</span> : null}
+              {change.preview ? <a href={change.preview} target="_blank" rel="noreferrer">Open preview</a> : null}
+            </p>
+          ) : null}
+          <details className="now-exact-diff" open>
+            <summary>Review exact diff</summary>
+            <DiffView diff={change.diff} />
+          </details>
+        </div>
+      ))}
+
+      {/* 4 · Broader impact — what else in the venture this change means. */}
+      {impact.length ? (
         <div className="now-detail-block">
-          <span className="now-detail-block-label">Affected context</span>
-          <p className="now-row-detail">This work connects to how the venture reaches and serves people.</p>
-          <div className="now-gate-actions">
-            <button type="button" className="now-gate-btn" onClick={onOpenMap}>See on the map</button>
-          </div>
+          <span className="now-detail-block-label">What this affects</span>
+          <ul className="now-detail-list">
+            {impact.map((line, index) => <li key={index}><span>{line.text}</span></li>)}
+          </ul>
         </div>
       ) : null}
 
-      {gateItem ? (
+      {/* 5 · Decisions — each outward consequence held independently. */}
+      {waiting.length ? (
         <div className="now-detail-block">
-          <span className="now-detail-block-label">Your decision</span>
-          <DecisionGate ventureId={ventureId} item={gateItem} onDecided={onChanged} onRevise={() => onRevise(betId)} />
+          <span className="now-detail-block-label">{waiting.length === 1 ? "Your decision" : "Your decisions"}</span>
+          {waiting.map((item) => (
+            <DecisionGate
+              key={item.id}
+              ventureId={ventureId}
+              item={item}
+              onDecided={onChanged}
+              showArtifact={String(item.effect.kind ?? "").toLowerCase() !== "product-change"}
+            />
+          ))}
         </div>
       ) : null}
 
-      {bet?.learning ? (
+      {direction.primaryBetId ? (
+        <div className="now-detail-block">
+          <span className="now-detail-block-label">Keep directing this</span>
+          <NowComposer
+            ventureId={ventureId}
+            ventureName={ventureName}
+            selection={targetBet(direction.primaryBetId)}
+            scopeLabel={direction.sentence.length > 44 ? `${direction.sentence.slice(0, 44).trimEnd()}…` : direction.sentence}
+            hasWork
+            onDriven={onSteered}
+          />
+        </div>
+      ) : null}
+
+      {learning ? (
         <div className="now-detail-block">
           <span className="now-detail-block-label">What Drover learned</span>
-          <p className="now-detail-why">{bet.learning}</p>
+          <p className="now-detail-why">{learning}</p>
         </div>
       ) : null}
 

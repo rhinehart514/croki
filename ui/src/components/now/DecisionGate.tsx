@@ -14,14 +14,18 @@ export function DecisionGate({
   item,
   onDecided,
   onRevise,
+  showArtifact = true,
 }: {
   ventureId: string;
   item: WallQueueItemView;
   onDecided: () => void;
   onRevise?: () => void;
+  // When the exact change is already rendered prominently above (Exact changes), the gate suppresses
+  // its own copy so the diff is shown once, not twice.
+  showArtifact?: boolean;
 }) {
   const content = reviewContent(item);
-  const artifact = resolveEffectArtifact(item.effect);
+  const artifact = showArtifact ? resolveEffectArtifact(item.effect) : null;
   const isDeploy = String(item.effect.kind ?? "").toLowerCase() === "deploy";
   const [authorized, setAuthorized] = useState<boolean>(Boolean(item.deployAuthorizedAt));
   const [busy, setBusy] = useState<WallDecision | null>(null);
@@ -45,6 +49,10 @@ export function DecisionGate({
 
   return (
     <div className="now-gate">
+      <div className="now-gate-head">
+        <span className="now-gate-eyebrow">{content.eyebrow}</span>
+        <span className="now-gate-title">{content.title}</span>
+      </div>
       {artifact?.kind === "diff" ? (
         <div className="now-detail-block">
           <span className="now-detail-block-label">What changed</span>

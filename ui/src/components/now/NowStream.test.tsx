@@ -1,47 +1,46 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { NowStream } from "./NowStream";
-import type { NowSection } from "./nowModel";
+import type { Direction, DirectionSection } from "./directionModel";
 
-const sections: NowSection[] = [
+function direction(partial: Partial<Direction> & Pick<Direction, "id" | "sentence" | "state">): Direction {
+  return {
+    createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", betIds: [], primaryBetId: null,
+    waitingWallItemIds: [], activeDriveIds: [], outcomeIds: [], proofCount: 0, approaches: 1,
+    needsYou: partial.state === "needs-you", understanding: "…", attribution: null, ...partial,
+  };
+}
+
+const sections: DirectionSection[] = [
   {
     key: "needs-you", label: "Needs you", tone: "needs-you",
-    rows: [{
-      id: "w1", source: "record", title: "Approve the outreach to 12 operators", detail: "Held safely.",
-      attribution: "Sable · cold outbound", stateLabel: "Needs you", state: "needs-you", needsYou: true,
-      occurredAt: "2026-07-15T10:00:00Z", startedAt: null, actionLabel: "Review", provenance: null,
-      target: { kind: "wall" },
-    }],
+    directions: [direction({ id: "d1", sentence: "Contact these roofing operators", state: "needs-you", understanding: "An outward act to ops@acme.com is waiting for your release." })],
   },
   {
-    key: "moving", label: "Moving", tone: "working",
-    rows: [{
-      id: "d1", source: "drive", title: "Find the first 20 customers", detail: "2 drafts ready to inspect",
-      attribution: null, stateLabel: "Working", state: "working", needsYou: false,
-      occurredAt: "2026-07-15T09:00:00Z", startedAt: "2026-07-15T09:00:00Z", actionLabel: "Open", provenance: null,
-      target: { kind: "drive", driveId: "d1", betId: "b1" },
-    }],
+    key: "working", label: "Working now", tone: "working",
+    directions: [direction({ id: "d2", sentence: "Find out why signups stalled and fix what you can", state: "working", understanding: "2 drafts are ready to inspect.", approaches: 3, proofCount: 2 })],
   },
 ];
 
 describe("NowStream", () => {
-  it("renders sections with their real row content and marks the needs-you tone", () => {
-    render(<NowStream sections={sections} now={Date.parse("2026-07-15T10:05:00Z")} onSelectRow={() => {}} />);
-    expect(screen.getByRole("button", { name: /Approve the outreach to 12 operators/ })).toHaveAttribute("data-tone", "needs-you");
-    expect(screen.getByText("2 drafts ready to inspect")).toBeTruthy();
-    expect(screen.getByLabelText("Needs you")).toBeTruthy();
-    expect(screen.getByLabelText("Moving")).toBeTruthy();
+  it("renders one row per founder direction, titled by the sentence", () => {
+    render(<NowStream sections={sections} now={Date.parse("2026-01-01T00:10:00Z")} onSelect={() => {}} />);
+    const row = screen.getByRole("button", { name: /Find out why signups stalled/ });
+    expect(row).toHaveAttribute("data-tone", "working");
+    // Machinery summaries (N approaches / N drafts) are not shown to the founder.
+    expect(screen.queryByText(/approaches/)).toBeNull();
+    expect(screen.getByText(/An outward act to ops@acme\.com/)).toBeTruthy();
   });
 
-  it("calls back with the row when selected", () => {
+  it("calls back with the direction when selected", () => {
     const onSelect = vi.fn();
-    render(<NowStream sections={sections} now={Date.now()} onSelectRow={onSelect} />);
-    screen.getByRole("button", { name: /Find the first 20 customers/ }).click();
+    render(<NowStream sections={sections} now={Date.now()} onSelect={onSelect} />);
+    screen.getByRole("button", { name: /Contact these roofing operators/ }).click();
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "d1" }));
   });
 
-  it("shows the quiet first-run state when the venture is silent", () => {
-    render(<NowStream sections={[]} now={Date.now()} onSelectRow={() => {}} />);
+  it("shows the quiet first-run state when nothing is living", () => {
+    render(<NowStream sections={[]} now={Date.now()} onSelect={() => {}} />);
     expect(screen.getByText(/This is your venture\. Tell it what to do\./)).toBeTruthy();
   });
 });

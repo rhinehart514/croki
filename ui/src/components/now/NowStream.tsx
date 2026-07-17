@@ -1,7 +1,7 @@
-// The consequence stream — a live account of what needs the founder, what is moving, what the market
-// said, and what changed. Not a chat log and not a dashboard: every row answers what/why/state and
-// whether it needs you. Selecting a row opens its detail. Quiet when the venture is quiet.
-import type { NowRow, NowSection } from "./nowModel";
+// The consequence stream — an index of living founder directions and meaningful returns. Each row is
+// one direction (the founder's sentence), its latest understanding, whether it needs you, and how many
+// approaches are running underneath — never one row per internal record. Quiet when the venture is quiet.
+import type { Direction, DirectionSection } from "./directionModel";
 
 function elapsed(since: string | null, now: number): string | null {
   if (!since) return null;
@@ -18,11 +18,11 @@ function elapsed(since: string | null, now: number): string | null {
 export function NowStream({
   sections,
   now,
-  onSelectRow,
+  onSelect,
 }: {
-  sections: NowSection[];
+  sections: DirectionSection[];
   now: number;
-  onSelectRow: (row: NowRow) => void;
+  onSelect: (direction: Direction) => void;
 }) {
   if (sections.length === 0) {
     return (
@@ -39,26 +39,19 @@ export function NowStream({
         <section className="now-section" data-tone={section.tone} key={section.key} aria-label={section.label}>
           <header className="now-section-head">
             <span>{section.label}</span>
-            <span className="now-section-count">{section.rows.length}</span>
+            <span className="now-section-count">{section.directions.length}</span>
           </header>
-          {section.rows.map((row) => {
-            const time = elapsed(row.startedAt ?? row.occurredAt, now);
+          {section.directions.map((direction) => {
+            const time = elapsed(direction.updatedAt, now);
             return (
-              <button
-                key={row.id}
-                type="button"
-                className="now-row"
-                data-tone={row.state}
-                onClick={() => onSelectRow(row)}
-              >
+              <button key={direction.id} type="button" className="now-row" data-tone={direction.state} onClick={() => onSelect(direction)}>
                 <span className="now-row-dot" aria-hidden="true" />
                 <span className="now-row-body">
-                  <span className="now-row-title">{row.title}</span>
-                  {row.detail ? <span className="now-row-detail">{row.detail}</span> : null}
-                  {row.attribution ? <span className="now-row-meta">{row.attribution}</span> : null}
+                  <span className="now-row-title">{direction.sentence}</span>
+                  <span className="now-row-detail">{direction.understanding}</span>
                 </span>
                 <span className="now-row-aside">
-                  <span className="now-row-state">{row.stateLabel}</span>
+                  <span className="now-row-state">{sectionState(section.tone, direction)}</span>
                   {time ? <span className="now-row-state">{time}</span> : null}
                 </span>
               </button>
@@ -68,4 +61,12 @@ export function NowStream({
       ))}
     </>
   );
+}
+
+function sectionState(tone: Direction["state"], direction: Direction): string {
+  if (tone === "needs-you") return "Needs you";
+  if (tone === "from-market") return "Replied";
+  if (tone === "working") return "Working";
+  void direction;
+  return "Changed";
 }

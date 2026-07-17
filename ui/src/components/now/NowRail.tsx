@@ -2,7 +2,7 @@
 // Automations are the only destinations. Everything else (agents, evidence, settings, decisions) is a
 // scope or a disclosure reached from the work itself, not a fixed door. Ventures switch here; search
 // reaches everything.
-import { Bell, Home, Map as MapIcon, Plus, Search, Zap } from "lucide-react";
+import { Bell, Home, Plus, Search, Zap } from "lucide-react";
 import type { FirmVenture } from "@/api";
 import type { NowView } from "./NowShell";
 
@@ -48,9 +48,6 @@ export function NowRail({
         <button type="button" className="now-nav-item" aria-current={view === "needs"} onClick={() => onNavigate("needs")}>
           <Bell aria-hidden="true" /> Needs you
           {needsYou > 0 ? <span className="now-nav-badge" aria-label={`${needsYou} waiting`}>{needsYou}</span> : null}
-        </button>
-        <button type="button" className="now-nav-item" aria-current={view === "map"} onClick={() => onNavigate("map")}>
-          <MapIcon aria-hidden="true" /> Map
         </button>
         <button type="button" className="now-nav-item" aria-current={view === "automations"} onClick={() => onNavigate("automations")}>
           <Zap aria-hidden="true" /> Automations
