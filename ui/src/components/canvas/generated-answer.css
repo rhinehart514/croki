@@ -1,0 +1,74 @@
+/* The generated-answer overlay: a quiet dock at the bottom of the plane that names the question being
+   answered and offers the three durable exits + dismiss. It never blocks the reorganized scene behind it. */
+
+.generated-answer {
+  position: absolute;
+  bottom: var(--space-3, 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  max-width: min(680px, 90%);
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--canvas) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink-3) 20%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.generated-answer-prompt {
+  margin: 0;
+  font-family: var(--font-orbital-serif);
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.generated-answer-exits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+  align-items: center;
+}
+
+.generated-answer-exit,
+.generated-answer-dismiss {
+  appearance: none;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--ink-3) 26%, transparent);
+  background: none;
+  color: color-mix(in srgb, var(--ink) 78%, transparent);
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.generated-answer-exit:hover:not(:disabled),
+.generated-answer-dismiss:hover {
+  background: color-mix(in srgb, var(--ink-3) 12%, transparent);
+  color: var(--ink);
+}
+
+.generated-answer-exit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.generated-answer-dismiss {
+  margin-left: auto;
+  border-color: transparent;
+  color: color-mix(in srgb, var(--ink-3) 60%, transparent);
+}
+
+.generated-answer-status {
+  margin: 0;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--ink-3) 62%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generated-answer-exit,
+  .generated-answer-dismiss { transition: none; }
+}

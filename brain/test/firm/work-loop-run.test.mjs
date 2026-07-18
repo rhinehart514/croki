@@ -233,6 +233,40 @@ describe("durable Run lifecycle on a founder-authorized drive", () => {
     assert.notEqual(cancelledTrail.state, completedTrail.state);
   });
 
+  it("a BETLESS founder-cancelled drive is durably distinguishable from a betless completed drive", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Betless cancelled vs completed" }, options);
+
+    // Two betless founder drives (exploration / working-theory), one completed and one founder-cancelled.
+    await driveTeammate({
+      ventureId: venture.id, teammateRef: "founding-teammate", goal: "Explore and finish",
+      initiatedBy: "founder", options,
+      deps: { runtime: completingRuntime() },
+    });
+    await driveTeammate({
+      ventureId: venture.id, teammateRef: "founding-teammate", goal: "Explore then stop",
+      initiatedBy: "founder", options,
+      deps: { runtime: cancellingRuntime() },
+    });
+
+    const runs = runsFor(venture.id, options);
+    assert.equal(runs.length, 2, "two betless runs were recorded");
+    for (const run of runs) {
+      assert.deepEqual(run.betRefs, [], "both runs are betless");
+      assert.ok(run.completedAt, "both betless runs reached finishDriveRun");
+    }
+
+    // The run records alone cannot tell them apart (both completedAt-set, both betless). The persisted
+    // terminal receipt's KIND is what keeps a betless cancelled honest against a betless completion.
+    const receipts = runs.map((run) => receiptFor(venture.id, run.id, options));
+    for (const receipt of receipts) {
+      assert.ok(receipt, "a betless drive persists a terminal receipt too");
+      assert.equal(receipt.betRef, null, "the betless receipt carries no bet ref");
+    }
+    const states = runs.map((run) => projectExecutionTrail(run, receiptFor(venture.id, run.id, options)).state).sort();
+    assert.deepEqual(states, ["cancelled", "completed"], "betless cancelled != betless completed post-hoc");
+  });
+
   it("a wall item DECIDED by the founder during the drive is joined to the run's decisionRefs", async () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Decided-during-drive join" }, options);

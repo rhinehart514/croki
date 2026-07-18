@@ -101,9 +101,10 @@ function newDecisionRefs(beforeWallItems, afterWallItems) {
 // without a recorded terminal kind it would be indistinguishable from a full completion. The receipt is
 // stored in the venture's own 'receipts' collection keyed by its own content-addressed .id, and the
 // run→receipt join is read back by receipt.runRef === run:<id> (findReceiptForRun), so the trail reports
-// the real terminal instead of 'unknown' — and survives export/import, which re-keys by .id. Betless runs
-// settle on the run's own completedAt (a receipt requires a bet ref); an interrupted drive throws before
-// this seam and stays historical-unknown, never a false completion. Wrapped fail-safe: any error here —
+// the real terminal instead of 'unknown' — and survives export/import, which re-keys by .id. BETLESS runs
+// mint a receipt too (betRef: null): without a recorded terminal kind a betless cancelled drive would be
+// indistinguishable from a betless completion post-hoc. An interrupted drive throws before this seam and
+// stays historical-unknown, never a false completion. Wrapped fail-safe: any error here —
 // completion, mint, or persist — leaves the run at completedAt:null rather than aborting the drive's
 // already-finished return.
 export function finishDriveRun(handle, {
@@ -119,26 +120,27 @@ export function finishDriveRun(handle, {
   try {
     const decisionRefs = newDecisionRefs(beforeWallItems, afterWallItems);
     completeDriveRun(ventureId, runId, { at: at ?? undefined, decisionRefs }, options);
-    let receipt = null;
-    if (betId) {
-      // Only a bet-scoped drive can mint a receipt (a receipt requires a bet ref). The normalized outcome
-      // is honest about interrupted/cancelled terminals — never a false completed/done.
-      receipt = createWorkflowExecutionReceipt({
-        ventureId,
-        runId,
-        betRef: `bet:${betId}`,
-        outcome: normalizeWorkflowOutcome(outcome ?? { kind: "completed" }, at ? { at } : {}),
-        decisionRefs,
-        runtime,
-        modelRevision: Number.isInteger(modelRevision) ? modelRevision : null,
-      });
-      // Persist the immutable receipt keyed by its OWN content-addressed .id so the doc's id IS its storage
-      // key — the invariant importVenture's re-keying (storageKeyFor) relies on, so the receipt survives a
-      // machine-to-machine transfer intact. The run→receipt join lives in receipt.runRef and is read back via
-      // findReceiptForRun, never by storage key. Inside the fail-safe try: a persistence error degrades to
-      // historical-unknown, never aborts the drive.
-      setVentureDoc(ventureId, "receipts", receipt.id, receipt, options);
-    }
+    // EVERY founder-authorized terminal — bet-scoped OR betless — mints a durable settlement receipt so its
+    // terminal KIND (completed | cancelled | paused | budget-exhausted | failed) survives. Without this a
+    // betless cancelled drive and a betless completed drive both reach here with completedAt set and are
+    // indistinguishable post-hoc; the receipt's terminal kind is what keeps them apart. A bet-scoped receipt
+    // carries betRef: bet:<id>; a betless receipt carries betRef: null. The normalized outcome is honest about
+    // interrupted/cancelled terminals — never a false completed/done.
+    const receipt = createWorkflowExecutionReceipt({
+      ventureId,
+      runId,
+      betRef: betId ? `bet:${betId}` : null,
+      outcome: normalizeWorkflowOutcome(outcome ?? { kind: "completed" }, at ? { at } : {}),
+      decisionRefs,
+      runtime,
+      modelRevision: Number.isInteger(modelRevision) ? modelRevision : null,
+    });
+    // Persist the immutable receipt keyed by its OWN content-addressed .id so the doc's id IS its storage
+    // key — the invariant importVenture's re-keying (storageKeyFor) relies on, so the receipt survives a
+    // machine-to-machine transfer intact. The run→receipt join lives in receipt.runRef and is read back via
+    // findReceiptForRun, never by storage key. Inside the fail-safe try: a persistence error degrades to
+    // historical-unknown, never aborts the drive.
+    setVentureDoc(ventureId, "receipts", receipt.id, receipt, options);
     return { runRef: `run:${runId}`, decisionRefs, receipt };
   } catch {
     return null;

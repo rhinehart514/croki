@@ -1,0 +1,104 @@
+/* The operating-lens control + altimeter dock. Pinned top-centre over the canvas plane: quiet chrome that
+   names the current lens and altitude without competing with the cards. Greyscale-safe (weight + a tick
+   scale, never hue). */
+
+.lens-control {
+  position: absolute;
+  top: var(--space-3, 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  pointer-events: none;
+}
+
+.lens-control-words {
+  pointer-events: auto;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3, 14px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--canvas) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink-3) 20%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.lens-word {
+  appearance: none;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 2px 0;
+  font-family: var(--font-orbital-serif);
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--ink-3) 55%, transparent);
+  transition: color 140ms ease, font-weight 140ms ease;
+}
+
+.lens-word:hover {
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
+}
+
+.lens-word[data-active="true"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.lens-word-free {
+  font-family: var(--font-orbital-serif);
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--ink-3) 40%, transparent);
+  padding-left: var(--space-2, 8px);
+  border-left: 1px solid color-mix(in srgb, var(--ink-3) 18%, transparent);
+}
+
+.lens-word-free[data-active="true"] {
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+}
+
+/* ── Altimeter ─────────────────────────────────────────────────────────────────────────────────────── */
+
+.lens-altimeter {
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  font-family: var(--font-orbital-serif);
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--ink-3) 60%, transparent);
+}
+
+.lens-altimeter-scale {
+  display: inline-flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+}
+
+.lens-altimeter-tick {
+  width: 14px;
+  height: 2px;
+  background: color-mix(in srgb, var(--ink-3) 24%, transparent);
+  transition: background 140ms ease;
+}
+
+.lens-altimeter-tick[data-active="true"] {
+  background: var(--ink);
+}
+
+.lens-altimeter-word {
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
+}
+
+.lens-altimeter-suffix {
+  color: color-mix(in srgb, var(--ink-3) 55%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lens-word,
+  .lens-altimeter-tick { transition: none; }
+}

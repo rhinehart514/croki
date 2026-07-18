@@ -184,4 +184,61 @@ describe("saved live views + snapshots (Law 12)", () => {
     }, options);
     assert.equal(inferred.condition, "inferred", "a non-founder finding cannot self-establish");
   });
+
+  it("REFUSES to re-POST over an existing snapshot id — immutable after capture is a mechanism, not a comment", () => {
+    const { options, venture } = fixture();
+    const snapshot = captureSnapshot(venture.id, {
+      id: "snap-fixed",
+      name: "Original name",
+      rootRefs: ["bet:bet-a"],
+    }, options);
+    assert.equal(snapshot.name, "Original name");
+
+    // A founder-capability re-POST that reuses the snapshot id would silently rewrite its pins/name. Refused.
+    assert.throws(
+      () => captureSnapshot(venture.id, { id: "snap-fixed", name: "REWRITTEN name", rootRefs: ["bet:bet-b"] }, options),
+      (e) => e.code === "view_immutable" && e.status === 409,
+      "an existing snapshot id cannot be overwritten",
+    );
+    // The stored snapshot is untouched — the original pins and name survive.
+    const stored = getVentureDoc(venture.id, "views", "snap-fixed", options);
+    assert.equal(stored.name, "Original name", "the captured snapshot kept its name");
+    assert.deepEqual(stored.spec.rootRefs, ["bet:bet-a"], "the captured snapshot kept its pins");
+
+    // A live view cannot be silently converted into a snapshot id either.
+    const live = saveLiveView(venture.id, { id: "live-fixed", name: "Live", arrangement: "orbital-atlas", rootRefs: ["bet:bet-a"] }, options);
+    assert.throws(
+      () => captureSnapshot(venture.id, { id: live.id, name: "Snap over live", rootRefs: ["bet:bet-a"] }, options),
+      (e) => e.code === "view_immutable" && e.status === 409,
+      "a snapshot cannot overwrite a record of another kind",
+    );
+    // But re-saving a LIVE view under its own id is still allowed — a live view stays mutable.
+    const resaved = saveLiveView(venture.id, { id: live.id, name: "Live renamed", arrangement: "orbital-atlas", rootRefs: ["bet:bet-b"] }, options);
+    assert.equal(resaved.name, "Live renamed", "a live view remains re-saveable");
+  });
+
+  it("REFUSES to re-POST over an existing finding id — a canonicalized finding is immutable", () => {
+    const { options, venture } = fixture();
+    const finding = promoteFinding(venture.id, {
+      id: "finding-fixed",
+      statement: "the original finding.",
+      subjectRefs: ["bet:bet-a"],
+      promotedBy: { authority: "founder", id: "founder" },
+    }, options);
+    assert.equal(finding.statement, "the original finding.");
+
+    assert.throws(
+      () => promoteFinding(venture.id, {
+        id: "finding-fixed",
+        statement: "a silent rewrite.",
+        subjectRefs: ["bet:bet-b"],
+        promotedBy: { authority: "founder", id: "founder" },
+      }, options),
+      (e) => e.code === "view_immutable" && e.status === 409,
+      "an existing finding id cannot be overwritten",
+    );
+    const stored = getVentureDoc(venture.id, "findings", "finding-fixed", options);
+    assert.equal(stored.statement, "the original finding.", "the canonicalized finding kept its statement");
+    assert.deepEqual(stored.subjectRefs, ["bet:bet-a"], "the canonicalized finding kept its subjects");
+  });
 });

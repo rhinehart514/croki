@@ -123,6 +123,36 @@ function normalizeScope(rootRefs) {
   return [...new Set(refs)];
 }
 
+// Immutability write-guard (Experience Law 12: a snapshot/finding is a historical moment, never a live
+// lens). setVentureDoc overwrites unconditionally, so a founder-capability re-POST that reuses an id would
+// silently rewrite a captured snapshot's pins/name or a canonicalized finding — 'immutable after capture'
+// stated as a comment but never enforced. This makes it a MECHANISM: it refuses to write a NEW record over
+// an id already held by an immutable record. It only guards a founder-SUPPLIED id (a minted id never
+// collides), and it never touches founder authority — it refuses an overwrite of an existing immutable
+// record, nothing more. A live view is mutable and re-saveable, so a reused id is only refused when the
+// existing record is a snapshot, a finding, or (for a snapshot capture) a record of a DIFFERENT kind.
+function guardImmutableId(existing, { collection, id, writingKind }) {
+  if (!existing) return;
+  const existingKind = collection === FINDINGS_COLLECTION ? "finding" : text(existing.kind);
+  if (existingKind === "snapshot" || existingKind === "finding") {
+    fail(
+      `${existingKind === "finding" ? "A finding" : "A snapshot"} is immutable after capture; the id "${id}" is already held and cannot be overwritten.`,
+      "view_immutable",
+      409,
+    );
+  }
+  // A snapshot capture must not clobber an id already held by a record of a different kind: a snapshot
+  // reusing a live-view id would silently convert that mutable view into an immutable snapshot. (Findings
+  // live in their own collection, so a finding write cannot collide with a non-finding record.)
+  if (writingKind === "snapshot" && existingKind && existingKind !== "snapshot") {
+    fail(
+      `The id "${id}" already names a ${existingKind}; a snapshot cannot overwrite a record of another kind.`,
+      "view_immutable",
+      409,
+    );
+  }
+}
+
 // Save a LIVE VIEW: an arrangement id + its atlasTrace scope + name. Stores no positions. The scope is
 // validated to resolve inside this venture (fail-closed) at save time; reopening re-runs the arrangement
 // over the founder's current positions, so the record is a way of looking, not a frozen frame.
@@ -133,6 +163,9 @@ export function saveLiveView(ventureId, { id = null, name, arrangement, rootRefs
   assertScopeResolves(ventureId, scope, options);
   const relationships = normalizeScope(relationshipRefs);
   const viewId = text(id) ?? genViewId();
+  // A live view is mutable and re-saveable, but it must never overwrite a captured snapshot that already
+  // holds this id — that would silently convert an immutable historical moment into a live lens.
+  if (text(id)) guardImmutableId(getView(ventureId, viewId, options), { collection: VIEWS_COLLECTION, id: viewId, writingKind: "live" });
   const spec = createViewSpec({ id: viewId, name, kind: "live", rootRefs: scope, relationshipRefs: relationships, query, filter });
   const record = {
     id: viewId,
@@ -156,6 +189,9 @@ export function captureSnapshot(ventureId, { id = null, name, arrangement = null
   if (scope.length === 0) fail("A snapshot must pin at least one object ref.");
   assertScopeResolves(ventureId, scope, options);
   const viewId = text(id) ?? genViewId();
+  // Immutable after capture: refuse to re-POST over an id already held by any snapshot/finding, or over a
+  // live view of a different kind. A minted id never collides; only a founder-supplied id can reuse.
+  if (text(id)) guardImmutableId(getView(ventureId, viewId, options), { collection: VIEWS_COLLECTION, id: viewId, writingKind: "snapshot" });
   const spec = createViewSpec({
     id: viewId,
     name,
@@ -261,6 +297,9 @@ export function promoteFinding(ventureId, { id = null, viewId = null, statement,
   // is earned). An agent asking for "established" is corrected to "inferred" rather than smuggling authority.
   const truthCondition = actor.authority === "founder" && condition === "established" ? "established" : "inferred";
   const findingId = text(id) ?? genId("finding");
+  // A canonicalized finding is immutable: refuse a re-POST that reuses an existing finding's id (which would
+  // silently rewrite its statement, subjects, or truth condition). A minted id never collides.
+  if (text(id)) guardImmutableId(getVentureDoc(ventureId, FINDINGS_COLLECTION, findingId, options), { collection: FINDINGS_COLLECTION, id: findingId, writingKind: "finding" });
   const record = Object.freeze({
     id: findingId,
     ventureId: text(ventureId),

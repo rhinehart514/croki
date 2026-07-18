@@ -527,3 +527,43 @@ export type DriveTeammateResult = {
   handoff: FirmConversationMessage | null;
   completion?: import("@/types").FirmDriveCompletion;
 };
+
+// Saved views substrate (Law 12: views are disposable; useful questions persist). A saved LIVE view names
+// an arrangement id + the atlasTrace SCOPE it was framed over (a set of object refs) — NEVER positions.
+// A SNAPSHOT pins a revision/arrangement/scope manifest. Both route through the founder-write boundary in
+// view-routes.mjs. The lens NEVER sends positions in either payload — the brain would reject them anyway;
+// re-deriving the arrangement from the founder's current positions is the entire point of a live view.
+export type SavedView = {
+  id: string;
+  kind: "live" | "snapshot";
+  name: string;
+  arrangement: string | null;
+  createdAt: string;
+};
+
+// Save a generated answer as a synchronized LIVE view: arrangement id + atlasTrace scope refs. No positions.
+export const saveLiveView = (
+  ventureId: string,
+  body: { name: string; arrangement: string; rootRefs: string[]; relationshipRefs?: string[] },
+) => guardedPost<{ view: SavedView }>(
+  `/api/ventures/${encodeURIComponent(ventureId)}/views`,
+  { kind: "live", ...body },
+);
+
+// Capture an immutable SNAPSHOT: a manifest pinning revision + arrangement + scope. Rasterization deferred.
+export const captureSnapshotView = (
+  ventureId: string,
+  body: { name: string; arrangement?: string | null; rootRefs: string[]; imageRef?: string | null },
+) => guardedPost<{ view: SavedView }>(
+  `/api/ventures/${encodeURIComponent(ventureId)}/views`,
+  { kind: "snapshot", ...body },
+);
+
+// Promote a FINDING out of a view into durable venture truth (Law 11). Authority is set server-side.
+export const promoteViewFinding = (
+  ventureId: string,
+  body: { viewId?: string | null; statement: string; subjectRefs: string[] },
+) => guardedPost<{ finding: { id: string; statement: string } }>(
+  `/api/ventures/${encodeURIComponent(ventureId)}/findings`,
+  body,
+);

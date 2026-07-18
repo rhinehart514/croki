@@ -7,9 +7,10 @@
 // The one connection lives above (VentureWorkspace); `useAtlasProjection` stays here because only the
 // stage reads the architecture projection (its own 1.5s cadence, independent of the lens poll).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlowProvider, useEdgesState, useNodesState, type Node, type NodeChange } from "@xyflow/react";
 import { SemanticBandProvider } from "@/components/atlas/SemanticBandProvider";
+import type { SemanticBand } from "@/components/atlas/semanticBand";
 import type { FirmVenture } from "@/api";
 import type { FirmLens } from "@/types";
 import { useAtlasProjection } from "@/components/atlas/useAtlasProjection";
@@ -24,9 +25,20 @@ import { AtlasOutline } from "@/components/atlas/AtlasOutline";
 import { VentureCanvasFlow } from "./VentureCanvasFlow";
 import { foldPlacement } from "./canvasSeedLayout";
 import { resolveTerritories } from "./canvasTerritory";
+import { useCanvasLens } from "./useCanvasLens";
+import { LensControl } from "./LensControl";
+import { GeneratedAnswer, type GeneratedAnswerQuestion } from "./GeneratedAnswer";
 import "@/styles/venture-atlas.css";
 import "@/styles/epistemic.css";
 import "./venture-canvas.css";
+
+// The founder-facing title of a node, for the generated-answer prompt. Falls back to the id so a prompt is
+// always legible even for a node with no title.
+function scopeTitle(nodes: AtlasNode[], id: string): string {
+  const node = nodes.find((candidate) => candidate.id === id);
+  const title = node && typeof node.data.title === "string" ? node.data.title.trim() : "";
+  return title || id;
+}
 
 type VentureCanvasStageProps = {
   venture: FirmVenture;
@@ -50,7 +62,8 @@ function VentureCanvasStageInner({
   onLensChange,
   refresh,
   dimmed = false,
-}: VentureCanvasStageProps) {
+  band,
+}: VentureCanvasStageProps & { band: SemanticBand }) {
   const { projection } = useAtlasProjection(venture.id);
   const capabilities = useCanvasCapabilities(venture.repository);
 
@@ -64,10 +77,8 @@ function VentureCanvasStageInner({
   const positioned = useMemo<AtlasNode[]>(() => {
     if (!scene || !lens) return [];
     const positions = foldPlacement(scene.nodes, lens.placement.positions);
-    // Resolve each node's territory (the same ownership-chain facet the seed biases from and the kickers
-    // label from) once, and stamp it onto the node's data so the rendered card carries data-territory. This
-    // surfaces the geography facet into the DOM — the split is legible from meaning, not re-derived from
-    // position — and lets the card anatomies read one authoritative value.
+    // Stamp each node's territory (the ownership-chain facet the seed biases from) onto its data so the
+    // card carries data-territory — geography read from meaning, not re-derived from position.
     const territoryById = resolveTerritories(scene.nodes);
     return scene.nodes.map((node) => {
       const territory = territoryById.get(node.id) ?? null;
@@ -87,6 +98,29 @@ function VentureCanvasStageInner({
   const [nodes, setNodes, onNodesChange] = useNodesState<AtlasNode>(positioned);
   const [edges, setEdges] = useEdgesState(scene?.edges ?? []);
 
+  // The generated answer (spec §4) and the operating lens are MUTUALLY EXCLUSIVE — both drive the ONE node
+  // array through a FLIP, so coexisting corrupts each other's restore frame. The answer state is declared
+  // here (above the lens wiring) so the lens can preempt an open answer. answerOpenRef gives the lens a
+  // stable live read without re-subscribing its key handler on every answer change.
+  const [answer, setAnswer] = useState<GeneratedAnswerQuestion | null>(null);
+  const answerOpenRef = useRef(false);
+  useEffect(() => { answerOpenRef.current = answer !== null; }, [answer]);
+  const isAnswerOpen = useCallback(() => answerOpenRef.current, []);
+  const dismissAnswer = useCallback(() => setAnswer(null), []);
+
+  // The operating lens (spec §2/§3): state home, captured flow instance, the FLIP, and the active-lens
+  // gate. lensId is null for the founder's free arrangement; L / Shift+L / Escape are bound in the hook.
+  // isAnswerOpen/dismissAnswer wire the mutual-exclusion preempt (entering a lens dismisses an open answer).
+  const { lensId, setLens, flowInstance, setFlowInstance, lensActiveRef } = useCanvasLens({
+    sceneNodes: scene?.nodes ?? [],
+    placementPositions: lens?.placement.positions ?? {},
+    lens,
+    projection,
+    setNodes,
+    isAnswerOpen,
+    dismissAnswer,
+  });
+
   const reload = useCallback(async () => { refresh(); }, [refresh]);
   const handleLensChange = useCallback((next: FirmLens) => { onLensChange(next); }, [onLensChange]);
 
@@ -97,27 +131,47 @@ function VentureCanvasStageInner({
     actionsDisabled: readOnly,
     onNodesChange: onNodesChange as unknown as (changes: NodeChange[]) => void,
     onLensChange: handleLensChange,
-    onCanvasInit: () => undefined,
+    onCanvasInit: setFlowInstance,
     reload,
   });
 
+  // Law 6 (marquee): while a lens or answer overlay is active, the node array holds OVERLAY coordinates, not
+  // the founder's own layout. A drag inside an overlay must NEVER be committed as founder placement — it
+  // would rewrite every moved id to its lens/answer position via putPlacement. Gate the commit; the
+  // overlay's own restore returns each node to the founder frame on exit. Dragging is ALSO disabled in
+  // `decorated` (draggable:false) so a stray move never even appears; this is the defense-in-depth backstop.
+  const guardedNodeDragStop = useCallback((event: unknown, node?: Node) => {
+    if (lensActiveRef.current || answerOpenRef.current) return;
+    onNodeDragStop(event, node);
+  }, [lensActiveRef, onNodeDragStop]);
+
   useEffect(() => {
+    // GATE (hard risk 1): while a lens OR a generated answer is active the founder-position reconcile must
+    // NOT run — it would re-apply free-layout positions over the overlay arrangement and snap scoped nodes
+    // back mid-overlay (the ~1.2s poll would otherwise undo an answer within a second). The overlay owns
+    // positions until it exits, at which point its restore re-reads foldPlacement anyway.
+    if (lensActiveRef.current || answerOpenRef.current) { setEdges(scene?.edges ?? []); return; }
     setNodes((previous) => applyFounderPositions(carryMeasuredDimensions(previous, positioned), founderPositions()));
     setEdges(scene?.edges ?? []);
-  }, [positioned, scene, setEdges, setNodes, founderPositions, committedDrop]);
+  }, [positioned, scene, setEdges, setNodes, founderPositions, committedDrop, lensActiveRef]);
 
   const epistemicIndex = useMemo(() => (projection ? indexContext(projection) : null), [projection]);
 
+  // A lens or answer overlay makes the plane a reversible VIEW, not the founder's editable layout: nodes are
+  // locked (draggable:false) so a drag can't rearrange coordinates the founder never chose (and can't reach
+  // the placement commit — Law 6). Returns to free on overlay exit.
+  const overlayActive = lensId !== null || answer !== null;
   const selectedNodeId = selection?.betId ? `bet:${selection.betId}` : null;
   const decorated = useMemo<AtlasNode[]>(() => nodes.map((node) => ({
     ...node,
     selected: node.id === selectedNodeId,
+    draggable: overlayActive ? false : node.draggable,
     data: {
       ...node.data,
       readOnly,
       epistemic: epistemicStateForNode(node, projection, epistemicIndex),
     },
-  })), [nodes, readOnly, selectedNodeId, projection, epistemicIndex]);
+  })), [nodes, readOnly, selectedNodeId, projection, epistemicIndex, overlayActive]);
 
   const epistemicEdges = useMemo(() => edges.map((edge) => {
     const treatment = edgeTreatmentForSceneEdge(edge, projection);
@@ -125,10 +179,8 @@ function VentureCanvasStageInner({
     return { ...edge, type: "epistemic", data: { ...(edge.data ?? {}), treatment, label: edge.label } };
   }), [edges, projection]);
 
-  // Resolve any canvas node id into the typed selection target it scopes to. Ported from the full
-  // VentureAtlas mapping so clicking a NON-bet node scopes the environment to that object (workRef /
-  // teammate / architecture / theory / outcome→owning bet) instead of silently clearing the scope.
-  // Returns null only for a node that carries no selectable truth (e.g. the intent hub).
+  // Resolve any canvas node id into the typed selection target it scopes to: a non-bet node scopes to its
+  // object (workRef / teammate / architecture / theory / outcome→owning bet); null only for empty nodes.
   const resolveTarget = useCallback((id: string): CanvasSelection => {
     if (id.startsWith("bet:")) return targetBet(id.slice("bet:".length));
     if (id.startsWith("work:")) {
@@ -155,8 +207,7 @@ function VentureCanvasStageInner({
     return null;
   }, [lens, projection]);
 
-  // One click SELECTS + SCOPES: a non-bet node no longer clears the scope. Only genuinely empty nodes
-  // (the intent hub) fall through to null.
+  // One click SELECTS + SCOPES: only the empty intent hub falls through to null.
   const selectNode = useCallback((id: string) => {
     if (id === "atlas:intent") { onSelect(null); return; }
     const target = resolveTarget(id);
@@ -170,23 +221,28 @@ function VentureCanvasStageInner({
     if (target && onDescend) onDescend(target);
   }, [onDescend, resolveTarget]);
 
-  // Deterministic keyboard access to every placed card: the same AtlasOutline the world atlas ships (a
-  // role=listbox with arrow/Home/End movement and visible focus), so every object on the plane is
-  // reachable and selectable without a pointer — a hard release-bar requirement the bare canvas lacked.
-  // "o"/"L" toggles it; Enter selects (single) / descends (double) exactly like the pointer; Escape closes
-  // the outline first, then leaves selection to the workspace's Escape ladder. Skipped while typing.
+  // Deterministic keyboard access via the AtlasOutline (role=listbox, arrow/Home/End, visible focus): "o"
+  // toggles it; Enter selects/descends like the pointer; Escape closes it first. Skipped while typing.
+  // "L" is NO LONGER an outline key — it is the operating-lens key (useOperatingLens), so "o" is the outline.
   const [outlineOpen, setOutlineOpen] = useState(false);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof Element && target.matches("input, textarea, [contenteditable='true']")) return;
       const key = event.key.toLowerCase();
-      if (key === "o" || key === "l") { event.preventDefault(); setOutlineOpen((open) => !open); }
+      if (key === "o") { event.preventDefault(); setOutlineOpen((open) => !open); }
+      // "a" asks a generated answer about the current selection — but ONLY while free (no lens): a lens and
+      // an answer are mutually exclusive, so 'a' is inert during a lens (the other half of the guard lives
+      // in useOperatingLens, which dismisses an open answer before entering a lens).
+      else if (key === "a" && selectedNodeId && !answer && !lensId) {
+        event.preventDefault();
+        setAnswer({ originId: selectedNodeId, prompt: `What bears on ${scopeTitle(nodes, selectedNodeId)}?` });
+      }
       else if (event.key === "Escape" && outlineOpen) { event.preventDefault(); setOutlineOpen(false); }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [outlineOpen]);
+  }, [outlineOpen, selectedNodeId, answer, lensId, nodes]);
 
   return (
     <div className="venture-canvas-stage" data-dimmed={dimmed ? "true" : "false"}>
@@ -197,11 +253,28 @@ function VentureCanvasStageInner({
             edges={epistemicEdges}
             onInit={onInit}
             onNodesChange={onNodesChange as unknown as (changes: NodeChange[]) => void}
-            onNodeDragStop={onNodeDragStop}
+            onNodeDragStop={guardedNodeDragStop}
             onNodeClick={selectNode}
             onNodeDoubleClick={onDescend ? descendNode : undefined}
             onPaneClick={() => onSelect(null)}
             onMoveEnd={() => undefined}
+          />
+          {/* The operating-lens control + altimeter (spec §2): four lens words + the live altitude word,
+              with the active lens as a one-word suffix. Clicking a word is the pointer path to the same
+              cycle the L / Shift+L / Escape keys drive. */}
+          <LensControl lensId={lensId} band={band} onPick={setLens} />
+          {/* The generated answer (spec §4): the SAME FLIP scoped by atlasTrace, with three durable exits
+              writing to the brain views substrate (never positions) + an instant dismiss. */}
+          <GeneratedAnswer
+            ventureId={venture.id}
+            question={answer}
+            sceneNodes={scene.nodes}
+            placementPositions={lens.placement.positions}
+            lens={lens}
+            projection={projection}
+            instance={flowInstance}
+            setNodes={setNodes}
+            onDismiss={() => setAnswer(null)}
           />
           {/* A single screen-reader-only control keeps the outline discoverable without keyboard-map
               knowledge (a11y), mirroring the world atlas. Visible only on focus. */}
@@ -238,10 +311,15 @@ function VentureCanvasStageInner({
 export type { VentureCanvasStageProps };
 
 export function VentureCanvasStage(props: VentureCanvasStageProps) {
+  // The altimeter is new on this surface (spec §2): SemanticBandProvider derives the band inside the flow
+  // store and lifts its word here through onBand, so the altimeter word and the card anatomy read the ONE
+  // band. The band lives above the provider so the inner stage can dock the altimeter as chrome outside
+  // the flow. Defaults to the arrival "structure" band (Orbit).
+  const [band, setBand] = useState<SemanticBand>("structure");
   return (
     <ReactFlowProvider>
-      <SemanticBandProvider>
-        <VentureCanvasStageInner {...props} />
+      <SemanticBandProvider onBand={setBand}>
+        <VentureCanvasStageInner {...props} band={band} />
       </SemanticBandProvider>
     </ReactFlowProvider>
   );

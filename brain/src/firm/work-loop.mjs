@@ -530,9 +530,11 @@ async function driveTeammateLeased({
   const completion = checkWorkingTheoryCompletion({ ventureId, baseline: theoryBaseline, outcome, target, required: workingTheoryDrive }, options);
 
   // Terminal Run completion: add the durable decision joins parked during this drive and mint an immutable
-  // WorkflowExecutionReceipt for a bet-scoped terminal. Only a drive that reached here (a real terminal
-  // outcome) completes its run; an interrupted/cancelled drive threw before this point, leaving its run
-  // completedAt:null — historical-unknown, never a false completion. Fail-safe: finishDriveRun swallows its
+  // WorkflowExecutionReceipt for EVERY founder-authorized terminal — bet-scoped OR betless (betRef null).
+  // A drive that reached here completed OR cancelled (a cancelled outcome returned by adapter.drive still
+  // arrives here and finishes its run with a terminal cancelled receipt, so cancelled stays distinct from
+  // completed post-hoc). Only a truly INTERRUPTED drive — one that THREW before this point — leaves its run
+  // completedAt:null, historical-unknown, never a false completion. Fail-safe: finishDriveRun swallows its
   // own errors so a completion failure never changes the drive's already-built return.
   finishDriveRun(driveRun, {
     outcome,

@@ -32,8 +32,13 @@ export function createWorkflowExecutionReceipt({
   createdAt = new Date().toISOString(),
 } = {}) {
   const normalized = normalizeWorkflowOutcome(outcome, { at: createdAt });
-  if (!text(ventureId) || !text(runId) || !String(betRef ?? "").startsWith("bet:")) {
-    fail("A workflow execution receipt needs venture, run, and authoritative bet refs.");
+  // Venture and run refs are always required. A bet ref is OPTIONAL: a betless founder drive (exploration,
+  // working-theory) also settles to a durable terminal, and 'cancelled' must stay distinguishable from
+  // 'completed' post-hoc for it too. When a betRef IS supplied it must be authoritative ("bet:<id>"); a
+  // betless receipt simply carries betRef: null.
+  const bet = text(betRef);
+  if (!text(ventureId) || !text(runId) || (bet !== null && !bet.startsWith("bet:"))) {
+    fail("A workflow execution receipt needs venture and run refs, and a well-formed bet ref when scoped to a bet.");
   }
   const receiptId = text(id) ?? `workflow-receipt-${crypto.createHash("sha256").update(`${ventureId}\0${runId}\0${normalized.at}`).digest("hex").slice(0, 20)}`;
   return immutable({

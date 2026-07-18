@@ -125,6 +125,29 @@ async function pressEscape(client) {
   await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
 }
 
+// A single lowercase-letter key press (e.g. "l" for the lens, "a" for the generated answer). The keyCode
+// is the uppercase letter's char code, which is what a physical key emits.
+async function pressLetter(client, letter) {
+  const code = `Key${letter.toUpperCase()}`;
+  const vk = letter.toUpperCase().charCodeAt(0);
+  await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: letter, code, text: letter, windowsVirtualKeyCode: vk });
+  await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: letter, code, windowsVirtualKeyCode: vk });
+}
+
+// Snapshot every rendered canvas node's exact on-screen top-left pixel + the id-set. The FLIP restore
+// covenant is pixel-exact by construction, so a lens enter → Escape must return every id to this frame.
+async function snapshotNodeFrame(client) {
+  return client.evaluate(`(() => {
+    const out = {};
+    for (const n of document.querySelectorAll('.venture-workspace .react-flow__node[data-id]')) {
+      const r = n.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) continue;
+      out[n.getAttribute('data-id')] = { left: Math.round(r.left), top: Math.round(r.top) };
+    }
+    return out;
+  })()`);
+}
+
 test("?shell=canvas rests as the Product+GTM machine and descends without a details detour", async () => {
   const drover = await bootFixture(createCanvasVentureFixture);
   const chrome = await openCanvasVenture(drover);
@@ -319,6 +342,77 @@ test("?shell=canvas rests as the Product+GTM machine and descends without a deta
   }
 });
 
+test("?shell=canvas lens and answer are mutually exclusive and neither can leak into placement", async () => {
+  const drover = await bootFixture(createCanvasVentureFixture);
+  const chrome = await openCanvasVenture(drover);
+  const { client } = chrome;
+  try {
+    // The three interplay guarantees the lens review named as must-fixes:
+    //   (1) Law 6 — while an overlay (lens/answer) is active, nodes are NOT draggable, so a drag can never
+    //       rewrite founder placement to the overlay's coordinates (React Flow drops the `draggable` class
+    //       from a node wrapper it will not drag — the deterministic render tell).
+    //   (2) entering a lens while an answer is open DISMISSES the answer and restores the exact free frame,
+    //       then swallows that press (no lens entered from the answer's corrupted frame).
+    //   (3) 'a' is inert while a lens is active (mutual exclusion in the other direction).
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    const betId = await client.evaluate(`document.querySelector('.venture-workspace .react-flow__node[data-id^="bet:"]')?.getAttribute('data-id') || null`);
+    assert.ok(betId, "no bet node to exercise the overlay guards");
+
+    const isDraggable = () => client.evaluate(`document.querySelector('.react-flow__node[data-id=${JSON.stringify(betId)}]')?.classList.contains('draggable') === true`);
+
+    // At rest the founder can drag their own layout: the node wrapper carries the draggable affordance.
+    assert.equal(await isDraggable(), true, "a resting bet node was not draggable (founder can't arrange their layout)");
+
+    // Enter a lens; the node LOSES its draggable affordance — a drag now cannot reach the placement commit.
+    await pressLetter(client, "l");
+    await client.evaluate("new Promise((r) => setTimeout(r, 520))");
+    assert.equal(await isDraggable(), false, "a node stayed draggable inside a lens (Law 6: a drag could leak lens coords into placement)");
+
+    // 'a' is inert while the lens is active (mutual exclusion): no generated answer opens.
+    await pressLetter(client, "a");
+    await client.evaluate("new Promise((r) => setTimeout(r, 120))");
+    assert.equal(await client.evaluate(`!!document.querySelector('.generated-answer')`), false, "'a' opened a generated answer while a lens was active");
+
+    // Escape back to free; dragging is restored.
+    await pressEscape(client);
+    await client.evaluate("new Promise((r) => setTimeout(r, 80))");
+    assert.equal(await isDraggable(), true, "a node stayed locked after exiting the lens");
+
+    // Now the OTHER direction: open an answer, capture the free frame, then press L. The answer must be
+    // dismissed (restoring the exact frame) and NO lens active — the preempt swallowed that press.
+    await fireNode(client, betId, "click");
+    await waitForDom(client, `!!document.querySelector('.venture-workspace-dock .now-composer-scope')`, "click did not scope the composer");
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    await client.evaluate("new Promise((r) => setTimeout(r, 60))");
+    const freeFrame = await snapshotNodeFrame(client);
+    const freeIds = Object.keys(freeFrame).sort();
+
+    await pressLetter(client, "a");
+    await waitForDom(client, `!!document.querySelector('.generated-answer')`, "pressing 'a' from free did not open a generated answer");
+    await client.evaluate("new Promise((r) => setTimeout(r, 520))");
+
+    await pressLetter(client, "l"); // lens key while the answer is open → preempt: dismiss, swallow entry
+    await waitForDom(client, `!document.querySelector('.generated-answer')`, "pressing L did not dismiss the open answer (preempt)");
+    await client.evaluate("new Promise((r) => setTimeout(r, 160))");
+    const afterPreempt = await client.evaluate(`(() => ({
+      lensActive: Boolean(document.querySelector('.lens-control .lens-word[data-active="true"]')),
+      free: document.querySelector('.lens-word-free[data-active="true"]') ? true : false,
+    }))()`);
+    assert.equal(afterPreempt.lensActive, false, "a lens entered from the answer's frame instead of only dismissing it");
+    assert.equal(afterPreempt.free, true, "after preempting the answer the surface was not in the free arrangement");
+    const restored = await snapshotNodeFrame(client);
+    assert.deepEqual(Object.keys(restored).sort(), freeIds, "preempting the answer changed the node id-set");
+    for (const id of freeIds) {
+      assert.deepEqual(restored[id], freeFrame[id], `node ${id} did not return to its exact pixel after answer-preempt`);
+    }
+
+    await assertNoUnhandledRejections(client);
+  } finally {
+    await chrome.close();
+    await drover.close();
+  }
+});
+
 test("?shell=canvas empty venture reads as named geography with first-direction affordances", async () => {
   const drover = await bootFixture(createEmptyCanvasVentureFixture);
   const chrome = await openCanvasVenture(drover);
@@ -428,6 +522,89 @@ test("?shell=canvas holds a dense venture legible and keyboard-reachable via the
     })()`);
     assert.ok(outline.options >= 3, `outline exposed too few objects to be a real access path: ${outline.options}`);
     assert.equal(outline.focusedIsOption, true, "opening the outline did not move focus onto a reachable option");
+
+    await assertNoUnhandledRejections(client);
+  } finally {
+    await chrome.close();
+    await drover.close();
+  }
+});
+
+test("?shell=canvas operating lens reorganizes then returns every node to its exact pre-toggle pixel", async () => {
+  const drover = await bootFixture(createCanvasVentureFixture);
+  const chrome = await openCanvasVenture(drover);
+  const { client } = chrome;
+  try {
+    // The reversible covenant (spec §3): each lens ENTER → Escape returns every node to its exact free
+    // pixel with an UNCHANGED id-set. Snapshot the free frame once, then for all four lenses press L
+    // (enter/cycle) and Escape (exit) and re-assert the frame is byte-identical.
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    // The altimeter + lens words are mounted (the new chrome on this surface).
+    const control = await client.evaluate(`(() => ({
+      words: [...document.querySelectorAll('.lens-control .lens-word')].map((w) => w.textContent.trim()),
+      altimeter: Boolean(document.querySelector('.lens-altimeter .lens-altimeter-word')),
+    }))()`);
+    assert.deepEqual(control.words, ["Understand", "Design", "Execute", "Learn"], `lens words wrong: ${JSON.stringify(control.words)}`);
+    assert.equal(control.altimeter, true, "the altimeter word did not mount");
+
+    const freeFrame = await snapshotNodeFrame(client);
+    const freeIds = Object.keys(freeFrame).sort();
+    assert.ok(freeIds.length >= 4, `too few nodes to prove the covenant: ${freeIds.length}`);
+
+    for (const lensName of ["Understand", "Design", "Execute", "Learn"]) {
+      // Press L to enter/cycle to the next lens; the active word emphasizes and the altimeter gains a
+      // one-word suffix. (Cycling forward from free lands on Understand, then advances each press.)
+      await pressLetter(client, "l");
+      await client.evaluate("new Promise((r) => setTimeout(r, 520))"); // let the ~400ms FLIP settle
+      const active = await client.evaluate(`document.querySelector('.lens-control .lens-word[data-active="true"]')?.textContent?.trim() || null`);
+      assert.ok(active, `no lens word emphasized after entering ${lensName}`);
+      const suffix = await client.evaluate(`Boolean(document.querySelector('.lens-altimeter-suffix'))`);
+      assert.equal(suffix, true, `altimeter gained no lens suffix under ${active}`);
+      // A lens must NOT drop or duplicate any object: the id-set is unchanged while reorganized.
+      const lensFrame = await snapshotNodeFrame(client);
+      assert.deepEqual(Object.keys(lensFrame).sort(), freeIds, `lens ${active} changed the node id-set`);
+
+      // Escape exits the lens; the FLIP restore is instant + pixel-exact.
+      await pressEscape(client);
+      await client.evaluate("new Promise((r) => setTimeout(r, 60))");
+      const restored = await snapshotNodeFrame(client);
+      assert.deepEqual(Object.keys(restored).sort(), freeIds, `Escape from ${active} changed the node id-set`);
+      for (const id of freeIds) {
+        assert.deepEqual(
+          restored[id], freeFrame[id],
+          `node ${id} did not return to its exact pixel after ${active} → Escape: ${JSON.stringify(restored[id])} vs ${JSON.stringify(freeFrame[id])}`,
+        );
+      }
+      const freeAgain = await client.evaluate(`document.querySelector('.lens-word-free[data-active="true"]') ? true : false`);
+      assert.equal(freeAgain, true, `Escape from ${active} did not return to the free arrangement`);
+    }
+
+    // A generated answer scopes the scene then dismisses back to the exact PRIOR frame (spec §4). Select a
+    // bet, capture the exact frame just before asking, press "a" to ask, then Dismiss; the frame returns
+    // pixel-exact with an unchanged id-set.
+    const betId = await client.evaluate(`document.querySelector('.venture-workspace .react-flow__node[data-id^="bet:"]')?.getAttribute('data-id') || null`);
+    assert.ok(betId, "no bet node to scope a generated answer");
+    await fireNode(client, betId, "click");
+    await waitForDom(client, `!!document.querySelector('.venture-workspace-dock .now-composer-scope')`, "click did not scope the composer");
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    await client.evaluate("new Promise((r) => setTimeout(r, 60))");
+    const priorFrame = await snapshotNodeFrame(client);
+    const priorIds = Object.keys(priorFrame).sort();
+
+    await pressLetter(client, "a");
+    await waitForDom(client, `!!document.querySelector('.generated-answer')`, "pressing 'a' did not open a generated answer");
+    await client.evaluate("new Promise((r) => setTimeout(r, 520))");
+    const answerExits = await client.evaluate(`[...document.querySelectorAll('.generated-answer-exit')].map((b) => b.textContent.trim())`);
+    assert.ok(answerExits.includes("Save as live view"), `generated answer missing the save-live-view exit: ${JSON.stringify(answerExits)}`);
+
+    await client.evaluate(`document.querySelector('.generated-answer-dismiss')?.click()`);
+    await waitForDom(client, `!document.querySelector('.generated-answer')`, "Dismiss did not close the generated answer");
+    await client.evaluate("new Promise((r) => setTimeout(r, 160))");
+    const afterDismiss = await snapshotNodeFrame(client);
+    assert.deepEqual(Object.keys(afterDismiss).sort(), priorIds, "dismissing the generated answer changed the node id-set");
+    for (const id of priorIds) {
+      assert.deepEqual(afterDismiss[id], priorFrame[id], `node ${id} did not return to its exact pixel after answer → dismiss`);
+    }
 
     await assertNoUnhandledRejections(client);
   } finally {
