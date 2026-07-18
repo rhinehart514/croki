@@ -1,18 +1,20 @@
 # Drover
 
-**The founder-controlled Product and go-to-market system.** Drover gives one founder a venture canvas for
-seeing, understanding, directly manipulating, and executing the whole system while retaining authority at
-every world boundary.
+**The founder-controlled Product and go-to-market system.** Drover lets one founder direct, understand, and
+execute the whole venture — operating through directions, artifacts, work, evidence, and exact
+consequences, summoning a spatial canvas when it helps — while retaining authority at every world boundary.
 
 The product/build laws are [`docs/FIRM-SPEC.md`](docs/FIRM-SPEC.md). Current proof and known gaps are
 [`docs/STATE.md`](docs/STATE.md). The intended desktop experience is [`DESIGN.md`](DESIGN.md).
 
 ## The product
 
-A venture binds to a real product repository and one readable local venture store. The canvas is the main
-founder surface over one canonical open model, with Product and go-to-market as permanent territories.
-Objects, relationships, artifacts, releases, evidence, and insights keep the same identity across every
-view.
+A venture binds to a real product repository and one readable local venture store. One canonical open
+model carries Product and go-to-market as permanent territories; objects, relationships, artifacts,
+releases, evidence, and insights keep the same identity across every view. The spatial canvas is a
+projection summoned over that model when spatial or causal understanding helps — the founder operates
+through directions, artifacts, work, evidence, and exact consequences. (The shipped tree is still
+canvas-first; see "Current state".)
 
 One continuous venture conversation and persistent scoped branches direct and interrogate the canvas.
 Selecting any visible object focuses its relationships, restores its conversation and work, and scopes the
@@ -37,10 +39,15 @@ contests, or revises understanding. Facts, evidence, and interpretation remain s
 
 ## Current state
 
-The current working tree still contains three competing founder shells and several partial paths. It is
-being migrated to the single canvas/conversation product above without discarding the working runtime,
-venture data, wall authority, repository grounding, product worktrees, conversation, or evidence lineage.
-See [`docs/STATE.md`](docs/STATE.md) for exact verified behavior and unproven requirements.
+The current working tree has **one** founder surface: `FirmApp.tsx` renders a venture picker or the single
+`VentureWorkspace` built around the venture canvas — there are no `?shell=` flags and no competing shells
+(the earlier immersive/Now/legacy shells were deleted). The shipped tree is canvas-first.
+
+A newer **ratified direction revises this**: the canvas becomes a *summoned* intelligence projection rather
+than the primary operating surface, with the founder operating through directions, artifacts, work,
+evidence, and exact consequences. That direction is approved but its ratification into `docs/FIRM-SPEC.md`
+and `DESIGN.md` is **pending**, and the tree does not yet implement it. See [`docs/STATE.md`](docs/STATE.md)
+for exact verified behavior, the surfaced conflict, current defects, and unproven requirements.
 
 Historical identifiers such as `gtm-ide`, `bet`, `fork`, `channel`, and `~/.gtm-ide` remain deliberate
 compatibility seams until an intentional migration proves safe. They are not product identity or required
@@ -74,11 +81,11 @@ socket are both loopback. It does not alter Electron authority.
 npm run mcp
 ```
 
-The agent-facing door exposes venture-scoped reads and can continue inward work already authorized by a
-founder direction or founder-invoked workflow. The current MCP drive path can also start fresh agent-stamped
-work; that is an unapproved implementation gap documented in `docs/STATE.md`. MCP cannot release, approve,
-end work, authorize deploy, spend, or perform another founder-only consequence. Current Electron/MCP
-endpoint discovery limitations are also documented in `docs/STATE.md`.
+The agent-facing door exposes venture-scoped reads and can continue or branch inward work already
+authorized by a founder direction or founder-invoked workflow. An agent-stamped drive that carries only a
+fresh goal — no bet lineage, no branch target — is refused: only the founder starts fresh work. MCP cannot
+release, approve, end work, authorize deploy, spend, or perform another founder-only consequence. Current
+Electron/MCP endpoint discovery limitations are documented in `docs/STATE.md`.
 
 ## Verify
 
@@ -88,8 +95,8 @@ npm run test:acceptance
 ```
 
 `npm test` runs Brain tests, UI unit tests, lint, and the production build. `npm run test:acceptance` adds
-token parity and deterministic browser journeys. These are readiness receipts, not outside-founder or
-market proof.
+token parity and deterministic browser journeys. There is **no CI workflow** — these run only when invoked
+by hand, and they are readiness receipts, not outside-founder or market proof.
 
 ## Safety boundary
 

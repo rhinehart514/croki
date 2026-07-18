@@ -1,28 +1,28 @@
-// GeneratedAnswer — a question's answer is the SAME FLIP, scoped by atlasTrace (spec §4).
+// RelatedContext — a deterministic TRACE of what already connects to a selected object (not a generated
+// interpretation, and NOT a source of durable truth).
 //
-// When the founder asks a question about an object, the scene does not navigate away: the objects that
-// answer it reorganize in place and everything else recedes. Scope = projectAtlasTrace(projection, lens,
-// originId) — the trace of objects that bear on the origin. In-scope nodes reorganize into an
-// evidence-strength reading (the Understand arrangement over the trace subset); out-of-scope nodes fade to
-// 0.35 rather than disappear (they are context, not deleted). Dismiss is the SAME instant restore to the
-// exact prior frame that a lens exit uses — the founder pays nothing for asking.
+// When the founder asks to see what relates to an object, the scene does not navigate away: the objects
+// connected to it reorganize in place and everything else recedes. Scope = projectAtlasTrace(projection,
+// lens, originId) — the trace of objects that already bear on the origin, read straight from existing graph
+// relationships. No model runs; nothing is concluded. In-scope nodes reorganize into an evidence-strength
+// reading; out-of-scope nodes fade to 0.35 rather than disappear (they are context, not deleted). Dismiss
+// is the SAME instant restore to the exact prior frame a lens exit uses — the founder pays nothing to look.
 //
-// Three word-based exits, all writing to the brain views substrate — NEVER positions:
-//   • save-as-live-view  → saveLiveView(arrangement id + atlasTrace scope refs). Reopening re-runs the
-//     arrangement over the founder's CURRENT positions; the route rejects any positions field.
-//   • capture-snapshot   → captureSnapshotView(manifest: arrangement + scope; rasterization deferred).
-//   • promote-finding    → promoteViewFinding(statement + subject refs), the existing promote path.
+// TRUTH BOUNDARY (Product Law: facts / evidence / interpretation / action stay distinct): this surface only
+// REARRANGES the view to highlight existing relationships. It promotes NOTHING to durable venture truth —
+// an earlier version wrote the founder's question back as a "finding", which recorded a question as a fact
+// and is removed. Saving/snapshotting a view returns only once the views lifecycle (list/reopen/inspect)
+// exists to make it a real, revisitable artifact rather than a write-only dead end.
 //
-// This overlay owns the scoped FLIP + fade and the three exits; it never touches placement. The parent
-// applies scoped positions through setNodes (the controlled array), exactly as the lens does.
+// This overlay owns the scoped FLIP + fade; it never touches placement. The parent applies scoped positions
+// through setNodes (the controlled array), exactly as the lens does.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Node, ReactFlowInstance, Viewport } from "@xyflow/react";
 import type { AtlasNode } from "@/components/atlas/atlasTypes";
 import type { FirmArchitectureProjection, FirmLens } from "@/types";
 import { projectAtlasTrace } from "@/components/atlas/atlasTrace";
 import { ATLAS_EASE } from "@/components/atlas/atlasMotion";
-import { saveLiveView, captureSnapshotView, promoteViewFinding } from "@/api";
 import { foldPlacement, type SeededPositions } from "./canvasSeedLayout";
 import { resolveTerritories } from "./canvasTerritory";
 import { arrangeLens } from "./lensArrangement";
@@ -35,17 +35,6 @@ const OUT_OF_SCOPE_OPACITY = "0.35";
 // The scope arrangement is named so a saved live view can re-run the SAME arrangement over the founder's
 // current positions. This id is the durable handle the views substrate stores.
 const ANSWER_ARRANGEMENT = "understand" as const;
-
-// atlasTrace emits UI ids; the views substrate only accepts DURABLE refs (bet / outcome / architecture).
-// UI pseudo-refs (atlas:wall, atlas:intent, work:*) are not loadable and the route rejects them, so the
-// saved scope carries only the durable subset. This mirrors views-store.isDurableRef.
-function durableScopeRefs(ids: Iterable<string>): string[] {
-  const refs: string[] = [];
-  for (const id of ids) {
-    if (id.startsWith("bet:") || id.startsWith("outcome:") || id.startsWith("architecture:")) refs.push(id);
-  }
-  return [...new Set(refs)];
-}
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) return false;
@@ -71,7 +60,6 @@ function snapshotRects(): Map<string, { left: number; top: number }> {
 export type GeneratedAnswerQuestion = { originId: string; prompt: string };
 
 export function GeneratedAnswer({
-  ventureId,
   question,
   sceneNodes,
   placementPositions,
@@ -81,7 +69,6 @@ export function GeneratedAnswer({
   setNodes,
   onDismiss,
 }: {
-  ventureId: string;
   question: GeneratedAnswerQuestion | null;
   sceneNodes: AtlasNode[];
   placementPositions: SeededPositions;
@@ -95,8 +82,6 @@ export function GeneratedAnswer({
   const scopeRef = useRef<Set<string>>(new Set());
   const rafRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [exitState, setExitState] = useState<null | "saved" | "captured" | "promoted" | "error">(null);
-  const [busy, setBusy] = useState(false);
 
   const clearPending = useCallback(() => {
     if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
@@ -191,7 +176,6 @@ export function GeneratedAnswer({
     if (instance && freeViewportRef.current) instance.setViewport(freeViewportRef.current, { duration: 0 });
     freeViewportRef.current = null;
     scopeRef.current = new Set();
-    setExitState(null);
   }, [clearPending, instance, placementPositions, sceneNodes, setNodes]);
 
   // Drive the answer from `question`: a set question applies the scoped FLIP; the transition BACK to null
@@ -207,72 +191,19 @@ export function GeneratedAnswer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question]);
 
-  const scopeRefs = useCallback(() => durableScopeRefs(scopeRef.current), []);
-
-  const onSaveLiveView = useCallback(async () => {
-    if (!question || busy) return;
-    setBusy(true);
-    try {
-      await saveLiveView(ventureId, {
-        name: question.prompt.slice(0, 80) || "Saved view",
-        arrangement: ANSWER_ARRANGEMENT,
-        rootRefs: scopeRefs(),
-      });
-      setExitState("saved");
-    } catch { setExitState("error"); } finally { setBusy(false); }
-  }, [busy, question, scopeRefs, ventureId]);
-
-  const onCaptureSnapshot = useCallback(async () => {
-    if (!question || busy) return;
-    setBusy(true);
-    try {
-      await captureSnapshotView(ventureId, {
-        name: question.prompt.slice(0, 80) || "Snapshot",
-        arrangement: ANSWER_ARRANGEMENT,
-        rootRefs: scopeRefs(),
-      });
-      setExitState("captured");
-    } catch { setExitState("error"); } finally { setBusy(false); }
-  }, [busy, question, scopeRefs, ventureId]);
-
-  const onPromoteFinding = useCallback(async () => {
-    if (!question || busy) return;
-    setBusy(true);
-    try {
-      await promoteViewFinding(ventureId, {
-        statement: question.prompt.slice(0, 200),
-        subjectRefs: scopeRefs(),
-      });
-      setExitState("promoted");
-    } catch { setExitState("error"); } finally { setBusy(false); }
-  }, [busy, question, scopeRefs, ventureId]);
-
   if (!question) return null;
 
-  const status = exitState === "saved" ? "Saved as a live view."
-    : exitState === "captured" ? "Captured a snapshot."
-    : exitState === "promoted" ? "Promoted to a finding."
-    : exitState === "error" ? "That could not be saved."
-    : null;
-
   return (
-    <div className="generated-answer" role="region" aria-label="Generated answer">
+    <div className="generated-answer" role="region" aria-label="Related context">
       <p className="generated-answer-prompt">{question.prompt}</p>
       <div className="generated-answer-exits">
-        <button type="button" className="generated-answer-exit" disabled={busy} onClick={onSaveLiveView}>
-          Save as live view
-        </button>
-        <button type="button" className="generated-answer-exit" disabled={busy} onClick={onCaptureSnapshot}>
-          Capture snapshot
-        </button>
-        <button type="button" className="generated-answer-exit" disabled={busy} onClick={onPromoteFinding}>
-          Promote finding
-        </button>
+        {/* This surface only highlights EXISTING relationships — it never promotes anything to durable truth
+            (the removed "promote finding" recorded the question itself as a fact). Save/snapshot return when
+            the views lifecycle exists to make a saved look revisitable rather than a write-only dead end. */}
         <button type="button" className="generated-answer-dismiss" onClick={onDismiss}>
           Dismiss
         </button>
       </div>
-      {status ? <p className="generated-answer-status" aria-live="polite">{status}</p> : null}
     </div>
   );
 }

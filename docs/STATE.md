@@ -1,6 +1,6 @@
 # STATE — Drover
 
-**Stage:** alpha. **Updated:** 2026-07-17.
+**Stage:** alpha. **Updated:** 2026-07-18.
 **Authority:** [`FIRM-SPEC.md`](FIRM-SPEC.md) defines durable product/build physics. Root
 [`DESIGN.md`](../DESIGN.md) defines the intended desktop experience.
 
@@ -14,7 +14,6 @@ Drover is the founder-controlled Product and go-to-market system.
 The approved product has:
 
 - one canonical open venture model with permanent Product and go-to-market territories;
-- the venture canvas as the main founder surface;
 - one continuous venture conversation plus persistent scoped branches;
 - selection-scoped direction and direct manipulation;
 - Understand / Design / Execute / Learn as reversible lenses, never stages;
@@ -27,6 +26,23 @@ The approved product has:
 - exact founder authority over sends, publish, deploy, spend, destructive/irreversible acts, work ending,
   and ambiguous canonical truth.
 
+### Ratified direction change — the canvas is a summoned projection, not the primary surface
+
+A newer approved direction **revises the prior "venture canvas as the main founder surface" line**: the
+graph is now a **summoned intelligence projection**, not the founder's primary operating surface. The
+founder operates through directions, artifacts, work, evidence, and exact consequences; the spatial graph
+is summoned when spatial or causal understanding adds value, not held open as the default workspace.
+
+**This direction is approved but its ratification into the authority files is pending — `FIRM-SPEC.md`
+and root `DESIGN.md` still describe the canvas as the main founder surface.** Per the repository rule, the
+conflict is surfaced rather than blended:
+
+- the **current tree** implements canvas-first (the venture canvas is the sole default founder surface —
+  see "Verified current behavior");
+- the **approved direction** is canvas-as-summoned-projection;
+- `FIRM-SPEC.md` / `DESIGN.md` ratification is **pending** — until they adopt it, treat the canvas-first
+  tree as current proof and the projection direction as approved-but-unratified intent.
+
 The detailed laws and compatibility boundaries live in `FIRM-SPEC.md`; experience behavior lives in root
 `DESIGN.md`.
 
@@ -34,39 +50,59 @@ The detailed laws and compatibility boundaries live in `FIRM-SPEC.md`; experienc
 
 ### Mechanical baseline
 
-On 2026-07-17, against the preserved dirty working tree, `npm test` completed successfully:
+On 2026-07-18, against the working tree, a local run recorded:
 
-- Brain: **736 tests passed**, 0 failed (Phase 1 canonical model, Phase 2 ambient-removal, Phase 3
-  consequence repairs, Phase 6 brain-side territory/traceability + the projection bridge that surfaces real
-  per-object territory and venture-level traceability gaps into the architecture projection the UI reads).
-- UI: **372 tests passed across 79 files**, 0 failed.
+- Brain: **774 tests passed**, 0 failed, 0 skipped.
+- UI unit (Vitest): **437 tests passed**, 0 failed, 0 skipped.
+- Browser firm-acceptance journeys: **12 passed**, 0 failed, 0 skipped.
+- Browser atlas journeys: **3 passed**, 0 failed, 0 skipped.
+- UI lint, the production build, and design-system token parity: clean.
 
-### Unified canvas — Phase 4/5 build in progress (behind `?shell=canvas`)
+This is a **local receipt** produced on one machine. **There is no CI workflow** — the repository has no
+`.github/workflows`, so nothing reruns this suite or the acceptance gate automatically. Every count above
+must be re-earned by hand before it can be trusted after a change.
 
-Additive, flag-gated, NowShell default untouched. Verified green (full `npm test` exit 0):
+This proves the mechanical suite, lint, token parity, and the deterministic browser journeys for the
+current working tree. It does not prove Electron behavior, founder comprehension, real effects, market
+value, or the approved product direction.
 
-- **Slice 1 — canvas shell:** `VentureCanvasShell` renders the one `projectAtlas` scene as a draggable map
-  with rendered Product/GTM territory geography and a named empty state ("Direct the venture"). Founder
-  placement is final: only founder-moved nodes persist (never seeds), a 409 merges rather than clobbers, and
-  a racing poll cannot snap a just-dropped card back. Opens in the structure band so the territories are
-  named on arrival; the atlas altitude attribute is set so zoom-out simplifies cards instead of shrinking to
-  tiny text.
-- **Slice 2 — semantic zoom:** one shared `SemanticBandProvider` (pure `bandForZoom` step function with
-  ±0.06 hysteresis + settle-freeze) owns the single band state; the node anatomies, density ranker, and the
-  legacy immersive band vocabulary all read it, so the altimeter word and the card anatomy cannot disagree.
-  Mounted inside the flow store and above the nodes on both the canvas and the legacy world surface.
-- **Browser verification owed:** this environment has no browser-automation, so the above is proven by unit
-  tests + build + render-logic review, not by literal screenshots. A human/browser pass on `?shell=canvas`
-  (empty-state territories visible, zoom changes card anatomy, drag is final) is still required.
-- UI lint passed.
-- TypeScript and Vite production build passed.
-- Vite emitted a build warning for `vendor-CGN5ilKm.js`: **633.21 kB minified / 195.39 kB gzip**.
-- `npm --prefix site run lint && npm --prefix site run build` passed; Next.js statically generated the
-  public routes.
+### Venture canvas — the sole default founder surface
 
-This proves the mechanical suite, lint, and builds for the current working tree. It does not prove the full
-acceptance suite, Electron behavior, founder comprehension, real effects, market value, or the approved
-product direction.
+`FirmApp.tsx` is ~48 lines with one render decision: no venture → `VenturePicker`; a venture →
+`VentureWorkspace`. There are **no `?shell=` flags, no competing shell roots, and no query-parameter
+product switching** — the venture workspace (built around the canvas) is the only founder surface. The
+prior immersive/Now/legacy shells were deleted from the tree (see "Removed surfaces").
+
+The shipped canvas (`VentureCanvasStage` and its collaborators under `ui/src/components/canvas/`)
+provides, verified by unit tests and by the deterministic browser journeys that render the built UI:
+
+- **founder placement** as final authority (Law 6): only founder-moved nodes persist, a 409 merges rather
+  than clobbers, and a racing poll cannot snap a just-dropped card back;
+- **Product / go-to-market territories** rendered as durable geography with a named seam;
+- **semantic zoom** — a shared band step function so the altimeter word and card anatomy cannot disagree;
+- reversible **operating lenses** (Understand / Design / Execute / Learn) driving the one node array;
+- a **drop-interpretation chip** that names what a founder gesture means before it commits;
+- **undo/redo** with revision receipts (see the durability caveat under "Known broken or incomplete paths");
+- **dense rank-and-reveal** cluster glyphs so a crowded scene stays a machine, not a scatter;
+- a **keyboard-accessible outline** of the scene;
+- **in-context workbench descent** into a selected object.
+
+**Browser verification is done, not owed.** The deterministic journeys run against the real built DOM —
+`canvas-journey.mjs` at 1440×900 and other journeys at 1280×800 — and assert territory geography,
+zoom-driven card anatomy, and final drag placement.
+
+### Removed surfaces
+
+The three-shell era is deleted from the tree, not flag-hidden. Confirmed absent:
+
+- the entire `ui/src/components/immersive/` tree;
+- `ui/src/components/now/NowShell.tsx`, `now/NowStream.tsx`, `now/WorkbenchView.tsx` (the `now/` directory
+  survives only as reusable leaf components composed inside the workspace, e.g. `NowRail`, `NowComposer`);
+- the legacy triptych, `firm/TeammateRail.tsx`, `firm/FirmWorkbenchCanvas.tsx`, `firm/InspectorEffort.tsx`;
+- `test/browser/immersive-shell-journey.mjs`.
+
+(`styles/firm-app.css` remains — it is still imported by `workspace/venture-workspace.css` for the
+conversation feed's leaf styles, so it is a live dependency, not dead code.)
 
 ### Durable local substrate
 
@@ -173,8 +209,8 @@ The current tree can:
   and spend checks;
 - keep the founder as the only actor allowed to end active work.
 
-Runtime completion currently does not equal founder-ended work. The default Now composer does not use the
-existing steer/close dialogue path.
+Runtime completion currently does not equal founder-ended work. The default composer always calls `/drive`
+and does not use the existing steer/close/new-direction dialogue reply path.
 
 ### Product-change and market-return mechanics
 
@@ -193,26 +229,23 @@ destructive act, or attributable market result on the current tree.
 
 ### Current UI mechanics
 
-The tree currently contains three founder shell roots/compositions:
-
-1. default `NowShell` direction workspace;
-2. `ImmersiveShell` behind `?shell=world`;
-3. legacy conversation/canvas/inspector behind `?shell=legacy`.
-
-Across those implementations, the tree already contains reusable mechanics for:
+The tree contains **one** founder surface: `FirmApp.tsx` renders `VenturePicker` (no venture) or
+`VentureWorkspace` (a venture). The earlier three-shell split (Now, immersive `?shell=world`, legacy
+`?shell=legacy`) is gone. Reusable mechanics now composed inside the single workspace include:
 
 - a venture picker and venture-scoped connection state;
 - a continuous conversation feed and selection-scoped conversation projection;
-- rich participant/bet/work/architecture/theory targeting;
-- a direction index with search and needs-you filtering;
+- a direction index (`WorkspaceIndex` / `NowRail`) with universal search and needs-you attention;
 - Result, Exact Change, and approach-comparison workbench representations;
-- a React Flow Atlas projection, deterministic layout, focus traces, camera restoration, outline, and
-  reduced-motion behavior;
+- the React Flow venture canvas with deterministic layout, founder placement, semantic zoom, operating
+  lenses, dense clustering, focus traces, camera restoration, outline, and reduced-motion behavior;
 - contextual product-change review and purpose-specific wall controls;
 - return summaries, active-work receipts, runtime provenance, and exact work focus.
 
-Those capabilities are split across incompatible shells. Their presence is not proof of the approved single
-canvas/conversation product.
+These are now composed into one surface. The canvas-first tree matches the prior "canvas as main surface"
+line but **not** the newer ratified direction, which makes the canvas a summoned projection rather than the
+primary operating surface (see "Ratified direction change"). A separate React Flow **Atlas** projection and
+its journeys remain in the tree as the graph substrate the workspace canvas builds on.
 
 ## Mechanically exercised — deterministic regression coverage
 
@@ -235,44 +268,63 @@ The repository contains deterministic tests and fixtures for:
 Deterministic browser and fixture coverage proves rendering and interaction mechanics only. It does not
 establish outside-founder comprehension, usefulness, real-world effects, causality, or market value.
 
-On 2026-07-17, `npm run test:acceptance` reran the mechanical suite successfully, then failed at design-token
-parity before browser journeys. The reported debt is concentrated in legacy immersive, Now, firm-app, and
-Atlas CSS: undefined tokens, infinite animations, and 9–10px essential text. The complete readiness gate is
-therefore **red** and no browser-acceptance receipt is claimed current.
+On 2026-07-18, a local run recorded the mechanical suite, design-token parity, the firm-acceptance browser
+journeys (12 pass), and the atlas browser journeys (3 pass) all green with 0 failed and 0 skipped. This is a
+**local receipt only** — there is no CI workflow, so the readiness gate is not enforced automatically and
+must be rerun by hand after any change.
 
 ## Known broken or incomplete paths
 
 ### Product composition
 
-- The shipped default is Now, while the approved product requires one canvas-first founder workspace.
-- `FirmApp.tsx` retains three shell roots and query-parameter product switching.
-- Conversation, canvas, selection, wall, polling, and composer behavior are duplicated.
+- The shipped tree is canvas-first: one `VentureWorkspace` surface with the venture canvas as the default.
+  The **newer ratified direction makes the canvas a summoned projection**, not the primary surface — the
+  current tree does not yet implement that (see "Ratified direction change"). `FIRM-SPEC`/`DESIGN`
+  ratification of the projection direction is pending.
 - Directions are reconstructed from founder-message chronology and bet lineage rather than durable branch
   records.
-- Now fetches conversation but does not render the continuing thread.
-- The Atlas is query-hidden from the default product.
+- Workspace search filters **directions only** — it does not search across canvas objects, work, or
+  evidence.
+- **Selection integrity is incomplete.** The visible selection, the founder-facing scope label, and the
+  drive payload are all bet-centric; architecture/theory/work/teammate selections degrade. A teammate
+  selection can *present* as scoped yet start an **unscoped** drive. One canonical selected-object spine is
+  owed.
 
 ### Canvas and model
 
-- The canonical storage model is open, but its shipped architecture compatibility projection and current
-  Atlas interactions still require the legacy five roles.
-- The resting Atlas filters most exact work, evidence, relationships, and live agent scope off-stage.
-- Current Atlas nodes are explicitly `draggable: false` and placement is engine-owned.
-- Saved synchronized live views, immutable snapshots, reversible operating lenses, open creation, hybrid
-  gesture interpretation, and complete epistemic states are not implemented.
-- Product and go-to-market are not yet permanent territories over one canonical model.
+- The canonical storage model is open, but its shipped architecture compatibility projection still requires
+  the legacy five roles.
+- **Saved views/snapshots are write-only in the UI.** The backend (`views-store.mjs` / `view-routes.mjs`)
+  supports save, list, reopen, and delete; the founder surface only saves/captures — it renders **no**
+  list, reopen, or delete affordance, so a saved view cannot be reached again.
+- Canvas nodes are now founder-draggable and placement is founder-owned (nodes lock to `draggable:false`
+  only while a lens or generated-answer overlay is active, and for group/intent nodes). This reverses the
+  earlier engine-owned placement.
+- The **generated-answer "Related context" trace is deterministic and promotes nothing to durable truth.**
+  A prior version wrote the founder's *question* back as a "finding" — recording a question as a fact, a
+  truth-model violation. That truth-promotion path is removed; the surface only rearranges to highlight
+  existing relationships.
+- **`VentureCanvasStage` is a large second-order coordinator** — it owns projection, placement, bands,
+  lenses, views, mutation, revision, interpretation, clustering, selection, keyboard, and outline in one
+  component. Splitting it by stable responsibility is owed.
 
 ### Conversation and runs
 
 - There is no durable venture-root branch plus persistent scoped branch model.
-- Now always calls `/drive`; it does not use the implemented dialogue steer/close/new-direction path.
+- The default composer always calls `/drive`; it does not use the implemented dialogue reply route
+  (steer/approve/close/new-direction), which is therefore unused from the UI.
+- **Undo/redo is not durable venture history.** It is session-scoped, capped, on a 30-minute TTL, and not
+  transactional — the stack moves before the mutation confirms, so a rejected write can leave the visible
+  history out of step with persisted truth.
 - The agent/MCP `/drive` fresh-start gap is **closed (Phase 2)**: an agent-stamped drive with no bet lineage
   is refused; only a founder starts fresh work.
-- Now drops explicit multi-participant targeting and exposes only the first active drive.
+- The composer drops explicit multi-participant targeting and exposes only the first active drive.
 - Runtime completion, workflow completion, founder ending, external execution, and returned evidence are not
   represented as distinct terminal conditions.
 - Outcome-contract workflows are not implemented.
-- SSE exists server/client-side but the production shell relies on polling.
+- **"Real-time" is a 1.2-second, four-request poll.** `use-firm-connection.ts` refetches lens,
+  conversation, active drives, and health together every 1.2s. Server-side SSE exists but this surface does
+  not use it.
 - Venture switching can briefly retain old lens/messages/drives/drafts under the new venture identity.
 
 ### Consequences
@@ -311,6 +363,10 @@ Remaining consequence follow-ups (tracked; not authority holes):
 
 ### Engineering
 
+- **No CI workflow.** The repository has no `.github/workflows`; nothing runs `npm test` or the acceptance
+  gate on push or PR. Every test count in this file is a hand-run local receipt.
+- `VentureCanvasStage` is a large second-order coordinator holding many responsibilities in one component
+  (see "Canvas and model").
 - `brain/src/firm/work-loop.mjs` exceeds the 500-line production-service ceiling and combines several
   responsibilities.
 - The anti-cage file-count threshold is too loose to prevent ordinary architecture growth.
@@ -324,11 +380,11 @@ The following are approved requirements or desired alpha evidence without suffic
 
 - one canonical open model fully wired across Product/go-to-market canvas, conversation, runs, work,
   decisions, evidence, and saved views;
-- one canvas-first founder workspace with one venture conversation and persistent branches;
-- direct canvas manipulation with reversible semantic interpretation;
-- semantic zoom over Product, go-to-market, exact work, evidence, and provenance;
-- reversible Understand / Design / Execute / Learn lens;
-- temporary generated views, synchronized live views, and immutable snapshots;
+- one venture conversation with durable persistent branches;
+- semantic zoom over exact work, evidence, and provenance (the canvas zooms over Product/go-to-market
+  structure today, but exact work, evidence, and provenance are not yet in the zoomed scene);
+- a **reachable** saved-view lifecycle — the founder can save and snapshot, but cannot yet list, reopen, or
+  delete a saved view from the UI;
 - immediate provisional whole-venture interpretation plus useful work in one founder-directed turn;
 - a real provider pass that independently selects and completes a second participant contribution;
 - founder-invoked outcome-contract workflows;
@@ -344,8 +400,10 @@ The following are approved requirements or desired alpha evidence without suffic
 
 The following exists in code or prior documentation but is not approved product physics:
 
-- Now/direction-workspace primacy and one conversation per direction;
-- optional/query-hidden canvas framing;
+- the three-shell surface split (Now/direction-workspace primacy, `?shell=world` immersive, `?shell=legacy`
+  triptych), the immersive tree, and the retired shell browser journey — **removed from the tree** (see
+  "Removed surfaces"), retained here only so their absence is on record;
+- one conversation per direction;
 - permanent AI staff, automatic founding crew, teammate roster as product ontology, and AI-org-chart
   relationships (new founder ventures no longer auto-seed fictional crew — Phase 1);
 - ambient scheduling, heat-controlled autonomy, automatic activation, and around-the-clock inward work
@@ -353,9 +411,10 @@ The following exists in code or prior documentation but is not approved product 
 - fixed diverge/prepare/wall/observe loops presented as the venture lifecycle;
 - closed Concept/Product-loop/System/Motion/Campaign architecture roles as the canonical model;
 - workflow prohibition instead of founder-invoked outcome contracts;
-- immersive ambient-thread treatment and decorative shell chrome;
-- legacy triptych as a separate product;
-- browser journeys that assert retired shell selectors or treat deterministic mechanics as product proof.
+- **canvas-first primacy itself, under the newer ratified direction** — the tree keeps the canvas as the
+  default surface while the approved direction summons it as a projection; this is a live conflict pending
+  `FIRM-SPEC`/`DESIGN` ratification, not yet a migrated behavior.
 
-These behaviors may remain temporarily as compatibility seams while the approved migration preserves current
-user data and capability parity. They must not be promoted in current product copy or future implementation.
+Remaining behaviors may persist temporarily as compatibility seams while the approved migration preserves
+current user data and capability parity. They must not be promoted in current product copy or future
+implementation.

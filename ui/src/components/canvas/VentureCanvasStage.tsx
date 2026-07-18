@@ -570,7 +570,6 @@ function VentureCanvasStageInner({
           {/* The generated answer (spec §4): the SAME FLIP scoped by atlasTrace, with three durable exits
               writing to the brain views substrate (never positions) + an instant dismiss. */}
           <GeneratedAnswer
-            ventureId={venture.id}
             question={answer}
             sceneNodes={scene.nodes}
             placementPositions={lens.placement.positions}

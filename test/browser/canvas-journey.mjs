@@ -631,10 +631,17 @@ test("default workspace operating lens reorganizes then returns every node to it
     const priorIds = Object.keys(priorFrame).sort();
 
     await pressLetter(client, "a");
-    await waitForDom(client, `!!document.querySelector('.generated-answer')`, "pressing 'a' did not open a generated answer");
+    await waitForDom(client, `!!document.querySelector('.generated-answer')`, "pressing 'a' did not open the related-context trace");
     await client.evaluate("new Promise((r) => setTimeout(r, 520))");
-    const answerExits = await client.evaluate(`[...document.querySelectorAll('.generated-answer-exit')].map((b) => b.textContent.trim())`);
-    assert.ok(answerExits.includes("Save as live view"), `generated answer missing the save-live-view exit: ${JSON.stringify(answerExits)}`);
+    // TRUTH BOUNDARY: this surface only rearranges to highlight EXISTING relationships — it must never offer
+    // to promote the founder's question as durable truth. It is labelled honestly as Related context, and
+    // the removed "Promote finding" path (which recorded the question itself as a fact) must not reappear.
+    const trace = await client.evaluate(`(() => ({
+      label: document.querySelector('.generated-answer')?.getAttribute('aria-label'),
+      controls: [...document.querySelectorAll('.generated-answer button')].map((b) => b.textContent.trim()),
+    }))()`);
+    assert.equal(trace.label, "Related context", `trace surface is not labelled honestly: ${JSON.stringify(trace.label)}`);
+    assert.ok(!trace.controls.some((c) => /promote|finding/i.test(c)), `related-context trace still offers a truth-promotion control: ${JSON.stringify(trace.controls)}`);
 
     await client.evaluate(`document.querySelector('.generated-answer-dismiss')?.click()`);
     await waitForDom(client, `!document.querySelector('.generated-answer')`, "Dismiss did not close the generated answer");
