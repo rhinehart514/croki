@@ -1,14 +1,19 @@
-// VentureWorkspace — the Cursor-like frame around the venture canvas (mounted at ?shell=canvas).
-// It composes existing parts into one calm IDE-like surface (DESIGN.md Experience Laws 1–3):
-//   LEFT   — WorkspaceIndex: NowRail's search + Needs-you attention + folded directions, docked with
-//            the ONE venture conversation (ConversationFeed) scoped to the current selection.
-//   CENTER — VentureCanvasStage: the visual venture model, the same plane the bare shell shipped.
-//   DOCK   — NowComposer scoped to the current selection: unscoped it directs the venture; with a
-//            selection it steers that object.
-// One selection state drives everything (Exp Law 3): clicking a canvas node focuses it, scopes the
-// composer, and surfaces its conversation branch — the canvas stays visible, never a details page.
-// The frame owns the single lens connection and reproduces NowShell's pure direction fold, so the rail
-// and conversation add no second poll.
+// VentureWorkspace — the founder-native agent development environment frame (the "Cursor UX for founders").
+// It composes existing parts into one calm IDE-like surface:
+//   LEFT   — WorkspaceIndex: the venture navigator (search + Needs-you attention + folded directions) docked
+//            with the ONE venture conversation (ConversationFeed) scoped to the current selection.
+//   CENTER — the adaptive Workbench: the DEFAULT resting surface. With no selection it shows VentureHome
+//            (where things stand); selecting a direction/run/artifact/decision opens the best representation
+//            the stage registry proposes for that work. The venture GRAPH is a summonable `map` mode — one
+//            action away, never the host.
+//   DOCK   — NowComposer scoped to the current selection. Scoped to a bet it STEERS that direction through
+//            the venture conversation (replyInConversation); unscoped it DIRECTS the venture (driveTeammate).
+// One selection state drives everything: it scopes the composer, filters the conversation branch, and chooses
+// the workbench representation. The frame owns the single lens connection and the pure direction fold, so the
+// rail, conversation, and workbench add no second poll and no second source of truth.
+//
+// HIERARCHY (inverted from the canvas-first shell): the workbench is the center; the map is summoned, and
+// descending from the map returns the founder to the selected work. This is the shipped default.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -23,9 +28,11 @@ import { buildDirections, buildDirectionSections, directionsNeedingYou, type Dir
 import { NowComposer } from "@/components/now/NowComposer";
 import { FirmFreshness } from "@/components/FirmFreshness";
 import { VentureCanvasStage } from "@/components/canvas/VentureCanvasStage";
-import { StageWorkspace } from "@/components/stage/StageWorkspace";
+import { Workbench } from "@/components/workbench/Workbench";
 import { WorkspaceIndex } from "./WorkspaceIndex";
 import "./venture-workspace.css";
+
+type CenterMode = "work" | "map";
 
 export function VentureWorkspace({
   venture,
@@ -36,15 +43,16 @@ export function VentureWorkspace({
 }) {
   const { lens, messages, activeDrives, connection, refresh, setLens } = useFirmConnection(venture.id);
   const readOnly = connection.phase === "stale" || connection.phase === "offline";
-  const readOnlyReason = connection.message ?? "Reconnecting before changes can be sent…";
+  const readOnlyReason = connection.phase === "offline"
+    ? "Offline. Nothing consequential can change until the firm is current again."
+    : "Drover is reconnecting. Nothing consequential can change until the firm is current again.";
 
-  // One selection drives the whole frame: the canvas node, the composer scope, and the conversation
-  // branch (Exp Law 3). A rail direction resolves to its primary bet so a rail pick focuses the canvas.
+  // One selection drives the whole frame: the composer scope, the conversation branch, and the workbench
+  // representation. A rail direction resolves to its primary bet so a rail pick scopes the workbench.
   const [selection, setSelection] = useState<CanvasSelection>(null);
-  // The single new bit of view state beside the selection: whether the adaptive workspace is open OVER the
-  // still-mounted canvas. Every scoped surface reads `selection`, not `descended`, so orientation, composer
-  // scope, and conversation branch persist across the swap for free.
-  const [descended, setDescended] = useState(false);
+  // The center's mode: the adaptive workbench (default) or the summoned venture graph. The graph is a mode,
+  // not the host — so it is only mounted when summoned, and selection survives across the toggle.
+  const [mode, setMode] = useState<CenterMode>("work");
   const [selectedDirectionId, setSelectedDirectionId] = useState<string | null>(null);
   const [needsOnly, setNeedsOnly] = useState(false);
   const [search, setSearch] = useState("");
@@ -56,9 +64,9 @@ export function VentureWorkspace({
   useEffect(() => { listVentures().then((result) => setVentures(result.ventures)).catch(() => undefined); }, []);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
 
-  // The needs-you fold reads lens.wallItems, which the single useFirmConnection poll keeps current; there
-  // is no separate wall fetch to run here. A settled drive just re-polls the lens.
-  // The same fold NowShell runs: bets + conversation spines + drives + wall waits + outcomes → directions.
+  // The same fold the Now route runs: bets + conversation spines + drives + wall waits + outcomes →
+  // directions. The needs-you fold reads lens.wallItems, which the single useFirmConnection poll keeps
+  // current; a settled drive just re-polls the lens.
   const directions = useMemo(
     () => (lens ? buildDirections({ lens, messages, activeDrives }, cursor) : []),
     [lens, messages, activeDrives, cursor],
@@ -83,42 +91,41 @@ export function VentureWorkspace({
   const onLensChange = useCallback((next: FirmLens) => { setLens(next); }, [setLens]);
   const onDriven = useCallback(() => { refresh(); }, [refresh]);
 
-  const clearScope = useCallback(() => { setSelection(null); setSelectedDirectionId(null); setDescended(false); }, []);
-  const newDirection = useCallback(() => { setSelection(null); setSelectedDirectionId(null); setDescended(false); setNeedsOnly(false); setSearch(""); }, []);
+  const clearScope = useCallback(() => { setSelection(null); setSelectedDirectionId(null); }, []);
+  const newDirection = useCallback(() => { setSelection(null); setSelectedDirectionId(null); setMode("work"); setNeedsOnly(false); setSearch(""); }, []);
 
-  // DESCEND: set the selection (scoping composer + conversation) AND open the adaptive workspace over the
-  // still-mounted canvas. Descending DEEPER (a row inside the body) is the same call with a finer target.
+  // SELECT a finer target and keep the workbench as the center. From the map, selecting a node scopes but
+  // stays on the map; descending (a deeper pick, or a row inside a body) returns to the work surface with
+  // that selection — the graph is one action away and hands the founder back to the work.
   const descend = useCallback((next: CanvasSelection) => {
     setSelection(next);
-    if (next?.betId) {
-      const match = directions.find((direction) => direction.betIds.includes(next.betId!));
-      setSelectedDirectionId(match?.id ?? null);
-    }
-    setDescended(true);
+    const match = next?.betId
+      ? directions.find((direction) => direction.betIds.includes(next.betId!))
+      : null;
+    setSelectedDirectionId(match?.id ?? null);
+    setMode("work");
   }, [directions]);
 
   // RETURN + BROADEN — the reversible Escape ladder, owned here because this frame owns the state:
-  //   1. workspace open → close it; the selection SURVIVES (still selected, still scoped). If the descent
-  //      was deep (workRef), also broaden workRef→betId in the same step.
-  //   2. next → broaden bet→null (clear selection), keeping the canvas whole.
-  const returnFromDescent = useCallback(() => {
-    if (descended) {
-      setDescended(false);
-      setSelection((current) => (current?.workRef ? targetBet(current.betId!) : current));
-      return;
-    }
+  //   1. map mode → back to the work surface; the selection SURVIVES.
+  //   2. a deep (workRef) selection → broaden workRef→betId, keeping the direction scoped.
+  //   3. a scoped selection → clear it back to whole-venture Home.
+  const broaden = useCallback(() => {
+    if (mode === "map") { setMode("work"); return; }
+    if (selection?.workRef) { setSelection(targetBet(selection.betId!)); return; }
     if (selection) { setSelection(null); setSelectedDirectionId(null); }
-  }, [descended, selection]);
+  }, [mode, selection]);
 
-  // Rail → canvas bridge: a picked direction focuses its primary bet, which scopes the composer and the
-  // conversation branch in the same state change. A direction with no bet yet still highlights in the rail.
+  // Rail / Home → workbench bridge: a picked direction scopes its primary bet, which scopes the composer and
+  // the conversation branch in the same state change, and the workbench adapts to the direction's best body.
   const selectDirection = useCallback((direction: Direction) => {
     setSelectedDirectionId(direction.id);
     setSelection(direction.primaryBetId ? targetBet(direction.primaryBetId) : null);
+    setMode("work");
   }, []);
 
-  // Canvas → rail bridge: a canvas node scopes everything; keep the rail's selected direction in sync so
-  // the picked object's row reads as current.
+  // Map → frame bridge: a canvas node scopes everything; keep the rail's selected direction in sync so the
+  // picked object's row reads as current. Stays on the map (selecting is not descending).
   const selectFromCanvas = useCallback((next: CanvasSelection) => {
     setSelection(next);
     if (!next?.betId) { setSelectedDirectionId(null); return; }
@@ -126,32 +133,30 @@ export function VentureWorkspace({
     setSelectedDirectionId(match?.id ?? null);
   }, [directions]);
 
-  const selectBet = useCallback((betId: string) => { selectFromCanvas(targetBet(betId)); }, [selectFromCanvas]);
+  const selectBet = useCallback((betId: string) => { descend(targetBet(betId)); }, [descend]);
+
+  const summonMap = useCallback(() => { setMode("map"); }, []);
 
   const stop = useCallback(async (driveId: string) => {
     await stopActiveDrive(venture.id, driveId).catch(() => undefined);
     onDriven();
   }, [venture.id, onDriven]);
 
-  // Escape BROADENS from a scoped selection back to whole-venture (interaction rule 14 / Exp Law 3): today
-  // only a button broadened. The ladder is the same one returnFromDescent runs, so a key and the Close
-  // control behave identically. Skipped while typing in the composer.
+  // Escape climbs the broaden ladder (map → deep → scoped → home). Skipped while typing, and it yields to a
+  // nearer handler that already consumed the key (e.g. an open menu closing itself).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      // If a nearer handler already consumed this Escape (the outline closes itself and calls
-      // preventDefault), do NOT also broaden the scope — one press does one thing. The next Escape,
-      // uncontested, runs the broaden ladder.
       if (event.defaultPrevented) return;
       const target = event.target;
       if (target instanceof Element && target.matches("input, textarea, [contenteditable='true']")) return;
-      if (!descended && !selection) return;
+      if (mode === "work" && !selection) return;
       event.preventDefault();
-      returnFromDescent();
+      broaden();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [descended, selection, returnFromDescent]);
+  }, [mode, selection, broaden]);
 
   const scopeLabel = useMemo(() => {
     if (!selection?.betId || !lens) return null;
@@ -160,7 +165,7 @@ export function VentureWorkspace({
   }, [lens, selection]);
 
   return (
-    <div className="venture-workspace" key={venture.id}>
+    <div className="venture-workspace" key={venture.id} data-mode={mode}>
       <WorkspaceIndex
         venture={venture}
         ventures={ventures}
@@ -188,28 +193,27 @@ export function VentureWorkspace({
         onOpenWall={refresh}
       />
 
-      <main className="venture-workspace-canvas">
-        {/* Stale/offline honesty on the plane: the same FirmFreshness chip the legacy shell shows, so a
-            frozen canvas is never presented as live. It renders nothing when fresh/opening (contract
-            §2.8), an aria-live "Reconnecting / Offline · consequential changes are held" chip with a Retry
-            otherwise. The surface stays legible behind it — the composer holds, the last lens is frozen,
-            never a broken screen (release bar: stale/offline explicitly designed). */}
+      <main className="venture-workspace-center">
+        {/* Stale/offline honesty on the center: the same FirmFreshness chip, so a frozen surface is never
+            presented as live. Renders nothing when fresh; an aria-live "Reconnecting / Offline · changes are
+            held" chip with a Retry otherwise. */}
         <div className="venture-workspace-freshness">
           <FirmFreshness connection={connection} onRetry={refresh} />
         </div>
-        <VentureCanvasStage
-          venture={venture}
-          lens={lens}
-          readOnly={readOnly}
-          selection={selection}
-          onSelect={selectFromCanvas}
-          onDescend={descend}
-          onLensChange={onLensChange}
-          refresh={refresh}
-          dimmed={descended}
-        />
-        {descended ? (
-          <StageWorkspace
+
+        {mode === "map" ? (
+          <VentureCanvasStage
+            venture={venture}
+            lens={lens}
+            readOnly={readOnly}
+            selection={selection}
+            onSelect={selectFromCanvas}
+            onDescend={descend}
+            onLensChange={onLensChange}
+            refresh={refresh}
+          />
+        ) : (
+          <Workbench
             venture={venture}
             lens={lens}
             messages={messages}
@@ -217,13 +221,19 @@ export function VentureWorkspace({
             projection={null}
             cursor={cursor}
             selection={selection}
+            sections={sections}
+            now={now}
+            onSelectDirection={selectDirection}
             onDescend={descend}
-            onReturn={returnFromDescent}
+            onBroaden={broaden}
             onScopePick={descend}
             onStop={stop}
             onChanged={onDriven}
+            onSummonMap={summonMap}
+            readOnlyReason={readOnly ? readOnlyReason : null}
           />
-        ) : null}
+        )}
+
         {lens ? (
           <div className="venture-workspace-dock">
             <NowComposer

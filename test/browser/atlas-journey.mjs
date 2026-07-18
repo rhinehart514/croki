@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 // The retired VentureAtlas shell (semantic-zoom altitude, focus-to-trace glow, promotion dialogs, keyboard
-// concept creation, an explicit machinery panel, Dive) is GONE — VentureWorkspace/VentureCanvasStage is the
-// sole mounted surface. Grepping the reachable component tree (see the report this test's porting produced)
-// confirms: `ArchitectureElement`'s "Use in Drover" and "How this runs" buttons still render on canvas
+// concept creation, an explicit machinery panel, Dive) is GONE. VentureWorkspace now rests on its adaptive
+// workbench and summons VentureCanvasStage only for map work. Grepping the reachable component tree confirms:
+// `ArchitectureElement`'s "Use in Drover" and "How this runs" buttons still render on canvas
 // architecture cards (the component is reused for its node visuals), but the canvas feeds them through
 // `atlasInertData()`, which wires `onPromote` and `onRevealMachinery` to `() => undefined` — genuinely dead
-// clicks on the shipped surface. Dive is explicitly superseded per StageWorkspace.tsx's own header comment.
+// clicks on the summoned map. Dive is explicitly superseded by the workbench descent.
 // Keyboard `n`-to-create-concept has no listener anywhere in canvas/workspace. So promotion, machinery, and
 // Dive assertions are DROPPED, not faked. What DOES survive and is ported here: the architecture-projection
 // API truth (revision/elements/roles/joins/pressure — untouched by the shell), the shared-system-powers-
@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { createAtlasPortfolioFixture } from "../fixtures/atlas-fixtures.mjs";
-import { bootFixture, setNetworkOffline, waitForDom } from "./fixtures/browser-harness.mjs";
+import { bootFixture, setNetworkOffline, summonMap, waitForDom } from "./fixtures/browser-harness.mjs";
 import { openAtlasFixture } from "./fixtures/atlas-browser-harness.mjs";
 
 function projectionExpression(ventureId, body) {
@@ -68,7 +68,7 @@ test("venture workspace: architecture truth stays durable, portable across ventu
     assert.ok(durable.pressure.includes("held-release"));
 
     // SHARED-SYSTEM DEDUP — one reusable system identity powers several motions without a duplicate DOM
-    // node. architecture: elements DO render as canvas nodes on the shipped surface (VentureCanvasStage.tsx
+    // node. architecture: elements DO render as nodes after the map is summoned (VentureCanvasStage.tsx
     // resolves "architecture:" ids into targets), so this claim survives.
     await waitForDom(client, `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`, "canvas did not mount");
     const sharedNode = await client.evaluate(`document.querySelectorAll('.react-flow__node[data-id="architecture:arch-buffalo-system-proof"]').length`);
@@ -108,7 +108,18 @@ test("venture workspace: architecture truth stays durable, portable across ventu
       return Boolean(option);
     })()`);
     assert.equal(switchedVenture, true, "DenialShield was not offered in the venture switcher");
-    await waitForDom(client, `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`, "DenialShield's canvas did not open");
+    await waitForDom(
+      client,
+      `!!document.querySelector('.venture-workspace[data-mode="work"] [data-testid="venture-workbench"][data-mode="work"]')`,
+      "DenialShield did not open on its venture workbench",
+    );
+    const switchedRestingSurface = await client.evaluate(`(() => ({
+      workbench: Boolean(document.querySelector('.venture-workspace[data-mode="work"] [data-testid="venture-workbench"][data-mode="work"]')),
+      map: Boolean(document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')),
+    }))()`);
+    assert.equal(switchedRestingSurface.workbench, true, "DenialShield's workbench was not mounted at rest");
+    assert.equal(switchedRestingSurface.map, false, "DenialShield opened on the map instead of its workbench");
+    await summonMap(client);
     await waitForDom(
       client,
       projectionExpression(unrelatedVentureId, `projection.elements.length > 0`),

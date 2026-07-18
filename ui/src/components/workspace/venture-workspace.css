@@ -103,18 +103,18 @@
   font-size: var(--text-sm);
 }
 
-/* ── Center — the canvas plane with a docked composer, the same dock the bare shell ships ────────── */
-.venture-workspace-canvas {
+/* ── Center — the adaptive workbench (default) or the summoned graph, with a docked composer ──────── */
+.venture-workspace-center {
   position: relative;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--canvas, #fff);
+  background: var(--n-app);
 }
 
-/* The extracted stage fills the canvas column. */
-.venture-workspace-canvas .venture-canvas-stage {
+/* In map mode the summoned graph plane fills the center column. */
+.venture-workspace-center .venture-canvas-stage {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;

@@ -5,9 +5,9 @@
 // active workspace. Freshness lives at the workspace level, never inside the field.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowRight, ArrowUp, Mic, Paperclip, X } from "lucide-react";
-import { driveTeammate, type DriveTeammateResult } from "@/api";
+import { driveTeammate, replyInConversation, type DriveTeammateResult } from "@/api";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
-import { readDriveReceipt, type DriveReceipt } from "./driveReceipt";
+import { readDriveReceipt, readReplyReceipt, type DriveReceipt } from "./driveReceipt";
 import { useSpeechInput } from "./useSpeechInput";
 
 const EMPTY_SUGGESTIONS = [
@@ -62,7 +62,9 @@ export function NowComposer({
   // byte-identical; the venture canvas passes the spec's "Direct the venture".
   placeholder?: string;
   onClearScope?: () => void;
-  onDriven?: (result: DriveTeammateResult) => void;
+  // Called after a turn lands so the frame re-polls. The result is present for a /drive (start work) and
+  // omitted for a scoped conversation reply (steer/answer/approve), which returns no DriveTeammateResult.
+  onDriven?: (result?: DriveTeammateResult) => void;
   // When provided (the home composer), the receipt offers a way into the direction the drive produced.
   onOpenResult?: (targetBetId: string | null) => void;
 }) {
@@ -90,14 +92,27 @@ export function NowComposer({
       ? `Steer this direction — try another angle, send it, refine…`
       : `What should Drover accomplish for ${ventureName}?`);
 
+  // Contextual routing (the composer is operational, not a one-verb /drive box):
+  //   • Scoped to a direction (a bet is selected) → the turn STEERS/answers/approves/continues that existing
+  //     direction through the ONE venture conversation (replyInConversation). The brain classifies the act.
+  //   • Unscoped, or scoped to a non-bet target (architecture/theory) → the turn DIRECTS the venture: /drive
+  //     starts (or branches) work. /drive is only for starting or branching, never for steering.
+  const scopedToDirection = Boolean(selection?.betId);
+
   const submit = async (value: string) => {
     const goal = value.trim();
     if (!goal || busy || readOnly) return;
     setBusy(true); setError(null); setReceipt(null); setDraft("");
     try {
-      const response = await driveTeammate(ventureId, scopedBody(goal, selection));
-      setReceipt(readDriveReceipt(response));
-      onDriven?.(response);
+      if (scopedToDirection) {
+        const reply = await replyInConversation(ventureId, { message: goal, betId: selection!.betId });
+        setReceipt(readReplyReceipt(reply));
+        onDriven?.();
+      } else {
+        const response = await driveTeammate(ventureId, scopedBody(goal, selection));
+        setReceipt(readDriveReceipt(response));
+        onDriven?.(response);
+      }
     } catch (cause) {
       setDraft(goal);
       setError(cause instanceof Error ? cause.message : "Drover could not take that direction.");
@@ -158,7 +173,7 @@ export function NowComposer({
                 <Mic aria-hidden="true" />
               </button>
             ) : null}
-            <button type="submit" className="now-composer-send" aria-label="Start work" disabled={busy || readOnly || !draft.trim()}>
+            <button type="submit" className="now-composer-send" aria-label={scopedToDirection ? "Send to this direction" : "Start work"} disabled={busy || readOnly || !draft.trim()}>
               <ArrowUp aria-hidden="true" />
             </button>
           </div>
@@ -181,7 +196,7 @@ export function NowComposer({
 
       <div className="now-composer-feedback" aria-live="polite">
         {speech.recording ? <span role="status">Listening…</span> : null}
-        {busy ? <span role="status">Starting work…</span> : null}
+        {busy ? <span role="status">{scopedToDirection ? "Sending…" : "Starting work…"}</span> : null}
         {error ? <span role="alert">{error}</span> : null}
         {readOnly && readOnlyReason && !error ? (
           <span className="now-composer-held" role="status">{readOnlyReason}</span>

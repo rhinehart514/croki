@@ -500,7 +500,8 @@ function VentureCanvasStageInner({
   }, [onDescend, resolveTarget]);
 
   // Deterministic keyboard access via the AtlasOutline (role=listbox, arrow/Home/End, visible focus): "o"
-  // toggles it; Enter selects/descends like the pointer; Escape closes it first. Skipped while typing.
+  // toggles it; Enter selects/descends like the pointer; Escape closes it first. Skipped while typing. This
+  // listener runs in capture phase so the outline consumes Escape before the workspace broadens map → work.
   // "L" is NO LONGER an outline key — it is the operating-lens key (useOperatingLens), so "o" is the outline.
   const [outlineOpen, setOutlineOpen] = useState(false);
   useEffect(() => {
@@ -516,10 +517,14 @@ function VentureCanvasStageInner({
         event.preventDefault();
         setAnswer({ originId: selectedNodeId, prompt: `What bears on ${scopeTitle(nodes, selectedNodeId)}?` });
       }
-      else if (event.key === "Escape" && outlineOpen) { event.preventDefault(); setOutlineOpen(false); }
+      else if (event.key === "Escape" && outlineOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setOutlineOpen(false);
+      }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [outlineOpen, selectedNodeId, answer, lensId, nodes]);
 
   return (

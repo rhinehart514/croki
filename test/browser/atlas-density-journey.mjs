@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 
 // The retired VentureAtlas semantic-zoom surface (named altitude tiers, `.atlas-element`/`.atlas-effort`
-// discrete zoom-density tiers, `.atlas-canvas[data-atlas-density]`) is gone — VentureCanvasStage is the
-// sole mounted surface, and it has NO discrete density-tier concept at all (grepped for `data-density` /
+// discrete zoom-density tiers, `.atlas-canvas[data-atlas-density]`) is gone. The default center is the
+// workbench; openAtlasFixture intentionally summons VentureCanvasStage for this map-specific journey. That
+// summoned map has NO discrete density-tier concept at all (grepped for `data-density` /
 // `data-atlas-density` anywhere under ui/src/components/canvas: zero hits). Canvas cards render
 // continuously, not through named tiers, so the structural-legibility-by-tier and selection-forces-full-
-// detail assertions have no home on the shipped surface and are dropped, not faked.
+// detail assertions have no home on the summoned map and are dropped, not faked.
 //
 // TEST A ("empty venture asks for intent without inventing architecture") is DROPPED as its own test here:
 // `createEmptyAtlasFixture` (empty venture, 0 elements/bets/outcomes) and `createEmptyCanvasVentureFixture`
 // are functionally identical shapes (a fresh venture with nothing seeded), and canvas-journey.mjs's
 // "default workspace empty venture reads as named geography with first-direction affordances" test already
-// proves the modern equivalent claim (territory kickers present, 0 bet cards, hub retitled to the venture
-// name, dock composer offers first-direction chips) against that shape. Porting it again here would be a
+// proves the modern equivalent claim (VentureHome present at rest, 0 bet cards after summoning the map,
+// dock composer offers first-direction chips) against that shape. Porting it again here would be a
 // pure duplicate assertion, not new coverage.
 //
 // TEST C ("card detail responds to zoom continuously, with no mode chrome") is DROPPED as its own test:
@@ -20,10 +21,9 @@
 // per the grep above, and its one surviving claim (no named-altitude switcher / mode selector exists) is
 // too thin to justify its own browser-boot test — it is folded into Test B below as one extra assertion.
 //
-// TEST B ("dense architecture stays canvas-like across zoom") is PORTED: outline access at dense scale,
-// direct wheel-zoom moving the camera, and 5-tier browser zoom (80/100/125/150/200%) preserving
-// reachability of canvas/composer/outline/rail with no horizontal overflow all survive on the shipped
-// canvas shell and are real, valuable coverage.
+// TEST B ("dense architecture stays canvas-like across zoom") is PORTED: openAtlasFixture summons the map,
+// then outline access at dense scale, direct wheel-zoom moving the camera, and 5-tier browser zoom
+// (80/100/125/150/200%) preserve reachability of map/composer/outline/rail with no horizontal overflow.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -46,9 +46,9 @@ test("venture workspace: dense architecture stays canvas-like and keyboard/zoom-
     await waitForDom(client, `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`, "canvas did not mount");
 
     // NO MODE CHROME — folded from the retired Test C: no named-altitude switcher / mode selector exists
-    // anywhere on the shipped surface (density is not a navigable state at all here).
+    // anywhere on the summoned map (density is not a navigable state at all here).
     const modeChrome = await client.evaluate(`Boolean(document.querySelector('[data-altitude-switcher], .atlas-altitude-switcher, .atlas-mode-selector, [data-atlas-mode-selector]'))`);
-    assert.equal(modeChrome, false, "a named-altitude switcher / mode selector leaked onto the shipped surface");
+    assert.equal(modeChrome, false, "a named-altitude switcher / mode selector leaked onto the summoned map");
 
     // OUTLINE — deterministic keyboard access to the full 83-element dense set.
     await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);

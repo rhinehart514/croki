@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { readDriveReceipt, type DriveReceipt } from "./driveReceipt";
-import type { DriveTeammateResult } from "@/api";
+import { readDriveReceipt, readReplyReceipt, type DriveReceipt } from "./driveReceipt";
+import type { ConversationReplyResult, DriveTeammateResult } from "@/api";
 
 function drive(partial: Partial<DriveTeammateResult>): DriveTeammateResult {
   return {
@@ -32,6 +32,12 @@ describe("readDriveReceipt", () => {
     const receipt = readDriveReceipt(drive({ outcome: { kind: "paused" }, handoff: handoff({ openedBetIds: ["b9"] }) }));
     expect(receipt.waiting).toBe(true);
     expect(receipt.targetBetId).toBe("b9");
+  });
+
+  it("opens the direction that owns the waiting decision", () => {
+    const receipt = readDriveReceipt(drive({ handoff: handoff({ openedBetIds: ["b-open"], wallBetIds: ["b-wall"] }) }));
+    expect(receipt.waiting).toBe(true);
+    expect(receipt.targetBetId).toBe("b-wall");
   });
 
   it("names a single staged change and offers it to open", () => {
@@ -75,5 +81,29 @@ describe("readDriveReceipt", () => {
     expect(receipt.headline).toMatch(/take shape/i);
     expect(receipt.targetBetId).toBeNull();
     expect(receipt.detail).toBeNull();
+  });
+});
+
+describe("readReplyReceipt", () => {
+  it("keeps an approved outward act visibly held for founder release", () => {
+    const receipt = readReplyReceipt({
+      act: "approve", betId: "b1", waitingItemId: "wall-1", grant: null,
+      note: "Release this at the gate to send it.",
+    } satisfies ConversationReplyResult);
+
+    expect(receipt.waiting).toBe(true);
+    expect(receipt.headline).toMatch(/release this act at the gate/i);
+    expect(receipt.headline).not.toMatch(/carrying it out/i);
+  });
+
+  it("never turns a standing approval into release authority", () => {
+    const receipt = readReplyReceipt({
+      act: "approve-standing", betId: "b1", waitingItemId: "wall-1",
+      grant: { actType: "send", grantedAt: "2026-07-18T12:00:00.000Z" },
+      note: "Release this at the gate to send it.",
+    } satisfies ConversationReplyResult);
+
+    expect(receipt.waiting).toBe(true);
+    expect(receipt.headline).toMatch(/still needs your release/i);
   });
 });

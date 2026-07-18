@@ -1,33 +1,35 @@
 #!/usr/bin/env node
 
-// The default resting-machine journey. Locks the gains the canvas seed + territory-in-sim +
-// rank-and-reveal changes make (STATE.md verification debt): the resting canvas reads as the Product+GTM
-// MACHINE, not a crowded scatter. At 1440x900 it asserts, against the real built UI:
-//   • FRAME — the workspace mounts: left index + canvas plane + dock composer.
-//   • RESTING — nodes do NOT overlap (bounding-box check), show distinct titles across >=2 kinds, and both
-//     the Product and Go-to-market territory kickers render.
-//   • SCOPE — a single click on a node scopes the composer (loses "Direct the venture") WITHOUT a details
-//     detour (no stage-workspace opens).
-//   • DESCEND — a double-click descends into a .stage-workspace over a STILL-mounted, dimmed canvas with a
-//     heading.
-//   • ESCAPE ladder — first Escape returns from descent (canvas un-dims, scope survives); second Escape
-//     broadens back to the whole venture ("Direct the venture" restored).
+// The default workbench-first journey. The hierarchy is inverted: the adaptive WORKBENCH is the resting
+// center and the venture graph is a SUMMONED mode, not the host. This journey locks that inversion and the
+// gains the canvas seed + territory-in-sim + rank-and-reveal changes make once the map IS summoned (the
+// plane reads as the Product+GTM MACHINE, not a crowded scatter). At 1440x900 it asserts, against the real
+// built UI:
+//   • FRAME — at rest the workbench mounts (left index + workbench center + dock composer); the node map is
+//     NOT mounted. The graph is one action away via "Map".
+//   • SUMMON — pressing Map mounts the venture plane as a mode.
+//   • RESTING — on the summoned plane, nodes do NOT overlap (bounding-box check), show distinct titles
+//     across >=2 kinds, and both the Product and Go-to-market territory kickers render.
+//   • SCOPE — on the plane, a single click on a node scopes the composer (loses "Direct the venture")
+//     WITHOUT descending (stays on the map, no stage-workspace).
+//   • DESCEND — a double-click hands the founder back to the WORK surface scoped to that node: the map
+//     unmounts and the workbench opens that direction's representation.
+//   • ESCAPE — from the scoped work surface, Escape broadens back to the whole venture ("Direct the venture"
+//     restored, scope cleared).
 //   • No unhandled console rejections.
 //
 // Reuses the browser harness (bootFixture spawns the built UI server with a venture pre-seeded so the
-// picker shows "Open canvas") and the CDP client. VentureWorkspace is now the sole default surface, so
+// picker shows the venture row) and the CDP client. VentureWorkspace is the sole default surface, so
 // clicking the venture from the picker lands in it with no flag.
 
 import assert from "node:assert/strict";
-import crypto from "node:crypto";
 import { test } from "node:test";
 
-import { launchChrome } from "./lib/cdp.mjs";
 import {
   bootFixture,
-  freePort,
+  openFixtureVenture,
+  summonMap,
   waitForDom,
-  waitForCanvasViewportStable,
   setNetworkOffline,
   assertNoUnhandledRejections,
 } from "./fixtures/browser-harness.mjs";
@@ -40,68 +42,10 @@ import {
 
 const VIEWPORT = { width: 1440, height: 900 };
 
-function signFounderRequest(secret, method, rawUrl) {
-  const url = new URL(rawUrl);
-  const requestPath = `${url.pathname}${url.search}`;
-  const issuedAt = Date.now();
-  const nonce = crypto.randomBytes(18).toString("base64url");
-  const signature = crypto
-    .createHmac("sha256", secret)
-    .update(`${method.toUpperCase()}\n${requestPath}\n${issuedAt}\n${nonce}`)
-    .digest("base64url");
-  return `v1.${issuedAt}.${nonce}.${signature}`;
-}
-
-async function installFounderHost(client, base, secret) {
-  client.on("Fetch.requestPaused", ({ requestId, request }) => {
-    const headers = Object.entries({
-      ...request.headers,
-      "x-drover-founder-capability": signFounderRequest(secret, request.method, request.url),
-    }).map(([name, value]) => ({ name, value: String(value) }));
-    void client.send("Fetch.continueRequest", { requestId, headers }).catch(() => {});
-  });
-  await client.send("Fetch.enable", {
-    patterns: [{ urlPattern: `${base}/api/*`, requestStage: "Request" }],
-  });
-}
-
-// Open the seeded venture in the default workspace: navigate to the base url, click the venture row, and
-// wait for the VentureWorkspace frame. (openFixtureVenture in the harness is default-shell only — it
-// hardcodes drover.base and waits for [data-venture-atlas], which this shell does not render.)
+// This journey proves the 1440×900 desktop contract while reusing the shared authenticated opener and
+// explicit Map transition used by the rest of the deterministic browser suite.
 async function openCanvasVenture(drover) {
-  const chrome = await launchChrome({
-    port: await freePort(),
-    url: `${drover.base}`,
-    beforeNavigate: async (client) => {
-      await client.send("Emulation.setDeviceMetricsOverride", {
-        width: VIEWPORT.width,
-        height: VIEWPORT.height,
-        deviceScaleFactor: 1,
-        mobile: false,
-      });
-      await client.send("Emulation.setEmulatedMedia", {
-        features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
-      });
-      await installFounderHost(client, drover.base, drover.founderCapability);
-    },
-  });
-  const { client } = chrome;
-  await waitForDom(client, `/Continue a venture/i.test(document.body.textContent)`, "canvas venture picker did not render");
-  const opened = await client.evaluate(`(() => {
-    const button = [...document.querySelectorAll('button')]
-      .find((entry) => entry.textContent.includes(${JSON.stringify(drover.fixture.venture.name)}));
-    button?.click();
-    return Boolean(button);
-  })()`);
-  assert.equal(opened, true, `could not open ${drover.fixture.venture.name}`);
-  await waitForDom(
-    client,
-    `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`,
-    "canvas workspace did not open",
-  );
-  await waitForCanvasViewportStable(client);
-  await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
-  return chrome;
+  return openFixtureVenture(drover, { viewport: VIEWPORT });
 }
 
 // Fire a real click / double-click on a canvas node, at its on-screen centre, through the SAME DOM path
@@ -192,19 +136,29 @@ test("default workspace rests as the Product+GTM machine and descends without a 
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
   try {
-    // FRAME — index + canvas plane + dock composer all mounted; canvas resting (not descended).
+    await waitForDom(
+      client,
+      `document.querySelector('.venture-workspace-dock .now-composer textarea')?.getAttribute('placeholder') === 'Direct the venture'`,
+      "the whole-venture dock composer did not settle",
+    );
+    // FRAME — the WORKBENCH is the resting center (not a node map): index + workbench + dock composer are
+    // mounted, the graph is NOT even present, and nothing is descended.
     const frame = await client.evaluate(`(() => ({
       index: Boolean(document.querySelector('.venture-workspace .vw-index')),
-      canvas: Boolean(document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')),
-      restingStage: document.querySelector('.venture-canvas-stage')?.getAttribute('data-dimmed'),
+      workbench: Boolean(document.querySelector('.venture-workspace [data-testid="venture-workbench"]')),
+      canvasMounted: Boolean(document.querySelector('.venture-workspace .venture-canvas-flow')),
       dock: (() => { const t = document.querySelector('.venture-workspace-dock .now-composer textarea'); return t ? t.getAttribute('placeholder') : null; })(),
       descended: Boolean(document.querySelector('[data-testid="stage-workspace"]')),
     }))()`);
-    assert.equal(frame.canvas, true, "canvas plane did not mount");
+    assert.equal(frame.workbench, true, "the workbench did not mount as the resting center");
     assert.equal(frame.index, true, "workspace index did not mount");
-    assert.equal(frame.restingStage, "false", "canvas started dimmed/descended instead of at rest");
+    assert.equal(frame.canvasMounted, false, "the node map was mounted at rest instead of being summonable");
     assert.equal(frame.dock, "Direct the venture", "dock composer did not show the whole-venture placeholder");
     assert.equal(frame.descended, false, "a stage-workspace was open at rest");
+
+    // SUMMON — the graph is one action away: pressing Map mounts the venture plane as a mode. Every
+    // plane-level assertion below runs on the summoned map.
+    await summonMap(client);
 
     // RESTING — collision-free by construction (no two placed cards overlap), distinct titles across
     // >=2 kinds, and BOTH territory kickers rendered.
@@ -309,48 +263,49 @@ test("default workspace rests as the Product+GTM machine and descends without a 
     assert.notEqual(afterScope.placeholder, "Direct the venture", "single click left the whole-venture placeholder");
     assert.equal(afterScope.descended, false, "a single click opened a details workspace instead of only scoping");
 
-    // DESCEND — a double-click descends into a .stage-workspace over the still-mounted, dimmed canvas.
+    // DESCEND — a double-click hands the founder back to the WORK surface scoped to that node: the map
+    // unmounts and the workbench opens that direction's own representation (no dimmed-canvas detour), with a
+    // heading and the direction still scoped on the dock.
     await fireNode(client, betId, "dblclick");
-    await waitForDom(client, `!!document.querySelector('[data-testid="stage-workspace"]')`, "double-click did not descend into the stage workspace");
+    await waitForDom(client, `!!document.querySelector('[data-testid="stage-workspace"]')`, "double-click did not hand back to the work surface");
     const descended = await client.evaluate(`(() => ({
       stageWorkspace: Boolean(document.querySelector('[data-testid="stage-workspace"]')),
-      canvasStillMounted: Boolean(document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')),
-      dimmed: document.querySelector('.venture-canvas-stage')?.getAttribute('data-dimmed'),
-      heading: (document.querySelector('[data-testid="stage-workspace"] h1, [data-testid="stage-workspace"] h2, [data-testid="stage-workspace"] [role="heading"]')?.textContent || '').trim(),
+      workbench: Boolean(document.querySelector('[data-testid="venture-workbench"]')),
+      canvasUnmounted: !document.querySelector('.venture-workspace .venture-canvas-flow'),
+      heading: (document.querySelector('.venture-workspace [data-testid="venture-workbench"] .now-doc-title')?.textContent || '').trim(),
       ariaLabel: document.querySelector('[data-testid="stage-workspace"]')?.getAttribute('aria-label'),
-    }))()`);
-    assert.equal(descended.stageWorkspace, true, "stage workspace did not mount on descent");
-    assert.equal(descended.canvasStillMounted, true, "canvas unmounted under the descent instead of staying mounted");
-    assert.equal(descended.dimmed, "true", "canvas did not dim behind the descent");
-    assert.equal(descended.ariaLabel, "Descended work", "stage workspace missing its region label");
-    assert.ok(descended.heading.length > 0, "descended workspace has no heading");
-
-    // ESCAPE ladder — blur the composer first (the handler skips input/textarea focus), then:
-    //   1. first Escape returns from descent; the canvas un-dims and the scope SURVIVES.
-    //   2. second Escape broadens back to the whole venture ("Direct the venture" restored).
-    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
-    await pressEscape(client);
-    await waitForDom(client, `!document.querySelector('[data-testid="stage-workspace"]')`, "first Escape did not return from descent");
-    const afterFirstEscape = await client.evaluate(`(() => ({
-      descended: Boolean(document.querySelector('[data-testid="stage-workspace"]')),
-      dimmed: document.querySelector('.venture-canvas-stage')?.getAttribute('data-dimmed'),
       scoped: Boolean(document.querySelector('.venture-workspace-dock .now-composer-scope')),
     }))()`);
-    assert.equal(afterFirstEscape.descended, false, "stage workspace stayed open after first Escape");
-    assert.equal(afterFirstEscape.dimmed, "false", "canvas stayed dimmed after returning from descent");
-    assert.equal(afterFirstEscape.scoped, true, "first Escape cleared the scope instead of only returning from descent");
+    assert.equal(descended.stageWorkspace, true, "the workbench did not open the selected work on descent");
+    assert.equal(descended.workbench, true, "the workbench frame vanished on descent");
+    assert.equal(descended.canvasUnmounted, true, "the node map stayed mounted instead of handing back to the work surface");
+    assert.equal(descended.ariaLabel, "Selected work", "the selected-work region is missing its label");
+    assert.ok(descended.heading.length > 0, "the descended work has no heading");
+    assert.equal(descended.scoped, true, "descending did not keep the direction scoped on the dock");
 
+    // ESCAPE — blur the composer first (the handler skips input/textarea focus), then a single Escape
+    // broadens the scoped work surface back to the whole venture: the selected-work region closes, the scope
+    // clears, and the dock composer directs the whole venture again ("Direct the venture" restored).
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
     await pressEscape(client);
-    await waitForDom(client, `document.querySelector('.venture-workspace-dock .now-composer textarea')?.getAttribute('placeholder') === 'Direct the venture'`, "second Escape did not broaden back to the whole venture");
-    const afterSecondEscape = await client.evaluate(`Boolean(document.querySelector('.venture-workspace-dock .now-composer-scope'))`);
-    assert.equal(afterSecondEscape, false, "second Escape left a scope in place");
+    await waitForDom(client, `document.querySelector('.venture-workspace-dock .now-composer textarea')?.getAttribute('placeholder') === 'Direct the venture'`, "Escape did not broaden back to the whole venture");
+    const afterEscape = await client.evaluate(`(() => ({
+      descended: Boolean(document.querySelector('[data-testid="stage-workspace"]')),
+      scoped: Boolean(document.querySelector('.venture-workspace-dock .now-composer-scope')),
+      workbench: Boolean(document.querySelector('.venture-workspace [data-testid="venture-workbench"]')),
+    }))()`);
+    assert.equal(afterEscape.descended, false, "the selected-work region stayed open after Escape");
+    assert.equal(afterEscape.scoped, false, "Escape left a scope in place");
+    assert.equal(afterEscape.workbench, true, "Escape left the workbench center");
 
-    // GEOMETRY — the latent-overlap regressions the drover fixture cannot trigger are guarded
-    // deterministically by canvasTerritory.test.ts (product-loop 480 no-overlap; two theory subjects ring
-    // instead of stacking at the origin). Here, against the real built DOM, assert every rendered card is
+    // GEOMETRY — re-summon the plane (Escape returned us to the workbench), then assert the latent-overlap
+    // regressions the drover fixture cannot trigger are guarded deterministically by canvasTerritory.test.ts
+    // (product-loop 480 no-overlap; two theory subjects ring instead of stacking at the origin). Against the
+    // real built DOM, assert every rendered card is
     // clear (the overlaps[] check above already did this over ALL nodes) AND that if a wide product-loop or
     // a theory subject DOES render, it is separated from every neighbour by real geometry — so a fixture
     // that later grows architecture/theory can never silently overlap.
+    await summonMap(client);
     const wide = await client.evaluate(`(() => {
       const nodes = [...document.querySelectorAll('.venture-workspace .react-flow__node')]
         .map((n) => {
@@ -386,6 +341,7 @@ test("default workspace lens and answer are mutually exclusive and neither can l
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
   try {
+    await summonMap(client); // the lens/answer overlays live on the summoned plane
     // The three interplay guarantees the lens review named as must-fixes:
     //   (1) Law 6 — while an overlay (lens/answer) is active, nodes are NOT draggable, so a drag can never
     //       rewrite founder placement to the overlay's coordinates (React Flow drops the `draggable` class
@@ -457,6 +413,7 @@ test("default workspace empty venture reads as named geography with first-direct
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
   try {
+    await summonMap(client); // the named geography is read on the summoned plane
     // The empty plane names its geography (both territory kickers), retitles the intent hub to the venture
     // name, and the dock composer offers first directions — no lorem, no tutorial checklist (spec).
     const empty = await client.evaluate(`(() => {
@@ -485,6 +442,7 @@ test("default workspace stays legible and honest when the connection goes offlin
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
   try {
+    await summonMap(client); // prove the summoned plane holds coherent when the connection drops
     // Cut the network: the 1.2s lens poll fails and the connection phase drops to offline/stale. The
     // surface must NOT break — the cards stay on the plane, an honest freshness chip appears with a Retry,
     // and the dock composer is held with a stated reason (never a dead input, never data-as-live).
@@ -528,6 +486,7 @@ test("default workspace holds a dense venture legible and keyboard-reachable via
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
   try {
+    await summonMap(client); // density is read on the summoned plane
     // DENSE — many nodes still read: the placed cards do not overlap (collision-free by construction holds
     // at scale) and titles are legible (no zero-size or clipped-to-nothing cards).
     const dense = await client.evaluate(`(() => {
@@ -574,6 +533,7 @@ test("default workspace operating lens reorganizes then returns every node to it
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
   try {
+    await summonMap(client); // the reversible lens covenant lives on the summoned plane
     // The reversible covenant (spec §3): each lens ENTER → Escape returns every node to its exact free
     // pixel with an UNCHANGED id-set. Snapshot the free frame once, then for all four lenses press L
     // (enter/cycle) and Escape (exit) and re-assert the frame is byte-identical.
@@ -665,6 +625,7 @@ test("default workspace dwell-armed drop raises the interpretation chip, applies
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
   try {
+    await summonMap(client); // dwell-armed drops happen on the summoned plane
     await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
     // Two distinct connectable (bet) nodes to drag one onto the other.
     const betIds = await client.evaluate(`[...document.querySelectorAll('.venture-workspace .react-flow__node[data-id^="bet:"]')].map((n) => n.getAttribute('data-id'))`);
@@ -735,6 +696,7 @@ test("default workspace collapses the dense tail into counted cluster glyphs whi
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
   try {
+    await summonMap(client); // cluster glyphs are read on the summoned plane
     // At arrival the surface sits in the STRUCTURE band (Orbit). The cold-dense fixture's bets are all stale,
     // so the ranker keeps only the always-surfaced few and folds the rest into ≤3 territory cluster glyphs.
     await waitForDom(client, `!!document.querySelector('.cluster-glyph')`, "no cluster glyph rendered at the structure band on a dense venture");

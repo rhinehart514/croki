@@ -26,22 +26,21 @@ The approved product has:
 - exact founder authority over sends, publish, deploy, spend, destructive/irreversible acts, work ending,
   and ambiguous canonical truth.
 
-### Ratified direction change — the canvas is a summoned projection, not the primary surface
+### Direction change — implemented: the workbench is the center, the graph is a summoned map
 
-A newer approved direction **revises the prior "venture canvas as the main founder surface" line**: the
-graph is now a **summoned intelligence projection**, not the founder's primary operating surface. The
-founder operates through directions, artifacts, work, evidence, and exact consequences; the spatial graph
-is summoned when spatial or causal understanding adds value, not held open as the default workspace.
+The prior "venture canvas as the main founder surface" line is **revised and now implemented in the tree**:
+the founder operates through a founder-native agent development environment — a left venture index, an
+**adaptive workbench center**, a persistent scoped venture conversation, and a dock composer. The spatial
+graph is a **summoned `map` mode**, one action away, not the default workspace or the primary navigation
+model. Selecting a direction/run/artifact/decision opens the best representation the open stage registry
+proposes for that work; the graph is summoned when spatial or causal understanding adds value, and
+descending from it hands the founder back to the selected work.
 
-**This direction is approved but its ratification into the authority files is pending — `FIRM-SPEC.md`
-and root `DESIGN.md` still describe the canvas as the main founder surface.** Per the repository rule, the
-conflict is surfaced rather than blended:
-
-- the **current tree** implements canvas-first (the venture canvas is the sole default founder surface —
-  see "Verified current behavior");
-- the **approved direction** is canvas-as-summoned-projection;
-- `FIRM-SPEC.md` / `DESIGN.md` ratification is **pending** — until they adopt it, treat the canvas-first
-  tree as current proof and the projection direction as approved-but-unratified intent.
+This resolves the earlier canvas-first-vs-projection conflict in favor of the workbench-first hierarchy.
+The implementing components are `workspace/VentureWorkspace.tsx` (owns one selection + a `work`/`map` mode),
+`workbench/Workbench.tsx` (the permanent adaptive center), and `workbench/VentureHome.tsx` (the resting
+operating picture); the retired `stage/StageWorkspace.tsx` overlay is deleted, its spine absorbed into the
+workbench. `FIRM-SPEC.md` and root `DESIGN.md` describe the workbench-first hierarchy.
 
 The detailed laws and compatibility boundaries live in `FIRM-SPEC.md`; experience behavior lives in root
 `DESIGN.md`.
@@ -50,31 +49,43 @@ The detailed laws and compatibility boundaries live in `FIRM-SPEC.md`; experienc
 
 ### Mechanical baseline
 
-On 2026-07-18, against the working tree, a local run recorded:
+On 2026-07-18, the complete local readiness checks passed against this working tree:
 
-- Brain: **774 tests passed**, 0 failed, 0 skipped.
-- UI unit (Vitest): **437 tests passed**, 0 failed, 0 skipped.
-- Browser firm-acceptance journeys: **12 passed**, 0 failed, 0 skipped.
-- Browser atlas journeys: **3 passed**, 0 failed, 0 skipped.
-- UI lint, the production build, and design-system token parity: clean.
+- `npm test`: Brain **774/774** and UI **451/451**, with lint and the production build green;
+- design-token parity: **156 tokens** across **24 CSS files** and **34 extensions**;
+- firm browser acceptance: **12/12**;
+- Atlas browser journeys: **3/3**;
+- Atlas fixtures: **7/7**;
+- Electron window-state tests: **7/7**.
 
-This is a **local receipt** produced on one machine. **There is no CI workflow** — the repository has no
-`.github/workflows`, so nothing reruns this suite or the acceptance gate automatically. Every count above
-must be re-earned by hand before it can be trusted after a change.
+The browser journeys now exercise the workbench at rest, explicit Map summon, selection-preserving mode
+changes, descend-hands-back-to-work, and Escape broadening. The stale canvas-at-rest assertions are gone, so
+there is no remaining browser-repoint warning.
 
-This proves the mechanical suite, lint, token parity, and the deterministic browser journeys for the
-current working tree. It does not prove Electron behavior, founder comprehension, real effects, market
-value, or the approved product direction.
+This is a **local receipt only**. **There is no CI workflow** — the repository has no `.github/workflows`,
+so nothing reruns this suite or the acceptance gate automatically. The browser is a deterministic harness,
+not a production surface. There is no packaged Electron end-to-end journey; the Electron receipt covers
+window-state helpers only. No test above proves live provider behavior, world-touching effects,
+outside-founder comprehension, or market value. Every count must be re-earned by hand after a change.
 
-### Venture canvas — the sole default founder surface
+### Workbench — the default founder surface; the canvas is a summoned map
 
 `FirmApp.tsx` is ~48 lines with one render decision: no venture → `VenturePicker`; a venture →
 `VentureWorkspace`. There are **no `?shell=` flags, no competing shell roots, and no query-parameter
-product switching** — the venture workspace (built around the canvas) is the only founder surface. The
-prior immersive/Now/legacy shells were deleted from the tree (see "Removed surfaces").
+product switching** — the venture workspace is the only founder surface. The prior immersive/Now/legacy
+shells were deleted from the tree (see "Removed surfaces").
 
-The shipped canvas (`VentureCanvasStage` and its collaborators under `ui/src/components/canvas/`)
-provides, verified by unit tests and by the deterministic browser journeys that render the built UI:
+The workspace opens on the **adaptive workbench** (`workbench/Workbench.tsx`): with no selection it shows
+`VentureHome` (where things stand — the folded directions grouped by state); selecting a direction opens the
+best representation the open stage registry proposes for that work. The venture graph is a summoned `map`
+mode — `VentureWorkspace` renders `mode === "map" ? <VentureCanvasStage/> : <Workbench/>`, defaulting to
+`work`, so the plane is **not even mounted at rest**. This is verified at the component-integration level by
+`VentureWorkspace.test.tsx` (opens on the workbench, no `canvas-flow`; Map summons it; Escape returns) and
+`VentureWorkspaceDescent.test.tsx` (a staged change opens the diff in place; a map descend hands back to the
+work surface).
+
+When summoned, the canvas (`VentureCanvasStage` and its collaborators under `ui/src/components/canvas/`)
+provides, verified by unit tests and deterministic browser journeys that render the built UI:
 
 - **founder placement** as final authority (Law 6): only founder-moved nodes persist, a 409 merges rather
   than clobbers, and a racing poll cannot snap a just-dropped card back;
@@ -85,11 +96,11 @@ provides, verified by unit tests and by the deterministic browser journeys that 
 - **undo/redo** with revision receipts (see the durability caveat under "Known broken or incomplete paths");
 - **dense rank-and-reveal** cluster glyphs so a crowded scene stays a machine, not a scatter;
 - a **keyboard-accessible outline** of the scene;
-- **in-context workbench descent** into a selected object.
-
-**Browser verification is done, not owed.** The deterministic journeys run against the real built DOM —
-`canvas-journey.mjs` at 1440×900 and other journeys at 1280×800 — and assert territory geography,
-zoom-driven card anatomy, and final drag placement.
+- **selection-preserving mode changes** — summoning Map keeps the current selected-work scope;
+- **descend-hands-back-to-work** — double-click or Enter leaves the map and opens that selection in the
+  workbench (it no longer descends into an overlay on a dimmed canvas);
+- **ordered Escape broadening** — Escape returns map to work first, then broadens selection or representation
+  depth until `VentureHome` is restored.
 
 ### Removed surfaces
 
@@ -209,8 +220,10 @@ The current tree can:
   and spend checks;
 - keep the founder as the only actor allowed to end active work.
 
-Runtime completion currently does not equal founder-ended work. The default composer always calls `/drive`
-and does not use the existing steer/close/new-direction dialogue reply path.
+Runtime completion currently does not equal founder-ended work. The composer is now **operational, not a
+one-verb `/drive` box**: scoped to a direction (a selected bet) a turn routes through `replyInConversation`
+(the brain classifies steer/approve/close/new-direction and the founder gets an honest receipt); unscoped it
+calls `/drive` to start or branch work. This is verified by `NowComposer.test.tsx`.
 
 ### Product-change and market-return mechanics
 
@@ -242,10 +255,10 @@ The tree contains **one** founder surface: `FirmApp.tsx` renders `VenturePicker`
 - contextual product-change review and purpose-specific wall controls;
 - return summaries, active-work receipts, runtime provenance, and exact work focus.
 
-These are now composed into one surface. The canvas-first tree matches the prior "canvas as main surface"
-line but **not** the newer ratified direction, which makes the canvas a summoned projection rather than the
-primary operating surface (see "Ratified direction change"). A separate React Flow **Atlas** projection and
-its journeys remain in the tree as the graph substrate the workspace canvas builds on.
+These are now composed into one surface with the **workbench as the center and the canvas as a summoned
+`map` mode** (see "Direction change — implemented"). The canvas keeps all of its capability; it is one mode
+behind "Map", not the resting host. A separate React Flow **Atlas** projection and its journeys remain in
+the tree as the graph substrate the summoned map builds on.
 
 ## Mechanically exercised — deterministic regression coverage
 
@@ -268,26 +281,25 @@ The repository contains deterministic tests and fixtures for:
 Deterministic browser and fixture coverage proves rendering and interaction mechanics only. It does not
 establish outside-founder comprehension, usefulness, real-world effects, causality, or market value.
 
-On 2026-07-18, a local run recorded the mechanical suite, design-token parity, the firm-acceptance browser
-journeys (12 pass), and the atlas browser journeys (3 pass) all green with 0 failed and 0 skipped. This is a
-**local receipt only** — there is no CI workflow, so the readiness gate is not enforced automatically and
-must be rerun by hand after any change.
+The exact current command receipts are recorded once in **Mechanical baseline** above. They are local-only:
+there is no CI workflow, so the readiness gate is not enforced automatically and must be rerun by hand after
+any change.
 
 ## Known broken or incomplete paths
 
 ### Product composition
 
-- The shipped tree is canvas-first: one `VentureWorkspace` surface with the venture canvas as the default.
-  The **newer ratified direction makes the canvas a summoned projection**, not the primary surface — the
-  current tree does not yet implement that (see "Ratified direction change"). `FIRM-SPEC`/`DESIGN`
-  ratification of the projection direction is pending.
+- The shipped tree is **workbench-first**: one `VentureWorkspace` surface whose default center is the
+  adaptive workbench, with the venture canvas summoned as a `map` mode (see "Direction change —
+  implemented"). The deterministic browser journeys now assert that hierarchy.
 - Directions are reconstructed from founder-message chronology and bet lineage rather than durable branch
   records.
 - Workspace search filters **directions only** — it does not search across canvas objects, work, or
   evidence.
-- **Selection integrity is incomplete.** The visible selection, the founder-facing scope label, and the
-  drive payload are all bet-centric; architecture/theory/work/teammate selections degrade. A teammate
-  selection can *present* as scoped yet start an **unscoped** drive. One canonical selected-object spine is
+- **Generalized non-bet canonical selection remains incomplete.** The workbench/map mode change preserves the
+  current selected-work scope, and direction selection routes correctly through `replyInConversation`, but
+  the visible selection, founder-facing scope label, and drive payload remain bet-centric.
+  Architecture/theory/work/participant selections can still degrade; one canonical selected-object spine is
   owed.
 
 ### Canvas and model
@@ -311,8 +323,9 @@ must be rerun by hand after any change.
 ### Conversation and runs
 
 - There is no durable venture-root branch plus persistent scoped branch model.
-- The default composer always calls `/drive`; it does not use the implemented dialogue reply route
-  (steer/approve/close/new-direction), which is therefore unused from the UI.
+- The dialogue reply route (steer/approve/close/new-direction) is now **wired into the composer**: a
+  direction-scoped turn calls `replyInConversation`; only an unscoped turn calls `/drive`. It is no longer
+  unused from the UI.
 - **Undo/redo is not durable venture history.** It is session-scoped, capped, on a 30-minute TTL, and not
   transactional — the stack moves before the mutation confirms, so a rejected write can leave the visible
   history out of step with persisted truth.
@@ -411,9 +424,9 @@ The following exists in code or prior documentation but is not approved product 
 - fixed diverge/prepare/wall/observe loops presented as the venture lifecycle;
 - closed Concept/Product-loop/System/Motion/Campaign architecture roles as the canonical model;
 - workflow prohibition instead of founder-invoked outcome contracts;
-- **canvas-first primacy itself, under the newer ratified direction** — the tree keeps the canvas as the
-  default surface while the approved direction summons it as a projection; this is a live conflict pending
-  `FIRM-SPEC`/`DESIGN` ratification, not yet a migrated behavior.
+- **canvas-first primacy** — **migrated.** The tree now opens on the workbench and summons the canvas as a
+  `map` mode; `FIRM-SPEC`/`DESIGN` describe the workbench-first hierarchy, and the deterministic browser
+  journeys assert it.
 
 Remaining behaviors may persist temporarily as compatibility seams while the approved migration preserves
 current user data and capability parity. They must not be promoted in current product copy or future

@@ -150,7 +150,7 @@ export async function bootFixture(seedFixture) {
   }
 }
 
-export async function openFixtureVenture(drover) {
+export async function openFixtureVenture(drover, { viewport = { width: 1920, height: 1080 } } = {}) {
   const chrome = await launchChrome({
     port: await freePort(),
     url: drover.base,
@@ -158,8 +158,8 @@ export async function openFixtureVenture(drover) {
       // Establish the supported desktop contract before the first paint so performance metrics do
       // not include Chrome's unsupported 800x600 launch viewport or the later emulation resize.
       await client.send("Emulation.setDeviceMetricsOverride", {
-        width: 1920,
-        height: 1080,
+        width: viewport.width,
+        height: viewport.height,
         deviceScaleFactor: 1,
         mobile: false,
       });
@@ -179,10 +179,12 @@ export async function openFixtureVenture(drover) {
   })()`);
   assert.equal(opened, true, `could not open ${drover.fixture.venture.name}`);
   try {
+    // Workbench-first hierarchy: the workspace is "open" when the adaptive WORKBENCH mounts, not the node
+    // map. The venture graph is a summoned mode (summonMap), never the open signal.
     await waitForDom(
       client,
-      `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`,
-      "fixture firm canvas did not open",
+      `!!document.querySelector('.venture-workspace [data-testid="venture-workbench"]')`,
+      "fixture venture workspace did not open on the workbench",
     );
   } catch (error) {
     const state = await client.evaluate(`(() => ({
@@ -195,6 +197,26 @@ export async function openFixtureVenture(drover) {
     throw new Error(`${error.message}\nBrowser state: ${JSON.stringify(state)}`);
   }
   return chrome;
+}
+
+// Summon the venture graph from the workbench: press the "Map" affordance and wait for the plane to mount
+// and its viewport to settle. Under the workbench-first hierarchy the graph is one action away — a mode, not
+// the host — so any journey that asserts plane behaviour summons the map first.
+export async function summonMap(client) {
+  const clicked = await client.evaluate(`(() => {
+    const button = document.querySelector('.venture-workspace .workbench-map');
+    if (!button) return false;
+    button.click();
+    return true;
+  })()`);
+  assert.equal(clicked, true, "the Map affordance was not present to summon the venture graph");
+  await waitForDom(
+    client,
+    `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`,
+    "the venture graph did not mount after summoning the map",
+  );
+  await waitForCanvasViewportStable(client);
+  await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
 }
 
 export async function assertBasicAccessibility(client) {
@@ -386,6 +408,13 @@ export async function assertNoUnhandledRejections(client) {
 }
 
 export async function assertPerformanceBudgets(client) {
+  // The PerformanceObserver callback can land after the workspace readiness check, especially when the
+  // browser journeys run back-to-back. Wait for the measured signal instead of racing it.
+  await waitForDom(
+    client,
+    `(window.__droverPerformance?.lcp ?? 0) > 0`,
+    "largest-contentful-paint was not observed",
+  );
   const metrics = await client.evaluate("window.__droverPerformance || { cls: 0, inp: 0, lcp: 0 }");
   const layoutShifts = metrics.cls > 0.1
     ? await client.evaluate("window.__droverLayoutShifts || []")

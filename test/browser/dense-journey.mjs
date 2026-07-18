@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-// The legacy-scale dense venture stays durable and navigable on the default VentureWorkspace canvas shell:
-// 120 bets, 30 outcomes, 20 wall items all persist through the API truth checks (fixture/API layer, shell-
-// agnostic), the canvas renders them collision-free, the outline gives complete keyboard access to the
-// whole set (not just what is painted), direct wheel-zoom moves the camera, and 125% browser zoom does not
-// break reachability of canvas/composer/rail. Ported from the retired VentureAtlas semantic-zoom assertions
-// (`.atlas-bet-node`, `atlasAltitude`, `.atlas-outline-toggle`) onto the shipped canvas DOM; canvas-
-// journey.mjs's own dense test proves the SAME fixture at a smaller default, this file is the ONLY coverage
-// of the full 120-bet/30-outcome/20-wall legacy operating scale plus the 125% browser-zoom contract.
+// The legacy-scale dense venture stays durable and navigable in the workbench-first VentureWorkspace:
+// 120 bets, 30 outcomes, 20 wall items all persist through the API truth checks (fixture/API layer,
+// workspace-agnostic), then the summoned map renders them collision-free, the outline gives complete
+// keyboard access to the whole set (not just what is painted), direct wheel-zoom moves the camera, and 125%
+// browser zoom does not break reachability of map/composer/index. Ported from the retired VentureAtlas
+// semantic-zoom assertions (`.atlas-bet-node`, `atlasAltitude`, `.atlas-outline-toggle`) onto the summoned
+// map DOM; canvas-journey.mjs's own dense test proves the SAME fixture at a smaller default, this file is the
+// ONLY coverage of the full 120-bet/30-outcome/20-wall legacy operating scale plus the 125% zoom contract.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -20,18 +20,18 @@ import {
   bootFixture,
   captureEvidence,
   openFixtureVenture,
+  summonMap,
   waitForDom,
-  waitForCanvasViewportStable,
 } from "./fixtures/browser-harness.mjs";
 
-test("dense venture: legacy operating scale stays durable, collision-free, and keyboard-reachable on the canvas shell", async () => {
+test("dense venture: legacy operating scale stays durable, collision-free, and keyboard-reachable on a summoned map", async () => {
   const drover = await bootFixture(createDenseVentureFixture);
   const chrome = await openFixtureVenture(drover);
   try {
     const { client } = chrome;
     const ventureId = drover.fixture.venture.id;
     await client.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-    await waitForCanvasViewportStable(client);
+    await summonMap(client);
     await assertPerformanceBudgets(client);
 
     // DURABLE STATE — fixture/API truth, unaffected by the shell change. Kept verbatim.
@@ -63,7 +63,7 @@ test("dense venture: legacy operating scale stays durable, collision-free, and k
       durableArchitecture: 0,
     });
 
-    // CANVAS — real rendered state at 1440x900: cards mounted, collision-free (the overlap-detection
+    // SUMMONED MAP — real rendered state at 1440x900: cards mounted, collision-free (the overlap-detection
     // pattern proven in canvas-journey.mjs), no unexplained zero-size/duplicate nodes.
     const canvasState = await client.evaluate(`(() => {
       const nodes = [...document.querySelectorAll('.venture-workspace .react-flow__node')]
@@ -83,7 +83,7 @@ test("dense venture: legacy operating scale stays durable, collision-free, and k
     })()`);
     assert.ok(canvasState.total >= 5, `too few painted cards to prove a dense render happened: ${canvasState.total}`);
     assert.deepEqual(canvasState.duplicateIds, [], `duplicate node ids painted: ${JSON.stringify(canvasState.duplicateIds)}`);
-    assert.equal(canvasState.overlapCount, 0, `dense canvas cards overlap: ${JSON.stringify(canvasState.overlaps)}`);
+    assert.equal(canvasState.overlapCount, 0, `dense summoned map cards overlap: ${JSON.stringify(canvasState.overlaps)}`);
 
     // OUTLINE — every venture object (all 120 bets + supporting objects), not just what is painted, stays
     // keyboard-reachable via "o". Real threshold observed from the fixture: 120 bets alone already clears
@@ -109,21 +109,22 @@ test("dense venture: legacy operating scale stays durable, collision-free, and k
     })();
     assert.equal(escapeCloses, true);
 
-    // DIRECT ZOOM — mouse wheel over the pane changes the viewport transform (React Flow's pane/viewport
-    // DOM is unchanged from the legacy shell).
+    // DIRECT ZOOM — mouse wheel anywhere inside the rendered map changes the viewport transform. At the
+    // full 120-bet scale cards can cover every sampled bare-pane point, but wheel zoom remains a map-level
+    // interaction even when the pointer is over a card.
     const canvasPoint = await client.evaluate(`(() => {
-      const pane = document.querySelector('.react-flow__pane'); const rect = pane?.getBoundingClientRect();
-      if (!pane || !rect) return null;
-      for (let y = rect.top + 40; y < rect.bottom - 40; y += 40) for (let x = rect.left + 40; x < rect.right - 40; x += 40) if (document.elementFromPoint(x, y) === pane) return { x, y };
-      return null;
+      const pane = document.querySelector('.react-flow__pane');
+      const rect = pane?.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     })()`);
-    assert.ok(canvasPoint, "dense canvas left no direct-manipulation point on its pane");
+    assert.ok(canvasPoint, "dense summoned map had no rendered wheel-zoom target");
     const beforeZoom = await client.evaluate("document.querySelector('.react-flow__viewport')?.style.transform");
     await client.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: canvasPoint.x, y: canvasPoint.y, deltaX: 0, deltaY: -720 });
-    await waitForDom(client, `document.querySelector('.react-flow__viewport')?.style.transform !== ${JSON.stringify(beforeZoom)}`, "dense canvas did not respond to direct wheel zoom");
+    await waitForDom(client, `document.querySelector('.react-flow__viewport')?.style.transform !== ${JSON.stringify(beforeZoom)}`, "dense summoned map did not respond to direct wheel zoom");
     assert.equal(await client.evaluate("location.pathname"), "/");
 
-    // 125% BROWSER ZOOM — no horizontal overflow; canvas, composer, and rail all stay reachable.
+    // 125% BROWSER ZOOM — no horizontal overflow; summoned map, composer, and index all stay reachable.
     await client.send("Emulation.setDeviceMetricsOverride", { width: 1152, height: 720, deviceScaleFactor: 1.25, mobile: false });
     await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     const zoomed = await client.evaluate(`(() => {
@@ -137,7 +138,7 @@ test("dense venture: legacy operating scale stays durable, collision-free, and k
     })()`);
     assert.ok(zoomed.overflow <= 1, `125% browser zoom introduced ${zoomed.overflow}px horizontal overflow`);
     assert.deepEqual({ canvas: zoomed.canvas, composer: zoomed.composer, rail: zoomed.rail }, { canvas: true, composer: true, rail: true });
-    await captureEvidence(client, "dense-canvas-legacy-scale-125-percent");
+    await captureEvidence(client, "dense-workbench-summoned-map-legacy-scale-125-percent");
 
     await assertBasicAccessibility(client);
     await assertNoUnhandledRejections(client);

@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 
-// Founder authority, in-context: every wall purpose (release/answer/review-outcome/end-bet) can be
-// resolved once through the canvas shell's per-bet decision gate, leaves a durable receipt, a double-
-// activation cannot double-fire the same decision, the "Needs you" signal correctly counts down as each
-// distinct bet settles, and the clear/safe state survives a full reload. Ported from the retired
-// VentureAtlas global wall-panel DOM (`.firm-wall-queue`, `[aria-label="Founder decisions"]`) onto
-// NowRail's "Needs you" filter + a descended bet's `.now-gate` blocks (ConsequenceBody/DecisionGate,
-// reused verbatim from the Now route). The wall fixture ties each of its 4 purposes to a DIFFERENT bet, so
-// "4 wall items" = 4 distinct directions in the rail, each requiring its own descend to act on.
+// Founder authority, in context: every wall purpose (release/answer/review-outcome/end-bet) can be
+// resolved once through its workbench-native decision gate, leaves a durable receipt, and cannot double-
+// fire on repeated activation. The "Needs you" signal counts down as each distinct direction settles, the
+// workbench returns Home between decisions, and the clear/safe state survives a full reload. The fixture
+// ties each purpose to a different direction, selected by its unique founder-facing intent rather than an
+// implementation id.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -24,31 +22,44 @@ import {
   waitForDom,
 } from "./fixtures/browser-harness.mjs";
 
-async function fireNode(client, id, kind) {
-  const fired = await client.evaluate(`(() => {
-    const node = document.querySelector('.react-flow__node[data-id=${JSON.stringify(id)}]');
-    if (!node) return false;
-    const r = node.getBoundingClientRect();
-    const opts = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
-    node.dispatchEvent(new MouseEvent(${JSON.stringify(kind)}, opts));
-    return true;
+// Select the exact founder-facing direction from workbench Home, falling back to the persistent rail if
+// Home is not rendering direction rows. The intent must identify exactly one row on the chosen surface.
+async function selectDirectionGate(client, intent) {
+  const selected = await client.evaluate(`(() => {
+    const intent = ${JSON.stringify(intent)};
+    const homeRows = [...document.querySelectorAll('.vh-row')];
+    const rows = homeRows.length ? homeRows : [...document.querySelectorAll('.now-rail-dir')];
+    const matches = rows.filter((entry) => entry.textContent.includes(intent));
+    if (matches.length !== 1) return { matches: matches.length };
+    matches[0].click();
+    return { matches: 1, clicked: true };
   })()`);
-  assert.ok(fired, `node ${id} was not on screen to ${kind}`);
+  assert.equal(selected.matches, 1, `direction intent was not unique: ${intent} (${JSON.stringify(selected)})`);
+  assert.equal(selected.clicked, true, `direction intent was not selectable: ${intent}`);
+  await waitForDom(
+    client,
+    `!!document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]') && !!document.querySelector('[data-testid="venture-workbench"] .now-gate') && !document.querySelector('.venture-workspace .venture-canvas-flow')`,
+    `selecting ${intent} did not open its workbench decision gate`,
+  );
 }
 
-// Descend into a bet's decision gate via the rail: click the rail direction row (scopes composer), then
-// double-click the same bet's canvas node (descends into the stage workspace's consequence body).
-async function descendToGate(client, betId) {
-  const clickedRailRow = await client.evaluate(`(() => {
-    const button = [...document.querySelectorAll('.now-rail-dir')]
-      .find((entry) => entry.getAttribute('data-state') === 'needs-you');
-    button?.click();
-    return Boolean(button);
-  })()`);
-  assert.ok(clickedRailRow, "no needs-you rail direction to select");
-  await fireNode(client, `bet:${betId}`, "dblclick");
-  await waitForDom(client, `!!document.querySelector('.now-gate')`, `descending into ${betId} did not raise a decision gate`);
+async function returnToWorkbenchHome(client, settledIntent) {
+  await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+  await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await waitForDom(
+    client,
+    `!!document.querySelector('[data-testid="venture-workbench"] .vh[aria-label]') && !document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]') && !document.querySelector('.venture-workspace .venture-canvas-flow') && !document.querySelector('.venture-workspace-dock .now-composer-scope') && document.querySelector('.venture-workspace-dock .now-composer textarea')?.getAttribute('placeholder') === 'Direct the venture'`,
+    `one Escape did not return ${settledIntent} to unselected workbench Home`,
+  );
 }
+
+const intents = {
+  release: "Hold the exact private preview until the founder reviews it",
+  answer: "Ask for the one constraint the repository cannot answer",
+  reviewOutcome: "Learn from the attributable buyer reply",
+  endBet: "End a disproven line only through the founder",
+};
 
 async function needsYouCount(client) {
   return client.evaluate(`(() => {
@@ -82,9 +93,9 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
     assert.ok(filteredStates.length > 0, "Needs you filter left no directions visible");
     assert.ok(filteredStates.every((state) => state === "needs-you"), `Needs you filter leaked a non-needs-you direction: ${JSON.stringify(filteredStates)}`);
 
-    // RELEASE — wall-purpose-release / wall-bet-release. Double-activation guard: click Reject twice
-    // rapidly and confirm exactly ONE POST to the decide endpoint fires.
-    await descendToGate(client, "wall-bet-release");
+    // RELEASE — double-activation guard: click Reject twice rapidly and confirm exactly ONE POST to the
+    // decide endpoint fires.
+    await selectDirectionGate(client, intents.release);
     let releaseDecideRequests = 0;
     await client.send("Network.enable");
     client.on("Network.requestWillBeSent", ({ request }) => {
@@ -101,12 +112,10 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
     await waitForDom(client, `(() => { const c = document.querySelector('.now-rail-needs-count'); return (c ? Number(c.textContent.trim()) : 0) === 3; })()`, "rejecting the release item did not settle the needs-you count to 3");
     assert.equal(releaseDecideRequests, 1, `double activation emitted ${releaseDecideRequests} wall decision requests instead of one`);
 
-    // ANSWER — wall-purpose-answer / wall-bet-answer. Free-text input + Send answer.
-    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
-    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await waitForDom(client, `!document.querySelector('[data-testid="stage-workspace"]')`, "first Escape did not return from the release descent");
-    await descendToGate(client, "wall-bet-answer");
+    await returnToWorkbenchHome(client, intents.release);
+
+    // ANSWER — free-text input + Send answer.
+    await selectDirectionGate(client, intents.answer);
     const answerSet = await client.evaluate(`(() => {
       const field = document.querySelector('input[aria-label="Your answer"]');
       if (!field) return false;
@@ -123,12 +132,10 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
     assert.equal(sentAnswer, true, "Send answer was not available");
     await waitForDom(client, `(() => { const c = document.querySelector('.now-rail-needs-count'); return (c ? Number(c.textContent.trim()) : 0) === 2; })()`, "answering did not settle the needs-you count to 2");
 
-    // REVIEW-OUTCOME — wall-purpose-review-outcome / wall-bet-outcome. Acknowledge.
-    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
-    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await waitForDom(client, `!document.querySelector('[data-testid="stage-workspace"]')`, "first Escape did not return from the answer descent");
-    await descendToGate(client, "wall-bet-outcome");
+    await returnToWorkbenchHome(client, intents.answer);
+
+    // REVIEW-OUTCOME — acknowledge the attributable reply.
+    await selectDirectionGate(client, intents.reviewOutcome);
     const acknowledged = await client.evaluate(`(() => {
       const button = [...document.querySelectorAll('.now-gate-btn')].find((entry) => entry.textContent.trim() === 'Acknowledge');
       button?.click();
@@ -137,12 +144,10 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
     assert.equal(acknowledged, true, "Acknowledge was not available for the review-outcome gate");
     await waitForDom(client, `(() => { const c = document.querySelector('.now-rail-needs-count'); return (c ? Number(c.textContent.trim()) : 0) === 1; })()`, "acknowledging did not settle the needs-you count to 1");
 
-    // END-BET — wall-purpose-end-bet / wall-bet-end. Keep it going (not killed — preserves "still 4 bets").
-    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
-    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await waitForDom(client, `!document.querySelector('[data-testid="stage-workspace"]')`, "first Escape did not return from the review-outcome descent");
-    await descendToGate(client, "wall-bet-end");
+    await returnToWorkbenchHome(client, intents.reviewOutcome);
+
+    // END-BET — keep it going (not killed, preserving all four directions).
+    await selectDirectionGate(client, intents.endBet);
     const keptGoing = await client.evaluate(`(() => {
       const button = [...document.querySelectorAll('.now-gate-btn')].find((entry) => entry.textContent.trim() === 'Keep it going');
       button?.click();
@@ -150,17 +155,26 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
     })()`);
     assert.equal(keptGoing, true, "Keep it going was not available for the end-bet gate");
 
-    // AFTER ALL FOUR — needs-you count/badge is gone, nothing crashed, composer + canvas still there.
     await waitForDom(client, `!document.querySelector('.now-rail-needs-count')`, "needs-you count did not clear after all four decisions");
+    await returnToWorkbenchHome(client, intents.endBet);
+
+    // AFTER ALL FOUR — workbench Home is unselected, the map is absent, and the safe operating surface is
+    // intact without an attention marker or exposed execution machinery.
     const clearState = await client.evaluate(`(() => ({
+      workbenchVisible: Boolean(document.querySelector('[data-testid="venture-workbench"][data-mode="work"]')),
+      homeVisible: Boolean(document.querySelector('[data-testid="venture-workbench"] .vh[aria-label]')),
+      stageVisible: Boolean(document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]')),
       attention: document.querySelector('.now-rail-needs')?.getAttribute('data-attention'),
-      composerVisible: Boolean(document.querySelector('.venture-workspace-dock .now-composer textarea')),
-      canvasVisible: Boolean(document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')),
+      composerVisible: document.querySelector('.venture-workspace-dock .now-composer textarea')?.getAttribute('placeholder') === 'Direct the venture',
+      mapVisible: Boolean(document.querySelector('.venture-workspace .venture-canvas-flow')),
       machineryVisible: Boolean(document.querySelector('[data-atlas-machinery]')),
     }))()`);
+    assert.equal(clearState.workbenchVisible, true, "workbench disappeared after settling the wall");
+    assert.equal(clearState.homeVisible, true, "workbench Home did not return after settling the wall");
+    assert.equal(clearState.stageVisible, false, "selected work remained open after settling the wall");
     assert.equal(clearState.attention, null, "Needs you retained an attention marker after clearing");
-    assert.equal(clearState.composerVisible, true, "composer disappeared after settling the wall");
-    assert.equal(clearState.canvasVisible, true, "canvas disappeared after settling the wall");
+    assert.equal(clearState.composerVisible, true, "whole-venture composer disappeared after settling the wall");
+    assert.equal(clearState.mapVisible, false, "the map mounted at rest after settling the wall");
     assert.equal(clearState.machineryVisible, false, "settling the wall must not expose execution machinery by default");
 
     // DURABLE RECEIPTS — brain-side truth, unaffected by the shell change.
@@ -183,9 +197,11 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
       button?.click();
       return Boolean(button);
     })()`), true);
-    await waitForDom(client, `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`, "wall venture did not reopen after reload");
-    await waitForDom(client, `!document.querySelector('.now-rail-needs-count')`, "needs-you count did not stay clear after a full reload");
-    assert.equal(await client.evaluate(`fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()).then((body) => body.queue.length)`), 0);
+    await waitForDom(client, `!!document.querySelector('.venture-workspace[data-mode="work"] [data-testid="venture-workbench"][data-mode="work"]')`, "wall venture did not reopen in workbench work mode");
+    await waitForDom(client, `!!document.querySelector('[data-testid="venture-workbench"] .vh[aria-label]') && !document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]')`, "wall venture did not reopen at unselected workbench Home");
+    await waitForDom(client, `!document.querySelector('.venture-workspace .venture-canvas-flow')`, "the map mounted at rest after receipt reload");
+    await waitForDom(client, `!document.querySelector('.now-rail-needs-count') && document.querySelector('.now-rail-needs')?.getAttribute('data-attention') == null`, "needs-you attention did not stay clear after a full reload");
+    await waitForDom(client, `fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()).then((body) => body.queue.length === 0)`, "wall API queue did not stay empty after a full reload");
 
     await assertBasicAccessibility(client);
     await captureEvidence(client, "wall-clear-after-four-receipts");

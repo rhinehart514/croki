@@ -11,10 +11,12 @@ export function ConsequenceBody({
   ctx,
   ventureId,
   onChanged,
+  readOnlyReason,
 }: {
   ctx: StageContext;
   ventureId: string;
   onChanged: () => void;
+  readOnlyReason: string | null;
 }) {
   if (!ctx.waiting.length) return null;
   return (
@@ -23,7 +25,14 @@ export function ConsequenceBody({
         {ctx.waiting.length === 1 ? "Your decision" : "Your decisions"}
       </span>
       {ctx.waiting.map((item: WallQueueItemView) => (
-        <DecisionGate key={item.id} ventureId={ventureId} item={item} onDecided={onChanged} showArtifact />
+        <DecisionGate
+          key={item.id}
+          ventureId={ventureId}
+          item={item}
+          onDecided={onChanged}
+          readOnlyReason={readOnlyReason}
+          showArtifact
+        />
       ))}
     </div>
   );

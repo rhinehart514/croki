@@ -14,12 +14,14 @@ export function DecisionGate({
   item,
   onDecided,
   onRevise,
+  readOnlyReason = null,
   showArtifact = true,
 }: {
   ventureId: string;
   item: WallQueueItemView;
   onDecided: () => void;
   onRevise?: () => void;
+  readOnlyReason?: string | null;
   // When the exact change is already rendered prominently above (Exact changes), the gate suppresses
   // its own copy so the diff is shown once, not twice.
   showArtifact?: boolean;
@@ -32,7 +34,7 @@ export function DecisionGate({
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   // A same-tick double-activation (a real double-click, or a stray duplicate dispatch) fires both click
-  // handlers before React commits the `busy` state update, so the `disabled={busy !== null}` render guard
+  // handlers before React commits the `busy` state update, so the `disabled={decisionDisabled}` render guard
   // alone cannot stop the second call. This ref is set synchronously, in the same turn as the first call,
   // so it closes that gap without changing the founder-facing disabled/label behavior driven by `busy`.
   const inFlight = useRef(false);
@@ -63,6 +65,7 @@ export function DecisionGate({
   // Detail rows minus the raw-diff row (rendered visually) and, for a judgment request, minus the raw
   // question rows (surfaced as concise language + provenance instead).
   const rows = isAnswer ? [] : content.details.filter((detail) => detail.tone !== "artifact");
+  const decisionDisabled = busy !== null || Boolean(readOnlyReason);
 
   return (
     <div className="now-gate">
@@ -100,7 +103,7 @@ export function DecisionGate({
       {item.purpose === "release" ? (
         <div className="now-gate-actions">
           {isDeploy && !authorized ? (
-            <button type="button" className="now-gate-btn" data-intent="release" disabled={busy !== null} onClick={() => decide("authorize-deploy")}>
+            <button type="button" className="now-gate-btn" data-intent="release" disabled={decisionDisabled} onClick={() => decide("authorize-deploy")}>
               {busy === "authorize-deploy" ? "Arming…" : "Authorize deploy"}
             </button>
           ) : (
@@ -108,14 +111,14 @@ export function DecisionGate({
               type="button"
               className="now-gate-btn"
               data-intent="release"
-              disabled={busy !== null || !content.releaseReady}
+              disabled={decisionDisabled || !content.releaseReady}
               onClick={() => decide("release", note.trim() || undefined)}
             >
               {busy === "release" ? "Sending…" : isDeploy ? "Send it" : "Approve & send"}
             </button>
           )}
           {onRevise ? <button type="button" className="now-gate-btn" onClick={onRevise}>Revise</button> : null}
-          <button type="button" className="now-gate-btn" data-intent="reject" disabled={busy !== null} onClick={() => decide("reject", note.trim() || "Held by the founder for now.")}>
+          <button type="button" className="now-gate-btn" data-intent="reject" disabled={decisionDisabled} onClick={() => decide("reject", note.trim() || "Held by the founder for now.")}>
             {busy === "reject" ? "Holding…" : "Reject"}
           </button>
         </div>
@@ -125,16 +128,16 @@ export function DecisionGate({
           {options.length ? (
             <div className="now-gate-actions">
               {options.map((option) => (
-                <button key={option} type="button" className="now-gate-btn" data-intent="release" disabled={busy !== null} onClick={() => decide("answer", option)}>{option}</button>
+                <button key={option} type="button" className="now-gate-btn" data-intent="release" disabled={decisionDisabled} onClick={() => decide("answer", option)}>{option}</button>
               ))}
             </div>
           ) : null}
           <div className="now-gate-words">
             <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={options.length ? "…or answer in your own words" : "Your answer…"} aria-label="Your answer" />
-            <button type="button" className="now-gate-btn" data-intent="release" disabled={busy !== null || !note.trim()} onClick={() => decide("answer", note.trim())}>Send answer</button>
+            <button type="button" className="now-gate-btn" data-intent="release" disabled={decisionDisabled || !note.trim()} onClick={() => decide("answer", note.trim())}>Send answer</button>
           </div>
           <div className="now-gate-actions">
-            <button type="button" className="now-gate-btn" data-intent="reject" disabled={busy !== null} onClick={() => decide("dismiss")}>Dismiss</button>
+            <button type="button" className="now-gate-btn" data-intent="reject" disabled={decisionDisabled} onClick={() => decide("dismiss")}>Dismiss</button>
           </div>
           {rawQuestion && rawQuestion !== conciseAsk ? (
             <details className="now-machinery">
@@ -145,17 +148,21 @@ export function DecisionGate({
         </div>
       ) : item.purpose === "end-bet" ? (
         <div className="now-gate-actions">
-          <button type="button" className="now-gate-btn" data-intent="reject" disabled={busy !== null} onClick={() => decide("kill")}>End this work</button>
-          <button type="button" className="now-gate-btn" disabled={busy !== null} onClick={() => decide("keep")}>Keep it going</button>
+          <button type="button" className="now-gate-btn" data-intent="reject" disabled={decisionDisabled} onClick={() => decide("kill")}>End this work</button>
+          <button type="button" className="now-gate-btn" disabled={decisionDisabled} onClick={() => decide("keep")}>Keep it going</button>
         </div>
       ) : (
         <div className="now-gate-actions">
-          <button type="button" className="now-gate-btn" data-intent="release" disabled={busy !== null} onClick={() => decide("acknowledge")}>Acknowledge</button>
+          <button type="button" className="now-gate-btn" data-intent="release" disabled={decisionDisabled} onClick={() => decide("acknowledge")}>Acknowledge</button>
         </div>
       )}
 
       {isDeploy && authorized ? <p className="now-gate-hint">Deploy armed. Send it to release, or reject to hold.</p> : null}
-      {error ? <p className="now-gate-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="now-gate-error" role="alert">{error}</p>
+      ) : readOnlyReason ? (
+        <p className="now-gate-hint">{readOnlyReason}</p>
+      ) : null}
     </div>
   );
 }

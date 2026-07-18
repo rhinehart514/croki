@@ -4,7 +4,7 @@
 // opened/staged/reached the wall), the outcome kind, and the completion grounding — in the same founder
 // vocabulary the direction model uses. It never echoes raw agent narration; the one place a teammate's own
 // words surface is a pure answer that opened no work, where those words ARE the product.
-import type { DriveTeammateResult } from "@/api";
+import type { ConversationReplyResult, DriveTeammateResult } from "@/api";
 
 export type DriveReceipt = {
   headline: string;
@@ -35,9 +35,9 @@ export function readDriveReceipt(result: DriveTeammateResult): DriveReceipt {
   const waiting = wallCount > 0 || kind === "paused";
 
   const targetBetId =
-    changes?.openedBetIds?.[0]
+    (waiting && wallCount > 0 ? changes?.wallBetIds?.[0] : null)
+    ?? changes?.openedBetIds?.[0]
     ?? changes?.stagedBetIds?.[0]
-    ?? changes?.wallBetIds?.[0]
     ?? result.handoff?.betId
     ?? null;
 
@@ -70,4 +70,39 @@ export function readDriveReceipt(result: DriveTeammateResult): DriveReceipt {
   }
 
   return { headline, detail, waiting, targetBetId };
+}
+
+// The receipt for a SCOPED conversation turn — the founder steered/answered/approved an existing direction
+// through the venture conversation (replyInConversation), not a fresh drive. The routed act names what the
+// turn did in the founder's own vocabulary. Steering and closing apply before resolution; approvals only
+// record intent and surface the exact act that still needs founder release at the gate. Terminal by design
+// (no "open this direction" — the composer is already inside it), so targetBetId stays null.
+export function readReplyReceipt(result: ConversationReplyResult): DriveReceipt {
+  const waiting = (result.act === "approve" || result.act === "approve-standing")
+    && Boolean(result.waitingItemId);
+  let headline: string;
+  switch (result.act) {
+    case "approve":
+      headline = waiting
+        ? "Approved — release this act at the gate to carry it out."
+        : "Nothing is waiting for approval in this direction.";
+      break;
+    case "approve-standing":
+      headline = waiting
+        ? "Standing approval saved — this act still needs your release at the gate."
+        : "Standing approval saved.";
+      break;
+    case "close":
+      headline = result.ended ? "This direction is closed — what it produced is kept." : "Closing this direction.";
+      break;
+    case "new-direction":
+      headline = "A new direction is underway.";
+      break;
+    default:
+      headline = "Your steer is in — Drover is adjusting course.";
+  }
+  const note = typeof result.note === "string" ? result.note.trim() : "";
+  const why = typeof result.why === "string" ? result.why.trim() : "";
+  const detail = note ? firstSentence(note) : why ? firstSentence(why) : null;
+  return { headline, detail, waiting, targetBetId: null };
 }

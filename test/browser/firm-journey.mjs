@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-// Cutover smoke journey: opening a venture from the picker lands the venture workspace (the Cursor-like
-// frame around the venture canvas), not the retired triptych. The workspace's full behaviour — resting
-// geometry, scope/descend, lens reversibility, offline honesty, dense collapse, drag-connect + undo —
+// Cutover smoke journey: opening a venture from the picker lands the workbench-first venture workspace,
+// not the retired triptych or an always-mounted node map. The workspace's full behaviour — workbench,
+// summoned map, scope/descend, lens reversibility, offline honesty, dense collapse, drag-connect + undo —
 // is proven end-to-end in canvas-journey.mjs against the same no-flag default surface. The legacy
 // triptych journey and its `?shell=legacy` hatch are retired with the flag.
 
@@ -71,7 +71,8 @@ async function waitForServer(url, child) {
 }
 
 async function waitForDom(client, expression, message) {
-  for (let attempt = 0; attempt < 160; attempt += 1) {
+  const deadline = Date.now() + 12_000;
+  while (Date.now() < deadline) {
     if (await client.evaluate(expression).catch(() => false)) return;
     await delay(50);
   }
@@ -141,12 +142,24 @@ test("cutover: opening a venture lands the venture workspace, not the retired tr
     await client.send("Emulation.setDeviceMetricsOverride", { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
     await waitForDom(client, `/Start your first venture/i.test(document.body.textContent)`, "venture picker did not render");
     assert.equal(await client.evaluate(setControl('[aria-label="New venture name"]', "Workspace firm")), true);
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => /start venture/i.test(entry.textContent)); button?.click(); return !!button; })()`), true);
+    await waitForDom(
+      client,
+      `(() => { const button = [...document.querySelectorAll('button')].find((entry) => /start venture/i.test(entry.textContent)); return Boolean(button && !button.disabled); })()`,
+      "the new-venture form did not become ready to submit",
+    );
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => /start venture/i.test(entry.textContent)); button?.click(); return Boolean(button && !button.disabled); })()`), true);
 
-    // The venture workspace mounts: the left index, the canvas plane, and the dock composer — never the triptych.
-    await waitForDom(client, `!!document.querySelector('.venture-workspace')`, "the venture workspace did not mount by default");
-    await waitForDom(client, `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`, "the venture canvas plane did not fill the workspace");
-    await waitForDom(client, `!!document.querySelector('.venture-workspace-dock .now-composer textarea')`, "the docked venture composer did not render");
+    // The venture opens at WORK: the adaptive workbench says where things stand and the unscoped dock can
+    // direct the whole venture. The graph is not mounted at rest; Map remains one action away.
+    await waitForDom(client, `!!document.querySelector('.venture-workspace[data-mode="work"]')`, "the venture workspace did not open in work mode");
+    await waitForDom(client, `!!document.querySelector('.venture-workspace [data-testid="venture-workbench"][data-mode="work"]')`, "the venture workbench did not mount by default");
+    await waitForDom(client, `(() => {
+      const home = document.querySelector('[data-testid="venture-workbench"] [role="region"][aria-label*="where things stand"]');
+      return Boolean(home && /Where things stand/i.test(home.textContent));
+    })()`, "the venture home did not show where things stand");
+    await waitForDom(client, `document.querySelector('.venture-workspace-dock .now-composer textarea')?.placeholder === 'Direct the venture'`, "the docked composer did not direct the whole venture");
+    assert.equal(await client.evaluate(`!document.querySelector('.venture-workspace .venture-canvas-flow')`), true, "the venture graph mounted at rest instead of waiting for Map");
+    assert.equal(await client.evaluate(`!!document.querySelector('.venture-workspace .workbench-map')`), true, "Map was not one action away from the workbench");
 
     // No legacy triptych presentation ships in the default DOM.
     assert.equal(await client.evaluate(`!document.querySelector('.firm-app-rail')`), true, "a retired conversation rail leaked into the default DOM");

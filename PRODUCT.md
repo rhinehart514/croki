@@ -8,19 +8,27 @@ desktop experience. This file is a compact translation and overrides none of the
 
 ## Product promise
 
-**Drover is the founder-controlled Product and go-to-market system.** It gives one founder a venture canvas
-for seeing, understanding, directly manipulating, and executing the whole system while retaining authority
-at every world boundary.
+**Drover is the founder-controlled Product and go-to-market system.** It is a founder-native agent
+development environment: the founder directs work through a persistent venture conversation, reviews the
+exact artifacts and consequences in an adaptive workbench, and summons the venture graph when causal
+understanding helps — all while retaining authority at every world boundary.
 
-The canvas holds one canonical open venture model. Product and go-to-market remain permanent territories;
-every object, relationship, artifact, release, and piece of evidence has one identity across canvas,
-conversation, work, and history.
+One canonical open venture model backs every view. Product and go-to-market remain permanent territories;
+every object, relationship, artifact, release, and piece of evidence has one identity across the workbench,
+the conversation, the summoned canvas, work, and history.
 
 ## Founder experience
 
-One continuous venture conversation and persistent scoped branches direct and interrogate the canvas.
-Selection focuses an object, reveals its relationships, restores its branch and artifacts, and scopes the
-same composer without leaving the wider venture.
+The workspace opens on the permanent **adaptive workbench**. With nothing selected, `VentureHome` shows
+where things stand; selecting a direction, run, artifact, or decision opens the best registered
+representation for that work. One continuous venture conversation and persistent scoped branches direct and
+interrogate the venture. Selection focuses an object, restores its work, and scopes the same composer across
+work and map. A scoped turn continues through `replyInConversation`; an unscoped turn starts work through
+`/drive`.
+
+The spatial venture graph is one explicit action away as a summoned map. Map selection preserves scope.
+Double-click or Enter returns to the selected work; Escape broadens from map to work, then from selection or
+representation depth to `VentureHome`.
 
 A broad founder direction may immediately generate an ambitious provisional interpretation and begin safe
 inward work. Generated structure remains visibly inferred until founder action or evidence strengthens it.
@@ -31,8 +39,8 @@ Understand, Design, Execute, and Learn are reversible lenses over Product and go
 Generated visual answers are disposable by default. The founder may explicitly save a synchronized live
 view, capture an immutable snapshot, or promote selected findings.
 
-Deep work opens in a temporary workbench—code, diffs, previews, campaigns, research, telemetry, comparisons,
-and workflow results—while canvas, conversation, selection, and context remain intact.
+The permanent workbench adapts to deep work—code, diffs, previews, campaigns, research, telemetry,
+comparisons, and workflow results—while conversation, selection, and composer scope remain intact.
 
 ## Work and authority
 
@@ -44,9 +52,10 @@ An ordinary direction may use one model, consultation, handoff, parallel approac
 or verification. Composition remains visible and steerable. Claude and Codex appear in provenance and run
 inspection, not as fictional employees or an AI org chart.
 
-Safe, reversible inward work may proceed after direction begins. The founder retains exact authority over
-sends, publishing, deployment, spending, destructive changes, irreversible external actions, material
-ambiguous changes to canonical truth, and ending active work.
+Safe, reversible inward work may proceed after direction begins. The founder wall remains fail-closed: no
+browser, model, MCP, stale, replayed, forged, or prior-process claim can mint release authority. The founder
+retains exact authority over sends, publishing, deployment, spending, destructive changes, irreversible
+external actions, material ambiguous changes to canonical truth, and ending active work.
 
 ## Truth and learning
 
@@ -63,7 +72,8 @@ contests, or revises the relevant Product and go-to-market understanding.
 
 ## Durable invariants
 
-1. The canvas is the main founder surface; conversation directs and interrogates it.
+1. The adaptive workbench is the default founder surface; conversation directs and interrogates the venture;
+   the canvas is a summoned map, never the permanent center or primary navigation model.
 2. One model powers every view; no canvas, board, branch, workbench, or snapshot becomes a second authority.
 3. Product and go-to-market remain distinct and traceable parts of one venture.
 4. Work starts only from founder intent or a founder-invoked workflow.

@@ -16,8 +16,9 @@ executable by one founder.**
 It does not run the company for the founder. It gives the founder the depth, memory, leverage, and visual
 cognition of a complete product and go-to-market organization.
 
-> **The canvas holds the venture. Conversation directs and interrogates it. Claude and Codex expand what
-> the founder can accomplish.**
+> **The workbench holds the work; the conversation directs and interrogates the venture; the canvas is a
+> map the founder summons when causal or spatial understanding helps. Claude and Codex expand what the
+> founder can accomplish.**
 
 The first proof is one real venture. The destination may span a portfolio, but each venture remains an
 isolated, readable, transferable operating environment behind the founder's authority.
@@ -328,7 +329,8 @@ consequence, returns evidence, or changes venture judgment.
 
 ## Interaction invariants
 
-1. One click selects; Enter or double-click descends; Escape restores the prior camera and scope.
+1. One click selects and preserves scope; Enter or double-click in the map descends to the selected work;
+   Escape broadens from map to work, then from representation depth or selection to VentureHome.
 2. Typing with no selection directs the venture; typing with a selection directs that object.
 3. Moving, resizing, and visual grouping update placement immediately and remain reversible.
 4. An obvious semantic connection may apply directly and remains undoable.
@@ -336,7 +338,8 @@ consequence, returns evidence, or changes venture judgment.
 6. Generated layouts never overwrite founder placement.
 7. Saving a live view, capturing a snapshot, and promoting an inferred finding are explicit acts.
 8. Every external act presents the exact consequence.
-9. Closing conversation, a branch, or a workbench never loses canvas context.
+9. Collapsing conversation, closing a branch, or switching between work and map never loses selected-work
+   context.
 10. Switching lenses never duplicates objects.
 11. Search reaches the whole venture model, evidence, conversations, views, snapshots, and work.
 12. Raw internal identifiers never become required founder vocabulary.
@@ -393,10 +396,12 @@ Each phase is a vertical completion gate. Nothing is called complete from compon
    adaptive multi-agent composition, steering, stopping, branching, closing, and persistent run receipts.
 4. **Consequence execution:** make product apply, deploy, send, spending, destructive actions, failure,
    retry, and MCP/Electron topology truthful under the founder wall.
-5. **One founder shell:** ship one workspace index, continuous conversation, canonical canvas, scoped
-   composer, contextual workbench, search, and contextual founder gate.
-6. **Manipulable canvas:** direct editing, semantic zoom, provisional theory, reversible interpretation,
-   provenance, and honest dense-scale behavior.
+5. **One founder shell:** ship one workspace index, continuous conversation, an **adaptive workbench as the
+   default center**, a scoped composer, a contextual founder gate, and the canonical canvas as a **summoned
+   `map` mode** — one action away, never the resting host or the primary navigation model.
+6. **Manipulable canvas (summoned):** direct editing, semantic zoom, provisional theory, reversible
+   interpretation, provenance, and honest dense-scale behavior — available on the summoned map, and
+   descending from it hands the founder back to the selected work.
 7. **Product/GTM loop:** permanent territories, reversible operating lens, cross-boundary traceability,
    temporary/live/snapshot views, and evidence-driven learning.
 8. **Deletion:** remove competing shells, duplicate data paths, dead controls, stale docs, and obsolete

@@ -11,6 +11,7 @@ import {
   assertBasicAccessibility,
   assertNoUnhandledRejections,
   freePort,
+  summonMap,
   waitForDom,
 } from "./browser-harness.mjs";
 
@@ -74,11 +75,16 @@ export async function openAtlasFixture(drover, {
     return Boolean(button);
   })()`);
   assert.equal(opened, true, `could not open ${ventureName}`);
+  // Workbench-first hierarchy: the workspace opens on the adaptive workbench, and the venture graph is a
+  // summoned mode. The atlas journeys are entirely about the plane, so opening the atlas fixture summons the
+  // map as part of "open" — the returned surface is the mounted venture graph, exactly as these journeys
+  // assume immediately after opening.
   await waitForDom(
     client,
-    `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`,
-    `${ventureName} did not open the venture workspace canvas`,
+    `!!document.querySelector('.venture-workspace [data-testid="venture-workbench"]')`,
+    `${ventureName} did not open the venture workspace on the workbench`,
   );
+  await summonMap(client);
   return chrome;
 }
 

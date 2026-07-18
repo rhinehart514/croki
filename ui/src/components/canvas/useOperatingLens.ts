@@ -69,21 +69,20 @@ export function useOperatingLens({
         cycle(event.shiftKey ? -1 : 1);
         return;
       }
-      // Escape exits the lens to the free arrangement AND preventDefaults so the workspace broaden at
-      // VentureWorkspace.tsx stands down THIS press — one Escape does one thing (lens-exit first, then the
-      // next press broadens). Only consume Escape when a lens is actually active.
-      if (event.key === "Escape") {
-        // Read current via the functional updater so the guard is against the live value, not a stale
-        // closure — but we still need to preventDefault synchronously, so check and act in one pass.
-        setLensId((current) => {
-          if (current !== null) event.preventDefault();
-          return null;
-        });
+      // Escape exits the lens to the free arrangement AND prevents the workspace from broadening on the
+      // same keypress. preventDefault must happen synchronously in this listener; a state updater may run
+      // after the event has already reached VentureWorkspace's handler.
+      if (event.key === "Escape" && lensId !== null) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setLensId(null);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cycle]);
+    // Capture phase gives the nearest canvas mode first refusal before VentureWorkspace's bubble listener
+    // applies the broader map → work Escape step.
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [cycle, lensId]);
 
   return { lensId, cycle, exit, setLens };
 }

@@ -1,0 +1,221 @@
+/* Workbench — the permanent adaptive center of the venture workspace. Unlike the retired StageWorkspace
+   overlay, this is the resting surface: it fills the center cell and scrolls its own body. It reuses the Now
+   doc leaf classes (.now-doc-*, .now-view, .now-detail-block) and the stage crumb classes so the selected
+   work reads as one product with the left index. The composer floats over the bottom of this cell, so the
+   scroll region reserves room for it. */
+
+.workbench {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--n-app);
+}
+
+/* Top bar: broaden (when scoped) or the resting label, and the persistent actions (View · Map). */
+.workbench-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--n-line);
+  background: var(--n-panel);
+}
+.workbench-bar-actions { display: flex; align-items: center; gap: var(--space-2); }
+
+.workbench-here {
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-ink-3);
+}
+
+.workbench-back,
+.workbench-map {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px var(--space-2);
+  border: 1px solid var(--n-line-2);
+  border-radius: var(--r-tool, 8px);
+  background: var(--n-panel);
+  color: var(--n-ink-2);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.workbench-back:hover,
+.workbench-map:hover { background: var(--n-hover); color: var(--n-ink); border-color: var(--n-ink-2); }
+.workbench-back svg,
+.workbench-map svg { width: 15px; height: 15px; }
+
+/* The selected-work scroll region — reserves bottom room for the floating composer dock. */
+.workbench-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow: hidden auto;
+  padding: var(--space-5) var(--space-6) calc(var(--space-8) + 88px);
+}
+
+/* Breadcrumb — the selection ancestry (venture › direction › focus), so orientation is never lost on a
+   deeper descent. Ported from the retired stage-workspace overlay; the classes stay stable for callers. */
+.stage-workspace-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  font-size: var(--text-sm, 0.8125rem);
+  color: var(--n-ink-2);
+}
+.stage-workspace-crumb:last-child { color: var(--n-ink); font-weight: 500; }
+
+.stage-workspace-body { display: flex; flex-direction: column; gap: var(--space-4); min-height: 0; }
+
+/* ── VentureHome — the resting operating picture ─────────────────────────────────────────────────── */
+.vh {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+  overflow: hidden auto;
+  padding: var(--space-6) var(--space-6) calc(var(--space-8) + 88px);
+}
+
+.vh-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.vh-eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--n-ink-3);
+}
+.vh-title {
+  margin: 2px 0 0;
+  font-size: var(--text-2xl, 1.5rem);
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  color: var(--n-ink);
+}
+.vh-summary { margin: var(--space-1) 0 0; color: var(--n-ink-2); font-size: var(--text-sm); }
+
+.vh-map {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px var(--space-3);
+  border: 1px solid var(--n-line-2);
+  border-radius: var(--r-tool, 8px);
+  background: var(--n-panel);
+  color: var(--n-ink-2);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.vh-map:hover { background: var(--n-hover); color: var(--n-ink); border-color: var(--n-ink-2); }
+.vh-map svg { width: 15px; height: 15px; }
+
+.vh-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--n-ink-3);
+}
+.vh-empty-mark { width: 28px; height: 28px; color: var(--n-ink-4); }
+.vh-empty-title { margin: var(--space-2) 0 0; font-size: var(--text-lg); font-weight: 600; color: var(--n-ink); }
+.vh-empty-body { margin: 0; max-width: 42ch; font-size: var(--text-sm); color: var(--n-ink-2); }
+
+.vh-sections { display: flex; flex-direction: column; gap: var(--space-5); }
+.vh-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.vh-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-ink-3);
+}
+.vh-section-head svg { width: 14px; height: 14px; }
+.vh-section-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--n-sunk);
+  color: var(--n-ink-3);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.vh-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.vh-list li { position: relative; }
+
+.vh-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--n-line);
+  border-radius: var(--r-lg, 12px);
+  background: var(--n-panel);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.vh-row:hover { border-color: var(--n-ink-2); background: var(--n-hover); }
+
+.vh-row-dot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 999px; background: var(--n-ink-4); }
+.vh-row[data-state="needs-you"] .vh-row-dot { background: var(--amber); }
+.vh-row[data-state="from-market"] .vh-row-dot { background: var(--clay); }
+.vh-row[data-state="working"] .vh-row-dot { background: var(--green-2); }
+
+.vh-row-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.vh-row-sentence { font-size: var(--text-base); font-weight: 560; color: var(--n-ink); }
+.vh-row-understanding { font-size: var(--text-sm); color: var(--n-ink-2); }
+.vh-row-meta { font-size: var(--text-xs); color: var(--n-ink-3); }
+
+.vh-row-action {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: center;
+  font-size: var(--text-sm);
+  color: var(--n-ink-2);
+}
+.vh-row-action svg { width: 14px; height: 14px; }
+.vh-row:hover .vh-row-action { color: var(--n-ink); }
+
+.vh-row-stop {
+  position: absolute;
+  right: var(--space-4);
+  bottom: calc(-1 * var(--space-1));
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--n-line-2);
+  border-radius: 999px;
+  background: var(--n-panel);
+  color: var(--n-ink-2);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.vh-row-stop:hover { color: var(--n-ink); border-color: var(--n-ink-2); }
+.vh-row-stop svg { width: 11px; height: 11px; }

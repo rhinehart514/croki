@@ -2,15 +2,15 @@
 product: Drover
 surface: desktop-founder-workbench
 stage: alpha
-north_star: "The canvas holds the venture. Conversation directs and interrogates it."
-layout: "Cursor-like workspace index and conversation beside a full venture canvas; contextual workbench in place"
+north_star: "The workbench holds the work; the conversation directs the venture; the canvas is a summoned map."
+layout: "Cursor-like workspace index and conversation beside an adaptive workbench center; the venture graph is a summoned map, not the resting host"
 signature_interaction: founder-direction-materializes-a-provisional-venture-model-and-useful-work
 token_source: ui/src/index.css
 system_record: docs/design/DESIGN.md
 target_viewports:
   - 1440x900
   - 1280x800
-last_reconciled: 2026-07-17
+last_reconciled: 2026-07-18
 ---
 
 # Drover experience doctrine
@@ -30,12 +30,14 @@ receipts unless this file explicitly adopts them.
 **Drover makes the full product and go-to-market system visible, understandable, manipulable, and
 executable by one founder.**
 
-> **The canvas holds the venture. Conversation directs and interrogates it. Claude and Codex expand what
-> the founder can accomplish.**
+> **The workbench holds the work; the conversation directs and interrogates the venture; the canvas is a
+> map the founder summons when causal or spatial understanding helps. Claude and Codex expand what the
+> founder can accomplish.**
 
 Drover is not a dashboard, task manager, chat wrapper, workflow-node builder, agent org chart, or diagram
-that the founder must maintain. It is a durable visual model of the venture, a continuous intelligence
-layer for directing and interrogating it, and a precise workbench for consequential detail.
+that the founder must maintain. It is a founder-native agent development environment: a precise adaptive
+workbench for the selected work, a continuous conversation for directing and interrogating the venture, and
+a durable visual model of the company the founder can summon as a map when it adds understanding.
 
 The primary return moment answers within ten seconds:
 
@@ -52,22 +54,25 @@ opens by showing what moved and what it means.
 
 ## Experience principles
 
-### The canvas is the venture
+### The workbench is the center; the canvas is a summoned map
 
-The main surface is the founder's durable visual model of the company. It is not a page containing a
-diagram and not an optional map route.
+The resting surface is the adaptive workbench: it shows where things stand, and when the founder selects a
+direction / run / artifact / decision it opens the best representation for that work. The founder's durable
+visual model of the company — the canvas — is one action away as a summoned `map` mode; descending from it
+hands the founder back to the selected work. The graph is never the permanent center or the primary
+navigation model, and it is not a page the founder must maintain.
 
 ### Conversation is the intelligence layer
 
 Conversation handles ambiguity, reasoning, critique, generation, and direction. It never becomes the only
 place where important Product or go-to-market understanding exists.
 
-> **Chat carries intent. The canvas carries consequence.**
+> **Conversation carries intent. The workbench holds consequence. The map exposes relationships.**
 
 ### Stable orientation, adaptive depth
 
 The founder always knows where they are. Complexity appears through semantic zoom, selection, generated
-lenses, and summoned workbenches, not permanent clutter or false simplicity.
+lenses, and adaptive workbench representations, not permanent clutter or false simplicity.
 
 ### Direct control remains available
 
@@ -96,7 +101,7 @@ A compact left side organizes attention through:
 - decisions requiring the founder.
 
 It is a chronological and operational index, not another venture navigation tree. It may compress and
-filter attention; it never duplicates the canvas model.
+filter attention; it never duplicates the canonical venture model.
 
 ### Conversation
 
@@ -108,19 +113,28 @@ Conversation is a resizable working surface. It may collapse for spatial work an
 draft, branch, scope, and scroll position. Important founder turns, model interpretations, consequential
 returns, decisions, and evidence remain visible; raw work logs live behind disclosure.
 
-### Main canvas
+### Adaptive workbench center
 
-The canvas owns the remaining room and remains present through selection and review. The founder may pan,
-zoom, select, arrange, group, create, connect, compare, and return to a stable camera. The canvas projects
-one canonical venture model and live consequential work; it never owns a second business-truth store.
+The permanent center is the adaptive workbench. With no selection, `VentureHome` gives the founder the
+resting operating picture: where active directions stand, what returned, and what needs judgment. Selecting
+a direction, run, artifact, or decision opens the best registered representation for that work in the same
+center: code, diffs, previews, campaign assets, research, telemetry, positioning, comparisons, workflows, or
+exact founder consequences.
 
-### Contextual workbench
+The workbench preserves selection, conversation scope, composer scope, and the route back to the wider
+venture. It is not a temporary overlay and does not depend on a canvas remaining mounted behind it.
 
-Deep artifacts open in a temporary, resizable workbench: code, diffs, previews, campaign assets, research,
-telemetry, positioning, comparisons, workflows, and exact founder consequences. The workbench preserves the
-canvas, selection, conversation branch, composer scope, and surrounding relationships.
+### Summoned map
 
-> **The canvas supplies meaning. The workbench supplies precision.**
+One explicit action replaces the workbench center with the venture map. The founder may pan, zoom, select,
+arrange, group, create, connect, and compare there. Map selection preserves the same workspace and composer
+scope. Double-click or Enter descends from the selected map object back into its workbench representation;
+the map unmounts rather than dimming behind an overlay. Escape first returns from map to work, then broadens
+selection or depth until `VentureHome` is restored.
+
+The map projects the one canonical venture model and never owns a second business-truth store.
+
+> **The workbench holds the work. The map supplies spatial and causal meaning.**
 
 ### Contextual founder gate
 
@@ -206,10 +220,11 @@ Suggested roles remain quiet. Promotion names the behavior it unlocks: bind to r
 use as a capability, track as a campaign, attach telemetry, execute through a channel, or provide agent
 context.
 
-### 9. Detail expands in place before opening tools
+### 9. Detail resolves in the permanent workbench
 
-Selection reveals enough local detail to understand and manipulate the object on the canvas. Only deep
-precision opens the temporary workbench.
+Selection preserves enough local context to understand the object in the map, then Enter or double-click
+returns to the permanent workbench for the best available representation. Precision does not open a second
+overlay or leave a dimmed map mounted behind the work.
 
 ### 10. Agent visibility is adaptive
 
@@ -244,9 +259,10 @@ relevant Product and go-to-market objects. The founder can see what changed beca
 ## Signature interaction: direction materializes the venture
 
 A broad direction such as “Help this venture grow” immediately creates a complete, editable provisional
-interpretation on the canvas and begins useful inward work. The first useful frame may show who may benefit,
-how Product value occurs, ways to reach people, campaigns worth trying, current evidence, missing links, and
-concrete Product or market work.
+interpretation in the canonical venture model and begins useful inward work. The workbench shows the useful
+work and returns first; the founder can summon the map to inspect who may benefit, how Product value occurs,
+ways to reach people, campaigns worth trying, current evidence, missing links, and concrete Product or market
+work.
 
 The structure is unmistakably inferred. It does not wait behind architecture approval, create empty
 containers, or silently become canonical. The founder can correct it directly or in ordinary language.
@@ -258,11 +274,11 @@ at the founder boundary, and returned evidence changes the venture model.
 
 ## Direct interaction contract
 
-1. One click selects.
-2. Double-click or Enter descends into detail.
-3. Escape restores the prior camera and scope.
-4. Typing with nothing selected directs the venture.
-5. Typing with selection directs that object.
+1. One click selects and preserves that scope across work and map.
+2. Double-click or Enter on the map returns to the selected work in the workbench.
+3. Escape broadens in order: map to work, then selection or representation depth to `VentureHome`.
+4. Typing with nothing selected directs the venture through `/drive`.
+5. Typing with selected work continues its durable conversation through `replyInConversation`.
 6. Dragging changes placement immediately.
 7. Obvious semantic connections apply directly and remain undoable.
 8. Ambiguous gestures expose interpretation before semantic truth changes.
@@ -271,7 +287,7 @@ at the founder boundary, and returned evidence changes the venture model.
 11. Capturing a snapshot is explicit and immutable.
 12. Promoting an inferred finding is explicit and preserves provenance.
 13. Every external act presents the exact consequence.
-14. Closing conversation, a branch, or a workbench never loses canvas context.
+14. Switching between work and map never loses selection, conversation, or composer scope.
 15. Switching lenses never duplicates objects.
 16. Search reaches the entire venture model, evidence, conversations, views, snapshots, and work.
 17. Raw internal identifiers never become required founder vocabulary.
@@ -316,9 +332,9 @@ claim keeps its source, words, attribution strength, and uncertainty.
 
 ### Composition
 
-This is a desktop spatial workbench, not a responsive dashboard. The workspace index is compact. Conversation
-opens at a readable working width and can resize or collapse. The canvas owns the main field. The contextual
-workbench appears only when precision is required.
+This is a desktop founder workbench, not a responsive dashboard. The workspace index is compact. Conversation
+opens at a readable working width and can resize or collapse. The permanent adaptive workbench owns the main
+field; the map replaces it only when explicitly summoned.
 
 Product and go-to-market remain distinguishable territories without becoming rigid columns. The operating
 lens may temporarily align them. Relationships and whitespace create structure before cards and chrome do.

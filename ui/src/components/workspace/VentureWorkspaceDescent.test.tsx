@@ -1,8 +1,10 @@
-// The adaptive center-stage: descent swaps the CENTER to a purpose-built workspace over the still-mounted
-// canvas; a non-bet selection scopes rather than clears; Escape returns AND broadens. The stubbed ReactFlow
-// exposes each node as a button and forwards double-click, so a founder descend is drivable from the test.
+// The adaptive center: selecting a direction opens the best representation for its durable truth (a staged
+// product change resolves to the diff/tests/preview body), all without a node map. The graph is summonable,
+// and descending from the map hands the founder back to the work. Escape climbs the broaden ladder
+// (map → work, scoped → home). The stubbed ReactFlow exposes each node as a button and forwards
+// double-click, so a map descend is drivable from the test.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { type ReactNode } from "react";
 import type { FirmConversationMessage, FirmLens as FirmLensPayload } from "@/types";
 
@@ -65,6 +67,7 @@ vi.mock("@/api", async () => {
     listVentures: (...a: unknown[]) => listVentures(...a),
     putPlacement: vi.fn(),
     driveTeammate: vi.fn(),
+    replyInConversation: vi.fn(),
     stopActiveDrive: vi.fn(),
     markFounderPresent: vi.fn().mockResolvedValue({ present: true }),
   };
@@ -93,7 +96,7 @@ const messages: FirmConversationMessage[] = [
 
 const venture = { id: "v1", name: "RodentRadar", repository: "/products/rr", createdAt: "now", updatedAt: "now" };
 
-describe("VentureWorkspace — the center adapts on descent", () => {
+describe("VentureWorkspace — the center adapts to the selected work", () => {
   beforeEach(() => {
     getLens.mockReset().mockResolvedValue({ lens });
     getConversation.mockReset().mockResolvedValue({ messages });
@@ -104,53 +107,67 @@ describe("VentureWorkspace — the center adapts on descent", () => {
     listVentures.mockReset().mockResolvedValue({ ventures: [venture] });
   });
 
-  it("double-clicking a bet DESCENDS into a purpose-built workspace over the still-mounted canvas", async () => {
+  it("selecting a direction with a staged change opens the product representation in place — no node map", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
-    const node = await screen.findByTestId("node-bet:bet-1");
+    const workbench = await screen.findByTestId("venture-workbench");
 
-    // No workspace yet — the canvas is the resting surface.
+    // At rest: Home, no selected-work region, no graph.
     expect(screen.queryByTestId("stage-workspace")).toBeNull();
+    expect(screen.queryByTestId("canvas-flow")).toBeNull();
 
-    fireEvent.doubleClick(node);
+    fireEvent.click(await within(workbench).findByRole("button", { name: /Reach the first buyers/ }));
 
-    // The center now shows the adaptive workspace — the direction's own head, not a bigger atlas card.
-    const workspace = await screen.findByTestId("stage-workspace");
-    expect(workspace).toBeTruthy();
-    // The direction identity is pinned (the venture→direction operating context).
+    // The center now shows the direction's own representation — its pinned identity head, not a bigger card.
+    expect(await screen.findByTestId("stage-workspace")).toBeTruthy();
     expect(screen.getByRole("heading", { name: /Reach the first buyers/ })).toBeTruthy();
-    // The canvas NEVER unmounts — it is dimmed beneath the workspace (the bench contract).
-    expect(screen.getByTestId("canvas-flow")).toBeTruthy();
-    expect(screen.getByTestId("node-bet:bet-1")).toBeTruthy();
+    // The exact staged change is first-class: the changed file is shown, never a summary.
+    expect(screen.getAllByText("x.ts").length).toBeGreaterThan(0);
+    // Still no graph — the workbench, not a canvas, is the host.
+    expect(screen.queryByTestId("canvas-flow")).toBeNull();
   });
 
-  it("clicking a NON-bet work node SCOPES the environment to that object instead of clearing the scope", async () => {
+  it("summons the map, and descending from a node returns to the selected work", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
-    // The staged diff on bet-1 projects a work: node on the canvas.
-    const workNode = await screen.findByTestId("node-work:staged-diff");
+    await screen.findByTestId("venture-workbench");
 
-    fireEvent.click(workNode);
-
-    // Scoped, not cleared: the composer is no longer the unscoped whole-venture placeholder.
-    await waitFor(() => expect(screen.queryByPlaceholderText("Direct the venture")).toBeNull());
-    // No workspace opened on a single click — descent is a separate gesture.
-    expect(screen.queryByTestId("stage-workspace")).toBeNull();
-  });
-
-  it("Escape RETURNS from the workspace and the selection SURVIVES, then a second Escape broadens", async () => {
-    render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Map$/ }));
     const node = await screen.findByTestId("node-bet:bet-1");
+
+    // Double-click (descend) hands the founder back to the work surface, scoped to that node.
     fireEvent.doubleClick(node);
+    await waitFor(() => expect(screen.queryByTestId("canvas-flow")).toBeNull());
+    expect(await screen.findByTestId("stage-workspace")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Reach the first buyers/ })).toBeTruthy();
+  });
+
+  it("clears the prior direction highlight when descending to a non-direction map object", async () => {
+    const { container } = render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
+    await screen.findByTestId("venture-workbench");
+    const railDirection = await waitFor(() => {
+      const button = container.querySelector<HTMLButtonElement>(".now-rail-dir");
+      expect(button).toBeTruthy();
+      return button!;
+    });
+
+    fireEvent.click(railDirection);
+    expect(railDirection.getAttribute("aria-current")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /^Map$/ }));
+    fireEvent.doubleClick(await screen.findByTestId("node-crew:sable"));
+
+    await waitFor(() => expect(screen.queryByTestId("canvas-flow")).toBeNull());
+    expect(railDirection.getAttribute("aria-current")).toBe("false");
+  });
+
+  it("Escape broadens a scoped selection back to Home", async () => {
+    render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
+    const workbench = await screen.findByTestId("venture-workbench");
+    fireEvent.click(await within(workbench).findByRole("button", { name: /Reach the first buyers/ }));
     await screen.findByTestId("stage-workspace");
 
-    // First Escape closes the workspace; the selection survives (composer still scoped to the bet intent).
+    // Escape clears the scope: back to Home (the venture name heading, the unscoped composer).
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(screen.queryByTestId("stage-workspace")).toBeNull());
-    expect(screen.getByTestId("canvas-flow")).toBeTruthy();
-    // Still scoped: the scoped composer label shows the bet intent, not "Direct the venture".
-    expect(screen.queryByPlaceholderText("Direct the venture")).toBeNull();
-
-    // Second Escape broadens to whole-venture: the composer returns to the unscoped placeholder.
-    fireEvent.keyDown(window, { key: "Escape" });
-    await waitFor(() => expect(screen.getByPlaceholderText("Direct the venture")).toBeTruthy());
+    expect(screen.getByRole("heading", { name: "RodentRadar" })).toBeTruthy();
+    expect(screen.getByPlaceholderText("Direct the venture")).toBeTruthy();
   });
 });

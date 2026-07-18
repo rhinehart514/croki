@@ -69,4 +69,29 @@ describe("useOperatingLens — lens/answer mutual-exclusion preempt", () => {
     pressL();
     expect(result.current.lensId).toBe("understand");
   });
+
+  it("consumes Escape synchronously while exiting an active lens", () => {
+    const { result } = renderHook(() => useOperatingLens({ isAnswerOpen: () => false }));
+    pressL();
+    expect(result.current.lensId).toBe("understand");
+
+    const event = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
+    act(() => { window.dispatchEvent(event); });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(result.current.lensId).toBe(null);
+  });
+
+  it("does not let the same Escape collapse a sibling canvas layer", () => {
+    const { result } = renderHook(() => useOperatingLens({ isAnswerOpen: () => false }));
+    pressL();
+    const sibling = vi.fn();
+    window.addEventListener("keydown", sibling, true);
+
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true })); });
+
+    expect(result.current.lensId).toBe(null);
+    expect(sibling).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", sibling, true);
+  });
 });

@@ -29,6 +29,7 @@ export type StageActions = RepresentationActions & {
   onReturn: () => void;
   ventureId: string;
   onChanged: () => void;
+  readOnlyReason: string | null;
 };
 
 export type StageWorkspace = {
@@ -52,7 +53,12 @@ const SEED: StageWorkspace[] = [
     id: "consequence",
     label: "The exact effect",
     available: (ctx) => ctx.waiting.length > 0,
-    render: (ctx, actions) => createElement(ConsequenceBody, { ctx, ventureId: actions.ventureId, onChanged: actions.onChanged }),
+    render: (ctx, actions) => createElement(ConsequenceBody, {
+      ctx,
+      ventureId: actions.ventureId,
+      onChanged: actions.onChanged,
+      readOnlyReason: actions.readOnlyReason,
+    }),
   },
   {
     // A staged product change resolves to the Cursor-grade product workspace: FilesChanged + DiffView +

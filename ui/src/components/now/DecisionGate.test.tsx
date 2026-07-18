@@ -50,4 +50,19 @@ describe("DecisionGate", () => {
     expect(screen.getByRole("button", { name: /Authorize deploy/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Send it/ })).toBeNull();
   });
+
+  it("holds every decision visibly while the venture is read-only", () => {
+    render(
+      <DecisionGate
+        ventureId="v1"
+        item={productChange}
+        onDecided={() => {}}
+        readOnlyReason="Drover is reconnecting. Nothing consequential can change until the firm is current again."
+      />,
+    );
+
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: /Approve & send/ }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: /Reject/ }).disabled).toBe(true);
+    expect(screen.getByText(/Nothing consequential can change/)).toBeTruthy();
+  });
 });

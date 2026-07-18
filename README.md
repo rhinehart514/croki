@@ -11,14 +11,14 @@ The product/build laws are [`docs/FIRM-SPEC.md`](docs/FIRM-SPEC.md). Current pro
 
 A venture binds to a real product repository and one readable local venture store. One canonical open
 model carries Product and go-to-market as permanent territories; objects, relationships, artifacts,
-releases, evidence, and insights keep the same identity across every view. The spatial canvas is a
-projection summoned over that model when spatial or causal understanding helps — the founder operates
-through directions, artifacts, work, evidence, and exact consequences. (The shipped tree is still
-canvas-first; see "Current state".)
+releases, evidence, and insights keep the same identity across every view. The founder operates through an
+adaptive workbench — directions, artifacts, work, evidence, and exact consequences — and the spatial canvas
+is a projection summoned over that model when spatial or causal understanding helps.
 
-One continuous venture conversation and persistent scoped branches direct and interrogate the canvas.
-Selecting any visible object focuses its relationships, restores its conversation and work, and scopes the
-same composer without hiding the wider venture.
+One continuous venture conversation and persistent scoped branches direct and interrogate the venture.
+Selecting direction-backed work restores its conversation and representation and scopes the same composer
+without hiding the wider venture. The generalized selected-object spine for other object types remains
+incomplete; [`docs/STATE.md`](docs/STATE.md) records the exact boundary.
 
 A founder direction can produce a provisional visual interpretation and begin safe inward work in the same
 turn. Generated structure remains visibly inferred. Understand, Design, Execute, and Learn are reversible
@@ -40,14 +40,20 @@ contests, or revises understanding. Facts, evidence, and interpretation remain s
 ## Current state
 
 The current working tree has **one** founder surface: `FirmApp.tsx` renders a venture picker or the single
-`VentureWorkspace` built around the venture canvas — there are no `?shell=` flags and no competing shells
-(the earlier immersive/Now/legacy shells were deleted). The shipped tree is canvas-first.
+`VentureWorkspace` — there are no `?shell=` flags and no competing shells (the earlier immersive/Now/legacy
+shells were deleted). The shipped tree is **workbench-first**: a venture opens on the permanent adaptive
+workbench and its resting `VentureHome`; the graph is a summoned `map` mode, one action away, never the
+resting host.
 
-A newer **ratified direction revises this**: the canvas becomes a *summoned* intelligence projection rather
-than the primary operating surface, with the founder operating through directions, artifacts, work,
-evidence, and exact consequences. That direction is approved but its ratification into `docs/FIRM-SPEC.md`
-and `DESIGN.md` is **pending**, and the tree does not yet implement it. See [`docs/STATE.md`](docs/STATE.md)
-for exact verified behavior, the surfaced conflict, current defects, and unproven requirements.
+Map selection preserves the selected-work scope. Double-click or Enter returns to that work; Escape broadens
+from map to work, then from selection or representation depth to `VentureHome`. The same composer continues
+selected direction work through `replyInConversation` and starts unscoped work through `/drive`. The founder
+wall remains fail-closed.
+
+This is the implemented form of the ratified "canvas as a summoned projection" direction;
+`docs/FIRM-SPEC.md` and `DESIGN.md` describe the workbench-first hierarchy, and the complete local acceptance
+suite is green. See [`docs/STATE.md`](docs/STATE.md) for exact verified behavior, current defects, and
+unproven requirements.
 
 Historical identifiers such as `gtm-ide`, `bet`, `fork`, `channel`, and `~/.gtm-ide` remain deliberate
 compatibility seams until an intentional migration proves safe. They are not product identity or required
@@ -94,9 +100,12 @@ npm test
 npm run test:acceptance
 ```
 
-`npm test` runs Brain tests, UI unit tests, lint, and the production build. `npm run test:acceptance` adds
-token parity and deterministic browser journeys. There is **no CI workflow** — these run only when invoked
-by hand, and they are readiness receipts, not outside-founder or market proof.
+The current locally verified command receipts and exact counts live in [`docs/STATE.md`](docs/STATE.md); rerun
+them after any product change rather than treating this README as a second proof ledger.
+
+There is **no CI workflow** — these run only when invoked by hand. The browser is a deterministic harness,
+not production, and there is no packaged Electron end-to-end journey. These receipts do not prove live
+provider behavior, world-touching effects, outside-founder comprehension, or market value.
 
 ## Safety boundary
 
