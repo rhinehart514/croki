@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// The ?shell=canvas resting-machine journey. Locks the gains the canvas seed + territory-in-sim +
+// The default resting-machine journey. Locks the gains the canvas seed + territory-in-sim +
 // rank-and-reveal changes make (STATE.md verification debt): the resting canvas reads as the Product+GTM
 // MACHINE, not a crowded scatter. At 1440x900 it asserts, against the real built UI:
 //   • FRAME — the workspace mounts: left index + canvas plane + dock composer.
@@ -15,8 +15,8 @@
 //   • No unhandled console rejections.
 //
 // Reuses the browser harness (bootFixture spawns the built UI server with a venture pre-seeded so the
-// picker shows "Open canvas") and the CDP client. The picker is shell-agnostic, so navigating with
-// ?shell=canvas and clicking the venture lands in VentureWorkspace.
+// picker shows "Open canvas") and the CDP client. VentureWorkspace is now the sole default surface, so
+// clicking the venture from the picker lands in it with no flag.
 
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -33,6 +33,7 @@ import {
 } from "./fixtures/browser-harness.mjs";
 import {
   createCanvasVentureFixture,
+  createColdDenseVentureFixture,
   createDenseVentureFixture,
   createEmptyCanvasVentureFixture,
 } from "../fixtures/firm-fixtures.mjs";
@@ -64,13 +65,13 @@ async function installFounderHost(client, base, secret) {
   });
 }
 
-// Open the seeded venture in the canvas shell: navigate with ?shell=canvas, click the venture row, and
+// Open the seeded venture in the default workspace: navigate to the base url, click the venture row, and
 // wait for the VentureWorkspace frame. (openFixtureVenture in the harness is default-shell only — it
 // hardcodes drover.base and waits for [data-venture-atlas], which this shell does not render.)
 async function openCanvasVenture(drover) {
   const chrome = await launchChrome({
     port: await freePort(),
-    url: `${drover.base}/?shell=canvas`,
+    url: `${drover.base}`,
     beforeNavigate: async (client) => {
       await client.send("Emulation.setDeviceMetricsOverride", {
         width: VIEWPORT.width,
@@ -120,6 +121,44 @@ async function fireNode(client, id, kind) {
   assert.ok(fired, `node ${id} was not on screen to ${kind}`);
 }
 
+// Return a node's on-screen centre in CSS pixels, or null if it is not rendered.
+async function nodeCentre(client, id) {
+  return client.evaluate(`(() => {
+    const node = document.querySelector('.venture-workspace .react-flow__node[data-id=${JSON.stringify(id)}]');
+    if (!node) return null;
+    const r = node.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return null;
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+}
+
+// Drive a real React Flow node drag through CDP mouse events: press on the source node's centre, step the
+// pointer toward the target centre (d3-drag needs incremental moves to engage), then hold over the target so
+// the interpretation preview's 200ms dwell can arm. `release` completes the drop; pass false to hold the
+// pointer down (so the chip — which renders while armed — can be asserted before the drop commits).
+async function dragNodeOnto(client, sourceId, targetId, { release = true } = {}) {
+  const from = await nodeCentre(client, sourceId);
+  const to = await nodeCentre(client, targetId);
+  assert.ok(from, `source node ${sourceId} not on screen to drag`);
+  assert.ok(to, `target node ${targetId} not on screen to drag onto`);
+  const move = (x, y) => client.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1 });
+  await client.send("Input.dispatchMouseEvent", { type: "mousePressed", x: from.x, y: from.y, button: "left", buttons: 1, clickCount: 1 });
+  const steps = 12;
+  for (let i = 1; i <= steps; i += 1) {
+    const t = i / steps;
+    await move(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t);
+  }
+  // Hold centred over the target through the dwell window (200ms) plus margin.
+  for (let i = 0; i < 4; i += 1) {
+    await move(to.x, to.y);
+    await client.evaluate("new Promise((r) => setTimeout(r, 90))");
+  }
+  if (release) {
+    await client.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: to.x, y: to.y, button: "left", buttons: 0, clickCount: 1 });
+  }
+  return { from, to };
+}
+
 async function pressEscape(client) {
   await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
@@ -148,7 +187,7 @@ async function snapshotNodeFrame(client) {
   })()`);
 }
 
-test("?shell=canvas rests as the Product+GTM machine and descends without a details detour", async () => {
+test("default workspace rests as the Product+GTM machine and descends without a details detour", async () => {
   const drover = await bootFixture(createCanvasVentureFixture);
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
@@ -342,7 +381,7 @@ test("?shell=canvas rests as the Product+GTM machine and descends without a deta
   }
 });
 
-test("?shell=canvas lens and answer are mutually exclusive and neither can leak into placement", async () => {
+test("default workspace lens and answer are mutually exclusive and neither can leak into placement", async () => {
   const drover = await bootFixture(createCanvasVentureFixture);
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
@@ -413,7 +452,7 @@ test("?shell=canvas lens and answer are mutually exclusive and neither can leak 
   }
 });
 
-test("?shell=canvas empty venture reads as named geography with first-direction affordances", async () => {
+test("default workspace empty venture reads as named geography with first-direction affordances", async () => {
   const drover = await bootFixture(createEmptyCanvasVentureFixture);
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
@@ -441,7 +480,7 @@ test("?shell=canvas empty venture reads as named geography with first-direction 
   }
 });
 
-test("?shell=canvas stays legible and honest when the connection goes offline", async () => {
+test("default workspace stays legible and honest when the connection goes offline", async () => {
   const drover = await bootFixture(createCanvasVentureFixture);
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
@@ -484,7 +523,7 @@ test("?shell=canvas stays legible and honest when the connection goes offline", 
   }
 });
 
-test("?shell=canvas holds a dense venture legible and keyboard-reachable via the outline", async () => {
+test("default workspace holds a dense venture legible and keyboard-reachable via the outline", async () => {
   const drover = await bootFixture(createDenseVentureFixture);
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
@@ -530,7 +569,7 @@ test("?shell=canvas holds a dense venture legible and keyboard-reachable via the
   }
 });
 
-test("?shell=canvas operating lens reorganizes then returns every node to its exact pre-toggle pixel", async () => {
+test("default workspace operating lens reorganizes then returns every node to its exact pre-toggle pixel", async () => {
   const drover = await bootFixture(createCanvasVentureFixture);
   const chrome = await openCanvasVenture(drover);
   const { client } = chrome;
@@ -605,6 +644,122 @@ test("?shell=canvas operating lens reorganizes then returns every node to its ex
     for (const id of priorIds) {
       assert.deepEqual(afterDismiss[id], priorFrame[id], `node ${id} did not return to its exact pixel after answer → dismiss`);
     }
+
+    await assertNoUnhandledRejections(client);
+  } finally {
+    await chrome.close();
+    await drover.close();
+  }
+});
+
+// SPEC A + B: a dwell-armed drop raises the interpretation chip; Apply writes a connection; ⌘Z undoes it.
+test("default workspace dwell-armed drop raises the interpretation chip, applies a connection, and undoes it", async () => {
+  const drover = await bootFixture(createCanvasVentureFixture);
+  const chrome = await openCanvasVenture(drover);
+  const { client } = chrome;
+  try {
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    // Two distinct connectable (bet) nodes to drag one onto the other.
+    const betIds = await client.evaluate(`[...document.querySelectorAll('.venture-workspace .react-flow__node[data-id^="bet:"]')].map((n) => n.getAttribute('data-id'))`);
+    assert.ok(betIds.length >= 2, `need two bet nodes to drag one onto the other: ${JSON.stringify(betIds)}`);
+    const [sourceId, targetId] = betIds;
+
+    // SPEC A — dwell over the target while HOLDING the drag: the interpretation chip appears (armed), reading
+    // in the founder's own vocabulary with Apply / Change relationship / Keep visual only.
+    await dragNodeOnto(client, sourceId, targetId, { release: false });
+    await waitForDom(client, `!!document.querySelector('.interpretation-chip')`, "a dwell-armed drop did not raise the interpretation chip");
+    const chip = await client.evaluate(`(() => {
+      const el = document.querySelector('.interpretation-chip');
+      const actions = [...(el?.querySelectorAll('.interpretation-chip-action') || [])].map((b) => b.textContent.trim());
+      return { sentence: (el?.querySelector('.interpretation-chip-sentence')?.textContent || '').trim(), actions };
+    })()`);
+    assert.ok(chip.sentence.length > 0, "the chip showed no interpretation sentence");
+    assert.ok(chip.actions.includes("Apply"), `the chip is missing the Apply exit: ${JSON.stringify(chip.actions)}`);
+    assert.ok(chip.actions.includes("Keep visual only"), `the chip is missing the Keep-visual-only exit: ${JSON.stringify(chip.actions)}`);
+    // Complete the drop so the visual move commits (Law 6), leaving the chip open for the founder to choose.
+    const to = await nodeCentre(client, targetId);
+    await client.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: to.x, y: to.y, button: "left", buttons: 0, clickCount: 1 });
+    await waitForDom(client, `!!document.querySelector('.interpretation-chip')`, "the chip closed on drop release before a choice was made");
+
+    // SPEC A write — Apply writes a founder-asserted create-connection. Confirm the architecture projection
+    // gains a connection between the two dragged refs.
+    const connectionsBefore = await client.evaluate(`(async () => {
+      const res = await fetch('/api/ventures/${encodeURIComponent(drover.fixture.venture.id)}/architecture/projection');
+      const body = await res.json();
+      return body.projection.connections.length;
+    })()`);
+    await client.evaluate(`document.querySelector('.interpretation-chip-action.is-primary')?.click()`);
+    await waitForDom(
+      client,
+      `(async () => {
+        const res = await fetch('/api/ventures/${encodeURIComponent(drover.fixture.venture.id)}/architecture/projection');
+        const body = await res.json();
+        return body.projection.connections.length > ${connectionsBefore};
+      })()`,
+      "Apply did not write a create-connection to the architecture projection",
+    );
+
+    // SPEC B — the revision rail names the change; ⌘Z removes the just-applied connection.
+    await waitForDom(client, `!!document.querySelector('.canvas-revision-receipt')`, "no revision receipt appeared after applying the connection");
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "z", code: "KeyZ", text: "z", metaKey: true, windowsVirtualKeyCode: 90, modifiers: 4 });
+    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "z", code: "KeyZ", metaKey: true, windowsVirtualKeyCode: 90, modifiers: 4 });
+    await waitForDom(
+      client,
+      `(async () => {
+        const res = await fetch('/api/ventures/${encodeURIComponent(drover.fixture.venture.id)}/architecture/projection');
+        const body = await res.json();
+        return body.projection.connections.length === ${connectionsBefore};
+      })()`,
+      "undo (⌘Z) did not remove the just-applied connection",
+    );
+
+    await assertNoUnhandledRejections(client);
+  } finally {
+    await chrome.close();
+    await drover.close();
+  }
+});
+
+// SPEC C: at the STRUCTURE map read a dense venture folds its quiet tail into territory cluster glyphs (each
+// carrying a count), while EVERY node — hidden or surfaced — stays in the array feeding AtlasOutline (Law 4).
+test("default workspace collapses the dense tail into counted cluster glyphs while the outline still lists every node", async () => {
+  const drover = await bootFixture(createColdDenseVentureFixture);
+  const chrome = await openCanvasVenture(drover);
+  const { client } = chrome;
+  try {
+    // At arrival the surface sits in the STRUCTURE band (Orbit). The cold-dense fixture's bets are all stale,
+    // so the ranker keeps only the always-surfaced few and folds the rest into ≤3 territory cluster glyphs.
+    await waitForDom(client, `!!document.querySelector('.cluster-glyph')`, "no cluster glyph rendered at the structure band on a dense venture");
+    const glyphs = await client.evaluate(`(() => {
+      const els = [...document.querySelectorAll('.cluster-glyph')];
+      return els.map((el) => ({
+        count: Number((el.querySelector('.cluster-glyph-count')?.textContent || '').trim()),
+        label: (el.querySelector('.cluster-glyph-label')?.textContent || '').trim(),
+        territory: el.getAttribute('data-territory'),
+      }));
+    })()`);
+    assert.ok(glyphs.length >= 1, "expected at least one cluster glyph on the dense structure map");
+    assert.ok(glyphs.every((g) => g.count >= 1), `a cluster glyph showed no count: ${JSON.stringify(glyphs)}`);
+    assert.ok(glyphs.some((g) => g.count >= 2), `no cluster glyph folded a real tail (all counts were 1): ${JSON.stringify(glyphs)}`);
+    // A glyph names the directions it stands in for, in founder words.
+    assert.ok(glyphs.every((g) => /directions?$/.test(g.label)), `a cluster glyph label did not name directions: ${JSON.stringify(glyphs)}`);
+
+    // Some tail nodes are HIDDEN (React Flow does not paint a hidden node), so the on-screen card count is
+    // below the total object count — that IS the collapse.
+    const painted = await client.evaluate(`[...document.querySelectorAll('.venture-workspace .react-flow__node[data-id^="bet:"]')].filter((n) => { const r = n.getBoundingClientRect(); return r.width > 0 && r.height > 0; }).length`);
+
+    // LAW 4 — every node is still reachable through the outline. Open it ("o") and count the options: the
+    // outline lists EVERY venture object, including the ones folded behind a glyph. So option count exceeds
+    // the painted-card count (the folded tail is present in the array the outline reads).
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "o", code: "KeyO", text: "o", windowsVirtualKeyCode: 79 });
+    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "o", code: "KeyO", windowsVirtualKeyCode: 79 });
+    await waitForDom(client, `!!document.querySelector('#atlas-outline-panel [role="listbox"]')`, "the venture outline did not open on 'o'");
+    const outlineOptions = await client.evaluate(`document.querySelectorAll('#atlas-outline-panel [role="option"]').length`);
+    assert.ok(outlineOptions > painted, `outline (${outlineOptions}) did not list more objects than are painted (${painted}) — a folded node fell out of the array (Law 4 violation)`);
+    // The outline lists a real portion of the 120-bet dense fixture, proving the hidden tail stays reachable.
+    assert.ok(outlineOptions >= 20, `outline listed too few objects to prove the folded tail is reachable: ${outlineOptions}`);
 
     await assertNoUnhandledRejections(client);
   } finally {

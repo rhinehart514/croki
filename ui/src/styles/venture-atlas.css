@@ -395,7 +395,7 @@
 .atlas-crew .cr-presence::after { content: ""; width: 4.5px; height: 4.5px; border-radius: 50%; background: #eef4ec; }
 .atlas-crew .cr-presence.idle { background: var(--ink-4-warm, #a8a498); }
 .atlas-crew .cr-presence.asking { background: var(--amber); }
-.atlas-crew .cr-presence.working::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 1.5px solid var(--green-3, #6f8f75); opacity: 0.5; animation: atlas-crew-pulse 2.4s ease infinite; }
+.atlas-crew .cr-presence.working::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 1.5px solid var(--green-3, #6f8f75); opacity: 0.5; animation: atlas-crew-pulse 2.4s ease 3 both; }
 @keyframes atlas-crew-pulse { 0% { transform: scale(0.7); opacity: 0.6; } 70% { transform: scale(1.5); opacity: 0; } 100% { opacity: 0; } }
 .atlas-crew .cr-name { margin-top: 6px; font-size: 12px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
 .atlas-crew .cr-doing { margin-top: 4px; max-width: 138px; padding: 3px 9px; border: 1px solid var(--green-line); border-radius: 7px; background: var(--green-tint); color: var(--green); font-size: 10.5px; line-height: 1.3; }
@@ -674,7 +674,7 @@
 .atlas-effort .e-body { display: block; padding: 13px 15px 12px; }
 .atlas-effort .e-kicker {
   display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
-  font-family: var(--mono); font-size: 9px; letter-spacing: var(--track-mono); text-transform: uppercase;
+  font-family: var(--mono); font-size: var(--text-xs); letter-spacing: var(--track-mono); text-transform: uppercase;
   color: var(--ink-3-warm);
 }
 .atlas-effort .e-kicker .kdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-2); flex: none; }
@@ -695,7 +695,7 @@
 .atlas-effort .e-need svg { flex: none; width: 13px; height: 13px; margin-top: 1px; }
 .atlas-effort .e-draft {
   display: inline-flex; align-items: center; gap: 7px; margin-top: 10px;
-  font-family: var(--mono); font-size: 10px; color: var(--ink-2-warm);
+  font-family: var(--mono); font-size: var(--text-xs); color: var(--ink-2-warm);
   border: 1px solid var(--line-2-warm); background: var(--card-resting); border-radius: var(--r-chip); padding: 4px 9px;
   max-width: 100%;
 }
@@ -718,7 +718,7 @@
 .atlas-effort .e-faces .face { width: 21px; height: 21px; border-radius: 50%; overflow: hidden; border: 1.5px solid var(--card-raised); margin-left: -6px; flex: none; }
 .atlas-effort .e-faces .face:first-child { margin-left: 0; }
 .atlas-effort .kdot.pulse { position: relative; }
-.atlas-effort .kdot.pulse::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid var(--green-3); opacity: 0.55; animation: atlas-effort-pulse 2.4s var(--ease-out) infinite; }
+.atlas-effort .kdot.pulse::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid var(--green-3); opacity: 0.55; animation: atlas-effort-pulse 2.4s var(--ease-out) 3 both; }
 @keyframes atlas-effort-pulse { 0% { transform: scale(0.7); opacity: 0.6; } 70% { transform: scale(1.5); opacity: 0; } 100% { opacity: 0; } }
 
 /* Kinetic materialization (contract §3): a node still held back by the staged unfold sits invisible and

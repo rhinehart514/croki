@@ -305,7 +305,7 @@
   padding: var(--space-3);
   border: 1px solid var(--green-line, var(--n-line-2)); border-radius: var(--r-md);
   background: var(--green-tint);
-  animation: now-receipt-in var(--dur-med, 240ms) var(--ease) both;
+  animation: now-receipt-in 240ms var(--ease) both;
 }
 .now-drive-receipt[data-waiting="true"] {
   border-color: var(--amber-line); background: var(--amber-soft);
@@ -424,7 +424,7 @@
   position: absolute; bottom: calc(100% + 4px); left: 0; z-index: 20;
   min-width: 200px; padding: var(--space-1);
   display: flex; flex-direction: column;
-  background: var(--n-panel); border: 1px solid var(--n-line-2); border-radius: var(--r-panel);
+  background: var(--n-panel); border: 1px solid var(--n-line-2); border-radius: var(--r-md);
   box-shadow: var(--shadow-pop, 0 8px 24px rgb(0 0 0 / 0.10));
 }
 .now-view-option {

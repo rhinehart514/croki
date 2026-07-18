@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+// Founder authority, in-context: every wall purpose (release/answer/review-outcome/end-bet) can be
+// resolved once through the canvas shell's per-bet decision gate, leaves a durable receipt, a double-
+// activation cannot double-fire the same decision, the "Needs you" signal correctly counts down as each
+// distinct bet settles, and the clear/safe state survives a full reload. Ported from the retired
+// VentureAtlas global wall-panel DOM (`.firm-wall-queue`, `[aria-label="Founder decisions"]`) onto
+// NowRail's "Needs you" filter + a descended bet's `.now-gate` blocks (ConsequenceBody/DecisionGate,
+// reused verbatim from the Now route). The wall fixture ties each of its 4 purposes to a DIFFERENT bet, so
+// "4 wall items" = 4 distinct directions in the rail, each requiring its own descend to act on.
+
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -15,113 +24,146 @@ import {
   waitForDom,
 } from "./fixtures/browser-harness.mjs";
 
-async function selectWallItem(client, pattern) {
-  const selected = await client.evaluate(`(() => {
-    const pattern = new RegExp(${JSON.stringify(pattern.source)}, ${JSON.stringify(pattern.flags)});
-    const button = [...document.querySelectorAll('.firm-wall-queue button')]
-      .find((entry) => pattern.test(entry.textContent));
+async function fireNode(client, id, kind) {
+  const fired = await client.evaluate(`(() => {
+    const node = document.querySelector('.react-flow__node[data-id=${JSON.stringify(id)}]');
+    if (!node) return false;
+    const r = node.getBoundingClientRect();
+    const opts = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+    node.dispatchEvent(new MouseEvent(${JSON.stringify(kind)}, opts));
+    return true;
+  })()`);
+  assert.ok(fired, `node ${id} was not on screen to ${kind}`);
+}
+
+// Descend into a bet's decision gate via the rail: click the rail direction row (scopes composer), then
+// double-click the same bet's canvas node (descends into the stage workspace's consequence body).
+async function descendToGate(client, betId) {
+  const clickedRailRow = await client.evaluate(`(() => {
+    const button = [...document.querySelectorAll('.now-rail-dir')]
+      .find((entry) => entry.getAttribute('data-state') === 'needs-you');
     button?.click();
     return Boolean(button);
   })()`);
-  assert.equal(selected, true, `wall queue item ${pattern} was not selectable`);
+  assert.ok(clickedRailRow, "no needs-you rail direction to select");
+  await fireNode(client, `bet:${betId}`, "dblclick");
+  await waitForDom(client, `!!document.querySelector('.now-gate')`, `descending into ${betId} did not raise a decision gate`);
 }
 
-async function activateWallAction(client, label, note = null) {
-  if (note != null) {
-    const set = await client.evaluate(`(() => {
-      const field = document.querySelector('.firm-wall-review-item textarea');
-      if (!field) return false;
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(field, ${JSON.stringify(note)});
-      field.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    })()`);
-    assert.equal(set, true, "wall note field was not available");
-  }
-  await waitForDom(
-    client,
-    `[...document.querySelectorAll('.firm-wall-review-actions button')].some((button) => button.textContent.trim() === ${JSON.stringify(label)} && !button.disabled)`,
-    `${label} did not become available`,
-  );
-  const clicked = await client.evaluate(`(() => {
-    const button = [...document.querySelectorAll('.firm-wall-review-actions button')]
-      .find((entry) => entry.textContent.trim() === ${JSON.stringify(label)});
-    button?.click();
-    return Boolean(button);
+async function needsYouCount(client) {
+  return client.evaluate(`(() => {
+    const count = document.querySelector('.now-rail-needs-count');
+    return count ? Number(count.textContent.trim()) : 0;
   })()`);
-  assert.equal(clicked, true, `${label} could not be activated`);
 }
 
-test("the wall: every purpose settles once, leaves a receipt, and recovers clear", async () => {
+test("the wall: every purpose settles once in-context, leaves a receipt, and the needs-you signal clears and recovers", async () => {
   const drover = await bootFixture(createWallVentureFixture);
   const chrome = await openFixtureVenture(drover);
   try {
     const { client } = chrome;
     const ventureId = drover.fixture.venture.id;
-    await waitForDom(client, `Promise.all([
-      fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()),
-      Promise.resolve(document.querySelector('[data-atlas-wall] .firm-lens-wall-band')?.textContent || ''),
-    ]).then(([wall, text]) => wall.queue.length === 4 && /4 decisions need you/i.test(text))`, "four-purpose wall fixture did not render four durable, founder-visible decisions");
+    await client.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+    await waitForDom(
+      client,
+      `fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()).then((wall) => wall.queue.length === 4)`,
+      "four-purpose wall fixture did not seed four durable decisions",
+    );
     await assertPerformanceBudgets(client);
-    await client.evaluate(`document.querySelector('.firm-lens-wall-band')?.click()`);
-    await waitForDom(client, `!!document.querySelector('[aria-label="Founder decisions"]')`, "decision workbench did not open");
 
-    const matrix = await client.evaluate(`(async () => {
-      const result = {};
-      for (const item of document.querySelectorAll('.firm-wall-queue button')) {
-        item.click();
-        await new Promise(requestAnimationFrame);
-        const key = item.textContent.trim();
-        result[key] = [...document.querySelectorAll('.firm-wall-review-actions button')]
-          .map((button) => button.textContent.trim());
-      }
-      return result;
-    })()`);
-    const actions = Object.values(matrix).flat();
-    for (const expected of ["Release", "Reject", "Answer", "Dismiss", "Acknowledge", "End this work", "Keep it going"]) {
-      assert.ok(actions.includes(expected), `wall action matrix omitted ${expected}`);
-    }
+    // The fixture's 4 wall items are tied to 4 DISTINCT bets, so needsYou (a per-direction count) reads 4.
+    await waitForDom(client, `!!document.querySelector('.now-rail-needs-count')`, "needs-you count never appeared");
+    assert.equal(await needsYouCount(client), 4, "initial needs-you count did not match the four-bet wall fixture");
 
+    // Toggle "Needs you" — the rail filters to only needs-you directions.
+    await client.evaluate(`document.querySelector('.now-rail-needs')?.click()`);
+    await waitForDom(client, `document.querySelector('.now-rail-needs')?.getAttribute('aria-pressed') === 'true'`, "Needs you toggle did not press");
+    const filteredStates = await client.evaluate(`[...document.querySelectorAll('.now-rail-dir')].map((entry) => entry.getAttribute('data-state'))`);
+    assert.ok(filteredStates.length > 0, "Needs you filter left no directions visible");
+    assert.ok(filteredStates.every((state) => state === "needs-you"), `Needs you filter leaked a non-needs-you direction: ${JSON.stringify(filteredStates)}`);
+
+    // RELEASE — wall-purpose-release / wall-bet-release. Double-activation guard: click Reject twice
+    // rapidly and confirm exactly ONE POST to the decide endpoint fires.
+    await descendToGate(client, "wall-bet-release");
+    let releaseDecideRequests = 0;
     await client.send("Network.enable");
-    let rejectRequests = 0;
     client.on("Network.requestWillBeSent", ({ request }) => {
-      if (request.method === "POST" && /\/wall\/wall-purpose-release\/decide$/.test(request.url)) rejectRequests += 1;
+      if (request.method === "POST" && /\/wall\/wall-purpose-release\/decide$/.test(request.url)) releaseDecideRequests += 1;
     });
-    await selectWallItem(client, /Private preview/i);
     const activatedTwice = await client.evaluate(`(() => {
-      const button = [...document.querySelectorAll('.firm-wall-review-actions button')]
-        .find((entry) => entry.textContent.trim() === 'Reject');
+      const button = document.querySelector('.now-gate-btn[data-intent="reject"]');
       if (!button) return false;
-      button?.click();
-      button?.click();
+      button.click();
+      button.click();
       return true;
     })()`);
-    assert.equal(activatedTwice, true, "the wall reject action was not available");
-    await waitForDom(client, `/3 decisions need you/i.test(document.body.textContent)`, "rejected release did not settle");
-    assert.equal(rejectRequests, 1, "double activation emitted more than one wall decision request");
+    assert.equal(activatedTwice, true, "the release gate's Reject action was not available");
+    await waitForDom(client, `(() => { const c = document.querySelector('.now-rail-needs-count'); return (c ? Number(c.textContent.trim()) : 0) === 3; })()`, "rejecting the release item did not settle the needs-you count to 3");
+    assert.equal(releaseDecideRequests, 1, `double activation emitted ${releaseDecideRequests} wall decision requests instead of one`);
 
-    await selectWallItem(client, /Needs your input|A teammate needs your answer/i);
-    await activateWallAction(client, "Answer", "Use the weekly handoff constraint; do not name a customer.");
-    await waitForDom(client, `/2 decisions need you/i.test(document.body.textContent)`, "founder answer did not settle");
+    // ANSWER — wall-purpose-answer / wall-bet-answer. Free-text input + Send answer.
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await waitForDom(client, `!document.querySelector('[data-testid="stage-workspace"]')`, "first Escape did not return from the release descent");
+    await descendToGate(client, "wall-bet-answer");
+    const answerSet = await client.evaluate(`(() => {
+      const field = document.querySelector('input[aria-label="Your answer"]');
+      if (!field) return false;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(field, ${JSON.stringify("Use the weekly handoff constraint; do not name a customer.")});
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`);
+    assert.equal(answerSet, true, "the answer gate's free-text input was not available");
+    const sentAnswer = await client.evaluate(`(() => {
+      const button = [...document.querySelectorAll('.now-gate-btn')].find((entry) => entry.textContent.trim() === 'Send answer');
+      button?.click();
+      return Boolean(button);
+    })()`);
+    assert.equal(sentAnswer, true, "Send answer was not available");
+    await waitForDom(client, `(() => { const c = document.querySelector('.now-rail-needs-count'); return (c ? Number(c.textContent.trim()) : 0) === 2; })()`, "answering did not settle the needs-you count to 2");
 
-    await selectWallItem(client, /From the market|A reply came back/i);
-    await activateWallAction(client, "Acknowledge");
-    await waitForDom(client, `/1 decision needs you/i.test(document.body.textContent)`, "returned evidence review did not settle");
+    // REVIEW-OUTCOME — wall-purpose-review-outcome / wall-bet-outcome. Acknowledge.
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await waitForDom(client, `!document.querySelector('[data-testid="stage-workspace"]')`, "first Escape did not return from the answer descent");
+    await descendToGate(client, "wall-bet-outcome");
+    const acknowledged = await client.evaluate(`(() => {
+      const button = [...document.querySelectorAll('.now-gate-btn')].find((entry) => entry.textContent.trim() === 'Acknowledge');
+      button?.click();
+      return Boolean(button);
+    })()`);
+    assert.equal(acknowledged, true, "Acknowledge was not available for the review-outcome gate");
+    await waitForDom(client, `(() => { const c = document.querySelector('.now-rail-needs-count'); return (c ? Number(c.textContent.trim()) : 0) === 1; })()`, "acknowledging did not settle the needs-you count to 1");
 
-    await selectWallItem(client, /Ending decision|Should this work end/i);
-    await activateWallAction(client, "Keep it going");
-    await waitForDom(client, `/Nothing needs you yet/i.test(document.querySelector('.firm-lens-wall-band')?.textContent || '')`, "the founder decision boundary did not return to its safe clear state");
-    assert.equal(await client.evaluate(`!!document.querySelector('[aria-label="Founder decisions"]')`), false);
+    // END-BET — wall-purpose-end-bet / wall-bet-end. Keep it going (not killed — preserves "still 4 bets").
+    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await waitForDom(client, `!document.querySelector('[data-testid="stage-workspace"]')`, "first Escape did not return from the review-outcome descent");
+    await descendToGate(client, "wall-bet-end");
+    const keptGoing = await client.evaluate(`(() => {
+      const button = [...document.querySelectorAll('.now-gate-btn')].find((entry) => entry.textContent.trim() === 'Keep it going');
+      button?.click();
+      return Boolean(button);
+    })()`);
+    assert.equal(keptGoing, true, "Keep it going was not available for the end-bet gate");
+
+    // AFTER ALL FOUR — needs-you count/badge is gone, nothing crashed, composer + canvas still there.
+    await waitForDom(client, `!document.querySelector('.now-rail-needs-count')`, "needs-you count did not clear after all four decisions");
     const clearState = await client.evaluate(`(() => ({
-      band: document.querySelector('.firm-lens-wall-band')?.textContent,
-      composerVisible: Boolean(document.querySelector('.firm-app-composer textarea')),
-      atlasVisible: Boolean(document.querySelector('[data-venture-atlas]')),
+      attention: document.querySelector('.now-rail-needs')?.getAttribute('data-attention'),
+      composerVisible: Boolean(document.querySelector('.venture-workspace-dock .now-composer textarea')),
+      canvasVisible: Boolean(document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')),
       machineryVisible: Boolean(document.querySelector('[data-atlas-machinery]')),
     }))()`);
-    assert.match(clearState.band ?? "", /Outward work still stops here/i);
-    assert.equal(clearState.composerVisible, true);
-    assert.equal(clearState.atlasVisible, true);
+    assert.equal(clearState.attention, null, "Needs you retained an attention marker after clearing");
+    assert.equal(clearState.composerVisible, true, "composer disappeared after settling the wall");
+    assert.equal(clearState.canvasVisible, true, "canvas disappeared after settling the wall");
     assert.equal(clearState.machineryVisible, false, "settling the wall must not expose execution machinery by default");
 
+    // DURABLE RECEIPTS — brain-side truth, unaffected by the shell change.
     const receipts = Object.fromEntries(drover.fixture.wall.map((item) => [
       item.id,
       getVentureDoc(ventureId, "decisions", item.id, { root: drover.home }),
@@ -133,6 +175,7 @@ test("the wall: every purpose settles once, leaves a receipt, and recovers clear
     assert.equal(receipts["wall-purpose-end-bet"].decision, "keep");
     assert.ok(Object.values(receipts).every((receipt) => receipt.decidedAt && receipt.decidedBy), "every wall decision needs a durable receipt");
 
+    // RELOAD RECOVERY — the clear/safe state survives a full reload; the wall API queue length is 0.
     await client.send("Page.reload", { ignoreCache: true });
     await waitForDom(client, `/Continue a venture/i.test(document.body.textContent)`, "venture picker did not return after receipt reload");
     assert.equal(await client.evaluate(`(() => {
@@ -140,8 +183,10 @@ test("the wall: every purpose settles once, leaves a receipt, and recovers clear
       button?.click();
       return Boolean(button);
     })()`), true);
-    await waitForDom(client, `/Nothing needs you yet/i.test(document.querySelector('.firm-lens-wall-band')?.textContent || '')`, "clear decision boundary did not survive a full reload");
+    await waitForDom(client, `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`, "wall venture did not reopen after reload");
+    await waitForDom(client, `!document.querySelector('.now-rail-needs-count')`, "needs-you count did not stay clear after a full reload");
     assert.equal(await client.evaluate(`fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()).then((body) => body.queue.length)`), 0);
+
     await assertBasicAccessibility(client);
     await captureEvidence(client, "wall-clear-after-four-receipts");
     await assertNoUnhandledRejections(client);

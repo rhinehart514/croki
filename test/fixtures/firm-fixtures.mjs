@@ -279,12 +279,12 @@ export function createOvernightVentureFixture({ root, repository } = {}) {
 }
 
 /** A scale fixture for browser review and deterministic acceptance only. */
-export function createDenseVentureFixture({ root, repository } = {}) {
+export function createDenseVentureFixture({ root, repository, ventureId, ventureName, betEventMinute } = {}) {
   // Hand-built deterministic fixture crew: opt out of the founding-crew seed so crew counts stay exact.
   const options = { root, seedFoundingCrew: false };
   const venture = createVenture({
-    id: "fixture-dense-venture",
-    name: "Dense venture",
+    id: ventureId ?? "fixture-dense-venture",
+    name: ventureName ?? "Dense venture",
     repository: fixtureRepository(repository),
     createdAt: at(0),
     updatedAt: at(0),
@@ -322,7 +322,10 @@ export function createDenseVentureFixture({ root, repository } = {}) {
       intent: `Bet ${number}: ${LONG_COPY}`,
       teammateRef: teammateRefs[index % teammateRefs.length],
       forkedFrom,
-      minute: index + 1,
+      // The bet timeline (and its event `at` stamps) rides `minute`. A cold dense fixture passes a large
+      // negative base so every bet event is stale relative to any wall clock — the rank-and-reveal (SPEC C)
+      // then collapses the quiet tail deterministically, not gated on when the test happens to run.
+      minute: (betEventMinute ?? 0) + index + 1,
       staged,
       evidence: [{ type: "repository-citation", id: `src/fixture-${number}.ts`, path: `src/fixture-${number}.ts`, excerpt: LONG_COPY }],
       events: [{ type: "speak", detail: `Durable dense-fixture event ${number}` }],
@@ -383,6 +386,23 @@ export function createDenseVentureFixture({ root, repository } = {}) {
     wall,
     expected: { teammates: 12, bets: 120, outcomes: 30, wallItems: 20, maxForkDepth: 9 },
   };
+}
+
+/**
+ * A dense venture whose bet events are COLD — stamped far in the past so none reads as recently-changed at
+ * any wall clock. This is the deterministic ground for the SPEC C rank-and-reveal browser assertion: with a
+ * hundred quiet directions the structure-band ranker keeps only the always-surfaced few and folds the rest
+ * into territory cluster glyphs, while every node stays in the array feeding the outline (Law 4).
+ */
+export function createColdDenseVentureFixture({ root, repository } = {}) {
+  return createDenseVentureFixture({
+    root,
+    repository,
+    ventureId: "fixture-cold-dense-venture",
+    ventureName: "Cold dense venture",
+    // ~2 years of minutes before the fixture epoch: every bet event is far outside the 7-day recency window.
+    betEventMinute: -1_000_000,
+  });
 }
 
 /** A compact four-purpose wall fixture for authority and recovery journeys. */

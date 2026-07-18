@@ -33,6 +33,7 @@ import { AtlasBetNode } from "@/components/atlas/AtlasBetNode";
 import { AtlasCrewNode } from "@/components/atlas/AtlasCrewNode";
 import { AtlasCapabilityNode } from "@/components/atlas/AtlasCapabilityNode";
 import { TerritoryLayer } from "./TerritoryLayer";
+import { ClusterGlyph } from "./ClusterGlyph";
 
 const NODE_TYPES: NodeTypes = {
   architectureElement: ArchitectureElement,
@@ -42,6 +43,9 @@ const NODE_TYPES: NodeTypes = {
   atlasBet: AtlasBetNode,
   atlasCrew: AtlasCrewNode,
   atlasCapability: AtlasCapabilityNode,
+  // SPEC C: the collapsed-tail glyph the dense-map rank-and-reveal fronts a territory's quiet directions
+  // with. A synthetic node the stage appends at the structure band; it carries its own data shape.
+  clusterGlyph: ClusterGlyph,
 };
 
 // Slice 3: the epistemic edge carries join truth on the line (Law 10). Scene edges that resolve to an
@@ -67,6 +71,7 @@ export function VentureCanvasFlow({
   edges,
   onInit,
   onNodesChange,
+  onNodeDragStart,
   onNodeDragStop,
   onNodeClick,
   onNodeDoubleClick,
@@ -77,6 +82,7 @@ export function VentureCanvasFlow({
   edges: Edge[];
   onInit: (instance: ReactFlowInstance) => void;
   onNodesChange: (changes: NodeChange[]) => void;
+  onNodeDragStart?: (event: unknown, node?: Node) => void;
   onNodeDragStop: (event: unknown, node?: Node) => void;
   onNodeClick: (id: string) => void;
   onNodeDoubleClick?: (id: string) => void;
@@ -96,6 +102,7 @@ export function VentureCanvasFlow({
       edgeTypes={EDGE_TYPES}
       onInit={onInit}
       onNodesChange={onNodesChange}
+      onNodeDragStart={onNodeDragStart}
       onNodeDragStop={onNodeDragStop}
       onNodeClick={(_, node) => onNodeClick(node.id)}
       onNodeDoubleClick={onNodeDoubleClick ? (_, node) => onNodeDoubleClick(node.id) : undefined}

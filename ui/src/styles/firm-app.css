@@ -330,15 +330,13 @@
   position: relative;
   flex: 1;
   display: grid;
-  grid-template-columns:
-    [rail] var(--firm-rail-width, 336px)
-    [stage] minmax(0, 1fr)
-    [inspector] var(--firm-inspector-width, 0px);
+  grid-template-columns: [rail] 336px [stage] minmax(0, 1fr) [inspector] 0px;
   min-height: 0;
   transition: grid-template-columns var(--dur-base) var(--ease-out);
 }
-.firm-app-body[data-rail="collapsed"] { --firm-rail-width: 56px; }
-.firm-app-body[data-inspector="open"] { --firm-inspector-width: 380px; }
+.firm-app-body[data-rail="collapsed"] { grid-template-columns: [rail] 56px [stage] minmax(0, 1fr) [inspector] 0px; }
+.firm-app-body[data-inspector="open"] { grid-template-columns: [rail] 336px [stage] minmax(0, 1fr) [inspector] 380px; }
+.firm-app-body[data-rail="collapsed"][data-inspector="open"] { grid-template-columns: [rail] 56px [stage] minmax(0, 1fr) [inspector] 380px; }
 
 @media (prefers-reduced-motion: reduce) {
   .firm-app-body { transition: none; }
@@ -354,7 +352,7 @@
   overflow: hidden;
   border-right: 1px solid var(--line);
   background: var(--surface);
-  box-shadow: var(--sh-rail, 8px 0 24px -22px rgba(38, 33, 26, 0.45));
+  box-shadow: 8px 0 24px -22px rgba(38, 33, 26, 0.45);
 }
 
 /* Collapsed rail: an icon strip. The stage genuinely widens (grid track), so
@@ -458,12 +456,12 @@
 }
 .firm-app-inspector-body .insp-state .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); box-shadow: 0 0 0 3px var(--green-tint); flex: none; }
 .firm-app-inspector-body .insp-block { margin-top: 22px; }
-.firm-app-inspector-body .insp-label { margin: 0 0 10px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink-4-warm); }
+.firm-app-inspector-body .insp-label { margin: 0 0 10px; font-family: var(--mono); font-size: var(--text-xs); letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink-4-warm); }
 .firm-app-inspector-body .insp-para { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-2-warm); }
 .firm-app-inspector-body .insp-crew-row { display: flex; align-items: center; gap: 10px; }
 .firm-app-inspector-body .insp-crew-face { width: 34px; height: 34px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1.5px var(--card-resting); overflow: hidden; }
 .firm-app-inspector-body .insp-crew-name { font-weight: 600; font-size: 13px; color: var(--ink-warm); }
-.firm-app-inspector-body .insp-crew-role { margin-top: 1px; font-family: var(--mono); font-size: 10px; color: var(--ink-3-warm); }
+.firm-app-inspector-body .insp-crew-role { margin-top: 1px; font-family: var(--mono); font-size: var(--text-xs); color: var(--ink-3-warm); }
 .firm-app-inspector-body .insp-draft { overflow: hidden; border: 1px solid var(--line-2-warm); border-radius: var(--r-card); background: var(--card-raised); box-shadow: 0 1px 2px rgba(38,37,31,0.05), 0 8px 20px rgba(38,37,31,0.05); }
 .firm-app-inspector-body .id-head { display: flex; align-items: center; gap: 10px; padding: 13px 15px; border-bottom: 1px solid var(--hair); }
 .firm-app-inspector-body .id-ic { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-well); background: var(--green-tint); color: var(--green); flex: none; }
@@ -474,7 +472,7 @@
 .firm-app-inspector-body .id-list li { position: relative; padding: 9px 0 9px 26px; font-size: 12.5px; line-height: 1.48; color: var(--ink-2-warm); border-top: 1px solid var(--hair); }
 .firm-app-inspector-body .id-list li:first-child { border-top: none; }
 .firm-app-inspector-body .id-list li .num { position: absolute; left: 0; top: 9px; font-family: var(--mono); font-size: 11px; color: var(--green-2); font-weight: 500; }
-.firm-app-inspector-body .insp-disclosure { display: inline-block; margin-top: 12px; padding: 0; border: 0; background: none; font-family: var(--mono); font-size: 10px; color: var(--ink-4-warm); cursor: pointer; }
+.firm-app-inspector-body .insp-disclosure { display: inline-block; margin-top: 12px; padding: 0; border: 0; background: none; font-family: var(--mono); font-size: var(--text-xs); color: var(--ink-4-warm); cursor: pointer; }
 .firm-app-inspector-body .insp-disclosure:hover { color: var(--ink-3-warm); }
 .firm-app-inspector-body .insp-note { display: flex; align-items: flex-start; gap: 9px; margin-top: 22px; padding: 12px 14px; border: 1px solid var(--green-line); border-radius: var(--r-cap); background: var(--green-tint); font-size: 12.5px; line-height: 1.45; color: var(--green); }
 .firm-app-inspector-body .insp-note svg { flex: none; margin-top: 1px; color: var(--green); }
@@ -1242,8 +1240,10 @@
   .firm-app-workbench-identity button { margin-left: 0; }
   /* Narrower desktop resilience: the rail track tightens but stays a real grid
      cell — never a slide-over. Inspector closes to reclaim the stage. */
-  .firm-app-body { --firm-rail-width: 300px; }
-  .firm-app-body[data-inspector="open"] { --firm-inspector-width: 340px; }
+  .firm-app-body { grid-template-columns: [rail] 300px [stage] minmax(0, 1fr) [inspector] 0px; }
+  .firm-app-body[data-rail="collapsed"] { grid-template-columns: [rail] 56px [stage] minmax(0, 1fr) [inspector] 0px; }
+  .firm-app-body[data-inspector="open"] { grid-template-columns: [rail] 300px [stage] minmax(0, 1fr) [inspector] 340px; }
+  .firm-app-body[data-rail="collapsed"][data-inspector="open"] { grid-template-columns: [rail] 56px [stage] minmax(0, 1fr) [inspector] 340px; }
   .firm-app-canvas { min-width: 0; }
 }
 .firm-app-working strong { font-size: var(--text-xs); }

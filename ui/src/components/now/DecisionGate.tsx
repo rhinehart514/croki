@@ -3,7 +3,7 @@
 // first (a real diff or a preview), then decides. A deploy still requires two explicit acts: Authorize,
 // then Send — the two-word invariant expressed as two deliberate clicks. Wires to decideWallItem; the
 // note carries a hold/answer reason.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { decideWallItem, type WallDecision, type WallQueueItemView } from "@/api";
 import { reviewContent } from "@/components/lens/wallReviewContent";
 import { DiffView, FilesChanged, ArtifactPreview } from "@/components/review";
@@ -31,9 +31,15 @@ export function DecisionGate({
   const [busy, setBusy] = useState<WallDecision | null>(null);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // A same-tick double-activation (a real double-click, or a stray duplicate dispatch) fires both click
+  // handlers before React commits the `busy` state update, so the `disabled={busy !== null}` render guard
+  // alone cannot stop the second call. This ref is set synchronously, in the same turn as the first call,
+  // so it closes that gap without changing the founder-facing disabled/label behavior driven by `busy`.
+  const inFlight = useRef(false);
 
   const decide = async (decision: WallDecision, noteValue?: string) => {
-    if (busy) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(decision); setError(null);
     try {
       await decideWallItem(ventureId, item.id, { decision, note: noteValue ?? null });
@@ -41,7 +47,7 @@ export function DecisionGate({
       else onDecided();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Drover could not record that decision.");
-    } finally { setBusy(null); }
+    } finally { setBusy(null); inFlight.current = false; }
   };
 
   // A judgment request is presented as concise founder-facing language, not the raw agent question.

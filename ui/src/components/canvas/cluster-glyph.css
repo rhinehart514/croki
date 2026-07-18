@@ -1,0 +1,57 @@
+/* ClusterGlyph (SPEC C) — the collapsed-tail glyph node. Territory-tinted but greyscale-safe (the stacked
+   mark + count carry the meaning; the tint is a redundant second channel). index.css tokens only. */
+
+.cluster-glyph {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px dashed var(--line-2);
+  border-radius: 0.55rem;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.cluster-glyph:hover {
+  border-color: var(--ink-3);
+  background: var(--surface-1);
+}
+
+.cluster-glyph[data-territory="product"] {
+  border-left: 3px solid var(--ember);
+}
+
+.cluster-glyph[data-territory="gtm"] {
+  border-left: 3px solid var(--gap);
+}
+
+.cluster-glyph-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+}
+
+.cluster-glyph-count {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.5rem;
+  min-width: 1.1rem;
+  padding: 0 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.1rem;
+  text-align: center;
+  color: var(--on-primary);
+  background: var(--ink);
+  border-radius: 0.6rem;
+}
+
+.cluster-glyph-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+}

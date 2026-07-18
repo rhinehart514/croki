@@ -39,7 +39,7 @@ vi.mock("@xyflow/react", () => ({
   Controls: () => <div data-testid="controls" />,
   BackgroundVariant: { Dots: "dots" },
   ViewportPortal: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  useStore: (selector: (state: { transform: [number, number, number] }) => unknown) => selector({ transform: [0, 0, 0.6] }),
+  useStore: (selector: (state: { transform: [number, number, number]; nodeLookup: Map<string, unknown> }) => unknown) => selector({ transform: [0, 0, 0.6], nodeLookup: new Map() }),
   useNodesState: (initial: unknown[]) => [initial, vi.fn(), vi.fn()],
   useEdgesState: (initial: unknown[]) => [initial, vi.fn(), vi.fn()],
 }));

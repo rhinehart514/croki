@@ -181,7 +181,7 @@ export async function openFixtureVenture(drover) {
   try {
     await waitForDom(
       client,
-      `!!document.querySelector('[data-venture-atlas], [aria-label="The firm: configured participants, their bets, and the wall."]')`,
+      `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`,
       "fixture firm canvas did not open",
     );
   } catch (error) {
@@ -297,9 +297,9 @@ export async function assertDesktopViewports(client, assertFixtureState, { evide
     await client.send("Emulation.setEmulatedMedia", {
       features: [{ name: "prefers-reduced-motion", value: scenario.motion }],
     });
-    await waitForDom(client, `document.querySelector('.firm-app-canvas')?.clientWidth > 0`, "firm layout did not settle");
+    await waitForDom(client, `document.querySelector('.venture-canvas-flow.atlas-canvas')?.clientWidth > 0`, "firm layout did not settle");
     await waitForDom(client, `(() => {
-      const canvas = document.querySelector('.firm-app-canvas')?.getBoundingClientRect();
+      const canvas = document.querySelector('.venture-canvas-flow.atlas-canvas')?.getBoundingClientRect();
       return Boolean(canvas && [...document.querySelectorAll('.react-flow__node')].some((node) => {
         const rect = node.getBoundingClientRect(); const style = getComputedStyle(node);
         return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
@@ -318,8 +318,8 @@ export async function assertDesktopViewports(client, assertFixtureState, { evide
     });
     await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     const layout = await client.evaluate(`(() => {
-      const rail = document.querySelector('.firm-app-thread')?.getBoundingClientRect();
-      const canvas = document.querySelector('.firm-app-canvas')?.getBoundingClientRect();
+      const rail = document.querySelector('.venture-workspace .vw-index')?.getBoundingClientRect();
+      const canvas = document.querySelector('.venture-canvas-flow.atlas-canvas')?.getBoundingClientRect();
       const visibleCanvasNodes = canvas ? [...document.querySelectorAll('.react-flow__node')].filter((node) => {
         const rect = node.getBoundingClientRect();
         const style = getComputedStyle(node);

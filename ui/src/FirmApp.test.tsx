@@ -1,14 +1,11 @@
-// FirmApp.test.tsx — the firm shell: venture picker (list/create), opening a venture
-// renders the lens, the wall/activity states are reachable, and the drive affordance posts a real goal.
-// FirmLens itself is mocked to a lightweight stub — its own render/pan/zoom/placement/wall acceptance is
-// already covered by FirmLens.test.tsx; this file proves FirmApp's OWN shell responsibilities.
+// FirmApp.test.tsx — the firm shell: venture picker (list/create) and opening a venture mounts the
+// venture workspace (the Cursor-like frame around the canvas). VentureWorkspace itself is stubbed here;
+// its own composition is proven in VentureWorkspace.test.tsx and the canvas browser journey. This file
+// proves FirmApp's OWN shell responsibilities: the picker, and open → mount the workspace keyed for
+// venture isolation.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
-import type { FirmLens as FirmLensPayload } from "@/types";
-import { advanceReturnCursor, readReturnCursor } from "@/lib/return-cursor";
-import { readUxMetrics } from "@/lib/ux-metrics";
 
 const listVentures = vi.fn();
 const listRepositoryChoices = vi.fn();
@@ -54,57 +51,10 @@ vi.mock("@/api", () => ({
   removeCredential: (...args: unknown[]) => removeCredential(...args),
 }));
 
-vi.mock("@/components/lens/FirmLens", () => ({
-  FirmLens: ({ ventureId, selection, wallOpen, onSelectionChange, onWallOpenChange }: {
-    ventureId: string;
-    selection?: { betId: string | null; workRef: string | null; teammateRefs: string[] } | null;
-    wallOpen?: boolean;
-    onSelectionChange?: (selection: { betId: string | null; workRef: string | null; teammateRefs: string[] } | null) => void;
-    onWallOpenChange?: (open: boolean) => void;
-  }) => (
-    <div
-      data-testid="firm-lens-stub"
-      data-selection={selection?.workRef ? `work:${selection.workRef}` : selection?.betId ? `bet:${selection.betId}` : selection?.teammateRefs.length ? `crew:${selection.teammateRefs.join(",")}` : "venture"}
-      data-wall-open={wallOpen ? "true" : "false"}
-    >
-      lens for {ventureId}
-      <button type="button" onClick={() => onSelectionChange?.({ betId: null, workRef: null, teammateRefs: ["closer"] })}>Select Reed</button>
-      <button type="button" onClick={() => onSelectionChange?.({ betId: "bet-1", workRef: "work-1", teammateRefs: ["outreach-writer"] })}>Select exact work</button>
-      <button type="button" onClick={() => onSelectionChange?.(null)}>Clear selection</button>
-      <button type="button" onClick={() => onWallOpenChange?.(true)}>Open wall</button>
-      <button type="button" onClick={() => onWallOpenChange?.(false)}>Close wall</button>
-    </div>
-  ),
-}));
-
-// FirmApp's shell tests use the same lightweight canvas stub whether the production
-// workbench chooses the Orbital Atlas or its untouched compatibility lens.
-vi.mock("@/components/atlas/VentureAtlas", () => ({
-  VentureAtlas: ({ fallback }: { fallback: ReactNode }) => fallback,
-}));
-
-// Phase 5 cutover: the immersive warm-paper world is the default shell. Its internals (world, chrome,
-// descent, gate) have their own component tests; here we stub it so these tests prove FirmApp's OWN
-// routing responsibility — open a venture → mount the immersive shell — without dragging in ReactFlow.
-vi.mock("@/components/immersive/ImmersiveShell", () => ({
-  ImmersiveShell: ({ venture }: { venture: { id: string; name: string } }) => (
-    <div data-testid="immersive-shell-stub" data-venture={venture.id} data-venture-name={venture.name} />
-  ),
-}));
-
-// The Now workspace is the default founder surface. Its internals (composer, stream, work detail, gate,
-// Map) have their own tests; here we stub it so these tests prove FirmApp's OWN routing responsibility —
-// open a venture → mount the Now shell — without dragging in the stream/data layer.
-vi.mock("@/components/now/NowShell", () => ({
-  NowShell: ({ venture }: { venture: { id: string; name: string } }) => (
-    <div data-testid="now-shell-stub" data-venture={venture.id} data-venture-name={venture.name} />
-  ),
-}));
-
-// The unified venture canvas (Phase 4/5) is flag-gated behind ?shell=canvas — now the framed
-// VentureWorkspace (Cursor-like frame around the canvas). Stub it so this test proves only FirmApp's
-// routing responsibility — open a venture with the flag → mount the workspace — without dragging in
-// ReactFlow. The frame's own composition is proven in VentureWorkspace.test.tsx.
+// VentureWorkspace is the sole default surface. Its composition (index, canvas, dock composer, descent,
+// lens overlays) has its own component and browser-journey coverage; here we stub it so this test proves
+// only FirmApp's routing responsibility — open a venture → mount the workspace, keyed for isolation —
+// without dragging in ReactFlow.
 vi.mock("@/components/workspace/VentureWorkspace", () => ({
   VentureWorkspace: ({ venture }: { venture: { id: string; name: string } }) => (
     <div data-testid="venture-canvas-stub" data-venture={venture.id} data-venture-name={venture.name} />
@@ -113,44 +63,17 @@ vi.mock("@/components/workspace/VentureWorkspace", () => ({
 
 import FirmApp from "./FirmApp";
 
-// The cutover routes on ?shell — default is Now, ?shell=legacy is the retained escape hatch,
-// ?shell=canvas is the flag-gated venture canvas. FirmApp reads window.location.search at render, so
-// tests set it before rendering.
-function setShell(shell: "immersive" | "legacy" | "canvas") {
-  const search = shell === "legacy" ? "/?shell=legacy" : shell === "canvas" ? "/?shell=canvas" : "/";
-  window.history.replaceState({}, "", search);
-}
-
-const fixtureLens: FirmLensPayload = {
-  ventureId: "v1",
-  crew: [
-    { ref: "outreach-writer", summonedAt: "now", soul: { name: "Sable" } },
-    { ref: "closer", summonedAt: "now", soul: { name: "Reed" } },
-  ],
-  bets: [
-    {
-      id: "bet-1", ventureId: "v1", intent: "cold outbound", forkedFrom: null, teammateRef: "writer",
-      refs: [], evidence: [], staged: [], joinKey: "j1", createdAt: "now", updatedAt: "now",
-      endedAt: null, endedBy: null, learning: null, position: "live", stagedCount: 0, latestOutcome: null,
-      events: [{ type: "bet_forked", detail: "cold outbound", at: "2026-07-01T00:00:00.000Z" }],
-    },
-  ],
-  wall: { count: 0, oldestParkedAt: null },
-  placement: { positions: {}, revision: 0 },
-};
-
 describe("FirmApp", () => {
   beforeEach(() => {
     delete window.droverDesktop;
     localStorage.clear();
-    setShell("immersive");
-    advanceReturnCursor("v1", "2026-07-02T00:00:00.000Z");
+    window.history.replaceState({}, "", "/");
     listVentures.mockReset().mockResolvedValue({ ventures: [] });
     listRepositoryChoices.mockReset().mockResolvedValue({
       repositories: [{ name: "new", path: "/products/new", source: "workspace" }],
     });
     createVenture.mockReset();
-    getLens.mockReset().mockResolvedValue({ lens: fixtureLens });
+    getLens.mockReset().mockResolvedValue({ lens: null });
     getArchitectureProjection.mockReset().mockRejectedValue(new Error("Architecture fixture not supplied by this shell test."));
     getConversation.mockReset().mockResolvedValue({ messages: [] });
     getActiveDrives.mockReset().mockResolvedValue({ drives: [] });
@@ -199,89 +122,27 @@ describe("FirmApp", () => {
     const row = await screen.findByRole("button", { name: /LocalSeoData pipeline/i });
     expect(row).toHaveTextContent(/open canvas/i);
     fireEvent.click(row);
-    // Cutover: opening a venture mounts the Now workspace by default — not the triptych.
-    expect(await screen.findByTestId("now-shell-stub")).toHaveAttribute(
+    // Opening a venture mounts the venture workspace.
+    expect(await screen.findByTestId("venture-canvas-stub")).toHaveAttribute(
       "data-venture-name",
       "LocalSeoData pipeline",
     );
   });
 
-  it("opens the Now workspace by default and ships no legacy triptych selectors", async () => {
+  it("opens the venture workspace by default and ships no legacy triptych selectors", async () => {
     listVentures.mockResolvedValue({
       ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
     });
     const { container } = render(<FirmApp />);
     fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
 
-    // The Now workspace is the default founder surface.
-    expect(await screen.findByTestId("now-shell-stub")).toHaveAttribute("data-venture", "v1");
+    // The venture workspace is the default founder surface, keyed for venture isolation.
+    expect(await screen.findByTestId("venture-canvas-stub")).toHaveAttribute("data-venture", "v1");
     // The retired triptych presentation is absent from the shipped DOM.
     expect(container.querySelector(".firm-app-rail")).toBeNull();
     expect(container.querySelector(".firm-app-inspector")).toBeNull();
     expect(container.querySelector(".firm-app-body")).toBeNull();
     expect(container.querySelector(".firm-app-workbench-bar")).toBeNull();
-  });
-
-  it("routes an open venture to the retired triptych only behind ?shell=legacy", async () => {
-    setShell("legacy");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-
-    // The escape hatch still mounts the legacy lens + docked rail for regression coverage.
-    await screen.findByTestId("firm-lens-stub");
-    expect(screen.queryByTestId("immersive-shell-stub")).toBeNull();
-    expect(screen.getByRole("complementary", { name: /firm conversation/i })).toBeTruthy();
-  });
-
-  it("mounts the venture canvas behind ?shell=canvas and leaves the Now default untouched", async () => {
-    setShell("canvas");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-
-    // The flag mounts the canvas with the venture, keyed for isolation; the Now default does not render.
-    expect(await screen.findByTestId("venture-canvas-stub")).toHaveAttribute("data-venture", "v1");
-    expect(screen.queryByTestId("now-shell-stub")).toBeNull();
-    expect(screen.queryByTestId("immersive-shell-stub")).toBeNull();
-  });
-
-  it("opens a portfolio wall item in its owning venture and canonical bet context", async () => {
-    setShell("legacy");
-    const venture = { id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" };
-    listVentures.mockResolvedValue({ ventures: [venture] });
-    getPortfolioWall.mockResolvedValue({
-      eligibility: {
-        status: "eligible",
-        proofDate: "2026-07-14",
-        requirement: "Dated Batch 8 outside-founder evidence recorded in docs/STATE.md",
-        activation: "Already eligible",
-      },
-      groups: [{
-        venture: { id: venture.id, name: venture.name },
-        items: [{
-          id: "wall-1",
-          ventureId: venture.id,
-          betId: "bet-1",
-          purpose: "review-outcome",
-          blocksBet: false,
-          effect: { outcome: { id: "outcome-1", body: "The narrower promise earned a reply." } },
-          parkedAt: "2026-07-14T10:00:00.000Z",
-          decision: null,
-          context: { ventureId: venture.id, betId: "bet-1", outcomeId: "outcome-1" },
-        }],
-      }],
-    });
-
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /the narrower promise earned a reply/i }));
-
-    expect(await screen.findByTestId("firm-lens-stub")).toHaveAttribute("data-selection", "bet:bet-1");
-    expect(screen.getByTestId("firm-lens-stub")).toHaveAttribute("data-wall-open", "true");
   });
 
   it("starting a new venture creates it and opens it directly", async () => {
@@ -295,7 +156,7 @@ describe("FirmApp", () => {
     fireEvent.click(screen.getByRole("button", { name: /start venture/i }));
 
     await waitFor(() => expect(createVenture).toHaveBeenCalledWith("A new venture", "/products/new"));
-    await screen.findByTestId("now-shell-stub");
+    await screen.findByTestId("venture-canvas-stub");
   });
 
   it("offers trusted local folders as explicit choices and keeps the derived name in sync", async () => {
@@ -349,359 +210,5 @@ describe("FirmApp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /start venture/i }));
     await waitFor(() => expect(createVenture).toHaveBeenCalledWith("chosen", "/products/chosen"));
-  });
-
-  it("keeps direction in the teammate rail and targets the selected canvas teammate", async () => {
-    setShell("legacy");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await screen.findByTestId("firm-lens-stub");
-
-    const composer = screen.getByRole("region", { name: /direction composer: what should change/i });
-    expect(composer.closest("header")).toBeNull();
-    expect(composer.closest(".firm-app-rail")).toBeTruthy();
-    expect(composer.closest(".firm-app-canvas")).toBeNull();
-    expect(screen.queryByRole("radio")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /select reed/i }));
-    expect(screen.getByRole("region", { name: /direction composer: direct reed/i })).toBeTruthy();
-    const submit = screen.getByRole("button", { name: /direct reed/i });
-    expect(submit).toBeDisabled();
-    fireEvent.change(screen.getByLabelText(/what should change/i), { target: { value: "Try a colder subject line" } });
-    await waitFor(() => expect(submit).toBeEnabled());
-    fireEvent.keyDown(screen.getByLabelText(/what should change/i), { key: "Enter" });
-
-    await waitFor(() => expect(driveTeammate).toHaveBeenCalledWith("v1", {
-      teammateRef: "closer",
-      teammateRefs: ["closer"],
-      goal: "Try a colder subject line",
-    }));
-  });
-
-  it("docks the conversation rail as a grid cell and collapses it to an icon strip", async () => {
-    setShell("legacy");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await screen.findByTestId("firm-lens-stub");
-
-    // The rail is a real docked grid cell, never a floating panel or a resizable separator.
-    expect(screen.queryByRole("separator", { name: "Resize conversation" })).toBeNull();
-    expect(screen.getByRole("complementary", { name: /firm conversation/i })).toBeVisible();
-
-    // Collapse is a layout track change to an icon strip — the stage genuinely widens.
-    fireEvent.click(screen.getByRole("button", { name: "Hide conversation" }));
-    expect(screen.queryByRole("complementary", { name: /firm conversation/i })).toBeNull();
-    expect(screen.getByRole("complementary", { name: /conversation, collapsed/i })).toBeTruthy();
-    expect(screen.getByTestId("firm-lens-stub")).toBeVisible();
-
-    // Restore from the collapsed strip.
-    fireEvent.click(screen.getAllByRole("button", { name: "Open conversation" })[0]);
-    expect(screen.getByRole("complementary", { name: /firm conversation/i })).toBeVisible();
-  });
-
-  it("opens the inspector cell on canvas selection and closes it to reclaim the stage", async () => {
-    setShell("legacy");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await screen.findByTestId("firm-lens-stub");
-
-    // Closed by default — the stage has full width.
-    expect(screen.queryByRole("complementary", { name: "Selection inspector" })).toBeNull();
-
-    // Selecting exact work opens the one swapping inspector cell.
-    fireEvent.click(screen.getByRole("button", { name: "Select exact work" }));
-    expect(screen.getByRole("complementary", { name: "Selection inspector" })).toBeTruthy();
-
-    // Closing the inspector clears the selection and gives the stage full width again.
-    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
-    expect(screen.queryByRole("complementary", { name: "Selection inspector" })).toBeNull();
-  });
-
-  it("keeps always-on work and real crew connections inside venture settings", async () => {
-    setShell("legacy");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await screen.findByTestId("firm-lens-stub");
-
-    expect(screen.queryByText("Always-on work")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-
-    expect(await screen.findByRole("dialog", { name: "Venture settings" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Real sources and actions" })).toBeTruthy();
-    expect(screen.getByText("Always-on work")).toBeTruthy();
-    expect(screen.queryByText(/^Heat$/)).toBeNull();
-    // This shell test stubs the canvas; venture settings still reads the connected credentials.
-    expect(getCredentials).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the composer available beside the open wall without discarding scope or draft", async () => {
-    setShell("legacy");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await screen.findByTestId("firm-lens-stub");
-
-    fireEvent.click(screen.getByRole("button", { name: /select reed/i }));
-    const direction = screen.getByLabelText(/what should change/i);
-    fireEvent.change(direction, { target: { value: "Keep this scoped to Reed" } });
-    const composerLayer = direction.closest(".firm-app-composer-layer");
-
-    fireEvent.click(screen.getByRole("button", { name: /open wall/i }));
-    expect(composerLayer).not.toHaveAttribute("hidden");
-    expect(screen.getByRole("region", { name: /direction composer: direct reed/i })).toBeTruthy();
-    expect(screen.getByLabelText(/what should change/i)).toHaveValue("Keep this scoped to Reed");
-
-    fireEvent.click(screen.getAllByRole("button", { name: /close wall/i })[0]);
-    expect(composerLayer).not.toHaveAttribute("hidden");
-    expect(screen.getByRole("region", { name: /direction composer: direct reed/i })).toBeTruthy();
-    expect(screen.getByLabelText(/what should change/i)).toHaveValue("Keep this scoped to Reed");
-  });
-
-  it("keeps the whole firm as the default even when there is only one teammate", async () => {
-    setShell("legacy");
-    getLens.mockResolvedValue({ lens: { ...fixtureLens, crew: [fixtureLens.crew[0]] } });
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await waitFor(() => expect(getLens).toHaveBeenCalledWith("v1"));
-
-    expect(screen.getByRole("region", { name: /direction composer: what should change/i })).toBeTruthy();
-    expect(screen.getByLabelText("Direction target")).toHaveTextContent("Venture");
-    expect(screen.queryByRole("radio", { name: /Sable/i })).toBeNull();
-
-    fireEvent.change(screen.getByLabelText(/tell drover what you want to change/i), { target: { value: "Reach our first ten customers" } });
-    const direct = screen.getByRole("button", { name: /direct the venture/i });
-    await waitFor(() => expect(direct).toBeEnabled());
-    fireEvent.click(direct);
-
-    await waitFor(() => expect(driveTeammate).toHaveBeenCalledWith("v1", {
-      goal: "Reach our first ten customers",
-    }));
-  });
-
-  it("addresses an empty firm without inventing an internal teammate reference", async () => {
-    setShell("legacy");
-    getLens.mockResolvedValue({ lens: { ...fixtureLens, crew: [] } });
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await screen.findByTestId("firm-lens-stub");
-    await waitFor(() => expect(getLens).toHaveBeenCalledWith("v1"));
-
-    expect(screen.getByRole("region", { name: /direction composer: what should change/i })).toBeTruthy();
-    expect(screen.getByLabelText("Direction target")).toHaveTextContent("Venture");
-    fireEvent.change(screen.getByLabelText(/tell drover what you want to change/i), { target: { value: "Find our first repeatable channel" } });
-    const direct = screen.getByRole("button", { name: /direct the venture/i });
-    await waitFor(() => expect(direct).toBeEnabled());
-    fireEvent.click(direct);
-
-    await waitFor(() => expect(driveTeammate).toHaveBeenCalledWith("v1", {
-      goal: "Find our first repeatable channel",
-    }));
-    expect(await screen.findByText(/direction received.*conversation and canvas/i)).toBeTruthy();
-  });
-
-  it("keeps founder-facing progress visible in the teammate line", async () => {
-    setShell("legacy");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await screen.findByTestId("firm-lens-stub");
-    await waitFor(() => expect(getLens).toHaveBeenCalledWith("v1"));
-
-    await screen.findAllByText("cold outbound");
-    expect(screen.getByText("Work began")).toBeTruthy();
-    expect(screen.queryByText("bet_forked")).toBeNull();
-    expect(screen.getByRole("complementary", { name: /venture one firm conversation/i })).toBeTruthy();
-  });
-
-  it("opens return proof without reviewing unrelated durable work", async () => {
-    setShell("legacy");
-    localStorage.clear();
-    advanceReturnCursor("v1", "2026-06-30T00:00:00.000Z");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-
-    expect(await screen.findByRole("heading", { name: "Since you left" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Kept moving" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Open on canvas" }));
-
-    expect(screen.getByTestId("firm-lens-stub")).toHaveAttribute("data-selection", "bet:bet-1");
-    expect(readReturnCursor("v1")).toBe("2026-06-30T00:00:00.000Z");
-    expect(readUxMetrics().filter((metric) => metric.event === "proof_opened")).toHaveLength(1);
-
-    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-    expect(await screen.findByRole("heading", { name: "Since you left" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Finish briefing" }));
-    expect(readReturnCursor("v1")).toBe("2026-07-01T00:00:00.000Z");
-  });
-
-  it("shows active provider work and stops only that run without ending its bet", async () => {
-    setShell("legacy");
-    getActiveDrives.mockResolvedValue({
-      drives: [{
-        id: "drive-1", ventureId: "v1", teammateRef: "outreach-writer", betId: "bet-1",
-        runtime: "codex", startedAt: new Date(Date.now() - 5_000).toISOString(),
-        abortSupported: true, abortRequestedAt: null,
-      }],
-    });
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    const stop = await screen.findByRole("button", { name: "Stop current work" });
-    expect(screen.getByLabelText("Current work")).toHaveTextContent(/Work began|Work is active/);
-    fireEvent.click(stop);
-
-    await waitFor(() => expect(stopActiveDrive).toHaveBeenCalledWith("v1", "drive-1"));
-    expect(screen.queryByRole("button", { name: /end bet/i })).toBeNull();
-  });
-
-  it("retries a failed move through the selected bet composer instead of restarting silently", async () => {
-    setShell("legacy");
-    getLens.mockResolvedValue({
-      lens: {
-        ...fixtureLens,
-        bets: [{
-          ...fixtureLens.bets[0],
-          events: [
-            ...(fixtureLens.bets[0].events ?? []),
-            { type: "tool_failed", detail: "scan_repository: connection lost", at: "2026-07-01T00:01:00.000Z" },
-          ],
-        }],
-      },
-    });
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    fireEvent.click(await screen.findByText("Work log"));
-    fireEvent.click(screen.getByRole("button", { name: "Retry current move" }));
-
-    const correction = screen.getByRole("textbox", { name: "What should change here?" });
-    expect(correction).toHaveValue("Retry this move from its last durable step.");
-    fireEvent.click(screen.getByRole("button", { name: "Direct cold outbound" }));
-    await waitFor(() => expect(driveTeammate).toHaveBeenCalledWith("v1", {
-      teammateRef: "writer",
-      betId: "bet-1",
-      goal: "Retry this move from its last durable step.",
-    }));
-  });
-
-  it("keeps the durable founder and teammate chat in the left rail", async () => {
-    setShell("legacy");
-    getConversation.mockResolvedValue({
-      messages: [
-        {
-          id: "message-1", ventureId: "v1", role: "founder", content: "Find the first buyer",
-          teammateRef: "outreach-writer", betId: null, createdAt: "2026-07-01T10:00:00.000Z",
-        },
-        {
-          id: "message-2", ventureId: "v1", role: "teammate", content: "I found three segments worth testing.",
-          teammateRef: "outreach-writer", betId: "bet-1", createdAt: "2026-07-01T10:01:00.000Z",
-        },
-      ],
-    });
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-
-    expect(await screen.findByRole("heading", { name: "Conversation" })).toBeTruthy();
-    expect(await screen.findByText("Find the first buyer")).toBeTruthy();
-    expect(screen.getByText("I found three segments worth testing.")).toBeTruthy();
-    expect(screen.getByText("You")).toBeTruthy();
-    expect(screen.getAllByText("Sable").length).toBeGreaterThan(0);
-    expect(getConversation).toHaveBeenCalledWith("v1");
-  });
-
-  it("hands a single new bet from the conversation back to the focused canvas", async () => {
-    setShell("legacy");
-    driveTeammate.mockResolvedValue({
-      outcome: { kind: "completed" },
-      work: {},
-      runtime: { id: "codex", label: "Codex", auth: "chatgpt-login" },
-      handoff: {
-        id: "handoff-1",
-        ventureId: "v1",
-        role: "system",
-        kind: "handoff",
-        content: "Work landed on the canvas — 1 bet opened.",
-        teammateRef: "outreach-writer",
-        betId: null,
-        changes: { openedBetIds: ["bet-1"], stagedBetIds: [], wallBetIds: [] },
-        createdAt: "now",
-      },
-    });
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    const field = await screen.findByRole("textbox", { name: /tell drover what you want to change/i });
-    fireEvent.change(field, { target: { value: "Open the strongest next bet" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: /direct the venture/i })).toBeEnabled());
-    fireEvent.keyDown(field, { key: "Enter" });
-
-    await waitFor(() => expect(screen.getByTestId("firm-lens-stub")).toHaveAttribute("data-selection", "bet:bet-1"));
-    expect(screen.getByText("Focused conversation")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /return to venture thread/i })).toBeTruthy();
-  });
-
-  it("uses the teammate character to orient an empty line", async () => {
-    setShell("legacy");
-    getLens.mockResolvedValue({ lens: { ...fixtureLens, bets: [] } });
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await waitFor(() => expect(getLens).toHaveBeenCalledWith("v1"));
-
-    expect(screen.getByRole("complementary", { name: /venture one firm conversation/i })).toBeTruthy();
-    expect(screen.getByText("Give Drover its first direction")).toBeTruthy();
-    expect(screen.getByText(/name what should change for this venture/i)).toBeTruthy();
-  });
-
-  it("the back control returns to the venture picker", async () => {
-    setShell("legacy");
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
-    });
-    render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
-    await screen.findByTestId("firm-lens-stub");
-
-    fireEvent.click(screen.getByRole("button", { name: /ventures/i }));
-    await screen.findByRole("heading", { name: /continue a venture/i });
   });
 });

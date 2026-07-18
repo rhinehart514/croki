@@ -76,8 +76,8 @@ export async function openAtlasFixture(drover, {
   assert.equal(opened, true, `could not open ${ventureName}`);
   await waitForDom(
     client,
-    `Boolean(document.querySelector('[data-venture-atlas], .venture-atlas, [aria-label^="Living venture atlas"]'))`,
-    `${ventureName} did not open the living venture atlas`,
+    `!!document.querySelector('.venture-workspace .venture-canvas-flow.atlas-canvas')`,
+    `${ventureName} did not open the venture workspace canvas`,
   );
   return chrome;
 }
@@ -306,12 +306,15 @@ export async function selectAtlasElement(client, accessibleName) {
   await waitForDom(client, `[...document.querySelectorAll('.atlas-element[data-selected="true"]')].some((entry) => entry.dataset.atlasId === ${JSON.stringify(target.atlasId)})`, `selection did not settle for ${accessibleName}`);
 }
 
+// NOTE: there is no standalone ".atlas-wall" landmark to assert anymore — founder decisions live
+// in-context per bet (NowRail's "Needs you" toggle + a descended bet's .now-gate blocks), not behind a
+// single global wall panel. Each journey file that needs wall-reachability proves it per-file (see
+// wall-journey.mjs) instead of this shared viewport helper asserting a dead selector.
 export async function assertAtlasViewport(client, { width, height, reducedMotion }) {
   const state = await client.evaluate(`(() => {
-    const root = document.querySelector('[data-venture-atlas], .venture-atlas, [aria-label^="Living venture atlas"]');
-    const canvas = document.querySelector('.firm-app-canvas');
-    const composer = document.querySelector('.firm-app-composer textarea');
-    const wall = document.querySelector('.atlas-wall');
+    const root = document.querySelector('.venture-workspace');
+    const canvas = document.querySelector('.venture-canvas-flow.atlas-canvas');
+    const composer = document.querySelector('.venture-workspace-dock .now-composer textarea');
     const visible = (element) => {
       if (!element) return false;
       const rect = element.getBoundingClientRect();
@@ -327,7 +330,6 @@ export async function assertAtlasViewport(client, { width, height, reducedMotion
       root: visible(root),
       canvas: visible(canvas),
       composer: visible(composer),
-      wall: Boolean(wall),
       overflowX: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
       permanentInspector: Boolean(document.querySelector('.atlas-inspector, [data-atlas-inspector], [aria-label*="architecture inspector" i]')),
       dashboard: Boolean(document.querySelector('.atlas-dashboard, [data-atlas-dashboard]')),
@@ -336,13 +338,12 @@ export async function assertAtlasViewport(client, { width, height, reducedMotion
   assert.equal(state.width, width);
   assert.equal(state.height, height);
   assert.equal(state.reducedMotion, reducedMotion);
-  assert.equal(state.root, true, "atlas root must remain visible");
-  assert.equal(state.canvas, true, "atlas must fill the workbench canvas");
+  assert.equal(state.root, true, "workspace root must remain visible");
+  assert.equal(state.canvas, true, "canvas must fill the workbench plane");
   assert.equal(state.composer, true, "continuous composer must remain reachable");
-  assert.equal(state.wall, true, "founder wall must remain reachable");
-  assert.ok(state.overflowX <= 1, `atlas introduced ${state.overflowX}px page overflow`);
-  assert.equal(state.permanentInspector, false, "atlas regressed to a permanent inspector");
-  assert.equal(state.dashboard, false, "atlas regressed to a dashboard composition");
+  assert.ok(state.overflowX <= 1, `workspace introduced ${state.overflowX}px page overflow`);
+  assert.equal(state.permanentInspector, false, "workspace regressed to a permanent inspector");
+  assert.equal(state.dashboard, false, "workspace regressed to a dashboard composition");
   return state;
 }
 
@@ -456,19 +457,18 @@ export async function assertVisibleKeyboardFocus(client, label) {
 export async function assertAtlasAccessibility(client) {
   await assertBasicAccessibility(client);
   await assertAxeNoCritical(client, {
-    context: "document.querySelector('[data-venture-atlas], .venture-atlas')",
-    label: "venture atlas",
+    context: "document.querySelector('.venture-workspace')",
+    label: "venture workspace",
   });
+  // The outline ("o") is the deterministic keyboard access path now, not a permanent visible toggle
+  // button — so accessible-name coverage is checked generically (assertBasicAccessibility above) rather
+  // than for a specific "outline" labelled button that no longer exists as chrome.
   const canvasContract = await client.evaluate(`(() => ({
-    labelled: Boolean(document.querySelector('[data-venture-atlas][aria-label], .venture-atlas[aria-label], [aria-label^="Living venture atlas"]')),
-    outlineToggle: Boolean([...document.querySelectorAll('button')].find((button) => /outline/i.test(button.getAttribute('aria-label') || button.textContent || ''))),
-    unnamedAtlasButtons: [...document.querySelectorAll('.venture-atlas button, [data-venture-atlas] button')]
+    unnamedButtons: [...document.querySelectorAll('.venture-workspace button')]
       .filter((button) => !(button.getAttribute('aria-label') || button.textContent || '').trim())
       .map((button) => button.outerHTML.slice(0, 160)),
   }))()`);
-  assert.equal(canvasContract.labelled, true, "living atlas needs an accessible canvas name");
-  assert.equal(canvasContract.outlineToggle, true, "living atlas needs deterministic outline access");
-  assert.deepEqual(canvasContract.unnamedAtlasButtons, []);
+  assert.deepEqual(canvasContract.unnamedButtons, []);
   await assertNoUnhandledRejections(client);
 }
 
