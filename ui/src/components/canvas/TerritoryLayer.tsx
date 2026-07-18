@@ -1,11 +1,16 @@
 // The rendered geography of the venture canvas — territory is geography, not a layout seed (spec).
 //
-// Two large-type region kickers ("Product" / "Go-to-market") are pinned at each territory population's
-// centroid-top, RECOMPUTED from the live member centroids every render so they survive any founder
-// dragging (a dragged node moves its territory's centroid, and the kicker follows). They render only at
-// the STRUCTURE altitude (the map read), matching Law 4's semantic zoom. Every causal edge crossing the
-// seam between territories carries a greyscale-safe tick glyph at its midpoint — a shape, never a colour,
-// so a monochrome screenshot still shows the crossing (Exp Law 11: provenance never by colour alone).
+// Two large-type region kickers ("Product" / "Go-to-market") name the two HALF-PLANES: Product sits over
+// the LEFT population, Go-to-market over the RIGHT, so the split reads as left/right geography the instant
+// the map opens — not two headings stacked over clusters. Each kicker's horizontal anchor is the centre of
+// its territory's own half-plane mass (recomputed from live member centres every render, so dragging a node
+// moves the label with it); its vertical anchor is a SHARED band near the top of the whole field, so the two
+// names sit level across the seam like the titles of two regions. The two anchors are always held apart
+// across the seam (a minimum left/right separation), so even a weakly-populated field never lets the labels
+// converge to the centre. They render only at the STRUCTURE altitude (the map read), matching Law 4's
+// semantic zoom. Every causal edge crossing the seam between territories carries a greyscale-safe tick glyph
+// at its midpoint — a shape, never a colour, so a monochrome screenshot still shows the crossing (Exp Law 11:
+// provenance never by colour alone).
 //
 // Rendered inside React Flow's ViewportPortal so both kickers and ticks live in flow coordinates and
 // track pan/zoom for free. Positions are read from the same live nodes the canvas renders; nothing here
@@ -22,8 +27,14 @@ const STRUCTURE_MAX_ZOOM = 0.78;
 // Where an EMPTY territory's kicker sits before it has any members — offset to its side of the seam,
 // above the hub — so the empty state names its geography even with nothing placed yet (spec empty
 // state: the two territory kickers as named empty geography).
-const EMPTY_ANCHOR_X = 300;
+const EMPTY_ANCHOR_X = 360;
 const EMPTY_ANCHOR_Y = -160;
+
+// The minimum distance each kicker is held from the seam (x = 0), on its own side. Even a field whose two
+// populations settled close together never lets the two names slide toward the centre and read as one
+// heading — Product stays clearly left, Go-to-market clearly right, so the split is felt in the labels
+// themselves. Sized to sit outside the layout's seam gutter under the region mass.
+const KICKER_MIN_OFFSET = 300;
 
 type NodeBox = { id: string; x: number; y: number; width: number; height: number };
 
@@ -37,13 +48,11 @@ function nodeBox(node: Node): NodeBox {
   };
 }
 
-// The centroid-top anchor for a population: horizontal centroid of member centres, vertical top of the
-// highest member. Recomputed from live boxes, so dragging a member moves the kicker.
-function centroidTop(boxes: NodeBox[]): { x: number; y: number } | null {
+// The horizontal centre of a population's mass — the mean of its member centres. Recomputed from live boxes,
+// so dragging a member moves the kicker. Returns null for an empty population (which takes the side anchor).
+function populationCentreX(boxes: NodeBox[]): number | null {
   if (!boxes.length) return null;
-  const cx = boxes.reduce((sum, box) => sum + box.x + box.width / 2, 0) / boxes.length;
-  const top = Math.min(...boxes.map((box) => box.y));
-  return { x: cx, y: top };
+  return boxes.reduce((sum, box) => sum + box.x + box.width / 2, 0) / boxes.length;
 }
 
 // Midpoints of every edge whose two endpoints sit in different territories — the seam crossings.
@@ -69,28 +78,60 @@ export function TerritoryLayer({ nodes, edges }: { nodes: Node[]; edges: Edge[] 
   const zoom = useStore((state) => state.transform[2]);
   const atStructure = zoom <= STRUCTURE_MAX_ZOOM;
 
-  const { kickers, crossings } = useMemo(() => {
+  const { kickers, crossings, seam } = useMemo(() => {
     const boxes = nodes.map(nodeBox);
     // Territory inherits through the ownership chain (record → bet → campaign/motion), so bet/work/outcome
     // cards populate the two territories instead of piling on the seam under empty kickers.
     const territoryById = resolveTerritories(nodes);
     const centreById = new Map(boxes.map((box) => [box.id, { x: box.x + box.width / 2, y: box.y + box.height / 2 }]));
 
-    // Both territories are always named. A populated territory anchors at its members' centroid-top and
-    // follows them under dragging; an empty one takes a fixed side anchor so the empty state still shows
-    // named geography, never a blank half-plane.
+    // The seam spine — a quiet vertical divider down x = 0 spanning the field's vertical extent, so the
+    // left/right split has a visible channel between the two populations. Rendered at the structure band
+    // only, like the kickers. Falls back to a band around the hub when the field is empty.
+    const fieldMinY = boxes.length ? Math.min(...boxes.map((box) => box.y)) : EMPTY_ANCHOR_Y;
+    const fieldMaxY = boxes.length ? Math.max(...boxes.map((box) => box.y + box.height)) : -EMPTY_ANCHOR_Y;
+    const seam = { top: fieldMinY - 72, height: fieldMaxY - fieldMinY + 144 };
+
+    // Both territories are always named, positioned LEFT (Product) and RIGHT (Go-to-market) over their own
+    // half-plane mass. Horizontal anchor: the population's centre, but always held to its own side of the
+    // seam by at least KICKER_MIN_OFFSET so the two names never converge to the centre and read as one
+    // heading. Vertical anchor: a SHARED band above the top of the whole field, so the two names sit level
+    // across the seam like the titles of two regions. An empty territory takes its fixed side anchor.
+    const fieldTop = boxes.length ? Math.min(...boxes.map((box) => box.y)) : EMPTY_ANCHOR_Y;
+    // The shared band the two names sit on — a hair above the top of the field so they title the regions
+    // without overlapping the topmost cards. The render offsets by translate(-50%,-100%), so this is the
+    // baseline the label rises from.
+    const labelY = fieldTop;
     const kickers = (["product", "gtm"] as Territory[]).map((territory) => {
+      const side = TERRITORY_SIDE[territory];
       const members = boxes.filter((box) => territoryById.get(box.id) === territory);
-      const anchor = centroidTop(members)
-        ?? { x: TERRITORY_SIDE[territory] * EMPTY_ANCHOR_X, y: EMPTY_ANCHOR_Y };
-      return { territory, anchor };
+      const centreX = populationCentreX(members);
+      // Held to this territory's side: at least KICKER_MIN_OFFSET from the seam, on `side`. An empty
+      // territory falls back to its fixed side anchor.
+      const anchorX = centreX === null
+        ? side * EMPTY_ANCHOR_X
+        : side > 0
+          ? Math.max(centreX, KICKER_MIN_OFFSET)
+          : Math.min(centreX, -KICKER_MIN_OFFSET);
+      return { territory, anchor: { x: anchorX, y: labelY } };
     });
 
-    return { kickers, crossings: seamCrossings(edges, territoryById, centreById) };
+    return { kickers, crossings: seamCrossings(edges, territoryById, centreById), seam };
   }, [nodes, edges]);
 
   return (
     <ViewportPortal>
+      <div
+        className="canvas-territory-seam"
+        data-visible={atStructure ? "true" : "false"}
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          // Centred on x = 0; spans the field's vertical extent.
+          transform: `translate(-50%, 0) translate(0px, ${seam.top}px)`,
+          height: `${seam.height}px`,
+        }}
+      />
       {kickers.map(({ territory, anchor }) => (
         <div
           key={territory}
@@ -100,7 +141,8 @@ export function TerritoryLayer({ nodes, edges }: { nodes: Node[]; edges: Edge[] 
           aria-hidden={atStructure ? undefined : true}
           style={{
             position: "absolute",
-            // Anchor at the population's centroid-top; the label sits above its geography.
+            // Anchor over the population's half-plane; the label sits above its geography, level with its
+            // opposite across the seam.
             transform: `translate(-50%, -100%) translate(${anchor.x}px, ${anchor.y - 44}px)`,
           }}
         >

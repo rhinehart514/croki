@@ -13,8 +13,21 @@
 // Legacy drives are not backfilled: only a drive that begins a run here can complete one.
 
 import { ensureRootThread, recordRun, completeDriveRun } from "./semantic-model-store.mjs";
+import { setVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { createWorkflowExecutionReceipt } from "./workflow-execution-receipt.mjs";
 import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
+
+// Join a run to its durable settlement receipt by receipt.runRef, not by storage key. A receipt is
+// STORED under its own content-addressed .id (workflow-execution-receipt.mjs) so the doc's id IS its
+// storage key — the invariant that lets it survive export/import unchanged (importVenture re-keys every
+// doc by its own .id via storageKeyFor). The run→receipt relationship therefore lives in the data
+// (receipt.runRef === run:<runId>), scanned here, rather than in a storage key that transfer rewrites.
+// This is why getVentureDoc("receipts", runId) is NEVER the read path: post-transfer it would miss.
+export function findReceiptForRun(ventureId, runId, options = {}) {
+  const runRef = `run:${String(runId ?? "").trim()}`;
+  if (runRef === "run:") return null;
+  return listVentureDocs(ventureId, "receipts", options).find((receipt) => receipt?.runRef === runRef) ?? null;
+}
 
 function conversationRef(messageId) {
   const id = String(messageId ?? "").trim();
@@ -59,20 +72,40 @@ export function beginDriveRun({
   }
 }
 
-// A wall item is a durable decision record even while it waits for the founder's release. New pending items
-// parked during this drive (present in afterWallItems but not beforeWallItems) are the decisions this run
-// produced — cited as decision: refs, which the atlas admits for any wall-item id.
+// A wall item is a durable decision record even while it waits for the founder's release. The decisions a
+// run produced are every wall item whose decision state advanced inside the drive window — diffed across the
+// WHOLE decisions collection, not the pending subset, so an item the founder decided BEFORE the drive
+// terminated is still joined. An item is this run's decision when it is either newly present (parked during
+// the drive) or was undecided before and carries a decision after (decided during the drive). Both snapshots
+// are full-collection maps keyed by item id; a decision: ref is admitted by the atlas for any wall-item id.
+function isDecided(item) {
+  return item?.decision != null;
+}
+
 function newDecisionRefs(beforeWallItems, afterWallItems) {
-  const before = new Set((beforeWallItems ?? []).map((item) => item.id));
+  const before = new Map((beforeWallItems ?? []).filter((item) => item?.id).map((item) => [item.id, item]));
   return (afterWallItems ?? [])
-    .filter((item) => item?.id && !before.has(item.id))
+    .filter((item) => {
+      if (!item?.id) return false;
+      const prior = before.get(item.id);
+      if (!prior) return true; // parked during the drive
+      return isDecided(item) && !isDecided(prior); // decided during the drive
+    })
     .map((item) => `decision:${item.id}`);
 }
 
 // finish — complete the run after terminal completion, adding durable decision joins from the wall diff, and
-// mint an immutable WorkflowExecutionReceipt for a bet-scoped terminal outcome. Betless runs settle on the
-// run's own completedAt (a receipt requires a bet ref). Wrapped fail-safe: a completion error leaves the run
-// at completedAt:null (historical-unknown) rather than aborting the drive's already-finished return.
+// mint AND PERSIST an immutable WorkflowExecutionReceipt for a bet-scoped terminal outcome. The receipt is
+// the durable home for the TERMINAL KIND (completed | cancelled | paused | budget-exhausted | failed) — a
+// founder-cancelled drive that returns { kind: "cancelled" } DOES reach here and completes its run, so
+// without a recorded terminal kind it would be indistinguishable from a full completion. The receipt is
+// stored in the venture's own 'receipts' collection keyed by its own content-addressed .id, and the
+// run→receipt join is read back by receipt.runRef === run:<id> (findReceiptForRun), so the trail reports
+// the real terminal instead of 'unknown' — and survives export/import, which re-keys by .id. Betless runs
+// settle on the run's own completedAt (a receipt requires a bet ref); an interrupted drive throws before
+// this seam and stays historical-unknown, never a false completion. Wrapped fail-safe: any error here —
+// completion, mint, or persist — leaves the run at completedAt:null rather than aborting the drive's
+// already-finished return.
 export function finishDriveRun(handle, {
   outcome,
   beforeWallItems = [],
@@ -94,11 +127,17 @@ export function finishDriveRun(handle, {
         ventureId,
         runId,
         betRef: `bet:${betId}`,
-        outcome: normalizeWorkflowOutcome(outcome ?? { kind: "completed" }),
+        outcome: normalizeWorkflowOutcome(outcome ?? { kind: "completed" }, at ? { at } : {}),
         decisionRefs,
         runtime,
         modelRevision: Number.isInteger(modelRevision) ? modelRevision : null,
       });
+      // Persist the immutable receipt keyed by its OWN content-addressed .id so the doc's id IS its storage
+      // key — the invariant importVenture's re-keying (storageKeyFor) relies on, so the receipt survives a
+      // machine-to-machine transfer intact. The run→receipt join lives in receipt.runRef and is read back via
+      // findReceiptForRun, never by storage key. Inside the fail-safe try: a persistence error degrades to
+      // historical-unknown, never aborts the drive.
+      setVentureDoc(ventureId, "receipts", receipt.id, receipt, options);
     }
     return { runRef: `run:${runId}`, decisionRefs, receipt };
   } catch {

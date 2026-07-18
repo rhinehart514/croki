@@ -86,6 +86,7 @@ function ArchitectureElementView({ data, id, selected }: NodeProps<AtlasNode>) {
       className="atlas-element"
       data-kind={data.kind}
       data-atlas-kind={data.kind}
+      data-territory={data.territory ?? undefined}
       data-atlas-id={id}
       data-selected={isSelected ? "true" : "false"}
       data-focus-role={data.focusRole}

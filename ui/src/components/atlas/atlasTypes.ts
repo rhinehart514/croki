@@ -51,6 +51,9 @@ export type AtlasNodeData = Record<string, unknown> & {
   capabilityConnected?: boolean;
   capabilityKind?: string;
   decisionBand?: AtlasDecisionBand;
+  // The venture-canvas geography facet ("product" | "gtm" | null), stamped by VentureCanvasStage from the
+  // ownership-chain resolver so the rendered card carries data-territory. The world atlas never sets it.
+  territory?: "product" | "gtm" | null;
   orbitSide?: "left" | "right";
   motionLabel?: string;
   memberRefs?: string[];

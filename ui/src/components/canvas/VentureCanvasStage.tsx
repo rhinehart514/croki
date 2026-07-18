@@ -23,6 +23,7 @@ import { targetArchitecture, targetBet, targetTeammates, targetTheory, targetWor
 import { AtlasOutline } from "@/components/atlas/AtlasOutline";
 import { VentureCanvasFlow } from "./VentureCanvasFlow";
 import { foldPlacement } from "./canvasSeedLayout";
+import { resolveTerritories } from "./canvasTerritory";
 import "@/styles/venture-atlas.css";
 import "@/styles/epistemic.css";
 import "./venture-canvas.css";
@@ -63,15 +64,24 @@ function VentureCanvasStageInner({
   const positioned = useMemo<AtlasNode[]>(() => {
     if (!scene || !lens) return [];
     const positions = foldPlacement(scene.nodes, lens.placement.positions);
-    return scene.nodes.map((node) => ({
-      ...node,
-      position: positions[node.id] ?? node.position,
-      draggable: node.type !== "architectureGroup" && node.id !== "atlas:intent",
-      selectable: node.data.kind !== "intent",
-      data: node.id === "atlas:intent" && emptyVenture && !node.data.intentNamed
+    // Resolve each node's territory (the same ownership-chain facet the seed biases from and the kickers
+    // label from) once, and stamp it onto the node's data so the rendered card carries data-territory. This
+    // surfaces the geography facet into the DOM — the split is legible from meaning, not re-derived from
+    // position — and lets the card anatomies read one authoritative value.
+    const territoryById = resolveTerritories(scene.nodes);
+    return scene.nodes.map((node) => {
+      const territory = territoryById.get(node.id) ?? null;
+      const namedData = node.id === "atlas:intent" && emptyVenture && !node.data.intentNamed
         ? { ...node.data, title: venture.name }
-        : node.data,
-    }));
+        : node.data;
+      return {
+        ...node,
+        position: positions[node.id] ?? node.position,
+        draggable: node.type !== "architectureGroup" && node.id !== "atlas:intent",
+        selectable: node.data.kind !== "intent",
+        data: { ...namedData, territory },
+      };
+    });
   }, [emptyVenture, scene, lens, venture.name]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<AtlasNode>(positioned);

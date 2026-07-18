@@ -39,9 +39,11 @@ export { getAgentDailySpend } from "./work-loop-budget.mjs";
 
 const DEFAULT_MAX_STEPS = 24;
 
-function pendingWallItems(ventureStore, ventureId, options) {
-  return ventureStore.listVentureDocs(ventureId, "decisions", options)
-    .filter((item) => !item.decision);
+// The whole wall-item collection at a moment in time — the run's decision-join diff (work-loop-run.mjs)
+// needs every item, decided or not, so an item DECIDED by the founder during the drive is still attributed
+// to the run. A pending-only snapshot would drop it from both the before and after view.
+function allWallItems(ventureStore, ventureId, options) {
+  return ventureStore.listVentureDocs(ventureId, "decisions", options);
 }
 
 // The system prompt: the teammate's soul/voice, plus the one standing instruction that carries
@@ -181,7 +183,7 @@ async function driveTeammateLeased({
   const venture = ventureStore.openVenture(ventureId, options);
   if (!venture) throw new Error(`No such venture: ${ventureId}`);
   const beforeBets = ventureStore.listVentureDocs(ventureId, "bets", options);
-  const beforeWallItems = pendingWallItems(ventureStore, ventureId, options);
+  const beforeWallItems = allWallItems(ventureStore, ventureId, options);
   const workingTheoryDrive = !betId && !target?.architectureId && !coordination?.request;
   const theoryBaseline = captureWorkingTheoryBaseline(ventureId, options);
   const architectureContext = target?.architectureId
@@ -508,7 +510,7 @@ async function driveTeammateLeased({
     coordination?.request ?? null,
   );
 
-  const afterWallItems = pendingWallItems(ventureStore, ventureId, options);
+  const afterWallItems = allWallItems(ventureStore, ventureId, options);
   const handoffDraft = buildWorkHandoff({
     beforeBets,
     afterBets: ventureStore.listVentureDocs(ventureId, "bets", options),

@@ -180,6 +180,57 @@ test("?shell=canvas rests as the Product+GTM machine and descends without a deta
     assert.ok(territories.has("product"), `Product territory kicker missing: ${JSON.stringify(resting.kickers)}`);
     assert.ok(territories.has("gtm"), `Go-to-market territory kicker missing: ${JSON.stringify(resting.kickers)}`);
 
+    // FELT SPLIT — the two-territory geography reads at the arrival zoom, not as a radial constellation.
+    // Against the real built DOM at 1440x900: Product-territory cards occupy the LEFT of the seam, GTM the
+    // RIGHT, with a clear gutter between the two populations; the two territory labels sit LEFT (Product) vs
+    // RIGHT (Go-to-market) over their own half-planes, and the seam spine renders between them. Membership is
+    // read from the card's own data-territory (stamped by the same facet the layout seeds from), so this
+    // asserts the RENDERED geography, never a re-derivation from position.
+    const split = await client.evaluate(`(() => {
+      const flow = document.querySelector('.venture-workspace .venture-canvas-flow');
+      const nodes = [...document.querySelectorAll('.venture-workspace .react-flow__node')]
+        .map((n) => {
+          const r = n.getBoundingClientRect();
+          const el = n.querySelector('[data-territory]');
+          return { id: n.getAttribute('data-id'), territory: el?.getAttribute('data-territory') || null, cx: (r.left + r.right) / 2, left: r.left, right: r.right, w: r.width };
+        })
+        .filter((n) => n.w > 0);
+      const product = nodes.filter((n) => n.territory === 'product');
+      const gtm = nodes.filter((n) => n.territory === 'gtm');
+      const kickers = [...document.querySelectorAll('.canvas-territory-kicker')].map((k) => {
+        const r = k.getBoundingClientRect();
+        return { territory: k.getAttribute('data-territory'), cx: (r.left + r.right) / 2 };
+      });
+      const seam = document.querySelector('.canvas-territory-seam');
+      return {
+        productCount: product.length,
+        gtmCount: gtm.length,
+        productMaxRight: product.length ? Math.max(...product.map((n) => n.right)) : null,
+        gtmMinLeft: gtm.length ? Math.min(...gtm.map((n) => n.left)) : null,
+        productKickerCx: kickers.find((k) => k.territory === 'product')?.cx ?? null,
+        gtmKickerCx: kickers.find((k) => k.territory === 'gtm')?.cx ?? null,
+        seamRendered: Boolean(seam),
+        seamVisible: seam?.getAttribute('data-visible') === 'true',
+      };
+    })()`);
+    // Both territories are actually populated on the canvas (otherwise "left vs right" is untestable).
+    assert.ok(split.productCount >= 1, `no product-territory cards rendered to prove the split: ${JSON.stringify(split)}`);
+    assert.ok(split.gtmCount >= 1, `no gtm-territory cards rendered to prove the split: ${JSON.stringify(split)}`);
+    // The Product population sits clearly LEFT of the GTM population, with a real gutter between them: the
+    // rightmost product card's right edge is left of the leftmost gtm card's left edge.
+    assert.ok(
+      split.productMaxRight < split.gtmMinLeft,
+      `Product and GTM populations are not left/right separated with a gutter: productMaxRight=${split.productMaxRight}, gtmMinLeft=${split.gtmMinLeft}`,
+    );
+    // The two territory LABELS sit on their populations' sides — Product left of Go-to-market — not top/bottom.
+    assert.ok(
+      split.productKickerCx !== null && split.gtmKickerCx !== null && split.productKickerCx < split.gtmKickerCx,
+      `territory labels are not positioned Product-left / GTM-right: ${JSON.stringify(split)}`,
+    );
+    // The seam spine renders between the two territories at the structure band.
+    assert.equal(split.seamRendered, true, "seam spine did not render");
+    assert.equal(split.seamVisible, true, "seam spine was not visible at the arrival structure band");
+
     // SCOPE — a single click on a bet node scopes the composer WITHOUT opening the stage workspace.
     const betId = await client.evaluate(`document.querySelector('.venture-workspace .react-flow__node[data-id^="bet:"]')?.getAttribute('data-id') || null`);
     assert.ok(betId, "no bet node on the canvas to scope");

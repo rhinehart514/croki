@@ -55,6 +55,13 @@ export const VENTURE_COLLECTIONS = Object.freeze([
   "configuration",
   "architecture",
   "grants",
+  "receipts",
+  // Law 12 — saved live views + snapshots (a WAY OF LOOKING at the venture, never a copy of it). Each
+  // view record's `.id` IS its storage key, so importVenture (storageKeyFor) round-trips it unchanged.
+  "views",
+  // Law 11/12 — a finding promoted OUT of a temporary view into durable venture truth, carrying the
+  // source-view ref as provenance. Promotion is the intentional act that lets a useful question persist.
+  "findings",
 ]);
 
 function ventureRoot(options, ventureId) {

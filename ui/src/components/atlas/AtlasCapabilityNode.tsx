@@ -29,6 +29,7 @@ function AtlasCapabilityNodeView({ data, id, selected }: NodeProps<AtlasNode>) {
       className="atlas-capability"
       data-atlas-kind="capability"
       data-atlas-id={id}
+      data-territory={data.territory ?? undefined}
       data-connected={connected ? "true" : "false"}
       data-density={cardDensity}
       data-selected={isSelected ? "true" : "false"}

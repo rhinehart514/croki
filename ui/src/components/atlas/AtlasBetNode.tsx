@@ -54,6 +54,7 @@ function AtlasBetNodeView({ data, id, selected }: NodeProps<AtlasNode>) {
       className="atlas-effort atlas-bet-node atlas-element"
       data-atlas-kind="bet"
       data-kind="bet"
+      data-territory={data.territory ?? undefined}
       data-focus-role={data.focusRole}
       data-position={data.bet?.position}
       data-band={data.decisionBand}

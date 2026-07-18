@@ -126,10 +126,21 @@ const FIELD_VERTICAL_BIAS = 0.74;
 // simulation force, so the exact AABB separation pass still runs LAST and the field stays collision-free.
 // Zero/absent territorySide keeps the origin-centred forceX the world atlas relies on. Sized past the
 // widest reserved card so the two populations read as distinct geography under the region kickers.
-const TERRITORY_FORCE_X = 320;
-// Territory pull strength — firm enough to hold sidedness against the radial ring, gentle enough that the
-// hub-centred constellation still reads as one field rather than two disconnected clusters.
-const TERRITORY_X_STRENGTH = 0.09;
+const TERRITORY_FORCE_X = 300;
+// Territory pull strength — firm enough to hold sidedness against the radial ring so a card never settles on
+// the wrong side of the seam. Raised past the earlier soft 0.09 (which lost to RADIAL_STRENGTH 0.62-0.9 and
+// let cards drift across): the felt split has to be a geography the founder reads instantly, not a
+// statistical tendency. Still a force, so the exact AABB separation pass runs LAST and the field stays
+// collision-free. The two populations still read as one hub-centred field because they share the hub, the
+// ring radii, and the seam gutter — not two disconnected clusters.
+const TERRITORY_X_STRENGTH = 0.32;
+
+// Half-width of the clear corridor reserved down the seam (x = 0). No territory-biased card's box may cross
+// into ±TERRITORY_GUTTER — after the sim settles, any card whose inner edge intrudes on the gutter is pushed
+// out to its own side so the two regions read with a visible channel between them (and the intent hub, pinned
+// on the seam, sits in clear space). The post-sim reassert enforces this, then the exact separation pass
+// re-runs so the reasserted field is still collision-free. World path (no territorySide) never triggers it.
+const TERRITORY_GUTTER = 48;
 
 type Size = { width: number; height: number };
 
@@ -219,8 +230,15 @@ function overlaps(a: SimNode, b: SimNode): boolean {
 // Deterministic rectangle-aware separation. The force pass settles the constellation; this pass makes
 // the axis-aligned gap exact — it pushes any overlapping pair apart along their least-overlapping axis,
 // never moving a pinned node. Ordered iteration keeps it deterministic.
+//
+// This pass is territory-BLIND (proven collision-free at any density) — it does not know about the seam. The
+// felt Product/GTM split is held by the strong forceX + the reassert that runs BEFORE this, which push each
+// card firmly onto its side with a gutter of margin; a least-penetration nudge here almost never crosses the
+// seam. `reassertSides` then runs once more AFTER, only ever moving a stray card further from the seam
+// (outward), and `settleSides` re-clears the handful of pairs that reassert nudged — so sidedness is exact
+// AND the field is collision-free, without entangling the two guarantees inside this hot loop.
 function separateBoxes(nodes: SimNode[]): void {
-  for (let pass = 0; pass < 160; pass += 1) {
+  for (let pass = 0; pass < 200; pass += 1) {
     let moved = false;
     for (let i = 0; i < nodes.length; i += 1) {
       for (let j = i + 1; j < nodes.length; j += 1) {
@@ -258,6 +276,99 @@ function separateBoxes(nodes: SimNode[]): void {
       }
     }
     if (!moved) break;
+  }
+}
+
+// Resolve overlaps for a field where the Product/GTM split must survive. Identical to separateBoxes' exact
+// least-penetration AABB clearing, with ONE added rule: a territory-biased card is never pushed across its
+// seam floor. When the least-penetration axis is X and a clamp would shorten a card's move, the FULL overlap
+// is still resolved — the clamped remainder is handed to the partner, which moves outward (its own side of
+// the seam, unbounded space) to absorb it. So every pair clears at any density AND no card crosses the seam.
+// Neutral cards (side 0) clamp to a floor of 0 = passthrough, so a neutral-heavy field behaves exactly like
+// the territory-blind pass. World path never calls this (it has no territory-biased nodes).
+// Returns true if it reached a collision-free fixed point (no overlap remained on the final pass), false if
+// it exhausted its pass budget with overlaps still present (the caller then keeps iterating).
+function settleSides(nodes: SimNode[]): boolean {
+  for (let pass = 0; pass < 240; pass += 1) {
+    let moved = false;
+    for (let i = 0; i < nodes.length; i += 1) {
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        const a = nodes[i];
+        const b = nodes[j];
+        if (!overlaps(a, b)) continue;
+        const ax = a.x ?? 0;
+        const ay = a.y ?? 0;
+        const bx = b.x ?? 0;
+        const by = b.y ?? 0;
+        const ae = boxEdges(a, b);
+        const be = boxEdges(b, a);
+        const gap = pairGap(a, b);
+        const gapNeededX = ax <= bx ? ae.right + be.left : ae.left + be.right;
+        const gapNeededY = ay <= by ? ae.bottom + be.top : ae.top + be.bottom;
+        const overlapX = gapNeededX + gap + SEPARATION_EPS - Math.abs(ax - bx);
+        const overlapY = gapNeededY + gap + SEPARATION_EPS - Math.abs(ay - by);
+        const sideA = a.territorySide ?? 0;
+        const sideB = b.territorySide ?? 0;
+        if (overlapX < overlapY) {
+          const dir = ax <= bx ? -1 : 1; // a moves toward dir, b toward -dir
+          const aFloor = seamFloorX(a);
+          const bFloor = seamFloorX(b);
+          // Desired centres after a symmetric split (pinned partner → the other takes the whole overlap).
+          let aTarget = a.pinned ? ax : b.pinned ? ax + dir * overlapX : ax + dir * (overlapX / 2);
+          let bTarget = b.pinned ? bx : a.pinned ? bx : bx - dir * (overlapX / 2);
+          // Clamp to each card's half-plane, then hand any clamped shortfall to the free partner outward, so
+          // the achieved separation always equals overlapX.
+          const aClamped = clampSide(sideA, aFloor, aTarget);
+          const bClamped = clampSide(sideB, bFloor, bTarget);
+          const shortfall = overlapX - (Math.abs(aClamped - bClamped) - Math.abs(ax - bx));
+          aTarget = aClamped;
+          bTarget = bClamped;
+          if (shortfall > 1e-6) {
+            if (!b.pinned) bTarget = clampSide(sideB, bFloor, bClamped - dir * shortfall);
+            const stillShort = overlapX - (Math.abs(aTarget - bTarget) - Math.abs(ax - bx));
+            if (stillShort > 1e-6 && !a.pinned) aTarget = clampSide(sideA, aFloor, aTarget + dir * stillShort);
+          }
+          if (!a.pinned) a.x = aTarget;
+          if (!b.pinned) b.x = bTarget;
+        } else {
+          const dir = ay <= by ? -1 : 1;
+          const shift = overlapY / 2;
+          if (!a.pinned) a.y = ay + dir * shift;
+          if (!b.pinned) b.y = by - dir * shift;
+          if (a.pinned && !b.pinned) b.y = by - dir * overlapY;
+          if (b.pinned && !a.pinned) a.y = ay + dir * overlapY;
+        }
+        moved = true;
+      }
+    }
+    if (!moved) return true;
+  }
+  return false;
+}
+
+// The minimum |centre-x| a territory-biased card may reach without its inner edge entering the seam gutter.
+function seamFloorX(node: SimNode): number {
+  return (node.territorySide ?? 0) === 0 ? 0 : TERRITORY_GUTTER + node.collisionWidth / 2;
+}
+
+// Clamp a centre-x to a card's own half-plane (never inside its seam floor). Neutral/world cards pass through.
+function clampSide(side: number, floor: number, x: number): number {
+  if (side === 0) return x;
+  return side > 0 ? Math.max(x, floor) : Math.min(x, -floor);
+}
+
+// Push every territory-biased card fully onto its own side of the seam: its inner edge must clear the
+// ±TERRITORY_GUTTER corridor. Runs after the sim settles so the felt split is GUARANTEED, not statistical —
+// the soft forceX gets a card most of the way; this makes sidedness exact. Pinned cards (the hub on the
+// seam, dragged obstacles) are never moved. World path never calls this (no territorySide anywhere).
+function reassertSides(nodes: SimNode[]): void {
+  for (const node of nodes) {
+    const side = node.territorySide ?? 0;
+    if (side === 0 || node.pinned) continue;
+    // The card's inner edge (the one nearest the seam) must sit at or beyond the gutter on its own side.
+    const floor = seamFloorX(node);
+    if (side > 0) node.x = Math.max(node.x ?? 0, floor);
+    else node.x = Math.min(node.x ?? 0, -floor);
   }
 }
 
@@ -307,6 +418,27 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
     record: -Math.PI / 2,
   };
 
+  // Per-side GRID index for territory-biased cards. A territory's whole population is laid out as a compact
+  // 2-D grid inside its half-plane (columns × rows), rather than seeded onto a single spoke where a dense
+  // population would collapse into one endless single-file column the exact separation then has to unstack
+  // pass by pass (O(n) passes for n cards — the performance + convergence wall). Seeding the grid up front
+  // makes the field near-collision-free before separation runs, so the exact pass only makes local nudges
+  // and converges fast at any density. Deterministic: cells are assigned in the stable sorted order.
+  const sideGridIndex = new Map<string, number>();
+  const sideCount = new Map<number, number>();
+  for (const node of ordered) {
+    const side = node.territorySide ?? 0;
+    if (side === 0 || node.pinned) continue;
+    const seen = sideCount.get(side) ?? 0;
+    sideGridIndex.set(node.id, seen);
+    sideCount.set(side, seen + 1);
+  }
+  // Grid cell pitch — a card's reserved footprint plus the layout gap, so grid cells never overlap and the
+  // exact separation barely moves anything. A wide cell (bet 340 + gap) and a tall cell cover the largest
+  // canvas card; smaller cards simply sit with extra room in their cell.
+  const GRID_CELL_W = 360;
+  const GRID_CELL_H = 320;
+
   const sim: SimNode[] = ordered.map((node) => {
     const radius = RING_RADIUS[node.kind] ?? RING_RADIUS.effort;
     const isEffort = node.kind === "effort";
@@ -317,9 +449,28 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
         + (hashAngle(node.id) - Math.PI) * 0.06 // tiny deterministic jitter, ±~11°
       : hashAngle(node.id);
     const side = node.territorySide ?? 0;
-    // A territory-biased node is seeded into its half-plane (magnitude only, its side chosen by `side`) so
-    // it starts on the correct side and the forceX pull below never has to drag it across the seam.
-    const startX = side !== 0 ? side * Math.abs(Math.cos(angle) * radius) : Math.cos(angle) * radius;
+    // A territory-biased node is seeded into a COMPACT GRID inside its half-plane; a neutral/world node keeps
+    // the radial ring seed (byte-unchanged). The grid packs a territory's population into columns × rows that
+    // grow OUTWARD from the seam (never across it), so:
+    //  • a small venture's cards start clearly on their side (fixing the old pole-collapse to x≈0 that read as
+    //    a top/bottom stack), and
+    //  • a dense same-side population starts as a near-collision-free 2-D block, not one endless single-file
+    //    column — so the exact separation only nudges locally and converges fast at any density.
+    let startX: number;
+    let startY: number;
+    if (side !== 0) {
+      const cell = sideGridIndex.get(node.id) ?? 0;
+      const cols = Math.max(1, Math.ceil(Math.sqrt(sideCount.get(side) ?? 1)));
+      const col = cell % cols;
+      const row = Math.floor(cell / cols);
+      const rows = Math.ceil((sideCount.get(side) ?? 1) / cols);
+      // Columns march outward from the seam floor; rows centre vertically so the block sits around the hub.
+      startX = side * (TERRITORY_FORCE_X + col * GRID_CELL_W);
+      startY = (row - (rows - 1) / 2) * GRID_CELL_H;
+    } else {
+      startX = Math.cos(angle) * radius;
+      startY = Math.sin(angle) * radius;
+    }
     const datum: SimNode = {
       ...node,
       // Collision uses the resting render size; efforts additionally reserve their selected-card
@@ -333,7 +484,7 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
       expandDir: isEffort ? (startX >= 0 ? 1 : -1) : 0,
       expandReach: isEffort ? EFFORT_EXPAND_OUTWARD : 0,
       x: startX,
-      y: Math.sin(angle) * radius,
+      y: startY,
     };
     if (node.pinned || node.kind === "hub") {
       // A pinned node with an explicit fixed centre (a dragged-card obstacle on the canvas seed path)
@@ -357,15 +508,21 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
     .alphaDecay(0.028)
     .velocityDecay(0.4)
     .force("collide", forceCollide<SimNode>(collideRadius).strength(1).iterations(6))
+    // The radial ring and inter-card charge are the world atlas' constellation shape. A territory-biased card
+    // does NOT ring the hub — it sits in its territory's grid — so both are zeroed for it; otherwise the ring
+    // would pull the whole population onto one right/left arc and undo the grid, and the charge would blow the
+    // block apart. Neutral / world-path cards keep the ORIGINAL strengths exactly, so their field is unchanged.
     .force("rings", forceRadial<SimNode>((node) => RING_RADIUS[node.kind] ?? RING_RADIUS.effort, 0, 0)
-      .strength((node) => RADIAL_STRENGTH[node.kind] ?? 0.8))
-    .force("charge", forceManyBody<SimNode>().strength(-140))
-    // Territory-biased nodes are pulled to their half-plane target; everyone else keeps the gentle
-    // origin recentre. Per-node target + strength so the two paths coexist in one force (the world atlas
-    // passes no territorySide, so it keeps the origin pull at the original 0.014 — its field is unchanged).
-    .force("x", forceX<SimNode>((node) => (node.territorySide ? node.territorySide * TERRITORY_FORCE_X : 0))
+      .strength((node) => (node.territorySide ? 0 : (RADIAL_STRENGTH[node.kind] ?? 0.8))))
+    .force("charge", forceManyBody<SimNode>().strength((node) => (node.territorySide ? 0 : -140)))
+    // Territory-biased nodes are held to their grid column's x by a firm forceX; everyone else keeps the
+    // gentle origin recentre. Per-node target + strength so the two paths coexist in one force (the world
+    // atlas passes no territorySide, so it keeps the origin pull at the original 0.014 — its field is
+    // unchanged). The target is the card's SEEDED grid x, so the force holds the grid instead of collapsing
+    // every same-side card onto one spoke at ±TERRITORY_FORCE_X.
+    .force("x", forceX<SimNode>((node) => (node.territorySide ? (node.x ?? 0) : 0))
       .strength((node) => (node.territorySide ? TERRITORY_X_STRENGTH : 0.014)))
-    .force("y", forceY<SimNode>(0).strength(0.014));
+    .force("y", forceY<SimNode>((node) => (node.territorySide ? (node.y ?? 0) : 0)).strength(0.014));
 
   for (let tick = 0; tick < TICKS; tick += 1) simulation.tick();
   simulation.stop();
@@ -379,9 +536,18 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
   // after and re-guarantees the >= LAYOUT_GAP clearance, so the ellipse is always collision-free.
   for (const node of sim) {
     if (node.pinned) continue;
+    // Territory-biased cards keep their grid geometry (the aspect stretch is for the radial constellation, and
+    // would smear the territory grid horizontally and crush it vertically). Neutral / world-path cards get the
+    // original ellipse reshape unchanged.
+    if (node.territorySide) continue;
     node.x = (node.x ?? 0) * FIELD_ASPECT_BIAS;
     node.y = (node.y ?? 0) * FIELD_VERTICAL_BIAS;
   }
+
+  // Enforce the felt Product/GTM split: push every territory-biased card fully onto its own side of the
+  // seam gutter, so the strong forceX's mostly-sided field becomes exactly sided with a clear corridor down
+  // x = 0. No-op when no node carries a territory side, so the world atlas geometry is byte-unchanged.
+  reassertSides(sim);
 
   // Re-derive each effort's expansion direction from its settled side of the field (the hub is pinned
   // at the origin, so sign(x) is the outward side). This is the same rule the adapter stamps as
@@ -392,9 +558,24 @@ export function computeAtlasLayout(nodes: LayoutInput[]): LayoutResult {
     node.expandDir = (node.x ?? 0) >= 0 ? 1 : -1;
   }
 
-  // Make the >= LAYOUT_GAP guarantee exact for rectangular cards, including the outward expansion
-  // envelope on efforts.
-  separateBoxes(sim);
+  // Make the >= LAYOUT_GAP guarantee exact for rectangular cards, including the outward expansion envelope
+  // on efforts. Two paths, chosen by whether the field carries any territory side:
+  //   • Neutral / world atlas (no side anywhere): the original territory-blind separation, byte-identical —
+  //     its convergence is the shipped guarantee.
+  //   • Canvas territory field: the SAME exact clearing, but a territory-biased card is never pushed across
+  //     its seam floor (settleSides). Because the strong forceX + the reassert already sit each card firmly
+  //     on its side with a gutter, the clearing only nudges locally and the seam is preserved — so the field
+  //     is collision-free AND exactly sided. A final reassert guarantees no inner edge intrudes on the gutter
+  //     even after the last nudge (outward-only, so it cannot re-introduce a collision the settle left clear
+  //     within the same half-plane's vertical run).
+  const hasTerritory = sim.some((node) => (node.territorySide ?? 0) !== 0);
+  if (hasTerritory) {
+    settleSides(sim);
+    reassertSides(sim);
+    settleSides(sim);
+  } else {
+    separateBoxes(sim);
+  }
 
   let minX = Infinity;
   let minY = Infinity;

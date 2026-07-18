@@ -73,6 +73,21 @@ const KIND_WIDTH_OVERRIDE: Record<string, number> = {
   "product-loop": 480,
 };
 
+// Per-kind HEIGHT OVERRIDE — the vertical analogue of KIND_WIDTH_OVERRIDE, for the one case where the real
+// rendered card is TALLER than its mapped archetype's reserved footprint height. The bet card renders ~293px
+// tall in the DOM (eyebrow + material + title clamp + statement clamp + instrument reading), 13px past the
+// bet archetype's 280px artifacts height. In the loose radial world layout that slack was absorbed by ring
+// spacing, but the canvas seed packs same-territory cards into tighter vertical columns, so the seed must
+// reserve the card's REAL height or a dense column overlaps in the DOM by exactly that overflow. Reserving
+// 300 covers the measured height with a hair of margin. Every other kind's measured height is <= its
+// archetype footprint, so bet is the sole override. This is the canvas-path truth only; the world atlas
+// KIND_SIZE table is untouched.
+const KIND_HEIGHT_OVERRIDE: Record<string, number> = {
+  bet: 300,
+  work: 300,
+  outcome: 300,
+};
+
 function archetypeForKind(kind: string): NodeArchetype {
   return KIND_ARCHETYPE[kind] ?? "architecture";
 }
@@ -84,6 +99,13 @@ function archetypeForKind(kind: string): NodeArchetype {
 export function canvasReservedWidth(kind: string): number {
   const footprint = reservedFootprint(archetypeForKind(kind)).width;
   return Math.max(footprint, KIND_WIDTH_OVERRIDE[kind] ?? 0);
+}
+
+// The height the seed reserves for a kind: the larger of the archetype footprint height and any per-kind
+// override. Same seam discipline as canvasReservedWidth — exported so tests separate against the true height.
+export function canvasReservedHeight(kind: string): number {
+  const footprint = reservedFootprint(archetypeForKind(kind)).height;
+  return Math.max(footprint, KIND_HEIGHT_OVERRIDE[kind] ?? 0);
 }
 
 function seedInput(node: Node, side: -1 | 0 | 1, pinAsHub: boolean): LayoutInput | null {
@@ -100,10 +122,9 @@ function seedInput(node: Node, side: -1 | 0 | 1, pinAsHub: boolean): LayoutInput
   // a real measured size still wins downstream for camera framing (carryMeasuredDimensions), but the seed
   // must reserve the WIDEST footprint the card can grow to (reservedFootprint), widened by any per-kind
   // CSS override (product-loop) so a card wider than its archetype family still clears its neighbours.
-  const footprint = reservedFootprint(archetypeForKind(visualKind));
   const reservedWidth = canvasReservedWidth(visualKind);
   const width = typeof node.width === "number" ? node.width : reservedWidth;
-  const height = typeof node.height === "number" ? node.height : footprint.height;
+  const height = typeof node.height === "number" ? node.height : canvasReservedHeight(visualKind);
   // The pinned hub sits on the seam; give it no territory bias so it pins at the origin. A demoted
   // theory subject rings like architecture and takes its territory bias (theory is territory-null → 0).
   const pinned = kind === "hub";
@@ -121,9 +142,8 @@ function obstacleInput(node: Node, position: { x: number; y: number }): LayoutIn
   const visualKind = String((node.data as { kind?: unknown }).kind ?? "");
   const layoutKind = layoutKindFor(visualKind);
   if (!layoutKind) return null;
-  const footprint = reservedFootprint(archetypeForKind(visualKind));
   const width = typeof node.width === "number" ? node.width : canvasReservedWidth(visualKind);
-  const height = typeof node.height === "number" ? node.height : footprint.height;
+  const height = typeof node.height === "number" ? node.height : canvasReservedHeight(visualKind);
   // A demoted theory subject rings as architecture; a dragged obstacle keeps whatever collision kind it
   // renders as (hub obstacle would re-pin at origin, so an obstacle is never the hub — the intent hub is
   // undraggable and so never appears in the stored set).

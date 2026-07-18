@@ -13,9 +13,13 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { driveTeammate } from "../../src/firm/work-loop.mjs";
-import { createVenture, setVentureDoc } from "../../src/firm/venture-store.mjs";
+import { beginDriveRun, finishDriveRun, findReceiptForRun } from "../../src/firm/work-loop-run.mjs";
+import { createVenture, setVentureDoc, exportVenture, importVenture } from "../../src/firm/venture-store.mjs";
 import { createBet } from "../../src/firm/bet.mjs";
 import { getSemanticModel } from "../../src/firm/semantic-model-store.mjs";
+import { projectExecutionTrail } from "../../src/firm/workflow-execution-receipt.mjs";
+import { park, decide } from "../../src/firm/wall.mjs";
+import { founderRequest } from "../helpers/founder-capability.mjs";
 import { ROOT_THREAD_ID } from "../../src/firm/thread.mjs";
 
 function freshRoot() {
@@ -30,8 +34,22 @@ function completingRuntime(summary = "done") {
   };
 }
 
+function cancellingRuntime(summary = "Stopped by the founder.") {
+  return {
+    id: "cancelling-runtime",
+    label: "Cancelling runtime",
+    async drive() { return { kind: "cancelled", summary }; },
+  };
+}
+
 function runsFor(ventureId, options) {
   return getSemanticModel(ventureId, options).runs;
+}
+
+function receiptFor(ventureId, runId, options) {
+  // Join by receipt.runRef, never by storage key: the receipt is stored under its own content-addressed
+  // .id, so a key lookup by runId would miss (and, post-transfer, always miss).
+  return findReceiptForRun(ventureId, runId, options);
 }
 
 describe("durable Run lifecycle on a founder-authorized drive", () => {
@@ -147,5 +165,159 @@ describe("durable Run lifecycle on a founder-authorized drive", () => {
 
     assert.equal(runsFor(venture.id, options).length, 0, "a non-founder drive records no run");
     assert.equal(getSemanticModel(venture.id, options).threads.length, 0, "and forms no root thread");
+  });
+
+  it("a completed bet drive persists a settlement receipt — the execution trail reports the REAL terminal, not 'unknown'", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Persisted receipt" }, options);
+    const bet = createBet({ ventureId: venture.id, intent: "settle this", teammateRef: "founding-teammate" });
+    setVentureDoc(venture.id, "bets", bet.id, bet, options);
+
+    const result = await driveTeammate({
+      ventureId: venture.id,
+      teammateRef: "founding-teammate",
+      goal: "Finish the bet",
+      betId: bet.id,
+      initiatedBy: "founder",
+      options,
+      deps: { runtime: completingRuntime() },
+    });
+
+    const run = runsFor(venture.id, options)[0];
+    const receipt = receiptFor(venture.id, run.id, options);
+    assert.ok(receipt, "the minted receipt was actually persisted, not discarded");
+    assert.equal(receipt.runRef, `run:${run.id}`, "the receipt is keyed to its run");
+    assert.equal(receipt.betRef, `bet:${bet.id}`, "the receipt joins the bet");
+
+    const trail = projectExecutionTrail(run, receipt);
+    assert.equal(trail.state, "completed", "the trail reports the real terminal, never a dead 'unknown'");
+    assert.notEqual(trail.state, "unknown");
+    // Sanity: the very same run with no persisted receipt would have degraded to unknown.
+    assert.equal(projectExecutionTrail(run).state, "unknown");
+    assert.equal(result.outcome.kind, "completed");
+  });
+
+  it("a founder-CANCELLED drive is durably distinguishable from a completed one — the terminal KIND is recorded", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Cancelled vs completed" }, options);
+
+    const completedBet = createBet({ ventureId: venture.id, intent: "runs to completion", teammateRef: "founding-teammate" });
+    setVentureDoc(venture.id, "bets", completedBet.id, completedBet, options);
+    const cancelledBet = createBet({ ventureId: venture.id, intent: "founder stops it", teammateRef: "founding-teammate" });
+    setVentureDoc(venture.id, "bets", cancelledBet.id, cancelledBet, options);
+
+    await driveTeammate({
+      ventureId: venture.id, teammateRef: "founding-teammate", goal: "Complete",
+      betId: completedBet.id, initiatedBy: "founder", options,
+      deps: { runtime: completingRuntime() },
+    });
+    await driveTeammate({
+      ventureId: venture.id, teammateRef: "founding-teammate", goal: "Cancel",
+      betId: cancelledBet.id, initiatedBy: "founder", options,
+      deps: { runtime: cancellingRuntime() },
+    });
+
+    const runs = runsFor(venture.id, options);
+    const completedRun = runs.find((r) => r.betRefs.includes(`bet:${completedBet.id}`));
+    const cancelledRun = runs.find((r) => r.betRefs.includes(`bet:${cancelledBet.id}`));
+
+    // Both runs carry a completedAt (both reached finishDriveRun): the run record alone cannot tell them
+    // apart. The persisted receipt's terminal kind is what makes cancelled honest.
+    assert.ok(completedRun.completedAt);
+    assert.ok(cancelledRun.completedAt);
+
+    const completedTrail = projectExecutionTrail(completedRun, receiptFor(venture.id, completedRun.id, options));
+    const cancelledTrail = projectExecutionTrail(cancelledRun, receiptFor(venture.id, cancelledRun.id, options));
+    assert.equal(completedTrail.state, "completed");
+    assert.equal(cancelledTrail.state, "cancelled", "a founder-cancelled drive is NOT indistinguishable from a completion");
+    assert.notEqual(cancelledTrail.state, completedTrail.state);
+  });
+
+  it("a wall item DECIDED by the founder during the drive is joined to the run's decisionRefs", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Decided-during-drive join" }, options);
+    const bet = createBet({ ventureId: venture.id, intent: "drive with a live decision", teammateRef: "founding-teammate" });
+    setVentureDoc(venture.id, "bets", bet.id, bet, options);
+
+    // Park a pending item BEFORE the drive begins. It is undecided at the before-snapshot.
+    const parked = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "send", message: "hi", recipients: ["a@x.com"] } }, options);
+
+    // The founder decides it DURING the drive window (reject touches nothing outward, needs no executor or
+    // presence). A pending-only diff would drop it from both snapshots; the full-collection diff catches it.
+    const decidingRuntime = {
+      id: "deciding-runtime",
+      label: "Deciding runtime",
+      async drive() {
+        decide({ ventureId: venture.id, itemId: parked.id, decision: "reject" }, { req: founderRequest() }, {}, options);
+        return { kind: "completed", summary: "done" };
+      },
+    };
+
+    await driveTeammate({
+      ventureId: venture.id, teammateRef: "founding-teammate", goal: "Decide mid-drive",
+      betId: bet.id, initiatedBy: "founder", options,
+      deps: { runtime: decidingRuntime },
+    });
+
+    const run = runsFor(venture.id, options)[0];
+    assert.ok(run.decisionRefs.includes(`decision:${parked.id}`), "the item decided during the drive is joined to the run");
+    const receipt = receiptFor(venture.id, run.id, options);
+    assert.ok(receipt.decisionRefs.includes(`decision:${parked.id}`), "and the receipt carries the same decision join");
+  });
+
+  it("finishDriveRun is FAIL-SAFE — a finish/receipt-seam error degrades to null and persists no partial receipt", () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Fail-safe finish seam" }, options);
+    const bet = createBet({ ventureId: venture.id, intent: "finish may fail", teammateRef: "founding-teammate" });
+    setVentureDoc(venture.id, "bets", bet.id, bet, options);
+
+    // A handle whose run was never recorded forces completeDriveRun (the first step of the finish seam, which
+    // also guards the receipt mint + PERSIST that follows it in the same try/catch) to throw "No such run".
+    // The fail-safe must swallow it: return null and leave no partial receipt — historical-unknown, never an
+    // abort and never a half-written settlement.
+    const handle = { ventureId: venture.id, runId: "run-never-recorded", betId: bet.id, options };
+    let settled;
+    assert.doesNotThrow(() => {
+      settled = finishDriveRun(handle, { outcome: { kind: "completed" }, beforeWallItems: [], afterWallItems: [] });
+    }, "a finish-seam error never propagates");
+    assert.equal(settled, null, "the finish seam degraded honestly to null");
+    assert.equal(receiptFor(venture.id, "run-never-recorded", options), null, "no partial receipt was persisted");
+
+    // And when the seam is healthy, the same call DOES persist a receipt — proving the null above is the
+    // failure path, not a dead no-op.
+    const goodHandle = beginDriveRun({ ventureId: venture.id, runId: "run-healthy", initiatedBy: "founder", betId: bet.id, options });
+    const ok = finishDriveRun(goodHandle, { outcome: { kind: "completed" }, beforeWallItems: [], afterWallItems: [] });
+    assert.ok(ok?.receipt, "a healthy finish mints a receipt");
+    assert.ok(receiptFor(venture.id, "run-healthy", options), "a healthy finish persists the receipt");
+  });
+
+  it("a transferred run's execution trail reports its real terminal, not 'unknown' — the receipt survives export/import", async () => {
+    const options = freshRoot();
+    const repository = fs.mkdtempSync(path.join(os.tmpdir(), "firm-run-transfer-repo-"));
+    const venture = createVenture({ name: "Run transfer", repository }, options);
+    const bet = createBet({ ventureId: venture.id, intent: "settle then transfer", teammateRef: "founding-teammate" });
+    setVentureDoc(venture.id, "bets", bet.id, bet, options);
+
+    // A real founder drive mints and persists the settlement receipt on the source machine.
+    await driveTeammate({
+      ventureId: venture.id, teammateRef: "founding-teammate", goal: "Finish the bet",
+      betId: bet.id, initiatedBy: "founder", options,
+      deps: { runtime: cancellingRuntime() },
+    });
+    const sourceRun = runsFor(venture.id, options)[0];
+    assert.equal(projectExecutionTrail(sourceRun, receiptFor(venture.id, sourceRun.id, options)).state, "cancelled");
+
+    // Move the whole venture to another machine (fresh product home) via the export/import bundle. The
+    // receipt is re-keyed to its own .id on import — the drift that used to lose it when it was keyed by runId.
+    const bundle = exportVenture(venture.id, options);
+    const destination = { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-run-transfer-dest-")) };
+    importVenture(bundle, { ...destination, repository });
+
+    // The transferred run resolves its receipt by runRef and reports the REAL terminal, never a dead 'unknown'.
+    const movedReceipt = receiptFor(venture.id, sourceRun.id, destination);
+    assert.ok(movedReceipt, "the receipt survived the transfer and is still joinable by runRef");
+    const movedTrail = projectExecutionTrail(sourceRun, movedReceipt);
+    assert.equal(movedTrail.state, "cancelled", "the transferred trail reports the real terminal");
+    assert.notEqual(movedTrail.state, "unknown");
   });
 });
