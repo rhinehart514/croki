@@ -23,6 +23,11 @@ blending them. Design explorations remain evidence until an authority file adopt
 - The shipped founder product is Electron desktop. The browser build is a development and
   deterministic-test harness; its explicit loopback development hatch does not define another
   production surface.
+- The shipped shell is a thread rail beside persistent chat with an optional visual stage. Do not restore
+  a permanent workbench, canvas, dashboard, or Product/GTM ontology browser as the founder's center.
+- Drover continuously develops Product and go-to-market as one evidence-returning system. Threads preserve
+  founder direction; releases are the unit of market movement. Every meaningful Product change must raise
+  its distribution question, and every meaningful market return must raise a Product or GTM consequence.
 
 ## Commands
 

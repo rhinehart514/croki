@@ -50,7 +50,7 @@ describe("production work-index projection", () => {
     const legacyRun = run("legacy", "venture-root");
     const index = projectWorkIndex({ ventureId: "venture-a", model: model({ runs: [legacyRun] }) });
     assert.deepEqual(index.items, []);
-    assert.deepEqual(index.counts, { total: 0, attention: 0, active: 0, unread: 0 });
+    assert.deepEqual(index.counts, { total: 0, attention: 0, active: 0, unread: 0, matchCount: 0 });
     assert.equal(index.legacy.unindexedRunCount, 1);
   });
 
@@ -208,4 +208,24 @@ test("work-index route returns child directions and durably advances an exact re
 test("work-index read fails closed for an unknown venture", async () => {
   const response = await call("GET", "/api/ventures/no-such-venture/work-index");
   assert.equal(response.status, 404);
+});
+
+test("pin and unpin persist through the semantic-model boundary and stay venture isolated", async () => {
+  const options = { root: routeRoot, seedFoundingCrew: false };
+  const venture = createVenture({ name: "Pinned direction" }, options);
+  const other = createVenture({ name: "Other venture" }, options);
+  await driveTeammate({
+    ventureId: venture.id, teammateRef: "founding-teammate", goal: "Keep this direction nearby", initiatedBy: "founder", options,
+    deps: { runtime: { id: "pin-runtime", label: "Pin runtime", async drive() { return { kind: "completed", summary: "Ready" }; } } },
+  });
+  const item = (await call("GET", `/api/ventures/${venture.id}/work-index`)).body.workIndex.items[0];
+  const threadId = item.threadRef.replace(/^thread:/, "");
+  const pinned = await call("PUT", `/api/ventures/${venture.id}/threads/${threadId}/pin`, { pinned: true });
+  assert.equal(pinned.status, 200);
+  assert.ok(pinned.body.item.pinnedAt);
+  const crossVenture = await call("PUT", `/api/ventures/${other.id}/threads/${threadId}/pin`, { pinned: true });
+  assert.equal(crossVenture.status, 404);
+  const unpinned = await call("PUT", `/api/ventures/${venture.id}/threads/${threadId}/pin`, { pinned: false });
+  assert.equal(unpinned.status, 200);
+  assert.equal(unpinned.body.item.pinnedAt, null);
 });

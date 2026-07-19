@@ -16,6 +16,7 @@ import { ensureDirectionThread, extendDirectionThread, recordRun, completeDriveR
 import { setVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { createWorkflowExecutionReceipt } from "./workflow-execution-receipt.mjs";
 import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
+import { emitFirmEvent } from "./firm-events.mjs";
 
 // Join a run to its durable settlement receipt by receipt.runRef, not by storage key. A receipt is
 // STORED under its own content-addressed .id (workflow-execution-receipt.mjs) so the doc's id IS its
@@ -77,6 +78,7 @@ export function beginDriveRun({
       betRefs,
       ...(originMessageRef ? { originMessageRef } : {}),
     }, { at: at ?? undefined }, options);
+    emitFirmEvent(ventureId, "timeline", { threadRef: direction.threadRef });
     return { ventureId, runId, betId, architectureRef, threadRef: direction.threadRef, options };
   } catch {
     // Honest degrade: the drive must never be aborted or changed by a run-recording error.
@@ -163,6 +165,7 @@ export function finishDriveRun(handle, {
         subjectRefs: [...new Set([...(architectureRef ? [architectureRef] : []), ...subjectRefs])],
         at: at ?? undefined,
       }, options);
+      emitFirmEvent(ventureId, "timeline", { threadRef });
     } catch {
       // The run + receipt remain truthful even if optional thread enrichment cannot be recorded.
     }

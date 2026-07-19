@@ -8,37 +8,40 @@ desktop experience. This file is a compact translation and overrides none of the
 
 ## Product promise
 
-**Drover is the founder-controlled Product and go-to-market system.** It is a founder-native agent
-development environment: the founder directs work through a persistent venture conversation, reviews the
-exact artifacts and consequences in an adaptive workbench, and summons the venture graph when causal
-understanding helps — all while retaining authority at every world boundary.
+**Drover is a Product and GTM Development Environment for founders building with agents.** Vibe coding made
+product development continuous and aggressive; Drover makes Product and go-to-market develop together with
+the same speed, structure, and compounding intelligence. Conversation is the command surface, durable
+threads preserve continuity, and the founder retains authority at every world boundary.
 
 One canonical open venture model backs every view. Product and go-to-market remain permanent territories;
-every object, relationship, artifact, release, and piece of evidence has one identity across the workbench,
-the conversation, the summoned canvas, work, and history.
+every object, relationship, artifact, release, and piece of evidence has one identity across chat, the
+visual stage, work, and history.
+
+A direction is an instruction, a thread is continuity, a workflow is an executable mechanism, and an agent
+is a runtime participant. **The release is the primary unit of market movement:** it joins the Product
+delta, customer consequence, supported claim or offer, audience, distribution mechanism, exact external
+acts, measurement, and returned evidence as far as reality supports.
 
 ## Founder experience
 
-Drover returns directly to the founder's last active venture and restores its prior scope and work/map mode.
+Drover returns directly to the founder's last active venture and thread. A deliberately open visual returns
+beside that conversation when space permits; obsolete work/map presentation state is never restored.
 Choosing or connecting a venture is exceptional: first use, recovery, or an explicit action from the
 in-workspace venture switcher.
 
-The workspace opens on a stable **Product / Go-to-market venture outline** beside the permanent adaptive
-workbench. The outline projects canonical objects and nests durable founder thought threads beneath the
-objects they change; search and `Needs you` filter that same structure instead of creating another inbox.
-Selecting an object scopes the workbench and composer. A founder direction from that scope becomes a
-durable object thread, and returning to the thought continues its exact identity.
+The workspace opens on a compact **thread rail** beside the permanent conversation. The rail shows pinned,
+open, active, waiting, and historical threads rather than exposing Product and Go-to-market ontology as
+navigation. Search returns to the owning thread; a founder direction creates a durable thread only when it
+is sent, and returning continues that exact identity.
 
-With nothing selected, `VentureHome` shows
-where things stand; selecting a direction, run, artifact, or decision opens the best registered
-representation for that work. One continuous venture conversation and persistent scoped branches direct and
-interrogate the venture. Selection focuses an object, restores its work, and scopes the same composer across
-work and map. A scoped turn continues through `replyInConversation`; an unscoped turn starts work through
-`/drive`.
+With no thread selected, venture chat shows what changed, what is still moving, and what needs founder
+judgment. Selecting a thread restores its meaningful conversation, active agents, artifacts, evidence, and
+consequences. Every founder turn uses the venture conversation contract and carries the exact selected
+`threadRef`; the server decides whether it continues, steers, observes, stops, critiques, or starts work.
 
-The spatial venture graph is one explicit action away as a summoned map. Map selection preserves scope.
-Double-click or Enter returns to the selected work; Escape broadens from map to work, then from selection or
-representation depth to `VentureHome`.
+Previews, flows, comparisons, evidence, consequences, exact changes, and the venture graph open in an
+optional visual stage beside chat. Opening material never changes the thread or moves the founder into a
+different product mode. Escape closes the stage and restores focus to chat.
 
 A broad founder direction may immediately generate an ambitious provisional interpretation and begin safe
 inward work. Generated structure remains visibly inferred until founder action or evidence strengthens it.
@@ -49,8 +52,8 @@ Understand, Design, Execute, and Learn are reversible lenses over Product and go
 Generated visual answers are disposable by default. The founder may explicitly save a synchronized live
 view, capture an immutable snapshot, or promote selected findings.
 
-The permanent workbench adapts to deep work—code, diffs, previews, campaigns, research, telemetry,
-comparisons, and workflow results—while conversation, selection, and composer scope remain intact.
+The visual stage adapts to deep work—code, diffs, previews, campaigns, research, telemetry, comparisons,
+and workflow results—while chat and composer scope remain intact.
 
 ## Work and authority
 
@@ -80,12 +83,15 @@ Every Product claim cites repository truth or remains labeled inference. Market,
 evidence retain their source, attribution strength, and uncertainty. Evidence visibly strengthens, weakens,
 contests, or revises the relevant Product and go-to-market understanding.
 
+Every meaningful Product change creates a distribution question. Every meaningful market return creates a
+Product or go-to-market consequence. Drover measures speed by the complete loop—develop, release, observe,
+revise, release again—not by code volume, campaign volume, or agent activity.
+
 ## Durable invariants
 
-1. A Product/GTM project-and-thread browser supplies stable orientation without exposing the underlying
-   ontology as navigation; the adaptive workbench is the default founder surface; conversation directs and
-   interrogates the venture; the canvas is a summoned map, never the permanent center or primary navigation
-   model.
+1. A thread rail supplies stable orientation without exposing the underlying ontology as navigation; chat
+   is the default founder surface; visuals open beside it and never become a separate mode or permanent
+   center.
 2. One model powers every view; no canvas, board, branch, workbench, or snapshot becomes a second authority.
 3. Product and go-to-market remain distinct and traceable parts of one venture.
 4. Work starts only from founder intent or a founder-invoked workflow.

@@ -3,6 +3,7 @@ import { getActiveDrives, getConversation, getHealth, getLens, getWorkIndex, typ
 import type { FirmConversationMessage, FirmLens } from "@/types";
 import { setConsequentialWritesAllowed } from "@/lib/freshness";
 import { recordUxMetric, recordUxMetricOnce } from "@/lib/ux-metrics";
+import { useFirmEventStream } from "@/hooks/useFirmEventStream";
 
 export type FirmConnectionPhase = "opening" | "fresh" | "stale" | "offline" | "read-only";
 
@@ -53,6 +54,9 @@ export function useFirmConnection(ventureId: string | null) {
   const refreshRef = useRef<() => void>(() => undefined);
 
   const refresh = useCallback(() => refreshRef.current(), []);
+  const { streaming } = useFirmEventStream(ventureId, useCallback(() => refresh(), [refresh]));
+  const streamingRef = useRef(streaming);
+  useEffect(() => { streamingRef.current = streaming; }, [streaming]);
 
   useEffect(() => {
     if (!ventureId) {
@@ -110,7 +114,7 @@ export function useFirmConnection(ventureId: string | null) {
           message: writable ? null : "Open Drover through its desktop host to make changes.",
         });
         setConsequentialWritesAllowed(writable);
-        schedule(IDLE_POLL_MS);
+        schedule(streamingRef.current ? 15_000 : IDLE_POLL_MS);
       } catch (error) {
         if (stopped) return;
         failures += 1;

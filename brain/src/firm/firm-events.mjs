@@ -14,7 +14,7 @@
 //   • Publishing NEVER throws into a caller's happy path: a firm mutation that emits an event must not
 //     fail because a listener did. Every emit is best-effort.
 
-const KINDS = new Set(["lens", "conversation", "drive", "wall", "outcome"]);
+const KINDS = new Set(["lens", "conversation", "drive", "wall", "outcome", "timeline"]);
 
 const subscribers = new Map(); // subscriptionId -> { ventureId, listener }
 let nextId = 1;
@@ -40,7 +40,13 @@ export function subscribeFirmEvents(ventureId, listener) {
 // validation surface). Returns the number of subscribers notified (useful in tests).
 export function emitFirmEvent(ventureId, kind, detail = {}) {
   if (!ventureId || !KINDS.has(kind)) return 0;
-  const event = { ventureId, kind, at: detail?.at ?? nowIso(), ...(detail?.betId ? { betId: String(detail.betId) } : {}) };
+  const event = {
+    ventureId,
+    kind,
+    at: detail?.at ?? nowIso(),
+    ...(detail?.betId ? { betId: String(detail.betId) } : {}),
+    ...(detail?.threadRef ? { threadRef: String(detail.threadRef) } : {}),
+  };
   let delivered = 0;
   for (const { ventureId: scoped, listener } of subscribers.values()) {
     if (scoped !== ventureId) continue;

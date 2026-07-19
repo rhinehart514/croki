@@ -15,7 +15,7 @@ import {
   pressKeyboardKey,
 } from "./fixtures/atlas-browser-harness.mjs";
 
-test("generated maps are keyboard-reachable from workbench to real work", async () => {
+test("generated maps are keyboard-reachable beside chat and hand off explicitly to real work", async () => {
   const drover = await bootFixture(createGeneratedMapsFixture);
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1920, height: 1080 } });
   try {
@@ -25,8 +25,8 @@ test("generated maps are keyboard-reachable from workbench to real work", async 
 
     const mapButton = await focusKeyboardTarget(
       client,
-      (target) => target.className?.includes("workbench-map") && target.name === "Map",
-      "Map was not keyboard-reachable from Venture Home",
+      (target) => /open venture map beside chat/i.test(target.name),
+      "Map was not keyboard-reachable from the thread header",
     );
     assert.ok(mapButton);
     await assertVisibleKeyboardFocus(client, "Map button");
@@ -67,17 +67,10 @@ test("generated maps are keyboard-reachable from workbench to real work", async 
     await pressKeyboardKey(client, "Enter");
     await waitForDom(
       client,
-      `!!document.querySelector('[data-testid="stage-workspace"]') && document.querySelector('.work-narrative-head h2')?.textContent?.trim() === ${JSON.stringify(expected.direction)} && !document.querySelector('.venture-maps')`,
-      "Enter on a map card did not hand back to its real work",
+      `document.querySelector('.thread-header-copy h1')?.textContent?.trim() === ${JSON.stringify(expected.direction)} && !!document.querySelector('.thread-conversation [role="log"]') && !document.querySelector('.visual-stage')`,
+      "Enter on a map card did not explicitly open its owning thread",
     );
-
-    await client.evaluate(`document.activeElement?.blur?.()`);
-    await pressKeyboardKey(client, "Escape");
-    await waitForDom(
-      client,
-      `!!document.querySelector('.vh[aria-label]') && !document.querySelector('[data-testid="stage-workspace"]') && !document.querySelector('.venture-maps')`,
-      "Escape did not broaden keyboard-opened work back to Home",
-    );
+    assert.equal(await client.evaluate(`!!document.querySelector('.thread-rail')`), true, "opening work from the map lost thread continuity");
   } finally {
     await chrome.close();
     await drover.close();

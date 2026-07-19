@@ -10,18 +10,22 @@ records are evidence only and cannot override this file.
 
 ## North star
 
-**Drover makes the full product and go-to-market system visible, understandable, manipulable, and
-executable by one founder.**
+**Drover makes Product and go-to-market develop together with the speed, structure, and compounding
+intelligence of agentic software development.**
 
 It does not run the company for the founder. It gives the founder the depth, memory, leverage, and visual
 cognition of a complete product and go-to-market organization.
 
-> **The workbench holds the work; the conversation directs and interrogates the venture; the canvas is a
-> map the founder summons when causal or spatial understanding helps. Claude and Codex expand what the
-> founder can accomplish.**
+> **Chat is the operating surface. Visuals are inspectable, interactive outputs of the current
+> conversation. The thread rail preserves continuity; the canonical venture model supplies memory,
+> consequence, and evidence behind the interface. Claude and Codex expand what the founder can accomplish.**
 
 The first proof is one real venture. The destination may span a portfolio, but each venture remains an
 isolated, readable, transferable operating environment behind the founder's authority.
+
+The founder's mental model is: **I am continuously developing and releasing my product and its path to
+market in one environment.** A thread carries direction and continuity. An agent is a runtime participant.
+A workflow is an executable mechanism. A release is the primary unit of market movement.
 
 ## Product principles
 
@@ -37,11 +41,18 @@ Product creates and delivers value. Go-to-market identifies, communicates, distr
 value. Drover keeps both visually distinct while making every meaningful dependency traceable across the
 boundary.
 
+### Complete loops create velocity
+
+Product changes, distribution, external consequences, and returned evidence form one learning system.
+More code, content, tool calls, campaigns, or agent activity without a release and attributable return is
+not venture velocity. Drover should feel aggressive because it finds and completes the next credible loop,
+not because it simulates constant activity.
+
 ### One model, many views
 
-The venture has one shared underlying model. The canvas, generated answers, operating arrangements, saved
-views, snapshots, conversation projections, and workbenches are projections of that model, never parallel
-sources of truth.
+The venture has one shared underlying model. The visual stage, generated answers, operating arrangements,
+saved views, snapshots, conversation projections, and thread index are projections of that model, never
+parallel sources of truth.
 
 ### Visual understanding precedes administration
 
@@ -208,6 +219,39 @@ Founder intent
 The system may loop, branch, pause, or stop anywhere. Runtime completion does not silently end a direction;
 only the founder ends active work.
 
+### Release architecture
+
+A release is broader than a deployment. It is the open, traceable join between a Product delta, intended
+customer consequence, supported claim or offer, audience, distribution mechanism, exact external actions,
+measurement, and returned evidence. Not every release needs every record, and this list must not become a
+required form or closed ontology. Missing links remain visible rather than being invented.
+
+```text
+Every release = Product delta × market mechanism × evidence path
+```
+
+A direction instructs work, a Thread preserves the conversation, a workflow makes a mechanism executable,
+and a Run records an attempt. None of those alone creates market movement. The release changes what the
+product can do or carries value across a world boundary; an Outcome joins returned reality only as strongly
+as its evidence permits.
+
+Every meaningful Product change must surface its distribution question. Every meaningful market return
+must surface the Product or go-to-market consequence it creates. Evidence that changes no understanding or
+future release remains visible as an unclosed loop.
+
+### Venture development loop
+
+```text
+understand the venture
+→ choose what should become true
+→ develop Product and distribution together
+→ coordinate and inspect work
+→ review and release exact consequences
+→ observe Product and market evidence
+→ revise venture understanding
+→ release again
+```
+
 ### View lifecycle
 
 ```text
@@ -282,7 +326,7 @@ first-class rather than being guessed from chronology.
 ### One event and projection model
 
 Durable truth lives only in the venture store. Live events announce that a scoped record changed; clients
-re-read through venture-scoped APIs. Canvas, conversation, return account, operating lens, workbench, and
+re-read through venture-scoped APIs. Conversation, thread timeline, return account, operating lens, and
 MCP reads project the same identities. Placement owns coordinates, camera, route bends, z-order, and
 visual-only grouping, never business truth.
 
@@ -329,17 +373,17 @@ consequence, returns evidence, or changes venture judgment.
 
 ## Interaction invariants
 
-1. One click selects and preserves scope; Enter or double-click in the map descends to the selected work;
-   Escape broadens from map to work, then from representation depth or selection to VentureHome.
-2. Typing with no selection directs the venture; typing with a selection directs that object.
+1. One click selects a thread or opens material beside its conversation. Opening material never changes
+   the current thread implicitly; Escape closes the visual stage and returns focus to its originating act.
+2. Typing in venture chat starts a thread; typing in a thread continues that exact durable conversation.
 3. Moving, resizing, and visual grouping update placement immediately and remain reversible.
 4. An obvious semantic connection may apply directly and remains undoable.
 5. An ambiguous gesture exposes Drover's interpretation before semantic truth changes.
 6. Generated layouts never overwrite founder placement.
 7. Saving a live view, capturing a snapshot, and promoting an inferred finding are explicit acts.
 8. Every external act presents the exact consequence.
-9. Collapsing conversation, closing a branch, or switching between work and map never loses selected-work
-   context.
+9. Collapsing activity, opening or closing a visual, or switching threads never loses the current draft,
+   thread identity, or last coherent conversation.
 10. Switching lenses never duplicates objects.
 11. Search reaches the whole venture model, evidence, conversations, views, snapshots, and work.
 12. Raw internal identifiers never become required founder vocabulary.
@@ -396,15 +440,13 @@ Each phase is a vertical completion gate. Nothing is called complete from compon
    adaptive multi-agent composition, steering, stopping, branching, closing, and persistent run receipts.
 4. **Consequence execution:** make product apply, deploy, send, spending, destructive actions, failure,
    retry, and MCP/Electron topology truthful under the founder wall.
-5. **One founder shell:** ship one canonical Product/GTM venture outline, continuous conversation, an
-   **adaptive workbench as the default center**, a scoped composer, a contextual founder gate, and the
-   canonical canvas as a **summoned `map` mode** — one action away, never the resting host or the primary
-   navigation model. Product and Go-to-market render as project-like folders with founder thought/work
-   Threads as their primary rows; canonical object structure organizes those Threads without becoming a
-   mandatory navigation taxonomy. Attention filters the same structure rather than creating another inbox.
-6. **Manipulable canvas (summoned):** direct editing, semantic zoom, provisional theory, reversible
-   interpretation, provenance, and honest dense-scale behavior — available on the summoned map, and
-   descending from it hands the founder back to the selected work.
+5. **One founder shell:** ship a thread rail, persistent venture/thread chat, scoped composer, contextual
+   founder gates inside the conversation, and an optional visual stage beside chat. Threads are the
+   founder-facing continuity model; Product and Go-to-market remain canonical system memory rather than
+   permanent navigation taxonomy.
+6. **Visual stage:** previews, diffs, comparisons, flows, evidence, consequences, and the venture map open
+   beside the current chat. The stage may inspect or manipulate canonical material, but it never becomes a
+   second product mode or hides the conversation that produced the work.
 7. **Product/GTM loop:** permanent territories, reversible operating lens, cross-boundary traceability,
    temporary/live/snapshot views, and evidence-driven learning.
 8. **Deletion:** remove competing shells, duplicate data paths, dead controls, stale docs, and obsolete

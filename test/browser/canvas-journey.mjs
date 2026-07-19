@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// Generated operating-graph acceptance. The workbench remains the resting product; Map summons one
-// truth-backed graph where Product capacity, GTM motions, campaigns, and returned evidence stay connected.
+// Generated operating-graph acceptance. Chat remains the resting product; Map summons one truth-backed
+// side visual where Product capacity, GTM motions, campaigns, and returned evidence stay connected.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -45,12 +45,12 @@ test("the operating graph exposes the whole Product and go-to-market system", as
     const expected = drover.fixture.expected.maps;
 
     const rest = await client.evaluate(`(() => ({
-      workbench: Boolean(document.querySelector('[data-testid="venture-workbench"]')),
-      home: Boolean(document.querySelector('.vh[aria-label]')),
+      rail: Boolean(document.querySelector('.thread-rail')),
+      chat: Boolean(document.querySelector('.thread-conversation [role="log"]')),
       graph: Boolean(document.querySelector('.venture-system-graph')),
-      mapButton: Boolean(document.querySelector('.workbench-map')),
+      visual: Boolean(document.querySelector('.visual-stage')),
     }))()`);
-    assert.deepEqual(rest, { workbench: true, home: true, graph: false, mapButton: true });
+    assert.deepEqual(rest, { rail: true, chat: true, graph: false, visual: false });
 
     await summonMap(client);
     const system = await client.evaluate(`(() => ({
@@ -99,27 +99,21 @@ test("the operating graph exposes the whole Product and go-to-market system", as
     await client.evaluate(`document.querySelector('.venture-map-open')?.click()`);
     await waitForDom(
       client,
-      `!!document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]') && !document.querySelector('.venture-maps')`,
-      "the campaign route did not hand back to real work",
+      `document.querySelector('.thread-header-copy h1')?.textContent?.trim() === ${JSON.stringify(expected.direction)} && !document.querySelector('.venture-maps')`,
+      "the explicit Open thread action did not return to its conversation",
     );
     const work = await client.evaluate(`(() => ({
-      heading: document.querySelector('.work-narrative-head h2')?.textContent?.trim() || '',
-      scoped: Boolean(document.querySelector('.venture-workspace-dock .now-composer-scope')),
+      heading: document.querySelector('.thread-header-copy h1')?.textContent?.trim() || '',
+      scoped: Boolean(document.querySelector('.thread-composer .now-composer-scope')),
+      chat: Boolean(document.querySelector('.thread-conversation [role="log"]')),
     }))()`);
     assert.equal(work.heading, expected.direction);
     assert.equal(work.scoped, true, "opening graph work did not preserve its execution scope");
-
-    await pressEscape(client);
-    await waitForDom(client, `!!document.querySelector('.vh[aria-label]') && !document.querySelector('[data-testid="stage-workspace"]')`, "Escape did not broaden selected graph work back to Venture Home");
+    assert.equal(work.chat, true, "opening graph work hid the conversation");
 
     await summonMap(client);
-    const backed = await client.evaluate(`(() => {
-      const button = document.querySelector('.venture-workspace-map-return');
-      button?.click();
-      return Boolean(button);
-    })()`);
-    assert.equal(backed, true, "Back to work was unavailable from the graph");
-    await waitForDom(client, `!!document.querySelector('.vh[aria-label]') && !document.querySelector('.venture-maps')`, "Back to work did not restore Venture Home");
+    await pressEscape(client);
+    await waitForDom(client, `!document.querySelector('.visual-stage') && !!document.querySelector('.thread-conversation [role="log"]')`, "Escape did not close the map beside the persistent conversation");
 
     await assertBasicAccessibility(client);
     await assertNoUnhandledRejections(client);

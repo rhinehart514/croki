@@ -1,9 +1,4 @@
-// work-loop-tools.mjs — the tool set work-loop.mjs hands a driving teammate: read_truth, get_taste,
-// fork_bet, stage_artifact, stage_outward, involve_participant, ask_founder, speak. Split out of
-// work-loop.mjs by domain
-// responsibility (the tools themselves vs. the drive that hands them to a runtime) to keep both files
-// under the firm build's ~300-line budget.
-//
+// The safe tool set work-loop.mjs hands a driving participant.
 // Every tool here is an ordinary function over the firm core, screened by FORBIDDEN_TOOL through
 // filterSafeTools before it ever reaches a model. None of them execute an outward effect themselves —
 // stage_outward only classifies and parks; the founder's own decision (F3) is the only door out.
@@ -21,6 +16,8 @@ import { getFirmConfiguration, proposeFirmConfiguration } from "./configuration.
 import { buildArchitectureWorkLoopTools } from "./architecture-work-loop-tools.mjs";
 import { buildRepositoryWorkLoopTools } from "./repository-work-loop-tools.mjs";
 import { parkOutwardAtWall } from "./grant-stage-outward.mjs";
+import { extendDirectionThread } from "./semantic-model-store.mjs";
+import { emitFirmEvent } from "./firm-events.mjs";
 
 const MAX_EVENTS_PER_BET = 200;
 
@@ -29,9 +26,7 @@ function genId(prefix) {
   return `${prefix}-${stamp}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
-// The bounded per-bet event log — text beats, tool starts, staged artifacts. This is what the
-// composer/lens streams; it is capped so a long-running drive never grows the venture file without
-// bound. Only meaningful on a bet (pre-fork work has nothing yet worth streaming to a lens).
+// Bounded per-bet material activity; pre-fork work has no durable subject for these events.
 export function appendEvent(ventureId, betId, event, options) {
   if (!betId) return null;
   const bet = getVentureDoc(ventureId, "bets", betId, options);
@@ -46,8 +41,7 @@ export function appendEvent(ventureId, betId, event, options) {
   return storedEvent;
 }
 
-// A tool's elapsed time is knowable only after it returns. Complete that exact stable event in place;
-// never infer a duration for text/model time and never manufacture cost at this seam.
+// Complete only exact measured tool duration; never infer model time or cost here.
 export function completeEventReceipt(ventureId, betId, eventId, receipt = {}, options) {
   if (!betId || !eventId) return null;
   const bet = getVentureDoc(ventureId, "bets", betId, options);
@@ -165,10 +159,7 @@ function makeProposeFirmConfiguration({ ventureId, teammateRef, options, trackCa
   };
 }
 
-// involve_participant is the deliberative seam, not a routing table. The current participant chooses
-// a configured peer and one of the founder-configured protocols for a focused contribution. The work
-// loop supplies the callback that runs that peer through their own runtime, capability, authority, and
-// budget configuration; this tool only validates and returns the contribution to the caller.
+// A participant chooses a configured peer and protocol for a bounded contribution.
 function makeInvolveParticipant({ participants, protocols, involveParticipant, trackCall, contributingRefs }) {
   const participantRefs = participants.map((participant) => participant.ref);
   return {
@@ -196,8 +187,7 @@ function makeInvolveParticipant({ participants, protocols, involveParticipant, t
   };
 }
 
-// fork_bet: the one structural verb, exposed as a tool. Divergence itself is never counted or shaped
-// here — the teammate calls this as many times, with whatever distinct intents, as the goal warrants.
+// fork_bet is the one structural divergence verb; the participant decides its shape.
 function makeForkBet({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall }) {
   return {
     name: "fork_bet",
@@ -223,24 +213,48 @@ function makeForkBet({ ventureId, teammateRef, configurationRevision, architectu
         architectureTarget: target?.architectureId ? { id: target.architectureId, stepId: target.architectureStepId ?? null } : (created.architectureTarget ?? null),
       };
       setVentureDoc(ventureId, "bets", bet.id, bet, options);
+      // An approach opened during a direction belongs to that conversation immediately.
+      if (target?.threadRef) {
+        try {
+          extendDirectionThread(ventureId, target.threadRef, { subjectRefs: [`bet:${bet.id}`] }, options);
+          emitFirmEvent(ventureId, "timeline", { threadRef: target.threadRef });
+        } catch {
+          // Terminal settlement retries this optional presentation join.
+        }
+      }
       appendEvent(ventureId, bet.id, { type: "bet_forked", detail: intent }, options);
       return bet;
     },
   };
 }
 
-// stage_artifact: attach content to bet.staged[] — a draft, a list, a page, a diff. Producing a draft
-// requires taste to have been consulted first (consult-guard), so a staged artifact can never bypass
-// the founder's own accumulated signal.
+// Staged drafts must consult the founder's accumulated taste first.
 function makeStageArtifact({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, contributingRefs }) {
   return {
     name: "stage_artifact",
-    description: "Attach a local draft, list, page, or diff to a bet without releasing it.",
+    description: "Attach local work to a bet without releasing it. Arbitrary legacy content remains valid. For a deliberate flow use { kind: 'flow', steps: [{ id, label, detail? }], edges: [{ from, to, label? }] }. For a deliberate comparison use { kind: 'comparison', variant: 'before-after' | 'alternatives', columns: [{ id, title, items: [{ label, detail?, artifactRef? }] }] }.",
     input_schema: {
       type: "object",
       properties: {
         betId: { type: "string" },
-        content: {},
+        content: {
+          anyOf: [
+            {
+              type: "object", properties: {
+                kind: { const: "flow" },
+                steps: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, detail: { type: "string" } }, required: ["id", "label"] } },
+                edges: { type: "array", items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" }, label: { type: "string" } }, required: ["from", "to"] } },
+              }, required: ["kind", "steps", "edges"],
+            },
+            {
+              type: "object", properties: {
+                kind: { const: "comparison" }, variant: { enum: ["before-after", "alternatives"] },
+                columns: { type: "array", items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, items: { type: "array", items: { type: "object", properties: { label: { type: "string" }, detail: { type: "string" }, artifactRef: { type: "string" } }, required: ["label"] } } }, required: ["id", "title", "items"] } },
+              }, required: ["kind", "variant", "columns"],
+            },
+            {},
+          ],
+        },
         title: { type: "string" },
         workRef: { type: "string" },
         producedDraft: { type: "boolean" },
@@ -292,12 +306,8 @@ function makeStageArtifact({ ventureId, teammateRef, configurationRevision, arch
   };
 }
 
-// stage_outward: classify an intended effect and park anything outward at the wall queue (F3). Default-
-// deny: a structural outward signal on the effect FORCES the wall regardless of the model's own
-// effects.external/irreversible/financial claim — that claim is never trusted to turn a signal off, and
-// its absence never turns a signal on either (host structural detection is the only path to
-// FOUNDER_WALL besides the pre-existing host-authored effects path). This never executes anything —
-// the only door past the wall is the founder's own decide().
+// stage_outward defaults to the wall when host structural detection finds an outward signal. Model safety
+// claims cannot turn that signal off, and only the founder's decide can execute the parked consequence.
 function makeStageOutward({ ventureId, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, deps }) {
   return {
     name: "stage_outward",

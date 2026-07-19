@@ -20,6 +20,7 @@ function publicDrive(entry) {
     architectureContextStaleAt: entry.architectureContextStaleAt,
     currentStageId: entry.currentStageId,
     lastBeatAt: entry.lastBeatAt,
+    activity: entry.activity,
     // A process-local presence pointer: true when a founder steer arrived for this effort while the
     // drive is running. The durable queue (work-loop-steer.mjs, on the effort's work record) is the
     // truth the resume reads; this only lets a live drive/UI honestly say "a steer will apply next step."
@@ -41,7 +42,8 @@ export function beginActiveDrive({ ventureId, teammateRef, betId = null, runtime
     architectureRevision: Number.isInteger(architectureRevision) ? architectureRevision : null,
     architectureContextStaleAt: null,
     currentStageId: null,
-    lastBeatAt: null,
+    lastBeatAt: new Date().toISOString(),
+    activity: "Starting work",
     steerPending: false,
     controller,
   };
@@ -56,13 +58,15 @@ export function beginActiveDrive({ ventureId, teammateRef, betId = null, runtime
 
 // A live causal pointer, not venture truth. The stage id is minted by workflow-projection's shared
 // helper at the same seam that appends the event; a restart correctly drops this presence fact.
-export function noteDriveBeat(driveId, { currentStageId, at } = {}) {
+export function noteDriveBeat(driveId, { currentStageId, activity, at } = {}) {
   const entry = active.get(driveId);
   if (!entry) return null;
   const stageId = String(currentStageId ?? "").trim();
-  if (!stageId) return publicDrive(entry);
-  entry.currentStageId = stageId;
+  const activityText = String(activity ?? "").trim();
+  if (stageId) entry.currentStageId = stageId;
+  if (activityText) entry.activity = activityText;
   entry.lastBeatAt = String(at ?? "").trim() || new Date().toISOString();
+  emitFirmEvent(entry.ventureId, "drive", { betId: entry.betId });
   return publicDrive(entry);
 }
 

@@ -2,7 +2,7 @@
 // change set: what Drover now understands, the working result, the EXACT repository change (files, diff,
 // tests, preview — never reduced to a summary), what else in the venture it affects, what it learned, and
 // how it was done. These blocks were once a single fixed stack; they are now the render bodies the
-// representation registry composes. WorkbenchView owns the head, the working-now pulse, and the pinned
+// representation registry composes. The visual stage owns the head, working-now pulse, and exact
 // decision; the blocks below are pure over the shared DirectionRenderContext so legacy and panes cannot
 // diverge. ResultBody is the default representation — it leads with what was produced and omits the exact
 // diff (that is its own view, and the pinned gate surfaces it when a release needs it). Steering happens in
@@ -126,9 +126,9 @@ export function MachineryBlock({ machinery }: { machinery: Array<[string, string
 /**
  * The default body — the direction's CONSEQUENCE, led by what was produced. It deliberately does NOT stack
  * the exact repository diff: that lives behind the View control (the `exact-change` representation), and the
- * pinned DecisionGate still renders it whenever a release actually needs it (WorkbenchView's evidence-honesty
+ * pinned DecisionGate still renders it whenever a release actually needs it (the stage's evidence-honesty
  * rule). This is the subtraction from the old everything-at-once overview — one coherent result, not every
- * system displayed simultaneously. The head, working-now pulse, and pinned decisions live in WorkbenchView.
+ * system displayed simultaneously. The head, working-now pulse, and pinned decisions live in the stage.
  */
 export function ResultBody({ ctx }: { ctx: DirectionRenderContext }) {
   return (

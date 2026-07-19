@@ -11,6 +11,7 @@ vi.mock("@/api", () => ({
   getHealth: vi.fn(),
   getLens: vi.fn(),
   getWorkIndex: vi.fn(),
+  subscribeVentureEvents: vi.fn(() => vi.fn()),
 }));
 
 const getLensMock = vi.mocked(getLens);

@@ -33,10 +33,13 @@ import { classifyDialogueAct } from "./dialogue-act.mjs";
 import { enqueueSteer } from "./work-loop-steer.mjs";
 import { recordGrant, actTypeForEffect } from "./grants.mjs";
 import { routeDirection } from "./direction-routing.mjs";
-import { end as endBet } from "./bet.mjs";
+import { end as endBet, fork as forkBet } from "./bet.mjs";
 import { setVentureDoc } from "./venture-store.mjs";
 import { subscribeFirmEvents } from "./firm-events.mjs";
 import { driveTeammate } from "./work-loop.mjs";
+import { abortActiveDrive, listActiveDrives } from "./active-drives.mjs";
+import { ensureDirectionThread, extendDirectionThread, getSemanticModel, setDirectionThreadLifecycle } from "./semantic-model-store.mjs";
+import { pollReplies } from "./market-poll.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -47,6 +50,127 @@ function statusFor(err) {
   if (err?.code === "venture_not_found") return 404;
   if (err?.code === "founder_decision_forbidden") return 403;
   return Number.isInteger(err?.status) ? err.status : 400;
+}
+
+function participantAliases(configuration) {
+  return new Map((configuration.agents ?? []).flatMap((agent) => [agent.ref, agent.name, agent.label]
+    .filter(Boolean).map((alias) => [String(alias).toLocaleLowerCase(), agent.ref])));
+}
+
+function participantName(configuration, ref) {
+  const participant = (configuration.agents ?? []).find((agent) => agent.ref === ref);
+  return participant?.name ?? participant?.label ?? ref;
+}
+
+function mentionedParticipants(message, configuration) {
+  const lower = String(message).toLocaleLowerCase();
+  return [...new Set([...participantAliases(configuration)]
+    .filter(([alias]) => new RegExp(`(^|\\W)${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\W|$)`, "i").test(lower))
+    .map(([, ref]) => ref))];
+}
+
+function appendThreadReply({ ventureId, threadRef, betId, teammateRef = null, content, options }) {
+  const reply = appendConversationMessage({ ventureId, role: "teammate", teammateRef, betId, content, ...(threadRef ? { target: { threadRef } } : {}) }, options);
+  if (threadRef) extendDirectionThread(ventureId, threadRef, { messageRefs: [`conversation:${reply.id}`] }, options);
+  return reply;
+}
+
+function launchDrive({ drive, input, ventureId, threadRef, betId, teammateRef, options }) {
+  let task;
+  try {
+    task = Promise.resolve(drive(input));
+  } catch (error) {
+    task = Promise.reject(error);
+  }
+  task.catch((error) => {
+    try {
+      const detail = error instanceof Error ? error.message : String(error);
+      appendThreadReply({
+        ventureId,
+        threadRef,
+        betId,
+        teammateRef,
+        content: `${teammateRef ?? "Drover"} could not continue this work: ${detail}`,
+        options,
+      });
+    } catch {
+      // The original drive failure is already terminal; reporting it must never create an unhandled rejection.
+    }
+  });
+  return task;
+}
+
+function latestArtifactRef(ventureId, betId) {
+  const bet = betId ? getVentureDoc(ventureId, "bets", betId) : null;
+  const artifact = [...(bet?.staged ?? [])].reverse().find((item) => item?.id);
+  return artifact ? `work:${artifact.id}` : null;
+}
+
+async function dispatchParticipantCommand({ ventureId, configuration, message, betId, threadRef, founderMessageId, res, deps }) {
+  const critique = /\bcritique\b/i.test(message);
+  const parallel = /\b(independently|side[ -]by[ -]side|separate (?:approaches|attempts)|both try)\b/i.test(message);
+  const involve = /^\s*(?:have|ask|let)\b/i.test(message) && /\b(join|help|inspect|explore|work|try|critique|review)\b/i.test(message);
+  if (!critique && !parallel && !involve) return false;
+
+  let participants = mentionedParticipants(critique ? message.split(/\bcritique\b/i)[0] : message, configuration);
+  if (parallel && participants.length === 0 && (configuration.agents ?? []).length === 2) {
+    participants = configuration.agents.map((agent) => agent.ref);
+  }
+  const required = parallel ? 2 : 1;
+  if (participants.length !== required || !betId || !threadRef) {
+    const note = !threadRef || !betId
+      ? "Which active thread and work should I use for that request?"
+      : parallel
+        ? "Which two participants should try this independently?"
+        : "Which participant should take that request?";
+    appendThreadReply({ ventureId, threadRef, betId, content: note, options: deps.appendOptions });
+    json(res, 200, { act: parallel ? "parallel-attempts" : critique ? "critique" : "involve-participant", messageId: founderMessageId, note, needsFounderJudgment: true });
+    return true;
+  }
+
+  const drive = deps.driveTeammate ?? driveTeammate;
+  if (parallel) {
+    const parent = getVentureDoc(ventureId, "bets", betId);
+    if (!parent) throw Object.assign(new Error(`No such effort: ${betId}`), { status: 404 });
+    const attempts = participants.map((teammateRef) => {
+      const attempt = forkBet(parent, `${message} — independent attempt by ${teammateRef}`, { teammateRef, configurationRevision: configuration.revision });
+      setVentureDoc(ventureId, "bets", attempt.id, attempt, deps.appendOptions);
+      return attempt;
+    });
+    appendThreadReply({ ventureId, threadRef, betId, content: `${participants.join(" and ")} are trying this independently in the same thread.`, options: deps.appendOptions });
+    for (const attempt of attempts) launchDrive({
+      drive,
+      input: {
+        ventureId, teammateRef: attempt.teammateRef, betId: attempt.id, goal: message, initiatedBy: "founder",
+        recordInitiation: false, originMessageRef: founderMessageId, target: { threadRef, betId: attempt.id },
+        options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
+      },
+      ventureId, threadRef, betId: attempt.id, teammateRef: attempt.teammateRef, options: deps.appendOptions,
+    });
+    json(res, 202, { act: "parallel-attempts", accepted: true, messageId: founderMessageId, threadRef, attempts: attempts.map((attempt) => ({ betId: attempt.id, teammateRef: attempt.teammateRef })) });
+    return true;
+  }
+
+  const teammateRef = participants[0];
+  const workRef = critique ? latestArtifactRef(ventureId, betId) : null;
+  if (critique && !workRef) {
+    const note = "I could not find a returned artifact in this thread to critique. Which work do you mean?";
+    appendThreadReply({ ventureId, threadRef, betId, content: note, options: deps.appendOptions });
+    json(res, 200, { act: "critique", messageId: founderMessageId, note, needsFounderJudgment: true });
+    return true;
+  }
+  appendThreadReply({ ventureId, threadRef, betId, teammateRef, content: `${teammateRef} is ${critique ? "critiquing the returned work" : "joining this thread"}.`, options: deps.appendOptions });
+  launchDrive({
+    drive,
+    input: {
+      ventureId, teammateRef, betId, goal: message, initiatedBy: "founder", recordInitiation: false,
+      originMessageRef: founderMessageId, target: { threadRef, betId, ...(workRef ? { workRef } : {}) },
+      options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
+    },
+    ventureId, threadRef, betId, teammateRef, options: deps.appendOptions,
+  });
+  json(res, 202, { act: critique ? "critique" : "involve-participant", accepted: true, messageId: founderMessageId, threadRef, teammateRef, workRef });
+  return true;
 }
 
 // A small, bounded effort summary the classifier reads the reply against — the effort's intent and
@@ -71,6 +195,7 @@ async function handleReply(ventureId, req, res, deps) {
   const body = await readBody(req);
   const message = trimOrNull(body?.message);
   const betId = trimOrNull(body?.betId);
+  const threadRef = trimOrNull(body?.threadRef);
   if (!message) {
     const error = new Error("A conversation reply needs a message.");
     error.status = 400;
@@ -84,15 +209,62 @@ async function handleReply(ventureId, req, res, deps) {
     throw error;
   }
 
+  if (threadRef) {
+    const threadId = threadRef.replace(/^thread:/, "");
+    const ownsThread = getSemanticModel(ventureId).threads.some((thread) => thread.id === threadId && thread.id !== "venture-root");
+    if (!ownsThread) throw Object.assign(new Error(`No such direction thread: ${threadId}`), { status: 404 });
+  }
+
   // The founder's own message is recorded first — it is the authority every dispatch below rests on.
-  const founderMessage = appendConversationMessage({ ventureId, role: "founder", content: message, betId }, deps.appendOptions);
+  const founderMessage = appendConversationMessage({ ventureId, role: "founder", content: message, betId, ...(threadRef ? { target: { threadRef } } : {}) }, deps.appendOptions);
+  if (threadRef) extendDirectionThread(ventureId, threadRef, { messageRefs: [`conversation:${founderMessage.id}`], actor: { authority: "founder", id: "founder" } }, deps.appendOptions);
+
+  // Observation is founder-invoked work, too. Keep reply capture on the conversation surface instead
+  // of reviving an ambient scheduler or hiding it behind a GTM dashboard. The poll is read-only until
+  // real provider evidence is found; recordOutcome owns the exact evidence join and dedupe.
+  if (/\b(check|look for|scan|refresh)\b[\s\S]*\b(replies|responses|returned evidence|market evidence)\b/i.test(message)) {
+    const result = await (deps.pollReplies ?? pollReplies)(ventureId, deps.appendOptions ?? {});
+    const returned = (result.ingested ?? []).filter((entry) => !entry.deduped).length;
+    const note = returned > 0
+      ? `${returned} new ${returned === 1 ? "market return was" : "market returns were"} joined to the work that caused it.`
+      : result.reason ?? `I checked ${result.polled ?? 0} released ${result.polled === 1 ? "conversation" : "conversations"}. No new evidence returned.`;
+    appendThreadReply({ ventureId, threadRef, betId, content: note, options: deps.appendOptions });
+    json(res, 200, { act: "observe", betId, threadRef, messageId: founderMessage.id, note, evidence: result });
+    return;
+  }
+
+  const stopMatch = message.match(/^\s*stop\s+(.+?)[.!]?\s*$/i);
+  if (stopMatch) {
+    const requested = stopMatch[1].trim().toLocaleLowerCase();
+    const aliases = participantAliases(configuration);
+    const requestedRef = String(aliases.get(requested) ?? requested).toLocaleLowerCase();
+    const model = getSemanticModel(ventureId);
+    const threadRuns = model.runs.filter((run) => !threadRef || run.threadRef === threadRef);
+    const threadRunIds = new Set(threadRuns.map((run) => run.id));
+    const threadBetIds = new Set(threadRuns.flatMap((run) => run.betRefs ?? []).map((ref) => String(ref).replace(/^bet:/, "")));
+    const matches = listActiveDrives(ventureId).filter((drive) => (
+      !threadRef || threadRunIds.has(drive.id) || (drive.betId && threadBetIds.has(drive.betId))
+    ) && String(drive.teammateRef).toLocaleLowerCase() === requestedRef);
+    if (matches.length !== 1) {
+      const note = matches.length ? `I found more than one active ${stopMatch[1]} run. Which one should I stop?` : `I could not find an active ${stopMatch[1]} run in this thread.`;
+      appendThreadReply({ ventureId, threadRef, betId, content: note, options: deps.appendOptions });
+      json(res, 200, { act: "stop-run", betId, messageId: founderMessage.id, note, needsFounderJudgment: true });
+      return;
+    }
+    const stopped = abortActiveDrive({ ventureId, driveId: matches[0].id });
+    appendThreadReply({ ventureId, threadRef, teammateRef: stopped.teammateRef, betId: stopped.betId, content: `Stop requested for ${participantName(configuration, stopped.teammateRef)}. The rest of this thread is still active.`, options: deps.appendOptions });
+    json(res, 200, { act: "stop-run", betId: stopped.betId, messageId: founderMessage.id, stoppedRunRef: `run:${stopped.id}` });
+    return;
+  }
+
+  if (await dispatchParticipantCommand({ ventureId, configuration, message, betId, threadRef, founderMessageId: founderMessage.id, res, deps })) return;
 
   const { act, steerText } = await classifyDialogueAct({ message, effortSummary: summary }, deps.dialogueDeps ?? {});
 
   if (act === "steer") {
     if (!betId) {
       // A steer with no effort to steer is just a new direction — route it.
-      return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id);
+      return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef);
     }
     enqueueSteer({ ventureId, betId, text: steerText ?? message, fromMessageId: founderMessage.id });
     json(res, 200, { act: "steer", betId, applied: "next-step", messageId: founderMessage.id });
@@ -112,11 +284,9 @@ async function handleReply(ventureId, req, res, deps) {
     // proposed "close" — the founder's message is what ends it.
     const ended = endBet(bet, "founder", { learning: message });
     setVentureDoc(ventureId, "bets", ended.id, ended, deps.appendOptions);
-    appendConversationMessage({
-      ventureId, role: "teammate", teammateRef: bet.teammateRef ?? null, betId,
-      content: "Stopping this — we've learned enough.",
-    }, deps.appendOptions);
-    json(res, 200, { act: "close", betId, ended: true, messageId: founderMessage.id });
+    if (threadRef) setDirectionThreadLifecycle(ventureId, threadRef, "closed", { actor: { authority: "founder", id: "founder" } }, deps.appendOptions);
+    appendThreadReply({ ventureId, threadRef, teammateRef: bet.teammateRef ?? null, betId, content: "Closing this thread — we've learned enough.", options: deps.appendOptions });
+    json(res, 200, { act: threadRef ? "close-thread" : "close", betId, threadRef, ended: true, messageId: founderMessage.id });
     return;
   }
 
@@ -141,13 +311,13 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   if (act === "new-direction") {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id);
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef);
   }
 
   json(res, 200, { act, betId, messageId: founderMessage.id });
 }
 
-async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId) {
+async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null) {
   const routed = await routeDirection({ direction, configuration }, deps.routingDeps ?? {});
   // A fresh, never-configured firm forms its first participant on the first direction — the same
   // founding-teammate fallback work-routes.mjs uses. Otherwise a firm with no claimable participant
@@ -160,26 +330,35 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
     throw error;
   }
   const why = routed.why ?? "Taking this one.";
+  const exactThreadRef = threadRef ?? ensureDirectionThread(ventureId, {
+    name: direction,
+    originMessageRef: fromMessageId,
+    identityKey: fromMessageId,
+    actor: { authority: "founder", id: "founder" },
+  }, deps.appendOptions).threadRef;
   // The claim is visible in the thread with a one-line why, BEFORE work begins (§4A.1).
-  appendConversationMessage({
-    ventureId, role: "teammate", teammateRef, content: why,
-  }, deps.appendOptions);
+  appendThreadReply({ ventureId, threadRef: exactThreadRef, betId: null, teammateRef, content: why, options: deps.appendOptions });
   const drive = deps.driveTeammate ?? driveTeammate;
-  const result = await drive({
-    ventureId, teammateRef, goal: direction, initiatedBy: "founder",
-    // The founder direction was already recorded above, so the work loop must not write it again — but its
-    // id still becomes the run's originMessageRef so founder intent → run stays an exact join.
-    recordInitiation: false,
-    originMessageRef: fromMessageId ?? null,
-    options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
+  launchDrive({
+    drive,
+    input: {
+      ventureId, teammateRef, goal: direction, initiatedBy: "founder",
+      // The founder direction was already recorded above, so the work loop must not write it again — but its
+      // id still becomes the run's originMessageRef so founder intent → run stays an exact join.
+      recordInitiation: false,
+      originMessageRef: fromMessageId ?? null,
+      target: { threadRef: exactThreadRef },
+      options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
+    },
+    ventureId, threadRef: exactThreadRef, betId: null, teammateRef, options: deps.appendOptions,
   });
-  json(res, 200, {
+  json(res, 202, {
     act: "new-direction",
+    accepted: true,
     teammateRef,
     why,
+    threadRef: exactThreadRef,
     fromMessageId,
-    outcome: result.outcome,
-    messages: result.messages,
   });
 }
 

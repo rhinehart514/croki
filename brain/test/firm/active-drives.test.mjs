@@ -13,7 +13,7 @@ process.env.GTM_IDE_PERSISTENCE = "json";
 const { default: workRoutes } = await import("../../src/firm/work-routes.mjs");
 const { createVenture, getVentureDoc, setVentureDoc } = await import("../../src/firm/venture-store.mjs");
 const { createBet } = await import("../../src/firm/bet.mjs");
-const { __resetActiveDrives } = await import("../../src/firm/active-drives.mjs");
+const { __resetActiveDrives, beginActiveDrive, listActiveDrives, noteDriveBeat } = await import("../../src/firm/active-drives.mjs");
 
 function routeCall(method, pathname, body = null, deps = {}) {
   const req = Readable.from(body == null ? [] : [JSON.stringify(body)]);
@@ -39,6 +39,16 @@ async function waitForActive(pathname) {
 test.after(() => {
   __resetActiveDrives();
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("a live drive exposes meaningful volatile progress even without a bet", () => {
+  const drive = beginActiveDrive({ ventureId: "volatile-venture", teammateRef: "claude", betId: null, runtime: "claude-code", abortSupported: true });
+  assert.equal(listActiveDrives("volatile-venture")[0].activity, "Starting work");
+  noteDriveBeat(drive.id, { activity: "Searching the repository", at: "2026-07-19T10:00:00.000Z" });
+  const visible = listActiveDrives("volatile-venture")[0];
+  assert.equal(visible.activity, "Searching the repository");
+  assert.equal(visible.lastBeatAt, "2026-07-19T10:00:00.000Z");
+  drive.finish();
 });
 
 test("a host-authorized abort stops one active provider drive and keeps the bet's partial evidence", async () => {

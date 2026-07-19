@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 
-// Cutover smoke journey: opening a venture from the picker lands the workbench-first venture workspace,
-// not the retired triptych or an always-mounted node map. The workspace's full behaviour — workbench,
-// summoned map, scope/descend, lens reversibility, offline honesty, dense collapse, drag-connect + undo —
-// is proven end-to-end in canvas-journey.mjs against the same no-flag default surface. The legacy
-// triptych journey and its `?shell=legacy` hatch are retired with the flag.
+// Cutover smoke journey: opening a venture lands the thread rail + permanent conversation, with no
+// workbench, ontology browser, or always-mounted visual. Rich material and the venture map are summoned
+// beside this conversation; deeper seeded journeys cover canonical work and the founder boundary.
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -130,7 +128,7 @@ function setControl(selector, value) {
   })()`;
 }
 
-test("cutover: opening a venture lands the venture workspace, not the retired triptych", async () => {
+test("cutover: opening a venture lands the chat-first ADE shell", async () => {
   const drover = await bootDrover();
   const chrome = await launchChrome({
     port: await freePort(),
@@ -149,17 +147,19 @@ test("cutover: opening a venture lands the venture workspace, not the retired tr
     );
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => /start venture/i.test(entry.textContent)); button?.click(); return Boolean(button && !button.disabled); })()`), true);
 
-    // The venture opens at WORK: the adaptive workbench says where things stand and the unscoped dock can
-    // direct the whole venture. The graph is not mounted at rest; Map remains one action away.
-    await waitForDom(client, `!!document.querySelector('.venture-workspace[data-mode="work"]')`, "the venture workspace did not open in work mode");
-    await waitForDom(client, `!!document.querySelector('.venture-workspace [data-testid="venture-workbench"][data-mode="work"]')`, "the venture workbench did not mount by default");
-    await waitForDom(client, `(() => {
-      const home = document.querySelector('[data-testid="venture-workbench"] [role="region"][aria-label*="where things stand"]');
-      return Boolean(home && /Where things stand/i.test(home.textContent));
-    })()`, "the venture home did not show where things stand");
-    await waitForDom(client, `document.querySelector('.venture-workspace-dock .now-composer textarea')?.placeholder === 'Direct the venture'`, "the docked composer did not direct the whole venture");
-    assert.equal(await client.evaluate(`!document.querySelector('.venture-workspace .venture-canvas-flow')`), true, "the venture graph mounted at rest instead of waiting for Map");
-    assert.equal(await client.evaluate(`!!document.querySelector('.venture-workspace .workbench-map')`), true, "Map was not one action away from the workbench");
+    await waitForDom(client, `!!document.querySelector('.thread-shell .thread-rail')`, "the thread rail did not mount");
+    await waitForDom(client, `!!document.querySelector('.thread-shell .thread-conversation [role="log"]')`, "the permanent conversation did not mount");
+    await waitForDom(client, `/What do you want to work on/i.test(document.querySelector('.thread-conversation')?.textContent ?? '')`, "the venture conversation home did not render");
+    assert.equal(await client.evaluate(`document.querySelector('.thread-rail')?.getBoundingClientRect().width`), 240, "the default thread rail is not 240px");
+    assert.equal(await client.evaluate(`document.querySelector('.thread-conversation')?.getBoundingClientRect().width`), 1680, "chat does not own the remaining desktop width");
+    assert.equal(await client.evaluate(`!document.querySelector('.visual-stage')`), true, "a visual mounted before the founder opened one");
+    assert.equal(await client.evaluate(`!document.querySelector('[data-testid="venture-workbench"]')`), true, "the retired workbench leaked into the default shell");
+    assert.equal(await client.evaluate(`!/(^|\\n)(Product|Go-to-market)(\\n|$)/.test(document.querySelector('.thread-rail')?.innerText ?? '')`), true, "ontology folders leaked into the thread rail");
+
+    // A fresh thread stays local until the founder sends its first direction.
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.thread-rail button')].find((entry) => /new thread/i.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
+    await waitForDom(client, `document.querySelector('.thread-composer textarea')?.placeholder === 'Ask Drover…'`, "the local draft did not use the thread composer");
+    assert.equal(await client.evaluate(`document.querySelectorAll('.thread-rail-row').length`), 0, "an empty durable thread was created before first send");
 
     // No legacy triptych presentation ships in the default DOM.
     assert.equal(await client.evaluate(`!document.querySelector('.firm-app-rail')`), true, "a retired conversation rail leaked into the default DOM");

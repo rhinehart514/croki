@@ -110,3 +110,29 @@ export function withThreadReviewedThrough(thread, reviewedThrough, { at = null }
   if (!cursor || !cursor.includes(":")) fail("A thread review cursor needs a typed reference.");
   return { ...structuredClone(thread), reviewedThrough: cursor, updatedAt: at ?? thread.updatedAt ?? null };
 }
+
+// Pinning is founder-owned navigation preference carried by the canonical Thread so it survives
+// export/import without becoming a second rail database. Unpinning touches no lifecycle or work state.
+export function withThreadPinnedAt(thread, pinnedAt, { at = null } = {}) {
+  if (!thread || typeof thread !== "object") fail("Pinning a thread needs a thread record.");
+  const next = structuredClone(thread);
+  const properties = next.properties && typeof next.properties === "object" ? next.properties : {};
+  const navigation = properties.navigation && typeof properties.navigation === "object"
+    ? structuredClone(properties.navigation)
+    : {};
+  const pin = text(pinnedAt);
+  if (pin) navigation.pinnedAt = pin;
+  else delete navigation.pinnedAt;
+  if (Object.keys(navigation).length) properties.navigation = navigation;
+  else delete properties.navigation;
+  next.properties = properties;
+  next.updatedAt = at ?? next.updatedAt ?? null;
+  return next;
+}
+
+export function withThreadLifecycle(thread, lifecycle, { at = null } = {}) {
+  if (!thread || typeof thread !== "object") fail("Changing a lifecycle needs a thread record.");
+  const nextLifecycle = text(lifecycle);
+  if (!["open", "closed"].includes(nextLifecycle)) fail("A thread lifecycle must be open or closed.");
+  return { ...structuredClone(thread), lifecycle: nextLifecycle, updatedAt: at ?? thread.updatedAt ?? null };
+}

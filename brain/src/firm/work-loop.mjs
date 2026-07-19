@@ -348,6 +348,7 @@ async function driveTeammateLeased({
     stepIndex: () => Number(currentWork.stepCount) || 0,
     monotonicNow: deps.monotonicNow,
   });
+  receipts.beat("Reading venture context");
   // Durable Run lifecycle (FIRM-SPEC rail #1): a founder-authorized drive records a canonical run joined to
   // its child direction thread BEFORE provider dispatch — founder intent → run → returned evidence becomes
   // inspectable history. Fail-safe by construction (beginDriveRun swallows its own errors): driveRun is null
@@ -411,6 +412,7 @@ async function driveTeammateLeased({
     onTurn: () => {
       currentWork = { ...currentWork, stepCount: (Number(currentWork.stepCount) || 0) + 1 };
       checkpointWork();
+      receipts.beat("Thinking through the direction");
       return currentWork.stepCount;
     },
     onText: (text) => {

@@ -172,8 +172,8 @@ function latestEvent({ thread, run, activeDrive, receipt, pendingDecision }) {
     return {
       kind,
       ref: `run:${run.id}#${kind}`,
-      at: activeDrive.abortRequestedAt ?? activeDrive.startedAt ?? activeDrive.queuedAt ?? run.createdAt ?? null,
-      summary: kind === "stopping" ? "Stop requested" : kind === "queued" ? "Queued" : "In progress",
+      at: activeDrive.abortRequestedAt ?? activeDrive.lastBeatAt ?? activeDrive.startedAt ?? activeDrive.queuedAt ?? run.createdAt ?? null,
+      summary: kind === "stopping" ? "Stop requested" : kind === "queued" ? "Queued" : activeDrive.activity ?? "In progress",
     };
   }
   if (run && receipt) {
@@ -204,7 +204,7 @@ function itemFor({ ventureId, thread, runs, activeByRun, receiptByRun, decisions
   const latestRun = newest(runs, (run) => {
     const active = activeByRun.get(run.id);
     const receipt = receiptByRun.get(run.id);
-    return active?.abortRequestedAt ?? active?.startedAt ?? receipt?.createdAt ?? run.completedAt ?? run.updatedAt ?? run.createdAt;
+    return active?.abortRequestedAt ?? active?.lastBeatAt ?? active?.startedAt ?? receipt?.createdAt ?? run.completedAt ?? run.updatedAt ?? run.createdAt;
   });
   const activeDrive = latestRun ? activeByRun.get(latestRun.id) ?? null : null;
   const receipt = latestRun ? receiptByRun.get(latestRun.id) ?? null : null;
@@ -220,6 +220,13 @@ function itemFor({ ventureId, thread, runs, activeByRun, receiptByRun, decisions
         ? "review"
         : "none";
   const subjectRefs = [...new Set(list(thread.subjectRefs))];
+  const betIds = new Set(runs.flatMap((run) => list(run.betRefs)).map((ref) => String(ref).replace(/^bet:/, "")));
+  const relevantDrives = [...activeByRun.values()].filter((drive) => runs.some((run) => run.id === drive.id) || betIds.has(drive.betId));
+  const participantRefs = [...new Set([
+    ...list(thread.participantRefs),
+    ...runs.flatMap((run) => list(run.participantRefs)),
+    ...relevantDrives.map((drive) => drive.teammateRef).filter(Boolean),
+  ])];
   return {
     threadRef: `thread:${thread.id}`,
     ventureRef: `venture:${ventureId}`,
@@ -236,12 +243,147 @@ function itemFor({ ventureId, thread, runs, activeByRun, receiptByRun, decisions
     reviewedThrough: thread.reviewedThrough ?? null,
     latestMeaningfulEvent,
     runRefs: runs.map((run) => `run:${run.id}`),
+    betRefs: [...new Set(runs.flatMap((run) => list(run.betRefs)))],
+    decisionRefs: [...new Set(runs.flatMap((run) => list(run.decisionRefs)))],
+    outcomeRefs: [...new Set(runs.flatMap((run) => list(run.outcomeRefs)))],
+    pinnedAt: thread?.properties?.navigation?.pinnedAt ?? null,
+    participantRefs,
+    activeParticipantRefs: [...new Set(relevantDrives.map((drive) => drive.teammateRef).filter(Boolean))],
     createdAt: thread.createdAt ?? null,
     updatedAt: latestMeaningfulEvent.at ?? thread.updatedAt ?? thread.createdAt ?? null,
   };
 }
 
-export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts = [], decisions = [] } = {}) {
+function searchable(value) {
+  try { return JSON.stringify(value ?? "").toLocaleLowerCase(); } catch { return String(value ?? "").toLocaleLowerCase(); }
+}
+
+function searchMatches(item, query, { messages, bets, decisions, outcomes }) {
+  const needle = String(query ?? "").trim().toLocaleLowerCase();
+  if (!needle) return [];
+  const refs = [];
+  const betIds = new Set([...item.subjectRefs, ...item.betRefs].filter((ref) => ref.startsWith("bet:")).map((ref) => ref.slice(4)));
+  if (searchable(item.founderIntent).includes(needle)) refs.push({ kind: "message", ref: item.originMessageRef ?? item.threadRef, label: item.founderIntent });
+  for (const message of messages) {
+    const exact = item.originMessageRef === `conversation:${message.id}` || item.threadMessageRefs?.includes(`conversation:${message.id}`);
+    if ((!exact && !betIds.has(message.betId)) || !searchable(message.content).includes(needle)) continue;
+    refs.push({ kind: "message", ref: `conversation:${message.id}`, label: String(message.content).slice(0, 120) });
+  }
+  for (const bet of bets) {
+    if (!betIds.has(bet.id)) continue;
+    for (const artifact of list(bet.staged)) {
+      if (!searchable([artifact.title, artifact.content]).includes(needle)) continue;
+      refs.push({ kind: "artifact", ref: `work:${artifact.id}`, label: artifact.title ?? "Visual work" });
+    }
+    for (const evidence of list(bet.evidence)) {
+      if (!searchable(evidence).includes(needle)) continue;
+      refs.push({ kind: "evidence", ref: evidence.id ? `evidence:${evidence.id}` : `bet:${bet.id}#evidence`, label: evidence.title ?? evidence.summary ?? "Evidence" });
+    }
+  }
+  const runIds = new Set(item.runRefs.map((ref) => ref.slice(4)));
+  const decisionIds = new Set(item.decisionRefs.map((ref) => String(ref).replace(/^decision:/, "")));
+  const outcomeIds = new Set(item.outcomeRefs.map((ref) => String(ref).replace(/^outcome:/, "")));
+  for (const decision of decisions) {
+    if (!betIds.has(decision.betId) && !decisionIds.has(decision.id) && !runIds.has(String(decision.runRef ?? "").replace(/^run:/, ""))) continue;
+    if (searchable(decision).includes(needle)) refs.push({ kind: "decision", ref: `decision:${decision.id}`, label: decision.summary ?? decision.purpose ?? "Decision" });
+  }
+  for (const outcome of outcomes) {
+    if (!betIds.has(outcome.betId) && !outcomeIds.has(outcome.id)) continue;
+    if (searchable(outcome).includes(needle)) refs.push({ kind: "evidence", ref: `outcome:${outcome.id}`, label: outcome.summary ?? outcome.kind ?? "Outcome" });
+  }
+  return refs;
+}
+
+function legacyFamilies(bets) {
+  const byId = new Map(list(bets).map((bet) => [bet.id, bet]));
+  const rootFor = (bet) => {
+    let current = bet;
+    const seen = new Set();
+    while (current?.forkedFrom && byId.has(current.forkedFrom) && !seen.has(current.forkedFrom)) {
+      seen.add(current.id);
+      current = byId.get(current.forkedFrom);
+    }
+    return current ?? bet;
+  };
+  const families = new Map();
+  for (const bet of list(bets)) {
+    const root = rootFor(bet);
+    if (!families.has(root.id)) families.set(root.id, { root, bets: [] });
+    families.get(root.id).bets.push(bet);
+  }
+  return [...families.values()];
+}
+
+function legacyItemsFor({ ventureId, bets, messages, decisions, outcomes, activeDrives }) {
+  return legacyFamilies(bets).map((family) => {
+    const ids = new Set(family.bets.map((bet) => bet.id));
+    const familyMessages = list(messages).filter((message) => ids.has(message.betId));
+    const familyDecisions = list(decisions).filter((decision) => ids.has(decision.betId));
+    const pending = newest(familyDecisions.filter((decision) => decision.decision == null), (decision) => decision.updatedAt ?? decision.createdAt ?? decision.parkedAt);
+    const familyOutcomes = list(outcomes).filter((outcome) => ids.has(outcome.betId));
+    const latestOutcome = newest(familyOutcomes, (outcome) => outcome.updatedAt ?? outcome.createdAt ?? outcome.observedAt);
+    const drives = list(activeDrives).filter((drive) => ids.has(drive.betId));
+    const latestDrive = newest(drives, (drive) => drive.abortRequestedAt ?? drive.startedAt);
+    const latestBet = newest(family.bets, (bet) => bet.updatedAt ?? bet.endedAt ?? list(bet.events).at(-1)?.at ?? bet.createdAt);
+    // Only an exact bet-scoped message may name a legacy thread. A merely-nearby unscoped founder
+    // message can have produced several sibling roots, and assigning that same sentence to every row
+    // makes distinct historical work indistinguishable in the rail. When the exact join is absent, the
+    // durable bet intent is the honest compatibility label.
+    const founder = familyMessages.find((message) => message.role === "founder") ?? null;
+    const latestMeaningfulEvent = pending
+      ? { kind: "decision", ref: `decision:${pending.id}`, at: pending.updatedAt ?? pending.createdAt ?? pending.parkedAt ?? null, summary: "Founder decision required" }
+      : latestDrive
+        ? { kind: activityFor(latestDrive), ref: `run:${latestDrive.id}#${activityFor(latestDrive)}`, at: latestDrive.abortRequestedAt ?? latestDrive.startedAt ?? null, summary: "In progress" }
+        : latestOutcome
+          ? { kind: "outcome", ref: `outcome:${latestOutcome.id}`, at: latestOutcome.updatedAt ?? latestOutcome.createdAt ?? latestOutcome.observedAt ?? null, summary: latestOutcome.summary ?? latestOutcome.body ?? "Evidence returned" }
+          : { kind: "created", ref: `bet:${family.root.id}#legacy`, at: latestBet?.updatedAt ?? latestBet?.createdAt ?? null, summary: null };
+    const lifecycle = family.bets.every((bet) => bet.endedAt) ? "closed" : "open";
+    return {
+      threadRef: `thread:legacy-${family.root.id}`,
+      ventureRef: `venture:${ventureId}`,
+      parentThreadRef: `thread:${ROOT_THREAD_ID}`,
+      originMessageRef: founder ? `conversation:${founder.id}` : null,
+      subjectRefs: family.bets.map((bet) => `bet:${bet.id}`),
+      focusRef: `bet:${family.root.id}`,
+      founderIntent: founder?.content ?? family.root.intent ?? "Founder direction",
+      lifecycle,
+      activity: activityFor(latestDrive),
+      attention: pending ? "decision" : latestOutcome ? "review" : "none",
+      terminal: lifecycle === "closed" ? "completed" : null,
+      unread: Boolean(pending || latestOutcome),
+      reviewedThrough: null,
+      latestMeaningfulEvent,
+      runRefs: [],
+      betRefs: family.bets.map((bet) => `bet:${bet.id}`),
+      decisionRefs: familyDecisions.map((decision) => `decision:${decision.id}`),
+      outcomeRefs: familyOutcomes.map((outcome) => `outcome:${outcome.id}`),
+      threadMessageRefs: familyMessages.map((message) => `conversation:${message.id}`),
+      pinnedAt: null,
+      participantRefs: [...new Set(family.bets.map((bet) => bet.teammateRef).filter(Boolean))],
+      activeParticipantRefs: [...new Set(drives.map((drive) => drive.teammateRef).filter(Boolean))],
+      createdAt: family.root.createdAt ?? null,
+      updatedAt: latestMeaningfulEvent.at ?? latestBet?.updatedAt ?? latestBet?.createdAt ?? null,
+      legacy: true,
+    };
+  });
+}
+
+function workPriority(item) {
+  return item.attention === "decision" ? 0
+    : item.attention === "failure" ? 1
+      : item.activity !== "idle" ? 2
+        : item.attention === "review" ? 3 : 4;
+}
+
+function compareWorkItems(a, b) {
+  const ranked = workPriority(a) - workPriority(b);
+  if (ranked) return ranked;
+  const unread = Number(b.unread) - Number(a.unread);
+  if (unread) return unread;
+  return time(b.updatedAt) - time(a.updatedAt) || a.threadRef.localeCompare(b.threadRef);
+}
+
+export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts = [], decisions = [], messages = [], bets = [], outcomes = [], query = "" } = {}) {
   if (!ventureId || !model) throw Object.assign(new Error("A work index needs venture truth."), { code: "work_index_invalid", status: 400 });
   const activeByRun = new Map(list(activeDrives).map((drive) => [drive.id, drive]));
   const receiptByRun = new Map(list(receipts).map((receipt) => [String(receipt.runRef ?? "").replace(/^run:/, ""), receipt]));
@@ -251,7 +393,7 @@ export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts
     if (!runsByThread.has(run.threadRef)) runsByThread.set(run.threadRef, []);
     runsByThread.get(run.threadRef).push(run);
   }
-  const items = list(model.threads)
+  const canonicalItems = list(model.threads)
     .filter((thread) => thread.id !== ROOT_THREAD_ID)
     .map((thread) => itemFor({
       ventureId,
@@ -261,33 +403,42 @@ export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts
       receiptByRun,
       decisionsById,
     }))
-    .sort((a, b) => {
-      const priority = (item) => item.attention === "decision"
-        ? 0
-        : item.attention === "failure"
-          ? 1
-          : item.activity !== "idle"
-            ? 2
-            : item.attention === "review"
-              ? 3
-              : 4;
-      const ranked = priority(a) - priority(b);
-      if (ranked) return ranked;
-      const unread = Number(b.unread) - Number(a.unread);
-      if (unread) return unread;
-      return time(b.updatedAt) - time(a.updatedAt) || a.threadRef.localeCompare(b.threadRef);
-    });
-  const indexedRuns = new Set(items.flatMap((item) => item.runRefs));
+    .map((item) => ({
+      ...item,
+      threadMessageRefs: list(model.threads.find((thread) => `thread:${thread.id}` === item.threadRef)?.messageRefs),
+    }))
+    .sort(compareWorkItems);
+  const canonicalBetIds = new Set([
+    ...list(model.threads).flatMap((thread) => list(thread.subjectRefs)),
+    ...list(model.runs).flatMap((run) => list(run.betRefs)),
+  ].filter((ref) => String(ref).startsWith("bet:")).map((ref) => String(ref).replace(/^bet:/, "")));
+  const legacyBets = list(bets).filter((bet) => !canonicalBetIds.has(bet.id));
+  // Migration is additive: creating the first canonical Thread must not make every older direction
+  // disappear. Project unclaimed bet families beside canonical threads until exact joins exist.
+  const legacyItems = legacyItemsFor({ ventureId, bets: legacyBets, messages, decisions, outcomes, activeDrives });
+  const allItems = [...canonicalItems, ...legacyItems].sort(compareWorkItems);
+  const items = String(query ?? "").trim()
+    ? allItems.map((item) => ({ ...item, matchRefs: searchMatches(item, query, { messages, bets, decisions, outcomes }) }))
+      .filter((item) => item.matchRefs.length)
+    : allItems;
+  for (const item of items) {
+    delete item.threadMessageRefs;
+    delete item.betRefs;
+    delete item.decisionRefs;
+    delete item.outcomeRefs;
+  }
+  const indexedRuns = new Set(allItems.flatMap((item) => item.runRefs));
   return {
     ventureId,
     revision: model.revision,
     items,
-    outline: projectOutline(model, items),
+    outline: projectOutline(model, allItems),
     counts: {
-      total: items.length,
-      attention: items.filter((item) => item.attention !== "none").length,
-      active: items.filter((item) => item.activity !== "idle").length,
-      unread: items.filter((item) => item.unread).length,
+      total: allItems.length,
+      attention: allItems.filter((item) => item.attention !== "none").length,
+      active: allItems.filter((item) => item.activity !== "idle").length,
+      unread: allItems.filter((item) => item.unread).length,
+      matchCount: items.length,
     },
     legacy: {
       unindexedRunCount: list(model.runs).filter((run) => !indexedRuns.has(`run:${run.id}`)).length,
@@ -296,11 +447,18 @@ export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts
 }
 
 export function buildWorkIndex(ventureId, options = {}) {
+  const messages = listVentureDocs(ventureId, "conversation", options);
+  const bets = listVentureDocs(ventureId, "bets", options);
+  const outcomes = listVentureDocs(ventureId, "outcomes", options);
   return projectWorkIndex({
     ventureId,
     model: getSemanticModel(ventureId, options),
     activeDrives: listActiveDrives(ventureId),
     receipts: listVentureDocs(ventureId, "receipts", options),
     decisions: listVentureDocs(ventureId, "decisions", options),
+    messages,
+    bets,
+    outcomes,
+    query: options.query ?? "",
   });
 }

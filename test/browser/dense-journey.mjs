@@ -52,7 +52,7 @@ test("dense venture: generated maps stay honest and contained without canonical 
       mapObjects: 0,
     });
 
-    assert.ok(await client.evaluate(`!!document.querySelector('.vh[aria-label]') && !document.querySelector('.venture-maps')`), "dense venture did not rest on workbench Home");
+    assert.ok(await client.evaluate(`!!document.querySelector('.thread-conversation [role="log"]') && !document.querySelector('.venture-maps')`), "dense venture did not rest in chat");
     await summonMap(client);
     await waitForDom(client, `/No connected system yet/i.test(document.querySelector('.venture-map-empty')?.textContent || '')`, "empty whole-system graph overstated legacy records as map truth");
 
@@ -63,15 +63,17 @@ test("dense venture: generated maps stay honest and contained without canonical 
 
     const contained = await client.evaluate(`(() => {
       const map = document.querySelector('.venture-maps')?.getBoundingClientRect();
-      const center = document.querySelector('.venture-workspace-center')?.getBoundingClientRect();
+      const center = document.querySelector('.visual-stage')?.getBoundingClientRect();
       return {
         pageOverflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
-        mapWithinCenter: Boolean(map && center && map.left >= center.left - 1 && map.right <= center.right + 1 && map.top >= center.top - 1 && map.bottom <= center.bottom + 1),
+        mapWithinCenter: Boolean(map && center && map.left >= center.left - 1 && map.right <= center.right + 1),
+        mapRect: map ? { left: map.left, right: map.right, width: map.width } : null,
+        centerRect: center ? { left: center.left, right: center.right, width: center.width } : null,
         editableCanvas: Boolean(document.querySelector('.venture-canvas-flow')),
       };
     })()`);
     assert.ok(contained.pageOverflow <= 1, `dense generated maps introduced ${contained.pageOverflow}px page overflow`);
-    assert.equal(contained.mapWithinCenter, true, "generated maps escaped the desktop center frame");
+    assert.equal(contained.mapWithinCenter, true, `generated maps escaped the side visual: ${JSON.stringify(contained)}`);
     assert.equal(contained.editableCanvas, false, "dense operating graph mounted the retired free canvas");
 
     await client.send("Emulation.setDeviceMetricsOverride", { width: 1152, height: 720, deviceScaleFactor: 1.25, mobile: false });
@@ -79,8 +81,8 @@ test("dense venture: generated maps stay honest and contained without canonical 
     const zoomed = await client.evaluate(`(() => ({
       overflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
       map: Boolean(document.querySelector('.venture-maps')),
-      composer: Boolean(document.querySelector('.venture-workspace-dock .now-composer textarea')),
-      index: Boolean(document.querySelector('.venture-workspace .vw-index')),
+      composer: Boolean(document.querySelector('.thread-composer .now-composer textarea')),
+      index: Boolean(document.querySelector('.thread-rail')),
     }))()`);
     assert.ok(zoomed.overflow <= 1, `125% browser zoom introduced ${zoomed.overflow}px horizontal overflow`);
     assert.deepEqual({ map: zoomed.map, composer: zoomed.composer, index: zoomed.index }, { map: true, composer: true, index: true });

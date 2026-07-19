@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Portfolio acceptance for generated maps: canonical/compatibility truth stays venture-isolated, switching
-// ventures returns to the workbench first, and a disconnected source cannot erase the last coherent map.
+// ventures returns to its last thread, and a disconnected source cannot erase the last coherent map.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -45,14 +45,14 @@ test("generated maps stay isolated across ventures and hold their last coherent 
     await waitForDom(client, `/A project worth advancing/i.test(document.querySelector('.venture-maps')?.textContent || '')`, "Buffalo Product map did not render its customer need");
 
     const openedMenu = await client.evaluate(`(() => {
-      const button = document.querySelector('.vw-index-project-switcher');
+      const button = document.querySelector('.thread-venture-switcher summary');
       button?.click();
       return Boolean(button);
     })()`);
     assert.equal(openedMenu, true, "venture switcher was unavailable from maps");
-    await waitForDom(client, `[...document.querySelectorAll('.vw-index-venture-menu button')].some((entry) => /DenialShield/i.test(entry.textContent || ''))`, "DenialShield was not offered in the venture switcher");
+    await waitForDom(client, `[...document.querySelectorAll('.thread-venture-switcher > div button')].some((entry) => /DenialShield/i.test(entry.textContent || ''))`, "DenialShield was not offered in the venture switcher");
     const switched = await client.evaluate(`(() => {
-      const option = [...document.querySelectorAll('.vw-index-venture-menu button')]
+      const option = [...document.querySelectorAll('.thread-venture-switcher > div button')]
         .find((entry) => /DenialShield/i.test(entry.textContent || ''));
       option?.click();
       return Boolean(option);
@@ -60,8 +60,8 @@ test("generated maps stay isolated across ventures and hold their last coherent 
     assert.equal(switched, true);
     await waitForDom(
       client,
-      `document.querySelector('.vw-index-project-copy strong')?.textContent?.trim() === 'DenialShield' && !!document.querySelector('.vh[aria-label]') && !document.querySelector('.venture-maps')`,
-      "venture switch did not return DenialShield to its workbench",
+      `document.querySelector('.thread-venture-switcher summary strong')?.textContent?.trim() === 'DenialShield' && !!document.querySelector('.thread-conversation [role="log"]') && !document.querySelector('.visual-stage')`,
+      "venture switch did not return DenialShield to its conversation",
     );
 
     await summonMap(client);
@@ -84,7 +84,7 @@ test("generated maps stay isolated across ventures and hold their last coherent 
     await client.evaluate(`window.dispatchEvent(new Event('offline'))`);
     await waitForDom(
       client,
-      `/Offline|Reconnecting/i.test(document.querySelector('.venture-workspace-freshness .firm-freshness')?.textContent || '')`,
+      `/Offline|Reconnecting/i.test(document.querySelector('.firm-freshness')?.textContent || '')`,
       "offline freshness state never appeared",
     );
     const offline = await client.evaluate(`(() => ({

@@ -13,6 +13,8 @@ import {
   ROOT_THREAD_ID,
   createRootThread,
   createThread,
+  withThreadPinnedAt,
+  withThreadLifecycle,
   withThreadReferences,
   withThreadReviewedThrough,
 } from "./thread.mjs";
@@ -195,6 +197,26 @@ export function markDirectionThreadReviewed(ventureId, threadRef, reviewedThroug
   if (!existing || existing.id === ROOT_THREAD_ID) throw Object.assign(new Error(`No such direction thread: ${id}`), { code: "semantic_model_missing_ref", status: 404 });
   const updated = withThreadReviewedThrough(existing, reviewedThrough, { at });
   applyOne(ventureId, updated, "threads", { actor, at }, options, "update-record");
+  return structuredClone(updated);
+}
+
+export function setDirectionThreadPinned(ventureId, threadRef, pinned, { actor = SYSTEM_ACTOR, at } = {}, options = {}) {
+  const id = normalizeRef(threadRef, "thread:")?.slice("thread:".length);
+  const existing = getSemanticModelState(ventureId, options).model.threads.find((thread) => thread.id === id);
+  if (!existing || existing.id === ROOT_THREAD_ID) throw Object.assign(new Error(`No such direction thread: ${id}`), { code: "semantic_model_missing_ref", status: 404 });
+  const changedAt = at ?? now();
+  const updated = withThreadPinnedAt(existing, pinned ? changedAt : null, { at: changedAt });
+  applyOne(ventureId, updated, "threads", { actor, at: changedAt }, options, "update-record");
+  return structuredClone(updated);
+}
+
+export function setDirectionThreadLifecycle(ventureId, threadRef, lifecycle, { actor = SYSTEM_ACTOR, at } = {}, options = {}) {
+  const id = normalizeRef(threadRef, "thread:")?.slice("thread:".length);
+  const existing = getSemanticModelState(ventureId, options).model.threads.find((thread) => thread.id === id);
+  if (!existing || existing.id === ROOT_THREAD_ID) throw Object.assign(new Error(`No such direction thread: ${id}`), { code: "semantic_model_missing_ref", status: 404 });
+  const changedAt = at ?? now();
+  const updated = withThreadLifecycle(existing, lifecycle, { at: changedAt });
+  applyOne(ventureId, updated, "threads", { actor, at: changedAt }, options, "update-record");
   return structuredClone(updated);
 }
 

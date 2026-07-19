@@ -173,7 +173,7 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
   const ventureName = drover.fixture.venture.name;
   await waitForDom(
     client,
-    `!!document.querySelector('.venture-workspace [data-testid="venture-workbench"]') || /Resume work/i.test(document.body.textContent)`,
+    `!!document.querySelector('.thread-shell .thread-conversation') || /Resume work/i.test(document.body.textContent)`,
     "fixture venture neither auto-opened nor offered a picker",
   );
 
@@ -181,8 +181,8 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
   // an explicit portfolio return, so acceptance must accept both launch states. A multi-venture fixture can
   // auto-open a different venture; use the real in-workspace switcher to reach the fixture under test.
   const launchState = await client.evaluate(`(() => ({
-    workspace: Boolean(document.querySelector('.venture-workspace [data-testid="venture-workbench"]')),
-    current: document.querySelector('.vw-index-project-copy strong')?.textContent?.trim() || null,
+    workspace: Boolean(document.querySelector('.thread-shell .thread-conversation')),
+    current: document.querySelector('.thread-venture-switcher summary strong')?.textContent?.trim() || null,
   }))()`);
   if (!launchState.workspace) {
     const opened = await client.evaluate(`(() => {
@@ -194,18 +194,18 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
     assert.equal(opened, true, `could not open ${ventureName}`);
   } else if (launchState.current !== ventureName) {
     const openedMenu = await client.evaluate(`(() => {
-      const switcher = document.querySelector('.vw-index-project-switcher');
+      const switcher = document.querySelector('.thread-venture-switcher summary');
       switcher?.click();
       return Boolean(switcher);
     })()`);
     assert.equal(openedMenu, true, `could not open the venture switcher from ${launchState.current ?? "the returned venture"}`);
     await waitForDom(
       client,
-      `[...document.querySelectorAll('.vw-index-venture-menu button')].some((entry) => entry.textContent.includes(${JSON.stringify(ventureName)}))`,
+      `[...document.querySelectorAll('.thread-venture-switcher > div button')].some((entry) => entry.textContent.includes(${JSON.stringify(ventureName)}))`,
       `venture switcher did not offer ${ventureName}`,
     );
     const switched = await client.evaluate(`(() => {
-      const option = [...document.querySelectorAll('.vw-index-venture-menu button')]
+      const option = [...document.querySelectorAll('.thread-venture-switcher > div button')]
         .find((entry) => entry.textContent.includes(${JSON.stringify(ventureName)}));
       option?.click();
       return Boolean(option);
@@ -213,12 +213,10 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
     assert.equal(switched, true, `could not switch from ${launchState.current ?? "the returned venture"} to ${ventureName}`);
   }
   try {
-    // Workbench-first hierarchy: the workspace is "open" when the adaptive WORKBENCH mounts, not the node
-    // map. The venture graph is a summoned mode (summonMap), never the open signal.
     await waitForDom(
       client,
-      `!!document.querySelector('.venture-workspace [data-testid="venture-workbench"]') && document.querySelector('.vw-index-project-copy strong')?.textContent?.trim() === ${JSON.stringify(ventureName)}`,
-      "fixture venture workspace did not open on the workbench",
+      `!!document.querySelector('.thread-shell .thread-conversation') && document.querySelector('.thread-venture-switcher summary strong')?.textContent?.trim() === ${JSON.stringify(ventureName)}`,
+      "fixture venture did not open in the conversation shell",
     );
   } catch (error) {
     const state = await client.evaluate(`(() => ({
@@ -233,11 +231,12 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
   return chrome;
 }
 
-// Summon the generated venture system graph from the workbench. The graph is a read projection of venture
-// truth: pan/zoom and route focus are presentation, never a second source of business truth.
+// Summon the generated venture system graph beside chat. The graph is a read projection of venture truth:
+// pan/zoom and route focus are presentation, never a second source of business truth.
 export async function summonMap(client) {
+  await waitForDom(client, `[...document.querySelectorAll('.thread-header-actions button')].some((entry) => /map/i.test(entry.textContent))`, "the Map affordance was not present in the thread header");
   const clicked = await client.evaluate(`(() => {
-    const button = document.querySelector('.venture-workspace .workbench-map');
+    const button = [...document.querySelectorAll('.thread-header-actions button')].find((entry) => /map/i.test(entry.textContent));
     if (!button) return false;
     button.click();
     return true;
@@ -245,7 +244,7 @@ export async function summonMap(client) {
   assert.equal(clicked, true, "the Map affordance was not present to summon venture maps");
   await waitForDom(
     client,
-    `!!document.querySelector('.venture-workspace .venture-maps[data-view="system"] :is(.venture-system-graph, .venture-map-empty)')`,
+    `!!document.querySelector('.visual-stage .venture-maps[data-view="system"] :is(.venture-system-graph, .venture-map-empty)')`,
     "the generated whole-system map did not mount after summoning Map",
   );
   await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");

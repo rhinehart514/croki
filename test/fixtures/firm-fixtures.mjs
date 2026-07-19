@@ -257,7 +257,7 @@ export function createOvernightVentureFixture({ root, repository } = {}) {
   ];
 
   seedConversation(venture.id, [
-    { role: "founder", content: "Find the narrowest product truth worth testing overnight.", minute: 2 },
+    { role: "founder", betId: "overnight-bet-evidence", content: "Find the narrowest product truth worth testing overnight.", minute: 2 },
     { role: "teammate", teammateRef: "scout", betId: "overnight-bet-evidence", content: "The repository supports a recurring-handoff promise; the broad automation claim is not evidenced.", minute: 11 },
     { role: "teammate", teammateRef: "closer", betId: "overnight-bet-partial", content: "I saved the useful half before the connected account went away. Nothing was sent.", minute: 32 },
   ], options);

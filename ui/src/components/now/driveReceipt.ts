@@ -93,10 +93,26 @@ export function readReplyReceipt(result: ConversationReplyResult): DriveReceipt 
         : "Standing approval saved.";
       break;
     case "close":
+    case "close-thread":
       headline = result.ended ? "This direction is closed — what it produced is kept." : "Closing this direction.";
       break;
     case "new-direction":
       headline = "A new direction is underway.";
+      break;
+    case "stop-run":
+      headline = result.stoppedRunRef ? "Stop requested — the rest of this thread stays active." : "Drover needs a more specific run to stop.";
+      break;
+    case "parallel-attempts":
+      headline = result.needsFounderJudgment ? "Drover needs the two participants you mean." : "Independent attempts are underway in this thread.";
+      break;
+    case "critique":
+      headline = result.needsFounderJudgment ? "Drover needs the exact work to critique." : `${result.teammateRef ?? "A participant"} is critiquing the returned work.`;
+      break;
+    case "involve-participant":
+      headline = result.needsFounderJudgment ? "Drover needs the participant you mean." : `${result.teammateRef ?? "A participant"} is joining this thread.`;
+      break;
+    case "observe":
+      headline = "Returned evidence checked.";
       break;
     default:
       headline = "Your steer is in — Drover is adjusting course.";

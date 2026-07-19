@@ -74,6 +74,21 @@ describe("NowComposer contextual routing", () => {
     expect(replyInConversation).not.toHaveBeenCalled();
   });
 
+  it("keeps the thread composer on the nonblocking conversation surface", async () => {
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:one" } as ConversationReplyResult);
+    render(
+      <NowComposer
+        ventureId="v1" ventureName="Acme"
+        selection={{ betId: null, workRef: null, teammateRefs: [], threadRef: "thread:one" }}
+        scopeLabel="Audit the shell" hasWork variant="dock" submissionMode="conversation" onDriven={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Stop Claude" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", { message: "Stop Claude", threadRef: "thread:one" }));
+    expect(driveTeammate).not.toHaveBeenCalled();
+  });
+
   it("CORRECTS exact work through /drive without dropping its work reference", async () => {
     driveTeammate.mockResolvedValue(result({ handoff: handoff({ stagedBetIds: ["bet-1"] }) }));
     render(

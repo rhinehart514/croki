@@ -210,6 +210,10 @@ export type WorkIndexItem = {
   reviewedThrough: string | null;
   latestMeaningfulEvent: { kind: string; ref: string; at: string | null; summary: string | null };
   runRefs: string[];
+  pinnedAt: string | null;
+  participantRefs: string[];
+  activeParticipantRefs: string[];
+  matchRefs?: Array<{ kind: "message" | "artifact" | "evidence" | "decision"; ref: string; label: string }>;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -254,12 +258,80 @@ export type WorkIndex = {
   revision: number;
   items: WorkIndexItem[];
   outline?: WorkIndexOutline;
-  counts: { total: number; attention: number; active: number; unread: number };
+  counts: { total: number; attention: number; active: number; unread: number; matchCount: number };
   legacy: { unindexedRunCount: number };
 };
 
-export const getWorkIndex = (ventureId: string) =>
-  get<{ workIndex: WorkIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/work-index`);
+export const getWorkIndex = (ventureId: string, query = "") =>
+  get<{ workIndex: WorkIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/work-index${query ? `?q=${encodeURIComponent(query)}` : ""}`);
+
+export const setThreadPinned = (ventureId: string, threadRef: string, pinned: boolean) => {
+  const threadId = threadRef.replace(/^thread:/, "");
+  return guardedPut<{ item: WorkIndexItem; workIndex: WorkIndex }>(
+    `/api/ventures/${encodeURIComponent(ventureId)}/threads/${encodeURIComponent(threadId)}/pin`,
+    { pinned },
+  );
+};
+
+export type VisualReference = {
+  kind: "preview" | "diff" | "flow" | "comparison" | "map" | "evidence" | "consequence";
+  ref: string;
+  threadRef: string;
+  title: string;
+  relatedRefs?: string[];
+};
+
+export type RichArtifactPayload =
+  | {
+      kind: "flow";
+      steps: Array<{ id: string; label: string; detail?: string }>;
+      edges: Array<{ from: string; to: string; label?: string }>;
+    }
+  | {
+      kind: "comparison";
+      variant: "before-after" | "alternatives";
+      columns: Array<{
+        id: string;
+        title: string;
+        items: Array<{ label: string; detail?: string; artifactRef?: string }>;
+      }>;
+    };
+
+export type ThreadAgentStatus = {
+  participantRef: string;
+  participantLabel?: string | null;
+  state: "queued" | "working" | "stopping" | "complete" | "failed";
+  runRef: string;
+  betRef: string | null;
+  activity?: string | null;
+  startedAt?: string | null;
+  updatedAt: string | null;
+};
+
+export type ThreadTimelineItem = {
+  kind: "message" | "agent-status" | "artifact" | "comparison" | "evidence" | "consequence" | "activity-summary" | "return-summary";
+  id: string;
+  ref: string;
+  at: string | null;
+  visual?: VisualReference;
+  [key: string]: unknown;
+};
+
+export type ThreadTimeline = {
+  ventureId: string;
+  revision: number;
+  thread: WorkIndexItem;
+  items: ThreadTimelineItem[];
+  agents: ThreadAgentStatus[];
+  visuals: VisualReference[];
+};
+
+export const getThreadTimeline = (ventureId: string, threadRef: string) => {
+  const threadId = threadRef.replace(/^thread:/, "");
+  return get<{ timeline: ThreadTimeline }>(
+    `/api/ventures/${encodeURIComponent(ventureId)}/threads/${encodeURIComponent(threadId)}/timeline`,
+  );
+};
 
 export const markWorkIndexReviewed = (ventureId: string, item: WorkIndexItem) => {
   const threadId = item.threadRef.replace(/^thread:/, "");
@@ -358,23 +430,28 @@ export const getConversation = (ventureId: string) =>
 // existing seams server-side. `betId` scopes the reply to the effort it answers. INTEGRATION POINT:
 // added to the shared api.ts; a conversation component calls this instead of a per-purpose button set.
 export type ConversationReplyResult = {
-  act: "steer" | "approve" | "approve-standing" | "close" | "new-direction";
+  act: "steer" | "stop-run" | "involve-participant" | "parallel-attempts" | "critique" | "approve" | "approve-standing" | "close-thread" | "close" | "new-direction" | "observe";
   betId?: string | null;
   messageId?: string;
   applied?: string;
   ended?: boolean;
   teammateRef?: string;
+  threadRef?: string;
+  accepted?: boolean;
+  stoppedRunRef?: string;
+  needsFounderJudgment?: boolean;
   why?: string;
   waitingItemId?: string | null;
   grant?: { actType: string; grantedAt: string } | null;
   note?: string;
+  evidence?: { polled?: number; ingested?: unknown[]; reason?: string };
   outcome?: { kind?: string; summary?: string };
   messages?: FirmConversationMessage[];
 };
 
 export const replyInConversation = (
   ventureId: string,
-  body: { message: string; betId?: string | null },
+  body: { message: string; threadRef?: string | null; betId?: string | null },
 ) => guardedPost<ConversationReplyResult>(
   `/api/ventures/${encodeURIComponent(ventureId)}/conversation/reply`,
   body,
@@ -387,9 +464,10 @@ export const replyInConversation = (
 // unsubscribe function that closes the connection.
 export type FirmStreamEvent = {
   ventureId: string;
-  kind: "lens" | "conversation" | "drive" | "wall" | "outcome";
+  kind: "lens" | "conversation" | "drive" | "wall" | "outcome" | "timeline";
   at: string;
   betId?: string;
+  threadRef?: string;
 };
 
 export function subscribeVentureEvents(
@@ -406,7 +484,7 @@ export function subscribeVentureEvents(
       /* a malformed frame is ignored; the poll fallback still refreshes the surface */
     }
   };
-  for (const kind of ["lens", "conversation", "drive", "wall", "outcome"]) {
+  for (const kind of ["lens", "conversation", "drive", "wall", "outcome", "timeline"]) {
     source.addEventListener(kind, relay as EventListener);
   }
   source.onopen = () => onStateChange?.("open");
@@ -423,6 +501,9 @@ export type FirmActiveDrive = {
   startedAt: string;
   abortSupported: boolean;
   abortRequestedAt: string | null;
+  activity?: string | null;
+  currentStageId?: string | null;
+  lastBeatAt?: string | null;
 };
 
 export const getActiveDrives = (ventureId: string) =>

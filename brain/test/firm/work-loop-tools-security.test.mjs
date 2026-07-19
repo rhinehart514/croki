@@ -32,6 +32,7 @@ import { describe, it } from "node:test";
 import { buildToolSet } from "../../src/firm/work-loop-tools.mjs";
 import { createVenture, setVentureDoc, getVentureDoc } from "../../src/firm/venture-store.mjs";
 import { createBet } from "../../src/firm/bet.mjs";
+import { ensureDirectionThread, getSemanticModel } from "../../src/firm/semantic-model-store.mjs";
 
 function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-stage-outward-security-")) };
@@ -55,6 +56,27 @@ async function setup(options) {
 }
 
 describe("staged work — stable identity and participant attribution", () => {
+  it("joins an approach opened during a run to the existing direction immediately", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "One conversation" }, options);
+    const thread = ensureDirectionThread(venture.id, { name: "Improve onboarding", identityKey: "founder-message" }, options);
+    const taste = await import("../../src/firm/taste.mjs");
+    const ventureStore = await import("../../src/firm/venture-store.mjs");
+    const { tools } = buildToolSet({
+      ventureId: venture.id,
+      teammateRef: "founding-teammate",
+      options,
+      taste,
+      ventureStore,
+      deps: {},
+      target: { threadRef: thread.threadRef },
+    });
+
+    const opened = await tools.find((tool) => tool.name === "fork_bet").run({ intent: "Try job-first setup" });
+    const canonical = getSemanticModel(venture.id, options).threads.find((item) => `thread:${item.id}` === thread.threadRef);
+    assert.ok(canonical.subjectRefs.includes(`bet:${opened.id}`));
+  });
+
   it("revises one durable work record and preserves owner/contributor attribution", async () => {
     const options = freshRoot();
     const firstDrive = await setup(options);

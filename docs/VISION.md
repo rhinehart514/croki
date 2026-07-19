@@ -1,64 +1,156 @@
 # VISION — Drover
 
-**Reconciled:** 2026-07-17.
+**Reconciled:** 2026-07-19.
 [`FIRM-SPEC.md`](FIRM-SPEC.md) owns durable product physics. [`STATE.md`](STATE.md) records proof.
 
-## The destination
+## The thesis
 
-**Drover makes the full Product and go-to-market system visible, understandable, manipulable, and
-executable by one founder.**
+**Vibe coding made product development continuous and aggressive. Drover makes Product and go-to-market
+develop together with the same speed, structure, and compounding intelligence.**
 
-The venture canvas is the founder's durable visual model of the company. One continuous venture
-conversation and persistent scoped branches direct and interrogate it. Claude and Codex expand what the
-founder can accomplish, but do not decide what the venture should pursue or become a simulated staff.
+Drover is a Product and GTM Development Environment for founders building with agents. It is where one
+founder continuously develops, runs, releases, observes, and improves both the product and the system that
+distributes it.
 
-Product and go-to-market remain distinct territories over one canonical open model. The founder can trace
-how a market need relates to a Product promise, how a capability supports that promise, how a campaign or
-asset carries it outward, what evidence returned, and what understanding changed.
+The founder's mental model is:
 
-## The experience
+> **I am continuously developing and releasing my product and its path to market in one environment.**
 
-A founder binds a venture to real Product truth and gives one direction. Drover makes its interpretation and
-operating freedom visible, composes useful work, and may generate a complete provisional visual model in the
-same turn. The founder can manipulate it directly or correct it in ordinary language.
+The founder is not managing an agent org chart, maintaining workflow diagrams, chatting about marketing,
+or handing a finished product to a downstream GTM function. Product capability and market understanding
+advance as one evidence-returning venture system.
 
-Understand, Design, Execute, and Learn are reversible lenses, not stages. Generated visual answers are
-temporary unless explicitly saved as synchronized live views, captured as immutable snapshots, or promoted
-into canonical truth.
+```text
+Product capability
+        ↕
+Customer and market understanding
+        ↕
+Positioning and offer
+        ↕
+Distribution workflows
+        ↕
+Released actions
+        ↕
+Returned evidence
+```
 
-Deep artifacts open in a temporary workbench while canvas, conversation, selection, and relationships stay
-intact. Multiple agents may work in parallel within the direction's scope; their scopes, branches, artifacts,
-verification, and provenance remain inspectable and steerable without turning the canvas into an org chart.
+## The wedge
 
-Safe inward work may proceed after the founder starts it. Sends, publish, deployment, spending, destructive
-or irreversible acts, ambiguous material canonical changes, and ending active work remain with the founder.
+Agentic product development is continuous, cheap to iterate, parallel, inspectable, branchable, and
+shippable every day. Distribution remains episodic, manual, fragmented across tools, weakly connected to
+product changes, and poor at retaining evidence. Product capability compounds; GTM knowledge usually does
+not.
 
-## Why this compounds
+Drover applies the development-environment approach to the whole product-to-market system. It makes product
+and distribution work branchable, inspectable, executable, verifiable, releasable, observable, and
+refactorable without weakening the native capabilities of Claude or Codex.
 
-Every use can leave durable cited Product truth, evidence, interpretations, exact artifacts, reusable views,
-workflow contracts, founder decisions, and provenance. The venture becomes easier to understand and act on
-because its history and relationships accumulate without fragmenting into chats, boards, dashboards, or
-provider-owned state.
+## The primary unit of market movement
 
-A portfolio may later place several isolated ventures behind the same founder authority. Portfolio breadth
-is an application of the model, not Drover's category definition. Ventures never bleed; only explicit,
-permissioned patterns may cross.
+A direction is an instruction. A thread preserves founder continuity. A workflow is an executable
+mechanism. An agent is a runtime participant. **A release is the unit that changes what the product can do
+or carries value into the market.**
+
+In Drover, a release can join:
+
+```text
+Release
+├── Product change or capability
+├── Intended customer consequence
+├── Positioning and claims
+├── Target audience
+├── Distribution workflows
+├── Campaigns and assets
+├── External actions
+├── Measurement
+└── Returned evidence
+```
+
+These are open, earned relationships over the canonical venture model, not a mandatory form or closed
+release schema. A deployment, campaign, or asset without a credible value consequence and evidence path is
+incomplete market movement.
+
+## The dominant loop
+
+```text
+Understand where the venture stands
+        ↓
+Choose what should become true next
+        ↓
+Develop the product and distribution response
+        ↓
+Run coordinated agent work
+        ↓
+Review and release exact consequences
+        ↓
+Observe product and market evidence
+        ↓
+Change the venture's understanding
+        ↓
+Release again
+```
+
+Drover should feel aggressive because it continuously finds and completes the next credible loop, not
+because it displays more agent activity. More code, content, tool calls, or campaigns without a release and
+returned evidence is not greater velocity.
+
+## What compounds
+
+Every loop can strengthen five durable layers:
+
+1. Product understanding: real capabilities, value-producing experiences, repository changes, and
+   unsupported promises.
+2. Market understanding: responsive audiences, recurring problems, resonant language, objections, offers,
+   and working routes to market.
+3. Distribution capability: reusable discovery, research, content, outbound, launch, reply-capture,
+   conversion, and activation mechanisms.
+4. Execution history: exact attempts, participants, tools, outputs, cost, external acts, failures,
+   recoveries, and promoted mechanisms.
+5. Strategic judgment: strengthened and weakened assumptions, stale beliefs, stop/scale decisions, and the
+   next release worth making.
+
+A normal automation platform reruns workflows. Drover makes the venture better at releasing every time a
+workflow runs.
+
+## The founder experience
+
+Conversation is the command surface. The founder opens a venture or thread, gives direction, watches
+meaningful work, inspects visual material when useful, and continues steering through the same chat. The
+thread rail preserves continuity. Visuals open as inspectable, interactive work products beside chat. The
+canonical venture model keeps Product, go-to-market, evidence, code, decisions, releases, and consequences
+connected behind the interface.
+
+The venture map is a summoned visual of the living Product × Distribution system. It should answer what
+value exists, who receives it, which claims and offers connect them, which workflows operate, what is
+blocked, what evidence returned, where the system is disconnected, and what should be released next. It is
+not the founder's permanent operating surface.
+
+## The central design rule
+
+> **Every meaningful product change creates a distribution question, and every meaningful market return
+> creates a Product or GTM consequence.**
+
+A feature creates a question about who should know and why. An objection creates a question about product,
+offer, positioning, or targeting. A working campaign can become reusable distribution capability. An unused
+capability requires tracing experience, positioning, audience, and distribution together.
 
 ## What never changes
 
 - Work starts only from explicit founder direction or a founder-invoked workflow.
 - Autonomy is bounded to that direction or workflow.
-- The canvas is the main founder surface; conversation directs and interrogates it.
+- Chat is the operating surface; the rail preserves threads; visuals open beside chat.
 - Product and go-to-market share one canonical model without losing their distinction.
+- Releases carry product and market consequences together; returned evidence changes future judgment.
 - Facts, evidence, and interpretation remain separate.
 - Generated structure remains provisional until authority or evidence strengthens it.
 - Every major action is reversible until it crosses into the world.
-- Exact world-touching consequences remain founder-held.
+- Exact world-touching consequences and ending active work remain founder-held.
 - Ventures remain isolated, local-first, readable, and transferable.
 
 ## Proof standard
 
 Passing deterministic tests proves mechanics, not the company. Alpha is proven only when an outside founder
-can bind a real venture, understand and manipulate its Product/go-to-market model, direct bounded work,
-inspect Claude/Codex provenance, authorize a real consequence, receive evidence, see what understanding
-changed, and decide what to do next without intervention.
+can bind a real venture, choose what should become true, direct Product and GTM work in one thread, inspect
+agent provenance and visual work, authorize an exact release, receive attributable product or market
+evidence in the originating thread, see what understanding changed, and decide the next release without
+intervention.

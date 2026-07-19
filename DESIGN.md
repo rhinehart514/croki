@@ -1,471 +1,265 @@
 ---
-product: Drover
-surface: desktop-founder-workbench
-stage: alpha
-north_star: "Work is the primary object: its conversation directs it, its material proves it, and the canvas is a summoned map."
-layout: "Resizable Product/GTM venture outline beside one continuous work thread with inline material; the venture graph is a summoned map"
-signature_interaction: founder-direction-materializes-a-provisional-venture-model-and-useful-work
-token_source: ui/src/index.css
-system_record: docs/design/DESIGN.md
-target_viewports:
-  - 1440x900
-  - 1280x800
-last_reconciled: 2026-07-18
+surface: desktop-founder-chat
+authority: intended-experience
+date: 2026-07-19
+north_star: chat-is-the-operating-surface
+layout: thread-rail-persistent-chat-optional-visual
 ---
 
-# Drover experience doctrine
-
-## Authority
-
-[`docs/FIRM-SPEC.md`](docs/FIRM-SPEC.md) defines product and build physics. [`docs/STATE.md`](docs/STATE.md)
-records what the current tree proves. This file owns the intended Electron desktop experience. It does not
-turn aspiration into implementation proof.
-
-[`ui/src/index.css`](ui/src/index.css) is the production token source. [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
-is the extracted current-code design-system record. Other `docs/design/` files are research or historical
-receipts unless this file explicitly adopts them.
+# Drover desktop experience
 
 ## North star
 
-**Drover makes the full product and go-to-market system visible, understandable, manipulable, and
-executable by one founder.**
+Drover is a true agentic development environment for building a venture. Conversation is the command,
+coordination, return, correction, and approval surface. Visual work appears inside that conversation and,
+when it needs more room, beside it.
 
-> **Work is the primary object. Its conversation carries intent, its material proves consequence, and the
-> canvas is a map the founder summons when causal or spatial understanding helps. Claude and Codex expand
-> what the founder can accomplish.**
+> **Chat is the operating surface. Visuals are inspectable, interactive outputs of the conversation. The
+> thread rail preserves continuity. The canonical venture model supplies memory behind the interface.**
 
-Drover is not a dashboard, task manager, chat wrapper, workflow-node builder, agent org chart, or diagram
-that the founder must maintain. It is a founder-native agent development environment: a precise adaptive
-workbench where intent, work, returned material, and founder consequence form one continuous thread, plus a
-durable visual model of the company the founder can summon as a map when it adds understanding.
+The thread is where the founder directs and understands work. The release—not the thread, workflow, or
+agent—is what moves the venture: rich messages and the stage should make the joined Product delta, customer
+consequence, distribution mechanism, founder-held act, measurement, and returned evidence legible without
+forcing a release form into every conversation.
 
-The primary return moment answers within ten seconds:
+The founder opens a venture or thread, says what they want, watches meaningful agent progress, inspects
+material when useful, and continues directing the work through the same conversation. The founder never has
+to operate the company by dragging nodes or maintaining a Product/go-to-market graph.
 
-1. What changed while the founder was away?
-2. Which work and agents are active, and where?
-3. What needs the founder's judgment?
-4. What exact artifacts or changes came back?
-5. What crossed into the world?
-6. What evidence returned?
-7. What understanding should change next?
+## Permanent frame
 
-The composer remains continuously available, but after first use it is not the hero. A capable venture
-opens by showing what moved and what it means.
+The default desktop frame is a two-column grid:
 
-## Experience principles
+- thread rail: `240px`, resizable from `208px` to `320px`;
+- chat: all remaining width;
+- no permanent right panel, dashboard, canvas, or workbench.
 
-### The workbench is the center; the canvas is a summoned map
+The chat surface owns the full remaining area. Message content may cap its reading width for legibility.
 
-The resting surface is the adaptive workbench: it shows where things stand, and when the founder selects a
-direction / run / artifact / decision it opens the best representation for that work. The founder's durable
-visual model of the company — the canvas — is one action away as a summoned `map` mode; descending from it
-hands the founder back to the selected work. The graph is never the permanent center or the primary
-navigation model, and it is not a page the founder must maintain.
+When a visual is deliberately opened, the frame becomes:
 
-### Conversation is the intelligence layer
+- rail: its current width;
+- chat: `clamp(420px, 34vw, 520px)`;
+- visual: the remaining width, normally 55–65% of the post-rail area.
 
-Conversation handles ambiguity, reasoning, critique, generation, and direction. It never becomes the only
-place where important Product or go-to-market understanding exists.
+Chat never disappears. Opening a visual does not create a route or product mode. It preserves the selected
+`threadRef`, chat position, and composer draft, and stores presentation state only on the local machine.
+`Esc` closes the visual and returns focus to the control that opened it.
 
-> **Conversation carries intent. The workbench holds consequence. The map exposes relationships.**
+Below an effective width of `960px`, including browser zoom, the rail becomes a keyboard-accessible launcher.
+Chat and an open visual divide the viewport evenly with a `320px` minimum each. Horizontal space may scroll;
+the conversation must not collapse or vanish.
 
-### Stable orientation, adaptive depth
+## Startup and return
 
-The founder always knows where they are. Complexity appears through semantic zoom, selection, generated
-lenses, and adaptive workbench representations, not permanent clutter or false simplicity.
+Open the last active venture, then its last active thread. Restore its last deliberately open visual when the
+viewport has room; otherwise leave that visual available from its originating message.
 
-### Direct control remains available
+An obsolete session saved in map mode migrates to its linked thread with no visual open. No legacy product
+mode survives migration.
 
-The founder can manipulate the venture directly. Claude and Codex resolve ambiguity; they do not confiscate
-control behind prompts and regeneration.
-
-### Progress means the venture changed
-
-Agent busyness is not progress. Progress is improved understanding, a formed artifact, changed
-implementation, a discovered contradiction, returned evidence, a founder decision, or a revised Product or
-go-to-market model.
-
-## The one desktop frame
-
-Drover ships one Electron founder workspace.
-
-On return, Drover reopens the founder's last active venture and restores that venture's prior scope and
-work/map mode. A portfolio chooser is not a normal launch step. Repository connection appears only when no
-venture exists or when the founder explicitly starts another venture from the workspace switcher.
-
-### Venture outline
-
-A compact left side makes the venture's durable operating model obvious through:
-
-- two calm workspace roots: **Product** and **Go-to-market**;
-- founder thought/work threads as the primary rows directly beneath those roots;
-- status and recency readable inline, like a project/thread browser rather than an inbox;
-- neutral or genuinely unscoped threads kept in a collapsed Venture context without being guessed into
-  either territory.
-
-This is a projection of the canonical venture model, never a manually maintained folder taxonomy or second
-truth store. Direction, experiences, capabilities, systems, releases, audiences, positioning, offer,
-distribution, launches, and evidence organize and inform each thread; they do not become mandatory rail
-levels. The ontology should disappear until it materially disambiguates work. `Needs you` and search filter
-the same threads rather than opening a duplicate inbox. The edge is resizable and remembers its founder-set
-width.
-
-Selecting a thread opens its work in the center and scopes the composer. Addressable canonical objects with
-no attached thought can appear as startable rows; selecting one opens its current durable meaning. A new
-founder direction from that scope becomes its durable thought thread. Returning later continues the exact
-thread identity; it does not mint an accidental sibling.
-
-### Conversation
-
-Each venture has one continuous top-level conversation. A product surface, capability, system, audience,
-campaign, artifact, direction, evidence item, or saved view may have a persistent scoped branch. Branches
-inherit venture context without fragmenting the venture into separate workspaces.
-
-With no work selected, the index reports the whole-venture conversation as compact context. With work
-selected, its scoped branch and exact material occupy one chronological work thread. Alternate
-representations may switch the selected result in place; no permanent inspector competes with the thread.
-Scope changes never fork the source of truth. Important founder turns, model
-interpretations, consequential returns, decisions, and evidence remain visible; raw work logs live behind
-disclosure.
-
-### Adaptive workbench center
-
-The permanent center is the adaptive workbench. With no selection, `VentureHome` gives the founder the
-resting operating picture: where active directions stand, what returned, and what needs judgment. Selecting
-a direction, run, artifact, or decision opens one continuous editorial work thread. Conversation, work
-events, exact material, verification, decisions, releases, evidence, and learning appear in causal order.
-Compact result views may expose diffs, previews, comparisons, or exact consequences without becoming a
-second permanent region or hiding the thread that produced them.
-
-The workbench preserves selection, conversation scope, composer scope, and the route back to the wider
-venture. It is not a temporary overlay and does not depend on a canvas remaining mounted behind it.
-
-### Summoned map
-
-One explicit action replaces the workbench center with the venture map. The founder may pan, zoom, select,
-arrange, group, create, connect, and compare there. Map selection preserves the same workspace and composer
-scope. Double-click or Enter descends from the selected map object back into its workbench representation;
-the map unmounts rather than dimming behind an overlay. Escape first returns from map to work, then broadens
-selection or depth until `VentureHome` is restored.
-
-The map projects the one canonical venture model and never owns a second business-truth store.
-
-> **The workbench holds the work. The map supplies spatial and causal meaning.**
-
-### Contextual founder gate
-
-The founder boundary appears on the exact object, artifact, or release that needs a decision. It may expand
-into the workbench but never becomes a separate inbox product. A clear boundary stays quiet.
-
-## Experience laws
-
-### 1. Cursor-like frame, venture-specific center
-
-The frame borrows Cursor's high-level interaction physics: persistent sessions, scoped context, parallel
-work, exact review, visible evidence, and keyboard-first control. The center is not files or an agent list;
-it is the evolving causal model of a venture.
-
-### 2. One venture conversation with persistent branches
-
-The root conversation and scoped branches share one durable record. Scope changes the projection, not the
-source of truth.
-
-### 3. Selection scopes the entire environment
-
-Selecting an object:
-
-1. focuses it visually;
-2. reveals relevant relationships;
-3. scopes the composer;
-4. surfaces its existing branch;
-5. restores related artifacts and work;
-6. keeps the wider venture visible.
-
-Selection never sends the founder to a disconnected details page.
-
-### 4. Progressive depth changes representation
-
-Zoom is semantic, not merely geometric.
-
-- **Far:** venture intent, Product value, go-to-market reach, active pressure, founder-held consequence,
-  and returned reality.
-- **Middle:** relationships, components, capabilities, audiences, campaigns, work, conflicts, and evidence.
-- **Near:** exact artifacts, implementation, telemetry, decisions, provenance, contributors, verification,
-  and line-level differences.
-
-Tiny text is never a substitute for meaningful level-of-detail behavior. The deterministic outline preserves
-access to every object at every altitude.
-
-### 5. Product and go-to-market can reorganize into operating view
-
-The free canvas has two permanent territories: Product and go-to-market. One action rearranges the same
-objects into the Understand / Design / Execute / Learn lens defined by `FIRM-SPEC.md`. The lens is not a
-process. Returning restores the exact free layout, camera, scope, and selection.
-
-### 6. Generated visual answers are temporary
-
-A question such as “Show why our positioning is unsupported” may temporarily rearrange relevant claims,
-capabilities, evidence, campaigns, and contradictions. Dismissal restores the prior view exactly. Generated
-layouts never overwrite founder placement.
-
-The founder may explicitly save the result as a synchronized live view, capture an immutable snapshot, or
-promote selected findings into canonical truth.
-
-### 7. Direct manipulation uses hybrid semantics
-
-Clear, cheap, reversible gestures apply immediately: move, resize, rename, edit, visual group, soft delete
-and restore, save, promote, and connect an obvious relationship.
-
-Ambiguous or consequential gestures expose Drover's interpretation before semantic truth changes:
+When the venture has no used thread, show a lightweight conversation home using the same composer:
 
 ```text
-You connected “AI audit” to “Buffalo contractors.”
+Drover
 
-Drover understands:
-This offer is designed for this audience.
+Since you left:
+• one result is ready for review
+• two agents are still working
+• one assumption was challenged
 
-Apply · Change relationship · Keep visual only
+What do you want to work on?
 ```
 
-No schema form or configuration wizard is required.
+The summary is derived only from unread consequences, returned evidence, failures, and active runs. Show no
+more than three truthful suggested review actions. The founder can always type a fresh direction instead.
 
-### 8. Creation is open
+## Thread rail
 
-The founder may type, paste, draw, group, connect, or ask Claude/Codex without choosing a type first.
-Suggested roles remain quiet. Promotion names the behavior it unlocks: bind to repository implementation,
-use as a capability, track as a campaign, attach telemetry, execute through a channel, or provide agent
-context.
+The rail is continuity, not an ontology browser. Its order is:
 
-### 9. Detail resolves in the permanent workbench
+1. venture switcher;
+2. New thread;
+3. Search;
+4. Pinned, only when explicit pins exist;
+5. open Threads;
+6. compact agent counts;
+7. closed History grouped by Today, Yesterday, Last 7 days, and Older;
+8. Settings.
 
-Selection preserves enough local context to understand the object in the map, then Enter or double-click
-returns to the permanent workbench for the best available representation. Precision does not open a second
-overlay or leave a dimmed map mounted behind the work.
+Do not permanently render Product, Go-to-market, audiences, campaigns, releases, evidence, code, or other
+canonical object levels as navigation folders. They remain searchable, referenceable system memory and
+material that can open beside chat.
 
-### 10. Agent visibility is adaptive
+Open thread order is: founder attention, active work, unread result, then recency. Thread state uses an icon,
+label, and accessible text—not color alone:
 
-By default, Drover surfaces consequential progress only:
+- active;
+- waiting for founder judgment;
+- failed or interrupted;
+- unread result;
+- quiet open;
+- closed.
 
-- approach formed;
-- evidence found;
-- artifact ready;
-- contradiction discovered;
-- implementation changed;
-- verification completed;
-- decision required.
+New thread creates a local draft only. The canonical Thread forms when the founder sends the first direction.
+Pinning is an explicit row action ordered by `pinnedAt`; Drover invents no default pins.
 
-The founder may descend into model interpretation, gathered context, approaches, sources, tools,
-verification, cost, failures, and blockers. Agent identity never becomes the canvas's primary content.
+Search covers thread title, referenced messages, visual bodies and titles, evidence and outcomes, and
+decisions. Opening a match restores its owning thread and, for material matches, opens the matched visual.
 
-When several agents work, the canvas shows their claims on real scopes, dependencies, branches, conflicts,
-and artifacts. The founder can inspect, steer, stop, or redirect each run. Completed agents collapse into
-provenance rather than becoming permanent fictional employees.
+## Chat
 
-### 11. Every visible claim has provenance
+The thread header contains:
 
-The interface distinguishes founder-established truth, repository-backed truth, measured evidence, model
-inference, conflict, weak or stale interpretation, unsupported relationship, and historical state. Color is
-never the only signal; text, icon, shape, line treatment, and position carry the distinction.
+- title;
+- lifecycle or attention status;
+- active participant statuses;
+- venture-map action;
+- a small menu for pin, rename, close, and receipts when those actions are backed by real contracts.
 
-### 12. Learning visibly changes understanding
+Selecting a participant status scrolls to that participant’s latest meaningful inline update. It never opens
+an agent dashboard.
 
-Evidence never disappears into analytics or a report. It strengthens, weakens, contests, or revises the
-relevant Product and go-to-market objects. The founder can see what changed because of what was learned.
+The composer stays attached to the bottom of the chat column and always submits against the selected
+`threadRef`. Runtime, model, and participant assignment remain inferred unless the founder names a
+participant. A correction sent while a visual is open updates the same thread and material.
 
-## Signature interaction: direction materializes the venture
+### Conversation information levels
 
-A broad direction such as “Help this venture grow” immediately creates a complete, editable provisional
-interpretation in the canonical venture model and begins useful inward work. The workbench shows the useful
-work and returns first; the founder can summon the map to inspect who may benefit, how Product value occurs,
-ways to reach people, campaigns worth trying, current evidence, missing links, and concrete Product or market
-work.
+The main conversation contains only:
 
-The structure is unmistakably inferred. It does not wait behind architecture approval, create empty
-containers, or silently become canonical. The founder can correct it directly or in ordinary language.
-Useful inward work begins in the same turn; every external consequence still waits for the founder.
+- founder directions and corrections;
+- Drover’s visible interpretation;
+- material progress and contradictions;
+- meaningful agent handoffs;
+- visual work products;
+- results, failures, evidence, and exact founder questions.
 
-The signature multi-agent moment is causal rather than theatrical: a founder direction branches into
-visible scoped work, agents produce inspectable artifacts, verification completes, exact consequences stop
-at the founder boundary, and returned evidence changes the venture model.
+Each run may add one collapsed activity disclosure, for example:
 
-## Direct interaction contract
+```text
+Codex inspected 18 files, changed 6, and ran 4 checks.
+[Show activity]
+```
 
-1. One click selects and preserves that scope across work and map.
-2. Double-click or Enter on the map returns to the selected work in the workbench.
-3. Escape broadens in order: map to work, then selection or representation depth to `VentureHome`.
-4. Typing with nothing selected directs the venture through `/drive`.
-5. Typing with selected work continues its durable conversation through `replyInConversation`.
-6. Dragging changes placement immediately.
-7. Obvious semantic connections apply directly and remain undoable.
-8. Ambiguous gestures expose interpretation before semantic truth changes.
-9. Generated layouts never overwrite founder layouts.
-10. Saving a view is explicit.
-11. Capturing a snapshot is explicit and immutable.
-12. Promoting an inferred finding is explicit and preserves provenance.
-13. Every external act presents the exact consequence.
-14. Switching between work and map never loses selection, conversation, or composer scope.
-15. Switching lenses never duplicates objects.
-16. Search reaches the entire venture model, evidence, conversations, views, snapshots, and work.
-17. Raw internal identifiers never become required founder vocabulary.
-18. Agent work attaches to the Product or go-to-market object it changes.
-19. A result without visible consequence or evidence is incomplete.
-20. Every major action is reversible until it crosses into the world.
+Full tool calls, sources, costs, runtime/model details, and low-level receipts remain available beneath that
+disclosure or in the side visual. They never stream through the primary conversation by default.
 
-## Work and return behavior
+## Rich conversation grammar
 
-Design first for leaving and returning. When the founder watches, show honest work rather than productivity
-theater:
+Model-generated prose always uses the shared markdown response renderer. Six domain projections may appear
+as first-class conversation items.
 
-- the visible interpretation and autonomy envelope;
-- a real plan or next action only when the runtime has one;
-- current consequential milestone and elapsed time;
-- durable artifacts as they form;
-- participant, runtime, model, cost, configuration, and verification as quiet receipts;
-- per-run redirect and stop only where the host can honor them;
-- a precise explanation when work is blocked, stale, offline, or budget-limited.
+### Live visual work
 
-No anonymous spinner, invented step list, looping avatar, ambient pulse, or activity metric may simulate work.
+Show a compact real preview, owner/contributor and verification states, and only actions supported by truth:
+Open, Compare, and View code.
 
-## Truth grammar
+### Before and after
 
-Lineage, chronology, attribution, causality, evidence, and interpretation are different visual claims.
+Show current/proposed or before/after columns in the conversation and open the full comparison beside it.
 
-- **Exact receipt:** a durable event Drover can prove.
-- **Evidence-supported join:** a real return linked to originating work by captured identity or evidence.
-- **Established truth:** explicitly adopted or edited by the founder.
-- **Repository-backed truth:** supported by a cited repository source.
-- **Measured evidence:** supported by telemetry, market response, revenue, or another captured observation.
-- **Model inference:** editable interpretation with visible source and uncertainty.
-- **Contested:** contradicted by evidence or another established claim.
-- **Stale:** no longer safely current.
-- **Unsupported:** an important claim or edge without defensible evidence.
-- **Historical:** preserved in a snapshot or prior revision.
+### Flow
 
-Every Product claim is one gesture from cited repository evidence or visibly labeled inference. Every market
-claim keeps its source, words, attribution strength, and uncertainty.
+Show an accessible ordered flow in chat. Its larger view may expose interactive nodes and edges without
+making that graph the operating surface.
 
-## Visual hand
+### Alternatives
 
-### Composition
+Show sibling attempts as approach cards derived from their existing bets/runs. Compare them side by side
+without duplicating their work records.
 
-This is a desktop founder workbench, not a responsive dashboard. The venture outline defaults to 256px,
-resizes between 208px and 420px, and remembers its width. Selected work divides the remaining field into a
-fluid narrative and a 360–540px exact-material panel. The permanent adaptive workbench owns the main field;
-the map replaces it only when explicitly summoned.
+### Evidence
 
-Product and go-to-market remain distinguishable territories without becoming rigid columns. The operating
-lens may temporarily align them. Relationships and whitespace create structure before cards and chrome do.
+Preserve original words or measured source, supports/challenges relationships, provenance, and uncertainty.
+Never flatten evidence into an invented score.
 
-### Color
+### Consequence review
 
-- `#171717` is the application ground; `#191919` and `#1c1c1c` separate chrome and material.
-- White at 6–10% carries hairlines, hover, selection, and recessed surfaces.
-- `#f5f5f5` through `#737373` is the compact operating text ramp.
-- `#4f86f7` marks primary action and focus.
-- Amber belongs to founder-held consequence; green to verified active work; red to destructive or failed states.
+Summarize the exact Product, go-to-market, code, and external effects. Opening the review grants nothing.
+Send, apply, deploy, spend, and destructive controls remain inside the precise founder gate and fail closed.
 
-Evidence conditions never rely on positive/negative sentiment color. Color is always reinforced by words,
-shape, icon, line treatment, or position.
+Every rich item needs honest loading, empty, partial, stale, failed, and long-content behavior.
 
-### Type
+## Agent presence and conversation commands
 
-- DM Sans Variable for headings, body, controls, and sustained reading.
-- JetBrains Mono, after the native SF Mono stack, for code, paths, revisions, identifiers, and exact diffs only.
-- The operating scale is compact: 11–14px for chrome and work metadata, with 16–26px reserved for focus.
+Agents are visible in context:
 
-Metadata stays readable. Tiny prose is not calm density.
+```text
+Claude  • exploring a job-first mental model
+Codex   • tracing the current implementation
+Browser ✓ current experience captured
+```
 
-### Material
+The founder can say:
 
-Near-black planes are ground. Readable operating content is opaque. Hairlines and spacing group content
-before another card does. The composer may use restrained blur because it floats over the stream; operating
-material does not. Popovers and transient tools may float one level. Modal elevation is reserved for an
-exact blocking consequence. No decorative gradients, glow, nested-card stacks, or elevation used as status.
+- “Stop Codex.” — abort only the matching active run;
+- “Have Claude critique what Codex built.” — start a Claude run in this thread with that material;
+- “Let both try independently.” — attach distinct attempts to the same Thread;
+- “Close this thread.” — end only with explicit founder authority.
 
-### Motion
+Ambiguous participants or targets produce a founder question. Approval language may surface the exact gate;
+it never executes the outward consequence itself.
 
-The motion personality is **fast settling with consequence**.
+## Optional visual
 
-- Workbench, map, work stream, material panel, and composer enter over 150–200ms with no travel beyond 6px.
-- Work-group expansion and selection change animate once; selected state remains static afterward.
-- Active-work indicators may pulse or rotate only while work is actually active.
-- Pan and zoom respond directly and stop quickly.
-- Focus travels from a selected landmark and Escape restores the exact prior camera.
-- Direction branches visibly separate.
-- An exact release travels only to its founder boundary.
-- Evidence returns along the defensible join and changes the affected object.
-- Semantic and operating views rearrange once and restore exactly.
-- No ambient drift, bouncing, parallax, decorative loops, or `transition: all`.
-- Reduced motion preserves every causal and status signal in the settled frame.
+The visual is a projection of the current thread’s material. Its registry supports preview, diff, flow,
+comparison, map, evidence, and consequence. It never owns business truth or changes conversation scope.
 
-## Founder language
+The venture map is one registered visual. Selecting a map object changes only local map inspection. Switching
+the conversation requires the explicit Open thread action. The map never replaces chat.
 
-Product-owned copy names the concrete object, artifact, audience, consequence, or evidence. Historical
-implementation terms such as `bet`, `fork`, `outcome`, `gtm-ide`, `pipeline`, `stage`, `work item`, or “the
-wall” never become required founder vocabulary.
+Product and go-to-market material may appear together when a promise, capability, campaign, or evidence
+record crosses that boundary. Drover should explain the mismatch or consequence in chat and let the founder
+inspect both materials beside it.
 
-Use verbs that name the exact effect: direct, investigate, refine, try another approach, compare, answer,
-release, apply change, authorize deploy, review evidence, keep, restore, end, or stop current work. Avoid
-generic Approve, Continue, Confirm, or Submit where a more truthful verb exists.
+## Visual language
 
-## Anti-laws
+The shell is a near-black editorial split. DM Sans carries the conversation; JetBrains Mono is reserved for
+receipts, identifiers, and exact code. `#4f86f7` is the single interaction accent. Borders and type hierarchy
+do more work than card chrome. Dense information remains quiet until it earns emphasis.
 
-Any of these is a design regression:
+Motion is causal and fast-settling:
 
-- autonomous-company theater;
-- an agent activity dashboard;
-- a task tracker with a decorative graph;
-- a CRM pipeline as the venture;
-- a workflow-node editor as the default experience;
-- chat that contains understanding unavailable elsewhere;
-- a canvas that requires taxonomy maintenance;
-- an AI org chart;
-- disconnected boards or duplicate models;
-- Understand/Design/Execute/Learn presented as a fixed process;
-- generated structure styled as truth;
-- confident edges without evidence;
-- empty-plan approval;
-- simplification that removes necessary depth;
-- complexity that cannot be manipulated;
-- a permanent property inspector;
-- miniaturized cards pretending to be semantic zoom;
-- stale data presented as live;
-- world-touching controls without a real executor.
+- opening and closing the side visual explains the spatial relationship to chat;
+- new material arrives without moving the composer;
+- focus restoration is deterministic;
+- no decorative looping motion;
+- reduced-motion preferences remove transforms and smooth scrolling.
 
-## Desktop and accessibility
+## Keyboard and accessibility
 
-The shipped founder product is Electron desktop. The browser is a development and deterministic-test
-harness. Judge at 1440×900 and 1280×800, plus browser zoom through 200%. No phone or tablet design work.
+- `Cmd/Ctrl+K` focuses venture-wide search.
+- `Esc` closes the open visual first and restores its originating control.
+- rail resize supports pointer and arrow-key adjustment.
+- the collapsed rail remains keyboard reachable.
+- all controls expose semantic roles, visible focus, accessible names, and non-color status text.
+- the conversation has log semantics, accessible auto-scroll, and an explicit scroll-to-latest control.
+- at 200% zoom, chat and an open visual remain present with at least `320px` each.
 
-- Every action is a semantic control with visible focus and an accessible name.
-- Selection, canvas navigation, branch navigation, search, outline traversal, workbench, and restoring the
-  wider venture have deterministic keyboard paths.
-- Zoom never removes access to the same information through outline, conversation, or search.
-- Loading, stale, offline, empty, partial, error, long content, dense scale, transport failure, and
-  founder-held states are explicitly designed.
-- Interactive targets, contrast, reduced motion, and screen-reader structure meet the global accessibility
-  floor.
+## Truth and authority
 
-## Shipping tests
+The interface projects one canonical venture model: Product, go-to-market, evidence, code, decisions,
+Threads, Runs, and consequences. Rich messages are projections over those records, not durable UI-message
+documents. Presentation memory never enters venture truth or export.
 
-Before shipping a founder-visible change, verify:
+Founder-only outward authority, venture isolation, evidence provenance, worktree review, and the founder’s
+exclusive right to end active work remain unchanged. Stale or offline state keeps the last coherent
+conversation readable and disables consequential mutation honestly.
 
-1. **Return:** can the founder answer the seven return questions within ten seconds?
-2. **Orientation:** does selection preserve the wider venture and restore the prior camera/scope?
-3. **Proof:** can every surprising claim reach its source or evidence in one gesture?
-4. **Truth:** can the founder distinguish established, repository-backed, measured, inferred, contested,
-   stale, unsupported, and historical states without color alone?
-5. **Action:** can they direct, branch, steer, stop, inspect, release, review, restore, and end through the
-   same context with exact consequences?
-6. **Product/GTM:** can they trace one Product value/change through a market artifact and release to returned
-   evidence and changed understanding?
-7. **Views:** can a generated view dismiss without mutation, save live, and snapshot immutably?
-8. **Authority:** does every external consequence stop at the real founder boundary and fail closed from
-   browser, model, MCP, stale, away, or forged contexts?
-9. **Failure:** does the product remain honest and recoverable through provider, network, transport,
-   migration, and dense-scale failures?
-10. **Substitution:** with the logo and brand color removed, do the canvas, conversation, evidence grammar,
-    Product/GTM traceability, and founder boundary still make the product recognizably Drover?
+## Acceptance
 
-Deterministic tests prove mechanics, not comprehension or market value. Alpha still requires a real founder
-using a real venture, completing a consequential Product/GTM loop, and returning without a walkthrough.
+The rebuilt shell is ready when deterministic journeys prove:
+
+1. startup restores the last thread or truthful venture conversation home;
+2. a founder direction produces interpretation and live participant status in one thread;
+3. visual work appears inline and opens beside chat;
+4. correction while it is open updates that same thread;
+5. independent attempts compare in one thread;
+6. one named participant can be stopped without stopping another;
+7. Product and go-to-market material can be inspected together;
+8. consequences wait at the founder boundary and do nothing without the exact host action;
+9. returned evidence appears in the originating thread and changes venture understanding;
+10. stale/offline state preserves readability and prevents unsafe mutation;
+11. the map opens beside chat and closes with `Esc`;
+12. the shell remains usable at 1440×900, 1280×800, and through 200% browser zoom.

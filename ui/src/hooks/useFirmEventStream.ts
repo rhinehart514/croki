@@ -33,6 +33,7 @@ export function useFirmEventStream(
     // `streaming` flips only from the subscription's async open/close callbacks (external-system
     // updates), never synchronously in the effect body — the reset on teardown is a callback too, so a
     // stale "streaming" is never shown for a torn-down subscription.
+    if (typeof subscribeVentureEvents !== "function") return undefined;
     const unsubscribe = subscribeVentureEvents(
       ventureId,
       (event) => handlerRef.current(event),

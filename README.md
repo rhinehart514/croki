@@ -1,8 +1,8 @@
 # Drover
 
-**The founder-controlled Product and go-to-market system.** Drover lets one founder direct, understand, and
-execute the whole venture — operating through directions, artifacts, work, evidence, and exact
-consequences, summoning a spatial canvas when it helps — while retaining authority at every world boundary.
+**A Product and GTM Development Environment for founders building with agents.** Drover makes Product and
+go-to-market develop together with the speed, structure, and compounding intelligence of vibe-coded
+software—while the founder retains authority at every world boundary.
 
 The product/build laws are [`docs/FIRM-SPEC.md`](docs/FIRM-SPEC.md). Current proof and known gaps are
 [`docs/STATE.md`](docs/STATE.md). The intended desktop experience is [`DESIGN.md`](DESIGN.md).
@@ -11,9 +11,9 @@ The product/build laws are [`docs/FIRM-SPEC.md`](docs/FIRM-SPEC.md). Current pro
 
 A venture binds to a real product repository and one readable local venture store. One canonical open
 model carries Product and go-to-market as permanent territories; objects, relationships, artifacts,
-releases, evidence, and insights keep the same identity across every view. The founder operates through an
-adaptive workbench — directions, artifacts, work, evidence, and exact consequences — and the spatial canvas
-is a projection summoned over that model when spatial or causal understanding helps.
+releases, evidence, and insights keep the same identity across every view. The founder operates through a
+thread rail and persistent chat. Previews, flows, comparisons, evidence, consequences, and the venture map
+open in an optional visual stage beside that conversation.
 
 One continuous venture conversation and persistent scoped branches direct and interrogate the venture.
 Selecting direction-backed work restores its conversation and representation and scopes the same composer
@@ -39,21 +39,16 @@ contests, or revises understanding. Facts, evidence, and interpretation remain s
 
 ## Current state
 
-The current working tree has **one** founder surface: `FirmApp.tsx` renders a venture picker or the single
-`VentureWorkspace` — there are no `?shell=` flags and no competing shells (the earlier immersive/Now/legacy
-shells were deleted). The shipped tree is **workbench-first**: a venture opens on the permanent adaptive
-workbench and its resting `VentureHome`; the graph is a summoned `map` mode, one action away, never the
-resting host.
+The current working tree has **one** founder surface: a thread rail beside persistent venture/thread chat,
+with an optional visual stage. There are no shell flags, permanent workbench, canvas mode, dashboard, or
+Product/GTM folder browser. Opening the venture map or another visual preserves the current conversation;
+Escape closes the stage and returns focus to its originating control.
 
-Map selection preserves the selected-work scope. Double-click or Enter returns to that work; Escape broadens
-from map to work, then from selection or representation depth to `VentureHome`. The same composer continues
-selected direction work through `replyInConversation` and starts unscoped work through `/drive`. The founder
-wall remains fail-closed.
-
-This is the implemented form of the ratified "canvas as a summoned projection" direction;
-`docs/FIRM-SPEC.md` and `DESIGN.md` describe the workbench-first hierarchy, and the complete local acceptance
-suite is green. See [`docs/STATE.md`](docs/STATE.md) for exact verified behavior, current defects, and
-unproven requirements.
+Every composer turn goes through the exact venture conversation and selected `threadRef`. Drover interprets
+the turn as direction, steer, stop, critique, parallel attempt, observation, approval, or explicit close.
+Safe inward work returns immediately to the founder while the participant continues in the same thread;
+the founder wall remains fail-closed. See [`docs/STATE.md`](docs/STATE.md) for exact verified behavior,
+current defects, and unproven requirements.
 
 Historical identifiers such as `gtm-ide`, `bet`, `fork`, `channel`, and `~/.gtm-ide` remain deliberate
 compatibility seams until an intentional migration proves safe. They are not product identity or required

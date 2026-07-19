@@ -52,6 +52,7 @@ vi.mock("@/api", async () => {
     putPlacement: vi.fn(),
     driveTeammate: vi.fn(),
     markFounderPresent: vi.fn().mockResolvedValue({ present: true }),
+    subscribeVentureEvents: vi.fn(() => vi.fn()),
   };
 });
 

@@ -57,18 +57,19 @@ test("dense generated maps contain 120 earned records without desktop overflow",
       await waitForDom(client, `innerWidth === ${expectedWidth} && innerHeight === ${expectedHeight}`, `${percent}% browser zoom did not settle`);
       const contained = await client.evaluate(`(() => {
         const map = document.querySelector('.venture-maps')?.getBoundingClientRect();
-        const center = document.querySelector('.venture-workspace-center')?.getBoundingClientRect();
+        const stage = document.querySelector('.visual-stage')?.getBoundingClientRect();
         return {
           pageOverflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
-          mapWithinCenter: Boolean(map && center && map.left >= center.left - 1 && map.right <= center.right + 1),
+          mapWithinStage: Boolean(map && stage && map.left >= stage.left - 1 && map.right <= stage.right + 1),
           map: Boolean(document.querySelector('.venture-maps')),
-          composer: Boolean(document.querySelector('.venture-workspace-dock .now-composer textarea')),
-          index: Boolean(document.querySelector('.venture-workspace .vw-index')),
+          composer: Boolean(document.querySelector('.thread-composer textarea')),
+          chat: Boolean(document.querySelector('.thread-conversation [role="log"]')),
+          rail: Boolean(document.querySelector('.thread-rail, .thread-rail-launcher')),
         };
       })()`);
       assert.ok(contained.pageOverflow <= 1, `${percent}% browser zoom introduced ${contained.pageOverflow}px page overflow`);
-      assert.equal(contained.mapWithinCenter, true, `${percent}% let the map escape the center frame`);
-      assert.deepEqual({ map: contained.map, composer: contained.composer, index: contained.index }, { map: true, composer: true, index: true });
+      assert.equal(contained.mapWithinStage, true, `${percent}% let the map escape the visual stage`);
+      assert.deepEqual({ map: contained.map, composer: contained.composer, chat: contained.chat, rail: contained.rail }, { map: true, composer: true, chat: true, rail: true });
     }
 
     await assertNoUnhandledRejections(client);

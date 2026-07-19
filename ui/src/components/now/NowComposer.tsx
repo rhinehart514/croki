@@ -47,6 +47,7 @@ export function NowComposer({
   autoFocus = false,
   focusRequest = 0,
   placeholder: placeholderOverride,
+  submissionMode = "auto",
   onClearScope,
   onDriven,
   onOpenResult,
@@ -66,6 +67,7 @@ export function NowComposer({
   // Optional placeholder override. The default (below) is unchanged, so every existing mount is
   // byte-identical; the venture canvas passes the spec's "Direct the venture".
   placeholder?: string;
+  submissionMode?: "auto" | "conversation";
   onClearScope?: () => void;
   // Called after a turn lands so the frame re-polls. The result is present for a /drive (start work) and
   // omitted for a scoped conversation reply (steer/answer/approve), which returns no DriveTeammateResult.
@@ -112,8 +114,12 @@ export function NowComposer({
     if (!goal || busy || readOnly) return;
     setBusy(true); setError(null); setReceipt(null); setDraft("");
     try {
-      if (route === "steer") {
-        const reply = await replyInConversation(ventureId, { message: goal, betId: selection!.betId });
+      if (submissionMode === "conversation" || route === "steer") {
+        const reply = await replyInConversation(ventureId, {
+          message: goal,
+          ...(selection?.betId ? { betId: selection.betId } : {}),
+          ...(selection?.threadRef ? { threadRef: selection.threadRef } : {}),
+        });
         setReceipt(readReplyReceipt(reply));
         onDriven?.();
       } else {
@@ -181,7 +187,7 @@ export function NowComposer({
             <button
               type="submit"
               className="now-composer-send"
-              aria-label={route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
+              aria-label={submissionMode === "conversation" ? "Send to this thread" : route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
               disabled={busy || readOnly || !draft.trim()}
             >
               <ArrowUp aria-hidden="true" />
@@ -206,7 +212,7 @@ export function NowComposer({
 
       <div className="now-composer-feedback" aria-live="polite">
         {speech.recording ? <span role="status">Listening…</span> : null}
-        {busy ? <span role="status">{route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
+        {busy ? <span role="status">{submissionMode === "conversation" || route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
         {error ? <span role="alert">{error}</span> : null}
         {readOnly && readOnlyReason && !error ? (
           <span className="now-composer-held" role="status">{readOnlyReason}</span>
