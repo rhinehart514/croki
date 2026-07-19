@@ -242,10 +242,12 @@
 .now-composer[data-busy="true"] .now-composer-shell { border-color: var(--green-2); }
 .now-composer-scope {
   display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  max-width: min(100%, 640px);
   padding: 2px 8px; border-radius: var(--r-tool);
   background: var(--green-tint); color: var(--green);
   font-size: var(--text-xs); font-weight: 550;
 }
+.now-composer-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-composer-scope button { background: none; border: none; color: inherit; cursor: pointer; padding: 0; display: inline-flex; }
 .now-composer-field { display: flex; align-items: flex-end; gap: var(--space-2); }
 .now-composer-field textarea {
@@ -435,19 +437,39 @@
 .now-view-option:hover { background: var(--n-hover); color: var(--n-ink); }
 .now-view-option[aria-checked="true"] { color: var(--n-ink); font-weight: 560; background: var(--n-sunk); }
 
-/* Approach comparison — each sibling attempt as a quiet clickable row, toned by its position. */
+/* Approach comparison — real work expands in place; steering is a separate, explicit action. */
 .now-approach {
   display: flex; flex-direction: column; gap: 4px; text-align: left; width: 100%;
   padding: var(--space-3); border: 1px solid var(--n-line); border-radius: var(--r-tool);
-  background: var(--n-panel); cursor: pointer;
+  background: var(--n-panel);
   transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
-.now-approach:hover { background: var(--n-hover); border-color: var(--n-ink-4); }
+button.now-approach { cursor: pointer; }
+button.now-approach:hover { background: var(--n-hover); border-color: var(--n-ink-4); }
+.now-approach-card { gap: var(--space-2); padding: var(--space-4); }
 .now-approach-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
-.now-approach-intent { font-size: var(--text-base); color: var(--n-ink); line-height: var(--leading-tight); }
+.now-approach-intent { margin: 0; font-size: var(--text-base); font-weight: 560; color: var(--n-ink); line-height: var(--leading-tight); }
 .now-approach-state { font-size: var(--text-xs); color: var(--n-ink-4); white-space: nowrap; }
 .now-approach[data-tone="working"] .now-approach-state { color: var(--green); }
 .now-approach[data-tone="needs-you"] .now-approach-state { color: var(--amber-ink); font-weight: 600; }
+.now-approach-review { border-top: 1px solid var(--n-line); }
+.now-approach-review > summary {
+  padding: var(--space-2) 0 0; color: var(--n-ink-2); font-size: var(--text-sm); font-weight: 560;
+  cursor: pointer;
+}
+.now-approach-review > summary:hover { color: var(--n-ink); }
+.now-approach-review-body { display: flex; flex-direction: column; gap: var(--space-3); padding-top: var(--space-3); }
+.now-approach-artifact { display: flex; flex-direction: column; gap: var(--space-2); }
+.now-approach-artifact + .now-approach-artifact { padding-top: var(--space-3); border-top: 1px solid var(--n-line); }
+.now-approach-artifact-title { margin: 0; color: var(--n-ink-2); font-size: var(--text-sm); font-weight: 560; }
+.now-approach-actions { display: flex; justify-content: flex-end; }
+.now-approach-steer {
+  padding: 5px var(--space-3); border: 1px solid var(--n-line-2); border-radius: var(--r-tool);
+  background: var(--n-panel); color: var(--n-ink-2); font-size: var(--text-sm); cursor: pointer;
+}
+.now-approach-steer:hover { border-color: var(--n-ink-4); background: var(--n-hover); color: var(--n-ink); }
+.now-approach-steer:focus-visible,
+.now-approach-review > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* generic labelled block */
 .now-detail-block { display: flex; flex-direction: column; gap: var(--space-2); }

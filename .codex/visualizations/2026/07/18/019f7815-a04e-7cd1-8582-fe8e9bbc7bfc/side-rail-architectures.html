@@ -1,0 +1,502 @@
+<div id="drover-rail-options">
+  <style>
+    #drover-rail-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      color: var(--foreground);
+    }
+
+    #drover-rail-options .option-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #drover-rail-options .option-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    #drover-rail-options .option-shell {
+      display: flex;
+      min-width: 0;
+      min-height: 690px;
+      padding: 0;
+    }
+
+    #drover-rail-options .option-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #drover-rail-options .option-label h3,
+    #drover-rail-options .rail-head h3,
+    #drover-rail-options .workbench h3,
+    #drover-rail-options .rail-row strong {
+      margin: 0;
+      font-weight: 500;
+    }
+
+    #drover-rail-options .product-frame {
+      display: grid;
+      width: 100%;
+      min-width: 0;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    #drover-rail-options .rail {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+    }
+
+    #drover-rail-options .rail-head,
+    #drover-rail-options .rail-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    #drover-rail-options .rail-head {
+      border-bottom: 1px solid var(--border);
+    }
+
+    #drover-rail-options .rail-foot {
+      margin-top: auto;
+      border-top: 1px solid var(--border);
+      color: var(--muted-foreground);
+    }
+
+    #drover-rail-options .venture-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      flex: none;
+      border-radius: var(--radius-lg);
+      color: var(--primary-foreground);
+      background: var(--primary);
+      font-weight: 500;
+    }
+
+    #drover-rail-options .venture-copy {
+      min-width: 0;
+      flex: 1;
+    }
+
+    #drover-rail-options .venture-copy > * {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #drover-rail-options .rail-tools {
+      display: grid;
+      gap: 6px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #drover-rail-options .tool-line,
+    #drover-rail-options .section-heading,
+    #drover-rail-options .status-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    #drover-rail-options .tool-line {
+      min-height: 28px;
+      color: var(--muted-foreground);
+    }
+
+    #drover-rail-options .rail-body {
+      display: flex;
+      min-height: 0;
+      flex: 1;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    #drover-rail-options .rail-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    #drover-rail-options .section-heading {
+      color: var(--muted-foreground);
+    }
+
+    #drover-rail-options .rail-row {
+      display: grid;
+      min-width: 0;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+      padding: 8px 6px;
+      border-radius: var(--radius-lg);
+    }
+
+    #drover-rail-options .rail-row.is-active {
+      color: var(--accent-foreground);
+      background: var(--accent);
+    }
+
+    #drover-rail-options .rail-row.is-priority {
+      background: color-mix(in srgb, var(--viz-series-2) 13%, transparent);
+    }
+
+    #drover-rail-options .row-copy {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    #drover-rail-options .row-copy > * {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #drover-rail-options .compare-view .row-copy > * {
+      white-space: nowrap;
+    }
+
+    #drover-rail-options .dot {
+      width: 8px;
+      height: 8px;
+      margin-top: 6px;
+      border-radius: var(--radius-full);
+      background: var(--muted-foreground);
+    }
+
+    #drover-rail-options .dot.attention { background: var(--viz-series-2); }
+    #drover-rail-options .dot.returned { background: var(--viz-series-4); }
+    #drover-rail-options .dot.working { background: var(--viz-series-3); }
+    #drover-rail-options .dot.open {
+      background: transparent;
+      box-shadow: inset 0 0 0 1px var(--muted-foreground);
+    }
+
+    #drover-rail-options .action-glyph {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: var(--radius-full);
+      color: var(--foreground);
+      background: var(--muted);
+    }
+
+    #drover-rail-options .is-priority .action-glyph {
+      color: var(--accent-foreground);
+      background: var(--accent);
+    }
+
+    #drover-rail-options .priority-summary {
+      display: grid;
+      gap: 4px;
+      padding: 2px 6px 8px;
+    }
+
+    #drover-rail-options .priority-summary strong {
+      font-weight: 500;
+    }
+
+    #drover-rail-options .workbench {
+      display: none;
+      min-width: 0;
+      flex-direction: column;
+      gap: 18px;
+      padding: 28px;
+      border-left: 1px solid var(--border);
+    }
+
+    #drover-rail-options .workbench-proof {
+      display: grid;
+      gap: 8px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+
+    #drover-rail-options .workbench-line {
+      height: 8px;
+      border-radius: var(--radius-full);
+      background: var(--muted);
+    }
+
+    #drover-rail-options .workbench-line.short { width: 58%; }
+    #drover-rail-options .workbench-line.medium { width: 78%; }
+
+    #drover-rail-options:not(.compare-view) .option-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    #drover-rail-options:not(.compare-view) .option-shell {
+      display: none;
+      min-height: 620px;
+    }
+
+    #drover-rail-options:not(.compare-view)[data-view="sessions"] .option-shell[data-option="sessions"],
+    #drover-rail-options:not(.compare-view)[data-view="queue"] .option-shell[data-option="queue"],
+    #drover-rail-options:not(.compare-view)[data-view="continuations"] .option-shell[data-option="continuations"] {
+      display: flex;
+    }
+
+    #drover-rail-options:not(.compare-view) .product-frame {
+      grid-template-columns: minmax(250px, 34%) minmax(0, 1fr);
+    }
+
+    #drover-rail-options:not(.compare-view) .workbench {
+      display: flex;
+    }
+
+    @media (max-width: 620px) {
+      #drover-rail-options .option-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      #drover-rail-options .option-shell {
+        min-height: 560px;
+      }
+
+      #drover-rail-options:not(.compare-view) .product-frame {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      #drover-rail-options:not(.compare-view) .workbench {
+        display: none;
+      }
+    }
+  </style>
+
+  <div class="option-controls" role="group" aria-label="View side rail options">
+    <button class="btn" type="button" data-view-button="compare" aria-pressed="true">Compare</button>
+    <button class="btn btn-ghost" type="button" data-view-button="sessions" aria-pressed="false">1 · Sessions</button>
+    <button class="btn btn-ghost" type="button" data-view-button="queue" aria-pressed="false">2 · Queue</button>
+    <button class="btn btn-ghost" type="button" data-view-button="continuations" aria-pressed="false">3 · Continuations</button>
+  </div>
+
+  <div class="option-grid">
+    <section class="card option-shell" data-option="sessions" aria-label="Session library option">
+      <div class="product-frame">
+        <div class="rail">
+          <div class="option-label">
+            <h3>1 · Session library</h3>
+            <span class="text-small text-muted">Proven</span>
+          </div>
+          <div class="rail-head">
+            <span class="venture-mark" aria-hidden="true">D</span>
+            <div class="venture-copy">
+              <h3>Dense venture</h3>
+              <div class="text-small text-muted">drover/…</div>
+            </div>
+            <span aria-hidden="true">＋</span>
+          </div>
+          <div class="rail-tools">
+            <div class="tool-line"><span>⌕&nbsp; Search work</span><span class="text-small">⌘K</span></div>
+            <div class="tool-line"><span>♧&nbsp; Needs you</span><span class="viz-badge">2</span></div>
+          </div>
+          <div class="rail-body">
+            <div class="rail-section">
+              <div class="section-heading text-small"><span>⌄ NEEDS YOU</span><span>2</span></div>
+              <div class="rail-row is-active">
+                <span class="dot attention" aria-hidden="true"></span>
+                <span class="row-copy"><strong>Trace the buyer’s exact language</strong><span class="text-small text-muted">A decision is waiting for you.</span></span>
+                <span class="text-small text-muted">4d</span>
+              </div>
+              <div class="rail-row">
+                <span class="dot attention" aria-hidden="true"></span>
+                <span class="row-copy"><strong>Keep the portfolio legible</strong><span class="text-small text-muted">An outward act is waiting.</span></span>
+                <span class="text-small text-muted">4d</span>
+              </div>
+            </div>
+            <div class="rail-section">
+              <div class="section-heading text-small"><span>⌄ RETURNED</span><span>1</span></div>
+              <div class="rail-row">
+                <span class="dot returned" aria-hidden="true"></span>
+                <span class="row-copy"><strong>Trace the buyer’s exact language</strong><span class="text-small text-muted">Market return ready to review.</span></span>
+                <span class="text-small text-muted">4d</span>
+              </div>
+            </div>
+            <div class="rail-section">
+              <div class="section-heading text-small"><span>⌄ RECENTLY CHANGED</span><span>9</span></div>
+              <div class="rail-row"><span class="dot" aria-hidden="true"></span><span class="row-copy"><strong>Trace the buyer’s exact language</strong><span class="text-small text-muted">A working draft is ready.</span></span><span class="text-small text-muted">4d</span></div>
+              <div class="rail-row"><span class="dot" aria-hidden="true"></span><span class="row-copy"><strong>Trace the buyer’s exact language</strong><span class="text-small text-muted">Two versions are ready.</span></span><span class="text-small text-muted">4d</span></div>
+              <div class="rail-row"><span class="dot" aria-hidden="true"></span><span class="row-copy"><strong>Trace the buyer’s exact language</strong><span class="text-small text-muted">A working draft is ready.</span></span><span class="text-small text-muted">4d</span></div>
+            </div>
+          </div>
+          <div class="rail-foot"><span>Venture conversation</span><span>2</span></div>
+        </div>
+        <div class="workbench">
+          <span class="text-small text-muted">Direction · Needs you</span>
+          <h3>Trace the buyer’s exact language</h3>
+          <p class="text-muted">A decision and its full work history open together in the workbench.</p>
+          <div class="workbench-proof"><span class="workbench-line"></span><span class="workbench-line medium"></span><span class="workbench-line short"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card option-shell" data-option="queue" aria-label="Attention queue option">
+      <div class="product-frame">
+        <div class="rail">
+          <div class="option-label">
+            <h3>2 · Attention queue</h3>
+            <span class="text-small text-muted">Fastest</span>
+          </div>
+          <div class="rail-head">
+            <span class="venture-mark" aria-hidden="true">D</span>
+            <div class="venture-copy"><h3>Dense venture</h3><div class="text-small text-muted">Founder review</div></div>
+            <span aria-hidden="true">＋</span>
+          </div>
+          <div class="rail-body">
+            <div class="priority-summary">
+              <strong>Two decisions are blocking progress</strong>
+              <span class="text-small text-muted">Everything else can keep moving.</span>
+            </div>
+            <div class="rail-section">
+              <div class="section-heading text-small"><span>DECIDE</span><span>2</span></div>
+              <div class="rail-row is-priority">
+                <span class="action-glyph" aria-hidden="true">↗</span>
+                <span class="row-copy"><strong>Release buyer reply</strong><span class="text-small text-muted">Exact message to buyer-001@example.com</span></span>
+                <span aria-hidden="true">›</span>
+              </div>
+              <div class="rail-row is-priority">
+                <span class="action-glyph" aria-hidden="true">◇</span>
+                <span class="row-copy"><strong>Choose an approach</strong><span class="text-small text-muted">Two versions differ on audience scope</span></span>
+                <span aria-hidden="true">›</span>
+              </div>
+            </div>
+            <div class="rail-section">
+              <div class="section-heading text-small"><span>REVIEW</span><span>1</span></div>
+              <div class="rail-row">
+                <span class="action-glyph" aria-hidden="true">✓</span>
+                <span class="row-copy"><strong>Buyer answered</strong><span class="text-small text-muted">Two positioning claims weakened</span></span>
+                <span aria-hidden="true">›</span>
+              </div>
+            </div>
+            <div class="rail-section">
+              <div class="section-heading text-small"><span>PROBLEMS</span><span>1</span></div>
+              <div class="rail-row">
+                <span class="action-glyph" aria-hidden="true">!</span>
+                <span class="row-copy"><strong>Reconnect mail</strong><span class="text-small text-muted">Last release attempt did not send</span></span>
+                <span aria-hidden="true">›</span>
+              </div>
+            </div>
+          </div>
+          <div class="rail-foot"><span>⌕&nbsp; All work</span><span class="text-small">⌘K</span></div>
+        </div>
+        <div class="workbench">
+          <span class="text-small text-muted">Exact founder consequence</span>
+          <h3>Release buyer reply</h3>
+          <p class="text-muted">The queue routes directly to the exact artifact, destination, evidence, and release control.</p>
+          <div class="workbench-proof"><span class="workbench-line medium"></span><span class="workbench-line"></span><span class="workbench-line short"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card option-shell" data-option="continuations" aria-label="Continuations rail option">
+      <div class="product-frame">
+        <div class="rail">
+          <div class="option-label">
+            <h3>3 · Continuations</h3>
+            <span class="viz-badge">Recommended</span>
+          </div>
+          <div class="rail-head">
+            <span class="venture-mark" aria-hidden="true">D</span>
+            <div class="venture-copy"><h3>Dense venture</h3><div class="text-small text-muted">What changed, what’s next</div></div>
+            <span aria-hidden="true">＋</span>
+          </div>
+          <div class="rail-body">
+            <div class="priority-summary">
+              <strong>Two things need your hand</strong>
+              <span class="text-small text-muted">One return changed what the venture knows.</span>
+            </div>
+            <div class="rail-section">
+              <div class="rail-row is-priority">
+                <span class="action-glyph" aria-hidden="true">⌁</span>
+                <span class="row-copy"><strong>Review product change</strong><span class="text-small text-muted">Tests passed · portfolio-legibility direction</span></span>
+                <span aria-hidden="true">›</span>
+              </div>
+              <div class="rail-row is-priority">
+                <span class="action-glyph" aria-hidden="true">↗</span>
+                <span class="row-copy"><strong>Release buyer reply</strong><span class="text-small text-muted">Exact message ready · nothing sent</span></span>
+                <span aria-hidden="true">›</span>
+              </div>
+            </div>
+            <div class="rail-section">
+              <div class="section-heading text-small"><span>RETURNED</span><span>1</span></div>
+              <div class="rail-row is-active">
+                <span class="dot returned" aria-hidden="true"></span>
+                <span class="row-copy"><strong>Buyer answered</strong><span class="text-small text-muted">Two claims weakened · one need surfaced</span></span>
+                <span aria-hidden="true">›</span>
+              </div>
+            </div>
+            <div class="rail-section">
+              <div class="section-heading text-small"><span>IN MOTION</span><span>2&nbsp; ›</span></div>
+              <div class="status-line text-small text-muted"><span>Competitor research</span><span>Evidence gathering</span></div>
+              <div class="status-line text-small text-muted"><span>Positioning revision</span><span>Drafting</span></div>
+            </div>
+            <div class="rail-section">
+              <div class="section-heading text-small"><span>CONTINUE</span><span></span></div>
+              <div class="rail-row">
+                <span class="dot open" aria-hidden="true"></span>
+                <span class="row-copy"><strong>Trace the buyer’s exact language</strong><span class="text-small text-muted">Last useful change: synthesis revised</span></span>
+                <span aria-hidden="true">›</span>
+              </div>
+              <div class="rail-row">
+                <span class="dot open" aria-hidden="true"></span>
+                <span class="row-copy"><strong>Make the launch legible</strong><span class="text-small text-muted">No blockers · ready to continue</span></span>
+                <span aria-hidden="true">›</span>
+              </div>
+            </div>
+          </div>
+          <div class="rail-foot"><span>⌕&nbsp; Find anything</span><span class="text-small">⌘K</span></div>
+        </div>
+        <div class="workbench">
+          <span class="text-small text-muted">Returned evidence · changes venture understanding</span>
+          <h3>Buyer answered</h3>
+          <p class="text-muted">The same durable direction now presents its next meaningful continuation, with the exact return and affected claims together.</p>
+          <div class="workbench-proof"><span class="workbench-line"></span><span class="workbench-line medium"></span><span class="workbench-line short"></span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.getElementById("drover-rail-options");
+      const buttons = Array.from(root.querySelectorAll("[data-view-button]"));
+
+      function setView(view) {
+        root.dataset.view = view;
+        root.classList.toggle("compare-view", view === "compare");
+        buttons.forEach((button) => {
+          const selected = button.dataset.viewButton === view;
+          button.setAttribute("aria-pressed", selected ? "true" : "false");
+          button.classList.toggle("btn-ghost", !selected);
+        });
+      }
+
+      buttons.forEach((button) => {
+        button.addEventListener("click", () => setView(button.dataset.viewButton));
+      });
+
+      setView("compare");
+    })();
+  </script>
+</div>

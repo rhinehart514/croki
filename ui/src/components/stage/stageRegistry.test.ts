@@ -83,10 +83,10 @@ describe("buildStageWorkspaces — the center adapts to the work", () => {
     expect(ids).not.toContain("research");
   });
 
-  it("always ends in the guaranteed OVERVIEW default, so getStageWorkspace is never blank", () => {
+  it("does not duplicate a direction result with an identical overview tab", () => {
     const stage = ctxFor([bet({ id: "b1", intent: "root" })], targetBet("b1"));
     const list = buildStageWorkspaces(stage);
-    expect(list.some((w) => w.id === "overview")).toBe(true);
+    expect(list.some((w) => w.id === "overview")).toBe(false);
     expect(getStageWorkspace(list, "missing-id")).toBeTruthy();
     expect(getStageWorkspace(list, "missing-id").id).toBe(list[0].id);
   });

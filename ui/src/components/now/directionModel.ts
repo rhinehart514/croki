@@ -7,7 +7,7 @@
 import type { FirmActiveDrive, WallQueueItemView } from "@/api";
 import type { FirmBet, FirmConversationMessage, FirmLens, FirmOutcome } from "@/types";
 
-export type DirectionState = "needs-you" | "from-market" | "working" | "changed";
+export type DirectionState = "needs-you" | "from-market" | "working" | "changed" | "returned" | "open";
 
 export type Direction = {
   id: string;
@@ -232,7 +232,7 @@ function materialize(
   };
 }
 
-export type DirectionSectionKey = "needs-you" | "market" | "working" | "changed";
+export type DirectionSectionKey = "needs-you" | "market" | "working" | "changed" | "returned" | "open";
 export type DirectionSection = { key: DirectionSectionKey; label: string; tone: DirectionState; directions: Direction[] };
 
 const SECTION_ORDER: Array<{ key: DirectionSectionKey; label: string; tone: DirectionState; state: DirectionState }> = [

@@ -1,6 +1,6 @@
 // work-loop-run.test.mjs — the durable Run lifecycle wired into a live founder-authorized drive.
 //
-// A founder (or agent-continued) drive mints a canonical run joined to the venture root Thread BEFORE
+// A founder (or agent-continued) drive mints a canonical run joined to a child direction Thread BEFORE
 // provider dispatch and completes it after a terminal outcome, so founder intent → run → returned evidence
 // is inspectable history. The whole point of the seam is that it is FAIL-SAFE: a run-recording error must
 // never abort or change a drive. These tests drive the real work loop through the fake-client injection
@@ -21,6 +21,7 @@ import { projectExecutionTrail } from "../../src/firm/workflow-execution-receipt
 import { park, decide } from "../../src/firm/wall.mjs";
 import { founderRequest } from "../helpers/founder-capability.mjs";
 import { ROOT_THREAD_ID } from "../../src/firm/thread.mjs";
+import { applyArchitectureMutations } from "../../src/firm/architecture.mjs";
 
 function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-work-loop-run-")), seedFoundingCrew: false };
@@ -53,7 +54,7 @@ function receiptFor(ventureId, runId, options) {
 }
 
 describe("durable Run lifecycle on a founder-authorized drive", () => {
-  it("a founder-initiated betless drive records a betless run joined to the root thread, completed at terminal", async () => {
+  it("a founder-initiated betless drive records a betless run on its own direction thread, completed at terminal", async () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Betless run" }, options);
 
@@ -70,7 +71,10 @@ describe("durable Run lifecycle on a founder-authorized drive", () => {
     assert.equal(model.threads.filter((t) => t.id === ROOT_THREAD_ID).length, 1, "the root thread formed exactly once");
     assert.equal(model.runs.length, 1, "one run was recorded");
     const run = model.runs[0];
-    assert.equal(run.threadRef, `thread:${ROOT_THREAD_ID}`, "the run joins the venture root thread");
+    assert.notEqual(run.threadRef, `thread:${ROOT_THREAD_ID}`, "the root organizes work but never owns a direction run");
+    const direction = model.threads.find((thread) => `thread:${thread.id}` === run.threadRef);
+    assert.equal(direction.parentThreadRef, `thread:${ROOT_THREAD_ID}`);
+    assert.equal(direction.name, "Explore the opening", "the durable identity keeps the founder's words");
     assert.deepEqual(run.betRefs, [], "a betless drive records a betless run");
     assert.ok(run.completedAt, "a terminal drive completes its run");
     assert.equal("status" in run, false, "a run never carries running state");
@@ -98,6 +102,77 @@ describe("durable Run lifecycle on a founder-authorized drive", () => {
     assert.equal(runs.length, 1);
     assert.deepEqual(runs[0].betRefs, [`bet:${bet.id}`], "a bet drive records a single-bet run");
     assert.ok(runs[0].completedAt);
+  });
+
+  it("an architecture-scoped founder thought becomes a durable thread beneath that venture object", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Object-scoped thought" }, options);
+    const architecture = applyArchitectureMutations({
+      ventureId: venture.id,
+      baseRevision: 0,
+      operations: [{ op: "create-element", element: {
+        id: "loop-onboarding", role: "product-loop", name: "Onboarding", actor: "Founder", entry: "First open",
+        value: "Useful first result", intendedChange: "Founder trusts Drover", steps: [{ id: "first-direction", label: "Give a direction" }],
+      } }],
+      actor: { authority: "founder", id: "jacob" },
+    }, options);
+
+    await driveTeammate({
+      ventureId: venture.id,
+      teammateRef: "founding-teammate",
+      goal: "Remove every setup step that is not essential",
+      initiatedBy: "founder",
+      target: { architectureId: "loop-onboarding", architectureRevision: architecture.revision },
+      options,
+      deps: { runtime: completingRuntime() },
+    });
+
+    const model = getSemanticModel(venture.id, options);
+    const direction = model.threads.find((thread) => thread.id !== ROOT_THREAD_ID);
+    assert.ok(direction);
+    assert.deepEqual(direction.subjectRefs, ["architecture:loop-onboarding"]);
+
+    await driveTeammate({
+      ventureId: venture.id,
+      teammateRef: "founding-teammate",
+      goal: "Continue that exact onboarding thought",
+      initiatedBy: "founder",
+      target: {
+        threadRef: `thread:${direction.id}`,
+        architectureId: "loop-onboarding",
+        architectureRevision: architecture.revision,
+      },
+      options,
+      deps: { runtime: completingRuntime() },
+    });
+    const continued = getSemanticModel(venture.id, options);
+    assert.equal(continued.threads.filter((thread) => thread.id !== ROOT_THREAD_ID).length, 1, "continuation does not mint a sibling thought");
+    assert.equal(continued.runs.filter((run) => run.threadRef === `thread:${direction.id}`).length, 2);
+  });
+
+  it("later work on the same bet resumes its stable direction thread", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Stable direction" }, options);
+    const bet = createBet({ ventureId: venture.id, intent: "advance the bet", teammateRef: "founding-teammate" });
+    setVentureDoc(venture.id, "bets", bet.id, bet, options);
+
+    for (const goal of ["Make the first pass", "Continue from the result"]) {
+      await driveTeammate({
+        ventureId: venture.id,
+        teammateRef: "founding-teammate",
+        goal,
+        betId: bet.id,
+        initiatedBy: "founder",
+        options,
+        deps: { runtime: completingRuntime() },
+      });
+    }
+
+    const model = getSemanticModel(venture.id, options);
+    assert.equal(new Set(model.runs.map((run) => run.threadRef)).size, 1, "both runs resume one addressable work item");
+    const childThreads = model.threads.filter((thread) => thread.id !== ROOT_THREAD_ID);
+    assert.equal(childThreads.length, 1);
+    assert.equal(childThreads[0].messageRefs.filter((ref) => ref.startsWith("conversation:")).length >= 2, true);
   });
 
   it("a run-recording failure NEVER aborts the drive — the drive still returns and the world is unchanged", async () => {

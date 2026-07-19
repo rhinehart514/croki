@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 
 import { anthropicRuntime } from "../src/runtimes/anthropic.mjs";
-import { buildCodexDriveArgs, buildCodexProductChangeArgs, codexRuntime, runCodexDriveTurn } from "../src/runtimes/codex.mjs";
+import { buildCodexDriveArgs, buildCodexProductChangeArgs, codexRuntime, runCodexDriveTurn, startCodexMcpBridge } from "../src/runtimes/codex.mjs";
 import { claudeCodeRuntime, createFirmSdkServer, detectClaudeAuth, driveBudgetUsd, modelMaxTurns } from "../src/runtimes/claude-code.mjs";
 import { runtimeForModel, selectRuntime } from "../src/runtimes/index.mjs";
 
@@ -150,6 +150,71 @@ describe("subscription adapter boundaries", () => {
     assert.ok(driveBudgetUsd({ spentUsd: 0, maxBudgetUsd: null }) > 0, "an unset participant cap must not become a zero-dollar provider invocation");
   });
 
+  it("runs the default Claude teammate in the full native Claude Code harness", async () => {
+    let invocation;
+    const result = await claudeCodeRuntime.drive(baseContext({
+      tools: [{
+        name: "read_truth",
+        description: "Read product truth.",
+        input_schema: { type: "object", properties: {} },
+      }],
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      query: (input) => {
+        invocation = input;
+        return (async function* completedQuery() {
+          yield { type: "result", subtype: "success", is_error: false, result: "Done." };
+        })();
+      },
+    }));
+
+    assert.equal(result.kind, "completed");
+    assert.deepEqual(invocation.options.tools, { type: "preset", preset: "claude_code" });
+    assert.deepEqual(invocation.options.systemPrompt, {
+      type: "preset",
+      preset: "claude_code",
+      append: invocation.options.systemPrompt.append,
+    });
+    assert.match(invocation.options.systemPrompt.append, /Stay inside the founder wall\./);
+    assert.match(invocation.options.systemPrompt.append, /full native Claude Code harness/);
+    assert.deepEqual(invocation.options.allowedTools, ["mcp__drover-firm__read_truth"]);
+    assert.equal(invocation.options.permissionMode, "auto");
+    assert.equal(invocation.options.strictMcpConfig, false);
+    assert.equal(Object.hasOwn(invocation.options, "settingSources"), false);
+    assert.equal(Object.hasOwn(invocation.options, "skills"), false);
+    assert.equal(Object.hasOwn(invocation.options, "plugins"), false);
+    assert.ok(invocation.options.mcpServers["drover-firm"]);
+  });
+
+  it("keeps Claude's bridge-only caged harness as explicit compatibility mode", async () => {
+    let invocation;
+    const result = await claudeCodeRuntime.drive(baseContext({
+      options: { harness: "caged" },
+      tools: [{
+        name: "read_truth",
+        description: "Read product truth.",
+        input_schema: { type: "object", properties: {} },
+      }],
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      query: (input) => {
+        invocation = input;
+        return (async function* completedQuery() {
+          yield { type: "result", subtype: "success", is_error: false, result: "Done." };
+        })();
+      },
+    }));
+
+    assert.equal(result.kind, "completed");
+    assert.deepEqual(invocation.options.tools, []);
+    assert.equal(invocation.options.systemPrompt, "Stay inside the founder wall.");
+    assert.deepEqual(invocation.options.allowedTools, ["mcp__drover-firm__read_truth"]);
+    assert.equal(invocation.options.permissionMode, "dontAsk");
+    assert.equal(invocation.options.strictMcpConfig, true);
+    assert.deepEqual(invocation.options.settingSources, []);
+    assert.ok(invocation.options.mcpServers["drover-firm"]);
+  });
+
   it("sends the complete directed-resume prompt to Claude", async () => {
     const resumePrompt = [
       "Prior pause context: Waiting for the founder's answer.",
@@ -211,7 +276,7 @@ describe("subscription adapter boundaries", () => {
         invocation = input;
         return {
           threadId: "codex-thread-1",
-          text: JSON.stringify({ type: "final", name: null, input: null, summary: "Redirected." }),
+          text: "Redirected.",
           error: null,
         };
       },
@@ -232,38 +297,85 @@ describe("subscription adapter boundaries", () => {
     assert.ok(!args.some((value) => /mcp_servers/.test(value)));
   });
 
-  it("builds a read-only Codex teammate invocation with no inherited apps or network", () => {
-    const args = buildCodexDriveArgs({ model: "gpt-test" });
-    assert.ok(args.includes("read-only"));
-    assert.ok(args.includes("features.apps=false"));
-    assert.ok(args.includes("features.network_proxy.enabled=false"));
-    assert.ok(args.includes("--output-schema"));
+  it("builds a native Codex teammate invocation that inherits founder configuration", () => {
+    const args = buildCodexDriveArgs({ model: "gpt-test", mcpUrl: "http://127.0.0.1:43210/mcp/token" });
+    assert.ok(args.includes("mcp_servers.drover.url=\"http://127.0.0.1:43210/mcp/token\""));
+    for (const removed of [
+      "read-only", "--ignore-user-config", "--ignore-rules", "--strict-config", "--output-schema",
+      "features.apps=false", "features.hooks=false", "features.plugin_sharing=false",
+      "features.computer_use=false", "features.browser_use=false", "features.in_app_browser=false",
+      "features.network_proxy.enabled=false",
+    ]) {
+      assert.ok(!args.includes(removed), `native drive still carries ${removed}`);
+    }
   });
 
-  it("drives typed Drover tools through a real Codex-session contract", async () => {
+  it("exposes screened Drover tools through the native Codex MCP contract", async () => {
     const calls = [];
-    const sessions = [];
     const context = baseContext({
-      model: null,
-      cwd: "/tmp/product",
       tools: [{
         name: "read_truth",
         description: "Read product truth.",
         input_schema: { type: "object", properties: {}, required: [] },
       }],
-      onRuntimeSession: (id) => sessions.push(id),
       async runTool(call) {
         calls.push(call);
         return { result: { evidenceState: "grounded" }, pause: false };
       },
-      runCodexTurn: async ({ resumeId }) => resumeId
-        ? { threadId: "thread-1", text: JSON.stringify({ type: "final", name: null, input: null, summary: "Grounded." }), error: null }
-        : { threadId: "thread-1", text: JSON.stringify({ type: "tool", name: "read_truth", input: "{}", summary: null }), error: null },
     });
-    const result = await codexRuntime.drive(context);
-    assert.deepEqual(result, { kind: "completed", summary: "Grounded." });
+    const bridge = await startCodexMcpBridge(context);
+    try {
+      const initialize = await fetch(bridge.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26" } }),
+      }).then((response) => response.json());
+      assert.equal(initialize.result.serverInfo.name, "drover");
+      const listed = await fetch(bridge.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+      }).then((response) => response.json());
+      assert.deepEqual(listed.result.tools[0].inputSchema.required, []);
+      const called = await fetch(bridge.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "read_truth", arguments: {} } }),
+      }).then((response) => response.json());
+      assert.deepEqual(JSON.parse(called.result.content[0].text), { evidenceState: "grounded" });
+    } finally {
+      await bridge.close();
+    }
     assert.equal(calls[0].name, "read_truth");
-    assert.deepEqual(sessions, ["thread-1", "thread-1"]);
+  });
+
+  it("accepts a normal Codex final response without a Drover action envelope", async () => {
+    const sessions = [];
+    const result = await codexRuntime.drive(baseContext({
+      model: null,
+      cwd: "/tmp/product",
+      onRuntimeSession: (id) => sessions.push(id),
+      runCodexTurn: async () => ({ threadId: "thread-1", text: "Grounded in the repository.", error: null, terminal: null }),
+    }));
+    assert.deepEqual(result, { kind: "completed", summary: "Grounded in the repository." });
+    assert.deepEqual(sessions, ["thread-1"]);
+  });
+
+  it("preserves a founder-wall pause returned by a native Drover MCP tool", async () => {
+    const bridge = await startCodexMcpBridge(baseContext({
+      tools: [{ name: "stage_outward", description: "Park an outward act.", input_schema: { type: "object", properties: {} } }],
+      async runTool() { return { result: { parked: true }, pause: true }; },
+    }));
+    try {
+      await fetch(bridge.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "stage_outward", arguments: {} } }),
+      });
+      assert.equal(bridge.terminal(), "paused");
+    } finally {
+      await bridge.close();
+    }
   });
 
   it("registers complete Firm tool schemas on the Claude SDK bridge", () => {

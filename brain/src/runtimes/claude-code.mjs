@@ -6,10 +6,10 @@
 // So when the `claude` CLI is installed, the resident teammate should be driven
 // by a Claude Code subprocess rather than a direct API call.
 //
-// Claude Code owns none of Drover's durable state or safety. It receives the goal plus typed Firm
-// tools over an in-process MCP bridge. The tools execute inside Drover. The toolset contains no
-// approve/send/publish tool, so the subprocess cannot cross the wall. Drover owns state, typed
-// mutations, permissions, cancellation, timeout, and restart recovery.
+// Claude Code owns none of Drover's durable state or founder authority. It receives the goal plus
+// typed Firm tools over an in-process MCP bridge while retaining its native tools, configuration,
+// skills, agents, plugins, and MCP servers. Drover owns its state, typed mutations, cancellation,
+// timeout, restart recovery, and the tools that stage outward work for founder review.
 //
 // The Agent SDK bundles Claude Code, so the product does not depend on a global
 // `claude` binary. It can use an existing Claude Code login or ANTHROPIC_API_KEY.
@@ -36,18 +36,13 @@ export function firmAllowedTools(toolNames, server = BRIDGE_SERVER) {
   return toolNames.map((name) => `mcp__${server}__${name}`);
 }
 
-// The composer IS the Claude harness (founder decision, 2026-07-01). The teammate runs as a
-// real Claude Code session — the founder's skills (/ideate, /positioning…), named subagents,
-// parallel fan-out (Task/Agent), web research, and read-only file tools — instead of a caged
-// model that can only touch the teammate bridge. The wall stays structural at this boundary:
-// no Bash, no Write/Edit, no send-shaped tool is ever granted here, and wall decisions still resolve
-// only through the founder (assertSafeTool refuses approve/send verbs on the bridge itself).
-// The honest seam this opens: a founder-owned agent definition invoked via Task may declare
-// its own tools — those definitions are the founder's files and their tool grants are the
-// founder's standing policy, the same trust boundary as the skills themselves.
-// GTM_FIRM_HARNESS=caged (or ctx.options.harness === "caged") selects the
-// bridge-only teammate.
-export const HARNESS_TOOLS = ["Task", "Agent", "Skill", "WebSearch", "WebFetch", "Read", "Glob", "Grep", "TodoWrite"];
+// The composer IS the Claude harness (founder decision, 2026-07-01). Full mode is a real native
+// Claude Code session, not a hand-picked imitation: the default toolset (including Bash, Write,
+// and Edit), all normal user/project/local settings, CLAUDE.md files, skills, agents, plugins, and
+// configured MCP servers remain available. Drover adds its screened MCP server to that harness.
+// Those Drover tools keep founder-only outward authority; the founder's own Claude Code policy
+// remains authoritative for native tools and integrations. GTM_FIRM_HARNESS=caged (or
+// ctx.options.harness === "caged") retains the prior bridge-only compatibility mode.
 
 export function firmHarnessMode(ctx = {}, env = process.env) {
   const explicit = ctx.options?.harness ?? env.GTM_FIRM_HARNESS;
@@ -56,15 +51,15 @@ export function firmHarnessMode(ctx = {}, env = process.env) {
 
 // Build the headless `claude` argument vector. Isolated so the exact flags are
 // trivially auditable and adjustable against the installed CLI version.
-export function buildClaudeArgs({ mcpConfigPath, allowedTools, model, maxTurns }) {
+export function buildClaudeArgs({ mcpConfigPath, allowedTools, model, maxTurns, harness = "full" }) {
   const args = [
     "--print",
     "--output-format", "stream-json",
     "--verbose",
     "--mcp-config", mcpConfigPath,
-    "--strict-mcp-config",
-    "--permission-mode", "default",
+    "--permission-mode", harness === "caged" ? "dontAsk" : "auto",
   ];
+  if (harness === "caged") args.push("--strict-mcp-config");
   if (allowedTools?.length) args.push("--allowedTools", allowedTools.join(","));
   if (model) args.push("--model", model);
   if (maxTurns) args.push("--max-turns", String(maxTurns));
@@ -328,7 +323,6 @@ export const claudeCodeRuntime = {
   async drive(ctx) {
     const harness = firmHarnessMode(ctx);
     const allowedTools = firmAllowedTools((ctx.tools ?? []).map((tool) => tool.name));
-    if (harness === "full") allowedTools.push(...HARNESS_TOOLS);
     const sdkServer = createFirmSdkServer(ctx);
     const runQuery = ctx.query || agentQuery;
     const reportSession = typeof ctx.onRuntimeSession === "function" ? ctx.onRuntimeSession : () => {};
@@ -381,15 +375,19 @@ export const claudeCodeRuntime = {
             // instead of an unbounded per-drive $5 each time.
             maxBudgetUsd: driveBudgetUsd(ctx),
             systemPrompt: harness === "full"
-              ? `${ctx.system}\n\nYou are running inside the founder's full Claude harness: their skills (invoke with the Skill tool), their named subagents and parallel fan-out (Task/Agent), web research, and read-only file tools are available alongside the Drover bridge tools. Use them — fan out research, run /ideate-style generation with separate judging — but the walls hold: you cannot send, publish, write files, or resolve a founder wall from here; everything outward still stages at the wall.`
+              ? {
+                  type: "preset",
+                  preset: "claude_code",
+                  append: `${ctx.system}\n\nThis is a Drover teammate session inside the founder's full native Claude Code harness. Use the native tools, settings, skills, agents, plugins, and configured MCP servers normally. Use the added Drover MCP tools for Drover venture truth, durable work, and any Drover-owned outward staging. Those tools cannot approve, send, or publish on the founder's behalf; only the founder resolves a Drover wall. Native tools and integrations remain governed by the founder's own Claude Code policy.`,
+                }
               : ctx.system,
-            tools: [],
+            tools: harness === "full" ? { type: "preset", preset: "claude_code" } : [],
             allowedTools,
-            permissionMode: "dontAsk",
-            strictMcpConfig: true,
-            // Full harness loads the founder's own skills/agents/CLAUDE.md ("user" settings);
-            // caged mode keeps the pre-2026-07 bridge-only behavior.
-            settingSources: harness === "full" ? ["user"] : [],
+            permissionMode: harness === "full" ? "auto" : "dontAsk",
+            strictMcpConfig: harness === "caged",
+            // Omitting settingSources in full mode preserves Claude Code's normal CLI behavior:
+            // user, project, and local settings all load. Caged mode opts out explicitly.
+            ...(harness === "caged" ? { settingSources: [] } : {}),
             // Persist the transcript so a later drive can resume it. This is the
             // founder's local Claude session store — the local-harness contract.
             persistSession: true,

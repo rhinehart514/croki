@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { createBet } from "../../brain/src/firm/bet.mjs";
 import { summon } from "../../brain/src/firm/crew.mjs";
+import { ensureDirectionThread, getSemanticModel, mutateSemanticModel } from "../../brain/src/firm/semantic-model-store.mjs";
 import { createVenture, setVentureDoc } from "../../brain/src/firm/venture-store.mjs";
 
 const FIXTURE_EPOCH = Date.parse("2026-07-15T08:00:00.000Z");
@@ -656,4 +657,103 @@ export function createEmptyAtlasFixture({ root, repository } = {}) {
     ventures: [venture],
     expected: { revision: 0, elements: 0, bets: 0, wall: 0, outcomes: 0 },
   };
+}
+
+// A complete generated-map path layered onto the same real Buffalo work/release/outcome records used by
+// the architecture acceptance fixture. The semantic records are canonical map truth; the existing bet,
+// released work, and joined outcome remain their authoritative records rather than being copied into it.
+export function createGeneratedMapsFixture({ root, repository } = {}) {
+  const fixture = createAtlasPortfolioFixture({ root, repository });
+  const options = { root };
+  const ventureId = fixture.venture.id;
+  const model = getSemanticModel(ventureId, options);
+  const objects = [
+    ["map-need", "need", "A project worth advancing", "Recent graduates need useful collaborators before they need another profile.", "gtm"],
+    ["map-experience", "experience", "Start with the work", "A builder describes the project before creating a profile.", "product"],
+    ["map-capability", "capability", "Project intake", "Capture a useful, comparable project description.", "product"],
+    ["map-release", "release", "Project-drop invitation v1", "The founder-released invitation asks builders to begin with real work.", "product"],
+    ["map-campaign", "campaign", "Project-first invitation test", "Invite recent graduates with a project worth advancing.", "gtm"],
+    ["map-response", "response", "Builder started with the project", "The returned reply says the project came before profile creation.", "gtm"],
+  ].map(([id, type, name, statement, territory]) => ({
+    op: "create-record",
+    family: "objects",
+    record: {
+      id, type, name, statement, properties: { territory }, assertion: "founder-asserted",
+      provenance: { kind: "founder-authored" },
+    },
+  }));
+  const relationships = [
+    ["map-need-experience", "map-need", "map-experience", "shapes"],
+    ["map-experience-capability", "map-experience", "map-capability", "depends on"],
+    ["map-capability-release", "map-capability", "map-release", "ships in"],
+    ["map-release-campaign", "map-release", "map-campaign", "creates the opportunity for"],
+    ["map-campaign-response", "map-campaign", "map-response", "returned", "outcome:buffalo-outcome-project-drop"],
+  ].map(([id, from, to, label, evidenceRef]) => ({
+    op: "create-record",
+    family: "relationships",
+    record: {
+      id,
+      fromRef: `object:${from}`,
+      toRef: `object:${to}`,
+      label,
+      type: "trace",
+      properties: {},
+      assertion: "founder-asserted",
+      sourceRefs: evidenceRef ? [evidenceRef] : [],
+    },
+  }));
+  mutateSemanticModel({
+    ventureId,
+    baseRevision: model.revision,
+    operations: [...objects, ...relationships],
+    actor: { authority: "founder", id: "jacob" },
+  }, options);
+  ensureDirectionThread(ventureId, {
+    name: "Test project-first entry with recent graduates",
+    identityKey: "generated-map-project-drop",
+    subjectRefs: ["object:map-campaign", "bet:buffalo-bet-project-first"],
+    at: at(52),
+  }, options);
+  return {
+    ...fixture,
+    expected: {
+      ...fixture.expected,
+      maps: {
+        path: ["map-need", "map-experience", "map-capability", "map-release", "map-campaign", "map-response"],
+        campaign: "Project-first invitation test",
+        direction: "Test project-first entry with recent graduates",
+      },
+    },
+  };
+}
+
+export function createDenseGeneratedMapsFixture({ root, repository } = {}) {
+  const fixture = createGeneratedMapsFixture({ root, repository });
+  const options = { root };
+  const ventureId = fixture.venture.id;
+  const model = getSemanticModel(ventureId, options);
+  const records = Array.from({ length: 120 }, (_, index) => {
+    const product = index < 60;
+    const number = String((index % 60) + 1).padStart(2, "0");
+    return {
+      op: "create-record",
+      family: "objects",
+      record: {
+        id: `map-dense-${product ? "capability" : "campaign"}-${number}`,
+        type: product ? "capability" : "campaign",
+        name: `${product ? "Product capability" : "Market test"} ${number}`,
+        statement: `Dense generated-map record ${number} keeps its full venture meaning inside a scrollable map lane.`,
+        properties: { territory: product ? "product" : "gtm" },
+        assertion: index % 3 === 0 ? "founder-asserted" : "tentative",
+        provenance: { kind: "founder-authored" },
+      },
+    };
+  });
+  mutateSemanticModel({
+    ventureId,
+    baseRevision: model.revision,
+    operations: records,
+    actor: { authority: "founder", id: "jacob" },
+  }, options);
+  return { ...fixture, expected: { ...fixture.expected, denseMapObjects: records.length } };
 }

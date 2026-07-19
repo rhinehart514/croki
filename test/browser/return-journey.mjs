@@ -19,20 +19,22 @@ import {
   captureEvidence,
   openFixtureVenture,
   setNetworkOffline,
-  summonMap,
   waitForDom,
 } from "./fixtures/browser-harness.mjs";
 
-async function fireNode(client, id, kind) {
-  const fired = await client.evaluate(`(() => {
-    const node = document.querySelector('.react-flow__node[data-id=${JSON.stringify(id)}]');
-    if (!node) return false;
-    const r = node.getBoundingClientRect();
-    const opts = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
-    node.dispatchEvent(new MouseEvent(${JSON.stringify(kind)}, opts));
-    return true;
+async function openReturnedDirection(client) {
+  const opened = await client.evaluate(`(() => {
+    const row = [...document.querySelectorAll('.vh-row')]
+      .find((entry) => /Find the narrowest product truth worth testing overnight/i.test(entry.textContent || ''));
+    row?.click();
+    return Boolean(row);
   })()`);
-  assert.ok(fired, `node ${id} was not on screen to ${kind}`);
+  assert.equal(opened, true, "the returned direction was not available on Venture Home");
+  await waitForDom(
+    client,
+    `!!document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]') && !document.querySelector('.venture-maps')`,
+    "the returned direction did not open as real work",
+  );
 }
 
 async function pressEscape(client) {
@@ -109,36 +111,25 @@ test("overnight return: held work, attributable proof, and offline recovery rema
     // with the outcome body and the honest attribution line. That bet ALSO has a waiting release item, so
     // the default body is the decision gate (consequence); switch the contextual View to "Direction" to
     // reach the returned-reality block the same descended stage exposes.
-    await summonMap(client);
-    await fireNode(client, "bet:overnight-bet-message", "dblclick");
+    await openReturnedDirection(client);
     await waitForDom(
       client,
-      `!!document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]') && !document.querySelector('.venture-workspace .venture-canvas-flow')`,
-      "descending into the joined-return bet did not open selected work and unmount the map",
+      `!!document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]') && !document.querySelector('.venture-maps')`,
+      "the returned direction did not open selected work",
     );
     // The overnight fixture's bets are one fork family (all forkedFrom overnight-bet-evidence), so
     // buildDirections folds them into the ONE direction spined off the founder's opening message — not the
     // sub-bet's own intent sentence.
-    const crumbTarget = await client.evaluate(`(() => {
-      const crumbs = [...document.querySelectorAll('.stage-workspace-crumb')].map((entry) => entry.textContent.trim());
-      return crumbs.join(' | ');
-    })()`);
-    assert.match(crumbTarget, /Find the narrowest product truth worth testing overnight/i, "descending into the joined-return bet did not target its canonical direction");
+    const workTitle = await client.evaluate(`document.querySelector('.work-narrative-head h2')?.textContent.trim() || ''`);
+    assert.match(workTitle, /Find the narrowest product truth worth testing overnight/i, "descending into the joined-return bet did not target its canonical direction");
 
     const switchedToDirection = await client.evaluate(`(() => {
-      const toggle = document.querySelector('.now-view-toggle');
-      if (!toggle) return false;
-      toggle.click();
+      const tab = [...document.querySelectorAll('.work-material-tab')].find((entry) => entry.textContent.trim() === 'Result');
+      if (!tab) return false;
+      tab.click();
       return true;
     })()`);
-    assert.equal(switchedToDirection, true, "no View control to switch bodies (expected consequence + direction both available)");
-    await waitForDom(client, `!!document.querySelector('.now-view-menu')`, "the View menu did not open");
-    const pickedDirection = await client.evaluate(`(() => {
-      const option = [...document.querySelectorAll('.now-view-option')].find((entry) => entry.textContent.trim() === 'Direction');
-      option?.click();
-      return Boolean(option);
-    })()`);
-    assert.equal(pickedDirection, true, "the Direction view was not offered alongside the consequence gate");
+    assert.equal(switchedToDirection, true, "the Result tab was not offered alongside the decision gate");
     await waitForDom(client, `!!document.querySelector('.now-returned')`, "the Direction view did not surface the returned market reply");
     const returnedText = await client.evaluate(`document.querySelector('.now-returned')?.textContent || ''`);
     assert.match(returnedText, /This is timely/i, "the joined return's body did not render");
@@ -147,16 +138,11 @@ test("overnight return: held work, attributable proof, and offline recovery rema
     // HELD REASSURANCE — the modern equivalent of "held safely": a bet's decision gate states the outward-
     // act invariant. Switch back to the consequence (default) view to read it.
     const switchedBack = await client.evaluate(`(() => {
-      const toggle = document.querySelector('.now-view-toggle');
-      toggle?.click();
-      return Boolean(toggle);
+      const tab = [...document.querySelectorAll('.work-material-tab')].find((entry) => entry.textContent.trim() === 'Decision');
+      tab?.click();
+      return Boolean(tab);
     })()`);
     assert.equal(switchedBack, true);
-    await waitForDom(client, `!!document.querySelector('.now-view-menu')`, "the View menu did not reopen");
-    await client.evaluate(`(() => {
-      const option = [...document.querySelectorAll('.now-view-option')].find((entry) => entry.textContent.trim() === 'The exact effect');
-      option?.click();
-    })()`);
     await waitForDom(client, `!!document.querySelector('.now-gate')`, "the consequence gate did not return");
     const gateReassurance = await client.evaluate(`document.querySelector('.now-gate-note')?.textContent || ''`);
     assert.match(
@@ -175,35 +161,17 @@ test("overnight return: held work, attributable proof, and offline recovery rema
       "one Escape did not return selected work to unselected whole-venture Home",
     );
 
-    // ANOTHER DECISION — the map is summoned again before targeting a different exact node. Merely reviewing
-    // its held decision opens selected work, then one Escape returns to Home without acting outward.
-    await summonMap(client);
-    await fireNode(client, "bet:overnight-bet-counterexample", "dblclick");
-    await waitForDom(
-      client,
-      `!!document.querySelector('[data-testid="venture-workbench"] .now-gate') && !document.querySelector('.venture-workspace .venture-canvas-flow')`,
-      "descending into a different bet did not open its gate as selected work",
-    );
-    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
-    await pressEscape(client);
-    await waitForDom(
-      client,
-      `!!document.querySelector('.vh[aria-label]') && !document.querySelector('[data-testid="stage-workspace"]') && document.querySelector('.venture-workspace-dock .now-composer textarea')?.getAttribute('placeholder') === 'Direct the venture'`,
-      "Escape did not return the second selected work to whole-venture Home",
-    );
-
-    // OFFLINE RECOVERY — create a whole-venture draft at Home, summon the map, descend into the partial/
-    // answer bet, then lose connectivity with selected work and its decision gate still open.
+    // OFFLINE RECOVERY — create a whole-venture draft at Home, reopen the returned direction, then lose
+    // connectivity with selected work and its decision gate still open.
     const recoveryDraft = "Keep this correction with the evidence while the connection recovers.";
     await client.evaluate(`document.querySelector('.venture-workspace-dock .now-composer textarea')?.focus()`);
     await client.send("Input.insertText", { text: recoveryDraft });
 
-    await summonMap(client);
-    await fireNode(client, "bet:overnight-bet-partial", "dblclick");
+    await openReturnedDirection(client);
     await waitForDom(
       client,
-      `!!document.querySelector('[data-testid="venture-workbench"] .now-gate') && !document.querySelector('.venture-workspace .venture-canvas-flow')`,
-      "descending into the answer bet did not open its selected-work gate and unmount the map before going offline",
+      `!!document.querySelector('[data-testid="venture-workbench"] .now-gate') && !document.querySelector('.venture-maps')`,
+      "the returned direction did not reopen its selected-work gate before going offline",
     );
 
     await setNetworkOffline(client, true);
@@ -222,7 +190,8 @@ test("overnight return: held work, attributable proof, and offline recovery rema
         selectedWork: Boolean(document.querySelector('[data-testid="stage-workspace"]')),
         gate: Boolean(document.querySelector('[data-testid="stage-workspace"] .now-gate')),
         mapAbsent: !document.querySelector('.venture-workspace .venture-canvas-flow'),
-        draft: document.querySelector('.venture-workspace-dock .now-composer textarea')?.value,
+        scopedDraft: document.querySelector('.venture-workspace-dock .now-composer textarea')?.value,
+        wholeVentureDraft: JSON.parse(sessionStorage.getItem('drover:composer-drafts:v1') || '{}')[${JSON.stringify(`${ventureId}:venture`)}] || '',
         composerDisabled: document.querySelector('.venture-workspace-dock .now-composer textarea')?.disabled === true,
       };
     })()`);
@@ -232,7 +201,8 @@ test("overnight return: held work, attributable proof, and offline recovery rema
     assert.equal(offlineState.selectedWork, true, "selected work closed while offline");
     assert.equal(offlineState.gate, true, "the selected decision gate closed while offline");
     assert.equal(offlineState.mapAbsent, true, "the map remounted behind selected work while offline");
-    assert.equal(offlineState.draft, recoveryDraft, "the whole-venture draft was lost going offline");
+    assert.equal(offlineState.scopedDraft, recoveryDraft, "the venture draft was lost when returned work opened");
+    assert.equal(offlineState.wholeVentureDraft, recoveryDraft, "the whole-venture draft was lost going offline");
     assert.equal(offlineState.composerDisabled, true, "composer stayed writable while offline");
 
     // The gate mirrors the workspace freshness boundary: its controls are visibly held while stale, and the
@@ -262,7 +232,8 @@ test("overnight return: held work, attributable proof, and offline recovery rema
       selectedWork: Boolean(document.querySelector('[data-testid="stage-workspace"]')),
       gate: Boolean(document.querySelector('[data-testid="stage-workspace"] .now-gate')),
       mapAbsent: !document.querySelector('.venture-workspace .venture-canvas-flow'),
-      draft: document.querySelector('.venture-workspace-dock .now-composer textarea')?.value,
+      scopedDraft: document.querySelector('.venture-workspace-dock .now-composer textarea')?.value,
+      wholeVentureDraft: JSON.parse(sessionStorage.getItem('drover:composer-drafts:v1') || '{}')[${JSON.stringify(`${ventureId}:venture`)}] || '',
       decisionEnabled: document.querySelector('.now-gate-btn[data-intent="reject"]')?.disabled === false,
       staleGateMessage: /Offline|Reconnecting/i.test(document.querySelector('.now-gate')?.textContent || ''),
     }))()`);
@@ -270,9 +241,17 @@ test("overnight return: held work, attributable proof, and offline recovery rema
     assert.equal(recovered.selectedWork, true, "reconnect cleared the selected work");
     assert.equal(recovered.gate, true, "reconnect closed the selected decision gate");
     assert.equal(recovered.mapAbsent, true, "reconnect remounted the map behind selected work");
-    assert.equal(recovered.draft, recoveryDraft, "the whole-venture draft did not survive reconnect");
+    assert.equal(recovered.scopedDraft, recoveryDraft, "reconnect lost the draft while returned work stayed open");
+    assert.equal(recovered.wholeVentureDraft, recoveryDraft, "the whole-venture draft did not survive reconnect");
     assert.equal(recovered.decisionEnabled, true, "reconnect left the founder decision disabled");
     assert.equal(recovered.staleGateMessage, false, "reconnect left stale offline copy inside the decision gate");
+
+    await client.evaluate(`[
+      ...document.querySelectorAll('.venture-workspace button')
+    ].find((button) => button.textContent?.trim() === 'Whole venture')?.click()`);
+    await waitForDom(client, `!!document.querySelector('.vh[aria-label]')`, "whole-venture Home did not reopen after reconnect");
+    const restoredDraft = await client.evaluate(`document.querySelector('.venture-workspace-dock .now-composer textarea')?.value || ''`);
+    assert.equal(restoredDraft, recoveryDraft, "the scope-safe whole-venture draft was not restored when its scope reopened");
     await captureEvidence(client, "overnight-recovered-in-place");
 
     await assertNoUnhandledRejections(client);

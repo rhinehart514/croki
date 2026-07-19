@@ -6,19 +6,44 @@
 // plain direction → approaches/active-work/results, else a read-only overview). Never the same card for
 // every kind. The graph is one action away via "Map" and is a mode, not the host.
 //
-// This ports the StageWorkspace spine (pinned identity head, contextual View control, breadcrumb) onto the
-// permanent center. Descending DEEPER re-keys the SAME selection (onDescend); broadening (onBroaden) and
-// Escape climb back one rung. The frame owns the selection + mode state; the Workbench only renders it.
+// Selected work follows the T3 thread/result composition: intent, conversation, returned material, and the
+// next founder decision occupy one continuous reading surface. Registry-backed alternatives remain available
+// as a compact result switcher, not a permanent second pane. Descending DEEPER re-keys the SAME selection.
 import { useMemo, useState } from "react";
-import { ChevronLeft, Compass, Layers } from "lucide-react";
-import type { FirmActiveDrive, FirmVenture } from "@/api";
+import { ChevronLeft, ClipboardList, Compass, FileDiff, Files, GitCompareArrows, ShieldCheck } from "lucide-react";
+import type { FirmActiveDrive, FirmVenture, WorkIndexOutlineObject } from "@/api";
 import type { FirmArchitectureProjection, FirmConversationMessage, FirmLens } from "@/types";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
 import type { Direction, DirectionSection } from "@/components/now/directionModel";
 import { projectStageContext } from "@/components/stage/projectStageContext";
 import { buildStageWorkspaces, getStageWorkspace, type StageActions } from "@/components/stage/stageRegistry";
 import { VentureHome } from "./VentureHome";
+import { WorkNarrative } from "./WorkNarrative";
 import "./workbench.css";
+
+const SURFACE_ICON = {
+  consequence: ShieldCheck,
+  "product-artifact": FileDiff,
+  comparison: GitCompareArrows,
+  direction: ClipboardList,
+  overview: Files,
+} as const;
+
+const SURFACE_LABEL: Record<string, string> = {
+  consequence: "Decision",
+  "product-artifact": "Changes",
+  comparison: "Approaches",
+  direction: "Result",
+  overview: "Context",
+};
+
+const SURFACE_KICKER: Record<string, string> = {
+  consequence: "Your decision",
+  "product-artifact": "What changed",
+  comparison: "Compare the work",
+  direction: "Latest result",
+  overview: "Supporting context",
+};
 
 export function Workbench({
   venture,
@@ -28,6 +53,8 @@ export function Workbench({
   projection,
   cursor,
   selection,
+  selectedDirection,
+  selectedObject = null,
   sections,
   now,
   onSelectDirection,
@@ -46,6 +73,8 @@ export function Workbench({
   projection: FirmArchitectureProjection | null;
   cursor: string | null;
   selection: CanvasSelection;
+  selectedDirection: Direction | null;
+  selectedObject?: WorkIndexOutlineObject | null;
   sections: DirectionSection[];
   now: number;
   onSelectDirection: (direction: Direction) => void;
@@ -58,23 +87,21 @@ export function Workbench({
   readOnlyReason: string | null;
 }) {
   const stage = useMemo(
-    () => projectStageContext(venture.id, selection, lens, messages, activeDrives, projection, cursor),
-    [venture.id, selection, lens, messages, activeDrives, projection, cursor],
+    () => projectStageContext(venture.id, selection, lens, messages, activeDrives, projection, cursor, selectedDirection, selectedObject),
+    [venture.id, selection, lens, messages, activeDrives, projection, cursor, selectedDirection, selectedObject],
   );
   const list = useMemo(() => buildStageWorkspaces(stage), [stage]);
 
   // A representation choice belongs only to this visit to this truth state. A new selection, a return through
   // Home, or a newly higher-precedence body (especially a founder gate) resets to the registry default rather
   // than reviving an older manual view that can hide what just changed.
-  const selectionKey = `${selection?.betId ?? ""}:${selection?.workRef ?? ""}:${selection?.architectureId ?? ""}:${selection?.theoryId ?? ""}`;
+  const selectionKey = `${selection?.betId ?? ""}:${selection?.workRef ?? ""}:${selection?.threadRef ?? ""}:${selection?.objectId ?? ""}:${selection?.architectureId ?? ""}:${selection?.theoryId ?? ""}`;
   const defaultId = list[0]?.id ?? "overview";
-  const [view, setView] = useState({ selectionKey, defaultId, activeId: defaultId, open: false });
-  const viewIsCurrent = view.selectionKey === selectionKey
-    && view.defaultId === defaultId
-    && list.some((workspace) => workspace.id === view.activeId);
-  if (!viewIsCurrent) setView({ selectionKey, defaultId, activeId: defaultId, open: false });
-  const active = getStageWorkspace(list, viewIsCurrent ? view.activeId : defaultId);
-  const viewOpen = viewIsCurrent && view.open;
+  const [views, setViews] = useState<Record<string, { defaultId: string; activeId: string }>>({});
+  const remembered = views[selectionKey];
+  const rememberedIsCurrent = remembered?.defaultId === defaultId
+    && list.some((workspace) => workspace.id === remembered.activeId);
+  const active = getStageWorkspace(list, rememberedIsCurrent ? remembered.activeId : defaultId);
 
   const actions: StageActions = {
     ventureId: venture.id,
@@ -86,67 +113,27 @@ export function Workbench({
     readOnlyReason,
   };
 
-  const showHome = !selection;
+  const showHome = !selection && !selectedDirection;
 
-  const crumbs = [venture.name, stage.direction?.sentence ?? null, stage.focusLabel ?? null]
+  const crumbs = [venture.name, stage.focusLabel ?? null]
     .filter((crumb): crumb is string => Boolean(crumb));
 
-  const eyebrow = stage.waiting.length
-    ? "Needs your decision"
-    : stage.ctx?.drive
-      ? "Working now"
-      : stage.direction?.state === "from-market"
-        ? "The market answered"
-        : "This work";
-  const title = stage.direction?.sentence ?? stage.focusLabel ?? venture.name;
-
-  const pick = (id: string) => setView({ selectionKey, defaultId, activeId: id, open: false });
+  const pick = (id: string) => setViews((current) => ({
+    ...current,
+    [selectionKey]: { defaultId, activeId: id },
+  }));
 
   return (
     <section className="workbench" data-testid="venture-workbench" data-mode="work">
       <header className="workbench-bar">
-        {selection ? (
+        {!showHome ? (
           <button type="button" className="workbench-back" onClick={onBroaden}>
-            <ChevronLeft aria-hidden="true" /> Back to venture
+            <ChevronLeft aria-hidden="true" /> {selection?.workRef ? "Back to direction" : "Venture overview"}
           </button>
         ) : (
           <span className="workbench-here">Workbench</span>
         )}
         <div className="workbench-bar-actions">
-          {selection && list.length > 1 ? (
-            <div className="now-view">
-              <button
-                type="button"
-                className="now-view-toggle"
-                aria-haspopup="menu"
-                aria-expanded={viewOpen}
-                onClick={() => setView((current) => ({
-                  selectionKey,
-                  defaultId,
-                  activeId: viewIsCurrent ? current.activeId : defaultId,
-                  open: viewIsCurrent ? !current.open : true,
-                }))}
-              >
-                <Layers aria-hidden="true" /> View · {active.label}
-              </button>
-              {viewOpen ? (
-                <div className="now-view-menu" role="menu">
-                  {list.map((workspace) => (
-                    <button
-                      key={workspace.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={workspace.id === active.id}
-                      className="now-view-option"
-                      onClick={() => pick(workspace.id)}
-                    >
-                      {workspace.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
           <button type="button" className="workbench-map" onClick={onSummonMap}>
             <Compass aria-hidden="true" /> Map
           </button>
@@ -163,25 +150,54 @@ export function Workbench({
           onSummonMap={onSummonMap}
         />
       ) : (
-        <div className="workbench-scroll">
-          {crumbs.length > 1 ? (
-            <nav className="stage-workspace-crumbs" aria-label="Where you are">
-              {crumbs.map((crumb, index) => (
-                <span key={index} className="stage-workspace-crumb">
-                  {crumb}{index < crumbs.length - 1 ? <span aria-hidden="true"> › </span> : null}
-                </span>
-              ))}
-            </nav>
-          ) : null}
+        <div className="selected-work-environment">
+          <div className="selected-work-scroll">
+            <div className="selected-work-thread">
+              {crumbs.length > 1 ? (
+                <nav className="stage-workspace-crumbs" aria-label="Where you are">
+                  {crumbs.map((crumb, index) => (
+                    <span key={index} className="stage-workspace-crumb">
+                      {crumb}{index < crumbs.length - 1 ? <span aria-hidden="true"> / </span> : null}
+                    </span>
+                  ))}
+                </nav>
+              ) : null}
+              {lens && !stage.object ? <WorkNarrative stage={stage} lens={lens} messages={messages} /> : null}
 
-          <div className="now-doc-head">
-            <span className="now-doc-eyebrow">{eyebrow}</span>
-            <h1 className="now-doc-title">{title}</h1>
-            {stage.direction?.understanding ? <p className="now-doc-why">{stage.direction.understanding}</p> : null}
-          </div>
-
-          <div className="stage-workspace-body" data-testid="stage-workspace" role="region" aria-label="Selected work">
-            {active.render(stage, actions)}
+              <section className="work-material" aria-label="Result">
+                <header className="work-material-head">
+                  <div>
+                    <span className="work-material-kicker">{SURFACE_KICKER[active.id] ?? "Result"}</span>
+                    <h3>{SURFACE_LABEL[active.id] ?? active.label}</h3>
+                  </div>
+                  {list.length > 1 ? (
+                    <div className="work-material-tabs" role="tablist" aria-label="Result views">
+                      {list.map((workspace) => {
+                        const Icon = SURFACE_ICON[workspace.id as keyof typeof SURFACE_ICON] ?? Files;
+                        const label = SURFACE_LABEL[workspace.id] ?? workspace.label;
+                        return (
+                          <button
+                            key={workspace.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={workspace.id === active.id}
+                            aria-label={label}
+                            title={label}
+                            className="work-material-tab"
+                            onClick={() => pick(workspace.id)}
+                          >
+                            <Icon aria-hidden="true" /><span>{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </header>
+                <div className="stage-workspace-body" data-testid="stage-workspace" role="tabpanel" aria-label={SURFACE_LABEL[active.id] ?? active.label}>
+                  {active.render(stage, actions)}
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       )}

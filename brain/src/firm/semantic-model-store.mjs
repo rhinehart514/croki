@@ -1,5 +1,7 @@
 // Venture-scoped persistence adapter for the pure canonical semantic model.
 
+import crypto from "node:crypto";
+
 import { getVentureDoc, listVentureDocs, venturePersistence, now } from "./venture-store.mjs";
 import {
   normalizeSemanticModel,
@@ -7,7 +9,13 @@ import {
 } from "./semantic-model.mjs";
 import { applySemanticModelMutations } from "./semantic-model-mutations.mjs";
 import { isRepositoryRef } from "./repository-ref.mjs";
-import { ROOT_THREAD_ID, createRootThread } from "./thread.mjs";
+import {
+  ROOT_THREAD_ID,
+  createRootThread,
+  createThread,
+  withThreadReferences,
+  withThreadReviewedThrough,
+} from "./thread.mjs";
 import { completeRun, createRun } from "./run.mjs";
 
 export const SEMANTIC_MODEL_KEY = "atlas";
@@ -96,6 +104,98 @@ export function ensureRootThread(ventureId, { actor = SYSTEM_ACTOR, at } = {}, o
   if (existing) return { threadRef: rootRef, created: false };
   applyOne(ventureId, createRootThread(ventureId, { at }), "threads", { actor, at }, options);
   return { threadRef: rootRef, created: true };
+}
+
+function directionThreadId(identity) {
+  return `direction-${crypto.createHash("sha256").update(String(identity)).digest("hex").slice(0, 20)}`;
+}
+
+function normalizeRef(value, prefix) {
+  const ref = String(value ?? "").trim();
+  if (!ref) return null;
+  return ref.startsWith(prefix) ? ref : `${prefix}${ref}`;
+}
+
+// Form or resume the child Thread that owns one founder direction. Callers may supply an exact threadRef
+// once the UI carries it end-to-end. Until then, bet-scoped directions resume the latest open child for
+// that bet; betless directions mint from their initiating message. The root remains organization only —
+// runs never land on it after this seam.
+export function ensureDirectionThread(ventureId, {
+  name,
+  originMessageRef = null,
+  subjectRefs = [],
+  resumeThreadRef = null,
+  identityKey = null,
+  actor = SYSTEM_ACTOR,
+  at,
+} = {}, options = {}) {
+  ensureRootThread(ventureId, { actor, at }, options);
+  const origin = normalizeRef(originMessageRef, "conversation:");
+  const subjects = [...new Set(list(subjectRefs).map((ref) => String(ref ?? "").trim()).filter(Boolean))];
+  const model = getSemanticModelState(ventureId, options).model;
+  const exactId = normalizeRef(resumeThreadRef, "thread:")?.slice("thread:".length);
+  let existing = exactId ? model.threads.find((thread) => thread.id === exactId) : null;
+  if (exactId && (!existing || existing.id === ROOT_THREAD_ID)) {
+    throw Object.assign(new Error(`No such direction thread: ${exactId}`), { code: "semantic_model_missing_ref", status: 404 });
+  }
+  if (!existing) {
+    const betRefs = subjects.filter((ref) => ref.startsWith("bet:"));
+    existing = model.threads
+      .filter((thread) => thread.id !== ROOT_THREAD_ID && (thread.lifecycle ?? "open") === "open")
+      .filter((thread) => betRefs.some((ref) => list(thread.subjectRefs).includes(ref)))
+      .sort((a, b) => String(b.updatedAt ?? b.createdAt ?? "").localeCompare(String(a.updatedAt ?? a.createdAt ?? "")))[0] ?? null;
+  }
+  if (existing) {
+    const updated = withThreadReferences(existing, {
+      messageRefs: origin ? [origin] : [],
+      subjectRefs: subjects,
+      at,
+    });
+    applyOne(ventureId, updated, "threads", { actor, at }, options, "update-record");
+    return { threadRef: `thread:${existing.id}`, created: false };
+  }
+
+  const id = directionThreadId(origin ?? identityKey ?? `${ventureId}:${name ?? "direction"}`);
+  const collision = model.threads.find((thread) => thread.id === id);
+  if (collision) {
+    const updated = withThreadReferences(collision, {
+      messageRefs: origin ? [origin] : [],
+      subjectRefs: subjects,
+      at,
+    });
+    applyOne(ventureId, updated, "threads", { actor, at }, options, "update-record");
+    return { threadRef: `thread:${collision.id}`, created: false };
+  }
+  const record = createThread({
+    id,
+    name: String(name ?? "Founder direction").trim() || "Founder direction",
+    messageRefs: origin ? [origin] : [],
+    subjectRefs: subjects,
+    parentThreadRef: `thread:${ROOT_THREAD_ID}`,
+    originMessageRef: origin,
+    createdAt: at ?? null,
+    updatedAt: at ?? null,
+  });
+  applyOne(ventureId, record, "threads", { actor, at }, options);
+  return { threadRef: `thread:${id}`, created: true };
+}
+
+export function extendDirectionThread(ventureId, threadRef, { messageRefs = [], subjectRefs = [], actor = SYSTEM_ACTOR, at } = {}, options = {}) {
+  const id = normalizeRef(threadRef, "thread:")?.slice("thread:".length);
+  const existing = getSemanticModelState(ventureId, options).model.threads.find((thread) => thread.id === id);
+  if (!existing || existing.id === ROOT_THREAD_ID) throw Object.assign(new Error(`No such direction thread: ${id}`), { code: "semantic_model_missing_ref", status: 404 });
+  const updated = withThreadReferences(existing, { messageRefs, subjectRefs, at });
+  applyOne(ventureId, updated, "threads", { actor, at }, options, "update-record");
+  return structuredClone(updated);
+}
+
+export function markDirectionThreadReviewed(ventureId, threadRef, reviewedThrough, { actor = SYSTEM_ACTOR, at } = {}, options = {}) {
+  const id = normalizeRef(threadRef, "thread:")?.slice("thread:".length);
+  const existing = getSemanticModelState(ventureId, options).model.threads.find((thread) => thread.id === id);
+  if (!existing || existing.id === ROOT_THREAD_ID) throw Object.assign(new Error(`No such direction thread: ${id}`), { code: "semantic_model_missing_ref", status: 404 });
+  const updated = withThreadReviewedThrough(existing, reviewedThrough, { at });
+  applyOne(ventureId, updated, "threads", { actor, at }, options, "update-record");
+  return structuredClone(updated);
 }
 
 // Persist a run record after drive input/configuration/runtime validation, before provider dispatch.

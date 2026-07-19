@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getActiveDrives, getConversation, getHealth, getLens, type FirmActiveDrive } from "@/api";
+import { getActiveDrives, getConversation, getHealth, getLens, getWorkIndex, type FirmActiveDrive, type WorkIndex } from "@/api";
 import type { FirmConversationMessage, FirmLens } from "@/types";
 import { setConsequentialWritesAllowed } from "@/lib/freshness";
 import { recordUxMetric, recordUxMetricOnce } from "@/lib/ux-metrics";
@@ -42,6 +42,7 @@ export function useFirmConnection(ventureId: string | null) {
   const [lens, setLens] = useState<FirmLens | null>(null);
   const [messages, setMessages] = useState<FirmConversationMessage[]>([]);
   const [activeDrives, setActiveDrives] = useState<FirmActiveDrive[]>([]);
+  const [workIndex, setWorkIndex] = useState<WorkIndex | null>(null);
   const [connection, setConnection] = useState<FirmConnectionState>({
     phase: "opening",
     lastUpdatedAt: null,
@@ -58,6 +59,7 @@ export function useFirmConnection(ventureId: string | null) {
       setLens(null);
       setMessages([]);
       setActiveDrives([]);
+      setWorkIndex(null);
       setConnection({ phase: "opening", lastUpdatedAt: null, retryAt: null, failures: 0, message: null });
       setConsequentialWritesAllowed(true);
       refreshRef.current = () => undefined;
@@ -70,6 +72,7 @@ export function useFirmConnection(ventureId: string | null) {
     let polling = false;
     const openedAt = performance.now();
     setConsequentialWritesAllowed(false);
+    setWorkIndex(null);
     setConnection({ phase: "opening", lastUpdatedAt: null, retryAt: null, failures: 0, message: null });
 
     const schedule = (delay: number) => {
@@ -81,10 +84,11 @@ export function useFirmConnection(ventureId: string | null) {
       if (stopped || polling) return;
       polling = true;
       try {
-        const [lensResponse, conversationResponse, drivesResponse, health] = await Promise.all([
+        const [lensResponse, conversationResponse, drivesResponse, workIndexResponse, health] = await Promise.all([
           getLens(ventureId),
           getConversation(ventureId),
           getActiveDrives(ventureId),
+          getWorkIndex(ventureId),
           getHealth(),
         ]);
         if (stopped) return;
@@ -93,6 +97,7 @@ export function useFirmConnection(ventureId: string | null) {
         setLens(lensResponse.lens);
         setMessages(conversationResponse.messages);
         setActiveDrives(drivesResponse.drives);
+        setWorkIndex(workIndexResponse.workIndex);
         if (hasGroundedValue(lensResponse.lens, conversationResponse.messages)) {
           recordUxMetricOnce("first_grounded_value", ventureId, performance.now() - openedAt);
         }
@@ -145,5 +150,5 @@ export function useFirmConnection(ventureId: string | null) {
     };
   }, [ventureId]);
 
-  return { lens, messages, activeDrives, connection, refresh, setLens, setMessages };
+  return { lens, messages, activeDrives, workIndex, connection, refresh, setLens, setMessages, setWorkIndex };
 }

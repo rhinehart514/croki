@@ -1,53 +1,56 @@
 @import "tailwindcss";
-@import "@fontsource-variable/geist";
-@import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/dm-sans";
+@import "@fontsource-variable/jetbrains-mono";
 
 :root {
+  color-scheme: dark;
   font-family: var(--sans);
-  color: #23211d;
-  background: #e3e0da;
+  color: #f5f5f5;
+  background: #171717;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
-  --serif: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
-  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
-  --mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  /* T3-like application typography: humanist operating text and precise technical text. */
+  --serif: "DM Sans Variable", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --sans: "DM Sans Variable", "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: "SF Mono", "SFMono-Regular", "JetBrains Mono Variable", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
   --font-orbital-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --font-heading: var(--serif);
+  --font-heading: var(--sans);
   --font-mono: var(--mono);
 
-  --ink: #23211d;
+  /* Dark-first neutral chrome. Small tonal steps and hairlines establish hierarchy. */
+  --ink: #f5f5f5;
   --ink-1: var(--ink);
-  --ink-2: #4e4b44;
-  --ink-3: #615e56;
-  --muted: #615e56;
-  --faint: #aba598;
-  --ghost: #c6c1b6;
-  --line: #d3cfc6;
-  --line-2: #c6c1b6;
-  --surface: #f4f2ee;
+  --ink-2: #d4d4d4;
+  --ink-3: #a3a3a3;
+  --muted: #a3a3a3;
+  --faint: #737373;
+  --ghost: #525252;
+  --line: rgb(255 255 255 / 6%);
+  --line-2: rgb(255 255 255 / 10%);
+  --surface: #1c1c1c;
   --surface-1: var(--surface);
-  --surface-2: #dcd8d0;
-  --canvas: #e9e6e0;
-  --canvas-dot: #d3cfc6;
-  --panel: #efede8;
-  --room: #e3e0da;
+  --surface-2: rgb(255 255 255 / 4%);
+  --canvas: #171717;
+  --canvas-dot: rgb(255 255 255 / 8%);
+  --panel: #191919;
+  --room: #171717;
 
-  --primary: var(--ink);
-  --on-primary: var(--canvas);
-  --link: #1e5245;
-  --ember: #2e6e5e;
-  --ember-soft: #dce7e2;
-  --ember-ink: #1e5245;
-  --ember-line: #b7cec6;
-  --gap: #a9791a;
-  --gap-soft: #f1e6cd;
-  --gap-ink: #72510f;
-  --proven: #5d7350;
-  --proven-soft: #e1e7db;
-  --danger: #b4443a;
-  --blind: #aba598;
+  --primary: #3f73d8;
+  --on-primary: #ffffff;
+  --link: #75a7ff;
+  --ember: #34d399;
+  --ember-soft: rgb(52 211 153 / 12%);
+  --ember-ink: #6ee7b7;
+  --ember-line: rgb(52 211 153 / 30%);
+  --gap: #f59e0b;
+  --gap-soft: rgb(245 158 11 / 12%);
+  --gap-ink: #fbbf24;
+  --proven: #4ade80;
+  --proven-soft: rgb(74 222 128 / 12%);
+  --danger: #f87171;
+  --blind: #737373;
 
   --text-xs: 0.6875rem;
   --text-meta: 0.75rem;
@@ -73,25 +76,29 @@
   --space-12: 3rem;
 
   --r-sm: 6px;
-  --r-md: 9px;
-  --r-lg: 12px;
+  --r-md: 10px;
+  --r-lg: 14px;
   --r-xl: 16px;
-  --r-2xl: 24px;
-  --shadow-sm: 0 1px 2px rgba(38, 33, 26, 0.05);
-  --shadow-card: 0 1px 0 rgba(38, 33, 26, 0.03), 0 4px 12px -7px rgba(38, 33, 26, 0.16);
-  /* selected / hover-raised node lift — the composite's warm two-part shadow (never neutral grey) */
-  --shadow-lift: 0 2px 6px rgba(38, 37, 31, 0.08), 0 20px 50px rgba(38, 37, 31, 0.13);
-  --shadow-pop: 0 4px 12px rgba(38, 33, 26, 0.07), 0 12px 32px -10px rgba(38, 33, 26, 0.18);
-  --shadow-modal: 0 8px 24px -12px rgba(38, 33, 26, 0.22), 0 24px 64px -20px rgba(38, 33, 26, 0.28);
-  --shadow-rail: 4px 0 18px -14px rgba(38, 33, 26, 0.22);
-  --avatar-inset: inset 0 0 0 1px rgba(38, 33, 26, 0.08);
+  --r-2xl: 20px;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 28%);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 3%), 0 4px 14px -8px rgb(0 0 0 / 45%);
+  --shadow-lift: 0 2px 8px rgb(0 0 0 / 36%), 0 18px 48px -20px rgb(0 0 0 / 62%);
+  --shadow-pop: 0 4px 14px -7px rgb(0 0 0 / 42%), 0 18px 48px -20px rgb(0 0 0 / 62%);
+  --shadow-modal: 0 8px 24px -12px rgb(0 0 0 / 65%), 0 24px 64px -20px rgb(0 0 0 / 72%);
+  --shadow-rail: 4px 0 18px -14px rgb(0 0 0 / 60%);
+  --avatar-inset: inset 0 0 0 1px rgb(255 255 255 / 8%);
   --elev-panel-shadow: var(--shadow-modal);
-  --elev-panel-radius: 24px;
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --elev-panel-radius: 16px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-out: var(--ease);
-  --dur-fast: 180ms;
-  --dur-base: 220ms;
-  --dur-focus: 260ms;
+  --dur-fast: 150ms;
+  --dur-base: 180ms;
+  --dur-focus: 200ms;
+
+  --app-scrollbar-width: 6px;
+  --workspace-topbar-height: 52px;
+  --vw-index-width: 256px;
+  --surface-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
 
   --background: var(--room);
   --foreground: var(--ink);
@@ -109,87 +116,78 @@
   --destructive: var(--danger);
   --border: var(--line);
   --input: var(--line-2);
-  --ring: var(--ink);
+  --ring: var(--primary);
   --radius: var(--r-md);
 
-  /* ── ADE composite token layer (lifted byte-for-byte from ade-frame-round2/composite.html;
-     composite wins on look). These are the authored surface the node archetypes and shell draw
-     from. Old names above stay as compatibility aliases during the transition. ── */
-  --paper: #eae6df;      /* room / app background */
-  --paper-2: #e3ded5;    /* recessed / inset well */
-  --paper-3: #ded8cd;    /* deepest recess */
-  --card-resting: #f4f1ea;   /* resting card / chip */
-  --card-raised: #faf8f3;    /* lifted card (effort, handoff, inspector draft) */
-  --card-warm: #f6f2e9;      /* warm instrument surface */
+  /* Legacy surface aliases stay semantic while older views migrate to the new shell. */
+  --paper: var(--room);
+  --paper-2: #141414;
+  --paper-3: #101010;
+  --card-resting: var(--surface);
+  --card-raised: #202020;
+  --card-warm: #1e1e1e;
 
-  --ink-warm: #26251f;   /* composite primary ink */
-  --ink-2-warm: #4a4840;
-  --ink-3-warm: #78756a;
-  --ink-4-warm: #a8a498;
-  --ink-5-warm: #bdb9ac;
-  --line-warm: #d8d2c6;
-  --line-2-warm: #cbc4b5;
-  --line-soft: #e0dacf;
-  --hair: #e2dcd0;
+  --ink-warm: var(--ink);
+  --ink-2-warm: var(--ink-2);
+  --ink-3-warm: var(--ink-3);
+  --ink-4-warm: var(--faint);
+  --ink-5-warm: var(--ghost);
+  --line-warm: var(--line);
+  --line-2-warm: var(--line-2);
+  --line-soft: var(--line);
+  --hair: var(--line);
 
-  /* muted green — living / connected / affirm */
-  --green: #3f5c46;
-  --green-2: #587a5f;
-  --green-3: #6f8f75;
-  --green-soft: #e0e8de;
-  --green-tint: #eef2ea;
-  --green-line: #c4d4c2;
+  /* Status colors keep their Drover meaning; color is never used as chrome. */
+  --green: #6ee7b7;
+  --green-2: #34d399;
+  --green-3: #22c55e;
+  --green-soft: rgb(52 211 153 / 12%);
+  --green-tint: rgb(52 211 153 / 8%);
+  --green-line: rgb(52 211 153 / 28%);
 
-  /* one amber — needs-you only, never decorative */
-  --amber: #9a6b2f;
-  --amber-ink: #7a5322;
-  --amber-soft: #f0e4d0;
-  --amber-line: #e4d2ae;
-  --clay: #a86b52;
+  --amber: #f59e0b;
+  --amber-ink: #fbbf24;
+  --amber-soft: rgb(245 158 11 / 11%);
+  --amber-line: rgb(245 158 11 / 28%);
+  --clay: #fb923c;
 
-  /* crew accents — a distinct person per teammate */
-  --yara: #587a5f;   --yara-soft: #e2ebe1;
-  --mira: #8a6d34;   --mira-soft: #efe4cf;
-  --soren: #4f6d86;  --soren-soft: #dfe7ed;
-  --kai: #8a5a63;    --kai-soft: #eddfe1;
+  --yara: #34d399;   --yara-soft: rgb(52 211 153 / 12%);
+  --mira: #fbbf24;   --mira-soft: rgb(251 191 36 / 12%);
+  --soren: #60a5fa;  --soren-soft: rgb(96 165 250 / 12%);
+  --kai: #f472b6;    --kai-soft: rgb(244 114 182 / 12%);
 
-  /* warm-tinted shadow ladder — every shadow is ink-brown, never neutral grey */
-  --sh-rest: 0 1px 2px rgba(38,37,31,0.05), 0 8px 22px rgba(38,37,31,0.07);
-  --sh-lift: 0 2px 6px rgba(38,37,31,0.08), 0 20px 50px rgba(38,37,31,0.13);
-  --sh-hub:  0 3px 8px rgba(38,37,31,0.09), 0 24px 60px rgba(38,37,31,0.13);
-  --sh-chip: 0 1px 2px rgba(38,37,31,0.04);
-  --sh-panel: -18px 0 44px rgba(38,37,31,0.045);
-  --sh-rail-edge: 18px 0 44px rgba(38,37,31,0.04);
-  --inset-top: inset 0 1px 0 rgba(255,255,255,0.5);
+  --sh-rest: var(--shadow-card);
+  --sh-lift: var(--shadow-lift);
+  --sh-hub: var(--shadow-modal);
+  --sh-chip: var(--shadow-sm);
+  --sh-panel: -18px 0 44px rgb(0 0 0 / 24%);
+  --sh-rail-edge: 18px 0 44px rgb(0 0 0 / 24%);
+  --inset-top: inset 0 1px 0 rgb(255 255 255 / 5%);
 
   --font-serif-voice: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --track-mono: 0.09em;
 
-  /* composite radii — the effort/composer/inspector-draft land at 13, capability at 11 */
-  --r-card: 13px;
-  --r-cap: 11px;
+  --r-card: 16px;
+  --r-cap: 10px;
   --r-well: 8px;
-  --r-chip: 7px;
+  --r-chip: 8px;
 
-  /* ── Cool application-shell neutrals — the Now direction workspace. Cursor-benchmark
-     density and restraint: cooler surfaces, stronger text contrast, smaller radii,
-     minimal shadow. Scoped by usage to the Now shell; the warm ADE world above is
-     untouched. Kept mirrored in design-system/styles.css. ── */
-  --n-app: #ffffff;      /* workspace canvas — the lightest plane */
-  --n-rail: #f7f8f9;     /* rail + docked chrome */
-  --n-panel: #fcfcfd;    /* raised card / composer surface */
-  --n-sunk: #f1f3f5;     /* recessed well — diffs, previews, code */
-  --n-hover: #eef0f2;    /* row / control hover */
-  --n-selected: #e6e9ed; /* selected row */
-  --n-line: #e8eaed;     /* hairline separator */
-  --n-line-2: #d8dce1;   /* stronger border / input */
-  --n-ink: #16181c;      /* primary text — high contrast */
-  --n-ink-2: #3a3f46;    /* secondary text */
-  --n-ink-3: #5b6069;    /* tertiary / meta */
-  --n-ink-4: #8a9099;    /* faint / placeholder / disabled */
-  --r-tool: 6px;         /* the application radius — compact, precise */
-  --n-shadow: 0 1px 2px rgba(20, 24, 31, 0.05), 0 8px 24px -14px rgba(20, 24, 31, 0.18);
-  --n-shadow-pop: 0 6px 16px -8px rgba(20, 24, 31, 0.16), 0 20px 48px -22px rgba(20, 24, 31, 0.28);
+  /* Primary application shell: T3-like near-black planes and compact controls. */
+  --n-app: #171717;
+  --n-rail: #191919;
+  --n-panel: #1c1c1c;
+  --n-sunk: #131313;
+  --n-hover: rgb(255 255 255 / 4%);
+  --n-selected: rgb(255 255 255 / 7%);
+  --n-line: rgb(255 255 255 / 6%);
+  --n-line-2: rgb(255 255 255 / 10%);
+  --n-ink: #f5f5f5;
+  --n-ink-2: #d4d4d4;
+  --n-ink-3: #a3a3a3;
+  --n-ink-4: #737373;
+  --r-tool: 8px;
+  --n-shadow: var(--shadow-card);
+  --n-shadow-pop: var(--shadow-pop);
 }
 
 @theme inline {
@@ -211,6 +209,9 @@
   --color-accent: var(--shadcn-accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--green-2);
+  --color-warning: var(--amber);
+  --color-info: var(--primary);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -230,16 +231,13 @@ body {
   min-width: 960px;
   min-height: 100vh;
   overflow: hidden;
-  background: var(--room);
+  background-color: var(--room);
+  background-image: var(--surface-grain);
+  background-repeat: repeat;
+  background-size: 256px 256px;
   color: var(--ink);
   font-family: var(--sans);
   line-height: var(--leading-normal);
-}
-
-/* Browser-zoom accessibility fallback. Drover remains desktop-only; below the desktop CSS width,
-   the workbench overlays conversation instead of widening the page beyond the visible viewport. */
-@media (max-width: 959px) {
-  body { min-width: 0; }
 }
 
 button,
@@ -251,12 +249,36 @@ textarea { font: inherit; }
 }
 
 :where(button, a, input, textarea, select, [tabindex]):focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
   border-radius: var(--r-sm);
 }
 
 svg { width: 1em; height: 1em; }
+
+pre,
+code,
+kbd,
+samp { font-family: var(--mono); }
+
+::selection {
+  background: rgb(79 134 247 / 35%);
+  color: var(--ink);
+}
+
+::-webkit-scrollbar {
+  width: var(--app-scrollbar-width);
+  height: var(--app-scrollbar-width);
+}
+
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgb(255 255 255 / 10%);
+}
+
+::-webkit-scrollbar-thumb:hover { background: rgb(255 255 255 / 18%); }
 
 .react-flow__handle {
   width: 7px !important;

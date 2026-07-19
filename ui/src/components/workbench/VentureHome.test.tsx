@@ -50,4 +50,15 @@ describe("VentureHome", () => {
     fireEvent.click(screen.getByRole("button", { name: /Open the map/ }));
     expect(onSummon).toHaveBeenCalled();
   });
+
+  it("names returned work instead of claiming the venture is quiet", () => {
+    const sections = [section({ key: "changed", label: "Recently changed", tone: "changed", directions: [
+      direction({ id: "d2", sentence: "A launch draft is ready.", state: "changed" }),
+    ] })];
+    render(<VentureHome venture={venture} sections={sections} now={Date.now()} onSelectDirection={vi.fn()} onSummonMap={vi.fn()} />);
+
+    expect(screen.getByText("1 result ready to review")).toBeTruthy();
+    expect(screen.queryByText(/All quiet/)).toBeNull();
+    expect(screen.getByRole("button", { name: /A launch draft is ready.*Review result/s })).toBeTruthy();
+  });
 });

@@ -205,6 +205,7 @@ export default async function handle({ req, res, url, deps = {} }) {
     }
     const betId = branchedBetId ?? trimOrNull(body?.betId);
     const workRef = branchedBetId ? null : trimOrNull(body?.workRef);
+    const threadRef = branchedBetId ? null : trimOrNull(body?.threadRef);
     const architectureId = trimOrNull(body?.architectureTarget?.id ?? body?.architectureId);
     const architectureStepId = trimOrNull(body?.architectureTarget?.stepId ?? body?.architectureStepId);
     const requestedArchitectureRevision = Number.isInteger(body?.architectureTarget?.revision)
@@ -253,6 +254,7 @@ export default async function handle({ req, res, url, deps = {} }) {
       target: {
         betId,
         workRef,
+        threadRef,
         architectureId,
         architectureStepId,
         architectureRevision: architectureContext?.architectureRevision ?? null,

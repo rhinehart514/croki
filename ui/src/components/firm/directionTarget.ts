@@ -2,6 +2,8 @@ export type DirectionTarget = {
   betId: string | null;
   workRef: string | null;
   teammateRefs: string[];
+  threadRef?: string | null;
+  objectId?: string | null;
   architectureId?: string | null;
   architectureStepId?: string | null;
   architectureRevision?: number | null;
@@ -22,6 +24,8 @@ export function normalizeDirectionTarget(value: Partial<DirectionTarget> | null 
   const betId = String(value.betId ?? "").trim() || null;
   const workRef = betId ? (String(value.workRef ?? "").trim() || null) : null;
   const teammateRefs = refs(value.teammateRefs);
+  const threadRef = String(value.threadRef ?? "").trim() || null;
+  const objectId = String(value.objectId ?? "").trim() || null;
   const architectureId = String(value.architectureId ?? "").trim() || null;
   const architectureStepId = architectureId ? (String(value.architectureStepId ?? "").trim() || null) : null;
   const architectureRevision = architectureId && Number.isFinite(value.architectureRevision)
@@ -31,15 +35,27 @@ export function normalizeDirectionTarget(value: Partial<DirectionTarget> | null 
   const theorySubjectId = theoryId ? (String(value.theorySubjectId ?? "").trim() || null) : null;
   const theoryRevision = theoryId && Number.isFinite(value.theoryRevision) ? Number(value.theoryRevision) : null;
   const theoryLabel = theoryId ? (String(value.theoryLabel ?? "").trim() || null) : null;
-  return betId || workRef || teammateRefs.length || architectureId || (theoryId && theorySubjectId)
+  return betId || workRef || teammateRefs.length || threadRef || objectId || architectureId || (theoryId && theorySubjectId)
     ? {
       betId,
       workRef,
       teammateRefs,
+      ...(threadRef ? { threadRef } : {}),
+      ...(objectId ? { objectId } : {}),
       ...(architectureId ? { architectureId, architectureStepId, architectureRevision } : {}),
       ...(theoryId && theorySubjectId ? { theoryId, theorySubjectId, theoryRevision, theoryLabel } : {}),
     }
     : null;
+}
+
+export function targetObject(objectId: string, threadRef: string | null = null): DirectionTarget {
+  return {
+    betId: null,
+    workRef: null,
+    teammateRefs: [],
+    objectId,
+    ...(threadRef ? { threadRef } : {}),
+  };
 }
 
 export function targetTheory(
@@ -80,6 +96,7 @@ export function targetArchitecture(
     betId: null,
     workRef: null,
     teammateRefs: [],
+    objectId: architectureId,
     architectureId,
     architectureStepId: architectureStepId ?? null,
     architectureRevision,
@@ -95,6 +112,8 @@ export function toggleTargetTeammate(target: CanvasSelection, teammateRef: strin
     betId: target?.betId ?? null,
     workRef: target?.workRef ?? null,
     teammateRefs,
+    threadRef: target?.threadRef ?? null,
+    objectId: target?.objectId ?? null,
     architectureId: target?.architectureId ?? null,
     architectureStepId: target?.architectureStepId ?? null,
     architectureRevision: target?.architectureRevision ?? null,
@@ -108,6 +127,8 @@ export function toggleTargetTeammate(target: CanvasSelection, teammateRef: strin
 export function sameDirectionTarget(left: CanvasSelection, right: CanvasSelection): boolean {
   return (left?.betId ?? null) === (right?.betId ?? null)
     && (left?.workRef ?? null) === (right?.workRef ?? null)
+    && (left?.threadRef ?? null) === (right?.threadRef ?? null)
+    && (left?.objectId ?? null) === (right?.objectId ?? null)
     && (left?.architectureId ?? null) === (right?.architectureId ?? null)
     && (left?.architectureStepId ?? null) === (right?.architectureStepId ?? null)
     && (left?.architectureRevision ?? null) === (right?.architectureRevision ?? null)

@@ -7,7 +7,7 @@
 // wall items scoped to the selection are carried through so the consequence body can show the in-context gate.
 //
 // Presentation-free (no JSX). Everything here is a fold over durable data the frame already holds.
-import type { FirmActiveDrive, WallQueueItemView } from "@/api";
+import type { FirmActiveDrive, WallQueueItemView, WorkIndexOutlineObject } from "@/api";
 import type { FirmArchitectureProjection, FirmConversationMessage, FirmLens } from "@/types";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
 import { buildDirections, type Direction } from "@/components/now/directionModel";
@@ -27,11 +27,12 @@ export type StageContext = {
   waiting: WallQueueItemView[];
   // A short human label for the breadcrumb tail (the artifact/segment the founder descended into).
   focusLabel: string | null;
+  object: WorkIndexOutlineObject | null;
 };
 
 const EMPTY: StageContext = {
   selection: null, direction: null, ctx: null, focusedArtifact: null,
-  focusedExactChange: null, waiting: [], focusLabel: null,
+  focusedExactChange: null, waiting: [], focusLabel: null, object: null,
 };
 
 // Resolve the direction that owns the selected bet. buildDirections is the same fold the rail computes; a
@@ -56,10 +57,12 @@ export function projectStageContext(
   activeDrives: FirmActiveDrive[],
   projection: FirmArchitectureProjection | null,
   cursor: string | null,
+  directionOverride: Direction | null = null,
+  object: WorkIndexOutlineObject | null = null,
 ): StageContext {
-  if (!lens || !selection) return { ...EMPTY, selection };
+  if (!lens || (!selection && !directionOverride)) return { ...EMPTY, selection, object };
 
-  const direction = directionForSelection(selection, lens, messages, activeDrives, cursor);
+  const direction = directionOverride ?? directionForSelection(selection, lens, messages, activeDrives, cursor);
   const wallItems = lens.wallItems ?? [];
   const ctx = direction
     ? projectDirection(ventureId, direction, lens, wallItems as WallQueueItemView[], activeDrives, projection)
@@ -68,8 +71,8 @@ export function projectStageContext(
   // If the selection targets a specific staged artifact, resolve it so the product body leads with it.
   let focusedArtifact: ResolvedArtifact = null;
   let focusedExactChange: ExactChange | null = null;
-  let focusLabel: string | null = null;
-  if (selection.workRef && selection.betId) {
+  let focusLabel: string | null = object?.name ?? null;
+  if (selection?.workRef && selection.betId) {
     const bet = lens.bets.find((candidate) => candidate.id === selection.betId);
     const staged = bet?.staged?.find((entry) => entry.id === selection.workRef);
     if (staged) {
@@ -83,11 +86,17 @@ export function projectStageContext(
   }
 
   // Waiting wall items scoped to the selection: the exact bet's undecided outward acts.
-  const waiting = (wallItems as WallQueueItemView[]).filter((item) =>
-    item.decision === null
-    && item.betId === selection.betId
-    && (!selection.workRef || item.workRef === selection.workRef),
-  );
+  const waiting = selection
+    ? (wallItems as WallQueueItemView[]).filter((item) =>
+      item.decision === null
+      && item.betId === selection.betId
+      && (!selection.workRef || item.workRef === selection.workRef),
+    )
+    : direction
+      ? (wallItems as WallQueueItemView[]).filter((item) => (
+        item.decision === null && direction.waitingWallItemIds.includes(item.id)
+      ))
+      : [];
 
-  return { selection, direction, ctx, focusedArtifact, focusedExactChange, waiting, focusLabel };
+  return { selection, direction, ctx, focusedArtifact, focusedExactChange, waiting, focusLabel, object };
 }

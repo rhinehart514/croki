@@ -20,6 +20,8 @@ const SECTION_ICON: Record<DirectionSectionKey, typeof Compass> = {
   market: MessageSquareText,
   working: Waves,
   changed: Sparkles,
+  returned: Sparkles,
+  open: Compass,
 };
 
 // The primary verb a row offers, by state — the founder reads what the row will do before clicking.
@@ -27,7 +29,9 @@ function actionLabel(direction: Direction): string {
   if (direction.state === "needs-you") return "Make the decision";
   if (direction.state === "from-market") return "See what came back";
   if (direction.state === "working") return "Watch it work";
-  return "Open";
+  if (direction.state === "open") return "Continue work";
+  if (direction.state === "returned") return "Review result";
+  return "Review result";
 }
 
 function metaLine(direction: Direction, now: number): string {
@@ -57,12 +61,16 @@ export function VentureHome({
   const total = sections.reduce((sum, section) => sum + section.directions.length, 0);
   const needsYou = sections.find((section) => section.key === "needs-you")?.directions.length ?? 0;
   const working = sections.find((section) => section.key === "working")?.directions.length ?? 0;
+  const ready = (sections.find((section) => section.key === "market")?.directions.length ?? 0)
+    + (sections.find((section) => section.key === "changed")?.directions.length ?? 0)
+    + (sections.find((section) => section.key === "returned")?.directions.length ?? 0);
 
   // A summary line the founder reads on return: what is theirs to move, what is moving on its own.
   const summary = total === 0
     ? null
     : [
         needsYou ? `${needsYou} ${needsYou === 1 ? "decision needs" : "decisions need"} you` : null,
+        ready ? `${ready} ${ready === 1 ? "result" : "results"} ready to review` : null,
         working ? `${working} moving` : null,
       ].filter(Boolean).join(" · ") || "All quiet — nothing waiting on you";
 

@@ -113,7 +113,10 @@ export function projectDirection(
   }
   const exactChanges = [...changeByDiff.values()];
 
-  const outcomes = (lens.outcomes ?? []).filter((outcome) => outcome.betId && own.has(outcome.betId));
+  const outcomeIds = new Set(direction.outcomeIds);
+  const outcomes = (lens.outcomes ?? []).filter((outcome) => (
+    outcomeIds.has(outcome.id) || Boolean(outcome.betId && own.has(outcome.betId))
+  ));
   const impact = buildDirectionImpact(direction.betIds, lens, projection);
   const learning = memberBets.map((bet) => bet.learning).find((value): value is string => Boolean(value)) ?? null;
   const machinery = machineryRows(memberBets, drive, direction.approaches);

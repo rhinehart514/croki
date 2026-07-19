@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getPortfolioWall,
@@ -55,5 +55,33 @@ describe("VenturePicker portfolio gate", () => {
     await waitFor(() => expect(getPortfolioWall).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/portfolio return|your ventures, one wall|proof-gated frontier/i)).toBeNull();
     expect(screen.queryByText("Move a venture")).toBeNull();
+  });
+
+  it("makes existing ventures the primary path back to work", async () => {
+    vi.mocked(listVentures).mockResolvedValue({ ventures: [venture] });
+    const onOpen = vi.fn();
+
+    render(<VenturePicker onOpen={onOpen} />);
+
+    expect(await screen.findByRole("heading", { name: "Resume work" })).toBeTruthy();
+    expect(screen.queryByText(/one-person holding company/i)).toBeNull();
+    expect(screen.queryByText(/open (the live )?canvas/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /venture a.*resume work/i }));
+    expect(onOpen).toHaveBeenCalledWith(venture);
+  });
+
+  it("keeps creating another venture behind an explicit disclosure", async () => {
+    vi.mocked(listVentures).mockResolvedValue({ ventures: [venture] });
+
+    render(<VenturePicker onOpen={vi.fn()} />);
+
+    const toggle = await screen.findByRole("button", { name: /start another venture/i });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("form", { name: "Start a venture" })).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("form", { name: "Start a venture" })).toBeTruthy();
   });
 });

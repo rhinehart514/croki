@@ -15,7 +15,7 @@ vi.mock("@xyflow/react", () => ({
   ReactFlow: ({
     nodes, children, onNodeClick, onNodeDoubleClick, onPaneClick,
   }: {
-    nodes: Array<{ id: string; data: { title?: string } }>;
+    nodes: Array<{ id: string; data: { title?: string; object?: { name: string }; onSelect?: (id: string) => void } }>;
     children?: ReactNode;
     onNodeClick?: (event: unknown, node: { id: string }) => void;
     onNodeDoubleClick?: (event: unknown, node: { id: string }) => void;
@@ -27,10 +27,11 @@ vi.mock("@xyflow/react", () => ({
           key={node.id}
           type="button"
           data-testid={`node-${node.id}`}
-          onClick={(event) => onNodeClick?.(event, node)}
+          aria-label={node.data.object ? `Inspect ${node.data.object.name}` : undefined}
+          onClick={(event) => onNodeClick ? onNodeClick(event, node) : node.data.onSelect?.(node.id)}
           onDoubleClick={(event) => onNodeDoubleClick?.(event, node)}
         >
-          {node.data.title}
+          {node.data.object?.name ?? node.data.title}
         </button>
       ))}
       <button type="button" data-testid="pane" onClick={() => onPaneClick?.({ target: { classList: { contains: () => true } } })} />
@@ -40,6 +41,8 @@ vi.mock("@xyflow/react", () => ({
   Background: () => <div data-testid="background" />,
   Controls: () => <div data-testid="controls" />,
   BackgroundVariant: { Dots: "dots" },
+  MarkerType: { ArrowClosed: "arrowclosed" },
+  Position: { Left: "left", Right: "right" },
   ViewportPortal: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   useStore: (selector: (state: { transform: [number, number, number]; nodeLookup: Map<string, unknown> }) => unknown) => selector({ transform: [0, 0, 0.6], nodeLookup: new Map() }),
   useNodesState: (initial: unknown[]) => [initial, vi.fn(), vi.fn()],
@@ -49,6 +52,7 @@ vi.mock("@xyflow/react", () => ({
 const getLens = vi.fn();
 const getConversation = vi.fn();
 const getActiveDrives = vi.fn();
+const getWorkIndex = vi.fn();
 const getHealth = vi.fn();
 const getArchitectureProjection = vi.fn();
 const getCredentials = vi.fn();
@@ -61,6 +65,7 @@ vi.mock("@/api", async () => {
     getLens: (...a: unknown[]) => getLens(...a),
     getConversation: (...a: unknown[]) => getConversation(...a),
     getActiveDrives: (...a: unknown[]) => getActiveDrives(...a),
+    getWorkIndex: (...a: unknown[]) => getWorkIndex(...a),
     getHealth: (...a: unknown[]) => getHealth(...a),
     getArchitectureProjection: (...a: unknown[]) => getArchitectureProjection(...a),
     getCredentials: (...a: unknown[]) => getCredentials(...a),
@@ -69,6 +74,7 @@ vi.mock("@/api", async () => {
     driveTeammate: vi.fn(),
     replyInConversation: vi.fn(),
     stopActiveDrive: vi.fn(),
+    markWorkIndexReviewed: vi.fn(),
     markFounderPresent: vi.fn().mockResolvedValue({ present: true }),
   };
 });
@@ -96,11 +102,25 @@ const messages: FirmConversationMessage[] = [
 
 const venture = { id: "v1", name: "RodentRadar", repository: "/products/rr", createdAt: "now", updatedAt: "now" };
 
+const mapWorkIndex = {
+  ventureId: "v1", revision: 4, items: [], counts: { total: 0, attention: 0, active: 0, unread: 0 },
+  legacy: { unindexedRunCount: 0 },
+  outline: {
+    architectureRevision: 4, unplacedThreadRefs: [], relationships: [],
+    objects: [{
+      id: "onboarding", objectRef: "object:onboarding", name: "Onboarding", statement: "Reach useful work before asking for setup.",
+      type: "experience", territory: "product", sectionId: "experiences", parentRef: null, assertion: "founder-asserted",
+      provenance: null, details: {}, threadRefs: [], targetable: true, architectureRole: "product-loop", updatedAt: null,
+    }],
+  },
+};
+
 describe("VentureWorkspace — the center adapts to the selected work", () => {
   beforeEach(() => {
     getLens.mockReset().mockResolvedValue({ lens });
     getConversation.mockReset().mockResolvedValue({ messages });
     getActiveDrives.mockReset().mockResolvedValue({ drives: [] });
+    getWorkIndex.mockReset().mockResolvedValue({ workIndex: mapWorkIndex });
     getHealth.mockReset().mockResolvedValue({ founderAuthority: { available: true } });
     getArchitectureProjection.mockReset().mockResolvedValue({ projection: null, revision: 0 });
     getCredentials.mockReset().mockResolvedValue({ credentials: [] });
@@ -126,36 +146,33 @@ describe("VentureWorkspace — the center adapts to the selected work", () => {
     expect(screen.queryByTestId("canvas-flow")).toBeNull();
   });
 
-  it("summons the map, and descending from a node returns to the selected work", async () => {
+  it("summons the maps, and opening a map object returns to its real workbench context", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     await screen.findByTestId("venture-workbench");
 
     fireEvent.click(screen.getByRole("button", { name: /^Map$/ }));
-    const node = await screen.findByTestId("node-bet:bet-1");
+    const node = await screen.findByRole("button", { name: "Inspect Onboarding" });
 
-    // Double-click (descend) hands the founder back to the work surface, scoped to that node.
-    fireEvent.doubleClick(node);
-    await waitFor(() => expect(screen.queryByTestId("canvas-flow")).toBeNull());
+    // One click shows the full route; the explicit context action hands the founder back to work.
+    fireEvent.click(node);
+    fireEvent.click(await screen.findByRole("button", { name: "Open context" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Whole system" })).toBeNull());
     expect(await screen.findByTestId("stage-workspace")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /Reach the first buyers/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Onboarding" })).toBeTruthy();
   });
 
-  it("clears the prior direction highlight when descending to a non-direction map object", async () => {
-    const { container } = render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
-    await screen.findByTestId("venture-workbench");
-    const railDirection = await waitFor(() => {
-      const button = container.querySelector<HTMLButtonElement>(".now-rail-dir");
-      expect(button).toBeTruthy();
-      return button!;
-    });
-
-    fireEvent.click(railDirection);
-    expect(railDirection.getAttribute("aria-current")).toBe("true");
+  it("replaces a prior direction scope when a map object is opened", async () => {
+    render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
+    const workbench = await screen.findByTestId("venture-workbench");
+    fireEvent.click(await within(workbench).findByRole("button", { name: /Reach the first buyers/ }));
+    expect(await screen.findByRole("heading", { name: /Reach the first buyers/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^Map$/ }));
-    fireEvent.doubleClick(await screen.findByTestId("node-crew:sable"));
+    fireEvent.click(await screen.findByRole("button", { name: "Inspect Onboarding" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open context" }));
 
-    await waitFor(() => expect(screen.queryByTestId("canvas-flow")).toBeNull());
-    expect(railDirection.getAttribute("aria-current")).toBe("false");
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Whole system" })).toBeNull());
+    expect(screen.getByRole("heading", { name: "Onboarding" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /Reach the first buyers/ })).toBeNull();
   });
 
   it("Escape broadens a scoped selection back to Home", async () => {

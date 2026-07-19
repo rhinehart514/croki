@@ -1,5 +1,5 @@
-// FirmApp.test.tsx — the firm shell: venture picker (list/create) and opening a venture mounts the
-// venture workspace (the Cursor-like frame around the canvas). VentureWorkspace itself is stubbed here;
+// FirmApp.test.tsx — the firm shell: reopen the active venture, use the picker only for first connection,
+// and mount the venture workspace. VentureWorkspace itself is stubbed here;
 // its own composition is proven in VentureWorkspace.test.tsx and the canvas browser journey. This file
 // proves FirmApp's OWN shell responsibilities: the picker, and open → mount the workspace keyed for
 // venture isolation.
@@ -110,34 +110,34 @@ describe("FirmApp", () => {
     expect(screen.getByRole("form", { name: /start a venture/i })).toBeTruthy();
   });
 
-  it("makes continuing an existing venture primary and keeps creation collapsed", async () => {
+  it("reopens the last active venture without showing a resume chooser", async () => {
     listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "LocalSeoData pipeline", repository: "/products/lsd", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "now" }],
+      ventures: [
+        { id: "v1", name: "LocalSeoData pipeline", repository: "/products/lsd", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "now" },
+        { id: "v2", name: "Newer venture", repository: "/products/newer", createdAt: "2026-07-02T00:00:00.000Z", updatedAt: "now" },
+      ],
     });
+    localStorage.setItem("drover:active-venture:v1", "v1");
     render(<FirmApp />);
-    expect(await screen.findByRole("heading", { name: /continue a venture/i })).toBeTruthy();
-    expect(screen.getByText(/open the live canvas for that product/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /start another venture/i })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByLabelText(/new venture name/i)).toBeNull();
-    const row = await screen.findByRole("button", { name: /LocalSeoData pipeline/i });
-    expect(row).toHaveTextContent(/open canvas/i);
-    fireEvent.click(row);
-    // Opening a venture mounts the venture workspace.
     expect(await screen.findByTestId("venture-canvas-stub")).toHaveAttribute(
       "data-venture-name",
       "LocalSeoData pipeline",
     );
+    expect(screen.queryByRole("heading", { name: /resume work/i })).toBeNull();
   });
 
-  it("opens the venture workspace by default and ships no legacy triptych selectors", async () => {
+  it("opens the newest venture when no prior venture is remembered", async () => {
     listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Venture one", repository: "/products/one", createdAt: "now", updatedAt: "now" }],
+      ventures: [
+        { id: "v1", name: "Venture one", repository: "/products/one", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "now" },
+        { id: "v2", name: "Venture two", repository: "/products/two", createdAt: "2026-07-02T00:00:00.000Z", updatedAt: "now" },
+      ],
     });
     const { container } = render(<FirmApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Venture one/i }));
 
     // The venture workspace is the default founder surface, keyed for venture isolation.
-    expect(await screen.findByTestId("venture-canvas-stub")).toHaveAttribute("data-venture", "v1");
+    expect(await screen.findByTestId("venture-canvas-stub")).toHaveAttribute("data-venture", "v2");
+    expect(localStorage.getItem("drover:active-venture:v1")).toBe("v2");
     // The retired triptych presentation is absent from the shipped DOM.
     expect(container.querySelector(".firm-app-rail")).toBeNull();
     expect(container.querySelector(".firm-app-inspector")).toBeNull();
@@ -177,22 +177,6 @@ describe("FirmApp", () => {
     fireEvent.click(screen.getByRole("button", { name: /use second-product product folder/i }));
     expect(screen.getByLabelText(/new venture name/i)).toHaveValue("second-product");
     expect(screen.getByRole("button", { name: /selected second-product product folder/i })).toHaveAttribute("aria-pressed", "true");
-  });
-
-  it("does not offer or prefill the product repository already connected to an existing venture", async () => {
-    listVentures.mockResolvedValue({
-      ventures: [{ id: "v1", name: "Drover", repository: "/products/drover", createdAt: "now", updatedAt: "now" }],
-    });
-    listRepositoryChoices.mockResolvedValue({
-      repositories: [{ name: "drover", path: "/products/drover", source: "workspace" }],
-    });
-    render(<FirmApp />);
-
-    fireEvent.click(await screen.findByRole("button", { name: /start another venture/i }));
-    expect(screen.getByLabelText(/new venture name/i)).toHaveValue("");
-    expect(screen.queryByRole("button", { name: /selected drover product folder/i })).toBeNull();
-    expect(await screen.findByText(/no repository is available yet/i)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^start venture$/i })).toBeNull();
   });
 
   it("chooses a product folder in the desktop shell and derives the venture name", async () => {

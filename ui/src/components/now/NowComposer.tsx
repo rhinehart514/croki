@@ -4,10 +4,12 @@
 // a centred `hero` when no direction is open, and a persistent `dock` anchored to the bottom of the
 // active workspace. Freshness lives at the workspace level, never inside the field.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowRight, ArrowUp, Mic, Paperclip, X } from "lucide-react";
+import { ArrowRight, ArrowUp, Mic, X } from "lucide-react";
 import { driveTeammate, replyInConversation, type DriveTeammateResult } from "@/api";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
+import { composerRoute, composerScopeKey } from "./composerScope";
 import { readDriveReceipt, readReplyReceipt, type DriveReceipt } from "./driveReceipt";
+import { useScopedDraft } from "./useScopedDraft";
 import { useSpeechInput } from "./useSpeechInput";
 
 const EMPTY_SUGGESTIONS = [
@@ -23,6 +25,7 @@ function scopedBody(goal: string, selection: CanvasSelection) {
     goal,
     ...(selection.betId ? { betId: selection.betId } : {}),
     ...(selection.workRef ? { workRef: selection.workRef } : {}),
+    ...(selection.threadRef ? { threadRef: selection.threadRef } : {}),
     ...(selection.architectureId && selection.architectureRevision != null
       ? { architectureTarget: { id: selection.architectureId, stepId: selection.architectureStepId ?? null, revision: selection.architectureRevision } }
       : {}),
@@ -42,6 +45,7 @@ export function NowComposer({
   readOnly = false,
   readOnlyReason,
   autoFocus = false,
+  focusRequest = 0,
   placeholder: placeholderOverride,
   onClearScope,
   onDriven,
@@ -58,6 +62,7 @@ export function NowComposer({
   // founder never faces a dead input with no explanation (DESIGN.md: precise reason when blocked/stale).
   readOnlyReason?: string | null;
   autoFocus?: boolean;
+  focusRequest?: number;
   // Optional placeholder override. The default (below) is unchanged, so every existing mount is
   // byte-identical; the venture canvas passes the spec's "Direct the venture".
   placeholder?: string;
@@ -68,7 +73,8 @@ export function NowComposer({
   // When provided (the home composer), the receipt offers a way into the direction the drive produced.
   onOpenResult?: (targetBetId: string | null) => void;
 }) {
-  const [draft, setDraft] = useState("");
+  const route = composerRoute(selection);
+  const [draft, setDraft] = useScopedDraft(composerScopeKey(ventureId, selection));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<DriveReceipt | null>(null);
@@ -79,7 +85,7 @@ export function NowComposer({
     textareaRef.current?.focus();
   });
 
-  useEffect(() => { if (autoFocus) textareaRef.current?.focus(); }, [autoFocus]);
+  useEffect(() => { if (autoFocus || focusRequest > 0) textareaRef.current?.focus(); }, [autoFocus, focusRequest]);
   useEffect(() => {
     const node = textareaRef.current;
     if (!node) return;
@@ -88,23 +94,25 @@ export function NowComposer({
   }, [draft]);
 
   const placeholder = placeholderOverride
-    ?? (scopeLabel
-      ? `Steer this direction — try another angle, send it, refine…`
-      : `What should Drover accomplish for ${ventureName}?`);
+    ?? (route === "correct"
+      ? "Describe the correction to this exact work…"
+      : route === "steer"
+        ? "Continue this direction…"
+        : scopeLabel
+          ? "Direct work from this context…"
+          : `What should Drover accomplish for ${ventureName}?`);
 
   // Contextual routing (the composer is operational, not a one-verb /drive box):
   //   • Scoped to a direction (a bet is selected) → the turn STEERS/answers/approves/continues that existing
   //     direction through the ONE venture conversation (replyInConversation). The brain classifies the act.
   //   • Unscoped, or scoped to a non-bet target (architecture/theory) → the turn DIRECTS the venture: /drive
   //     starts (or branches) work. /drive is only for starting or branching, never for steering.
-  const scopedToDirection = Boolean(selection?.betId);
-
   const submit = async (value: string) => {
     const goal = value.trim();
     if (!goal || busy || readOnly) return;
     setBusy(true); setError(null); setReceipt(null); setDraft("");
     try {
-      if (scopedToDirection) {
+      if (route === "steer") {
         const reply = await replyInConversation(ventureId, { message: goal, betId: selection!.betId });
         setReceipt(readReplyReceipt(reply));
         onDriven?.();
@@ -137,7 +145,7 @@ export function NowComposer({
       <div className="now-composer-shell">
         {scopeLabel ? (
           <span className="now-composer-scope">
-            {scopeLabel}
+            <span className="now-composer-scope-label" title={scopeLabel}>{scopeLabel}</span>
             {onClearScope ? (
               <button type="button" aria-label="Clear scope — direct the whole venture" onClick={onClearScope}>
                 <X aria-hidden="true" style={{ width: 13, height: 13 }} />
@@ -157,9 +165,6 @@ export function NowComposer({
             disabled={readOnly}
           />
           <div className="now-composer-tools">
-            <button type="button" className="now-icon-btn" aria-label="Attach context" disabled title="Attach context (coming soon)">
-              <Paperclip aria-hidden="true" />
-            </button>
             {speech.supported ? (
               <button
                 type="button"
@@ -173,7 +178,12 @@ export function NowComposer({
                 <Mic aria-hidden="true" />
               </button>
             ) : null}
-            <button type="submit" className="now-composer-send" aria-label={scopedToDirection ? "Send to this direction" : "Start work"} disabled={busy || readOnly || !draft.trim()}>
+            <button
+              type="submit"
+              className="now-composer-send"
+              aria-label={route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
+              disabled={busy || readOnly || !draft.trim()}
+            >
               <ArrowUp aria-hidden="true" />
             </button>
           </div>
@@ -181,7 +191,7 @@ export function NowComposer({
       </div>
 
       <div className="now-composer-provenance" aria-hidden="true">
-        Drover picks the agents, model, and tools. Nothing leaves without your decision.
+        Drover chooses how to do the work. Nothing leaves without your decision.
       </div>
 
       {showChips ? (
@@ -196,7 +206,7 @@ export function NowComposer({
 
       <div className="now-composer-feedback" aria-live="polite">
         {speech.recording ? <span role="status">Listening…</span> : null}
-        {busy ? <span role="status">{scopedToDirection ? "Sending…" : "Starting work…"}</span> : null}
+        {busy ? <span role="status">{route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
         {error ? <span role="alert">{error}</span> : null}
         {readOnly && readOnlyReason && !error ? (
           <span className="now-composer-held" role="status">{readOnlyReason}</span>

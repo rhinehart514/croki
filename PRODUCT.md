@@ -19,7 +19,17 @@ the conversation, the summoned canvas, work, and history.
 
 ## Founder experience
 
-The workspace opens on the permanent **adaptive workbench**. With nothing selected, `VentureHome` shows
+Drover returns directly to the founder's last active venture and restores its prior scope and work/map mode.
+Choosing or connecting a venture is exceptional: first use, recovery, or an explicit action from the
+in-workspace venture switcher.
+
+The workspace opens on a stable **Product / Go-to-market venture outline** beside the permanent adaptive
+workbench. The outline projects canonical objects and nests durable founder thought threads beneath the
+objects they change; search and `Needs you` filter that same structure instead of creating another inbox.
+Selecting an object scopes the workbench and composer. A founder direction from that scope becomes a
+durable object thread, and returning to the thought continues its exact identity.
+
+With nothing selected, `VentureHome` shows
 where things stand; selecting a direction, run, artifact, or decision opens the best registered
 representation for that work. One continuous venture conversation and persistent scoped branches direct and
 interrogate the venture. Selection focuses an object, restores its work, and scopes the same composer across
@@ -72,8 +82,10 @@ contests, or revises the relevant Product and go-to-market understanding.
 
 ## Durable invariants
 
-1. The adaptive workbench is the default founder surface; conversation directs and interrogates the venture;
-   the canvas is a summoned map, never the permanent center or primary navigation model.
+1. A Product/GTM project-and-thread browser supplies stable orientation without exposing the underlying
+   ontology as navigation; the adaptive workbench is the default founder surface; conversation directs and
+   interrogates the venture; the canvas is a summoned map, never the permanent center or primary navigation
+   model.
 2. One model powers every view; no canvas, board, branch, workbench, or snapshot becomes a second authority.
 3. Product and go-to-market remain distinct and traceable parts of one venture.
 4. Work starts only from founder intent or a founder-invoked workflow.

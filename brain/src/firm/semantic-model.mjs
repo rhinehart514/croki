@@ -364,10 +364,12 @@ export function validateSemanticModel(model, { ventureId = model?.ventureId, ext
   }
   for (const thread of model.threads) {
     if (!text(thread.name)) fail(`Thread ${thread.id} needs a name.`);
+    if (thread.lifecycle != null && !["open", "closed"].includes(thread.lifecycle)) fail(`Thread ${thread.id} needs a valid lifecycle.`);
     if (carries(thread, ["messages", "messageBodies", "body", "content"])) fail(`Thread ${thread.id} must reference conversation truth, not copy it.`);
     if (list(thread.messageRefs).some((ref) => !String(ref).startsWith("conversation:"))) fail(`Thread ${thread.id} can only reference conversation messages.`);
     optionalRef(thread.parentThreadRef, "thread:", model, indexes, externalRefExists, `Thread ${thread.id} parentThreadRef`);
     optionalRef(thread.originMessageRef, "conversation:", model, indexes, externalRefExists, `Thread ${thread.id} originMessageRef`);
+    if (thread.reviewedThrough != null) validateRef(thread.reviewedThrough, model, indexes, externalRefExists, `Thread ${thread.id} reviewedThrough`);
     if (thread.parentThreadRef === `thread:${thread.id}`) fail(`Thread ${thread.id} cannot reference itself as its parent.`);
     validateRefs(thread.messageRefs, model, indexes, externalRefExists, `Thread ${thread.id} messageRefs`);
     validateRefs(thread.subjectRefs, model, indexes, externalRefExists, `Thread ${thread.id} subjectRefs`);
