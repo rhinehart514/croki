@@ -18,6 +18,7 @@ import credentialRoutes from "./routes/credentials.mjs";
 import firmRoutes from "./firm/routes.mjs";
 import firmHeatRoutes from "./firm/heat-routes.mjs";
 import firmLensRoutes from "./firm/lens-routes.mjs";
+import firmWorkIndexRoutes from "./firm/work-index-routes.mjs";
 import firmViewRoutes from "./firm/view-routes.mjs";
 import firmProductChangeRoutes from "./firm/product-routes.mjs";
 import firmWorkRoutes from "./firm/work-routes.mjs";
@@ -38,6 +39,7 @@ const ROUTE_GROUPS = [
   firmRoutes,
   firmHeatRoutes,
   firmLensRoutes,
+  firmWorkIndexRoutes,
   firmViewRoutes,
   firmProductChangeRoutes,
   firmWorkRoutes,

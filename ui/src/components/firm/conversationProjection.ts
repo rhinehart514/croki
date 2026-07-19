@@ -44,7 +44,7 @@ function configurationAffectsSelection(
 export function conversationBetIds(lens: FirmLens, selection: CanvasSelection) {
   if (!selection) return lens.bets.map((bet) => bet.id);
   if (selection.betId) return [selection.betId];
-  if (selection.architectureId) return [];
+  if (selection.architectureId || selection.objectId) return [];
   return lens.bets.filter((bet) => bet.teammateRef && selection.teammateRefs.includes(bet.teammateRef)).map((bet) => bet.id);
 }
 

@@ -1,13 +1,8 @@
 #!/usr/bin/env node
 
-// The legacy-scale dense venture stays durable and navigable in the workbench-first VentureWorkspace:
-// 120 bets, 30 outcomes, 20 wall items all persist through the API truth checks (fixture/API layer,
-// workspace-agnostic), then the summoned map renders them collision-free, the outline gives complete
-// keyboard access to the whole set (not just what is painted), direct wheel-zoom moves the camera, and 125%
-// browser zoom does not break reachability of map/composer/index. Ported from the retired VentureAtlas
-// semantic-zoom assertions (`.atlas-bet-node`, `atlasAltitude`, `.atlas-outline-toggle`) onto the summoned
-// map DOM; canvas-journey.mjs's own dense test proves the SAME fixture at a smaller default, this file is the
-// ONLY coverage of the full 120-bet/30-outcome/20-wall legacy operating scale plus the 125% zoom contract.
+// Dense acceptance for the operating graph. Legacy operating records remain durable, but they are not promoted
+// into graph truth without canonical Product/GTM objects and relationships. The graph therefore stays honestly
+// empty and contained at the supported desktop size and at 125% browser zoom.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -16,129 +11,79 @@ import { createDenseVentureFixture } from "../fixtures/firm-fixtures.mjs";
 import {
   assertBasicAccessibility,
   assertNoUnhandledRejections,
-  assertPerformanceBudgets,
   bootFixture,
-  captureEvidence,
   openFixtureVenture,
   summonMap,
   waitForDom,
 } from "./fixtures/browser-harness.mjs";
 
-test("dense venture: legacy operating scale stays durable, collision-free, and keyboard-reachable on a summoned map", async () => {
+async function pickView(client, label, heading) {
+  const clicked = await client.evaluate(`(() => {
+    const tab = [...document.querySelectorAll('.venture-map-tabs [role="tab"]')]
+      .find((entry) => entry.textContent.trim() === ${JSON.stringify(label)});
+    tab?.click();
+    return Boolean(tab);
+  })()`);
+  assert.equal(clicked, true, `${label} map tab was unavailable`);
+  await waitForDom(client, `document.querySelector('.venture-maps h1')?.textContent?.trim() === ${JSON.stringify(heading)}`, `${heading} did not render`);
+}
+
+test("dense venture: generated maps stay honest and contained without canonical map truth", async () => {
   const drover = await bootFixture(createDenseVentureFixture);
-  const chrome = await openFixtureVenture(drover);
+  const chrome = await openFixtureVenture(drover, { viewport: { width: 1440, height: 900 } });
   try {
     const { client } = chrome;
     const ventureId = drover.fixture.venture.id;
-    await client.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-    await summonMap(client);
-    await assertPerformanceBudgets(client);
 
-    // DURABLE STATE — fixture/API truth, unaffected by the shell change. Kept verbatim.
-    const durableState = await client.evaluate(`Promise.all([
+    const durable = await client.evaluate(`Promise.all([
       fetch('/api/ventures/${ventureId}/lens').then((response) => response.json()),
       fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()),
-      fetch('/api/ventures/${ventureId}/architecture/projection').then((response) => response.json()),
-    ]).then(([lensResponse, wall, { projection }]) => {
-      const lens = lensResponse.lens;
-      return {
-        crew: lens.crew.length,
-        bets: lens.bets.length,
-        outcomes: lens.bets.filter((bet) => bet.latestOutcome).length,
-        wall: wall.queue.length,
-        longCopy: lens.bets.every((bet) => bet.intent.length > 250),
-        projectedOutcomes: projection.joins.outcomes.length,
-        durableArchitecture: projection.elements.length,
-      };
-    })`);
-    assert.deepEqual(durableState, {
-      crew: drover.fixture.expected.teammates,
+      fetch('/api/ventures/${ventureId}/work-index').then((response) => response.json()),
+    ]).then(([lensResponse, wall, indexResponse]) => ({
+      bets: lensResponse.lens.bets.length,
+      outcomes: lensResponse.lens.bets.filter((bet) => bet.latestOutcome).length,
+      wall: wall.queue.length,
+      mapObjects: indexResponse.workIndex.outline.objects.length,
+    }))`);
+    assert.deepEqual(durable, {
       bets: drover.fixture.expected.bets,
       outcomes: drover.fixture.expected.outcomes,
       wall: drover.fixture.expected.wallItems,
-      longCopy: true,
-      projectedOutcomes: drover.fixture.expected.outcomes,
-      // The dense fixture seeds no architecture elements at all (no proposals accepted), so the
-      // projection's elements array is genuinely empty — this is real fixture truth, not a stale carry.
-      durableArchitecture: 0,
+      mapObjects: 0,
     });
 
-    // SUMMONED MAP — real rendered state at 1440x900: cards mounted, collision-free (the overlap-detection
-    // pattern proven in canvas-journey.mjs), no unexplained zero-size/duplicate nodes.
-    const canvasState = await client.evaluate(`(() => {
-      const nodes = [...document.querySelectorAll('.venture-workspace .react-flow__node')]
-        .map((n) => { const r = n.getBoundingClientRect(); return { id: n.getAttribute('data-id'), left: r.left, top: r.top, right: r.right, bottom: r.bottom, w: r.width, h: r.height }; })
-        .filter((n) => n.w > 0 && n.h > 0);
-      const ids = nodes.map((n) => n.id);
-      const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
-      const overlaps = [];
-      for (let i = 0; i < nodes.length; i += 1) {
-        for (let j = i + 1; j < nodes.length; j += 1) {
-          const a = nodes[i]; const b = nodes[j];
-          if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) overlaps.push([a.id, b.id]);
-        }
-      }
-      const betNodes = nodes.filter((n) => (n.id || '').startsWith('bet:'));
-      return { total: nodes.length, betCount: betNodes.length, duplicateIds, overlapCount: overlaps.length, overlaps: overlaps.slice(0, 5) };
-    })()`);
-    assert.ok(canvasState.total >= 5, `too few painted cards to prove a dense render happened: ${canvasState.total}`);
-    assert.deepEqual(canvasState.duplicateIds, [], `duplicate node ids painted: ${JSON.stringify(canvasState.duplicateIds)}`);
-    assert.equal(canvasState.overlapCount, 0, `dense summoned map cards overlap: ${JSON.stringify(canvasState.overlaps)}`);
+    assert.ok(await client.evaluate(`!!document.querySelector('.vh[aria-label]') && !document.querySelector('.venture-maps')`), "dense venture did not rest on workbench Home");
+    await summonMap(client);
+    await waitForDom(client, `/No connected system yet/i.test(document.querySelector('.venture-map-empty')?.textContent || '')`, "empty whole-system graph overstated legacy records as map truth");
 
-    // OUTLINE — every venture object (all 120 bets + supporting objects), not just what is painted, stays
-    // keyboard-reachable via "o". Real threshold observed from the fixture: 120 bets alone already clears
-    // any conservative floor, so assert generously against the fixture's own known bet count.
-    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
-    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "o", code: "KeyO", text: "o", windowsVirtualKeyCode: 79 });
-    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "o", code: "KeyO", windowsVirtualKeyCode: 79 });
-    await waitForDom(client, `!!document.querySelector('#atlas-outline-panel [role="listbox"]')`, "the venture outline did not open on 'o'");
-    const outline = await client.evaluate(`(() => {
-      const listbox = document.querySelector('#atlas-outline-panel [role="listbox"]');
-      const options = [...(listbox?.querySelectorAll('[role="option"]') || [])];
-      const focusedIsOption = document.activeElement?.getAttribute('role') === 'option';
-      return { options: options.length, focusedIsOption };
-    })()`);
-    assert.ok(outline.options >= 30, `outline exposed too few objects for the 120-bet dense fixture: ${outline.options}`);
-    assert.equal(outline.focusedIsOption, true, "opening the outline did not move focus onto a reachable option");
-    await client.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
-    const { escapeCloses } = await (async () => {
-      await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-      await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-      await waitForDom(client, `!document.querySelector('#atlas-outline-panel')`, "the outline did not close on Escape");
-      return { escapeCloses: true };
-    })();
-    assert.equal(escapeCloses, true);
+    await pickView(client, "Go-to-market", "Go-to-market");
+    await waitForDom(client, `/No connected system yet/i.test(document.querySelector('.venture-map-empty')?.textContent || '')`, "empty GTM graph was not honest");
+    await pickView(client, "Product", "Product");
+    await waitForDom(client, `/No connected system yet/i.test(document.querySelector('.venture-map-empty')?.textContent || '')`, "empty Product graph was not honest");
 
-    // DIRECT ZOOM — mouse wheel anywhere inside the rendered map changes the viewport transform. At the
-    // full 120-bet scale cards can cover every sampled bare-pane point, but wheel zoom remains a map-level
-    // interaction even when the pointer is over a card.
-    const canvasPoint = await client.evaluate(`(() => {
-      const pane = document.querySelector('.react-flow__pane');
-      const rect = pane?.getBoundingClientRect();
-      if (!rect || rect.width <= 0 || rect.height <= 0) return null;
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    })()`);
-    assert.ok(canvasPoint, "dense summoned map had no rendered wheel-zoom target");
-    const beforeZoom = await client.evaluate("document.querySelector('.react-flow__viewport')?.style.transform");
-    await client.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: canvasPoint.x, y: canvasPoint.y, deltaX: 0, deltaY: -720 });
-    await waitForDom(client, `document.querySelector('.react-flow__viewport')?.style.transform !== ${JSON.stringify(beforeZoom)}`, "dense summoned map did not respond to direct wheel zoom");
-    assert.equal(await client.evaluate("location.pathname"), "/");
-
-    // 125% BROWSER ZOOM — no horizontal overflow; summoned map, composer, and index all stay reachable.
-    await client.send("Emulation.setDeviceMetricsOverride", { width: 1152, height: 720, deviceScaleFactor: 1.25, mobile: false });
-    await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
-    const zoomed = await client.evaluate(`(() => {
-      const visible = (element) => { if (!element) return false; const rect = element.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 && rect.left < innerWidth && rect.top < innerHeight; };
+    const contained = await client.evaluate(`(() => {
+      const map = document.querySelector('.venture-maps')?.getBoundingClientRect();
+      const center = document.querySelector('.venture-workspace-center')?.getBoundingClientRect();
       return {
-        overflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
-        canvas: visible(document.querySelector('.venture-canvas-flow.atlas-canvas')),
-        composer: visible(document.querySelector('.venture-workspace-dock .now-composer textarea')),
-        rail: visible(document.querySelector('.venture-workspace .vw-index')),
+        pageOverflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
+        mapWithinCenter: Boolean(map && center && map.left >= center.left - 1 && map.right <= center.right + 1 && map.top >= center.top - 1 && map.bottom <= center.bottom + 1),
+        editableCanvas: Boolean(document.querySelector('.venture-canvas-flow')),
       };
     })()`);
+    assert.ok(contained.pageOverflow <= 1, `dense generated maps introduced ${contained.pageOverflow}px page overflow`);
+    assert.equal(contained.mapWithinCenter, true, "generated maps escaped the desktop center frame");
+    assert.equal(contained.editableCanvas, false, "dense operating graph mounted the retired free canvas");
+
+    await client.send("Emulation.setDeviceMetricsOverride", { width: 1152, height: 720, deviceScaleFactor: 1.25, mobile: false });
+    await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+    const zoomed = await client.evaluate(`(() => ({
+      overflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
+      map: Boolean(document.querySelector('.venture-maps')),
+      composer: Boolean(document.querySelector('.venture-workspace-dock .now-composer textarea')),
+      index: Boolean(document.querySelector('.venture-workspace .vw-index')),
+    }))()`);
     assert.ok(zoomed.overflow <= 1, `125% browser zoom introduced ${zoomed.overflow}px horizontal overflow`);
-    assert.deepEqual({ canvas: zoomed.canvas, composer: zoomed.composer, rail: zoomed.rail }, { canvas: true, composer: true, rail: true });
-    await captureEvidence(client, "dense-workbench-summoned-map-legacy-scale-125-percent");
+    assert.deepEqual({ map: zoomed.map, composer: zoomed.composer, index: zoomed.index }, { map: true, composer: true, index: true });
 
     await assertBasicAccessibility(client);
     await assertNoUnhandledRejections(client);

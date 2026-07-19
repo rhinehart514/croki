@@ -33,6 +33,7 @@ vi.mock("@xyflow/react", () => ({
 const getLens = vi.fn();
 const getConversation = vi.fn();
 const getActiveDrives = vi.fn();
+const getWorkIndex = vi.fn();
 const getHealth = vi.fn();
 const getArchitectureProjection = vi.fn();
 const getCredentials = vi.fn();
@@ -44,6 +45,7 @@ vi.mock("@/api", async () => {
     getLens: (...args: unknown[]) => getLens(...args),
     getConversation: (...args: unknown[]) => getConversation(...args),
     getActiveDrives: (...args: unknown[]) => getActiveDrives(...args),
+    getWorkIndex: (...args: unknown[]) => getWorkIndex(...args),
     getHealth: (...args: unknown[]) => getHealth(...args),
     getArchitectureProjection: (...args: unknown[]) => getArchitectureProjection(...args),
     getCredentials: (...args: unknown[]) => getCredentials(...args),
@@ -67,6 +69,7 @@ describe("VentureCanvasShell — the specified empty state", () => {
     getLens.mockReset().mockResolvedValue({ lens: emptyLens });
     getConversation.mockReset().mockResolvedValue({ messages: [] });
     getActiveDrives.mockReset().mockResolvedValue({ drives: [] });
+    getWorkIndex.mockReset().mockResolvedValue({ workIndex: { ventureId: "v1", revision: 0, items: [], counts: { total: 0, attention: 0, active: 0, unread: 0 }, legacy: { unindexedRunCount: 0 } } });
     getHealth.mockReset().mockResolvedValue({ founderAuthority: { available: true } });
     getArchitectureProjection.mockReset().mockResolvedValue({ projection: null, revision: 0 });
     getCredentials.mockReset().mockResolvedValue({ credentials: [] });

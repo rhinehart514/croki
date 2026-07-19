@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { ConversationReplyResult, DriveTeammateResult } from "@/api";
-import { targetBet } from "@/components/firm/directionTarget";
+import { targetBet, targetWork } from "@/components/firm/directionTarget";
 import { NowComposer } from "./NowComposer";
 
 const driveTeammate = vi.fn<(...args: unknown[]) => Promise<DriveTeammateResult>>();
@@ -32,7 +32,11 @@ async function drive(text: string) {
 }
 
 describe("NowComposer contextual routing", () => {
-  beforeEach(() => { driveTeammate.mockReset(); replyInConversation.mockReset(); });
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    driveTeammate.mockReset();
+    replyInConversation.mockReset();
+  });
 
   it("STEERS an existing direction through the conversation when scoped to a bet — not a fresh /drive", async () => {
     replyInConversation.mockResolvedValue({ act: "steer", betId: "bet-1" } as ConversationReplyResult);
@@ -68,6 +72,74 @@ describe("NowComposer contextual routing", () => {
 
     await waitFor(() => expect(driveTeammate).toHaveBeenCalled());
     expect(replyInConversation).not.toHaveBeenCalled();
+  });
+
+  it("CORRECTS exact work through /drive without dropping its work reference", async () => {
+    driveTeammate.mockResolvedValue(result({ handoff: handoff({ stagedBetIds: ["bet-1"] }) }));
+    render(
+      <NowComposer
+        ventureId="v1" ventureName="Acme" selection={targetWork("bet-1", "work-1")}
+        scopeLabel="Reach the first buyers / Outreach draft" hasWork variant="dock" onDriven={() => {}}
+      />,
+    );
+    const field = screen.getByLabelText(/Say what you want/);
+    fireEvent.change(field, { target: { value: "Make the opening more specific" } });
+    fireEvent.click(screen.getByRole("button", { name: "Correct this work" }));
+
+    await waitFor(() => expect(driveTeammate).toHaveBeenCalledWith("v1", {
+      goal: "Make the opening more specific", betId: "bet-1", workRef: "work-1",
+    }));
+    expect(replyInConversation).not.toHaveBeenCalled();
+  });
+
+  it("continues an object-scoped thought through its durable thread instead of minting a sibling", async () => {
+    driveTeammate.mockResolvedValue(result({ handoff: handoff({}) }));
+    render(
+      <NowComposer
+        ventureId="v1" ventureName="Acme"
+        selection={{
+          betId: null, workRef: null, teammateRefs: [], threadRef: "thread:thought-1",
+          architectureId: "onboarding", architectureStepId: null, architectureRevision: 4,
+        }}
+        scopeLabel="Remove setup friction" hasWork variant="dock" onDriven={() => {}}
+      />,
+    );
+    const field = screen.getByLabelText(/Say what you want/);
+    fireEvent.change(field, { target: { value: "Try the zero-config version" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start work" }));
+
+    await waitFor(() => expect(driveTeammate).toHaveBeenCalledWith("v1", {
+      goal: "Try the zero-config version",
+      threadRef: "thread:thought-1",
+      architectureTarget: { id: "onboarding", stepId: null, revision: 4 },
+    }));
+  });
+
+  it("keeps unsent drafts attached to the scope where they were written", () => {
+    const { rerender } = render(
+      <NowComposer
+        ventureId="v1" ventureName="Acme" selection={targetBet("bet-1")}
+        scopeLabel="First direction" hasWork variant="dock"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Draft for the first direction" } });
+
+    rerender(
+      <NowComposer
+        ventureId="v1" ventureName="Acme" selection={targetBet("bet-2")}
+        scopeLabel="Second direction" hasWork variant="dock"
+      />,
+    );
+    expect(screen.getByLabelText(/Say what you want/)).toHaveValue("");
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Draft for the second direction" } });
+
+    rerender(
+      <NowComposer
+        ventureId="v1" ventureName="Acme" selection={targetBet("bet-1")}
+        scopeLabel="First direction" hasWork variant="dock"
+      />,
+    );
+    expect(screen.getByLabelText(/Say what you want/)).toHaveValue("Draft for the first direction");
   });
 });
 

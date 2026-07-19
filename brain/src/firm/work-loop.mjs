@@ -349,7 +349,7 @@ async function driveTeammateLeased({
     monotonicNow: deps.monotonicNow,
   });
   // Durable Run lifecycle (FIRM-SPEC rail #1): a founder-authorized drive records a canonical run joined to
-  // the venture root thread BEFORE provider dispatch — founder intent → run → returned evidence becomes
+  // its child direction thread BEFORE provider dispatch — founder intent → run → returned evidence becomes
   // inspectable history. Fail-safe by construction (beginDriveRun swallows its own errors): driveRun is null
   // when this drive does not record or when recording failed, and a null handle changes nothing downstream.
   const driveRun = beginDriveRun({
@@ -358,6 +358,9 @@ async function driveTeammateLeased({
     initiatedBy,
     betId: targetBetId,
     originMessageId: initiatingMessageId,
+    threadName: goal,
+    threadRef: target?.threadRef ?? null,
+    target,
     options,
   });
   const externallyCancelled = deps.isCancelled ?? (() => false);
@@ -542,6 +545,13 @@ async function driveTeammateLeased({
     afterWallItems,
     runtime: runtimeReceipt,
     modelRevision: configuration.revision,
+    messageRefs: [...stampedMessages, ...(handoff ? [handoff] : [])].map((message) => `conversation:${message.id}`),
+    subjectRefs: [...new Set([
+      targetBetId,
+      ...(handoffDraft?.changes?.openedBetIds ?? []),
+      ...(handoffDraft?.changes?.stagedBetIds ?? []),
+      ...(handoffDraft?.changes?.wallBetIds ?? []),
+    ].filter(Boolean))].map((id) => `bet:${id}`),
   });
 
   return {

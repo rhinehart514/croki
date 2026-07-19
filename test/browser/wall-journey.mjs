@@ -63,8 +63,9 @@ const intents = {
 
 async function needsYouCount(client) {
   return client.evaluate(`(() => {
-    const count = document.querySelector('.now-rail-needs-count');
-    return count ? Number(count.textContent.trim()) : 0;
+    const summary = document.querySelector('.vh-summary')?.textContent || '';
+    const match = summary.match(/(\\d+) decisions? needs? you/i);
+    return match ? Number(match[1]) : 0;
   })()`);
 }
 
@@ -82,16 +83,9 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
     );
     await assertPerformanceBudgets(client);
 
-    // The fixture's 4 wall items are tied to 4 DISTINCT bets, so needsYou (a per-direction count) reads 4.
-    await waitForDom(client, `!!document.querySelector('.now-rail-needs-count')`, "needs-you count never appeared");
+    // The fixture's 4 wall items are tied to 4 DISTINCT directions, so Home names all four decisions.
+    await waitForDom(client, `/4 decisions need you/i.test(document.querySelector('.vh-summary')?.textContent || '')`, "needs-you summary never appeared");
     assert.equal(await needsYouCount(client), 4, "initial needs-you count did not match the four-bet wall fixture");
-
-    // Toggle "Needs you" — the rail filters to only needs-you directions.
-    await client.evaluate(`document.querySelector('.now-rail-needs')?.click()`);
-    await waitForDom(client, `document.querySelector('.now-rail-needs')?.getAttribute('aria-pressed') === 'true'`, "Needs you toggle did not press");
-    const filteredStates = await client.evaluate(`[...document.querySelectorAll('.now-rail-dir')].map((entry) => entry.getAttribute('data-state'))`);
-    assert.ok(filteredStates.length > 0, "Needs you filter left no directions visible");
-    assert.ok(filteredStates.every((state) => state === "needs-you"), `Needs you filter leaked a non-needs-you direction: ${JSON.stringify(filteredStates)}`);
 
     // RELEASE — double-activation guard: click Reject twice rapidly and confirm exactly ONE POST to the
     // decide endpoint fires.
@@ -109,10 +103,12 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
       return true;
     })()`);
     assert.equal(activatedTwice, true, "the release gate's Reject action was not available");
-    await waitForDom(client, `(() => { const c = document.querySelector('.now-rail-needs-count'); return (c ? Number(c.textContent.trim()) : 0) === 3; })()`, "rejecting the release item did not settle the needs-you count to 3");
+    await waitForDom(client, `fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()).then((wall) => wall.queue.length === 3)`, "rejecting the release item did not settle the wall to 3");
     assert.equal(releaseDecideRequests, 1, `double activation emitted ${releaseDecideRequests} wall decision requests instead of one`);
 
     await returnToWorkbenchHome(client, intents.release);
+    await waitForDom(client, `/3 decisions need you/i.test(document.querySelector('.vh-summary')?.textContent || '')`, "Home did not refresh its decision summary to 3");
+    assert.equal(await needsYouCount(client), 3, "Home did not reduce its decision summary to 3");
 
     // ANSWER — free-text input + Send answer.
     await selectDirectionGate(client, intents.answer);
@@ -130,9 +126,11 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
       return Boolean(button);
     })()`);
     assert.equal(sentAnswer, true, "Send answer was not available");
-    await waitForDom(client, `(() => { const c = document.querySelector('.now-rail-needs-count'); return (c ? Number(c.textContent.trim()) : 0) === 2; })()`, "answering did not settle the needs-you count to 2");
+    await waitForDom(client, `fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()).then((wall) => wall.queue.length === 2)`, "answering did not settle the wall to 2");
 
     await returnToWorkbenchHome(client, intents.answer);
+    await waitForDom(client, `/2 decisions need you/i.test(document.querySelector('.vh-summary')?.textContent || '')`, "Home did not refresh its decision summary to 2");
+    assert.equal(await needsYouCount(client), 2, "Home did not reduce its decision summary to 2");
 
     // REVIEW-OUTCOME — acknowledge the attributable reply.
     await selectDirectionGate(client, intents.reviewOutcome);
@@ -142,9 +140,11 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
       return Boolean(button);
     })()`);
     assert.equal(acknowledged, true, "Acknowledge was not available for the review-outcome gate");
-    await waitForDom(client, `(() => { const c = document.querySelector('.now-rail-needs-count'); return (c ? Number(c.textContent.trim()) : 0) === 1; })()`, "acknowledging did not settle the needs-you count to 1");
+    await waitForDom(client, `fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()).then((wall) => wall.queue.length === 1)`, "acknowledging did not settle the wall to 1");
 
     await returnToWorkbenchHome(client, intents.reviewOutcome);
+    await waitForDom(client, `/1 decision needs you/i.test(document.querySelector('.vh-summary')?.textContent || '')`, "Home did not refresh its decision summary to 1");
+    assert.equal(await needsYouCount(client), 1, "Home did not reduce its decision summary to 1");
 
     // END-BET — keep it going (not killed, preserving all four directions).
     await selectDirectionGate(client, intents.endBet);
@@ -155,8 +155,10 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
     })()`);
     assert.equal(keptGoing, true, "Keep it going was not available for the end-bet gate");
 
-    await waitForDom(client, `!document.querySelector('.now-rail-needs-count')`, "needs-you count did not clear after all four decisions");
+    await waitForDom(client, `fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()).then((wall) => wall.queue.length === 0)`, "the wall did not clear after all four decisions");
     await returnToWorkbenchHome(client, intents.endBet);
+    await waitForDom(client, `!/decisions? needs? you/i.test(document.querySelector('.vh-summary')?.textContent || '')`, "Home did not clear its decision summary");
+    assert.equal(await needsYouCount(client), 0, "Home still claimed a decision needed the founder after the wall cleared");
 
     // AFTER ALL FOUR — workbench Home is unselected, the map is absent, and the safe operating surface is
     // intact without an attention marker or exposed execution machinery.
@@ -164,7 +166,7 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
       workbenchVisible: Boolean(document.querySelector('[data-testid="venture-workbench"][data-mode="work"]')),
       homeVisible: Boolean(document.querySelector('[data-testid="venture-workbench"] .vh[aria-label]')),
       stageVisible: Boolean(document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]')),
-      attention: document.querySelector('.now-rail-needs')?.getAttribute('data-attention'),
+      attention: /decisions? needs? you/i.test(document.querySelector('.vh-summary')?.textContent || ''),
       composerVisible: document.querySelector('.venture-workspace-dock .now-composer textarea')?.getAttribute('placeholder') === 'Direct the venture',
       mapVisible: Boolean(document.querySelector('.venture-workspace .venture-canvas-flow')),
       machineryVisible: Boolean(document.querySelector('[data-atlas-machinery]')),
@@ -172,7 +174,7 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
     assert.equal(clearState.workbenchVisible, true, "workbench disappeared after settling the wall");
     assert.equal(clearState.homeVisible, true, "workbench Home did not return after settling the wall");
     assert.equal(clearState.stageVisible, false, "selected work remained open after settling the wall");
-    assert.equal(clearState.attention, null, "Needs you retained an attention marker after clearing");
+    assert.equal(clearState.attention, false, "Home retained a needs-you summary after clearing");
     assert.equal(clearState.composerVisible, true, "whole-venture composer disappeared after settling the wall");
     assert.equal(clearState.mapVisible, false, "the map mounted at rest after settling the wall");
     assert.equal(clearState.machineryVisible, false, "settling the wall must not expose execution machinery by default");
@@ -191,16 +193,14 @@ test("the wall: every purpose settles once in-context, leaves a receipt, and the
 
     // RELOAD RECOVERY — the clear/safe state survives a full reload; the wall API queue length is 0.
     await client.send("Page.reload", { ignoreCache: true });
-    await waitForDom(client, `/Continue a venture/i.test(document.body.textContent)`, "venture picker did not return after receipt reload");
-    assert.equal(await client.evaluate(`(() => {
-      const button = [...document.querySelectorAll('button')].find((entry) => /Wall venture/.test(entry.textContent));
-      button?.click();
-      return Boolean(button);
-    })()`), true);
-    await waitForDom(client, `!!document.querySelector('.venture-workspace[data-mode="work"] [data-testid="venture-workbench"][data-mode="work"]')`, "wall venture did not reopen in workbench work mode");
+    await waitForDom(
+      client,
+      `!!document.querySelector('.venture-workspace[data-mode="work"] [data-testid="venture-workbench"][data-mode="work"]') && document.querySelector('.vw-index-project-copy strong')?.textContent?.trim() === 'Wall venture'`,
+      "wall venture did not auto-reopen in workbench work mode",
+    );
     await waitForDom(client, `!!document.querySelector('[data-testid="venture-workbench"] .vh[aria-label]') && !document.querySelector('[data-testid="venture-workbench"] [data-testid="stage-workspace"]')`, "wall venture did not reopen at unselected workbench Home");
     await waitForDom(client, `!document.querySelector('.venture-workspace .venture-canvas-flow')`, "the map mounted at rest after receipt reload");
-    await waitForDom(client, `!document.querySelector('.now-rail-needs-count') && document.querySelector('.now-rail-needs')?.getAttribute('data-attention') == null`, "needs-you attention did not stay clear after a full reload");
+    await waitForDom(client, `!/decisions? needs? you/i.test(document.querySelector('.vh-summary')?.textContent || '')`, "needs-you attention did not stay clear after a full reload");
     await waitForDom(client, `fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()).then((body) => body.queue.length === 0)`, "wall API queue did not stay empty after a full reload");
 
     await assertBasicAccessibility(client);

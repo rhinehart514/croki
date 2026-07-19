@@ -1,13 +1,12 @@
 // Codex CLI adapter for teammate drives and isolated product changes. Both doors use the founder's
-// authenticated Codex subscription. Teammate drives get a read-only repository plus Drover's typed
-// tool protocol; product changes get an isolated writable worktree. Neither door inherits apps,
-// MCP servers, hooks, network, or approval authority.
+// authenticated Codex subscription. Teammate drives are native resumable Codex sessions: they inherit
+// the founder's Codex configuration and receive the current direction's screened Drover tools as one
+// additional process-local MCP server. Product changes remain a narrower isolated-worktree capability.
 
 import { spawn, spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
-import { fileURLToPath } from "node:url";
-
-const DRIVE_SCHEMA = fileURLToPath(new URL("./codex-drive.schema.json", import.meta.url));
+import http from "node:http";
 
 export function findCodexBinary(env = process.env) {
   const override = env.GTM_IDE_CODEX_PATH;
@@ -47,84 +46,133 @@ export function codexAuthModeLabel(mode) {
   return mode === "chatgpt-login" ? "ChatGPT subscription" : null;
 }
 
-const CODEX_CAGED_CONFIG = [
-  "-c", 'approval_policy="never"',
-  "-c", "features.apps=false",
-  "-c", "features.hooks=false",
-  "-c", "features.plugin_sharing=false",
-  "-c", "features.computer_use=false",
-  "-c", "features.browser_use=false",
-  "-c", "features.in_app_browser=false",
-  "-c", "features.network_proxy.enabled=false",
-];
-
-export function buildCodexDriveArgs({ model, resumeId } = {}) {
+export function buildCodexDriveArgs({ model, resumeId, mcpUrl } = {}) {
   const common = [
     "--json",
-    "--ignore-user-config",
-    "--ignore-rules",
-    "--strict-config",
     "--skip-git-repo-check",
-    "--output-schema", DRIVE_SCHEMA,
-    ...CODEX_CAGED_CONFIG,
+    ...(mcpUrl ? ["-c", `mcp_servers.drover.url=${JSON.stringify(mcpUrl)}`] : []),
     ...(model ? ["-m", model] : []),
   ];
   return resumeId
     ? ["exec", "resume", ...common, resumeId, "-"]
-    : ["exec", ...common, "-s", "read-only", "-"];
+    : ["exec", ...common, "-"];
 }
 
-export function parseCodexAction(text) {
-  const raw = String(text ?? "").trim();
-  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
-  for (const candidate of [fenced, raw]) {
-    if (!candidate) continue;
-    try {
-      const action = JSON.parse(candidate);
-      if (action?.type === "final" && typeof action.summary === "string") {
-        return { type: "final", summary: action.summary.trim() };
-      }
-      if (action?.type === "tool" && typeof action.name === "string") {
-        let input = action.input ?? {};
-        if (typeof input === "string") {
-          try { input = JSON.parse(input); } catch { return null; }
-        }
-        if (!input || typeof input !== "object" || Array.isArray(input)) return null;
-        return { type: "tool", name: action.name, input };
-      }
-    } catch {
-      // Try the unfenced candidate next.
+function sendMcpJson(res, status, payload) {
+  const body = JSON.stringify(payload);
+  res.writeHead(status, {
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(body),
+    "Cache-Control": "no-store",
+  });
+  res.end(body);
+}
+
+async function readMcpBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+// Codex receives Drover as one additional native MCP server. The bridge is process-local, binds only to
+// loopback on a random port, and uses an unguessable path. It exposes exactly the already-screened tools
+// from the current direction; it grants no founder decision or outward executor.
+export async function startCodexMcpBridge(ctx) {
+  const toolMap = new Map((ctx.tools ?? []).map((tool) => [tool.name, tool]));
+  let terminal = null;
+  const token = crypto.randomBytes(24).toString("hex");
+  const route = `/mcp/${token}`;
+  const server = http.createServer(async (req, res) => {
+    if (req.url !== route || req.method !== "POST") {
+      res.writeHead(404).end();
+      return;
     }
-  }
-  return null;
+    let message;
+    try {
+      message = await readMcpBody(req);
+    } catch {
+      sendMcpJson(res, 400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
+      return;
+    }
+    const { id, method, params } = message;
+    if (method === "notifications/initialized") {
+      res.writeHead(202).end();
+      return;
+    }
+    if (method === "initialize") {
+      sendMcpJson(res, 200, {
+        jsonrpc: "2.0",
+        id,
+        result: {
+          protocolVersion: params?.protocolVersion ?? "2025-03-26",
+          capabilities: { tools: { listChanged: false } },
+          serverInfo: { name: "drover", version: "0.3.0" },
+          instructions: "Use these tools for venture truth and Drover-managed work. They cannot authorize founder-held outward consequences.",
+        },
+      });
+      return;
+    }
+    if (method === "tools/list") {
+      sendMcpJson(res, 200, {
+        jsonrpc: "2.0",
+        id,
+        result: { tools: [...toolMap.values()].map((tool) => ({ name: tool.name, description: tool.description, inputSchema: tool.input_schema })) },
+      });
+      return;
+    }
+    if (method === "tools/call") {
+      const tool = toolMap.get(params?.name);
+      if (!tool) {
+        sendMcpJson(res, 200, { jsonrpc: "2.0", id, result: { isError: true, content: [{ type: "text", text: `Unknown Drover tool: ${params?.name ?? "missing"}` }] } });
+        return;
+      }
+      ctx.onToolStart?.(tool.name);
+      try {
+        const response = await ctx.runTool({
+          id: `codex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: tool.name,
+          input: params?.arguments ?? {},
+        });
+        const step = ctx.onTurn?.();
+        if (response?.pause === true) terminal = "paused";
+        else if (Number.isFinite(step) && step >= ctx.maxSteps) terminal = "budget";
+        sendMcpJson(res, 200, { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(response?.result ?? null) }] } });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        ctx.onToolError?.(tool.name, detail);
+        sendMcpJson(res, 200, { jsonrpc: "2.0", id, result: { isError: true, content: [{ type: "text", text: detail }] } });
+      }
+      return;
+    }
+    if (method === "ping") {
+      sendMcpJson(res, 200, { jsonrpc: "2.0", id, result: {} });
+      return;
+    }
+    sendMcpJson(res, 200, { jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${method}` } });
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  return {
+    url: `http://127.0.0.1:${address.port}${route}`,
+    terminal: () => terminal,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
 }
 
 function drivePrompt(ctx) {
-  const tools = (ctx.tools ?? []).map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    input_schema: tool.input_schema,
-  }));
   return [
     ctx.system,
     "",
-    "You are operating through Codex inside Drover. The repository is read-only. Drover tools are",
-    "invoked one at a time by returning the structured tool action required by the output schema.",
-    "For a tool action, encode its arguments object as a JSON string in the input field.",
-    "Use the tools to inspect truth and taste, fork genuinely different bets, and stage useful work.",
-    "Anything outward must go through stage_outward and stop at the founder wall.",
-    `Available Drover tools:\n${JSON.stringify(tools)}`,
+    "You are operating as a native Codex session inside Drover. Your normal Codex configuration,",
+    "project rules, tools, skills, apps, plugins, hooks, browser, and MCP servers remain available.",
+    "Drover adds a native MCP server named drover for venture truth, durable work, and founder-held",
+    "consequences. Use those tools when work must attach to the venture. A Drover tool can prepare or",
+    "park an outward consequence, but only the founder can authorize it.",
     "",
     `Founder's outcome: ${ctx.goal}`,
-  ].join("\n");
-}
-
-function toolResultPrompt(name, result) {
-  return [
-    `Drover completed ${name}.`,
-    JSON.stringify(result),
-    "Continue the same outcome. Return the next Drover tool action, or a final action when the useful",
-    "work is complete. Do not claim an outward action happened; outward work can only wait at the wall.",
   ].join("\n");
 }
 
@@ -133,15 +181,25 @@ export async function runCodexDriveTurn({
   cwd,
   model,
   resumeId,
+  tools = [],
+  runTool,
+  onToolStart,
+  onToolError,
+  onTurn,
+  maxSteps,
   env = process.env,
   spawnProcess = spawn,
+  startBridge = startCodexMcpBridge,
   timeoutMs = Number(env.GTM_IDE_CODEX_TIMEOUT_MS) || 600_000,
   isCancelled = () => false,
   signal = null,
 } = {}) {
   const binary = findCodexBinary(env);
   if (!binary.ok) return { threadId: null, text: "", error: binary.reason };
-  const args = buildCodexDriveArgs({ model, resumeId });
+  const bridge = tools.length && typeof runTool === "function"
+    ? await startBridge({ tools, runTool, onToolStart, onToolError, onTurn, maxSteps })
+    : null;
+  const args = buildCodexDriveArgs({ model, resumeId, mcpUrl: bridge?.url });
   return new Promise((resolve) => {
     const child = spawnProcess(binary.path, args, {
       cwd,
@@ -173,7 +231,9 @@ export async function runCodexDriveTurn({
       clearInterval(cancelPoll);
       if (forceKill) clearTimeout(forceKill);
       signal?.removeEventListener?.("abort", abortFromHost);
-      resolve(result);
+      const completed = { ...result, terminal: bridge?.terminal() ?? null };
+      if (!bridge) resolve(completed);
+      else bridge.close().then(() => resolve(completed), () => resolve(completed));
     };
     const consume = (line) => {
       const event = parseCodexEvent(line);
@@ -367,6 +427,12 @@ export const codexRuntime = {
         cwd: ctx.cwd || process.cwd(),
         model: ctx.model,
         resumeId,
+        tools: ctx.tools ?? [],
+        runTool: ctx.runTool,
+        onToolStart: ctx.onToolStart,
+        onToolError: ctx.onToolError,
+        onTurn: ctx.onTurn,
+        maxSteps: ctx.maxSteps,
         env: ctx.env ?? process.env,
         isCancelled: ctx.isCancelled,
         signal: ctx.signal,
@@ -386,34 +452,11 @@ export const codexRuntime = {
         resumeId = turn.threadId;
         ctx.onRuntimeSession?.(turn.threadId);
       }
-
-      const action = parseCodexAction(turn.text);
-      if (!action) throw new Error("Codex finished without a valid Drover action.");
-      if (action.type === "final") {
-        if (action.summary) ctx.onText?.(action.summary);
-        return { kind: "completed", summary: action.summary || "Codex finished the session." };
-      }
-
-      ctx.onToolStart(action.name);
-      let result;
-      let pause = false;
-      try {
-        const response = await ctx.runTool({
-          id: `codex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          name: action.name,
-          input: action.input ?? {},
-        });
-        result = response?.result;
-        pause = response?.pause === true;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        ctx.onToolError(action.name, message);
-        result = { error: message };
-      }
-      const step = ctx.onTurn();
-      if (pause) return { kind: "paused" };
-      if (step >= ctx.maxSteps) return { kind: "budget" };
-      prompt = toolResultPrompt(action.name, result);
+      if (turn.terminal === "paused") return { kind: "paused" };
+      if (turn.terminal === "budget") return { kind: "budget" };
+      const summary = String(turn.text ?? "").trim() || "Codex finished the session.";
+      ctx.onText?.(summary);
+      return { kind: "completed", summary };
     }
   },
 

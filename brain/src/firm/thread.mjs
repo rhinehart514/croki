@@ -34,6 +34,8 @@ export function createThread({
   participantRefs = [],
   parentThreadRef = null,
   originMessageRef = null,
+  lifecycle = "open",
+  reviewedThrough = null,
   properties = {},
   createdAt = null,
   updatedAt = null,
@@ -44,12 +46,17 @@ export function createThread({
   if (parent && parent === `thread:${text(id)}`) fail("A thread cannot reference itself as its parent.");
   const origin = text(originMessageRef);
   if (origin && !origin.startsWith("conversation:")) fail("A thread origin must reference a conversation message.");
+  const normalizedLifecycle = text(lifecycle) ?? "open";
+  if (!["open", "closed"].includes(normalizedLifecycle)) fail("A thread lifecycle must be open or closed.");
+  const reviewCursor = text(reviewedThrough);
   const record = {
     id: text(id),
     name: text(name),
     messageRefs: conversationRefs(messageRefs, "A thread"),
     subjectRefs: refs(subjectRefs),
     participantRefs: refs(participantRefs),
+    lifecycle: normalizedLifecycle,
+    reviewedThrough: reviewCursor,
     properties: properties && typeof properties === "object" ? structuredClone(properties) : {},
     createdAt: createdAt ?? null,
     updatedAt: updatedAt ?? createdAt ?? null,
@@ -81,4 +88,25 @@ export function withThreadMessage(thread, messageRef, { at = null } = {}) {
   next.messageRefs = [...new Set([...(next.messageRefs ?? []), ref])];
   next.updatedAt = at ?? next.updatedAt ?? null;
   return next;
+}
+
+// Extend the durable organization around a direction without copying the referenced records. This is
+// intentionally additive: a later run may reveal more subjects or return more conversation messages,
+// but it must not silently erase the founder's earlier lineage.
+export function withThreadReferences(thread, { messageRefs = [], subjectRefs = [], at = null } = {}) {
+  if (!thread || typeof thread !== "object") fail("Extending a thread needs a thread record.");
+  const next = structuredClone(thread);
+  next.messageRefs = conversationRefs([...(next.messageRefs ?? []), ...messageRefs], "A thread");
+  next.subjectRefs = refs([...(next.subjectRefs ?? []), ...subjectRefs]);
+  next.updatedAt = at ?? next.updatedAt ?? null;
+  return next;
+}
+
+// A review cursor is a stable ref to the latest consequence the founder actually saw. It is not a
+// boolean badge: when later work produces a different consequence ref, unread derives true again.
+export function withThreadReviewedThrough(thread, reviewedThrough, { at = null } = {}) {
+  if (!thread || typeof thread !== "object") fail("Reviewing a thread needs a thread record.");
+  const cursor = text(reviewedThrough);
+  if (!cursor || !cursor.includes(":")) fail("A thread review cursor needs a typed reference.");
+  return { ...structuredClone(thread), reviewedThrough: cursor, updatedAt: at ?? thread.updatedAt ?? null };
 }

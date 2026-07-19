@@ -396,9 +396,12 @@ Each phase is a vertical completion gate. Nothing is called complete from compon
    adaptive multi-agent composition, steering, stopping, branching, closing, and persistent run receipts.
 4. **Consequence execution:** make product apply, deploy, send, spending, destructive actions, failure,
    retry, and MCP/Electron topology truthful under the founder wall.
-5. **One founder shell:** ship one workspace index, continuous conversation, an **adaptive workbench as the
-   default center**, a scoped composer, a contextual founder gate, and the canonical canvas as a **summoned
-   `map` mode** — one action away, never the resting host or the primary navigation model.
+5. **One founder shell:** ship one canonical Product/GTM venture outline, continuous conversation, an
+   **adaptive workbench as the default center**, a scoped composer, a contextual founder gate, and the
+   canonical canvas as a **summoned `map` mode** — one action away, never the resting host or the primary
+   navigation model. Product and Go-to-market render as project-like folders with founder thought/work
+   Threads as their primary rows; canonical object structure organizes those Threads without becoming a
+   mandatory navigation taxonomy. Attention filters the same structure rather than creating another inbox.
 6. **Manipulable canvas (summoned):** direct editing, semantic zoom, provisional theory, reversible
    interpretation, provenance, and honest dense-scale behavior — available on the summoned map, and
    descending from it hands the founder back to the selected work.

@@ -1,33 +1,113 @@
-// Approach comparison — a representation projected from REAL durable truth thrown away today as a count.
-// A direction's member bets are its parallel attempts (fork siblings via forkedFrom). Instead of hiding
-// them behind "Approaches: N" in machinery and collapsing extra drafts into <details>, this renders each
-// sibling side by side: its intent, its live/at-wall/ended position, its staged summary, and any joined
-// outcome. A row is clickable to narrow the composer's scope to that one sibling (targetBet) — pure
-// intent, mutates nothing until the founder sends. available() gates on more than one member bet, so it
-// never appears for a single-attempt direction. One visual grammar: now-detail-block throughout.
-import type { FirmBet } from "@/types";
+// Comparison is a review surface, not a hidden composer shortcut. Each approach states what exists,
+// reveals the real staged artifacts/outcome in place, and offers steering as a separate explicit act.
+// No draft body is synthesized here: everything comes from the bet's durable staged work or outcome.
+import type { FirmBet, FirmStagedArtifact } from "@/types";
 import { targetBet, type CanvasSelection } from "@/components/firm/directionTarget";
-import { resolveStagedArtifact } from "./reviewArtifact";
+import { ArtifactPreview, DiffView, FilesChanged } from "@/components/review";
+import { resolveStagedArtifact, type ResolvedArtifact } from "./reviewArtifact";
 import type { DirectionRenderContext } from "./projectDirection";
 
-const POSITION_LABEL: Record<string, string> = { live: "Working", "at-wall": "Awaiting your decision", ended: "Ended" };
+const POSITION_LABEL: Record<string, string> = {
+  live: "Open",
+  "at-wall": "Needs your decision",
+  ended: "Ended",
+};
 
-// A short, honest summary of what an attempt has produced — never fabricated, read from real artifacts.
-function producedSummary(bet: FirmBet): string {
-  const artifacts = bet.staged ?? [];
-  if (!artifacts.length) return "Nothing produced yet.";
-  let diffs = 0;
-  let drafts = 0;
-  for (const entry of artifacts) {
+type ReviewableArtifact = {
+  key: string;
+  title: string;
+  resolved: Exclude<ResolvedArtifact, null>;
+};
+
+function reviewableArtifacts(bet: FirmBet): ReviewableArtifact[] {
+  return (bet.staged ?? []).flatMap((entry: FirmStagedArtifact, index) => {
     const resolved = resolveStagedArtifact(entry.content);
-    if (!resolved) continue;
-    if (resolved.kind === "diff") diffs += 1;
-    else drafts += 1;
-  }
+    if (!resolved) return [];
+    return [{
+      key: entry.id ?? `${bet.id}-${index}`,
+      title: entry.title?.trim() || (resolved.kind === "diff" ? "Product change" : "Draft"),
+      resolved,
+    }];
+  });
+}
+
+function workSummary(artifacts: ReviewableArtifact[], hasOutcome: boolean): string {
+  const changes = artifacts.filter((entry) => entry.resolved.kind === "diff").length;
+  const drafts = artifacts.length - changes;
   const parts: string[] = [];
-  if (diffs) parts.push(diffs > 1 ? `${diffs} product changes` : "a product change");
-  if (drafts) parts.push(drafts > 1 ? `${drafts} drafts` : "a draft");
-  return parts.length ? `Produced ${parts.join(" and ")}.` : "A result is forming.";
+  if (changes) parts.push(`${changes} ${changes === 1 ? "product change" : "product changes"}`);
+  if (drafts) parts.push(`${drafts} ${drafts === 1 ? "draft" : "drafts"}`);
+  if (hasOutcome) parts.push("1 market result");
+  return parts.length ? `${parts.join(" · ")} ready to review` : "Nothing reviewable yet";
+}
+
+function ArtifactReview({ entry }: { entry: ReviewableArtifact }) {
+  return (
+    <div className="now-approach-artifact">
+      <p className="now-approach-artifact-title">{entry.title}</p>
+      {entry.resolved.kind === "diff" ? (
+        <>
+          <FilesChanged diff={entry.resolved.diff} />
+          <details className="now-exact-diff">
+            <summary>Review exact diff</summary>
+            <DiffView diff={entry.resolved.diff} />
+          </details>
+        </>
+      ) : (
+        <div className="now-artifact-cap">
+          <ArtifactPreview artifact={entry.resolved.artifact} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ApproachCard({
+  bet,
+  isWorking,
+  onScopePick,
+}: {
+  bet: FirmBet;
+  isWorking: boolean;
+  onScopePick?: (selection: CanvasSelection) => void;
+}) {
+  const artifacts = reviewableArtifacts(bet);
+  const outcome = bet.latestOutcome;
+  const hasReview = artifacts.length > 0 || Boolean(outcome?.body);
+  const tone = bet.position === "live" ? "working" : bet.position === "at-wall" ? "needs-you" : "changed";
+
+  return (
+    <article className="now-approach now-approach-card" data-tone={tone} aria-label={`Approach: ${bet.intent}`}>
+      <div className="now-approach-head">
+        <h3 className="now-approach-intent">{bet.intent}</h3>
+        <span className="now-approach-state">{isWorking ? "Working" : POSITION_LABEL[bet.position] ?? bet.position}</span>
+      </div>
+      <p className="now-change-meta">{workSummary(artifacts, Boolean(outcome?.body))}</p>
+
+      {hasReview ? (
+        <details className="now-approach-review">
+          <summary>Review this approach</summary>
+          <div className="now-approach-review-body">
+            {artifacts.map((entry) => <ArtifactReview key={entry.key} entry={entry} />)}
+            {outcome?.body ? (
+              <div className="now-returned">
+                <span className="now-detail-block-label">Market result</span>
+                <p className="now-detail-why">{outcome.body}</p>
+              </div>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
+
+      {onScopePick && bet.position !== "ended" && !bet.endedAt ? (
+        <div className="now-approach-actions">
+          <button type="button" className="now-approach-steer" onClick={() => onScopePick(targetBet(bet.id))}>
+            Steer this approach
+          </button>
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
 export function ApproachComparison({
@@ -37,32 +117,19 @@ export function ApproachComparison({
   ctx: DirectionRenderContext;
   onScopePick?: (selection: CanvasSelection) => void;
 }) {
-  const { memberBets } = ctx;
   return (
-    <div className="now-detail-block">
+    <section className="now-detail-block" aria-label="Approach comparison">
       <span className="now-detail-block-label">
-        {memberBets.length} approaches · pick one to steer it
+        {ctx.memberBets.length} approaches · compare their work
       </span>
-      {memberBets.map((bet) => {
-        const outcome = bet.latestOutcome;
-        const label = POSITION_LABEL[bet.position] ?? bet.position;
-        return (
-          <button
-            key={bet.id}
-            type="button"
-            className="now-approach"
-            data-tone={bet.position === "live" ? "working" : bet.position === "at-wall" ? "needs-you" : "changed"}
-            onClick={() => onScopePick?.(targetBet(bet.id))}
-          >
-            <span className="now-approach-head">
-              <span className="now-approach-intent">{bet.intent}</span>
-              <span className="now-approach-state">{label}</span>
-            </span>
-            <span className="now-change-meta">{producedSummary(bet)}</span>
-            {outcome?.body ? <span className="now-change-meta">Market: {outcome.body}</span> : null}
-          </button>
-        );
-      })}
-    </div>
+      {ctx.memberBets.map((bet) => (
+        <ApproachCard
+          key={bet.id}
+          bet={bet}
+          isWorking={(ctx.drives ?? []).some((drive) => drive.betId === bet.id)}
+          onScopePick={onScopePick}
+        />
+      ))}
+    </section>
   );
 }

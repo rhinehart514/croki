@@ -66,7 +66,7 @@ export async function openAtlasFixture(drover, {
     },
   });
   const { client } = chrome;
-  await waitForDom(client, `/Continue a venture/i.test(document.body.textContent)`, "atlas fixture venture picker did not render");
+  await waitForDom(client, `/Resume work/i.test(document.body.textContent)`, "atlas fixture venture picker did not render");
   if (!openVenture) return chrome;
   const opened = await client.evaluate(`(() => {
     const button = [...document.querySelectorAll('button')]

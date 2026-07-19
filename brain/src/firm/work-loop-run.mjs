@@ -12,7 +12,7 @@
 // The run id is the activeDrive.id, so a run is 1:1 with the drive that produced it and never collides.
 // Legacy drives are not backfilled: only a drive that begins a run here can complete one.
 
-import { ensureRootThread, recordRun, completeDriveRun } from "./semantic-model-store.mjs";
+import { ensureDirectionThread, extendDirectionThread, recordRun, completeDriveRun } from "./semantic-model-store.mjs";
 import { setVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { createWorkflowExecutionReceipt } from "./workflow-execution-receipt.mjs";
 import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
@@ -41,7 +41,7 @@ export function driveRecordsRun(initiatedBy) {
   return initiatedBy === "founder" || initiatedBy === "agent";
 }
 
-// begin — form the root thread lazily and persist the canonical run BEFORE provider dispatch, after all
+// begin — form/resume a child direction thread and persist the canonical run BEFORE provider dispatch, after all
 // input/config/runtime validation. Returns a handle the finish seam completes, or null when this drive
 // does not record (not founder-authorized) or when recording failed. A failure here is swallowed: the
 // drive proceeds untouched, exactly as if no run substrate existed.
@@ -51,21 +51,33 @@ export function beginDriveRun({
   initiatedBy,
   betId = null,
   originMessageId = null,
+  threadName = null,
+  threadRef = null,
+  target = null,
   at = null,
   options = {},
 }) {
   if (!driveRecordsRun(initiatedBy)) return null;
   try {
-    const { threadRef } = ensureRootThread(ventureId, { at: at ?? undefined }, options);
-    const betRefs = betId ? [`bet:${betId}`] : [];
     const originMessageRef = conversationRef(originMessageId);
+    const betRefs = betId ? [`bet:${betId}`] : [];
+    const architectureRef = target?.architectureId ? `architecture:${target.architectureId}` : null;
+    const subjectRefs = [...betRefs, ...(architectureRef ? [architectureRef] : [])];
+    const direction = ensureDirectionThread(ventureId, {
+      name: threadName,
+      originMessageRef,
+      subjectRefs,
+      resumeThreadRef: threadRef,
+      identityKey: runId,
+      at: at ?? undefined,
+    }, options);
     recordRun(ventureId, {
       id: runId,
-      threadRef,
+      threadRef: direction.threadRef,
       betRefs,
       ...(originMessageRef ? { originMessageRef } : {}),
     }, { at: at ?? undefined }, options);
-    return { ventureId, runId, betId, options };
+    return { ventureId, runId, betId, architectureRef, threadRef: direction.threadRef, options };
   } catch {
     // Honest degrade: the drive must never be aborted or changed by a run-recording error.
     return null;
@@ -113,10 +125,12 @@ export function finishDriveRun(handle, {
   afterWallItems = [],
   runtime = null,
   modelRevision = null,
+  messageRefs = [],
+  subjectRefs = [],
   at = null,
 }) {
   if (!handle) return null;
-  const { ventureId, runId, betId, options } = handle;
+  const { ventureId, runId, betId, architectureRef, threadRef, options } = handle;
   try {
     const decisionRefs = newDecisionRefs(beforeWallItems, afterWallItems);
     completeDriveRun(ventureId, runId, { at: at ?? undefined, decisionRefs }, options);
@@ -141,6 +155,17 @@ export function finishDriveRun(handle, {
     // findReceiptForRun, never by storage key. Inside the fail-safe try: a persistence error degrades to
     // historical-unknown, never aborts the drive.
     setVentureDoc(ventureId, "receipts", receipt.id, receipt, options);
+    // Returned messages and newly revealed subjects belong to the same direction. This enrichment is
+    // best-effort after settlement: a bad optional ref must never erase an otherwise valid terminal receipt.
+    try {
+      extendDirectionThread(ventureId, threadRef, {
+        messageRefs,
+        subjectRefs: [...new Set([...(architectureRef ? [architectureRef] : []), ...subjectRefs])],
+        at: at ?? undefined,
+      }, options);
+    } catch {
+      // The run + receipt remain truthful even if optional thread enrichment cannot be recorded.
+    }
     return { runRef: `run:${runId}`, decisionRefs, receipt };
   } catch {
     return null;

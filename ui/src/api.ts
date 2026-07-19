@@ -189,6 +189,86 @@ export const removeCredential = (provider: string) =>
 export const getLens = (ventureId: string) =>
   get<{ lens: FirmLens }>(`/api/ventures/${encodeURIComponent(ventureId)}/lens`);
 
+export type WorkIndexLifecycle = "open" | "closed";
+export type WorkIndexActivity = "queued" | "running" | "stopping" | "idle";
+export type WorkIndexAttention = "decision" | "review" | "failure" | "none";
+export type WorkIndexTerminal = "completed" | "failed" | "cancelled" | "paused" | "budget-exhausted" | "interrupted" | null;
+
+export type WorkIndexItem = {
+  threadRef: string;
+  ventureRef: string;
+  parentThreadRef: string | null;
+  originMessageRef: string | null;
+  subjectRefs: string[];
+  focusRef: string;
+  founderIntent: string;
+  lifecycle: WorkIndexLifecycle;
+  activity: WorkIndexActivity;
+  attention: WorkIndexAttention;
+  terminal: WorkIndexTerminal;
+  unread: boolean;
+  reviewedThrough: string | null;
+  latestMeaningfulEvent: { kind: string; ref: string; at: string | null; summary: string | null };
+  runRefs: string[];
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type WorkIndexOutlineObject = {
+  id: string;
+  objectRef: string;
+  name: string;
+  statement: string;
+  type: string;
+  territory: "product" | "gtm" | null;
+  sectionId: string;
+  parentRef: string | null;
+  assertion: "tentative" | "founder-asserted";
+  provenance: Record<string, unknown> | null;
+  details: Record<string, unknown>;
+  threadRefs: string[];
+  targetable: boolean;
+  architectureRole: string | null;
+  updatedAt: string | null;
+};
+
+export type WorkIndexOutlineRelationship = {
+  id: string;
+  fromRef: string;
+  toRef: string;
+  label: string;
+  type: string;
+  assertion: "tentative" | "founder-asserted";
+  sourceRefs: string[];
+};
+
+export type WorkIndexOutline = {
+  architectureRevision: number;
+  objects: WorkIndexOutlineObject[];
+  relationships: WorkIndexOutlineRelationship[];
+  unplacedThreadRefs: string[];
+};
+
+export type WorkIndex = {
+  ventureId: string;
+  revision: number;
+  items: WorkIndexItem[];
+  outline?: WorkIndexOutline;
+  counts: { total: number; attention: number; active: number; unread: number };
+  legacy: { unindexedRunCount: number };
+};
+
+export const getWorkIndex = (ventureId: string) =>
+  get<{ workIndex: WorkIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/work-index`);
+
+export const markWorkIndexReviewed = (ventureId: string, item: WorkIndexItem) => {
+  const threadId = item.threadRef.replace(/^thread:/, "");
+  return guardedPut<{ item: WorkIndexItem; workIndex: WorkIndex }>(
+    `/api/ventures/${encodeURIComponent(ventureId)}/work-index/${encodeURIComponent(threadId)}/reviewed-through`,
+    { reviewedThrough: item.latestMeaningfulEvent.ref },
+  );
+};
+
 export const getArchitectureProjection = (ventureId: string) =>
   get<{ projection: FirmArchitectureProjection; revision: number }>(
     `/api/ventures/${encodeURIComponent(ventureId)}/architecture/projection`,
@@ -507,6 +587,7 @@ export const driveTeammate = (
     // scopes the drive to it (work-routes.mjs), so a sibling is guaranteed rather than prompt-dependent.
     branchFrom?: string | null;
     workRef?: string | null;
+    threadRef?: string | null;
     architectureTarget?: { id: string; stepId?: string | null; revision: number };
     theoryTarget?: { theoryId: string; subjectId: string };
     runtime?: string | null;

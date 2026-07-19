@@ -2,8 +2,8 @@
 product: Drover
 surface: desktop-founder-workbench
 stage: alpha
-north_star: "The workbench holds the work; the conversation directs the venture; the canvas is a summoned map."
-layout: "Cursor-like workspace index and conversation beside an adaptive workbench center; the venture graph is a summoned map, not the resting host"
+north_star: "Work is the primary object: its conversation directs it, its material proves it, and the canvas is a summoned map."
+layout: "Resizable Product/GTM venture outline beside one continuous work thread with inline material; the venture graph is a summoned map"
 signature_interaction: founder-direction-materializes-a-provisional-venture-model-and-useful-work
 token_source: ui/src/index.css
 system_record: docs/design/DESIGN.md
@@ -30,14 +30,14 @@ receipts unless this file explicitly adopts them.
 **Drover makes the full product and go-to-market system visible, understandable, manipulable, and
 executable by one founder.**
 
-> **The workbench holds the work; the conversation directs and interrogates the venture; the canvas is a
-> map the founder summons when causal or spatial understanding helps. Claude and Codex expand what the
-> founder can accomplish.**
+> **Work is the primary object. Its conversation carries intent, its material proves consequence, and the
+> canvas is a map the founder summons when causal or spatial understanding helps. Claude and Codex expand
+> what the founder can accomplish.**
 
 Drover is not a dashboard, task manager, chat wrapper, workflow-node builder, agent org chart, or diagram
 that the founder must maintain. It is a founder-native agent development environment: a precise adaptive
-workbench for the selected work, a continuous conversation for directing and interrogating the venture, and
-a durable visual model of the company the founder can summon as a map when it adds understanding.
+workbench where intent, work, returned material, and founder consequence form one continuous thread, plus a
+durable visual model of the company the founder can summon as a map when it adds understanding.
 
 The primary return moment answers within ten seconds:
 
@@ -89,19 +89,31 @@ go-to-market model.
 
 Drover ships one Electron founder workspace.
 
-### Workspace index
+On return, Drover reopens the founder's last active venture and restores that venture's prior scope and
+work/map mode. A portfolio chooser is not a normal launch step. Repository connection appears only when no
+venture exists or when the founder explicitly starts another venture from the workspace switcher.
 
-A compact left side organizes attention through:
+### Venture outline
 
-- the venture conversation;
-- persistent scoped branches;
-- saved live views;
-- snapshots;
-- active directions and recent runs;
-- decisions requiring the founder.
+A compact left side makes the venture's durable operating model obvious through:
 
-It is a chronological and operational index, not another venture navigation tree. It may compress and
-filter attention; it never duplicates the canonical venture model.
+- two calm workspace roots: **Product** and **Go-to-market**;
+- founder thought/work threads as the primary rows directly beneath those roots;
+- status and recency readable inline, like a project/thread browser rather than an inbox;
+- neutral or genuinely unscoped threads kept in a collapsed Venture context without being guessed into
+  either territory.
+
+This is a projection of the canonical venture model, never a manually maintained folder taxonomy or second
+truth store. Direction, experiences, capabilities, systems, releases, audiences, positioning, offer,
+distribution, launches, and evidence organize and inform each thread; they do not become mandatory rail
+levels. The ontology should disappear until it materially disambiguates work. `Needs you` and search filter
+the same threads rather than opening a duplicate inbox. The edge is resizable and remembers its founder-set
+width.
+
+Selecting a thread opens its work in the center and scopes the composer. Addressable canonical objects with
+no attached thought can appear as startable rows; selecting one opens its current durable meaning. A new
+founder direction from that scope becomes its durable thought thread. Returning later continues the exact
+thread identity; it does not mint an accidental sibling.
 
 ### Conversation
 
@@ -109,17 +121,21 @@ Each venture has one continuous top-level conversation. A product surface, capab
 campaign, artifact, direction, evidence item, or saved view may have a persistent scoped branch. Branches
 inherit venture context without fragmenting the venture into separate workspaces.
 
-Conversation is a resizable working surface. It may collapse for spatial work and must restore selection,
-draft, branch, scope, and scroll position. Important founder turns, model interpretations, consequential
-returns, decisions, and evidence remain visible; raw work logs live behind disclosure.
+With no work selected, the index reports the whole-venture conversation as compact context. With work
+selected, its scoped branch and exact material occupy one chronological work thread. Alternate
+representations may switch the selected result in place; no permanent inspector competes with the thread.
+Scope changes never fork the source of truth. Important founder turns, model
+interpretations, consequential returns, decisions, and evidence remain visible; raw work logs live behind
+disclosure.
 
 ### Adaptive workbench center
 
 The permanent center is the adaptive workbench. With no selection, `VentureHome` gives the founder the
 resting operating picture: where active directions stand, what returned, and what needs judgment. Selecting
-a direction, run, artifact, or decision opens the best registered representation for that work in the same
-center: code, diffs, previews, campaign assets, research, telemetry, positioning, comparisons, workflows, or
-exact founder consequences.
+a direction, run, artifact, or decision opens one continuous editorial work thread. Conversation, work
+events, exact material, verification, decisions, releases, evidence, and learning appear in causal order.
+Compact result views may expose diffs, previews, comparisons, or exact consequences without becoming a
+second permanent region or hiding the thread that produced them.
 
 The workbench preserves selection, conversation scope, composer scope, and the route back to the wider
 venture. It is not a temporary overlay and does not depend on a canvas remaining mounted behind it.
@@ -332,50 +348,54 @@ claim keeps its source, words, attribution strength, and uncertainty.
 
 ### Composition
 
-This is a desktop founder workbench, not a responsive dashboard. The workspace index is compact. Conversation
-opens at a readable working width and can resize or collapse. The permanent adaptive workbench owns the main
-field; the map replaces it only when explicitly summoned.
+This is a desktop founder workbench, not a responsive dashboard. The venture outline defaults to 256px,
+resizes between 208px and 420px, and remembers its width. Selected work divides the remaining field into a
+fluid narrative and a 360–540px exact-material panel. The permanent adaptive workbench owns the main field;
+the map replaces it only when explicitly summoned.
 
 Product and go-to-market remain distinguishable territories without becoming rigid columns. The operating
 lens may temporarily align them. Relationships and whitespace create structure before cards and chrome do.
 
 ### Color
 
-- `#e3e0da` room, `#e9e6e0` canvas, `#f4f2ee` lifted surface, `#dcd8d0` inset surface.
-- `#23211d` and its warm umber ramp carry operating content.
-- `#1e5245` marks interaction and focus.
-- `#a9791a` belongs to founder-held consequence.
-- `#b4443a` belongs to destructive or failed states.
+- `#171717` is the application ground; `#191919` and `#1c1c1c` separate chrome and material.
+- White at 6–10% carries hairlines, hover, selection, and recessed surfaces.
+- `#f5f5f5` through `#737373` is the compact operating text ramp.
+- `#4f86f7` marks primary action and focus.
+- Amber belongs to founder-held consequence; green to verified active work; red to destructive or failed states.
 
 Evidence conditions never rely on positive/negative sentiment color. Color is always reinforced by words,
 shape, icon, line treatment, or position.
 
 ### Type
 
-- Geist Variable for venture titles and major focus headings.
-- System sans for body, controls, and sustained reading.
-- Geist Mono for code, paths, revisions, identifiers, and exact diffs only.
+- DM Sans Variable for headings, body, controls, and sustained reading.
+- JetBrains Mono, after the native SF Mono stack, for code, paths, revisions, identifiers, and exact diffs only.
+- The operating scale is compact: 11–14px for chrome and work metadata, with 16–26px reserved for focus.
 
 Metadata stays readable. Tiny prose is not calm density.
 
 ### Material
 
-The canvas is ground. Readable operating content is opaque. Hairlines, topology, and space group content
-before another panel does. Popovers and transient tools may float one level. Modal elevation is reserved for
-an exact blocking consequence. No glass behind operating text, decorative gradients, glow, nested-card
-stacks, or elevation used as status.
+Near-black planes are ground. Readable operating content is opaque. Hairlines and spacing group content
+before another card does. The composer may use restrained blur because it floats over the stream; operating
+material does not. Popovers and transient tools may float one level. Modal elevation is reserved for an
+exact blocking consequence. No decorative gradients, glow, nested-card stacks, or elevation used as status.
 
 ### Motion
 
-The motion personality is **settling with consequence**.
+The motion personality is **fast settling with consequence**.
 
+- Workbench, map, work stream, material panel, and composer enter over 150–200ms with no travel beyond 6px.
+- Work-group expansion and selection change animate once; selected state remains static afterward.
+- Active-work indicators may pulse or rotate only while work is actually active.
 - Pan and zoom respond directly and stop quickly.
 - Focus travels from a selected landmark and Escape restores the exact prior camera.
 - Direction branches visibly separate.
 - An exact release travels only to its founder boundary.
 - Evidence returns along the defensible join and changes the affected object.
 - Semantic and operating views rearrange once and restore exactly.
-- No ambient drift, bouncing, parallax, looping work animation, or `transition: all`.
+- No ambient drift, bouncing, parallax, decorative loops, or `transition: all`.
 - Reduced motion preserves every causal and status signal in the settled frame.
 
 ## Founder language

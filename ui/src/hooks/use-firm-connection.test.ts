@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getActiveDrives, getConversation, getHealth, getLens } from "@/api";
+import { getActiveDrives, getConversation, getHealth, getLens, getWorkIndex } from "@/api";
 import { requireFreshConnection } from "@/lib/freshness";
 import type { FirmConversationMessage, FirmLens } from "@/types";
 import { hasGroundedValue, useFirmConnection } from "./use-firm-connection";
@@ -10,12 +10,14 @@ vi.mock("@/api", () => ({
   getActiveDrives: vi.fn(),
   getHealth: vi.fn(),
   getLens: vi.fn(),
+  getWorkIndex: vi.fn(),
 }));
 
 const getLensMock = vi.mocked(getLens);
 const getConversationMock = vi.mocked(getConversation);
 const getActiveDrivesMock = vi.mocked(getActiveDrives);
 const getHealthMock = vi.mocked(getHealth);
+const getWorkIndexMock = vi.mocked(getWorkIndex);
 
 const lens = {
   ventureId: "v1", crew: [], bets: [], outcomes: [], wallItems: [],
@@ -29,6 +31,7 @@ describe("firm connection", () => {
     getLensMock.mockResolvedValue({ lens });
     getConversationMock.mockResolvedValue({ messages: [] });
     getActiveDrivesMock.mockResolvedValue({ drives: [] });
+    getWorkIndexMock.mockResolvedValue({ workIndex: { ventureId: "v1", revision: 0, items: [], counts: { total: 0, attention: 0, active: 0, unread: 0 }, legacy: { unindexedRunCount: 0 } } });
     getHealthMock.mockResolvedValue({
       ok: true,
       instanceId: "brain-1",

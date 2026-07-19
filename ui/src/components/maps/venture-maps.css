@@ -1,0 +1,238 @@
+.venture-maps {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  padding: 18px 20px 116px;
+  background: var(--n-app);
+  color: var(--n-ink);
+  overflow: hidden;
+}
+
+.venture-maps-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-height: 82px;
+  padding: 0 154px 12px 96px;
+}
+
+.venture-maps-head > div:first-child { display: grid; gap: var(--space-0-5); }
+.venture-maps-head > div:first-child > span { color: var(--n-ink-4); font-size: var(--text-xs); }
+.venture-maps-head h1 { margin: 0; font-size: var(--text-xl); font-weight: 620; letter-spacing: -0.02em; }
+.venture-maps-head p { margin: 2px 0 0; color: var(--n-ink-3); font-size: var(--text-xs); }
+
+.venture-map-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--n-line);
+  border-radius: var(--r-tool);
+  background: var(--n-rail);
+}
+
+.venture-map-tabs button {
+  min-height: 30px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--n-ink-3);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.venture-map-tabs button:hover { color: var(--n-ink); background: var(--n-hover); }
+.venture-map-tabs button[aria-selected="true"] { color: var(--n-ink); background: var(--n-selected); }
+
+.venture-system-graph {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--n-line);
+  border-radius: var(--r-lg);
+  background: var(--n-sunk);
+}
+
+.venture-system-graph .react-flow__pane { cursor: grab; }
+.venture-system-graph .react-flow__pane:active { cursor: grabbing; }
+.venture-system-graph .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--n-line-2);
+  border-radius: var(--r-tool);
+  box-shadow: var(--n-shadow-pop);
+}
+.venture-system-graph .react-flow__controls-button {
+  border: 0;
+  border-bottom: 1px solid var(--n-line);
+  background: var(--n-panel);
+  fill: var(--n-ink-2);
+}
+.venture-system-graph .react-flow__controls-button:hover { background: var(--n-selected); }
+.venture-system-graph .react-flow__edge-path { transition: stroke var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease); }
+
+.venture-graph-node { width: 244px; color: var(--n-ink); transition: opacity var(--dur-fast) var(--ease); }
+.venture-graph-node[data-kind="motion"] { width: 276px; }
+.venture-graph-node[data-kind="campaign"] { width: 258px; }
+.venture-graph-node[data-quiet="true"] { opacity: 0.24; }
+.venture-graph-node-main {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  min-height: 108px;
+  padding: 12px 13px;
+  border: 1px solid var(--n-line-2);
+  border-radius: var(--r-tool);
+  background: color-mix(in srgb, var(--n-panel) 96%, white);
+  color: var(--n-ink);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: var(--n-shadow);
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.venture-graph-node-main:hover { transform: translateY(-1px); border-color: var(--n-ink-4); background: var(--card-raised); }
+.venture-graph-node-main:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.venture-graph-node[data-selected="true"] .venture-graph-node-main { border-color: var(--primary); box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent), var(--n-shadow-pop); }
+.venture-graph-node[data-kind="motion"] .venture-graph-node-main { min-height: 120px; border-radius: var(--r-2xl); }
+.venture-graph-node[data-kind="product-loop"] .venture-graph-node-main { border-radius: var(--r-xl); box-shadow: inset 0 0 0 1px var(--n-line), var(--n-shadow); }
+.venture-graph-node[data-kind="system"] .venture-graph-node-main { background: linear-gradient(180deg, var(--n-panel), var(--n-rail)); }
+.venture-graph-node[data-kind="campaign"] .venture-graph-node-main { border-style: dashed; background: var(--n-rail); }
+.venture-graph-node[data-territory="context"] .venture-graph-node-main { border-style: dashed; box-shadow: none; }
+.venture-graph-node[data-gap="true"] .venture-graph-node-main { border-color: var(--gap); border-style: dashed; }
+
+.venture-graph-node-type {
+  color: var(--n-ink-4);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.venture-graph-node strong { font-size: var(--text-sm); font-weight: 650; line-height: var(--leading-tight); }
+.venture-graph-node-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--n-ink-3);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.venture-graph-node-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  color: var(--n-ink-4);
+  font-size: var(--text-xs);
+}
+.venture-graph-node[data-gap="true"] .venture-graph-node-foot { color: var(--gap-ink); }
+.venture-graph-node-foot i { font-style: normal; }
+.venture-graph-handle { width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
+
+.venture-graph-readout {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 4;
+  display: flex;
+  gap: var(--space-3);
+  padding: 7px 9px;
+  border: 1px solid var(--n-line);
+  border-radius: var(--r-tool);
+  background: color-mix(in srgb, var(--n-sunk) 92%, transparent);
+  color: var(--n-ink-4);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  backdrop-filter: blur(10px);
+}
+.venture-graph-readout span[data-gap="true"] { color: var(--gap-ink); }
+
+.venture-map-inspector {
+  position: absolute;
+  top: 104px;
+  right: 30px;
+  bottom: 132px;
+  z-index: 6;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  align-content: start;
+  gap: var(--space-3);
+  width: min(328px, calc(100% - 80px));
+  padding: var(--space-4);
+  overflow: auto;
+  border: 1px solid var(--n-line-2);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--n-panel) 96%, transparent);
+  box-shadow: var(--shadow-modal);
+  backdrop-filter: blur(18px);
+}
+.venture-map-inspector > header { display: flex; align-items: center; justify-content: space-between; }
+.venture-map-inspector > header span { color: var(--n-ink-4); font-family: var(--mono); font-size: var(--text-xs); text-transform: uppercase; }
+.venture-map-inspector > header button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--n-ink-3);
+  cursor: pointer;
+  font-size: var(--text-lg);
+}
+.venture-map-inspector > header button:hover { background: var(--n-hover); color: var(--n-ink); }
+.venture-map-inspector h2 { margin: 0; font-size: var(--text-lg); line-height: var(--leading-tight); }
+.venture-map-inspector > p, .venture-map-inspector section > p { margin: 0; color: var(--n-ink-3); font-size: var(--text-sm); line-height: var(--leading-normal); }
+.venture-map-inspector dl { display: grid; gap: var(--space-3); margin: 0; }
+.venture-map-inspector dl div { display: grid; gap: 3px; }
+.venture-map-inspector dt, .venture-map-inspector h3 { margin: 0; color: var(--n-ink-4); font-size: var(--text-xs); font-weight: 500; text-transform: uppercase; }
+.venture-map-inspector dd { margin: 0; color: var(--n-ink-2); font-size: var(--text-sm); line-height: var(--leading-normal); }
+.venture-map-inspector section { min-height: 0; overflow: auto; }
+.venture-map-inspector ul { display: grid; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
+.venture-map-inspector li { display: grid; gap: 2px; padding-top: var(--space-2); border-top: 1px solid var(--n-line); }
+.venture-map-inspector li span { color: var(--link); font-size: var(--text-xs); }
+.venture-map-inspector li strong { color: var(--n-ink-2); font-size: var(--text-sm); font-weight: 550; }
+.venture-map-open {
+  min-height: 36px;
+  border: 0;
+  border-radius: var(--r-tool);
+  background: var(--primary);
+  color: var(--on-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 620;
+}
+
+.venture-map-hint {
+  position: absolute;
+  bottom: 130px;
+  left: 50%;
+  z-index: 4;
+  padding: 7px 10px;
+  border: 1px solid var(--n-line);
+  border-radius: var(--r-tool);
+  background: var(--n-panel);
+  color: var(--n-ink-3);
+  font-size: var(--text-xs);
+  box-shadow: var(--n-shadow);
+  transform: translateX(-50%);
+}
+
+.venture-map-empty {
+  place-self: center;
+  display: grid;
+  gap: 7px;
+  max-width: 420px;
+  color: var(--n-ink-3);
+  text-align: center;
+}
+.venture-map-empty strong { color: var(--n-ink); font-size: var(--text-base); }
+.venture-map-empty p { margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal); }
+
+@media (prefers-reduced-motion: reduce) {
+  .venture-graph-node,
+  .venture-graph-node-main,
+  .venture-map-tabs button,
+  .venture-system-graph .react-flow__edge-path { transition: none; }
+}

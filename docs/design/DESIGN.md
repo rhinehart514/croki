@@ -1,6 +1,6 @@
 ---
 status: canonical-current-code-record
-refreshed: 2026-07-17
+refreshed: 2026-07-18
 experience_direction: ../../DESIGN.md
 token_source: ../../ui/src/index.css
 feature_styles:
@@ -12,23 +12,26 @@ feature_styles:
   - ../../ui/src/styles/portfolio-frontier.css
   - ../../ui/src/styles/venture-atlas.css
   - ../../ui/src/styles/workyard.css
+  - ../../ui/src/components/workspace/venture-workspace.css
+  - ../../ui/src/components/workspace/workspace-index.css
+  - ../../ui/src/components/workbench/workbench.css
 tokens:
   colors:
-    ink: { value: "#23211d", ref: "ui/src/index.css:18" }
-    ink_2: { value: "#4e4b44", ref: "ui/src/index.css:20" }
-    ink_3: { value: "#615e56", ref: "ui/src/index.css:21" }
-    muted: { value: "#615e56", ref: "ui/src/index.css:22" }
-    faint: { value: "#aba598", ref: "ui/src/index.css:23" }
-    ghost: { value: "#c6c1b6", ref: "ui/src/index.css:24" }
-    line: { value: "#d3cfc6", ref: "ui/src/index.css:25" }
-    surface: { value: "#f4f2ee", ref: "ui/src/index.css:27" }
-    surface_2: { value: "#dcd8d0", ref: "ui/src/index.css:29" }
-    canvas: { value: "#e9e6e0", ref: "ui/src/index.css:30" }
-    room: { value: "#e3e0da", ref: "ui/src/index.css:31" }
-    link: { value: "#1e5245", ref: "ui/src/index.css:35" }
-    gap: { value: "#a9791a", ref: "ui/src/index.css:36" }
-    danger: { value: "#b4443a", ref: "ui/src/index.css:37" }
-    blind: { value: "#aba598", ref: "ui/src/index.css:38" }
+    ink: { value: "#f5f5f5", ref: "ui/src/index.css" }
+    ink_2: { value: "#d4d4d4", ref: "ui/src/index.css" }
+    ink_3: { value: "#a3a3a3", ref: "ui/src/index.css" }
+    muted: { value: "#a3a3a3", ref: "ui/src/index.css" }
+    faint: { value: "#737373", ref: "ui/src/index.css" }
+    ghost: { value: "#525252", ref: "ui/src/index.css" }
+    line: { value: "white / 6%", ref: "ui/src/index.css" }
+    surface: { value: "#1c1c1c", ref: "ui/src/index.css" }
+    surface_2: { value: "white / 4%", ref: "ui/src/index.css" }
+    canvas: { value: "#171717", ref: "ui/src/index.css" }
+    room: { value: "#171717", ref: "ui/src/index.css" }
+    link: { value: "#75a7ff", ref: "ui/src/index.css" }
+    gap: { value: "#f59e0b", ref: "ui/src/index.css" }
+    danger: { value: "#f87171", ref: "ui/src/index.css" }
+    blind: { value: "#737373", ref: "ui/src/index.css" }
   type:
     text_xs: { value: "0.6875rem", ref: "ui/src/index.css:40" }
     text_meta: { value: "0.75rem", ref: "ui/src/index.css:41" }
@@ -53,15 +56,16 @@ tokens:
     ref: "ui/src/index.css:51"
   radius:
     sm: "6px"
-    md: "9px"
-    lg: "12px"
-    ref: "ui/src/index.css:60"
+    md: "10px"
+    lg: "14px"
+    ref: "ui/src/index.css"
   motion:
-    ease: "cubic-bezier(0.22, 1, 0.36, 1)"
+    ease: "cubic-bezier(0.4, 0, 0.2, 1)"
     ease_out: "var(--ease)"
-    fast: "120ms"
-    base: "200ms"
-    ref: "ui/src/index.css:71"
+    fast: "150ms"
+    base: "180ms"
+    focus: "200ms"
+    ref: "ui/src/index.css"
 ---
 
 # Drover design system record
@@ -70,29 +74,27 @@ This is the canonical design-system record extracted from the live UI. The root
 [`DESIGN.md`](../../DESIGN.md) owns experience direction; this file records what the current code can
 actually render, where reuse is real, and where the foundation is drifting.
 
-The older white/zinc, blue-link, proven-green, and glass-palette description is retired. The current
-Firm shell ships a warm mineral palette, opaque operating surfaces, a forest interaction color, and
-no production glass skin.
+The older warm-mineral and light Now-shell descriptions are retired. The current founder shell is a
+dark-first neutral work environment with compact chrome, persistent exact material, and restrained blur
+only on the floating composer.
 
 ## Creative north star
 
-**The canvas holds the venture. Conversation directs and interrogates it.** The visual system is a quiet
-warm room for one canonical Product and go-to-market model. Direct manipulation, exact differences,
-evidence, interpretation, runtime provenance, and the founder-held consequence boundary create
-specificity. Agent machinery and decoration do not.
+**Work is the primary object. Conversation carries its intent; exact material proves its consequence.**
+The visual system is a quiet, near-black founder IDE for one canonical Product and go-to-market model.
+Direct manipulation, exact differences, evidence, interpretation, runtime provenance, and the founder-held
+consequence boundary create specificity. Agent machinery and decoration do not.
 
 ## Current-code boundary
 
-This file records what the current UI can render; it does not bless the current product composition. The
-working tree still contains Now, immersive, and legacy shells, closed Atlas roles, a teammate-oriented
-configuration model, a non-draggable resting Atlas, and heat/always-on controls. Those are migration debt
-under root `DESIGN.md` and `docs/FIRM-SPEC.md`, not approved information architecture.
+This file records what the current UI can render; it does not turn product aspirations into proof. The
+working tree has one `VentureWorkspace`: a resizable work index, `VentureHome`, a selected work stream beside
+persistent registry-backed material, a docked scoped composer, and an explicitly summoned map. Removed
+Now/immersive/legacy shells are not part of the current boundary.
 
-The approved missing capabilities are: one canvas-first founder workspace, one venture conversation with
-persistent branches, open Product/go-to-market objects and relationships, reversible Understand / Design /
-Execute / Learn lenses, direct canvas manipulation, disposable/live/snapshot view semantics, founder-started
-runs, outcome-contract workflows, and complete consequence execution. Until code and acceptance receipts
-exist, none may be listed as current foundation truth.
+Important incomplete capabilities remain: universal search across the canonical model, generalized
+non-bet selection, synchronized saved live views and immutable snapshots, outcome-contract workflows, and
+complete consequence execution. `docs/STATE.md` remains authoritative for the exact proof boundary.
 
 ## Stack
 
@@ -107,9 +109,8 @@ exist, none may be listed as current foundation truth.
 - **Icons:** `lucide-react` 1.21.
 - **Rich model text:** `streamdown` 2.5.
 - **Identity:** DiceBear-backed illustrated avatars behind `CrewFace`.
-- **Type assets:** Geist Variable and Geist Mono are installed and imported. The rendered body stack
-  is the system sans; Geist Mono is used for machine text; Geist is reserved for rare return/focus
-  headings through `--font-heading`.
+- **Type assets:** DM Sans Variable and JetBrains Mono Variable are installed and imported. DM Sans owns
+  operating text; the native SF Mono stack followed by JetBrains Mono owns machine text and exact diffs.
 - **Platform:** desktop web shell embedded by Electron; 960px minimum, judged at 1440x900 and
   1280x800.
 
@@ -122,24 +123,24 @@ extensions serve package-only historical components.
 
 ### Neutral room
 
-- `--room` `#e3e0da` is the outer workbench.
-- `--canvas` `#e9e6e0` is the infinite spatial ground.
-- `--surface` `#f4f2ee` is the readable lifted plane for conversation, nodes, controls, and review.
-- `--surface-2` `#dcd8d0` is an inset or quiet selected plane.
-- `--ink` `#23211d` through `--ghost` `#c6c1b6` forms the warm umber content and line ramp.
+- `--room` and `--n-app` `#171717` are the application ground.
+- `--n-rail` `#191919` and `--n-panel` `#1c1c1c` separate chrome and exact material.
+- White at 4–10% forms inset, hover, selected, and hairline roles.
+- `--n-ink` `#f5f5f5` through `--n-ink-4` `#737373` forms the operating text ramp.
 
 ### Semantic color
 
-- `--link` `#1e5245` marks interaction, focus, and presence. It is not an ambient brand wash.
-- `--gap` `#a9791a` marks held founder attention and the wall.
-- `--danger` `#b4443a` marks destructive or failed states.
-- `--blind` `#aba598` marks missing signal.
+- `--primary` `#4f86f7` and `--link` `#75a7ff` mark action and focus, never ambient brand wash.
+- `--gap` / amber marks held founder attention and the wall.
+- `--green-2` marks verified active work.
+- `--danger` marks destructive or failed states.
+- `--blind` marks missing signal.
 
 The UI has no production `--proven` token. Do not reintroduce positive/negative outcome color or
 inherit the standalone package's green status vocabulary. Outcomes remain language and evidence.
 
-`--muted` is the readable metadata ink: 5.20:1 on canvas and 5.79:1 on surface. `--faint` remains a
-decorative line/disabled role and must not carry essential meaning.
+Metadata uses `--n-ink-3`; disabled and placeholder roles use `--n-ink-4`. Essential meaning is never
+carried by the faint role or color alone.
 
 ## Type hierarchy and voice
 
@@ -148,34 +149,30 @@ operating metadata role; production feature CSS has no remaining raw 9-10px text
 
 The intended roles are:
 
-- Geist Variable for rare display and major focus headings.
-- System sans for body, controls, and high-frequency reading.
-- Geist Mono for code, repository paths, revisions, identifiers, and exact diffs.
+- DM Sans Variable for display, body, controls, and high-frequency reading.
+- SF Mono / JetBrains Mono for code, repository paths, revisions, identifiers, and exact diffs.
 
-Geist's rare display role remains intentionally narrow; do not describe it as the body face.
 Founder-facing prose is plain, concrete, and consequence-led; machine vocabulary belongs only in
 receipts and disclosures.
 
 ## Spacing, radius, and density
 
-The spacing scale is 4, 8, 12, 16, 20, 24, 32, and 48px. The radius scale is 6, 9, and 12px, plus a
-24px panel radius alias and full circles where identity or a focal marker requires them.
+The spacing scale is 4, 8, 12, 16, 20, 24, 32, and 48px. The working radius scale is 6, 8, 10, 14,
+16, and 20px; 20px is reserved for the composer and full circles for status or identity.
 
 Dense does not mean microscopic. Metadata can be quieter than body copy but must stay readable at the
-two supported desktop sizes. Crew does not occupy a duplicate conversation roster. The conversation
-panel has a durable 360–680px width and can collapse; the canvas tray stays compact until requested
-and its expanded inventory remains scrollable inside the viewport.
+two supported desktop sizes. The work index defaults to 256px and resizes from 208–420px. Selected exact
+material is 360–540px; the narrative consumes the remaining field. Crew does not occupy a duplicate roster.
 
 ## Elevation and material
 
-- `--shadow-card` is the resting node and content-card level.
+- `--shadow-card` is the resting content and composer level.
 - `--shadow-pop` is the popover, outline, and transient-control level.
 - `--shadow-modal` is reserved for a blocking decision surface.
-- Conversation and review content are opaque. The dotted canvas may never bleed through text.
+- Conversation and review content are opaque. The composer alone may use restrained backdrop blur.
 - Hairlines and spacing group related content before another container does.
 
-The rail and avatar use the earned `--shadow-rail` and `--avatar-inset` roles. Do not create a
-speculative shadow catalog.
+The rail is separated by a hairline, not elevation. Do not create a speculative shadow catalog.
 
 ## Current legacy Atlas grammar
 
@@ -200,21 +197,21 @@ venture document.
 
 ## Motion
 
-The shared motion contract is `--dur-fast` at 120ms and `--dur-base` at 200ms with
-`cubic-bezier(0.22, 1, 0.36, 1)`. Atlas focus may use `--dur-focus` at 360ms with the same settling
-curve; topology changes may use a critically damped spring only through the installed Motion runtime.
-Shared controls name the properties they transition and consume shared timing. Working identity
-settles into a static forest ring; it never loops to simulate work.
+The shared motion contract is `--dur-fast` at 150ms, `--dur-base` at 180ms, and `--dur-focus` at 200ms
+with `cubic-bezier(0.4, 0, 0.2, 1)`. Atlas topology changes may use a critically damped spring only through
+the installed Motion runtime. Shared controls name the properties they transition and consume shared timing.
+An active-work dot may pulse and an active-work glyph may rotate only while work is actually running.
 
-Purposeful sequences are camera focus/restore, concept promotion, route reflow, fork, exact release
-to the wall, evidence-supported return, and founder-accepted architecture change. Each plays once,
+Purposeful sequences include workbench/map entry, composer arrival/focus, work-group disclosure, selected
+work and material settlement, active-work state, camera focus/restore, route reflow, exact release to the
+wall, evidence-supported return, and founder-accepted architecture change. Each arrival plays once,
 remains interruptible, and ends in the complete information state. React Flow camera movement uses
 the same contract and becomes immediate when `prefers-reduced-motion` is active. The direction is strict:
 
 - explicit transform/opacity or named state properties only;
-- no loop that simulates productivity;
+- no loop that simulates productivity; loops require a truthful active-work state;
 - no `transition: all`;
-- no parallax, ambient drift, pulsing work decoration, or animation used as status;
+- no parallax, ambient drift, decorative pulse, or animation as the sole carrier of status;
 - reduced motion preserves information in the settled frame.
 
 ## Real primitive inventory
@@ -231,62 +228,46 @@ the same contract and becomes immediate when `prefers-reduced-motion` is active.
 - **`CrewFace`** — one participant-identity door. States: `idle`, `working`; monogram exists only as
   an error fallback. Reused across roster, canvas, composer, and conversation.
 
-### Feature primitives carrying current or migration behavior
+### Feature primitives carrying current behavior
 
-- **`VenturePicker`** — existing venture, create another venture, repository selection, loading,
-  empty, busy, and error.
-- **`TeammateRail`** — scoped conversation, composer, collapse control, and wall-open state.
-- **`GoalComposer`** — whole-firm, teammate, and bet scope; runtime readiness; busy, suggestion,
-  blocked-at-wall, error, and send states.
-- **`ConversationFeed`** — founder/model messages, configuration proposal/receipt, handoff, activity,
-  empty guidance, and working state.
-- **`ReturnBrief`** — presentation-only `Since you left` groups with canonical receipt/bet/wall
-  navigation and an explicit wider-firm omission boundary.
-- **`FirmFreshness`** — last verified update, reconnect/backoff, offline, and desktop-host-required
-  states over the coherent shell read model.
-- **`ActiveWorkReceipt`** — durable progress, elapsed time, runtime/configuration/cost provenance, and
-  provider-supported stop without ending the bet.
-- **`ConfigurationMessage` + `ConfigurationDiff`** — proposal, applied receipt, stale proposal, apply,
-  undo, and raw field disclosure.
-- **`ConversationHandoff`** — new-bet and wall handoff attached to the originating conversation.
-- **`FirmLens`** — React Flow projection, authored placement, ephemeral evidence focus scenes, camera
-  history, semantic altitude, relationship edges, outline, wall band, loading, error, and empty firm.
-- **`CanvasTray`** — draggable and keyboard-placeable existing crew plus host-backed repository and
-  connected-account capabilities; it writes placement only.
-- **`CrewNode`** — selected participant plus capability-proposal toolbar.
-- **`CapabilityNode`** — a placed real source/action with read-only or founder-wall authority shown
-  explicitly and a placement-only remove action.
-- **`BetNode`** — `live`, `at-wall`, and `ended` position; fork marker; staged count; latest joined
-  market return.
-- **`FirmLensOutline`** — keyboard-accessible crew/bet index with open/closed, active row, group,
-  empty, Home/End/arrow/Escape behavior.
-- **`FirmWallReview`** — clear wall and purpose-specific pending items; exact artifact/consequence;
-  release, answer, outcome review, product-change review, deploy authorization, keep, and end actions.
-- **`FirmHeatControl`** — heat, daily spend, dirty, saving, saved, and error.
+- **`VenturePicker`** — existing venture, create another venture, repository selection, loading, empty,
+  busy, and error.
+- **`VentureWorkspace`** — the sole founder shell; owns one selection, work/map mode, and composer scope.
+- **`WorkspaceIndex`** — resizable persisted venture/work navigation, search, attention filter, active work,
+  compact conversation context, and Settings.
+- **`VentureHome`** — grouped return list for decisions, market returns, active work, and recent change.
+- **`Workbench`** — selected narrative/material split, safe registry precedence, persistent material tabs,
+  and the path to Map.
+- **`WorkNarrative`** — the selected work's conversation projection, status, runtime receipts, and founder
+  authority cue.
+- **`NowComposer`** — whole-venture and selected-work scope, voice, busy/held/error states, and exact receipt.
+- **Stage registry bodies** — consequence, exact product artifact, comparison, direction, and overview.
+- **`VentureMaps` + `VentureSystemGraph`** — explicitly summoned generated operating graph with Whole system,
+  Product, and Go-to-market views; route focus; pan/zoom; and explicit handoff back to real work.
+- **`FirmFreshness`** — reconnect/offline honesty over the coherent workspace read model.
 
-Feature primitives are not a request to extract a component package. `TeammateRail`, `CrewNode`,
-`BetNode`, `FirmHeatControl`, Workyard, and the current closed-role Atlas are legacy/migration primitives,
-not approved navigation or ontology. Their useful mechanics should be folded into the unified workspace;
-the old components should be deleted after parity rather than preserved as a second surface.
+Feature primitives remain feature-local product behavior, not a request to extract a component package.
+Legacy canvas node primitives are compatibility seams under the summoned map, not approved navigation or
+product ontology.
 
 ## Current foundation state
 
 ### Real
 
-- Warm mineral tokens in `ui/src/index.css` and their Tailwind aliases.
-- One venture-wide header, a persistent 360–680px conversation width, independent conversation
-  collapse, and a canvas that takes the released space at supported desktop sizes.
-- A compact canvas tray for repositioning existing crew and placing repository/Gmail capability
-  truth without granting authority or duplicating domain state.
+- Dark-first neutral tokens in `ui/src/index.css` and their Tailwind aliases.
+- One 52px chrome line, a persisted 208–420px work index, and one adaptive center.
+- `VentureHome` at rest; selected work stream and 360–540px exact-material panel together.
+- Persistent material tabs backed by the open stage registry and safe consequence precedence.
+- A floating scoped composer aligned to the narrative rather than the material panel.
+- 150–200ms entry, disclosure, focus, and active-work motion with a reduced-motion settlement.
+- An explicitly summoned whole-system operating graph that keeps Product capacity, paths to market, market
+  work, and returned evidence connected; route focus hands descent back to work.
 - Shared Base UI button/input primitives in high-consequence forms.
-- Stable `CrewFace` identity across four surfaces.
 - Card/popover/modal elevation roles.
 - Purpose-specific wall actions and configuration receipts.
 - Keyboard outline and visible focus styling.
 - Coherent freshness/read-only presentation, evidence-linked return briefing, and durable active-work
   control.
-- Measured-node viewport fitting, temporary bet-family focus arrangement, camera restoration, and
-  reduced-motion-aware camera travel.
 
 ### Duplicated
 
@@ -304,12 +285,9 @@ the old components should be deleted after parity rather than preserved as a sec
 
 ### Missing by approved direction
 
-- One unified workspace frame, persistent venture/branch conversation, unified composer, canonical canvas,
-  contextual workbench, and contextual founder gate.
-- Direct canvas manipulation, hybrid semantic interpretation, undo/restore, semantic zoom, and complete
-  epistemic grammar.
-- Product/go-to-market territories, reversible operating lens, generated/live/snapshot views, and full
-  search across model, evidence, conversation, views, and work.
+- Generalized non-bet canonical selection and full search across model, evidence, conversation, views, and work.
+- Generated disposable/live/snapshot view semantics.
+- Complete epistemic grammar and consequence execution across every registered work type.
 - Visible multi-agent scope/provenance without roster or org-chart primacy.
 
 These remain feature-local product behavior rather than generic design-system primitives.
@@ -329,9 +307,9 @@ Closed in the 2026-07-14 foundation pass:
   reduced-motion camera travel, and low-contrast active wall text.
 
 Remaining foundation debt includes the historical package component duplicate, incidental raw geometry,
-the oversized shared vendor chunk, and current token-parity failures in immersive, Now, firm-app, and Atlas
-CSS. On 2026-07-17 `npm run test:acceptance` stopped at token parity before browser journeys; see
-`docs/STATE.md`. Do not convert historical receipts into current proof or speculative primitives.
+the oversized shared vendor chunk, and warm/light compatibility styles below the dark founder shell. See
+`docs/STATE.md` for the latest mechanical receipt. Do not convert historical receipts into current proof or
+speculative primitives.
 
 ## Local rules
 
@@ -344,7 +322,7 @@ Checkable rules for this repository:
 - Extend `ui/src/components/ui` before hand-rolling a repeated control state. Keep product-specific
   semantics in feature components.
 - While legacy participant portraits remain, use `CrewFace`; do not create another identity system or make portraits approved navigation.
-- The wall owns amber. Interaction owns forest. Outcomes own neither.
+- The wall owns amber. Primary action and focus own blue. Verified active work owns green. Outcomes own none.
 - Readable operating surfaces are opaque; no glass over the canvas.
 - Mono is for machine material only.
 - No raw font size below the decided metadata token; no essential text below AA contrast.
@@ -372,11 +350,11 @@ The token parity command reads all production CSS, rejects undefined production 
 all 78 canonical tokens with the compatibility projection, validates the extension registry, and
 exits nonzero on any drift.
 
-The intended acceptance browser coverage includes 1440x900 and 1280x800, 80–200% browser zoom, keyboard
-focus, reduced motion, canonical canvas/branch/workbench behavior, founder consequence, dense/empty states,
-stale/offline recovery, errors, and long content. The current 2026-07-17 readiness run did not reach browser
-journeys because token parity failed; no acceptance coverage is claimed current until the complete command
-passes.
+The acceptance browser coverage includes the 1440×900 desktop, 100–150% dense-map zoom, keyboard focus,
+workbench/graph descent, founder consequence, dense/empty states, stale/offline recovery, venture isolation,
+errors, and long content. On 2026-07-18 the complete local command passed: Brain 787/787, UI 484/484,
+token parity, firm browser 5/5, and Atlas browser 3/3. This remains a local browser-harness receipt, not a
+packaged Electron end-to-end receipt or evidence of outside-founder comprehension.
 
 Refresh this record only from current code and a current render. Promote inline values and
 consolidate duplicates by observed reuse; do not build a speculative component library.

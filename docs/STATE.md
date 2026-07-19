@@ -51,16 +51,17 @@ The detailed laws and compatibility boundaries live in `FIRM-SPEC.md`; experienc
 
 On 2026-07-18, the complete local readiness checks passed against this working tree:
 
-- `npm test`: Brain **774/774** and UI **451/451**, with lint and the production build green;
-- design-token parity: **156 tokens** across **24 CSS files** and **34 extensions**;
-- firm browser acceptance: **12/12**;
+- `npm test`: Brain **787/787** and UI **484/484**, with lint and the production build green;
+- design-token parity: **160 tokens** across **26 CSS files** and **34 extensions**;
+- firm browser acceptance: **5/5**;
 - Atlas browser journeys: **3/3**;
 - Atlas fixtures: **7/7**;
 - Electron window-state tests: **7/7**.
 
-The browser journeys now exercise the workbench at rest, explicit Map summon, selection-preserving mode
-changes, descend-hands-back-to-work, and Escape broadening. The stale canvas-at-rest assertions are gone, so
-there is no remaining browser-repoint warning.
+The browser journeys now exercise the workbench at rest; generated Whole system, Product, and Go-to-market
+graphs; graph-to-work descent; Escape broadening; keyboard reachability; 120-node containment; venture
+isolation; and offline last-coherent reads. The stale free-canvas assertions are gone, so there is no
+remaining browser-repoint warning.
 
 This is a **local receipt only**. **There is no CI workflow** — the repository has no `.github/workflows`,
 so nothing reruns this suite or the acceptance gate automatically. The browser is a deterministic harness,
@@ -68,39 +69,44 @@ not a production surface. There is no packaged Electron end-to-end journey; the 
 window-state helpers only. No test above proves live provider behavior, world-touching effects,
 outside-founder comprehension, or market value. Every count must be re-earned by hand after a change.
 
-### Workbench — the default founder surface; the canvas is a summoned map
+### Workbench — the default founder surface; generated maps are summoned
 
-`FirmApp.tsx` is ~48 lines with one render decision: no venture → `VenturePicker`; a venture →
-`VentureWorkspace`. There are **no `?shell=` flags, no competing shell roots, and no query-parameter
-product switching** — the venture workspace is the only founder surface. The prior immersive/Now/legacy
-shells were deleted from the tree (see "Removed surfaces").
+`FirmApp.tsx` resolves the launch boundary before rendering a founder surface: an existing installation
+reopens the last active venture (or the newest connected venture when no return preference exists), while a
+first installation with no venture reaches `VenturePicker`. There are **no `?shell=` flags, no competing
+shell roots, and no query-parameter product switching** — the venture workspace is the only returning
+founder surface. The prior immersive/Now/legacy shells were deleted from the tree (see "Removed surfaces").
 
 The workspace opens on the **adaptive workbench** (`workbench/Workbench.tsx`): with no selection it shows
 `VentureHome` (where things stand — the folded directions grouped by state); selecting a direction opens the
-best representation the open stage registry proposes for that work. The venture graph is a summoned `map`
-mode — `VentureWorkspace` renders `mode === "map" ? <VentureCanvasStage/> : <Workbench/>`, defaulting to
-`work`, so the plane is **not even mounted at rest**. This is verified at the component-integration level by
-`VentureWorkspace.test.tsx` (opens on the workbench, no `canvas-flow`; Map summons it; Escape returns) and
+best representation the open stage registry proposes for that work. `map` mode now renders `VentureMaps`,
+a read projection generated from the same canonical objects, relationships, and structured Product/GTM
+references as the rest of the product. It opens on a Whole system graph and also supplies Product and
+Go-to-market views. Product capacity, repeatable paths to market, market work, and returned evidence remain
+visible as one connected operating picture. Selecting any node keeps the system visible, highlights its
+direct route, and opens an inspector with the real operating facts and links. Explicit Open work/Open context
+actions hand the founder back to the workbench. Pan, zoom, and fit are presentation only; nodes are not
+draggable and the graph never becomes a second source of truth. Unconnected canonical Product/GTM objects
+remain visible as gaps; unrelated orphan notes do not flood the graph. A new venture session defaults to
+`work` and return restores that venture's prior mode and scope.
+The map is **not mounted at workbench rest**. This is verified at the component-integration level by
+`VentureWorkspace.test.tsx` (new sessions open on the workbench; saved scope/mode restores; Map summons it;
+Escape returns) and
 `VentureWorkspaceDescent.test.tsx` (a staged change opens the diff in place; a map descend hands back to the
 work surface).
 
-When summoned, the canvas (`VentureCanvasStage` and its collaborators under `ui/src/components/canvas/`)
-provides, verified by unit tests and deterministic browser journeys that render the built UI:
+The former free-canvas implementation remains in `ui/src/components/canvas/` as compatibility code and is
+still covered by its existing unit tests, but it is no longer the founder's map-mode surface. This creates
+an explicit authority conflict: `FIRM-SPEC.md` and `DESIGN.md` still describe a manipulable full canvas as
+the intended destination, while the current tree proves generated maps. That destination should not be
+rewritten as durable law until this simpler model is tested with founders outside the builder.
 
-- **founder placement** as final authority (Law 6): only founder-moved nodes persist, a 409 merges rather
-  than clobbers, and a racing poll cannot snap a just-dropped card back;
-- **Product / go-to-market territories** rendered as durable geography with a named seam;
-- **semantic zoom** — a shared band step function so the altimeter word and card anatomy cannot disagree;
-- reversible **operating lenses** (Understand / Design / Execute / Learn) driving the one node array;
-- a **drop-interpretation chip** that names what a founder gesture means before it commits;
-- **undo/redo** with revision receipts (see the durability caveat under "Known broken or incomplete paths");
-- **dense rank-and-reveal** cluster glyphs so a crowded scene stays a machine, not a scatter;
-- a **keyboard-accessible outline** of the scene;
-- **selection-preserving mode changes** — summoning Map keeps the current selected-work scope;
-- **descend-hands-back-to-work** — double-click or Enter leaves the map and opens that selection in the
-  workbench (it no longer descends into an overlay on a dimmed canvas);
-- **ordered Escape broadening** — Escape returns map to work first, then broadens selection or representation
-  depth until `VentureHome` is restored.
+Current slice verification on 2026-07-18: work-index projection **7/7**, runtime adapters **22/22**, and the
+complete UI unit suite **484/484** passed; UI lint and the production build passed. The live browser rendered
+Buffalo Projects as **10 nodes, 16 links, and 3 paths to market** in one Whole system graph, kept all four
+supporting Product objects in the Go-to-market view, highlighted a selected four-link route, and introduced
+no page overflow at 1440×1135. Acceptance also proved the 120-record dense case at 100%, 125%, and 150% zoom.
+This proves the local projection and interaction contract, not outside-founder comprehension or live market state.
 
 ### Removed surfaces
 
@@ -134,21 +140,36 @@ under the existing CAS and transfer boundary. Records join conversation, bets/wo
 and placement by same-venture reference rather than copying those authorities.
 
 The Thread and Run schema is corrected to the operating physics rather than a one-bet-per-drive assumption.
-A Thread carries durable identity, name, message/subject/participant references, and optional
-`parentThreadRef`/`originMessageRef`, and can only reference conversation messages — never copy their
-bodies. A Run requires a `threadRef`; it accepts zero, one, or many `betRefs` (betless, multi-bet, and
+A Thread carries durable identity, name, lifecycle, reviewed-through cursor,
+message/subject/participant references, and optional `parentThreadRef`/`originMessageRef`, and can only
+reference conversation messages — never copy their bodies. A Run requires a `threadRef`; it accepts zero,
+one, or many `betRefs` (betless, multi-bet, and
 nested drives via `parentRunRef` are all first-class), keeps the single `betRef` only as a legacy
 compatibility seam, and never persists running state or copies bet/event/work/decision/outcome records.
 Reference resolution fails closed: a `repository:` citation is accepted only when it structurally carries a
 path, an ordered line range, and a source digest — a bare `repository:` prefix no longer resolves, in the
 model store and in venture transfer alike. Pure `thread.mjs`/`run.mjs` constructors (no persistence, UI, or
-infrastructure imports) plus a lazy atlas CAS adapter (`ensureRootThread`, `recordRun`) form the venture's
-deterministic root thread and multi-bet runs only when a real drive needs them, and round-trip through the
-existing export/import boundary. New founder ventures created through the product route no longer seed a
+infrastructure imports) plus the atlas CAS adapter form the venture's deterministic root organization and
+child direction threads only when a real drive needs them. Each new founder-authorized direction now mints
+a child Thread; later work on the same bet resumes that stable thread; every Run joins the child rather than
+the root. Terminal settlement enriches that child with returned conversation and newly revealed bet refs.
+The records round-trip through the existing export/import boundary. New founder ventures created through the product route no longer seed a
 fictional founding crew; the first founder direction forms the first participant explicitly. A founder
 direction routed through `conversation/reply` is recorded exactly once (the work loop no longer re-appends
-it). This proves the corrected canonical Thread/Run substrate and its constructors, not yet the durable Run
-lifecycle wired into every live drive (see the handoff's next resumable seam).
+it).
+
+`GET /api/ventures/:id/work-index` now projects one production read model from Threads, Runs, process-local
+active drives, immutable settlement receipts, and pending founder decisions. Lifecycle, activity,
+attention, terminal, and unread remain independent facets; missing settlement becomes `interrupted`, not a
+false completion. A founder-only reviewed-through write advances the exact latest consequence cursor and
+rejects stale writes. Empty, 200-row, long-intent, active/stopping, decision, review, all terminal kinds,
+missing-receipt, and legacy-root cases are covered. The full brain suite passed **781/781** after this
+change. The rail and `VentureHome` now consume this endpoint for canonical child Threads, group rows by
+derived attention/activity/terminal facets, and advance the exact reviewed-through cursor when indexed work
+is opened. Pre-contract ventures remain reachable through an `Earlier work` compatibility fold rather than
+being dropped or falsely migrated. Full UI verification passed **471/471**, lint, and production build; the
+shared browser harness at 1440×900 verified the legacy label, long-title truncation, selection, and workbench
+handoff. This proves the work-index slice, not the still-missing chronological event projection.
 
 Legacy schema-v1 atlas documents read without rewriting. Their first successful semantic or architecture
 mutation lazily writes v2 while preserving architecture IDs, public architecture revision receipts,
@@ -242,11 +263,12 @@ destructive act, or attributable market result on the current tree.
 
 ### Current UI mechanics
 
-The tree contains **one** founder surface: `FirmApp.tsx` renders `VenturePicker` (no venture) or
-`VentureWorkspace` (a venture). The earlier three-shell split (Now, immersive `?shell=world`, legacy
-`?shell=legacy`) is gone. Reusable mechanics now composed inside the single workspace include:
+The tree contains **one returning founder surface**: `FirmApp.tsx` reopens the last active
+`VentureWorkspace`; `VenturePicker` is the first-venture/recovery connector, not a launch dashboard. The
+earlier three-shell split (Now, immersive `?shell=world`, legacy `?shell=legacy`) is gone. Reusable mechanics
+now composed inside the single workspace include:
 
-- a venture picker and venture-scoped connection state;
+- an in-workspace venture switcher with venture creation behind an explicit connector dialog;
 - a continuous conversation feed and selection-scoped conversation projection;
 - a direction index (`WorkspaceIndex` / `NowRail`) with universal search and needs-you attention;
 - Result, Exact Change, and approach-comparison workbench representations;
@@ -292,26 +314,34 @@ any change.
 - The shipped tree is **workbench-first**: one `VentureWorkspace` surface whose default center is the
   adaptive workbench, with the venture canvas summoned as a `map` mode (see "Direction change —
   implemented"). The deterministic browser journeys now assert that hierarchy.
-- Directions are reconstructed from founder-message chronology and bet lineage rather than durable branch
-  records.
-- Workspace search filters **directions only** — it does not search across canvas objects, work, or
-  evidence.
-- **Generalized non-bet canonical selection remains incomplete.** The workbench/map mode change preserves the
-  current selected-work scope, and direction selection routes correctly through `replyInConversation`, but
-  the visible selection, founder-facing scope label, and drive payload remain bet-centric.
-  Architecture/theory/work/participant selections can still degrade; one canonical selected-object spine is
-  owed.
+- The rail is now a T3-shaped read projection of canonical objects and Threads: stable Product and
+  Go-to-market workspace folders with founder thought/work Threads as the primary rows. Derived object
+  groupings and arbitrary explicit parent nesting still organize the model, but no longer force founders to
+  navigate the ontology. Neutral objects and unplaced legacy thoughts remain under a collapsed Venture
+  context instead of being guessed into a territory.
+- `Needs you` and workspace search filter the same Product/GTM outline across object names, durable
+  statements, and thought summaries. They still do not search exact artifact bodies or evidence payloads.
+- Architecture-object selection is wired through the rail, workbench, composer label, drive target, and
+  durable Thread subject. Returning to a betless object thought carries its exact child `threadRef` back
+  through `/drive`, so continuation does not mint a sibling. Generalized theory/work/participant selection
+  still has separate compatibility paths; one fully open selected-object spine remains owed.
 
 ### Canvas and model
 
 - The canonical storage model is open, but its shipped architecture compatibility projection still requires
   the legacy five roles.
+- The active map surface is a generated, read-only operating graph. Whole system is the default; Product
+  and Go-to-market are focused views that preserve their real cross-boundary support. Canonical
+  relationships and existing structured references supply every connector. There is no separate diagram
+  store, free placement, or invented connector data in this surface.
+- The older full canvas remains compatibility code, not the normal map-mode UI. Its persistence, saved-view,
+  and coordinator caveats below still apply if that surface is restored or reused.
 - **Saved views/snapshots are write-only in the UI.** The backend (`views-store.mjs` / `view-routes.mjs`)
   supports save, list, reopen, and delete; the founder surface only saves/captures — it renders **no**
   list, reopen, or delete affordance, so a saved view cannot be reached again.
-- Canvas nodes are now founder-draggable and placement is founder-owned (nodes lock to `draggable:false`
-  only while a lens or generated-answer overlay is active, and for group/intent nodes). This reverses the
-  earlier engine-owned placement.
+- In the older compatibility canvas, nodes are founder-draggable and placement is founder-owned (nodes lock
+  only while a lens or generated-answer overlay is active, and for group/intent nodes). The active operating
+  graph never writes placement.
 - The **generated-answer "Related context" trace is deterministic and promotes nothing to durable truth.**
   A prior version wrote the founder's *question* back as a "finding" — recording a question as a fact, a
   truth-model violation. That truth-promotion path is removed; the surface only rearranges to highlight
@@ -322,7 +352,9 @@ any change.
 
 ### Conversation and runs
 
-- There is no durable venture-root branch plus persistent scoped branch model.
+- New founder-authorized drives now have a durable venture root plus persistent child direction Threads;
+  legacy root-joined Runs are intentionally not backfilled. The venture-outline path carries a selected
+  betless child `threadRef` end to end; other legacy selection paths may still lack exact Thread identity.
 - The dialogue reply route (steer/approve/close/new-direction) is now **wired into the composer**: a
   direction-scoped turn calls `replyInConversation`; only an unscoped turn calls `/drive`. It is no longer
   unused from the UI.
@@ -332,12 +364,13 @@ any change.
 - The agent/MCP `/drive` fresh-start gap is **closed (Phase 2)**: an agent-stamped drive with no bet lineage
   is refused; only a founder starts fresh work.
 - The composer drops explicit multi-participant targeting and exposes only the first active drive.
-- Runtime completion, workflow completion, founder ending, external execution, and returned evidence are not
-  represented as distinct terminal conditions.
+- The brain work-index projection distinguishes runtime terminals (`completed`, `failed`, `cancelled`,
+  `paused`, `budget-exhausted`, `interrupted`), but founder-ended work, external execution, returned evidence,
+  and the current UI projection are not yet unified on those semantics.
 - Outcome-contract workflows are not implemented.
-- **"Real-time" is a 1.2-second, four-request poll.** `use-firm-connection.ts` refetches lens,
-  conversation, active drives, and health together every 1.2s. Server-side SSE exists but this surface does
-  not use it.
+- **"Real-time" is a 1.2-second, five-request poll.** `use-firm-connection.ts` refetches lens,
+  conversation, active drives, the work index, and health together every 1.2s. Server-side SSE exists but
+  this surface does not use it.
 - Venture switching can briefly retain old lens/messages/drives/drafts under the new venture identity.
 
 ### Consequences

@@ -1,35 +1,26 @@
-// VentureWorkspace — the founder-native agent development environment frame (the "Cursor UX for founders").
-// It composes existing parts into one calm IDE-like surface:
-//   LEFT   — WorkspaceIndex: the venture navigator (search + Needs-you attention + folded directions) docked
-//            with the ONE venture conversation (ConversationFeed) scoped to the current selection.
-//   CENTER — the adaptive Workbench: the DEFAULT resting surface. With no selection it shows VentureHome
-//            (where things stand); selecting a direction/run/artifact/decision opens the best representation
-//            the stage registry proposes for that work. The venture GRAPH is a summonable `map` mode — one
-//            action away, never the host.
-//   DOCK   — NowComposer scoped to the current selection. Scoped to a bet it STEERS that direction through
-//            the venture conversation (replyInConversation); unscoped it DIRECTS the venture (driveTeammate).
-// One selection state drives everything: it scopes the composer, filters the conversation branch, and chooses
-// the workbench representation. The frame owns the single lens connection and the pure direction fold, so the
-// rail, conversation, and workbench add no second poll and no second source of truth.
-//
-// HIERARCHY (inverted from the canvas-first shell): the workbench is the center; the map is summoned, and
-// descending from the map returns the founder to the selected work. This is the shipped default.
+// One workspace frame owns the navigator, adaptive workbench, generated maps, and scoped composer.
+// One focus value keeps the visible work and execution target together. Work is the default center;
+// maps are summoned and hand a selected object back to the workbench.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  listVentures, stopActiveDrive,
-  type FirmVenture,
+  listVentures, markWorkIndexReviewed, stopActiveDrive,
+  type FirmVenture, type WorkIndexOutlineObject,
 } from "@/api";
-import type { FirmLens } from "@/types";
 import { useFirmConnection } from "@/hooks/use-firm-connection";
-import { targetBet, type CanvasSelection } from "@/components/firm/directionTarget";
+import { targetArchitecture, targetBet, targetObject, type CanvasSelection } from "@/components/firm/directionTarget";
 import { readReturnCursor } from "@/lib/return-cursor";
+import { readWorkspaceSession, rememberWorkspaceSession } from "@/lib/venture-session";
 import { buildDirections, buildDirectionSections, directionsNeedingYou, type Direction } from "@/components/now/directionModel";
 import { NowComposer } from "@/components/now/NowComposer";
+import { composerScopeLabel } from "@/components/now/composerScope";
 import { FirmFreshness } from "@/components/FirmFreshness";
-import { VentureCanvasStage } from "@/components/canvas/VentureCanvasStage";
+import { VentureMaps } from "@/components/maps/VentureMaps";
 import { Workbench } from "@/components/workbench/Workbench";
 import { WorkspaceIndex } from "./WorkspaceIndex";
+import { directionsFromWorkIndex, sectionsFromWorkIndex } from "./workIndexModel";
+import { buildVentureOutline } from "./ventureOutlineModel";
+import { directionFocus, targetFocus, ventureFocus, type WorkspaceFocus } from "./workspaceFocus";
 import "./venture-workspace.css";
 
 type CenterMode = "work" | "map";
@@ -41,19 +32,22 @@ export function VentureWorkspace({
   venture: FirmVenture;
   onOpenVenture: (venture: FirmVenture) => void;
 }) {
-  const { lens, messages, activeDrives, connection, refresh, setLens } = useFirmConnection(venture.id);
-  const readOnly = connection.phase === "stale" || connection.phase === "offline";
+  const { lens, messages, activeDrives, workIndex, connection, refresh, setWorkIndex } = useFirmConnection(venture.id);
+  const readOnly = connection.phase === "stale" || connection.phase === "offline" || connection.phase === "read-only";
   const readOnlyReason = connection.phase === "offline"
     ? "Offline. Nothing consequential can change until the firm is current again."
-    : "Drover is reconnecting. Nothing consequential can change until the firm is current again.";
+    : connection.phase === "read-only"
+      ? connection.message ?? "Open Drover through its desktop host to make changes."
+      : "Drover is reconnecting. Nothing consequential can change until the firm is current again.";
+  const [initialSession] = useState(() => readWorkspaceSession(venture.id));
 
-  // One selection drives the whole frame: the composer scope, the conversation branch, and the workbench
-  // representation. A rail direction resolves to its primary bet so a rail pick scopes the workbench.
-  const [selection, setSelection] = useState<CanvasSelection>(null);
+  // Visual focus and execution target move atomically. `directionId` keeps standalone returns addressable;
+  // `target` carries the exact bet/work/architecture subject the composer is allowed to affect.
+  const [focus, setFocus] = useState<WorkspaceFocus>(() => initialSession?.focus ?? ventureFocus());
   // The center's mode: the adaptive workbench (default) or the summoned venture graph. The graph is a mode,
   // not the host — so it is only mounted when summoned, and selection survives across the toggle.
-  const [mode, setMode] = useState<CenterMode>("work");
-  const [selectedDirectionId, setSelectedDirectionId] = useState<string | null>(null);
+  const [mode, setMode] = useState<CenterMode>(() => initialSession?.mode ?? "work");
+  const [composerFocusRequest, setComposerFocusRequest] = useState(0);
   const [needsOnly, setNeedsOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [ventures, setVentures] = useState<FirmVenture[]>([venture]);
@@ -63,46 +57,59 @@ export function VentureWorkspace({
 
   useEffect(() => { listVentures().then((result) => setVentures(result.ventures)).catch(() => undefined); }, []);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => {
+    rememberWorkspaceSession(venture.id, { mode, focus });
+  }, [venture.id, mode, focus]);
 
   // The same fold the Now route runs: bets + conversation spines + drives + wall waits + outcomes →
   // directions. The needs-you fold reads lens.wallItems, which the single useFirmConnection poll keeps
   // current; a settled drive just re-polls the lens.
-  const directions = useMemo(
+  const legacyDirections = useMemo(
     () => (lens ? buildDirections({ lens, messages, activeDrives }, cursor) : []),
     [lens, messages, activeDrives, cursor],
   );
-  const sections = useMemo(() => buildDirectionSections(directions, cursor), [directions, cursor]);
-  const needsYou = directionsNeedingYou(sections);
+  const usesCanonicalIndex = Boolean(workIndex?.items.length);
+  const directions = useMemo(
+    () => usesCanonicalIndex && workIndex ? directionsFromWorkIndex(workIndex, lens) : legacyDirections,
+    [usesCanonicalIndex, workIndex, lens, legacyDirections],
+  );
+  const sections = useMemo(
+    () => usesCanonicalIndex && workIndex
+      ? sectionsFromWorkIndex(directions, workIndex)
+      : buildDirectionSections(directions, cursor),
+    [usesCanonicalIndex, workIndex, directions, cursor],
+  );
+  const needsYou = usesCanonicalIndex && workIndex ? workIndex.counts.attention : directionsNeedingYou(sections);
+  const selection = focus.target;
+  const selectedDirection = directions.find((direction) => direction.id === focus.directionId)
+    ?? (selection?.betId ? directions.find((direction) => direction.betIds.includes(selection.betId!)) : null)
+    ?? null;
 
-  const railSections = useMemo(() => {
-    let result = sections;
-    if (needsOnly) result = result.filter((section) => section.key === "needs-you");
-    const query = search.trim().toLowerCase();
-    if (query) {
-      result = result
-        .map((section) => ({ ...section, directions: section.directions.filter((direction) => (
-          `${direction.sentence} ${direction.understanding}`.toLowerCase().includes(query)
-        )) }))
-        .filter((section) => section.directions.length > 0);
-    }
-    return result;
-  }, [sections, needsOnly, search]);
+  const outline = useMemo(
+    () => buildVentureOutline(workIndex, directions, { search, needsOnly }),
+    [workIndex, directions, search, needsOnly],
+  );
+  const selectedObjectId = selection?.objectId ?? selection?.architectureId ?? null;
+  const selectedObject = selectedObjectId && !focus.directionId
+    ? workIndex?.outline?.objects.find((object) => object.id === selectedObjectId) ?? null
+    : null;
 
-  const onLensChange = useCallback((next: FirmLens) => { setLens(next); }, [setLens]);
   const onDriven = useCallback(() => { refresh(); }, [refresh]);
 
-  const clearScope = useCallback(() => { setSelection(null); setSelectedDirectionId(null); }, []);
-  const newDirection = useCallback(() => { setSelection(null); setSelectedDirectionId(null); setMode("work"); setNeedsOnly(false); setSearch(""); }, []);
+  const clearScope = useCallback(() => { setFocus(ventureFocus()); }, []);
+  const newDirection = useCallback(() => {
+    setFocus(ventureFocus());
+    setMode("work");
+    setNeedsOnly(false);
+    setSearch("");
+    setComposerFocusRequest((value) => value + 1);
+  }, []);
 
   // SELECT a finer target and keep the workbench as the center. From the map, selecting a node scopes but
   // stays on the map; descending (a deeper pick, or a row inside a body) returns to the work surface with
   // that selection — the graph is one action away and hands the founder back to the work.
   const descend = useCallback((next: CanvasSelection) => {
-    setSelection(next);
-    const match = next?.betId
-      ? directions.find((direction) => direction.betIds.includes(next.betId!))
-      : null;
-    setSelectedDirectionId(match?.id ?? null);
+    setFocus(targetFocus(next, directions));
     setMode("work");
   }, [directions]);
 
@@ -112,28 +119,49 @@ export function VentureWorkspace({
   //   3. a scoped selection → clear it back to whole-venture Home.
   const broaden = useCallback(() => {
     if (mode === "map") { setMode("work"); return; }
-    if (selection?.workRef) { setSelection(targetBet(selection.betId!)); return; }
-    if (selection) { setSelection(null); setSelectedDirectionId(null); }
-  }, [mode, selection]);
+    if (selection?.workRef) {
+      setFocus((current) => ({ ...current, target: targetBet(selection.betId!) }));
+      return;
+    }
+    if (focus.directionId || selection) setFocus(ventureFocus());
+  }, [mode, selection, focus.directionId]);
 
   // Rail / Home → workbench bridge: a picked direction scopes its primary bet, which scopes the composer and
   // the conversation branch in the same state change, and the workbench adapts to the direction's best body.
   const selectDirection = useCallback((direction: Direction) => {
-    setSelectedDirectionId(direction.id);
-    setSelection(direction.primaryBetId ? targetBet(direction.primaryBetId) : null);
+    const indexed = workIndex?.items.find((item) => item.threadRef === direction.id);
+    const next = directionFocus(direction);
+    if (indexed && !next.target) {
+      const architectureId = indexed.subjectRefs.find((ref) => ref.startsWith("architecture:"))?.replace(/^architecture:/, "") ?? null;
+      next.target = {
+        betId: null,
+        workRef: null,
+        teammateRefs: [],
+        threadRef: indexed.threadRef,
+        ...(architectureId ? {
+          architectureId,
+          architectureStepId: null,
+          architectureRevision: workIndex?.outline?.architectureRevision ?? 0,
+        } : {}),
+      };
+    }
+    setFocus(next);
     setMode("work");
-  }, []);
+    if (indexed?.unread && !readOnly) {
+      void markWorkIndexReviewed(venture.id, indexed)
+        .then((response) => setWorkIndex(response.workIndex))
+        .catch(() => refresh());
+    }
+  }, [workIndex, readOnly, venture.id, setWorkIndex, refresh]);
 
-  // Map → frame bridge: a canvas node scopes everything; keep the rail's selected direction in sync so the
-  // picked object's row reads as current. Stays on the map (selecting is not descending).
-  const selectFromCanvas = useCallback((next: CanvasSelection) => {
-    setSelection(next);
-    if (!next?.betId) { setSelectedDirectionId(null); return; }
-    const match = directions.find((direction) => direction.betIds.includes(next.betId!));
-    setSelectedDirectionId(match?.id ?? null);
-  }, [directions]);
-
-  const selectBet = useCallback((betId: string) => { descend(targetBet(betId)); }, [descend]);
+  const selectObject = useCallback((object: WorkIndexOutlineObject) => {
+    const revision = workIndex?.outline?.architectureRevision ?? 0;
+    const target = object.targetable
+      ? { ...targetArchitecture(object.id, revision), ...(object.threadRefs[0] ? { threadRef: object.threadRefs[0] } : {}) }
+      : targetObject(object.id, object.threadRefs[0] ?? null);
+    setFocus({ directionId: null, target });
+    setMode("work");
+  }, [workIndex]);
 
   const summonMap = useCallback(() => { setMode("map"); }, []);
 
@@ -150,19 +178,22 @@ export function VentureWorkspace({
       if (event.defaultPrevented) return;
       const target = event.target;
       if (target instanceof Element && target.matches("input, textarea, [contenteditable='true']")) return;
-      if (mode === "work" && !selection) return;
+      if (mode === "work" && !selection && !focus.directionId) return;
       event.preventDefault();
       broaden();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mode, selection, broaden]);
+  }, [mode, selection, focus.directionId, broaden]);
 
-  const scopeLabel = useMemo(() => {
-    if (!selection?.betId || !lens) return null;
-    const bet = lens.bets.find((candidate) => candidate.id === selection.betId);
-    return bet ? bet.intent : null;
-  }, [lens, selection]);
+  const scopeLabel = useMemo(
+    () => composerScopeLabel(selection, lens, selectedDirection?.sentence ?? selectedObject?.name ?? null),
+    [lens, selection, selectedDirection?.sentence, selectedObject?.name],
+  );
+  const contextOnly = Boolean(selection?.objectId && !selection.architectureId && !selection.threadRef);
+  const composerReadOnlyReason = contextOnly
+    ? "This map object has no attached work yet. Start a venture direction to change it."
+    : readOnly ? readOnlyReason : null;
 
   return (
     <div className="venture-workspace" key={venture.id} data-mode={mode}>
@@ -171,9 +202,12 @@ export function VentureWorkspace({
         ventures={ventures}
         lens={lens}
         messages={messages}
-        sections={railSections}
+        outline={outline}
+        workState={workIndex ? "ready" : connection.phase === "opening" ? "loading" : "failed"}
+        workError={workIndex ? null : connection.message}
         selection={selection}
-        selectedDirectionId={selectedDirectionId}
+        selectedDirectionId={selectedDirection?.id ?? focus.directionId}
+        selectedObjectId={selectedObject?.id ?? null}
         needsYou={needsYou}
         search={search}
         needsOnly={needsOnly}
@@ -185,15 +219,15 @@ export function VentureWorkspace({
         onToggleNeeds={() => setNeedsOnly((value) => !value)}
         onNewDirection={newDirection}
         onSelectDirection={selectDirection}
+        onSelectObject={selectObject}
         onSwitchVenture={onOpenVenture}
-        onSelectBet={selectBet}
         onClearScope={clearScope}
         onStopActiveWork={stop}
         onConfigurationChanged={onDriven}
-        onOpenWall={refresh}
+        onRetry={refresh}
       />
 
-      <main className="venture-workspace-center">
+      <main className="venture-workspace-center" data-scoped={selection ? "true" : "false"}>
         {/* Stale/offline honesty on the center: the same FirmFreshness chip, so a frozen surface is never
             presented as live. Renders nothing when fresh; an aria-live "Reconnecting / Offline · changes are
             held" chip with a Retry otherwise. */}
@@ -202,16 +236,17 @@ export function VentureWorkspace({
         </div>
 
         {mode === "map" ? (
-          <VentureCanvasStage
-            venture={venture}
-            lens={lens}
-            readOnly={readOnly}
-            selection={selection}
-            onSelect={selectFromCanvas}
-            onDescend={descend}
-            onLensChange={onLensChange}
-            refresh={refresh}
-          />
+          <>
+            <button type="button" className="venture-workspace-map-return" onClick={() => setMode("work")}>
+              <span aria-hidden="true">←</span> Back to work
+            </button>
+            <VentureMaps
+              outline={workIndex?.outline}
+              directions={directions}
+              onOpenDirection={selectDirection}
+              onOpenObject={selectObject}
+            />
+          </>
         ) : (
           <Workbench
             venture={venture}
@@ -221,6 +256,8 @@ export function VentureWorkspace({
             projection={null}
             cursor={cursor}
             selection={selection}
+            selectedDirection={selectedDirection}
+            selectedObject={selectedObject}
             sections={sections}
             now={now}
             onSelectDirection={selectDirection}
@@ -243,8 +280,9 @@ export function VentureWorkspace({
               scopeLabel={scopeLabel}
               hasWork={lens.bets.length > 0}
               variant="dock"
-              readOnly={readOnly}
-              readOnlyReason={readOnly ? readOnlyReason : null}
+              readOnly={readOnly || contextOnly}
+              readOnlyReason={composerReadOnlyReason}
+              focusRequest={composerFocusRequest}
               placeholder={scopeLabel ? undefined : "Direct the venture"}
               onClearScope={selection ? clearScope : undefined}
               onDriven={onDriven}

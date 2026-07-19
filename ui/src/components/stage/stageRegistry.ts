@@ -94,7 +94,7 @@ const SEED: StageWorkspace[] = [
     // selection summary for architecture/theory/capability targets — never a blank pane.
     id: "overview",
     label: "Overview",
-    available: () => true,
+    available: (ctx) => !ctx.ctx,
     render: (ctx) => createElement(OverviewBody, { ctx }),
   },
   // Registered STUBS: their backing brain collections do not exist yet, so available() reads truth that is

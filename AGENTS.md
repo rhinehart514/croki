@@ -17,6 +17,9 @@ blending them. Design explorations remain evidence until an authority file adopt
   or required vocabulary. This does not prohibit the ordinary go-to-market role **channel**.
 - Preserve founder-only outward authority, venture isolation, cited product truth, and the founder's
   exclusive right to end active work.
+- Preserve the full native capability of the Claude and Codex SDKs. Drover owns venture context,
+  visual projection, durable work, and founder authority; it must not force provider work through a
+  custom planning or workflow layer that makes the underlying agents less capable.
 - The shipped founder product is Electron desktop. The browser build is a development and
   deterministic-test harness; its explicit loopback development hatch does not define another
   production surface.
