@@ -28,6 +28,7 @@
 import crypto from "node:crypto";
 import { getVentureDoc, listVentureDocs, setVentureDoc, venturePersistence, safeId } from "./venture-store.mjs";
 import { createViewSpec, createSourceFrame, resolveSourceFrame } from "./view-semantics.mjs";
+import { getSemanticModel } from "./semantic-model-store.mjs";
 
 export const VIEWS_COLLECTION = "views";
 export const FINDINGS_COLLECTION = "findings";
@@ -51,7 +52,8 @@ function genViewId() {
 }
 
 // The canonical ref → durable venture record resolver. A saved view's scope is a set of ref strings
-// ("bet:<id>", "outcome:<id>", "decision:<id>", "conversation:<id>", plus the atlas singletons); this
+// (canonical semantic refs plus "bet:<id>", "outcome:<id>", "decision:<id>", "conversation:<id>", and
+// the atlas singletons); this
 // maps each to the (collection, key) it actually lives at so a snapshot can pin — and later re-resolve —
 // the exact record. It is deliberately CONSERVATIVE: a ref it does not recognize resolves to null, and a
 // snapshot pinning an unrecognized ref reports "unresolved" rather than pretending it settled.
@@ -62,6 +64,10 @@ function genViewId() {
 // isDurableRef filters these out before a scope is ever accepted, so a snapshot frame never carries a
 // ref that would resolve "unresolved" forever.
 const REF_LOADERS = Object.freeze({
+  object: (ventureId, id, options) => getSemanticModel(ventureId, options).objects.find((entry) => entry.id === id) ?? null,
+  relationship: (ventureId, id, options) => getSemanticModel(ventureId, options).relationships.find((entry) => entry.id === id) ?? null,
+  thread: (ventureId, id, options) => getSemanticModel(ventureId, options).threads.find((entry) => entry.id === id) ?? null,
+  run: (ventureId, id, options) => getSemanticModel(ventureId, options).runs.find((entry) => entry.id === id) ?? null,
   bet: (ventureId, id, options) => getVentureDoc(ventureId, "bets", id, options),
   outcome: (ventureId, id, options) => getVentureDoc(ventureId, "outcomes", id, options),
   decision: (ventureId, id, options) => getVentureDoc(ventureId, "decisions", id, options),

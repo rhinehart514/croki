@@ -10,6 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { mutateSemanticModel } from "../../src/firm/semantic-model-store.mjs";
 
 import {
   createVenture,
@@ -44,6 +45,14 @@ function fixture() {
 }
 
 describe("saved live views + snapshots (Law 12)", () => {
+  it("saves and reopens a current canonical Product object", () => {
+    const { options, venture } = fixture();
+    mutateSemanticModel({ ventureId: venture.id, baseRevision: 0, actor: { authority: "founder", id: "founder" }, operations: [{
+      op: "create-record", family: "objects", record: { id: "capability", type: "capability", name: "Project intake", statement: "Start with the work.", assertion: "founder-asserted", properties: { territory: "product" } },
+    }] }, options);
+    const saved = saveLiveView(venture.id, { name: "Project intake", arrangement: "product", rootRefs: ["object:capability"] }, options);
+    assert.deepEqual(reopenView(venture.id, saved.id, options).rootRefs, ["object:capability"]);
+  });
   it("saves a live view as an arrangement id + scope with NO node positions, and reopens it re-derivable", () => {
     const { options, venture } = fixture();
     const view = saveLiveView(venture.id, {

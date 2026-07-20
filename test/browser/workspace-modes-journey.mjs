@@ -35,6 +35,26 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     await waitForDom(client, `document.querySelector('.venture-system-graph')?.getBoundingClientRect().height > 500`, "the mode-owned canvas collapsed behind its headerless composition");
     assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Product / GTM");
     await chooseNode(client, expected.campaign);
+    const saveDeadline = Date.now() + 12_000;
+    let saved = false;
+    while (!saved && Date.now() < saveDeadline) {
+      saved = await client.evaluate(`Boolean(document.querySelector('[aria-label="Reopen ${expected.campaign}"]'))`);
+      if (!saved) {
+        await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-saved-views button')].find((entry) => entry.textContent.includes('Save current view') && !entry.disabled); button?.click(); })()`);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    if (!saved) {
+      const state = await client.evaluate(`({ text: document.querySelector('.product-saved-views')?.textContent?.replace(/\\s+/g, ' ').trim(), selected: document.querySelector('.venture-map-inspector h2')?.textContent?.trim(), connection: document.querySelector('.mode-connection-state')?.textContent?.replace(/\\s+/g, ' ').trim() })`);
+      const response = await drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/views`);
+      throw new Error(`the selected Product / GTM path did not become a reachable saved view: ${JSON.stringify({ state, views: await response.json() })}`);
+    }
+    await chooseNode(client, "A project worth advancing");
+    await client.evaluate(`document.querySelector('[aria-label="Reopen ${expected.campaign}"]')?.click()`);
+    await waitForDom(client, `document.querySelector('.venture-map-inspector h2')?.textContent.trim() === ${JSON.stringify(expected.campaign)}`, "the saved Product / GTM view did not reopen its exact focal object");
+    await client.evaluate(`document.querySelector('[aria-label="Delete ${expected.campaign}"]')?.click()`);
+    await client.evaluate(`document.querySelector('[aria-label="Confirm delete ${expected.campaign}"]')?.click()`);
+    await waitForDom(client, `!document.querySelector('[aria-label="Reopen ${expected.campaign}"]')`, "the saved Product / GTM view did not delete after confirmation");
     await waitForDom(client, `document.querySelector('.venture-map-agent')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the selected node did not expose its linked agent context");
     assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat') && !document.querySelector('.workspace-rail .thread-rail-list') && !!document.querySelector('.product-rail-body')`), true, "Product / GTM did not own the center and rail");
     await client.evaluate(`[...document.querySelectorAll('.workspace-fab button')].find((entry) => entry.textContent.includes('Ask Drover'))?.click()`);

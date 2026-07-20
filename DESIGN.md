@@ -115,7 +115,10 @@ icon, label, and accessible text—not color alone:
 
 **Product / GTM** shows Whole venture, Product, Go-to-market, Needs attention, mode-local search, and compact
 context for the selected object or path. **System** is not a founder-facing label. The rail does not become an
-object explorer; exact editing remains on the canvas or selected-path depth.
+object explorer; exact editing remains on the canvas or selected-path depth. A selected canonical object can
+seed a named saved view. Saved live views and snapshots remain reachable in this rail: the founder can reopen
+or delete them, while reopening resolves their exact durable references against current venture truth and
+never restores canvas position as authority.
 
 **Releases** shows Prepare release when exact context can seed it, mode-local search, and Needs you, Preparing,
 In market, and Recent groups. It never opens a blank release form when selected work or Product / GTM truth

@@ -1,8 +1,9 @@
 import { AlertCircle, CircleDot, Clock3, PackageCheck, Plus } from "lucide-react";
-import type { ReleaseIndex, ReleaseSummary, SystemIndex, SystemIndexObject, WorkIndex, WorkIndexItem } from "@/api";
+import type { ReleaseIndex, ReleaseSummary, SavedView, SystemIndex, SystemIndexObject, WorkIndex, WorkIndexItem } from "@/api";
 import { ThreadList } from "@/components/thread/ThreadList";
 import type { SystemScope } from "@/components/system-mode/SystemWorkspace";
 import type { WorkspaceMode } from "@/lib/venture-session";
+import { ProductSavedViews } from "./ProductSavedViews";
 
 const PRODUCT_SCOPES: Array<{ id: SystemScope; label: string }> = [
   { id: "system", label: "Whole venture" },
@@ -11,13 +12,19 @@ const PRODUCT_SCOPES: Array<{ id: SystemScope; label: string }> = [
   { id: "attention", label: "Needs attention" },
 ];
 
-function ProductRail({ index, scope, selectedRef, search, onScope, onSelect }: {
+function ProductRail({ index, scope, selectedRef, search, savedViews, readOnlyReason, savedViewsError, onScope, onSelect, onSaveView, onReopenView, onDeleteView }: {
   index: SystemIndex | null;
   scope: SystemScope;
   selectedRef: string | null;
   search: string;
   onScope: (scope: SystemScope) => void;
   onSelect: (object: SystemIndexObject) => void;
+  savedViews: SavedView[];
+  readOnlyReason: string | null;
+  savedViewsError: string | null;
+  onSaveView: () => Promise<void>;
+  onReopenView: (view: SavedView) => Promise<string>;
+  onDeleteView: (view: SavedView) => Promise<void>;
 }) {
   const needle = search.trim().toLowerCase();
   const matches = needle ? (index?.objects ?? []).filter((object) => `${object.name} ${object.statement} ${object.type}`.toLowerCase().includes(needle)).slice(0, 20) : [];
@@ -27,6 +34,7 @@ function ProductRail({ index, scope, selectedRef, search, onScope, onSelect }: {
       {PRODUCT_SCOPES.map(({ id, label }) => <button type="button" key={id} aria-current={scope === id ? "page" : undefined} onClick={() => onScope(id)}><span>{label}</span>{id === "attention" && index?.counts.attention ? <small>{index.counts.attention}</small> : null}</button>)}
     </nav>
     {needle ? <section aria-label="Product and go-to-market search results"><h2>Results</h2>{matches.length ? matches.map((object) => <button type="button" key={object.objectRef} aria-current={selectedRef === object.objectRef ? "true" : undefined} onClick={() => onSelect(object)}><strong>{object.name}</strong><small>{object.territory === "gtm" ? "Go-to-market" : "Product"}</small></button>) : <p>No matching Product / GTM context.</p>}</section> : selected ? <section aria-label="Selected Product and go-to-market context"><h2>Selected</h2><button type="button" aria-current="true" onClick={() => onSelect(selected)}><strong>{selected.name}</strong><small>{selected.territory === "gtm" ? "Go-to-market" : "Product"}</small></button></section> : <p className="mode-rail-hint">Select a capability, audience, offer, path, or gap on the canvas.</p>}
+    {!needle ? <ProductSavedViews views={savedViews} canSave={Boolean(selected && !selected.projectionOnly)} disabledReason={readOnlyReason} loadError={savedViewsError} onSave={onSaveView} onReopen={onReopenView} onDelete={onDeleteView} /> : null}
   </div>;
 }
 
@@ -65,13 +73,16 @@ function ReleasesRail({ index, selectedId, search, canStart, onSelect, onStart }
   </div>;
 }
 
-export function WorkspaceRailBody({ mode, workIndex, selectedThread, systemIndex, scope, selectedObjectRef, releaseIndex, selectedReleaseId, search, canStartRelease, onSelectThread, onScope, onSelectObject, onSelectRelease, onNewThread, onStartRelease }: {
+export function WorkspaceRailBody({ mode, workIndex, selectedThread, systemIndex, scope, selectedObjectRef, savedViews, savedViewsError, readOnlyReason, releaseIndex, selectedReleaseId, search, canStartRelease, onSelectThread, onScope, onSelectObject, onSelectRelease, onNewThread, onStartRelease, onSaveView, onReopenView, onDeleteView }: {
   mode: WorkspaceMode;
   workIndex: WorkIndex | null;
   selectedThread: string | null;
   systemIndex: SystemIndex | null;
   scope: SystemScope;
   selectedObjectRef: string | null;
+  savedViews: SavedView[];
+  savedViewsError: string | null;
+  readOnlyReason: string | null;
   releaseIndex: ReleaseIndex | null;
   selectedReleaseId: string | null;
   search: string;
@@ -82,8 +93,11 @@ export function WorkspaceRailBody({ mode, workIndex, selectedThread, systemIndex
   onSelectRelease: (id: string) => void;
   onNewThread: () => void;
   onStartRelease: () => void;
+  onSaveView: () => Promise<void>;
+  onReopenView: (view: SavedView) => Promise<string>;
+  onDeleteView: (view: SavedView) => Promise<void>;
 }) {
   if (mode === "work") return <><button type="button" className="thread-new" onClick={onNewThread}><Plus aria-hidden="true" />New thread</button><ThreadList workIndex={workIndex} search={search} selected={selectedThread} onSelect={onSelectThread} /></>;
-  if (mode === "system") return <ProductRail index={systemIndex} scope={scope} selectedRef={selectedObjectRef} search={search} onScope={onScope} onSelect={onSelectObject} />;
+  if (mode === "system") return <ProductRail index={systemIndex} scope={scope} selectedRef={selectedObjectRef} search={search} savedViews={savedViews} readOnlyReason={readOnlyReason} savedViewsError={savedViewsError} onScope={onScope} onSelect={onSelectObject} onSaveView={onSaveView} onReopenView={onReopenView} onDeleteView={onDeleteView} />;
   return <ReleasesRail index={releaseIndex} selectedId={selectedReleaseId} search={search} canStart={canStartRelease} onSelect={onSelectRelease} onStart={onStartRelease} />;
 }

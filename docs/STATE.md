@@ -63,7 +63,7 @@ mechanics.
 
 On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **832/832** and UI **505/505**, with lint and the production build green;
+- `npm test`: Brain **833/833** and UI **507/507**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
@@ -80,7 +80,8 @@ the five-part Release Path, honest missing links, derived in-market state, joine
 founder-granted bounded Gmail observation, honest missing-source/credential states, unsaved contextual release
 drafts, blank-form refusal, end/reopen, generated Whole venture/Product/Go-to-market graphs, a visible
 release-scoped evidence return curve and exact next-Work handoff, keyboard
-reachability, 120-node containment, venture isolation, zoom, and offline last-coherent reads. T3's
+reachability, a complete saved-view save/list/reopen/delete lifecycle, 120-node containment, venture
+isolation, zoom, and offline last-coherent reads. T3's
 collaborative preview automation required unavailable authentication during this run, so no outside-founder
 manual visual-QA claim is made. A deterministic 1440×900 Chrome capture was inspected and exposed a collapsed
 headerless canvas; the repaired full-height composition is now guarded in the browser journey. Browser and
@@ -113,8 +114,9 @@ founder surface. The prior immersive/Now/legacy shells were deleted from the tre
 The workspace opens on `WorkspaceShell`: a resizable 240px rail with Work, Product / GTM, and Releases below
 the venture switcher. Its body belongs to the current mode: Work shows compact Thread groups and search;
 Product / GTM shows Whole venture, Product, Go-to-market, Needs attention, mode-local search, and selected
-context; Releases shows Needs you, Preparing, In market, Recent, mode-local search, and release preparation
-only when exact Work or Product / GTM context can seed it. New Threads become durable only on first send.
+context, plus reachable saved live views and snapshots for the selected canonical path; Releases shows Needs
+you, Preparing, In market, Recent, mode-local search, and release preparation only when exact Work or Product
+/ GTM context can seed it. New Threads become durable only on first send.
 
 Work opens as coding conversation and gives it the available surface until repository work exists. Its
 composer exposes the repository, isolated-worktree promise, founder guard, and available Claude/Codex model
@@ -152,7 +154,14 @@ only the release's existing canonical relationships back to affected objects, re
 return curves, and separates the exact outcome from the explicitly unresolved interpretation. The evidence
 inspector cannot edit projection-only evidence as Product truth. **Start next work** switches to Work with the
 exact `outcomeRef` plus every directly affected `objectRef`; the first message forms the durable Thread under
-those subjects. The mode-owned headerless canvas also has an explicit height contract after visual inspection
+those subjects.
+
+The Product / GTM rail now completes the saved-view lifecycle. **Save current view** stores the selected
+canonical object and its directly connected canonical context; the rail lists live views and snapshots and
+supports reopen plus confirmed delete. Reopening a live view resolves current truth, while a stale snapshot
+remains visibly stale. Presentation-only camera and generated projection nodes never enter the saved scope.
+
+The mode-owned headerless canvas also has an explicit height contract after visual inspection
 found that its graph could render into a two-pixel grid row while DOM nodes remained test-visible.
 
 Releases are canonical semantic objects, not another collection. The workspace derives draft/in-market/ended
@@ -449,8 +458,8 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 - Mode-owned rail bodies and contextual conversation are implemented and deterministic across desktop and
   narrow-width layouts. Outside-founder comprehension remains unproven; no cross-mode command palette,
   generalized resolver, or focus stack was added.
-- Product / GTM graph camera, selection, and scope restore through the v4 venture session. The older saved
-  view/snapshot store still lacks a complete list/reopen/delete founder UI.
+- Product / GTM graph camera, selection, and scope restore through the v4 venture session. Its mode rail now
+  exposes save, list, reopen, and confirmed delete for live views and snapshots.
 - Exact thread targeting is carried through conversation replies and new Runs. Legacy bet-focused work
   remains reachable through non-destructive virtual threads.
 
@@ -466,9 +475,9 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
   free placement, or invented connector data in this surface.
 - The older full canvas remains compatibility code, not the normal map-mode UI. Its persistence, saved-view,
   and coordinator caveats below still apply if that surface is restored or reused.
-- **Saved views/snapshots are write-only in the UI.** The backend (`views-store.mjs` / `view-routes.mjs`)
-  supports save, list, reopen, and delete; the founder surface only saves/captures — it renders **no**
-  list, reopen, or delete affordance, so a saved view cannot be reached again.
+- **Saved views/snapshots have a reachable founder lifecycle.** The Product / GTM rail saves the selected
+  canonical path, lists live views and snapshots, reopens their exact references, and uses a confirmed second
+  act before delete. Read-only mode keeps reopen available while visibly disabling mutation.
 - In the older compatibility canvas, nodes are founder-draggable and placement is founder-owned (nodes lock
   only while a lens or generated-answer overlay is active, and for group/intent nodes). The active operating
   graph never writes placement.
@@ -558,8 +567,6 @@ The following are approved requirements or desired alpha evidence without suffic
 - semantic zoom over exact work, evidence, and provenance is explicitly deferred until a real release returns
   attributable evidence into next Work; the current structure zoom remains implemented evidence, not an
   adopted capacity-layer direction;
-- a **reachable** saved-view lifecycle — the founder can save and snapshot, but cannot yet list, reopen, or
-  delete a saved view from the UI;
 - immediate provisional whole-venture interpretation plus useful work in one founder-directed turn;
 - a real provider pass that independently selects and completes a second participant contribution;
 - hard concurrent spend authority;

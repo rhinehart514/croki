@@ -273,7 +273,7 @@ export type SystemIndexObject = {
   attention: Array<{ kind: string; reason: string }>; createdAt: string | null; updatedAt: string | null;
   projectionOnly?: boolean;
 };
-export type SystemIndexRelationship = WorkIndexOutlineRelationship & { relationshipRef: string; compatibilityOwned: boolean };
+export type SystemIndexRelationship = WorkIndexOutlineRelationship & { relationshipRef: string; compatibilityOwned: boolean; projectionOnly?: boolean };
 export type SystemAttentionItem = SystemIndexObject["attention"][number] & { objectRef: string };
 export type SystemIndex = { ventureId: string; revision: number; architectureRevision: number; scope: "system" | "product" | "gtm" | "attention"; objects: SystemIndexObject[]; relationships: SystemIndexRelationship[]; counts: { total: number; product: number; gtm: number; attention: number; matchCount: number } };
 export type SystemMutation =
@@ -797,7 +797,27 @@ export type SavedView = {
   name: string;
   arrangement: string | null;
   createdAt: string;
+  spec?: { rootRefs: string[]; relationshipRefs: string[] };
 };
+
+export type ReopenedSavedView = {
+  view: SavedView;
+  arrangement?: string | null;
+  rootRefs?: string[];
+  relationshipRefs?: string[];
+  resolution?: Array<{ source: { ref: string }; state: "resolved" | "stale" | "unresolved" }>;
+  stale?: Array<{ ref: string; state: "stale" | "unresolved" }>;
+  intact?: boolean;
+};
+
+export const listSavedViews = (ventureId: string) =>
+  get<{ views: SavedView[] }>(`/api/ventures/${encodeURIComponent(ventureId)}/views`);
+
+export const reopenSavedView = (ventureId: string, viewId: string) =>
+  get<{ reopened: ReopenedSavedView }>(`/api/ventures/${encodeURIComponent(ventureId)}/views/${encodeURIComponent(viewId)}`);
+
+export const deleteSavedView = (ventureId: string, viewId: string) =>
+  guardedDelete<{ deleted: boolean }>(`/api/ventures/${encodeURIComponent(ventureId)}/views/${encodeURIComponent(viewId)}`);
 
 // Save a generated answer as a synchronized LIVE view: arrangement id + atlasTrace scope refs. No positions.
 export const saveLiveView = (
