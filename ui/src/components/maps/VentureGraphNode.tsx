@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import type { WorkIndexOutlineObject } from "@/api";
+import type { SystemWorkState } from "@/components/system-mode/systemWorkState";
 import { objectMapSummary, objectMapTypeLabel } from "./ventureMapModel";
 
 export type VentureGraphNodeData = Record<string, unknown> & {
@@ -8,6 +9,7 @@ export type VentureGraphNodeData = Record<string, unknown> & {
   connectionCount: number;
   selected: boolean;
   quiet: boolean;
+  workState: SystemWorkState | null;
   onSelect: (id: string) => void;
 };
 
@@ -24,6 +26,7 @@ function VentureGraphNodeView({ data }: NodeProps<VentureGraphFlowNode>) {
       data-selected={data.selected ? "true" : "false"}
       data-quiet={data.quiet ? "true" : "false"}
       data-gap={data.connectionCount === 0 ? "true" : "false"}
+      data-work-state={data.workState ?? "none"}
     >
       <Handle className="venture-graph-handle" type="target" position={Position.Left} />
       <button
@@ -36,7 +39,8 @@ function VentureGraphNodeView({ data }: NodeProps<VentureGraphFlowNode>) {
         <strong>{data.object.name}</strong>
         {summary ? <span className="venture-graph-node-summary">{summary}</span> : null}
         <span className="venture-graph-node-foot">
-          {data.connectionCount ? `${data.connectionCount} ${data.connectionCount === 1 ? "link" : "links"}` : "Not connected"}
+          <span>{data.connectionCount ? `${data.connectionCount} ${data.connectionCount === 1 ? "link" : "links"}` : "Not connected"}</span>
+          {data.workState ? <i className="venture-graph-node-work" data-state={data.workState}>{workLabel(data.workState)}</i> : null}
           {data.object.assertion === "tentative" ? <i>Working read</i> : null}
         </span>
       </button>
@@ -46,3 +50,10 @@ function VentureGraphNodeView({ data }: NodeProps<VentureGraphFlowNode>) {
 }
 
 export const VentureGraphNode = memo(VentureGraphNodeView);
+
+function workLabel(state: SystemWorkState) {
+  if (state === "needs-review") return "Needs review";
+  if (state === "working") return "Working";
+  if (state === "failed") return "Failed";
+  return "Completed";
+}

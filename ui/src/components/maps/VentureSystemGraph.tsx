@@ -12,6 +12,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { WorkIndexOutline } from "@/api";
+import type { SystemAgentContext } from "@/components/system-mode/systemWorkState";
 import { connectedIds, ventureGraph, type VentureMapView } from "./ventureMapModel";
 import { VentureGraphNode, type VentureGraphFlowNode } from "./VentureGraphNode";
 
@@ -24,6 +25,7 @@ export function VentureSystemGraph({
   onSelect,
   camera,
   onCameraChange,
+  workByObject,
 }: {
   outline: WorkIndexOutline;
   view: VentureMapView;
@@ -31,6 +33,7 @@ export function VentureSystemGraph({
   onSelect: (id: string | null) => void;
   camera?: Viewport | null;
   onCameraChange?: (camera: Viewport) => void;
+  workByObject?: ReadonlyMap<string, SystemAgentContext>;
 }) {
   const graph = useMemo(() => ventureGraph(outline, view), [outline, view]);
   const route = useMemo(() => connectedIds(graph, selectedId), [graph, selectedId]);
@@ -45,9 +48,10 @@ export function VentureSystemGraph({
       connectionCount: node.connectionCount,
       selected: selectedId === node.object.id,
       quiet: Boolean(selectedId && !route.has(node.object.id)),
+      workState: workByObject?.get(node.object.id)?.state ?? null,
       onSelect: (id: string) => onSelect(selectedId === id ? null : id),
     },
-  })), [graph.nodes, onSelect, route, selectedId]);
+  })), [graph.nodes, onSelect, route, selectedId, workByObject]);
   const edges = useMemo<Edge[]>(() => graph.links.map((link) => {
     const highlighted = Boolean(selectedId && (link.source === selectedId || link.target === selectedId));
     return {

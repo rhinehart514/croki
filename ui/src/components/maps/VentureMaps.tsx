@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { WorkIndexOutline, WorkIndexOutlineObject } from "@/api";
 import type { Viewport } from "@xyflow/react";
 import type { Direction } from "@/components/now/directionModel";
+import type { SystemAgentContext, SystemWorkState } from "@/components/system-mode/systemWorkState";
 import { objectMapFacts, objectMapTypeLabel, ventureGraph, type VentureMapView } from "./ventureMapModel";
 import { VentureSystemGraph } from "./VentureSystemGraph";
 import "./venture-maps.css";
@@ -23,6 +24,9 @@ export function VentureMaps({
   onSelectionChange,
   camera,
   onCameraChange,
+  workByObject,
+  inspectorActions,
+  showHeader = true,
 }: {
   outline: WorkIndexOutline | null | undefined;
   directions: Direction[];
@@ -34,6 +38,9 @@ export function VentureMaps({
   onSelectionChange?: (id: string | null) => void;
   camera?: Viewport | null;
   onCameraChange?: (camera: Viewport) => void;
+  workByObject?: ReadonlyMap<string, SystemAgentContext>;
+  inspectorActions?: ReactNode;
+  showHeader?: boolean;
 }) {
   const [localView, setLocalView] = useState<VentureMapView>("system");
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
@@ -48,6 +55,7 @@ export function VentureMaps({
   const selected = visibleSelectedId ? outlineObjects.find((object) => object.id === visibleSelectedId) ?? null : null;
   const facts = selected ? objectMapFacts(selected) : [];
   const connections = selected ? graph.links.filter((link) => link.source === selected.id || link.target === selected.id) : [];
+  const agentContext = selected ? workByObject?.get(selected.id) ?? null : null;
 
   const open = (object: WorkIndexOutlineObject) => {
     const direction = object.threadRefs.map((ref) => directionByRef.get(ref)).find(Boolean);
@@ -57,7 +65,7 @@ export function VentureMaps({
 
   return (
     <section className="venture-maps" aria-label="Venture system map" data-view={view}>
-      <header className="venture-maps-head">
+      {showHeader ? <header className="venture-maps-head">
         <div>
           <span>Generated from venture truth</span>
           <h1>{VIEW_LABEL[view]}</h1>
@@ -79,7 +87,7 @@ export function VentureMaps({
             </button>
           ))}
         </div>
-      </header>
+      </header> : null}
 
       {!outline || graph.nodes.length === 0 ? (
         <div className="venture-map-empty" role="status">
@@ -94,6 +102,7 @@ export function VentureMaps({
           onSelect={setSelectedId}
           camera={camera}
           onCameraChange={onCameraChange}
+          workByObject={workByObject}
         />
       )}
 
@@ -104,6 +113,7 @@ export function VentureMaps({
             <button type="button" aria-label="Close route" onClick={() => setSelectedId(null)}>×</button>
           </header>
           <h2>{selected.name}</h2>
+          {agentContext ? <AgentContext context={agentContext} objectName={selected.name} /> : null}
           {facts.length ? (
             <dl>
               {facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}
@@ -121,13 +131,26 @@ export function VentureMaps({
               </ul>
             ) : <p>This node is visible, but it is not part of an operating path yet.</p>}
           </section>
-          <button type="button" className="venture-map-open" onClick={() => open(selected)}>
-            {selected.threadRefs.length ? "Open work" : "Open context"}
-          </button>
+          {inspectorActions ?? <button type="button" className="venture-map-open" onClick={() => open(selected)}>{selected.threadRefs.length ? "Open work" : "Open context"}</button>}
         </aside>
       ) : (
         <div className="venture-map-hint">Select a path to see every system and piece of market work it uses.</div>
       )}
     </section>
   );
+}
+
+const STATE_LABEL: Record<SystemWorkState, string> = {
+  working: "Agent working",
+  "needs-review": "Needs your review",
+  failed: "Work failed",
+  completed: "Work completed",
+};
+
+function AgentContext({ context, objectName }: { context: SystemAgentContext; objectName: string }) {
+  return <div className="venture-map-agent" data-state={context.state ?? "ready"} aria-live="polite">
+    <span><i />Agent context</span>
+    <strong>{context.state ? STATE_LABEL[context.state] : context.threadRef ? "Linked work is ready" : `Ready to work on ${objectName}`}</strong>
+    <p>{context.thread?.founderIntent ?? (context.threadRef ? "Open the linked thread to continue with this node in context." : `Your next message can begin work with ${objectName} as its exact subject.`)}</p>
+  </div>;
 }
