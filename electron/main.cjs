@@ -10,13 +10,16 @@
 //   3. wait for its health endpoint, then load that URL in a BrowserWindow.
 // No brain code changes — the desktop app talks to the same local API the dev server already serves.
 
-const { app, BrowserWindow, shell, utilityProcess, dialog, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, WebContentsView, shell, utilityProcess, dialog, ipcMain, screen } = require("electron");
 const path = require("node:path");
 const http = require("node:http");
 const net = require("node:net");
 const crypto = require("node:crypto");
 const { execSync } = require("node:child_process");
+const pty = require("node-pty");
 const windowState = require("./window-state.cjs");
+const { createTerminalRuntime } = require("./terminal-runtime.cjs");
+const { createPreviewRuntime } = require("./preview-runtime.cjs");
 
 const HOST = "127.0.0.1";
 
@@ -24,6 +27,15 @@ let brainProcess = null;
 let mainWindow = null;
 let brainPort = 0;
 let founderCapability = null;
+
+function rendererWindow(ownerId) {
+  return mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents.id === ownerId ? mainWindow : null;
+}
+
+function sendToRenderer(ownerId, channel, payload) {
+  const window = rendererWindow(ownerId);
+  if (window && !window.webContents.isDestroyed()) window.webContents.send(`drover:${channel}`, payload);
+}
 
 function signFounderRequest(method, rawUrl) {
   const url = new URL(rawUrl);
@@ -36,6 +48,55 @@ function signFounderRequest(method, rawUrl) {
     .digest("base64url");
   return `v1.${issuedAt}.${nonce}.${signature}`;
 }
+
+function resolveCodingWorkspace(ventureId, workspaceId) {
+  const url = `http://${HOST}:${brainPort}/api/ventures/${encodeURIComponent(ventureId)}/coding-workspaces/${encodeURIComponent(workspaceId)}`;
+  return new Promise((resolve, reject) => {
+    const request = http.get(url, {
+      headers: { "x-drover-founder-capability": signFounderRequest("GET", url) },
+    }, (response) => {
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          if (response.statusCode !== 200) throw new Error(body?.error || `Coding workspace lookup failed (${response.statusCode}).`);
+          resolve(body);
+        } catch (error) { reject(error); }
+      });
+    });
+    request.setTimeout(5000, () => request.destroy(new Error("Coding workspace lookup timed out.")));
+    request.on("error", reject);
+  });
+}
+
+const terminalRuntime = createTerminalRuntime({
+  pty,
+  resolveWorkspace: resolveCodingWorkspace,
+  send: sendToRenderer,
+});
+const previewRuntime = createPreviewRuntime({
+  WebContentsView,
+  getWindow: rendererWindow,
+  shell,
+  send: sendToRenderer,
+});
+
+function owner(event) {
+  if (!rendererWindow(event.sender.id)) throw new Error("This desktop capability belongs to the active Drover window.");
+  return event.sender.id;
+}
+
+ipcMain.handle("drover:terminal-open", (event, target) => terminalRuntime.open(owner(event), target));
+ipcMain.handle("drover:terminal-write", (event, sessionId, data) => terminalRuntime.write(owner(event), sessionId, data));
+ipcMain.handle("drover:terminal-resize", (event, sessionId, cols, rows) => terminalRuntime.resize(owner(event), sessionId, cols, rows));
+ipcMain.handle("drover:terminal-restart", (event, sessionId) => terminalRuntime.restart(owner(event), sessionId));
+ipcMain.handle("drover:terminal-close", (event, sessionId) => terminalRuntime.close(owner(event), sessionId));
+ipcMain.handle("drover:preview-show", (event, input) => previewRuntime.show(owner(event), input));
+ipcMain.handle("drover:preview-bounds", (event, bounds) => previewRuntime.setBounds(owner(event), bounds));
+ipcMain.handle("drover:preview-navigate", (event, url) => previewRuntime.navigate(owner(event), url));
+ipcMain.handle("drover:preview-reload", (event) => previewRuntime.reload(owner(event)));
+ipcMain.handle("drover:preview-hide", (event) => previewRuntime.hide(owner(event)));
 
 // Repository binding is a filesystem choice, so the desktop host owns it. The renderer receives
 // only the path the founder explicitly picked plus a human name for the onboarding form.
@@ -226,8 +287,13 @@ async function createWindow(port) {
     return { action: "allow" };
   });
 
+  const ownerId = mainWindow.webContents.id;
   mainWindow.loadURL(`http://${HOST}:${port}/`);
-  mainWindow.on("closed", () => { mainWindow = null; });
+  mainWindow.on("closed", () => {
+    terminalRuntime.stopOwner(ownerId);
+    previewRuntime.stopOwner(ownerId);
+    mainWindow = null;
+  });
 }
 
 async function boot() {
@@ -290,11 +356,15 @@ if (!gotLock) {
   // for this expected exit.
   app.on("before-quit", () => {
     app.isQuiting = true;
+    terminalRuntime.stopAll();
+    previewRuntime.stopAll();
     stopBrain();
   });
 
   // Final backstop: quit fires even on paths that skip before-quit; stopBrain is idempotent.
   app.on("quit", () => {
+    terminalRuntime.stopAll();
+    previewRuntime.stopAll();
     stopBrain();
   });
 }
