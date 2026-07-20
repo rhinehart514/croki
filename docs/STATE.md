@@ -492,9 +492,10 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
   A prior version wrote the founder's *question* back as a "finding" — recording a question as a fact, a
   truth-model violation. That truth-promotion path is removed; the surface only rearranges to highlight
   existing relationships.
-- **`VentureCanvasStage` is a large second-order coordinator** — it owns projection, placement, bands,
-  lenses, views, mutation, revision, interpretation, clustering, selection, keyboard, and outline in one
-  component. Splitting it by stable responsibility is owed.
+- **The compatibility canvas coordinator is split by stable responsibility.** `VentureCanvasStage` is 282
+  lines and composes feature-local hooks for drag interpretation, revision application, dense-node
+  presentation, and selection/keyboard behavior. The generated-map unit suite and all three Atlas browser
+  journeys prove the split preserved the existing surface.
 
 ### Conversation and runs
 
@@ -558,8 +559,6 @@ Remaining consequence follow-ups (tracked; not authority holes):
 
 ### Engineering
 
-- `VentureCanvasStage` is a large second-order coordinator holding many responsibilities in one component
-  (see "Canvas and model").
 - The anti-cage file-count threshold is too loose to prevent ordinary architecture growth.
 - The production vendor bundle exceeds the current warning threshold.
 - The native Electron journey proves the development desktop host rather than a signed, installed package;
