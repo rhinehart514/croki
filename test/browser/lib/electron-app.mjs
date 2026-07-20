@@ -8,22 +8,22 @@ const ELECTRON = path.resolve(import.meta.dirname, "../../../node_modules/electr
 
 function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
-export async function launchDroverElectron({ root, home, port }) {
-  if (!fs.existsSync(ELECTRON)) throw new Error(`Electron is not installed at ${ELECTRON}`);
+async function launchElectron({ executable, args, cwd, home, port }) {
+  if (!fs.existsSync(executable)) throw new Error(`Electron is not installed at ${executable}`);
   const childEnv = { ...process.env, GTM_IDE_HOME: home, GTM_IDE_PERSISTENCE: "json", GTM_IDE_DISABLE_CLAUDE_CODE: "1" };
   // Codex and some package runners set this for their own Electron-based host. It would turn the
   // product under test into a plain Node process, so the native acceptance child must not inherit it.
   delete childEnv.ELECTRON_RUN_AS_NODE;
-  const child = spawn(ELECTRON, [
+  const child = spawn(executable, [
     "--headless",
     "--no-sandbox",
     "--disable-gpu",
     "--remote-allow-origins=*",
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${path.join(home, "electron-profile")}`,
-    root,
+    ...args,
   ], {
-    cwd: root,
+    cwd,
     env: childEnv,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -67,4 +67,12 @@ export async function launchDroverElectron({ root, home, port }) {
     if (child.exitCode === null) child.kill("SIGTERM");
     throw error;
   }
+}
+
+export function launchDroverElectron({ root, home, port }) {
+  return launchElectron({ executable: ELECTRON, args: [root], cwd: root, home, port });
+}
+
+export function launchPackagedDroverElectron({ executable, home, port }) {
+  return launchElectron({ executable, args: [], cwd: path.dirname(executable), home, port });
 }

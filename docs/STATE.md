@@ -68,7 +68,9 @@ On 2026-07-20, the complete `npm run test:acceptance` receipt passed against thi
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
 - Electron: **13/13**, including PTY worktree isolation and terminal outcomes, native preview security, real-host native-coding
-  restart, and founder-authority receipts.
+  restart, and founder-authority receipts;
+- packaged Electron: **1/1**, launching a disposable arm64 `Drover.app`, proving the trusted preload and
+  matching dynamic Brain instance, and clearing its runtime location on shutdown.
 
 The browser journeys exercise mode-owned rail bodies, contextual closable conversation outside Work, and
 visible offline/read-only truth on the owning Product / GTM or Releases surface; the coding-first Work composer with repository,
@@ -86,6 +88,12 @@ collaborative preview automation required unavailable authentication during this
 manual visual-QA claim is made. A deterministic 1440×900 Chrome capture was inspected and exposed a collapsed
 headerless canvas; the repaired full-height composition is now guarded in the browser journey. Browser and
 native-host receipts still prove deterministic behavior rather than comprehension.
+
+The same tree produced `release/Drover-0.3.3-arm64.dmg` (**187,216,672 bytes**, SHA-256
+`b0a136944169559508837fc16c1379c9a9fd2a650c18cb14357c26fa99a44eb5`). `codesign --verify --deep
+--strict` passed for the app bundle and `hdiutil verify` passed for the DMG. This proves the local ad-hoc
+arm64 package, not Developer ID signing, notarization, public hosting, clean-machine installation, upgrade,
+or rollback.
 
 The macOS GitHub Actions workflow runs the same complete gate on pull requests and pushes to `main`; its first
 remote execution remains unobserved until this working tree is committed and pushed. The browser remains a
@@ -325,8 +333,9 @@ gaps (unsupported claim, unsupported link, unexpressed capability, disconnected 
 never mutates the model and never fabricates evidence. Facts, evidence, and interpretation stay separate
 (Product Law 10) — a tentative interpretation cannot discharge a claim's evidence gap, only a supporting
 stance backed by resolving evidence can, and with no evidence resolver wired a claim stays a *visible* gap
-(fail toward visibility, FIRM-SPEC section 7). This is the brain substrate the Phase 6 UI will read; it is
-not yet wired to a founder surface.
+(fail toward visibility, FIRM-SPEC section 7). The active Product / GTM graph now projects those exact
+relationships and gaps, release-scoped evidence, tentative return curves, and the affected next-Work
+handoff. It does not promote tentative interpretation to canonical truth.
 
 ### Founder authority mechanics
 
@@ -348,7 +357,9 @@ while `npm start` remains the explicit `127.0.0.1:4317` development fallback. Th
 the MCP client against the published dynamic port, verifies the matching health identity, then proves stale
 location cleanup and a distinct identity after relaunch.
 
-These are strong authority mechanics. They do not prove every visible consequence has a working executor.
+The founder UI exposes working exact apply, Gmail send, and repository deploy consequences. Missing
+credentials or deploy contracts are visibly unavailable with the reason. Publish, spend, and other outward
+capabilities have no active control rather than a decorative or dead one.
 
 ### Founder-directed work mechanics
 
@@ -459,12 +470,12 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 
 ### Product composition
 
-- The three presentation modes share one context but remain incomplete as a founder-validated composition;
-  deterministic coverage proves navigation and restoration mechanics, not that the hierarchy is yet obvious
-  to an outside founder.
+- The three presentation modes share one context and are mechanically complete as parallel lenses. Whether
+  the hierarchy is immediately obvious to an outside founder remains a validation deferral, not a hidden
+  implementation gap.
 - Mode-owned rail bodies and contextual conversation are implemented and deterministic across desktop and
-  narrow-width layouts. Outside-founder comprehension remains unproven; no cross-mode command palette,
-  generalized resolver, or focus stack was added.
+  narrow-width layouts. `Cmd/Ctrl+K` searches the current mode. Global cross-mode search remains a Phase C
+  hypothesis until the direct loop is used live; no generalized resolver or focus stack is exposed.
 - Product / GTM graph camera, selection, and scope restore through the v4 venture session. Its mode rail now
   exposes save, list, reopen, and confirmed delete for live views and snapshots.
 - Exact thread targeting is carried through conversation replies and new Runs. Legacy bet-focused work
@@ -472,22 +483,22 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 
 ### Canvas and model
 
-- The canonical storage model is open, but its shipped architecture compatibility projection still requires
-  the legacy five roles.
+- The canonical storage model is open. One hidden architecture compatibility projection still requires the
+  legacy five roles; migration or removal is explicitly deferred because the active founder map neither
+  exposes those roles nor needs a sixth role control.
 - The active map surface is a generated operating graph with direct founder creation and editing through
   venture-scoped mutation adapters. Whole venture is the default; Product and Go-to-market are focused views
   that preserve their real cross-boundary support. Canonical relationships and existing structured
   references supply every connector. Release-scoped outcomes add projection-only tentative return curves to
   directly connected objects and cannot establish an interpretation. There is no separate diagram store,
   free placement, or invented connector data in this surface.
-- The older full canvas remains compatibility code, not the normal map-mode UI. Its persistence, saved-view,
-  and coordinator caveats below still apply if that surface is restored or reused.
+- The older full canvas remains compatibility code with no normal founder entry. Its removal is deferred
+  until retained compatibility journeys can be retired without losing migration evidence.
 - **Saved views/snapshots have a reachable founder lifecycle.** The Product / GTM rail saves the selected
   canonical path, lists live views and snapshots, reopens their exact references, and uses a confirmed second
   act before delete. Read-only mode keeps reopen available while visibly disabling mutation.
-- In the older compatibility canvas, nodes are founder-draggable and placement is founder-owned (nodes lock
-  only while a lens or generated-answer overlay is active, and for group/intent nodes). The active operating
-  graph never writes placement.
+- Drag/placement belongs only to the hidden compatibility canvas. The active operating graph never writes
+  placement and exposes no control that implies it does.
 - The **generated-answer "Related context" trace is deterministic and promotes nothing to durable truth.**
   A prior version wrote the founder's *question* back as a "finding" — recording a question as a fact, a
   truth-model violation. That truth-promotion path is removed; the surface only rearranges to highlight
@@ -505,9 +516,9 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 - The dialogue reply route is the desktop composer's sole submission path. It handles new direction,
   steer, observe, participant-specific stop/involvement, critique, parallel attempts, approval surfacing,
   and explicit close without switching product modes.
-- **Undo/redo is not durable venture history.** It is session-scoped, capped, on a 30-minute TTL, and not
-  transactional — the stack moves before the mutation confirms, so a rejected write can leave the visible
-  history out of step with persisted truth.
+- **Compatibility-canvas undo/redo is not durable venture history.** It remains session-scoped and
+  nontransactional, but has no shipped founder control. The active graph uses direct founder mutation and
+  explicit removal; transactional compatibility history is deferred unless that canvas returns.
 - The agent/MCP `/drive` fresh-start gap is **closed (Phase 2)**: an agent-stamped drive with no bet lineage
   is refused; only a founder starts fresh work.
 - Participant composition is directed in chat; all active participants in the selected Thread are visible
@@ -517,7 +528,8 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
   `budget-exhausted`, and `interrupted`. Raw exit codes and signals remain receipts. Older retained `stopped`
   UI values render as `cancelled` without rewriting founder data. Founder-ended work, outward execution, and
   returned evidence remain distinct consequences rather than being flattened into Run terminals.
-- Outcome-contract workflows are not implemented.
+- Outcome-contract workflows are not implemented and no control claims they are. A generalized workflow or
+  scheduler remains deliberately deferred until repeated use of the direct release loop proves a need.
 - Selected-thread timelines and relevant index facets revalidate from the venture SSE stream. A slower
   reconnect/offline poll preserves the last coherent read; it is not the normal five-request 1.2-second
   path.
@@ -544,47 +556,53 @@ Repaired brain-side in Phase 3 (verified: 710 brain + 49 security-matrix green):
   act parks honestly (`sent:false`) and the founder still performs the release. The wall release capability
   is minted only inside `wall.decide()`.
 
-Remaining consequence follow-ups (tracked; not authority holes):
+Closed consequence follow-ups:
+
+- `executeProductChange` now returns `{ok:false}` through the persist-failure path instead of throwing past
+  it, preserving the exact error on the queued item.
+- Startup recovery returns an interrupted product-change revision from `applying` to its approved retryable
+  state rather than leaving it permanently stuck.
+- `preAuthorizedGrantId` is stripped from parker-controlled effect content and stamped only by the host.
+- Venture work-loop serialization occurs before the allowance read, so concurrent drives cannot oversubscribe
+  the remaining daily budget.
+
+Explicit authority deferral:
 
 - **Grant true auto-send is a deliberate product/authority decision, not a bug.** A background drive holds no
   live founder request and cannot obtain the founder capability, so a grant cannot ship a real send in-spec.
   If auto-send is actually wanted, it needs a new host-authority path — surfaced for Jacob, not smuggled in.
-- `executeProductChange` throws on apply failure instead of returning `{ok:false}`, bypassing the
-  persist-failure path (item stays queued, honest, but without `lastExecutionError`) — normalize in Phase 4/6.
-- A crash mid-apply leaves a product-change revision `applying`; the approved-only gate then refuses retry
-  with no recovery path (fail-closed but stuck) — add an explicit recovery.
-- `preAuthorizedGrantId` is stamped on parker-controllable effect content and not in `park()`'s
-  authorization-claim strip list — a latent spoof-display seam (nothing reads it today); move it to a
-  host-stamped item field in the Phase 7 hardening pass.
-- Concurrent drives can oversubscribe the same remaining daily allowance; aggregate spend is not a hard
-  concurrent guarantee.
 
 ### Engineering
 
-- The anti-cage file-count threshold is too loose to prevent ordinary architecture growth.
-- The production vendor bundle exceeds the current warning threshold.
-- The native Electron journey proves the development desktop host rather than a signed, installed package;
-  packaged-distribution behavior remains a separate release receipt.
+- The anti-cage file-count threshold remains coarse technical debt. Tightening it is deferred until the next
+  measured architecture boundary so an arbitrary threshold does not force churn.
+- The production vendor bundle exceeds the current warning threshold. Optimization is deferred until runtime
+  profiling identifies a founder-visible load or memory cost.
+- The current arm64 app bundle and DMG are locally built, launched, integrity-checked, and covered by the
+  acceptance gate. Developer ID signing, notarization, public hosting, clean-machine installation, upgrade,
+  and rollback remain external distribution work requiring founder-owned credentials and decisions.
 
 ## Unproven
 
-The following are approved requirements or desired alpha evidence without sufficient current receipts:
+Mechanically closed in the current tree: the canonical model joins Product / GTM, conversation, Runs, exact
+work, decisions, release evidence, and saved views; venture conversation has a durable root and persistent
+child Threads; and work-loop serialization makes concurrent budget enforcement hard rather than advisory.
 
-- one canonical open model fully wired across Product/go-to-market canvas, conversation, runs, work,
-  decisions, evidence, and saved views;
-- one venture conversation with durable persistent branches;
+The following still lack sufficient live or human receipts:
+
 - semantic zoom over exact work, evidence, and provenance is explicitly deferred until a real release returns
   attributable evidence into next Work; the current structure zoom remains implemented evidence, not an
   adopted capacity-layer direction;
-- immediate provisional whole-venture interpretation plus useful work in one founder-directed turn;
 - a real provider pass that independently selects and completes a second participant contribution;
-- hard concurrent spend authority;
 - a real released send and returned reply;
 - a live attributable market result changing founder-adopted venture understanding and next work (the
   deterministic outcome projection and exact Work handoff are proven; no live Gmail return was performed);
-- cross-machine import with destination repository rebind;
+- cross-machine import with destination repository rebind (export/import and same-machine rebind mechanics
+  are proven; a second physical machine is not);
 - an outside founder completing the Product/go-to-market loop without a walkthrough;
-- repeated use proving the canvas stays legible without manual grooming.
+- repeated use proving the canvas stays legible without manual grooming;
+- a Developer ID-signed, notarized, publicly hosted package and its clean-machine install, upgrade, and
+  rollback receipts.
 
 ## Legacy or conflicting behavior — scheduled for migration or removal
 

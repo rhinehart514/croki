@@ -1,24 +1,17 @@
 appId: com.gtmide.desktop
 productName: Drover
 copyright: Drover
-
-# No auto-updater. The app bundles no electron-updater and boots no update check, so we tell
-# electron-builder not to emit an update manifest (latest-mac.yml) or assume a publish target.
-# A local, unsigned build has nowhere to update FROM; shipping a manifest that points nowhere is
-# worse than shipping none. Real distribution (signing + hosting) is a founder decision — see
-# docs/DISTRIBUTION.md.
 publish: null
 
-# Keep the local brain and built lens as plain files in Resources.
+# Brain and renderer files remain inspectable in the local alpha package. Native dependencies are already
+# rebuilt by prepare:pty; electron-builder must not replace them with a different ABI afterward.
 asar: false
-
 npmRebuild: false
 
 directories:
   output: release
   buildResources: build
 
-# Ad-hoc sign the local bundle as one unit. See build/after-pack.cjs.
 afterPack: build/after-pack.cjs
 
 files:
@@ -38,8 +31,6 @@ mac:
     - target: dmg
       arch:
         - arm64
-  # Unsigned, local build. No Apple Developer identity, no notarization. Gatekeeper will require a
-  # one-time right-click > Open on first launch.
   identity: null
 
 dmg:

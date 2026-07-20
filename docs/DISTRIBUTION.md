@@ -1,12 +1,11 @@
 # Distribution — how a founder gets Drover
 
-**Honest snapshot:** 2026-07-15, alpha. [STATE.md](STATE.md) remains the authority for product proof.
+**Honest snapshot:** 2026-07-20, alpha. [STATE.md](STATE.md) remains the authority for product proof.
 This file covers delivery mechanics only.
 
-There is no signed public download. The supported alpha path is source on a desktop machine. A local
-arm64 macOS package can be built from the repository, but the current Firm tree has no freshly
-verified package receipt; the existing artifact under `release/` predates the current package
-version and does not count as one.
+There is no Developer ID-signed public download. The supported alpha paths are source on a desktop machine
+and a freshly verified local arm64 macOS package. The package is ad-hoc signed for local use; it is not
+notarized or suitable for an unattended public handoff.
 
 ## Current paths
 
@@ -14,7 +13,7 @@ version and does not count as one.
 |---|---|---|
 | Run `npm run app` | Supported local alpha path | Builds the UI, starts the loopback brain, and hosts founder authority below the renderer |
 | Run `npm start` | Read-only browser diagnostics by default | Requires Node and npm; an explicit loopback-only development hatch exists but is not a distribution authority |
-| Build `npm run app:dist` | Configured for arm64 macOS | Produces an unsigned, ad-hoc-signed local DMG; reverify before handoff |
+| Build `npm run app:dist` | Verified local arm64 path | Produces an ad-hoc-signed local DMG and app bundle |
 | Download a signed, notarized app | Does not exist | Requires founder-owned Apple identity and hosting decisions |
 
 Drover is local software, not bundled intelligence. Founder-directed Product and go-to-market work needs
@@ -62,6 +61,11 @@ npm run app:dist
 `release/`. `release/` is ignored and must never be treated as proof for a different package version
 or source tree.
 
+The current-tree package receipt is `Drover-0.3.3-arm64.dmg`, **187,216,672 bytes**, SHA-256
+`b0a136944169559508837fc16c1379c9a9fd2a650c18cb14357c26fa99a44eb5`. The app launched with its trusted
+preload and matching dynamic Brain identity; `codesign --verify --deep --strict` and `hdiutil verify` passed.
+Rebuild and record a new hash after any source change.
+
 The package has no Developer ID signature or notarization. Gatekeeper therefore requires the
 founder to use the explicit one-time right-click **Open** path. `electron-builder.yml` sets
 `publish: null`; no update manifest is emitted and the app performs no update check.
@@ -78,14 +82,15 @@ Run the product gates against the source tree first:
 npm run test:acceptance
 ```
 
-This reruns the repository's mechanical, token, and deterministic browser readiness gates. The exact
+This reruns the repository's mechanical, token, deterministic browser, Electron, and disposable packaged-app
+readiness gates. The exact
 journey inventory must match `package.json` and the current `STATE.md`; legacy Now/Atlas/immersive journey
-names are migration coverage, not product direction. It is not packaged-app or outside-founder proof.
+names are migration coverage, not product direction. It is not outside-founder or public-distribution proof.
 
-For a desktop artifact, build from that same verified tree, launch the packaged app, bind a disposable
-repository, confirm runtime readiness, restart, and complete the deterministic Firm journey. Record
-the package version, architecture, macOS version, runtime/auth mode, and resulting artifact hash.
-Do not update [STATE.md](STATE.md) with packaging proof until that receipt exists.
+For a desktop artifact, build from that same verified tree and retain the disposable packaged-app acceptance
+receipt. Before handing an artifact to another machine, also bind a disposable repository, confirm a real
+runtime, restart, and complete the Firm journey on that machine. Record the package version, architecture,
+macOS version, runtime/auth mode, and resulting artifact hash; do not reuse the receipt after the tree changes.
 
 ## What public distribution still requires
 
