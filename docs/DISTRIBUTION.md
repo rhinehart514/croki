@@ -69,6 +69,8 @@ Rebuild and record a new hash after any source change.
 The package has no Developer ID signature or notarization. Gatekeeper therefore requires the
 founder to use the explicit one-time right-click **Open** path. `electron-builder.yml` sets
 `publish: null`; no update manifest is emitted and the app performs no update check.
+The local alpha also keeps its application files inspectable outside ASAR and uses Electron's default icon.
+A branded icon, hardened archive posture, signing, and notarization belong to the public-distribution pass.
 
 The packaged display name is Drover. Compatibility identifiers stay unchanged: npm package
 `gtm-ide`, bundle id `com.gtmide.desktop`, storage path `~/.gtm-ide`, and historical `channel`

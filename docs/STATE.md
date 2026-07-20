@@ -482,7 +482,8 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 - Product / GTM graph camera, selection, and scope restore through the v4 venture session. Its mode rail now
   exposes save, list, reopen, and confirmed delete for live views and snapshots.
 - Exact thread targeting is carried through conversation replies and new Runs. Legacy bet-focused work
-  remains reachable through non-destructive virtual threads.
+  remains reachable through non-destructive virtual threads. Backfilling exact Thread identity into every
+  hidden legacy selection path is deferred; the active Work and cross-mode paths use exact references.
 
 ### Canvas and model
 
@@ -585,6 +586,9 @@ Explicit authority deferral:
 - The current arm64 app bundle and DMG are locally built, launched, integrity-checked, and covered by the
   acceptance gate. Developer ID signing, notarization, public hosting, clean-machine installation, upgrade,
   and rollback remain external distribution work requiring founder-owned credentials and decisions.
+- The local alpha bundle deliberately remains inspectable (`asar: false`) and still uses Electron's default
+  application icon. A branded icon and hardened archive/signing posture are deferred to the public
+  distribution pass rather than implied by the local package.
 
 ## Unproven
 
