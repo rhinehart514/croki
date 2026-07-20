@@ -151,7 +151,8 @@ test("cutover: opening a venture lands the three-mode founder workspace", async 
     await waitForDom(client, `!!document.querySelector('.workspace-shell .thread-conversation [role="log"]')`, "the mounted conversation did not render");
     await waitForDom(client, `/What do you want to work on/i.test(document.querySelector('.thread-conversation')?.textContent ?? '')`, "the venture conversation home did not render");
     assert.equal(await client.evaluate(`document.querySelector('.thread-rail')?.getBoundingClientRect().width`), 240, "the default thread rail is not 240px");
-    assert.equal(await client.evaluate(`document.querySelector('.thread-conversation')?.getBoundingClientRect().width`), 1680, "chat does not own the remaining desktop width");
+    assert.equal(await client.evaluate(`document.querySelector('.work-surface')?.getBoundingClientRect().width`), 1680, "the Work ADE does not own the remaining desktop width");
+    assert.equal(await client.evaluate(`document.querySelector('.thread-conversation')?.getBoundingClientRect().width > 500 && document.querySelector('.work-empty')?.getBoundingClientRect().width > 700`), true, "conversation and the calm Work surface did not remain usable together");
     assert.equal(await client.evaluate(`!document.querySelector('.visual-stage')`), true, "a visual mounted before the founder opened one");
     assert.equal(await client.evaluate(`!document.querySelector('[data-testid="venture-workbench"]')`), true, "the retired workbench leaked into the default shell");
     assert.equal(await client.evaluate(`['Work', 'Product / GTM', 'Releases'].every((label) => [...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes(label)))`), true, "the three founder modes did not mount");

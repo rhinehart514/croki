@@ -46,8 +46,8 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
     })()`), true);
     await waitForDom(client, `[...document.querySelectorAll('button')].some((entry) => entry.textContent.trim() === 'Commit in isolated branch' && !entry.disabled)`, "commit consequence did not become available");
     assert.equal(await client.evaluate(clickButton("Commit in isolated branch")), true);
-    await waitForDom(client, `document.querySelector('.code-workspace-error') || (document.querySelector('.code-workspace-summary [data-status]')?.textContent || '').trim() === 'committed'`, "the isolated branch commit produced no receipt");
-    const commitState = await client.evaluate(`({ status: document.querySelector('.code-workspace-summary [data-status]')?.textContent?.trim(), error: document.querySelector('.code-workspace-error')?.textContent?.trim() })`);
+    await waitForDom(client, `document.querySelector('.code-workspace-activity[data-state="error"]') || (document.querySelector('.work-attempt [data-status]')?.textContent || '').trim() === 'committed'`, "the isolated branch commit produced no receipt");
+    const commitState = await client.evaluate(`({ status: document.querySelector('.work-attempt [data-status]')?.textContent?.trim(), error: document.querySelector('.code-workspace-activity[data-state="error"]')?.textContent?.trim() })`);
     assert.equal(commitState.status, "committed", commitState.error || "the isolated branch commit was not recorded");
     assert.equal(fs.existsSync(path.join(ROOT, "native-coding-browser-proof.txt")), false, "committing isolated work changed the founder source workspace");
 
