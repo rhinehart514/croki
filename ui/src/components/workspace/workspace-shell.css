@@ -49,9 +49,6 @@
 .workspace-dialog button, .release-draft button, .release-settings button { min-height: 31px; padding: 0 10px; border: 1px solid var(--n-line-2); border-radius: 7px; color: var(--n-ink-2); }
 .workspace-dialog button[aria-pressed="true"] { background: var(--n-selected); color: var(--n-ink); }
 
-.release-subnav { display: flex; gap: 3px; padding: 9px 24px; border-bottom: 1px solid var(--n-line); }
-.release-subnav button { padding: 6px 10px; border-radius: 6px; color: var(--n-ink-4); font-size: 11px; text-transform: capitalize; }
-.release-subnav button[aria-current="page"] { background: var(--n-selected); color: var(--n-ink); }
 .release-draft, .release-settings, .release-build, .release-activity, .release-unassigned { display: grid; max-width: 720px; gap: 16px; margin: 42px auto; padding: 24px; border: 1px solid var(--n-line-2); border-radius: 12px; background: var(--n-panel); }
 .release-draft p, .release-settings p, .release-build p, .release-activity p, .release-unassigned p { color: var(--n-ink-3); font-size: 12px; }
 .release-grid { display: grid; max-width: 1100px; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 28px auto; padding: 0 26px; }

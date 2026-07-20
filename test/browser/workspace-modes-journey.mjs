@@ -15,10 +15,17 @@ async function chooseNode(client, name) {
   await waitForDom(client, `!!document.querySelector('.system-workspace .venture-system-graph')`, "Product / GTM graph did not mount");
   const clicked = await client.evaluate(`(() => { const node = [...document.querySelectorAll('.system-workspace .venture-graph-node-main')].find((entry) => entry.querySelector('strong')?.textContent.trim() === ${JSON.stringify(name)}); node?.click(); return Boolean(node); })()`);
   assert.equal(clicked, true, `system object was unavailable: ${name}`);
-  await waitForDom(client, `document.querySelector('.mode-workspace-header h1')?.textContent.trim() === ${JSON.stringify(name)}`, `system context did not select ${name}`);
+  await waitForDom(client, `document.querySelector('.venture-map-inspector h2')?.textContent.trim() === ${JSON.stringify(name)}`, `system context did not select ${name}`);
 }
 
-test("shared context moves through Product / GTM, Releases, and contextual chat", async () => {
+async function chooseRelease(client, name) {
+  await waitForDom(client, `!!document.querySelector('.release-selector select[aria-label="Release"]')`, "Release selector did not mount");
+  const changed = await client.evaluate(`(() => { const select = document.querySelector('.release-selector select[aria-label="Release"]'); const option = [...(select?.options || [])].find((entry) => entry.textContent.trim() === ${JSON.stringify(name)}); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  assert.equal(changed, true, `release was unavailable: ${name}`);
+  await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === ${JSON.stringify(name)}`, `${name} did not become current`);
+}
+
+test("one thread rail and persistent agent connect Product / GTM to the release path", async () => {
   const drover = await bootFixture(createGeneratedMapsFixture);
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1440, height: 900 } });
   try {
@@ -26,37 +33,37 @@ test("shared context moves through Product / GTM, Releases, and contextual chat"
     const expected = drover.fixture.expected.maps;
     await chooseMode(client, "Product / GTM");
     await chooseNode(client, expected.campaign);
+    await waitForDom(client, `document.querySelector('.venture-map-agent')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the selected node did not expose its linked agent context");
+    await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the persistent agent did not open the node's linked thread");
+    assert.equal(await client.evaluate(`!!document.querySelector('.workspace-rail .thread-rail-list')`), true, "Product / GTM replaced the universal thread rail");
+
     await chooseMode(client, "Releases");
-    await waitForDom(client, `document.querySelector('.release-workspace .mode-workspace-header h1')?.textContent.trim() === 'Project-drop invitation v1'`, "the linked canonical release did not open");
-    assert.equal(await client.evaluate(`document.querySelector('.release-workspace .mode-workspace-header span')?.textContent.trim()`), "in market", "a successfully released joined action did not derive in-market lifecycle");
+    await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "switching modes replaced the selected thread");
+    assert.equal(await client.evaluate(`!!document.querySelector('.workspace-rail .thread-rail-list')`), true, "Releases replaced the universal thread rail");
+    await chooseRelease(client, "Project-drop invitation v1");
+    assert.equal(await client.evaluate(`document.querySelector('.release-workspace-header > div > span')?.textContent.trim()`), "In market", "a released joined action did not derive in-market lifecycle");
+    await waitForDom(client, `["Product delta", "Customer consequence", "Distribution", "Outward action", "Evidence"].every((label) => (document.querySelector('.release-path')?.textContent || '').includes(label))`, "the connected release path was incomplete");
+    await waitForDom(client, `!!document.querySelector('.release-path .now-gate') && document.querySelector('.release-activity')?.textContent.includes('Evidence returned')`, "the path lost its exact founder gate or returned evidence");
+    assert.equal(await client.evaluate(`!document.querySelector('.release-subnav') && ![...document.querySelectorAll('.release-workspace button')].some((entry) => entry.textContent.trim() === 'Open chat')`), true, "legacy release navigation returned");
 
-    const openedChat = await client.evaluate(`(() => { const button = document.querySelector('.release-workspace .mode-workspace-header button'); button?.click(); return Boolean(button); })()`);
-    assert.equal(openedChat, true);
-    await waitForDom(client, `document.querySelector('.workspace-shell')?.dataset.chatOpen === 'true' && document.querySelector('.thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "release chat did not resolve to its linked thread");
-    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    await waitForDom(client, `document.querySelector('.workspace-shell')?.dataset.chatOpen !== 'true' && document.activeElement?.textContent.trim() === 'Open chat'`, "Escape did not close contextual chat and restore its opener");
-
-    await client.evaluate(`[...document.querySelectorAll('.release-subnav button')].find((entry) => entry.textContent.trim() === 'activity')?.click()`);
-    await waitForDom(client, `!!document.querySelector('.release-activity .now-gate') && document.querySelector('.release-activity')?.textContent.includes('Evidence returned')`, "joined founder gate and returned evidence did not appear in Activity");
-    await client.evaluate(`[...document.querySelectorAll('.release-subnav button')].find((entry) => entry.textContent.trim() === 'build')?.click()`);
-    await waitForDom(client, `!!document.querySelector('.release-build') && document.querySelector('.release-build')?.textContent.includes(${JSON.stringify(expected.direction)})`, "release Build did not expose exact linked work");
-    await client.evaluate(`[...document.querySelectorAll('.release-subnav button')].find((entry) => entry.textContent.trim() === 'settings')?.click()`);
-    await client.evaluate(`[...document.querySelectorAll('.release-settings button')].find((entry) => entry.textContent.trim() === 'End release')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace .mode-workspace-header span')?.textContent.trim() === 'ended'`, "the founder could not explicitly end the release");
-    await client.evaluate(`[...document.querySelectorAll('.release-settings button')].find((entry) => entry.textContent.trim() === 'Reopen')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace .mode-workspace-header span')?.textContent.trim() !== 'ended'`, "the ended release did not reopen");
+    await client.evaluate(`document.querySelector('.release-details summary')?.click()`);
+    await client.evaluate(`[...document.querySelectorAll('.release-details button')].find((entry) => entry.textContent.trim() === 'End release')?.click()`);
+    await waitForDom(client, `document.querySelector('.release-workspace-header > div > span')?.textContent.trim() === 'Ended'`, "the founder could not explicitly end the release");
+    await client.evaluate(`[...document.querySelectorAll('.release-details button')].find((entry) => entry.textContent.trim() === 'Reopen')?.click()`);
+    await waitForDom(client, `document.querySelector('.release-workspace-header > div > span')?.textContent.trim() !== 'Ended'`, "the ended release did not reopen");
 
     await chooseMode(client, "Product / GTM");
     await chooseNode(client, "A project worth advancing");
+    await waitForDom(client, `document.querySelector('.thread-composer')?.textContent.includes('A project worth advancing')`, "an unlinked node did not scope the persistent agent draft");
     await chooseMode(client, "Releases");
+    await client.evaluate(`[...document.querySelectorAll('.release-selector button')].find((entry) => entry.textContent.trim() === 'New release')?.click()`);
     await waitForDom(client, `document.querySelector('.release-workspace h1')?.textContent.trim() === 'New release from this' && !!document.querySelector('.release-draft')`, "an unlinked object did not seed an unsaved release draft");
     const draft = await client.evaluate(`(() => { const set = (node, value) => { const setter = Object.getOwnPropertyDescriptor(node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set; setter.call(node, value); node.dispatchEvent(new Event('input', { bubbles: true })); }; const name = document.querySelector('.release-draft input[placeholder="What is moving to market?"]'); const intent = document.querySelector('.release-draft textarea'); if (!name || !intent) return false; set(name, 'Project need release'); set(intent, 'Test the project-first need in market.'); return true; })()`);
     assert.equal(draft, true);
     await client.evaluate(`[...document.querySelectorAll('.release-draft button')].find((entry) => entry.textContent.trim() === 'Save release')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace .mode-workspace-header h1')?.textContent.trim() === 'Project need release'`, "the meaningful release save did not persist");
-    await client.evaluate(`[...document.querySelectorAll('.release-subnav button')].find((entry) => entry.textContent.trim() === 'build')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-build')?.textContent.includes('A project worth advancing') && document.querySelector('.release-build')?.textContent.includes('Distribution')`, "the founder-confirmed context link was not canonical in Build");
+    await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === 'Project need release'`, "the meaningful release save did not persist");
+    await waitForDom(client, `document.querySelector('.release-path')?.textContent.includes('A project worth advancing') && document.querySelector('.release-path')?.textContent.includes('Distribution')`, "the founder-confirmed context link was not canonical in the release path");
+    assert.equal(await client.evaluate(`document.querySelectorAll('.release-path-step[data-empty="true"]').length > 0`), true, "missing release connections were hidden or fabricated");
     assert.equal(await client.evaluate(`!/\b\d+%/.test(document.querySelector('.release-workspace')?.textContent || '')`), true, "release readiness became a percentage");
     await assertNoUnhandledRejections(client);
   } finally {

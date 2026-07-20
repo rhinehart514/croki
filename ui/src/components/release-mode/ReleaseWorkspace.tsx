@@ -6,8 +6,6 @@ import { ReleasePath } from "./ReleasePath";
 import type { ReleasePathKey } from "./releaseRecords";
 import "./release-workspace.css";
 
-/** @deprecated Removed by the shared-shell integration after it stops persisting release subviews. */
-export type ReleaseSubview = "overview" | "build" | "activity" | "settings";
 export type ReleaseSeed = { kind: string; ref: string; label: string; suggestedRole: string } | null;
 
 export type ReleaseWorkspaceProps = {
@@ -22,12 +20,6 @@ export type ReleaseWorkspaceProps = {
   onChanged: () => void;
   onSelectRelease?: (releaseId: string) => void;
   onStartRelease?: () => void;
-  /** @deprecated Ignored while the integration shell removes the old contract. */
-  subview?: ReleaseSubview;
-  /** @deprecated Ignored while the integration shell removes the old contract. */
-  onSubview?: (view: ReleaseSubview) => void;
-  /** @deprecated Conversation is mounted permanently by the integration shell. */
-  onOpenChat?: (source: HTMLElement) => void;
 };
 
 function ReleaseSelector({ index, release, onSelect, onStart }: {

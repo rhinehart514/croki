@@ -40,7 +40,6 @@ export type SystemWorkspaceProps = {
   onMutate: (mutations: SystemMutation[]) => Promise<void>;
   onMutateArchitecture: (operations: FirmArchitectureOperation[], reason: string) => Promise<void>;
   onOpenWork: (threadRef: string) => void;
-  onOpenChat?: (source: HTMLElement) => void;
 };
 
 export function SystemWorkspace({ index, workIndex, scope, selectedRef, directions, camera, readOnlyReason, onScope, onSelect, onAgentContextChange, onCameraChange, onMutate, onMutateArchitecture, onOpenWork }: SystemWorkspaceProps) {
