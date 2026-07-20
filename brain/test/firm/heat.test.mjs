@@ -186,8 +186,8 @@ describe("heat — the spend rail durably stops wakes once the day's ledger is c
   });
 });
 
-describe("heat — heat off leaves only the read-only reply poller", () => {
-  it("wakes no teammate when heat is off, but still runs the poller", async () => {
+describe("heat — heat off leaves only founder-authorized observation", () => {
+  it("wakes no teammate when heat is off, but may check active bounded observation", async () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Heat off" }, options);
     // heat defaults to off — no setHeatSettings call needed.
@@ -200,22 +200,20 @@ describe("heat — heat off leaves only the read-only reply poller", () => {
       options,
       deps: {
         driveTeammate: fakeDriveTeammate(woken),
-        pollReplies: async (ventureId) => { polledCalledWith = ventureId; return { polled: true }; },
+        checkObservations: async (ventureId) => { polledCalledWith = ventureId; return { polled: true }; },
       },
     });
     assert.equal(result.heat, "off");
     assert.equal(woken.length, 0, "heat off wakes nothing");
-    assert.equal(polledCalledWith, venture.id, "the read-only reply poller still ran");
+    assert.equal(polledCalledWith, venture.id, "the bounded observation pass still ran");
   });
 
-  it("with no deps.pollReplies injected, the tick lazily wires in the real market-poll.mjs poller and never breaks on a venture with nothing released yet", async () => {
+  it("with no grant, the real observation pass reads no provider source", async () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Poller absent" }, options);
     const result = await runHeatTick(venture.id, { options, deps: { driveTeammate: async () => ({ outcome: {}, work: {} }) } });
-    // The real pollReplies (F5 step 3, market-poll.mjs) now runs — it honestly no-ops for a venture
-    // with nothing released, rather than the tick finding no poller at all.
     assert.equal(result.polled.polled, 0);
-    assert.match(result.polled.reason, /nothing/i);
+    assert.match(result.polled.reason, /no active founder-authorized/i);
   });
 
   it("a poller that throws outright still never breaks the tick", async () => {
@@ -223,7 +221,7 @@ describe("heat — heat off leaves only the read-only reply poller", () => {
     const venture = createVenture({ name: "Poller throws" }, options);
     const result = await runHeatTick(venture.id, {
       options,
-      deps: { driveTeammate: async () => ({ outcome: {}, work: {} }), pollReplies: async () => { throw new Error("boom"); } },
+      deps: { driveTeammate: async () => ({ outcome: {}, work: {} }), checkObservations: async () => { throw new Error("boom"); } },
     });
     assert.equal(result.polled, null);
   });

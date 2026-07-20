@@ -3,6 +3,7 @@ import type { ReleaseDetail, ReleaseIndex, ReleaseMutation, SystemIndexObject, W
 import { ReleaseActivity } from "./ReleaseActivity";
 import { ReleaseBuild } from "./ReleaseBuild";
 import { ReleasePath } from "./ReleasePath";
+import { ReleaseObservation } from "./ReleaseObservation";
 import type { ReleasePathKey } from "./releaseRecords";
 import "./release-workspace.css";
 
@@ -29,6 +30,9 @@ export type ReleaseWorkspaceProps = {
   onMutate: (mutations: ReleaseMutation[]) => Promise<void>;
   onChanged: () => void;
   onReconnect: () => void;
+  onGrantObservation: (value: { source: "gmail"; purpose: string; startsAt: string; endsAt: string; returnConditions: string[] }) => Promise<void>;
+  onCheckObservation: (contractId: string) => Promise<void>;
+  onRevokeObservation: (contractId: string) => Promise<void>;
 };
 
 function ReleaseDetails({ release, readOnlyReason, onMutate }: {
@@ -69,7 +73,7 @@ function ReleaseDraft({ draftContext, readOnlyReason, onCreate }: Pick<ReleaseWo
 }
 
 export function ReleaseWorkspace(props: ReleaseWorkspaceProps) {
-  const { index, release, draftContext, objects, threads, readOnlyReason, onCreate, onMutate, onChanged, onReconnect } = props;
+  const { index, release, draftContext, objects, threads, readOnlyReason, onCreate, onMutate, onChanged, onReconnect, onGrantObservation, onCheckObservation, onRevokeObservation } = props;
   const [configure, setConfigure] = useState<{ releaseId: string; step: Exclude<ReleasePathKey, "evidence"> } | null>(null);
   const lifecycle = release?.lifecycle === "in-market" ? "In market" : release?.lifecycle === "ended" ? "Ended" : "Draft";
 
@@ -82,6 +86,7 @@ export function ReleaseWorkspace(props: ReleaseWorkspaceProps) {
     {!release ? <>{draftContext ? <ReleaseDraft key={draftContext.ref} draftContext={draftContext} readOnlyReason={readOnlyReason} onCreate={onCreate} /> : <section className="release-draft release-missing-link"><span>Missing link</span><h2>Start from exact venture context</h2><p>Select verified Work or a Product / GTM capability, audience, offer, or gap first. Drover will carry that truth into the release instead of asking for a blank record.</p></section>}{index?.unassignedActions.length ? <aside className="release-unassigned"><strong>Unassigned release actions</strong><p>{index.unassignedActions.length} exact founder-held {index.unassignedActions.length === 1 ? "action is" : "actions are"} not joined to a release. Nothing was assigned by inference.</p></aside> : null}</> : <div className="release-workspace-body">
       {release.attention.length ? <p className="release-attention" role="status"><strong>Needs you</strong> · {release.attention.map((item) => item.replace("-", " ")).join(" · ")}</p> : null}
       <ReleasePath release={release} objects={objects} threads={threads} readOnlyReason={readOnlyReason} onConfigure={(step) => { if (step !== "evidence") setConfigure({ releaseId: release.id, step }); }} onMutate={onMutate} onChanged={onChanged} onReconnect={onReconnect} />
+      <ReleaseObservation release={release} readOnlyReason={readOnlyReason} onGrant={onGrantObservation} onCheck={onCheckObservation} onRevoke={onRevokeObservation} onReconnect={onReconnect} />
       {configure?.releaseId === release.id ? <ReleaseBuild key={`${release.id}:${configure.step}`} release={release} step={configure.step} objects={objects} threads={threads} readOnlyReason={readOnlyReason} onMutate={onMutate} onClose={() => setConfigure(null)} /> : null}
       <ReleaseActivity release={release} />
       {index?.unassignedActions.length ? <aside className="release-unassigned release-unassigned-inline"><strong>Outside this release</strong><p>{index.unassignedActions.length} exact founder-held {index.unassignedActions.length === 1 ? "action remains" : "actions remain"} unassigned.</p></aside> : null}

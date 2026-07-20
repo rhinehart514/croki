@@ -363,6 +363,7 @@ function seedBetAndReality({ venture, betInput, releasedWork, pendingWork, outco
     decidedBy: "founder",
     note: "Released from the exact staged work.",
     releasedAt: at(betInput.minute + 4),
+    executionResult: { messageId: `message-${outcome.id}` },
     deployAuthorizedAt: null,
     deployAuthorizedBy: null,
   };

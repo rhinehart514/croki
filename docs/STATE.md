@@ -62,7 +62,7 @@ comprehension and the complete causal loop remain open rather than being claimed
 
 On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **828/828** and UI **502/502**, with lint and the production build green;
+- `npm test`: Brain **831/831** and UI **504/504**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
@@ -76,7 +76,8 @@ Product / GTM and Releases; no reserved empty workbench before coding begins; st
 conversation/workbench split; compact transcript material references; attempt selection; in-surface
 changes/diff/review; node-scoped contextual agent; direct Thread/object/release selection,
 the five-part Release Path, honest missing links, derived in-market state, joined exact gates and evidence,
-unsaved contextual release drafts, blank-form refusal, end/reopen, generated Whole venture/Product/Go-to-market graphs, keyboard
+founder-granted bounded Gmail observation, honest missing-source/credential states, unsaved contextual release
+drafts, blank-form refusal, end/reopen, generated Whole venture/Product/Go-to-market graphs, keyboard
 reachability, 120-node containment, venture isolation, zoom, and offline last-coherent reads. T3's
 collaborative preview automation timed out during this run, so no new outside-founder manual visual-QA claim is
 made; the browser and native-host receipts prove deterministic behavior rather than comprehension.
@@ -275,10 +276,19 @@ founder-authored work, but only the founder starts fresh work. Proven by `heat.t
 new `agent-drive-initiation.test.mjs` (agent fresh refused; agent resume/branch allowed; founder fresh
 allowed). Verified green in the full `npm test` on 2026-07-17.
 
-Reply capture now has an explicit founder-invoked production home: a founder can ask the current chat to
-check replies or returned evidence. `conversation/reply` calls the read-only `pollReplies`, reports an
-honest no-op when nothing has been released or connected, and lets the existing outcome path dedupe and join
-real provider evidence. Nothing polls on a timer and no read grants outward authority.
+Reply capture now has an explicit founder-granted production home. A release with a real Gmail message
+identity can persist one exact, revocable observation contract carrying its source, purpose, start/end,
+return conditions, decision references, and message identities. The Releases UI exposes grant, check,
+revoke, unavailable-source, expiry, and reconnect truth. A conversation request or founder-invoked heat pass
+enumerates only active contracts; neither can call the broad provider reader without one. The contract can
+read Gmail threads and record attributable evidence, but explicitly denies send, publish, deploy, spend, and
+canonical-interpretation authority. Nothing polls on a timer.
+
+`release-observation.test.mjs` proves founder-only grant/revoke, valid windows, release and message scoping,
+source mismatch failure, expiry/revocation failure, and the absence of outward or semantic authority. The
+three-mode browser journey grants a contract against one exact released Gmail identity, reloads it from the
+canonical release projection, and proves a missing credential returns honestly without reading another
+source. `ReleaseObservation.test.tsx` proves the control is visibly unavailable before a real send.
 
 ### Product/GTM territory + traceability substrate (Phase 6, brain-side)
 
@@ -536,7 +546,6 @@ The following are approved requirements or desired alpha evidence without suffic
   delete a saved view from the UI;
 - immediate provisional whole-venture interpretation plus useful work in one founder-directed turn;
 - a real provider pass that independently selects and completes a second participant contribution;
-- founder-invoked outcome-contract workflows;
 - hard concurrent spend authority;
 - a working deploy executor;
 - a real released send and returned reply;

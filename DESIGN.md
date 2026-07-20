@@ -267,6 +267,13 @@ activity follows the path, and rename/end/reopen live in the compact Details con
 states **Nothing was sent**, preserves the provider error, and leaves the same action available as **Retry
 send**. A revoked Gmail grant opens the existing reconnect form; reconnecting never retries by itself.
 
+After a real Gmail action has a provider message identity, the Evidence end of the release path offers a
+separate bounded-observation contract. The founder sees and grants the exact source, purpose, start, end,
+return conditions, and number of sent messages in scope. The active contract exposes **Check now** and
+**Revoke observation** with its last honest result. Until an exact sent source exists, the control is disabled
+with the reason. This read authority records only attributable evidence; it cannot send, deploy, spend, start
+unrelated work, or establish an interpretation. Provider reconnect is explicit and never retries a send.
+
 Product and go-to-market material may appear together when a promise, capability, campaign, or evidence
 record crosses that boundary. Drover should explain the mismatch or consequence in chat and let the founder
 inspect both materials beside it.

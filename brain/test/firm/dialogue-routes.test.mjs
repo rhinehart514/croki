@@ -193,7 +193,7 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
       message: "Check for returned evidence and replies.", betId: bet.id, threadRef,
     }, { deps: {
-      pollReplies: async () => {
+      checkObservations: async () => {
         polled = true;
         return { polled: 2, ingested: [{ outcomeKind: "reply", deduped: false }] };
       },

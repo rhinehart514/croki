@@ -39,7 +39,7 @@ import { subscribeFirmEvents } from "./firm-events.mjs";
 import { driveTeammate } from "./work-loop.mjs";
 import { abortActiveDrive, listActiveDrives } from "./active-drives.mjs";
 import { ensureDirectionThread, extendDirectionThread, getSemanticModel, setDirectionThreadLifecycle } from "./semantic-model-store.mjs";
-import { pollReplies } from "./market-poll.mjs";
+import { checkAuthorizedObservations } from "./release-observation.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -230,7 +230,7 @@ async function handleReply(ventureId, req, res, deps) {
   // of reviving an ambient scheduler or hiding it behind a GTM dashboard. The poll is read-only until
   // real provider evidence is found; recordOutcome owns the exact evidence join and dedupe.
   if (/\b(check|look for|scan|refresh)\b[\s\S]*\b(replies|responses|returned evidence|market evidence)\b/i.test(message)) {
-    const result = await (deps.pollReplies ?? pollReplies)(ventureId, deps.appendOptions ?? {});
+    const result = await (deps.checkObservations ?? checkAuthorizedObservations)(ventureId, deps.appendOptions ?? {}, deps);
     const returned = (result.ingested ?? []).filter((entry) => !entry.deduped).length;
     const note = returned > 0
       ? `${returned} new ${returned === 1 ? "market return was" : "market returns were"} joined to the work that caused it.`

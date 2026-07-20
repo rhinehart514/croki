@@ -48,6 +48,7 @@ export function buildSentIndex(ventureId, options = {}) {
     const effect = item.effect ?? {};
     const recipient = extractEmail(effect.to ?? effect.recipient ?? effect.recipients ?? effect.email);
     byMessageId.set(messageId, {
+      decisionId: item.id,
       joinKey: bet.joinKey,
       betId: bet.id,
       workRef: trimOrNull(item.workRef),
@@ -159,6 +160,8 @@ export async function pollReplies(ventureId, options = {}) {
         providerSourceId: threadId,
         workRef: sent.workRef,
         configurationRevision: sent.configurationRevision,
+        releaseRef: sent.releaseRef,
+        observationContractRef: sent.observationContractRef,
       },
       options,
     );

@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { ReleaseDetail, ReleaseIndex, SystemIndexObject, WorkIndexItem } from "@/api";
 import { ReleaseWorkspace } from "./ReleaseWorkspace";
 
-const release: ReleaseDetail = { id: "launch", releaseRef: "object:launch", name: "Launch", statement: "Move setup to market.", lifecycle: "draft", attention: [], updatedAt: null, createdAt: null, endedAt: null, endedBy: null, relatedObjectRefs: ["object:product"], threadRefs: ["thread:work"], runRefs: [], decisions: [], outcomes: [], relationships: [{ id: "link", relationshipRef: "relationship:link", compatibilityOwned: false, fromRef: "object:launch", toRef: "object:product", label: "Product delta", type: "release-link", assertion: "founder-asserted", sourceRefs: [] }], externalRefs: {}, revision: 3 };
+const release: ReleaseDetail = { id: "launch", releaseRef: "object:launch", name: "Launch", statement: "Move setup to market.", lifecycle: "draft", attention: [], updatedAt: null, createdAt: null, endedAt: null, endedBy: null, relatedObjectRefs: ["object:product"], threadRefs: ["thread:work"], runRefs: [], decisions: [], outcomes: [], observations: [], relationships: [{ id: "link", relationshipRef: "relationship:link", compatibilityOwned: false, fromRef: "object:launch", toRef: "object:product", label: "Product delta", type: "release-link", assertion: "founder-asserted", sourceRefs: [] }], externalRefs: {}, revision: 3 };
 const index: ReleaseIndex = { ventureId: "v1", revision: 3, releases: [release], unassignedActions: [], counts: { needsYou: 0, drafts: 1, inMarket: 0, ended: 0 } };
 const object: SystemIndexObject = { id: "product", objectRef: "object:product", name: "Faster setup", statement: "", type: "open", territory: "product", assertion: "founder-asserted", provenance: null, properties: {}, compatibilityOwned: false, architectureRole: null, threadRefs: [], attention: [], createdAt: null, updatedAt: null };
 const customer: SystemIndexObject = { ...object, id: "customer", objectRef: "object:customer", name: "Customers finish setup unaided" };
 const thread = { threadRef: "thread:work", founderIntent: "Prepare exact launch work" } as WorkIndexItem;
-const base = { index, objects: [object, customer], threads: [thread], readOnlyReason: null, onCreate: vi.fn(async () => {}), onMutate: vi.fn(async () => {}), onChanged: vi.fn(), onReconnect: vi.fn() };
+const base = { index, objects: [object, customer], threads: [thread], readOnlyReason: null, onCreate: vi.fn(async () => {}), onMutate: vi.fn(async () => {}), onChanged: vi.fn(), onReconnect: vi.fn(), onGrantObservation: vi.fn(async () => {}), onCheckObservation: vi.fn(async () => {}), onRevokeObservation: vi.fn(async () => {}) };
 
 describe("ReleaseWorkspace", () => {
   it("seeds a contextual release from exact Product and Work truth before creation", () => {

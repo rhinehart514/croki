@@ -56,6 +56,7 @@ export const VENTURE_COLLECTIONS = Object.freeze([
   "configuration",
   "architecture",
   "grants",
+  "observationContracts",
   "receipts",
   // Law 12 — saved live views + snapshots (a WAY OF LOOKING at the venture, never a copy of it). Each
   // view record's `.id` IS its storage key, so importVenture (storageKeyFor) round-trips it unchanged.

@@ -85,13 +85,15 @@ function joinToBet(ventureId, joinKey, options) {
 // field, no score. `structural`/`identifying` mirrors outcome-ingest.mjs's writeLearningForResult split
 // (Build step 1's "keep the split"): structural (channel, outcomeKind, whether it joined) is safe to
 // pool across ventures later; identifying (the body, who spoke, the bet's own intent) never is.
-function buildOutcome({ ventureId, joinKey, workRef, outcomeKind, body, from, source, channel, messageId, observedAt, providerEventId: eventId, providerSourceId, configurationRevision, architectureRevision, architectureTarget }, bet, release = null) {
+function buildOutcome({ ventureId, joinKey, workRef, releaseRef, observationContractRef, outcomeKind, body, from, source, channel, messageId, observedAt, providerEventId: eventId, providerSourceId, configurationRevision, architectureRevision, architectureTarget }, bet, release = null) {
   return {
     type: "outcome",
     id: `outcome-${(observedAt ?? now()).replace(/\D/g, "").slice(0, 14)}-${Math.random().toString(16).slice(2, 10)}`,
     ventureId,
     betId: bet?.id ?? null,
     workRef: trimOrNull(workRef),
+    releaseRef: trimOrNull(releaseRef),
+    observationContractRef: trimOrNull(observationContractRef),
     configurationRevision: Number.isInteger(configurationRevision) && configurationRevision > 0
       ? configurationRevision
       : (Number.isInteger(bet?.configurationRevision) ? bet.configurationRevision : null),

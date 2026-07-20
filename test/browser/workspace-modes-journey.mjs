@@ -66,6 +66,13 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     await waitForDom(client, `!!document.querySelector('.release-path .now-gate') && document.querySelector('.release-activity')?.textContent.includes('Evidence returned')`, "the path lost its exact founder gate or returned evidence");
     assert.equal(await client.evaluate(`!document.querySelector('.release-subnav') && ![...document.querySelectorAll('.release-workspace button')].some((entry) => entry.textContent.trim() === 'Open chat')`), true, "legacy release navigation returned");
 
+    await waitForDom(client, `document.querySelector('.release-observation')?.textContent.includes('1 exact released Gmail message is in scope')`, "bounded observation did not resolve the exact released Gmail source");
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.release-observation button')].find((entry) => entry.textContent.trim() === 'Authorize observation'); button?.click(); return Boolean(button && !button.disabled); })()`), true, "the founder could not authorize bounded observation");
+    await waitForDom(client, `document.querySelector('.release-observation-contract')?.textContent.includes('Gmail · 1 exact sent message')`, "the observation grant did not persist as release-scoped authority");
+    assert.equal(await client.evaluate(`document.querySelector('.release-observation')?.textContent.includes('no sends, spend, or interpretation changes')`), true, "the observation authority boundary was not visible");
+    await client.evaluate(`[...document.querySelectorAll('.release-observation button')].find((entry) => entry.textContent.trim() === 'Check now')?.click()`);
+    await waitForDom(client, `document.querySelector('.release-observation-contract')?.textContent.includes('No connected Gmail account')`, "an unavailable Gmail read did not fail honestly inside the release contract");
+
     await client.evaluate(`document.querySelector('.release-details summary')?.click()`);
     await client.evaluate(`[...document.querySelectorAll('.release-details button')].find((entry) => entry.textContent.trim() === 'End release')?.click()`);
     await waitForDom(client, `document.querySelector('.release-workspace-header > div > span')?.textContent.trim() === 'Ended'`, "the founder could not explicitly end the release");

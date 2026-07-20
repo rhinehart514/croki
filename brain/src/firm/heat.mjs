@@ -194,14 +194,13 @@ export async function runHeatTick(ventureId, { nowMs = Date.now(), options = {},
     }
   }
 
-  // The read-only reply poller runs every tick regardless of heat — heat off means nothing drafts and
-  // nothing spends, not that the founder stops hearing from the market. market-poll.mjs's pollReplies
-  // is F5 step 3's reply-capture path (ports inbox-reader.mjs's read+classify, feeds market.mjs's
-  // recordOutcome). Isolated: a poller failure never breaks the tick.
+  // A tick may check only live founder-granted release observation. The low-level provider poller is
+  // never called directly here; an absent contract is an honest no-op. Isolated: a read failure never
+  // breaks inward work.
   let polled = null;
   try {
-    const pollReplies = deps.pollReplies ?? (await import("./market-poll.mjs")).pollReplies;
-    if (typeof pollReplies === "function") polled = await pollReplies(ventureId, options);
+    const checkObservations = deps.checkObservations ?? (await import("./release-observation.mjs")).checkAuthorizedObservations;
+    if (typeof checkObservations === "function") polled = await checkObservations(ventureId, options, deps);
   } catch {
     polled = null;
   }

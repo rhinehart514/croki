@@ -19,12 +19,12 @@ function joined(model, release) {
   return { relationships, threads, runs };
 }
 
-function projection(model, release, decisions, outcomes, receipts = []) {
+function projection(model, release, decisions, outcomes, receipts = [], observationContracts = []) {
   const joins = joined(model, release);
   const decisionIds = new Set(joins.runs.flatMap((run) => list(run.decisionRefs)).map((ref) => idOf(ref, "decision:")).filter(Boolean));
   const outcomeIds = new Set(joins.runs.flatMap((run) => list(run.outcomeRefs)).map((ref) => idOf(ref, "outcome:")).filter(Boolean));
   const joinedDecisions = decisions.filter((entry) => decisionIds.has(entry.id));
-  const joinedOutcomes = outcomes.filter((entry) => outcomeIds.has(entry.id));
+  const joinedOutcomes = outcomes.filter((entry) => outcomeIds.has(entry.id) || entry.releaseRef === releaseRef(release.id));
   const runRefs = new Set(joins.runs.map((entry) => `run:${entry.id}`));
   const joinedReceipts = receipts.filter((entry) => runRefs.has(entry.runRef));
   const ended = Boolean(release.properties?.release?.endedAt);
@@ -35,6 +35,7 @@ function projection(model, release, decisions, outcomes, receipts = []) {
   if (joinedDecisions.some((entry) => entry.needsReconnect)) attention.push("reconnect");
   if (release.properties?.release?.unresolvedJudgment) attention.push("judgment");
   const relatedObjectRefs = joins.relationships.map((entry) => entry.fromRef === releaseRef(release.id) ? entry.toRef : entry.fromRef);
+  const observations = observationContracts.filter((entry) => entry.releaseRef === releaseRef(release.id));
   return {
     id: release.id, releaseRef: releaseRef(release.id), name: release.name, statement: release.statement,
     assertion: release.assertion, lifecycle, attention: [...new Set(attention)],
@@ -43,14 +44,14 @@ function projection(model, release, decisions, outcomes, receipts = []) {
     externalRefs: release.properties?.release?.externalRefs ?? {}, relatedObjectRefs,
     threadRefs: joins.threads.map((entry) => `thread:${entry.id}`), runRefs: [...runRefs],
     threads: joins.threads, runs: joins.runs, receipts: joinedReceipts,
-    decisions: joinedDecisions, outcomes: joinedOutcomes, relationships: joins.relationships,
+    decisions: joinedDecisions, outcomes: joinedOutcomes, observations, relationships: joins.relationships,
   };
 }
 
-export function projectReleaseIndex(model, { decisions = [], outcomes = [], receipts = [], query = "" } = {}) {
+export function projectReleaseIndex(model, { decisions = [], outcomes = [], receipts = [], observationContracts = [], query = "" } = {}) {
   const needle = String(query ?? "").trim().toLowerCase();
   const releases = list(model.objects).filter((entry) => entry.type === "release")
-    .map((entry) => projection(model, entry, decisions, outcomes, receipts))
+    .map((entry) => projection(model, entry, decisions, outcomes, receipts, observationContracts))
     .filter((entry) => !needle || JSON.stringify(entry).toLowerCase().includes(needle))
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   const assigned = new Set(releases.flatMap((entry) => entry.decisions.map((decision) => decision.id)));
@@ -68,7 +69,7 @@ export function projectReleaseIndex(model, { decisions = [], outcomes = [], rece
 
 export function buildReleaseIndex(ventureId, options = {}) {
   return projectReleaseIndex(getSemanticModel(ventureId, options), {
-    decisions: listVentureDocs(ventureId, "decisions", options), outcomes: listVentureDocs(ventureId, "outcomes", options), receipts: listVentureDocs(ventureId, "receipts", options), query: options.query,
+    decisions: listVentureDocs(ventureId, "decisions", options), outcomes: listVentureDocs(ventureId, "outcomes", options), receipts: listVentureDocs(ventureId, "receipts", options), observationContracts: listVentureDocs(ventureId, "observationContracts", options), query: options.query,
   });
 }
 
@@ -98,7 +99,7 @@ export function createRelease({ ventureId, baseRevision, release, actor } = {}, 
     operations.push({ op: "update-record", family: "threads", id: thread.id, record: { subjectRefs: [...new Set([...list(thread.subjectRefs), releaseRef(id)])] } });
   }
   const next = mutateSemanticModel({ ventureId, baseRevision, operations, actor }, options);
-  return { release: projection(next, next.objects.find((entry) => entry.id === id), listVentureDocs(ventureId, "decisions", options), listVentureDocs(ventureId, "outcomes", options), listVentureDocs(ventureId, "receipts", options)), releaseIndex: projectReleaseIndex(next, { decisions: listVentureDocs(ventureId, "decisions", options), outcomes: listVentureDocs(ventureId, "outcomes", options), receipts: listVentureDocs(ventureId, "receipts", options) }) };
+  return { release: projection(next, next.objects.find((entry) => entry.id === id), listVentureDocs(ventureId, "decisions", options), listVentureDocs(ventureId, "outcomes", options), listVentureDocs(ventureId, "receipts", options), listVentureDocs(ventureId, "observationContracts", options)), releaseIndex: projectReleaseIndex(next, { decisions: listVentureDocs(ventureId, "decisions", options), outcomes: listVentureDocs(ventureId, "outcomes", options), receipts: listVentureDocs(ventureId, "receipts", options), observationContracts: listVentureDocs(ventureId, "observationContracts", options) }) };
 }
 
 export function mutateRelease({ ventureId, releaseId, baseRevision, mutations, actor } = {}, options = {}) {
