@@ -12,6 +12,8 @@
 
 const { app, BrowserWindow, WebContentsView, shell, utilityProcess, dialog, ipcMain, screen } = require("electron");
 const path = require("node:path");
+const fs = require("node:fs");
+const os = require("node:os");
 const http = require("node:http");
 const net = require("node:net");
 const crypto = require("node:crypto");
@@ -161,6 +163,19 @@ function brainEntry() {
   return path.join(__dirname, "..", "brain", "src", "server.mjs");
 }
 
+function clearBrainLocation(port) {
+  const root = process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
+  const file = path.join(root, ".runtime", "brain.json");
+  try {
+    const runtime = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (runtime?.port === port) fs.rmSync(file, { force: true });
+  } catch (error) {
+    if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) {
+      process.stderr.write(`[desktop] Could not clear Brain location: ${error instanceof Error ? error.message : error}\n`);
+    }
+  }
+}
+
 // Stop the brain and don't leave it orphaned. SIGTERM lets server.mjs drain (it has its own
 // force-exit fail-safe); a short SIGKILL backstop covers a brain that ignores the term. Idempotent:
 // repeated calls (before-quit + quit, or an error path) are safe.
@@ -168,6 +183,7 @@ function stopBrain() {
   const child = brainProcess;
   if (!child) return;
   brainProcess = null;
+  clearBrainLocation(brainPort);
   try {
     child.kill(); // SIGTERM → graceful shutdown in server.mjs
   } catch {

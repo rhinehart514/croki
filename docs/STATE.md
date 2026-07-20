@@ -63,7 +63,7 @@ mechanics.
 
 On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **833/833** and UI **507/507**, with lint and the production build green;
+- `npm test`: Brain **835/835** and UI **507/507**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
@@ -341,6 +341,13 @@ The current tree mechanically implements:
 - cross-venture failure;
 - module-private wall release capability checks in effect executors.
 
+Electron and MCP now share the same Brain process. The desktop Brain atomically publishes its dynamic
+loopback port plus per-boot instance identity in a private runtime file; MCP resolves that record on each
+call and rejects an instance mismatch. Electron and Brain both clear only the matching record on shutdown,
+while `npm start` remains the explicit `127.0.0.1:4317` development fallback. The Electron journey invokes
+the MCP client against the published dynamic port, verifies the matching health identity, then proves stale
+location cleanup and a distinct identity after relaunch.
+
 These are strong authority mechanics. They do not prove every visible consequence has a working executor.
 
 ### Founder-directed work mechanics
@@ -545,8 +552,6 @@ Remaining consequence follow-ups (tracked; not authority holes):
   host-stamped item field in the Phase 7 hardening pass.
 - Concurrent drives can oversubscribe the same remaining daily allowance; aggregate spend is not a hard
   concurrent guarantee.
-- MCP assumes a fixed Brain port while Electron owns a dynamic port, so the packaged desktop and MCP do not
-  naturally share one Brain process.
 
 ### Engineering
 

@@ -7,6 +7,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { discardCodingWorkspace } from "../../brain/src/firm/code-workspace.mjs";
+import { brainGet } from "../../brain/src/mcp.mjs";
 import { freePort, ROOT, waitForDom } from "./fixtures/browser-harness.mjs";
 import { seedNativeCoding } from "./fixtures/native-coding-fixture.mjs";
 import { launchDroverElectron } from "./lib/electron-app.mjs";
@@ -27,6 +28,18 @@ test("native coding: the real Electron host restores work and holds founder auth
   try {
     fixture = await seedNativeCoding({ root: home });
     app = await launchDroverElectron({ root: ROOT, home, port: await freePort() });
+    const firstRuntime = JSON.parse(fs.readFileSync(path.join(home, ".runtime", "brain.json"), "utf8"));
+    const previousHome = process.env.GTM_IDE_HOME;
+    const previousBrainUrl = process.env.DROVER_BRAIN_URL;
+    process.env.GTM_IDE_HOME = home;
+    delete process.env.DROVER_BRAIN_URL;
+    const firstHealth = await brainGet("/api/health").finally(() => {
+      if (previousHome === undefined) delete process.env.GTM_IDE_HOME;
+      else process.env.GTM_IDE_HOME = previousHome;
+      if (previousBrainUrl === undefined) delete process.env.DROVER_BRAIN_URL;
+      else process.env.DROVER_BRAIN_URL = previousBrainUrl;
+    });
+    assert.equal(firstRuntime.instanceId, firstHealth.instanceId, "Electron and MCP did not resolve the same Brain instance");
     await waitForDom(app.client, `typeof window.droverDesktop?.selectRepository === 'function'`, "the actual Electron preload did not mount");
     await waitForDom(app.client, `document.querySelectorAll('.thread-material[data-kind="native-code"]').length === 2`, "Electron did not restore both coding attempts");
     assert.equal(await app.client.evaluate(`/Drover restarted before the provider turn settled/.test(document.body.textContent)`), true, "the Electron restart hid interrupted provider work");
@@ -38,7 +51,10 @@ test("native coding: the real Electron host restores work and holds founder auth
     await waitForDom(app.client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "Electron did not persist founder review");
 
     await app.close();
+    assert.equal(fs.existsSync(path.join(home, ".runtime", "brain.json")), false, "Electron left a stale Brain location after shutdown");
     app = await launchDroverElectron({ root: ROOT, home, port: await freePort() });
+    const secondRuntime = JSON.parse(fs.readFileSync(path.join(home, ".runtime", "brain.json"), "utf8"));
+    assert.notEqual(secondRuntime.instanceId, firstRuntime.instanceId, "a relaunch reused the stopped Brain identity");
     await waitForDom(app.client, `document.querySelectorAll('.thread-material[data-kind="native-code"]').length === 2`, "a full Electron relaunch lost coding state");
     assert.equal(await app.client.evaluate(`/native coding browser proof/i.test(document.body.textContent)`), true, "the durable implementation did not return after Electron relaunch");
   } finally {

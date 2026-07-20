@@ -6,22 +6,29 @@
  */
 
 import { fileURLToPath } from "node:url";
+import { resolveBrainEndpoint } from "./brain-runtime-location.mjs";
 import { createFirmTools } from "./firm/mcp-tools.mjs";
 
-const BRAIN = "http://localhost:4317";
-
 async function brainGet(routePath) {
-  const response = await fetch(BRAIN + routePath);
+  const endpoint = resolveBrainEndpoint();
+  const response = await fetch(endpoint.baseUrl + routePath);
+  if (endpoint.instanceId && response.headers.get("x-drover-server-instance") !== endpoint.instanceId) {
+    throw new Error("Drover's recorded desktop Brain is no longer current. Reopen the Electron app.");
+  }
   if (!response.ok) throw new Error("Brain " + routePath + " → HTTP " + response.status);
   return response.json();
 }
 
 async function brainPost(routePath, body) {
-  const response = await fetch(BRAIN + routePath, {
+  const endpoint = resolveBrainEndpoint();
+  const response = await fetch(endpoint.baseUrl + routePath, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-gtm-actor": "agent" },
     body: JSON.stringify(body),
   });
+  if (endpoint.instanceId && response.headers.get("x-drover-server-instance") !== endpoint.instanceId) {
+    throw new Error("Drover's recorded desktop Brain is no longer current. Reopen the Electron app.");
+  }
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     throw new Error("Brain " + routePath + " → HTTP " + response.status + ": " + detail);
@@ -72,7 +79,7 @@ const SURVIVING_TOOLS = [
 const TOOLS = [...FIRM_TOOLS, ...SURVIVING_TOOLS];
 const TOOL_MAP = new Map(TOOLS.map((tool) => [tool.name, tool]));
 
-export { TOOLS, TOOL_MAP, FIRM_TOOLS };
+export { TOOLS, TOOL_MAP, FIRM_TOOLS, brainGet, brainPost };
 
 function respond(id, result) {
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\n");
@@ -123,7 +130,7 @@ async function dispatch(message) {
     } catch (error) {
       const messageText = String(error?.message ?? error);
       const text = /fetch failed|ECONNREFUSED/.test(messageText)
-        ? "Drover brain not running. Start with: npm start"
+        ? "Drover Brain is unavailable. Open the Electron app, or start the development server with npm start."
         : messageText;
       respond(id, {
         content: [{ type: "text", text }],

@@ -319,6 +319,11 @@ The interface projects one canonical venture model: Product, go-to-market, evide
 Threads, Runs, and consequences. Rich messages are projections over those records, not durable UI-message
 documents. Presentation memory never enters venture truth or export.
 
+Electron owns one dynamic loopback Brain process and publishes only its private runtime address and instance
+identity beneath the local Drover state root. The MCP transport resolves that current instance for every call
+and verifies its response identity; `npm start` retains the fixed development fallback. Neither transport
+creates another Brain, store, or venture authority.
+
 Founder-only outward authority, venture isolation, evidence provenance, worktree review, and the founder’s
 exclusive right to end active work remain unchanged. Stale or offline state keeps the last coherent
 conversation readable and disables consequential mutation honestly.

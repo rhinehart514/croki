@@ -4,6 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { recoverStaleBuilds } from "./feature-builder.mjs";
+import { clearBrainRuntime, publishBrainRuntime } from "./brain-runtime-location.mjs";
 import { devFounderAuthorityEnabled } from "./routes/founder-authority.mjs";
 import { json, serveFile } from "./routes/util.mjs";
 
@@ -112,7 +113,9 @@ function closeHttpServer() {
 function shutdownServer() {
   if (shutdownPromise) return shutdownPromise;
 
-  shutdownPromise = closeHttpServer().catch((err) => {
+  shutdownPromise = closeHttpServer().then(() => {
+    if (process.env.GTM_IDE_DESKTOP === "1") clearBrainRuntime(serverInstance);
+  }).catch((err) => {
     server.closeAllConnections?.();
     process.exitCode = 1;
     console.error(`Drover shutdown failed: ${err instanceof Error ? err.message : err}`);
@@ -143,7 +146,11 @@ function shutdownAfterSignal() {
 
 function startServer() {
   server.listen(port, host, () => {
-    console.log(`Drover running at http://${host}:${port}`);
+    const activePort = server.address().port;
+    if (process.env.GTM_IDE_DESKTOP === "1") {
+      publishBrainRuntime({ port: activePort, instanceId: serverInstance, pid: process.pid, startedAt: shellStatus().startedAt });
+    }
+    console.log(`Drover running at http://${host}:${activePort}`);
     if (devFounderAuthorityEnabled()) {
       console.warn("  Development founder writes enabled for non-agent loopback browser requests.");
     }
