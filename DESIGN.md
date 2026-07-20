@@ -3,7 +3,7 @@ surface: desktop-founder-workspace
 authority: intended-experience
 date: 2026-07-19
 north_star: one-venture-three-founder-jobs
-layout: workspace-rail-contextual-conversation
+layout: thread-rail-primary-surface-persistent-agent
 ---
 
 # Drover desktop experience
@@ -20,8 +20,9 @@ parallel founder jobs over one canonical venture model and one shared selection:
 > **One venture, one context, three ways to work. Modes change the founder's working surface, never the
 > underlying authority or the lifecycle of the venture.**
 
-Conversation remains the direction and judgment surface. It is primary in Work and contextual in Product /
-GTM and Releases. The release—not a thread, mode, workflow, or agent—is what moves the venture.
+Conversation remains the direction and judgment surface. It is primary in Work and stays permanently visible
+beside Product / GTM and Releases. The release—not a thread, mode, workflow, or agent—is what moves the
+venture.
 
 ## Permanent frame
 
@@ -33,29 +34,28 @@ The desktop frame begins with:
 - Settings at the rail bottom.
 
 Use `aria-current="page"` for the active mode. `⌘1`, `⌘2`, and `⌘3` switch modes; `⌘K` focuses
-mode-scoped search. Do not add a decorative profile, Edit overlay, permanent agent roster, dashboard, or
+Thread search. Do not add a decorative profile, Edit overlay, permanent agent roster, dashboard, or
 competing navigation root.
 
-In Work, conversation owns the main workspace. A deliberately opened visual sits beside it:
+Work is a stable agent development environment:
 
 - rail: its current width;
-- chat: `clamp(420px, 34vw, 520px)`;
-- visual: the remaining width, normally 55–65% of the post-rail area.
+- conversation: `minmax(380px, .82fr)`;
+- coding workbench: `minmax(480px, 1.18fr)`, with Files, Diff, and Preview above a collapsible terminal.
 
-In Product / GTM and Releases, conversation stays mounted but visually closed. Opening chat docks a
-`clamp(420px, 34vw, 520px)` drawer from the right and compresses the workspace at ordinary desktop widths.
-`Esc` closes the topmost visual or drawer and returns focus to the control that opened it. Composer drafts
-remain scoped and intact while switching modes.
+In Product / GTM and Releases, the primary canvas or release path occupies the center and conversation is a
+permanent right column. There is no Open chat control, chat drawer state, or mode-specific conversation
+navigation. Composer drafts remain scoped and intact while switching modes.
 
-Below an effective width of `960px`, including browser zoom, the rail and contextual chat are overlays. Work
-chat and an open visual retain usable minimum widths; neither may collapse into decorative chrome.
+Below an effective width of `1120px`, including browser zoom, the thread rail collapses behind its launcher.
+The primary surface and agent stay usable; neither may collapse into decorative chrome.
 
 ## Startup and return
 
-Open the last active venture, mode, and shared context. Restore Work thread/visual/scroll state, Product / GTM
-scope/selection/camera, Release selection/subview, rail width, and drawer state from venture-keyed presentation
-memory. A v2 thread session migrates into Work without losing its thread, visual, width, or scroll. A legacy
-map session migrates into Product / GTM only when its target still resolves; otherwise it returns to Work home.
+Open the last active venture and restore the selected mode, thread, Product / GTM object, Release, system
+scope/camera, rail width, and per-thread conversation scroll from venture-keyed presentation memory. The v4
+reader maps useful v3, v2, and v1 selections forward while ignoring legacy drawer, subview, context-router,
+and persisted visual-stage fields.
 
 When the venture has no used thread, show a lightweight conversation home using the same composer:
 
@@ -75,12 +75,11 @@ more than three truthful suggested review actions. The founder can always type a
 
 ## Workspace rail
 
-The rail provides stable orientation without becoming a second source of truth. Below venture and mode
-navigation, its body changes with the founder job.
-
-Work orders return value: optional Pinned, Active, Needs review, Recent, then compact older history. Only
-Active and Needs review use expanded cards. Participant/runtime state stays attached to threads, headers,
-and conversation updates. Thread state uses an icon, label, and accessible text—not color alone:
+The rail provides stable orientation without becoming a second source of truth. Its body never changes into
+Product/GTM scopes or release lists. Across all three modes it contains the venture switcher, mode switch,
+New thread, thread search, compact Pinned, Active, Needs review, Recent and older rows, agent state on the
+corresponding thread, and Settings. Participant/runtime state stays attached to threads, headers, and
+conversation updates. Thread state uses an icon, label, and accessible text—not color alone:
 
 - active;
 - waiting for founder judgment;
@@ -89,11 +88,9 @@ and conversation updates. Thread state uses an icon, label, and accessible text�
 - quiet open;
 - closed.
 
-Product / GTM offers Whole system, Product, GTM, Needs attention, and Add to system. Releases offers New
-release, Needs you, conditional Drafts, In market, Recent, and conditional Unassigned release actions.
-
-New thread and New release begin as local drafts. Canonical records form only on the first meaningful save or
-send. Search is mode-scoped and opening a result restores its canonical context, never an unrelated selection.
+Product / GTM scope controls live in the canvas header. Release selection and New release live inside the
+Releases surface. New threads and releases begin as local drafts; canonical records form only on the first
+meaningful save or send. Thread search never changes the current mode.
 
 ## Chat
 
@@ -189,16 +186,18 @@ The founder can say:
 Ambiguous participants or targets produce a founder question. Approval language may surface the exact gate;
 it never executes the outward consequence itself.
 
-## Optional visual
+## Work ADE and visual material
 
 The visual is a projection of the current thread’s material. Its registry supports preview, diff, flow,
 comparison, map, evidence, and consequence. It never owns business truth or changes conversation scope.
 
-When the work is implementation, the same visual becomes a serious coding surface and may take most of the
-available width. It shows the participant, Run and workspace lineage, current activity, changed files, exact
-diff, command and verification receipts, failures, checkpoints, and unresolved risk. The conversation and
-composer remain mounted beside it, so a correction, critique, stop, or another approach continues the same
-Thread. Raw terminal and tool noise stays collapsed unless it supplies useful control or proof.
+Code artifacts do not open as optional overlays. When a Thread carries native coding work, Work shows its
+latest attempt in the permanent workbench and lets the founder select older attempts. Files, exact diff,
+preview, command and verification receipts, failures, checkpoints, and unresolved risk stay beside the
+conversation. A collapsible terminal runs only in the canonical isolated worktree; Electron resolves the
+workspace and executable rather than trusting renderer paths. Preview uses one sandboxed native view and
+accepts only HTTP(S). The browser harness states that these native capabilities require Electron rather than
+simulating them.
 
 Founder actions state the exact repository consequence: approve the current checkpoint, apply or reverse it
 in the source workspace, commit the isolated branch, prepare a branch or pull request, restore a checkpoint,
@@ -206,9 +205,15 @@ or discard the workspace. Multiple attempts open as separate material and can be
 overwrites another. Repository ambiguity disables the consequence instead of inviting a guess. Completed
 implementation also shows the resulting Product capability and its release or distribution question.
 
-The venture map is the primary Product / GTM workspace projection. Selecting a node updates shared context
-and its inspector. Opening linked work or contextual chat resolves through the same context; the graph never
-becomes another authority or an executable workflow.
+The venture map is the primary Product / GTM workspace projection. Selecting a node opens its latest linked
+Thread in the permanent agent; without one, the next message creates a Thread scoped by the node’s existing
+`objectRef`. Node work state is derived from `WorkIndex`, never stored on the graph. The graph never becomes
+another authority or an executable workflow.
+
+Releases shows one connected path: Product delta → Customer consequence → Distribution → Outward action →
+Evidence. Every populated section traces to an existing relationship, Thread, decision, or outcome; an open
+section names the missing connection. Exact outward gates remain in the Outward action section, joined
+activity follows the path, and rename/end/reopen live in the compact Details control.
 
 Product and go-to-market material may appear together when a promise, capability, campaign, or evidence
 record crosses that boundary. Drover should explain the mismatch or consequence in chat and let the founder
@@ -230,8 +235,8 @@ Motion is causal and fast-settling:
 
 ## Keyboard and accessibility
 
-- `Cmd/Ctrl+1`, `2`, and `3` switch founder modes; `Cmd/Ctrl+K` focuses mode-scoped search.
-- `Esc` closes the topmost visual or contextual chat drawer and restores its originating control.
+- `Cmd/Ctrl+1`, `2`, and `3` switch founder modes; `Cmd/Ctrl+K` focuses thread search.
+- `Esc` closes the topmost optional non-code visual and restores its originating control.
 - rail resize supports pointer and arrow-key adjustment.
 - the collapsed rail remains keyboard reachable.
 - all controls expose semantic roles, visible focus, accessible names, and non-color status text.
@@ -252,14 +257,15 @@ conversation readable and disables consequential mutation honestly.
 
 The rebuilt shell is ready when deterministic journeys prove:
 
-1. startup restores the exact venture, mode, shared context, drawer, draft, visual, and scroll state;
-2. Work moves to its linked Product / GTM object and Release without losing context;
-3. contextual chat opens the linked thread or a correctly scoped local draft;
-4. Product / GTM objects and connections can be added and edited reversibly within venture scope;
-5. a release begins unsaved, persists on meaningful save, joins exact work and actions, receives evidence,
+1. startup restores the exact venture, mode, selected thread/object/release, system camera, and scroll state;
+2. switching modes preserves the selected Thread while node and release selection use direct existing refs;
+3. node or release selection opens its latest linked Thread or a correctly scoped local draft;
+4. Work exposes attempts, files, exact diff, native preview/terminal, verification, and founder consequences;
+5. Product / GTM objects and connections can be added and edited reversibly within venture scope;
+6. a release begins unsaved, persists on meaningful save, joins exact work and actions, receives evidence,
    and ends or reopens only by the founder;
-6. consequences wait at the founder boundary and do nothing without the exact host action;
-7. unassigned release actions remain visibly unassigned and completeness is never shown as a percentage;
-8. stale/offline state preserves readability and prevents unsafe mutation;
-9. keyboard navigation, Escape focus restoration, and reduced motion remain coherent;
-10. the shell remains usable at 1440×900, 1280×800, and through 200% browser zoom.
+7. consequences wait at the founder boundary and do nothing without the exact host action;
+8. unassigned release actions and missing path connections remain visible without a percentage;
+9. stale/offline state preserves readability and prevents unsafe mutation;
+10. keyboard navigation, rail collapse, focus restoration, and reduced motion remain coherent at desktop and
+    narrow desktop widths.

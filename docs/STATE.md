@@ -32,18 +32,18 @@ The approved product has:
 
 ### Implemented correction — three founder jobs, one venture context
 
-The shipped shell now has Work, Product / GTM, and Releases as presentation-level modes over the canonical
-venture model. Work keeps conversation primary and may open visual material beside it. Product / GTM and
-Releases own full workspaces while the same conversation stays mounted and opens contextually from the right.
-Mode changes resolve only linked thread, object, and release context; missing counterparts return the
-destination overview with the source available for the next action.
+The shipped shell now has Work, Product / GTM, and Releases as complete presentation-level modes over the
+canonical venture model. Work is a stable conversation-and-workbench ADE. Product / GTM owns the node canvas
+beside a permanently visible agent. Releases owns one connected release path beside the same permanent agent.
+Mode changes preserve the selected Thread; node and release selection use their existing direct references
+instead of a generalized context router.
 
 `workspace/VentureWorkspace.tsx` remains the stable app boundary; feature-local `WorkspaceShell` now owns
-mode, shared context, v3 venture-keyed presentation state, rail width, Product / GTM selection, Release
-selection/subview, and contextual chat. `ThreadShell` is no longer the runtime state owner or navigation
-root. The retired `Workbench`, `VentureHome`, `WorkNarrative`, `WorkspaceIndex`, `WorkspaceOutline`, and
-`ventureOutlineModel` implementations remain deleted. The older free canvas remains a tested compatibility
-seam with no normal product entrypoint.
+mode, the selected Thread/object/release, v4 venture-keyed presentation state, rail width, Product / GTM
+scope/camera, and per-thread conversation scroll. `ThreadShell` is no longer the runtime state owner or
+navigation root. The generalized `resolveWorkspaceContext`, Release subview contract, and persisted drawer/
+visual-stage routing state are removed. The older free canvas remains a tested compatibility seam with no
+normal product entrypoint.
 
 The detailed laws and compatibility boundaries live in `FIRM-SPEC.md`; experience behavior lives in root
 `DESIGN.md`.
@@ -54,20 +54,20 @@ The detailed laws and compatibility boundaries live in `FIRM-SPEC.md`; experienc
 
 On 2026-07-19, `npm run test:acceptance` passed against this working tree:
 
-- `npm test`: Brain **825/825** and UI **481/481**, with lint and the production build green;
-- design-token parity: **161 tokens** across **25 CSS files** and **34 extensions**;
+- `npm test`: Brain **825/825** and UI **492/492**, with lint and the production build green;
+- design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
-- Electron: **8/8**, including the real-host native-coding restart and founder-authority receipt.
+- Electron: **12/12**, including PTY worktree isolation, native preview security, real-host native-coding
+  restart, and founder-authority receipts.
 
-The browser journeys exercise the three-mode navigation root, Work conversation and visual stage, linked
-thread → Product/GTM → Release context, contextual-chat resolution and focus return, derived in-market state,
-joined decision gates and evidence, unsaved release drafts and confirmed links, end/reopen, inline evidence
-and consequences, exact founder controls, generated Whole system/Product/Go-to-market graphs, explicit
-graph-to-thread handoff, `Esc` close, keyboard reachability, 120-node containment, venture isolation, zoom,
-and offline last-coherent reads. T3's collaborative preview did not attach during this run, so no new manual
-visual-QA claim is made; desktop dimensions and native-host recovery are deterministic-test proof, not
-outside-founder comprehension.
+The browser journeys exercise the universal Thread rail, stable Work conversation/workbench split, attempt
+selection, in-surface files/diff/review, node-scoped persistent agent, direct Thread/object/release selection,
+the five-part Release Path, honest missing links, derived in-market state, joined exact gates and evidence,
+unsaved contextual release drafts, end/reopen, generated Whole system/Product/Go-to-market graphs, keyboard
+reachability, 120-node containment, venture isolation, zoom, and offline last-coherent reads. T3's
+collaborative preview did not attach during this run, so no new outside-founder manual visual-QA claim is
+made; the browser and native-host receipts prove deterministic behavior rather than comprehension.
 
 The macOS GitHub Actions workflow runs the same complete gate on pull requests and pushes to `main`; its first
 remote execution remains unobserved until this working tree is committed and pushed. The browser remains a
@@ -94,23 +94,33 @@ shell roots, and no query-parameter product switching** — the venture workspac
 founder surface. The prior immersive/Now/legacy shells were deleted from the tree (see "Removed surfaces").
 
 The workspace opens on `WorkspaceShell`: a resizable 240px rail with Work, Product / GTM, and Releases below
-the venture switcher. Work groups optional pins, active work, founder review, recent threads, and older
-history without a permanent participant roster. New threads become durable only on first send.
+the venture switcher. The same compact pinned, active, needs-review, recent, and older Thread rows remain in
+all three modes; scope and release lists no longer replace them. New threads become durable only on first
+send.
 
-Product / GTM controls `VentureMaps` as a full workspace across Whole system, Product, GTM, and Needs
-attention scopes. The founder can create open objects and labeled connections, edit open records directly,
-and edit compatibility-owned names/connections through the existing architecture adapter. Graph pan, zoom,
-fit, and camera remain presentation only; the graph never becomes another authority.
+Work mounts conversation beside a stable coding workbench. Native coding attempts are selectable without an
+overlay; the workbench exposes Files, Diff, Preview, a collapsible Terminal, command/verification receipts,
+checkpoints, and the existing approve/reject/apply/reverse/commit/prepare/restore/discard controls. Electron
+uses `node-pty` only after resolving `ventureId + workspaceId` to the canonical isolated worktree and owns one
+sandboxed HTTP(S)-only `WebContentsView` preview. The browser harness shows honest desktop-required states.
+
+Product / GTM controls `VentureMaps` as the primary canvas across Whole system, Product, GTM, and Needs
+attention scopes, with those controls in its header. The founder can create open objects and labeled
+connections, edit open records directly, and edit compatibility-owned names/connections through the existing
+architecture adapter. Selecting a node visibly scopes the permanent agent and derives working, needs review,
+failed, or completed state from linked `WorkIndex` Threads. Graph pan, zoom, fit, and camera remain
+presentation only; the graph never becomes another authority.
 
 Releases are canonical semantic objects, not another collection. The workspace derives draft/in-market/ended
-and needs-you state from exact references, keeps unmatched founder-held actions under Unassigned release
-actions, begins new releases as unsaved drafts, exposes editable object/work joins and the existing exact
-`DecisionGate`, and supports rename/end/reopen without deletion or percentage readiness.
+and needs-you state from exact references and presents Product delta → Customer consequence → Distribution →
+Outward action → Evidence as one feature-local projection. Missing sections remain explicit; exact gates sit
+inside Outward action; joined activity follows the path; object/work links open from the relevant section;
+rename/end/reopen live in Details. There is no Overview/Build/Activity/Settings subnavigation.
 
-Conversation remains mounted in every mode. Outside Work it opens as a 420–520px contextual drawer (overlay
-below 960px); a missing linked thread becomes a local subject-scoped draft whose canonical Thread forms on
-first send. The v3 session restores venture, mode, context, rail, Work stage/scroll, Product / GTM scope and
-selection, Release selection/subview, and drawer state, with v2 thread and v1 map migration.
+Conversation remains mounted and visible in every mode. A missing linked Thread becomes a local subject-scoped
+draft whose canonical Thread forms on first send. The v4 session restores mode, selected Thread/object/release,
+rail width, Product / GTM scope/camera, and conversation scroll, while mapping useful v3/v2/v1 selections
+forward and ignoring retired context, drawer, Release subview, and visual-stage fields.
 
 The former free-canvas implementation remains in `ui/src/components/canvas/` as compatibility code and is
 still covered by unit tests, but it has no founder product entrypoint. This proves the local projection and
@@ -347,8 +357,9 @@ The repository contains deterministic tests and fixtures for:
 - Gmail connection/send failure paths and outcome joins;
 - Atlas projection, layout, density, outline, accessibility, camera, wall, return, and Workyard fixtures;
 - Now component rendering, representation availability, composer receipts, and local callbacks;
-- browser native coding with two attempts, failure/recovery, compare, diff/check inspection, commit, and
-  refresh; and real Electron preload, signed review, full relaunch, and durable coding recovery.
+- browser native coding with two attempts, failure/recovery, diff/check inspection, commit, and refresh;
+  real Electron preload, PTY canonical-worktree resolution, preview scheme/isolation guards, signed review,
+  full relaunch, and durable coding recovery.
 
 Deterministic browser and fixture coverage proves rendering and interaction mechanics only. It does not
 establish outside-founder comprehension, usefulness, real-world effects, causality, or market value.
@@ -363,10 +374,9 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 - The three presentation modes share one context but remain incomplete as a founder-validated composition;
   deterministic coverage proves navigation and restoration mechanics, not that the hierarchy is yet obvious
   to an outside founder.
-- Mode-scoped search covers Work material, system names/statements/relationships/provenance/thread joins, and
-  release names, intent, lifecycle, and joined references. Search does not yet provide a cross-mode command
-  palette or a unified result surface.
-- Product / GTM graph camera, selection, and scope restore through the v3 venture session. The older saved
+- The permanent rail searches Threads across every mode. Product/GTM and Release selection stay inside their
+  own surfaces; there is no cross-mode command palette or generalized result router.
+- Product / GTM graph camera, selection, and scope restore through the v4 venture session. The older saved
   view/snapshot store still lacks a complete list/reopen/delete founder UI.
 - Exact thread targeting is carried through conversation replies and new Runs. Legacy bet-focused work
   remains reachable through non-destructive virtual threads.

@@ -24,18 +24,23 @@ blending them. Design explorations remain evidence until an authority file adopt
   deterministic-test harness; its explicit loopback development hatch does not define another
   production surface.
 - The shipped shell has three parallel founder modes—Work, Product / GTM, and Releases—over one canonical
-  venture model and shared context. Conversation is primary in Work and stays mounted as a contextual drawer
-  elsewhere. Do not collapse this back to a thread-only shell, turn modes into lifecycle stages or separate
-  authorities, or restore a competing workbench/dashboard/navigation root.
+  venture model and shared context. Conversation is primary in Work and remains permanently visible beside
+  Product / GTM and Releases. Do not collapse this back to a thread-only shell, turn modes into lifecycle
+  stages or separate authorities, or restore competing navigation roots.
 - Work is the full agentic development environment: directing Claude/Codex, coding in isolated workspaces,
   inspecting previews/diffs/commands/tests, steering or comparing attempts, and applying exact changes. It
   must compete with a native coding-agent client rather than reducing implementation to workflow status.
-- Product / GTM is the spatial node-and-relationship workspace. It exposes how Product and market work connect,
-  including executable workflows attached to the nodes they change; it is not a second coding shell or a
-  static ontology diagram.
+- Product / GTM is the spatial node-and-relationship workspace. It exposes how Product and market work connect
+  and derives linked agent state directly from `WorkIndex`; it is not a workflow engine, second coding shell,
+  or static ontology diagram.
+- Releases is one connected path from Product delta through Customer consequence, Distribution, Outward
+  action, and returned Evidence. It projects existing relationships, decisions, outcomes, and exact work;
+  missing links remain visible and never become fabricated release content.
 - Keep mode changes as simple as project/thread navigation in a native coding-agent client: preserve state and
   open linked context, but do not expose a focus stack, routing layer, cross-mode choreography, or workflow
   machinery merely to explain that Work, Product / GTM, and Releases share one model.
+- Every new abstraction must remove more experience architecture than it adds. Prefer direct reference rules
+  and feature-local projections over generalized context, navigation, activity, or workflow frameworks.
 - Drover continuously develops Product and go-to-market as one evidence-returning system. Threads preserve
   founder direction; releases are the unit of market movement. Every meaningful Product change must raise
   its distribution question, and every meaningful market return must raise a Product or GTM consequence.
