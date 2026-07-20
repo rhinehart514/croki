@@ -120,10 +120,11 @@ violations and should split by stable domain responsibility when touched.
 
 ## Evidence and non-goals
 
-The current T3 comparison used upstream commit `1735e27d9e5106bbb35d5b1dd10363604a54b69e`. The useful guarantees
-are route-addressed thread identity, target-keyed drafts, ordered aggregate projection, optimistic placement,
-and sequenced event reduction. Do not copy T3's provider/model/worktree chrome, disconnected chat model,
-permanent coding panes, component sizes, or mobile/off-canvas paths.
+The original T3 comparison used upstream commit `1735e27d9e5106bbb35d5b1dd10363604a54b69e`. Direct component
+inspection was refreshed against the installed T3 Code 0.0.28 build at `fda6486233e0`. Drover ports the proven
+transcript, composer, changed-files/diff, terminal, checkpoint, and status interaction geometry while rebinding
+it to Drover truth. T3's project/session/thread/event stores, disconnected conversation authority, planning
+chrome, permanent empty coding panes, and mobile/off-canvas paths remain outside the product.
 
 Historical shipped-pattern receipts remain Notion AI's page conversation and text revision flows, plus
 Loops' exact send flow. Mobbin was unavailable during this audit after three connector attempts, so these

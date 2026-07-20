@@ -57,6 +57,14 @@ is unboxed and reads directly on the conversation plane. The transcript is the o
 It restores each Thread's position, stays at the end while streaming only when the founder was already there,
 and otherwise exposes the scroll-to-latest control without moving the anchored composer.
 
+This Work kit ports the interaction geometry of T3 Code's shipped `MessagesTimeline`, `ChatComposer`,
+`DiffPanel`, `ThreadTerminalDrawer`, and status/checkpoint treatment. Drover deliberately replaces T3's
+project, session, Thread, event, draft, terminal, and checkpoint stores with Drover `Thread`, `Run`,
+`WorkIndex`, timeline, coding-workspace, checkpoint, and founder-gate contracts. It also replaces T3's blue
+interaction accents with Drover's restrained neutral/amber authority language, omits provider planning chrome,
+and keeps exact consequential controls in Drover's wall. Those are intentional product differences, not a
+second visual kit.
+
 In Product / GTM and Releases, the primary canvas or release path occupies all available center space.
 **Ask Drover** opens contextual conversation as a right column when room permits and as an overlay at narrow
 desktop widths. It is scoped to the selected object, path, release, gap, or carried source context. Its

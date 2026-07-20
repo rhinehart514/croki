@@ -40,6 +40,7 @@ describe("Work surface", () => {
     expect(screen.getByText("Production ADE")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve checkpoint" })).toBeInTheDocument();
 
+    expect(screen.getByRole("tab", { name: "changes" })).toHaveAttribute("aria-selected", "true");
     fireEvent.click(screen.getByRole("tab", { name: "preview" }));
     expect(screen.getByText("Preview latest")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Terminal" }));
@@ -61,8 +62,9 @@ describe("Work surface", () => {
     expect(screen.getByText("Terminal requires the desktop app.")).toBeInTheDocument();
   });
 
-  it("keeps a calm workbench empty state before repository work begins", () => {
+  it("does not reserve an empty workbench before repository work begins", () => {
     render(<WorkSurface ventureId="venture-one" timeline={null} conversation={<div>New direction</div>} readOnlyReason={null} onWorkspaceChanged={vi.fn()} />);
-    expect(screen.getByText("Coding workspace begins when the agent starts repository work.")).toBeInTheDocument();
+    expect(screen.getByText("New direction")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Coding workbench")).not.toBeInTheDocument();
   });
 });

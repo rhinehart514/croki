@@ -28,4 +28,11 @@ describe("DiffView", () => {
     render(<DiffView diff="not a diff at all" />);
     expect(screen.getByText("No reviewable difference is available.")).toBeInTheDocument();
   });
+
+  it("can focus one selected file without duplicating the rest of the diff", () => {
+    const twoFiles = `${DIFF}\ndiff --git a/src/other.ts b/src/other.ts\n--- a/src/other.ts\n+++ b/src/other.ts\n@@ -1 +1 @@\n-old\n+new`;
+    render(<DiffView diff={twoFiles} path="src/other.ts" />);
+    expect(screen.getByText("src/other.ts")).toBeInTheDocument();
+    expect(screen.queryByText("src/hello.ts")).not.toBeInTheDocument();
+  });
 });

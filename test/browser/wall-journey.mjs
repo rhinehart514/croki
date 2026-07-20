@@ -20,8 +20,8 @@ async function openGate(client, intent) {
   const selected = await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row, .thread-rail-card')].find((entry) => entry.textContent.includes(${JSON.stringify(intent)})); row?.click(); return Boolean(row); })()`);
   assert.equal(selected, true, `thread was unavailable: ${intent}`);
   await waitForDom(client, `document.querySelector('.thread-header-copy h1')?.textContent?.includes(${JSON.stringify(intent)})`, `thread did not open: ${intent}`);
-  await waitForDom(client, `!!document.querySelector('.thread-rich-card[data-kind="consequence"] .thread-inline-action')`, `consequence did not appear in: ${intent}`);
-  await client.evaluate(`document.querySelector('.thread-rich-card[data-kind="consequence"] .thread-inline-action')?.click()`);
+  await waitForDom(client, `!!document.querySelector('.thread-material[data-kind="consequence"] button')`, `consequence did not appear in: ${intent}`);
+  await client.evaluate(`document.querySelector('.thread-material[data-kind="consequence"] button')?.click()`);
   await waitForDom(client, `!!document.querySelector('.visual-stage .now-gate')`, `exact founder gate did not open beside chat: ${intent}`);
   assert.equal(await client.evaluate(`!!document.querySelector('.thread-conversation [role="log"]')`), true, "opening founder review hid chat");
 }

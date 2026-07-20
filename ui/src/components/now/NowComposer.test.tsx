@@ -89,6 +89,24 @@ describe("NowComposer contextual routing", () => {
     expect(driveTeammate).not.toHaveBeenCalled();
   });
 
+  it("starts an immediate coding turn in Work with the selected model", async () => {
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:one" } as ConversationReplyResult);
+    render(
+      <NowComposer
+        ventureId="v1" ventureName="Acme"
+        selection={{ betId: "bet-1", workRef: null, teammateRefs: [], threadRef: "thread:one" }}
+        scopeLabel="Build the shell" hasWork variant="dock" submissionMode="work"
+        runtimeOverride="codex" modelOverride="gpt-5.4" onDriven={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Collapse the workbench" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", {
+      message: "Collapse the workbench", betId: "bet-1", threadRef: "thread:one", mode: "work", runtime: "codex", model: "gpt-5.4",
+    }));
+    expect(driveTeammate).not.toHaveBeenCalled();
+  });
+
   it("CORRECTS exact work through /drive without dropping its work reference", async () => {
     driveTeammate.mockResolvedValue(result({ handoff: handoff({ stagedBetIds: ["bet-1"] }) }));
     render(

@@ -22,13 +22,52 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
   try {
     chrome = await openFixtureVenture(drover);
     const { client } = chrome;
-    await waitForDom(client, `document.querySelectorAll('.thread-rich-card[data-kind="native-code"]').length === 2`, "both durable coding attempts did not return to the thread");
+    await waitForDom(client, `document.querySelectorAll('.thread-material[data-kind="native-code"]').length === 2`, "both durable coding attempts did not return to the thread");
     assert.equal(await client.evaluate(`!!document.querySelector('.thread-composer textarea')`), true, "conversation composer was not available beside completed work");
+    await waitForDom(client, `!!document.querySelector('.thread-conversation[data-surface="work"] .thread-message[data-role="founder"]')`, "the Work timeline did not render a founder turn");
+    const chatGeometry = await client.evaluate(`(() => {
+      const conversation = document.querySelector('.thread-conversation[data-surface="work"]');
+      const founder = conversation?.querySelector('.thread-message[data-role="founder"]');
+      const founderBody = founder?.querySelector('.thread-message-body');
+      const agent = conversation?.querySelector('.thread-message:not([data-role="founder"]) .thread-message-body');
+      const scroll = conversation?.querySelector('.thread-log-scroll');
+      const composer = conversation?.querySelector('.thread-composer');
+      const composerShell = conversation?.querySelector('.now-composer-shell');
+      const scope = conversation?.querySelector('.now-composer-scope');
+      const log = conversation?.querySelector('.thread-log');
+      const workSurface = conversation?.closest('.work-surface');
+      const shell = conversation?.closest('.workspace-shell');
+      const style = (node) => node ? getComputedStyle(node) : null;
+      return {
+        founderMax: style(founderBody)?.maxWidth,
+        founderRadius: style(founderBody)?.borderRadius,
+        founderAligned: style(founder)?.justifyContent,
+        agentBorder: style(agent)?.borderTopWidth,
+        scrollOverflow: style(scroll)?.overflowY,
+        scrollContained: style(scroll)?.overscrollBehaviorY,
+        composerHeight: style(composerShell)?.minHeight,
+        scopeDisplay: style(scope)?.display,
+        composerBelowTimeline: Boolean(composer && log && composer.getBoundingClientRect().top >= log.getBoundingClientRect().bottom - 1),
+        fullHeight: Boolean(workSurface && shell && Math.abs(workSurface.getBoundingClientRect().height - shell.getBoundingClientRect().height) <= 1),
+      };
+    })()`);
+    assert.deepEqual(chatGeometry, {
+      founderMax: "80%",
+      founderRadius: "16px",
+      founderAligned: "flex-end",
+      agentBorder: "0px",
+      scrollOverflow: "auto",
+      scrollContained: "contain",
+      composerHeight: "86px",
+      scopeDisplay: "none",
+      composerBelowTimeline: true,
+      fullHeight: true,
+    }, "Work chat lost the T3 conversation geometry or single-scroll contract");
     assert.equal(await client.evaluate(`/Drover restarted before the provider turn settled/.test(document.body.textContent)`), true, "restart recovery did not surface honestly");
     assert.equal(await client.evaluate(`/Implementation attempts/.test(document.body.textContent)`), true, "separate approaches were not comparable in the thread");
 
     await waitForDom(client, `!!document.querySelector('.work-workbench .code-workspace')`, "the native code workbench did not mount beside conversation");
-    await client.evaluate(`(() => { const select = document.querySelector('.work-attempt select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('reviewable')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await client.evaluate(`(() => { const select = document.querySelector('.work-workbench-tools select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('reviewable')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
     await waitForDom(client, `/native-coding-browser-proof.txt/.test(document.querySelector('.work-workbench')?.textContent || '')`, "the reviewable implementation was not selectable");
     assert.equal(await client.evaluate(`/git diff --check/.test(document.querySelector('.work-workbench')?.textContent || '')`), true, "attributed verification was not visible");
     assert.equal(await client.evaluate(`(document.querySelector('.work-workbench')?.textContent || '').includes('Release / distribution question')`), true, "the Product change lost its release question");
@@ -46,13 +85,13 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
     })()`), true);
     await waitForDom(client, `[...document.querySelectorAll('button')].some((entry) => entry.textContent.trim() === 'Commit in isolated branch' && !entry.disabled)`, "commit consequence did not become available");
     assert.equal(await client.evaluate(clickButton("Commit in isolated branch")), true);
-    await waitForDom(client, `document.querySelector('.code-workspace-activity[data-state="error"]') || (document.querySelector('.work-attempt [data-status]')?.textContent || '').trim() === 'committed'`, "the isolated branch commit produced no receipt");
-    const commitState = await client.evaluate(`({ status: document.querySelector('.work-attempt [data-status]')?.textContent?.trim(), error: document.querySelector('.code-workspace-activity[data-state="error"]')?.textContent?.trim() })`);
+    await waitForDom(client, `document.querySelector('.code-workspace-activity[data-state="error"]') || (document.querySelector('.work-status')?.textContent || '').trim() === 'committed'`, "the isolated branch commit produced no receipt");
+    const commitState = await client.evaluate(`({ status: document.querySelector('.work-status')?.textContent?.trim(), error: document.querySelector('.code-workspace-activity[data-state="error"]')?.textContent?.trim() })`);
     assert.equal(commitState.status, "committed", commitState.error || "the isolated branch commit was not recorded");
     assert.equal(fs.existsSync(path.join(ROOT, "native-coding-browser-proof.txt")), false, "committing isolated work changed the founder source workspace");
 
     await client.send("Page.reload", { ignoreCache: true });
-    await waitForDom(client, `document.querySelectorAll('.thread-rich-card[data-kind="native-code"]').length === 2`, "refresh lost durable coding attempts");
+    await waitForDom(client, `document.querySelectorAll('.thread-material[data-kind="native-code"]').length === 2`, "refresh lost durable coding attempts");
 
   } finally {
     for (const id of [drover.fixture.interrupted.id, drover.fixture.completed.id]) {

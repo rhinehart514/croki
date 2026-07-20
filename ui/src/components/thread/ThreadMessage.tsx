@@ -11,13 +11,14 @@ import { ThreadAgentUpdate } from "./ThreadAgentUpdate";
 
 type Props = {
   item: ThreadTimelineItem;
+  surface?: "work" | "context";
   onOpenVisual: (visual: VisualReference, origin: HTMLElement) => void;
   onOpenThread: (threadRef: string) => void;
 };
 
 const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
 
-export function ThreadMessage({ item, onOpenVisual, onOpenThread }: Props) {
+export function ThreadMessage({ item, surface = "context", onOpenVisual, onOpenThread }: Props) {
   if (item.kind === "artifact") return <ArtifactMessage item={item} onOpenVisual={onOpenVisual} />;
   if (item.kind === "comparison") return <ComparisonMessage item={item} onOpenVisual={onOpenVisual} />;
   if (item.kind === "evidence") return <EvidenceMessage item={item} onOpenVisual={onOpenVisual} />;
@@ -59,11 +60,13 @@ export function ThreadMessage({ item, onOpenVisual, onOpenThread }: Props) {
 
   const role = text(item.role, "teammate");
   const participant = role === "founder" ? "You" : text(item.participantLabel, text(item.participantRef, "Drover"));
+  const content = text(item.content);
+  if (surface === "work" && role !== "founder" && content.trim().toLocaleLowerCase() === `${participant.toLocaleLowerCase()} is taking this one.`) return null;
   return (
     <article className="thread-message" data-role={role}>
       <header>{participant}</header>
       <div className="thread-message-body">
-        {role === "founder" ? <p>{text(item.content)}</p> : <MessageResponse>{text(item.content)}</MessageResponse>}
+        {role === "founder" ? <p>{content}</p> : <MessageResponse>{content}</MessageResponse>}
       </div>
     </article>
   );

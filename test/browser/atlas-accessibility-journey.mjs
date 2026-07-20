@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// Keyboard/accessibility acceptance for the operating graph: Map, view tabs, nodes, route inspection, and
-// work handoff are reachable in native tab order, and Escape broadens back to Home.
+// Keyboard/accessibility acceptance for the operating graph: the Product / GTM mode, scope controls,
+// nodes, route inspection, and Work handoff are reachable in native tab order.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -23,23 +23,23 @@ test("generated maps are keyboard-reachable beside chat and hand off explicitly 
     const expected = drover.fixture.expected.maps;
     await client.evaluate(`document.activeElement?.blur?.(); document.body.focus({ preventScroll: true })`);
 
-    const mapButton = await focusKeyboardTarget(
+    const productMode = await focusKeyboardTarget(
       client,
-      (target) => /open venture map beside chat/i.test(target.name),
-      "Map was not keyboard-reachable from the thread header",
+      (target) => target.name.startsWith("Product / GTM"),
+      "Product / GTM was not keyboard-reachable from the permanent mode switch",
     );
-    assert.ok(mapButton);
-    await assertVisibleKeyboardFocus(client, "Map button");
+    assert.ok(productMode);
+    await assertVisibleKeyboardFocus(client, "Product / GTM mode");
     await pressKeyboardKey(client, "Enter");
-    await waitForDom(client, `!!document.querySelector('.venture-maps[data-view="system"] .venture-system-graph')`, "Enter did not summon the operating graph");
+    await waitForDom(client, `!!document.querySelector('.system-workspace .venture-system-graph')`, "Enter did not preserve the operating graph");
 
     const gtmTab = await focusKeyboardTarget(
       client,
-      (target) => target.role === "tab" && target.name === "Go-to-market",
-      "Go-to-market map tab was not keyboard-reachable",
+      (target) => target.name === "GTM" && target.pressed !== null,
+      "GTM scope was not keyboard-reachable",
     );
     assert.ok(gtmTab);
-    await assertVisibleKeyboardFocus(client, "Go-to-market tab");
+    await assertVisibleKeyboardFocus(client, "GTM scope");
     await pressKeyboardKey(client, "Enter");
     await waitForDom(client, `document.querySelector('.venture-maps')?.getAttribute('data-view') === 'gtm'`, "Enter did not switch to the GTM map");
 
@@ -58,17 +58,17 @@ test("generated maps are keyboard-reachable beside chat and hand off explicitly 
 
     const openWork = await focusKeyboardTarget(
       client,
-      (target) => target.name === "Open work",
-      "the campaign's work action was not keyboard-reachable",
+      (target) => target.name === "Open thread",
+      "the campaign's thread action was not keyboard-reachable",
       { limit: 80 },
     );
     assert.ok(openWork);
-    await assertVisibleKeyboardFocus(client, "Open work");
+    await assertVisibleKeyboardFocus(client, "Open thread");
     await pressKeyboardKey(client, "Enter");
     await waitForDom(
       client,
       `document.querySelector('.thread-header-copy h1')?.textContent?.trim() === ${JSON.stringify(expected.direction)} && !!document.querySelector('.thread-conversation [role="log"]') && !document.querySelector('.visual-stage')`,
-      "Enter on a map card did not explicitly open its owning thread",
+      "Enter on the selected node did not explicitly open its owning Work thread",
     );
     assert.equal(await client.evaluate(`!!document.querySelector('.thread-rail')`), true, "opening work from the map lost thread continuity");
   } finally {

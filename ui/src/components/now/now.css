@@ -481,6 +481,12 @@ button.now-approach:hover { background: var(--n-hover); border-color: var(--n-in
 .now-detail-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .now-detail-list li { font-size: var(--text-sm); color: var(--n-ink-2); display: flex; gap: var(--space-2); }
 .now-detail-list li::before { content: "·"; color: var(--n-ink-4); }
+.now-review-changes { display: grid; min-width: 0; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: var(--space-2); align-items: start; }
+.now-review-changes .review-files { position: sticky; top: 0; border-radius: var(--r-tool); }
+.now-review-changes .review-file-row { padding: 6px 9px; }
+.now-review-changes .review-file-row[aria-current="true"] { background: var(--n-selected); }
+.now-review-changes .review-diff { min-width: 0; gap: 0; }
+.now-review-changes .review-diff-file { border-radius: var(--r-tool); box-shadow: none; }
 
 /* Working / in-progress */
 .now-progress {
@@ -595,6 +601,11 @@ button.now-approach:hover { background: var(--n-hover); border-color: var(--n-in
 }
 .now-gate-hint { font-size: var(--text-xs); color: var(--n-ink-3); }
 .now-gate-error { font-size: var(--text-sm); color: var(--danger); }
+
+@media (max-width: 760px) {
+  .now-review-changes { grid-template-columns: 1fr; }
+  .now-review-changes .review-files { position: static; }
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
    Cool the shared review artifacts inside the Now workspace. The diff, changed

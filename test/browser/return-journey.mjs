@@ -28,7 +28,7 @@ test("overnight return stays coherent in chat through evidence, founder hold, an
 
     const intent = "Find the narrowest product truth worth testing overnight";
     await selectThread(client, intent);
-    await waitForDom(client, `!!document.querySelector('.thread-rich-card[data-kind="evidence"], .thread-rich-card[data-kind="consequence"]')`, "returned evidence or consequence did not appear in its thread");
+    await waitForDom(client, `!!document.querySelector('.thread-material[data-kind="evidence"], .thread-material[data-kind="consequence"]')`, "returned evidence or consequence did not appear in its thread");
     assert.match(await client.evaluate(`document.querySelector('.thread-conversation')?.textContent || ''`), /This is timely|Evidence returned|Founder boundary/i);
 
     const draft = "Keep this correction with the evidence while the connection recovers.";

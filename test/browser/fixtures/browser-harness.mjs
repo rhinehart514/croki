@@ -239,8 +239,9 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
   return chrome;
 }
 
-// Summon the generated venture system graph beside chat. The graph is a read projection of venture truth:
-// pan/zoom and route focus are presentation, never a second source of business truth.
+// Open the generated venture system graph in Product / GTM while keeping the current conversation mounted.
+// The graph is a read projection of venture truth: pan/zoom and route focus are presentation, never a
+// second source of business truth.
 export async function summonMap(client) {
   await waitForDom(client, `[...document.querySelectorAll('.thread-header-actions button')].some((entry) => /map/i.test(entry.textContent))`, "the Map affordance was not present in the thread header");
   const clicked = await client.evaluate(`(() => {
@@ -252,8 +253,8 @@ export async function summonMap(client) {
   assert.equal(clicked, true, "the Map affordance was not present to summon venture maps");
   await waitForDom(
     client,
-    `!!document.querySelector('.visual-stage .venture-maps[data-view="system"] :is(.venture-system-graph, .venture-map-empty)')`,
-    "the generated whole-system map did not mount after summoning Map",
+    `!!document.querySelector('.workspace-shell[data-mode="system"] .system-workspace > .venture-maps[data-view] :is(.venture-system-graph, .venture-map-empty)') && !!document.querySelector('.workspace-chat .thread-conversation')`,
+    "the generated map did not open in Product / GTM beside the persistent agent",
   );
   await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
 }

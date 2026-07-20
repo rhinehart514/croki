@@ -27,6 +27,7 @@ describe("VentureWorkspace — three-mode founder shell", () => {
     expect(await screen.findByRole("heading", { name: "Improve onboarding" })).toBeInTheDocument();
     expect(screen.getByLabelText("Buffalo Projects workspace rail")).toBeInTheDocument();
     expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
+    expect(screen.getByText("Make setup feel immediate.").closest(".thread-conversation")).toHaveAttribute("data-surface", "work");
     expect(screen.getByRole("button", { name: /Product \/ GTM/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Releases/ })).toBeInTheDocument();
   });
@@ -37,12 +38,13 @@ describe("VentureWorkspace — three-mode founder shell", () => {
     fireEvent.keyDown(window, { key: "2", metaKey: true });
     expect((await screen.findAllByRole("heading", { name: "Whole system" })).length).toBeGreaterThan(0);
     expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
+    expect(screen.getByText("Make setup feel immediate.").closest(".thread-conversation")).toHaveAttribute("data-surface", "context");
     expect(screen.getByRole("button", { name: /Product \/ GTM/ })).toHaveAttribute("aria-current", "page");
   });
 
   it("opens visual material beside chat and Escape restores focus without unmounting chat", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
-    const open = await screen.findByRole("button", { name: "Open" });
+    const open = await screen.findByRole("button", { name: "Open: Onboarding proposal" });
     fireEvent.click(open);
     expect(screen.getByLabelText("Onboarding proposal visual workspace")).toBeInTheDocument();
     expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
@@ -55,7 +57,7 @@ describe("VentureWorkspace — three-mode founder shell", () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "New thread" }));
     expect(screen.getByRole("heading", { name: "What do you want to work on?" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Say what you want for this venture" })).toHaveAttribute("placeholder", "Ask Drover…");
+    expect(screen.getByRole("textbox", { name: "Say what you want for this venture" })).toHaveAttribute("placeholder", "Describe what you want to build…");
   });
 
   it("migrates an old map session to its thread with the visual closed", async () => {

@@ -18,14 +18,15 @@ import {
 } from "./fixtures/browser-harness.mjs";
 
 async function pickView(client, label, heading) {
+  const control = label === "Go-to-market" ? "GTM" : label;
   const clicked = await client.evaluate(`(() => {
-    const tab = [...document.querySelectorAll('.venture-map-tabs [role="tab"]')]
-      .find((entry) => entry.textContent.trim() === ${JSON.stringify(label)});
+    const tab = [...document.querySelectorAll('.system-scope-tabs button')]
+      .find((entry) => entry.textContent.trim() === ${JSON.stringify(control)});
     tab?.click();
     return Boolean(tab);
   })()`);
   assert.equal(clicked, true, `${label} map tab was unavailable`);
-  await waitForDom(client, `document.querySelector('.venture-maps h1')?.textContent?.trim() === ${JSON.stringify(heading)}`, `${heading} did not render`);
+  await waitForDom(client, `document.querySelector('.system-workspace-title h1')?.textContent?.trim() === ${JSON.stringify(heading)}`, `${heading} did not render`);
 }
 
 test("dense venture: generated maps stay honest and contained without canonical map truth", async () => {
@@ -63,7 +64,7 @@ test("dense venture: generated maps stay honest and contained without canonical 
 
     const contained = await client.evaluate(`(() => {
       const map = document.querySelector('.venture-maps')?.getBoundingClientRect();
-      const center = document.querySelector('.visual-stage')?.getBoundingClientRect();
+      const center = document.querySelector('.system-workspace')?.getBoundingClientRect();
       return {
         pageOverflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
         mapWithinCenter: Boolean(map && center && map.left >= center.left - 1 && map.right <= center.right + 1),
@@ -73,7 +74,7 @@ test("dense venture: generated maps stay honest and contained without canonical 
       };
     })()`);
     assert.ok(contained.pageOverflow <= 1, `dense generated maps introduced ${contained.pageOverflow}px page overflow`);
-    assert.equal(contained.mapWithinCenter, true, `generated maps escaped the side visual: ${JSON.stringify(contained)}`);
+    assert.equal(contained.mapWithinCenter, true, `generated maps escaped Product / GTM: ${JSON.stringify(contained)}`);
     assert.equal(contained.editableCanvas, false, "dense operating graph mounted the retired free canvas");
 
     await client.send("Emulation.setDeviceMetricsOverride", { width: 1152, height: 720, deviceScaleFactor: 1.25, mobile: false });

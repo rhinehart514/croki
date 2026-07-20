@@ -34,7 +34,7 @@ export type SystemWorkspaceProps = {
   camera: Viewport | null;
   readOnlyReason: string | null;
   onScope: (scope: SystemScope) => void;
-  onSelect: (object: SystemIndexObject | null) => void;
+  onSelect: (object: SystemIndexObject | null, linkedThreadRef?: string | null) => void;
   onAgentContextChange?: (context: SystemAgentContext | null) => void;
   onCameraChange: (camera: Viewport) => void;
   onMutate: (mutations: SystemMutation[]) => Promise<void>;
@@ -60,8 +60,9 @@ export function SystemWorkspace({ index, workIndex, scope, selectedRef, directio
   const relationship = selectedRelationships.find((entry) => entry.id === editingRelationship) ?? null;
 
   const selectObject = (object: SystemIndexObject | null) => {
-    onSelect(object);
-    onAgentContextChange?.(object ? systemAgentContext(object, workIndex) : null);
+    const context = object ? systemAgentContext(object, workIndex) : null;
+    onSelect(object, context?.threadRef);
+    onAgentContextChange?.(context);
     if (!object) setEditingObject(false);
   };
 

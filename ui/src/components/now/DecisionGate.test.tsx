@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { DecisionGate } from "./DecisionGate";
 import type { WallQueueItemView } from "@/api";
 
@@ -49,6 +49,34 @@ describe("DecisionGate", () => {
     // First act is to arm the deploy, not to send it.
     expect(screen.getByRole("button", { name: /Authorize deploy/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Send it/ })).toBeNull();
+  });
+
+  it("shows one selected file diff instead of repeating every file", () => {
+    const twoFiles: WallQueueItemView = {
+      ...productChange,
+      effect: {
+        ...productChange.effect,
+        diff: [
+          "diff --git a/src/App.tsx b/src/App.tsx",
+          "--- a/src/App.tsx",
+          "+++ b/src/App.tsx",
+          "@@ -1 +1 @@",
+          "-const app = 'old'",
+          "+const app = 'new'",
+          "diff --git a/src/New.tsx b/src/New.tsx",
+          "--- /dev/null",
+          "+++ b/src/New.tsx",
+          "@@ -0,0 +1 @@",
+          "+export const New = true",
+        ].join("\n"),
+      },
+    };
+    render(<DecisionGate ventureId="v1" item={twoFiles} onDecided={() => {}} />);
+    expect(screen.getByText(/const app = 'new'/)).toBeTruthy();
+    expect(screen.queryByText(/export const New/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /src\/New\.tsx/ }));
+    expect(screen.queryByText(/const app = 'new'/)).toBeNull();
+    expect(screen.getByText(/export const New/)).toBeTruthy();
   });
 
   it("holds every decision visibly while the venture is read-only", () => {

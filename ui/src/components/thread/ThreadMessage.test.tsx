@@ -7,25 +7,26 @@ const open = vi.fn();
 const openThread = vi.fn();
 const item = (kind: ThreadTimelineItem["kind"], extra: Record<string, unknown> = {}): ThreadTimelineItem => ({ kind, id: `${kind}:one`, ref: `${kind}:one`, at: null, ...extra });
 
-describe("thread rich-message grammar", () => {
-  it("renders all six rich forms honestly when their canonical payload is partial", () => {
+describe("thread material grammar", () => {
+  it("keeps returned material compact while preserving honest state and exact open actions", () => {
     const { rerender } = render(<ThreadMessage item={item("artifact", { title: "Live proposal", artifact: {}, ownerLabels: ["Yara"] })} onOpenVisual={open} onOpenThread={openThread} />);
-    expect(screen.getByText("This visual is ready for inspection.")).toBeInTheDocument();
+    expect(screen.getByText("Live proposal")).toBeInTheDocument();
     expect(screen.getByText("Yara")).toBeInTheDocument();
-    expect(screen.queryByText(/Verification not recorded/)).not.toBeInTheDocument();
     rerender(<ThreadMessage item={item("artifact", { title: "Working preview", artifact: { content: "PREVIEW\n\nThe real work starts here." } })} onOpenVisual={open} onOpenThread={openThread} />);
-    expect(screen.getByText("The real work starts here.")).toBeInTheDocument();
-    expect(screen.queryByText("PREVIEW")).not.toBeInTheDocument();
+    expect(screen.getByText("Working preview")).toBeInTheDocument();
+    expect(screen.queryByText("The real work starts here.")).not.toBeInTheDocument();
     rerender(<ThreadMessage item={item("comparison", { title: "Before and after", alternatives: [] })} onOpenVisual={open} onOpenThread={openThread} />);
-    expect(screen.getByText("Before and after")).toBeInTheDocument();
+    expect(screen.getByText("No alternatives recorded")).toBeInTheDocument();
     rerender(<ThreadMessage item={item("artifact", { title: "Setup flow", artifact: { content: { kind: "flow", steps: [{ id: "one", label: "Start with the job" }], edges: [] } } })} onOpenVisual={open} onOpenThread={openThread} />);
-    expect(screen.getByText("Start with the job")).toBeInTheDocument();
+    expect(screen.getByText("1 step")).toBeInTheDocument();
+    expect(screen.queryByText("Start with the job")).not.toBeInTheDocument();
     rerender(<ThreadMessage item={item("comparison", { title: "Alternatives", alternatives: [{ id: "a", title: "Job first" }, { id: "b", title: "Guided setup" }] })} onOpenVisual={open} onOpenThread={openThread} />);
-    expect(screen.getByText("Guided setup")).toBeInTheDocument();
+    expect(screen.getByText("2 approaches")).toBeInTheDocument();
     rerender(<ThreadMessage item={item("evidence", { title: "Evidence returned", evidence: [{}] })} onOpenVisual={open} onOpenThread={openThread} />);
     expect(screen.getByText("Source details unavailable")).toBeInTheDocument();
     rerender(<ThreadMessage item={item("consequence", { title: "Ready for approval", decision: {} })} onOpenVisual={open} onOpenThread={openThread} />);
-    expect(screen.getByText("None until a founder action")).toBeInTheDocument();
+    expect(screen.getByText("Needs review")).toBeInTheDocument();
+    expect(screen.getByText("No external action until you decide")).toBeInTheDocument();
   });
 
   it("keeps activity collapsed and long model prose inside the primary conversation", () => {
@@ -49,14 +50,19 @@ describe("thread rich-message grammar", () => {
     expect(screen.getByText("is taking this one.")).toBeInTheDocument();
   });
 
+  it("removes redundant participant assignment prose from the Work transcript", () => {
+    const { container } = render(<ThreadMessage surface="work" item={item("message", { role: "teammate", participantLabel: "Yara", content: "Yara is taking this one." })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("presents native coding as exact work rather than provider completion", () => {
     render(<ThreadMessage item={item("artifact", {
       title: "Implement native coding",
       artifact: { kind: "native-code", status: "needs-verification", verification: [{ status: "passed" }], content: { kind: "diff", diff: "diff --git a/a.ts b/a.ts\n@@ -1 +1 @@\n-a\n+b" } },
       ownerLabels: ["Codex"], visual: { kind: "diff", ref: "work:code-one", threadRef: "thread:one", title: "Implement native coding" },
     })} onOpenVisual={open} onOpenThread={openThread} />);
-    expect(screen.getByText("Coding attempt")).toBeInTheDocument();
+    expect(screen.getByText("Code")).toBeInTheDocument();
     expect(screen.getByText(/needs verification · 1 check passed/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "View code" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show changes: Implement native coding" })).toBeInTheDocument();
   });
 });

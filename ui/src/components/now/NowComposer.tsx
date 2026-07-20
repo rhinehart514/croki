@@ -3,7 +3,7 @@
 // shown only as quiet provenance. Voice is equal to typing where the browser supports it. Two states:
 // a centred `hero` when no direction is open, and a persistent `dock` anchored to the bottom of the
 // active workspace. Freshness lives at the workspace level, never inside the field.
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowRight, ArrowUp, Mic, X } from "lucide-react";
 import { driveTeammate, replyInConversation, type DriveTeammateResult } from "@/api";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
@@ -52,6 +52,9 @@ export function NowComposer({
   onDriven,
   onOpenResult,
   subjectRefs = [],
+  runtimeOverride = null,
+  modelOverride = null,
+  composerControls = null,
 }: {
   ventureId: string;
   ventureName: string;
@@ -68,7 +71,7 @@ export function NowComposer({
   // Optional placeholder override. The default (below) is unchanged, so every existing mount is
   // byte-identical; the venture canvas passes the spec's "Direct the venture".
   placeholder?: string;
-  submissionMode?: "auto" | "conversation";
+  submissionMode?: "auto" | "conversation" | "work";
   onClearScope?: () => void;
   // Called after a turn lands so the frame re-polls. The result is present for a /drive (start work) and
   // omitted for a scoped conversation reply (steer/answer/approve), which returns no DriveTeammateResult.
@@ -76,6 +79,9 @@ export function NowComposer({
   // When provided (the home composer), the receipt offers a way into the direction the drive produced.
   onOpenResult?: (targetBetId: string | null) => void;
   subjectRefs?: string[];
+  runtimeOverride?: string | null;
+  modelOverride?: string | null;
+  composerControls?: ReactNode;
 }) {
   const route = composerRoute(selection);
   const contextualDraftRef = !selection && subjectRefs.length ? `:subjects:${[...subjectRefs].sort().join("|")}` : "";
@@ -117,17 +123,24 @@ export function NowComposer({
     if (!goal || busy || readOnly) return;
     setBusy(true); setError(null); setReceipt(null); setDraft("");
     try {
-      if (submissionMode === "conversation" || route === "steer") {
+      if (submissionMode === "conversation" || submissionMode === "work" || route === "steer") {
         const reply = await replyInConversation(ventureId, {
           message: goal,
           ...(selection?.betId ? { betId: selection.betId } : {}),
           ...(selection?.threadRef ? { threadRef: selection.threadRef } : {}),
           ...(!selection?.threadRef && subjectRefs.length ? { subjectRefs } : {}),
+          ...(submissionMode === "work" ? { mode: "work" as const } : {}),
+          ...(submissionMode === "work" && runtimeOverride ? { runtime: runtimeOverride } : {}),
+          ...(submissionMode === "work" && modelOverride ? { model: modelOverride } : {}),
         });
         setReceipt(readReplyReceipt(reply));
         onDriven?.();
       } else {
-        const response = await driveTeammate(ventureId, scopedBody(goal, selection));
+        const response = await driveTeammate(ventureId, {
+          ...scopedBody(goal, selection),
+          ...(runtimeOverride ? { runtime: runtimeOverride } : {}),
+          ...(modelOverride ? { model: modelOverride } : {}),
+        });
         setReceipt(readDriveReceipt(response));
         onDriven?.(response);
       }
@@ -191,13 +204,14 @@ export function NowComposer({
             <button
               type="submit"
               className="now-composer-send"
-              aria-label={submissionMode === "conversation" ? "Send to this thread" : route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
+              aria-label={submissionMode === "conversation" || submissionMode === "work" ? "Send to this thread" : route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
               disabled={busy || readOnly || !draft.trim()}
             >
               <ArrowUp aria-hidden="true" />
             </button>
           </div>
         </form>
+        {composerControls}
       </div>
 
       <div className="now-composer-provenance" aria-hidden="true">
@@ -216,7 +230,7 @@ export function NowComposer({
 
       <div className="now-composer-feedback" aria-live="polite">
         {speech.recording ? <span role="status">Listening…</span> : null}
-        {busy ? <span role="status">{submissionMode === "conversation" || route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
+        {busy ? <span role="status">{submissionMode === "work" ? "Starting coding work…" : submissionMode === "conversation" || route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
         {error ? <span role="alert">{error}</span> : null}
         {readOnly && readOnlyReason && !error ? (
           <span className="now-composer-held" role="status">{readOnlyReason}</span>

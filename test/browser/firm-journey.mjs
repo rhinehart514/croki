@@ -152,15 +152,16 @@ test("cutover: opening a venture lands the three-mode founder workspace", async 
     await waitForDom(client, `/What do you want to work on/i.test(document.querySelector('.thread-conversation')?.textContent ?? '')`, "the venture conversation home did not render");
     assert.equal(await client.evaluate(`document.querySelector('.thread-rail')?.getBoundingClientRect().width`), 240, "the default thread rail is not 240px");
     assert.equal(await client.evaluate(`document.querySelector('.work-surface')?.getBoundingClientRect().width`), 1680, "the Work ADE does not own the remaining desktop width");
-    assert.equal(await client.evaluate(`document.querySelector('.thread-conversation')?.getBoundingClientRect().width > 500 && document.querySelector('.work-empty')?.getBoundingClientRect().width > 700`), true, "conversation and the calm Work surface did not remain usable together");
+    assert.equal(await client.evaluate(`document.querySelector('.thread-conversation')?.getBoundingClientRect().width > 1500 && !document.querySelector('.work-workbench')`), true, "a fresh venture did not give conversation the available Work surface until repository work exists");
     assert.equal(await client.evaluate(`!document.querySelector('.visual-stage')`), true, "a visual mounted before the founder opened one");
     assert.equal(await client.evaluate(`!document.querySelector('[data-testid="venture-workbench"]')`), true, "the retired workbench leaked into the default shell");
     assert.equal(await client.evaluate(`['Work', 'Product / GTM', 'Releases'].every((label) => [...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes(label)))`), true, "the three founder modes did not mount");
     assert.equal(await client.evaluate(`document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Work')`), true, "Work was not the initial mode");
+    assert.equal(await client.evaluate(`(() => { const bar = document.querySelector('.work-composer-bar'); const model = bar?.querySelector('select[aria-label="Model"]'); const text = bar?.textContent || ''; return Boolean(model && text.includes('acme-saas') && text.includes('Worktree') && text.includes('Guarded')); })()`), true, "Work did not expose repository, worktree, founder guard, and model context");
 
     // A fresh thread stays local until the founder sends its first direction.
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.thread-rail button')].find((entry) => /new thread/i.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
-    await waitForDom(client, `document.querySelector('.thread-composer textarea')?.placeholder === 'Ask Drover…'`, "the local draft did not use the thread composer");
+    await waitForDom(client, `document.querySelector('.thread-composer textarea')?.placeholder === 'Describe what you want to build…'`, "the local draft did not use the coding composer");
     assert.equal(await client.evaluate(`document.querySelectorAll('.thread-rail-row').length`), 0, "an empty durable thread was created before first send");
 
     // No legacy triptych presentation ships in the default DOM.

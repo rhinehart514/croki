@@ -18,9 +18,11 @@ function StatPair({ file }: { file: DiffFile }) {
 export function FilesChanged({
   diff,
   onSelectFile,
+  selectedPath,
 }: {
   diff: string;
   onSelectFile?: (path: string) => void;
+  selectedPath?: string | null;
 }) {
   const files = useMemo(() => parseUnifiedDiff(diff), [diff]);
   const stat = useMemo(() => diffStat(files), [files]);
@@ -45,7 +47,7 @@ export function FilesChanged({
         {files.map((file, i) => (
           <li key={`${file.path}-${i}`}>
             {onSelectFile ? (
-              <button type="button" className="review-file-row" onClick={() => onSelectFile(file.path)}>
+              <button type="button" className="review-file-row" aria-current={selectedPath === file.path ? "true" : undefined} onClick={() => onSelectFile(file.path)}>
                 <span className="review-file-path" title={file.path}>
                   {file.path}
                 </span>

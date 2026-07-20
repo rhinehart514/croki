@@ -32,12 +32,30 @@ test("one thread rail and persistent agent connect Product / GTM to the release 
     const { client } = chrome;
     const expected = drover.fixture.expected.maps;
     await chooseMode(client, "Product / GTM");
+    assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Product / GTM");
     await chooseNode(client, expected.campaign);
     await waitForDom(client, `document.querySelector('.venture-map-agent')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the selected node did not expose its linked agent context");
-    await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the persistent agent did not open the node's linked thread");
+    try {
+      await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the persistent agent did not open the node's linked thread");
+    } catch (error) {
+      const [systemResponse, workResponse] = await Promise.all([
+        drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/system-index?scope=system`),
+        drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/work-index`),
+      ]);
+      const system = (await systemResponse.json()).systemIndex;
+      const work = (await workResponse.json()).workIndex;
+      const campaign = system.objects.find((entry) => entry.name === expected.campaign);
+      const state = await client.evaluate(`(() => ({
+        header: document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent?.trim() || null,
+        agent: document.querySelector('.venture-map-agent')?.textContent?.replace(/\\s+/g, ' ').trim() || null,
+        selectedRows: [...document.querySelectorAll('.thread-rail-row[aria-current="true"]')].map((entry) => entry.textContent?.replace(/\\s+/g, ' ').trim()),
+      }))()`);
+      throw new Error(`${error.message}: ${JSON.stringify({ ...state, campaignThreads: campaign?.threadRefs, workThreads: work.items.map((entry) => entry.threadRef) })}`);
+    }
     assert.equal(await client.evaluate(`!!document.querySelector('.workspace-rail .thread-rail-list')`), true, "Product / GTM replaced the universal thread rail");
 
     await chooseMode(client, "Releases");
+    assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Releases");
     await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "switching modes replaced the selected thread");
     assert.equal(await client.evaluate(`!!document.querySelector('.workspace-rail .thread-rail-list')`), true, "Releases replaced the universal thread rail");
     await chooseRelease(client, "Project-drop invitation v1");

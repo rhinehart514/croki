@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// Generated operating-graph acceptance. Chat remains the resting product; Map summons one truth-backed
-// side visual where Product capacity, GTM motions, campaigns, and returned evidence stay connected.
+// Generated operating-graph acceptance. Work remains the resting product; Map routes directly to the
+// truth-backed Product / GTM mode while the persistent agent stays mounted.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -16,23 +16,18 @@ import {
   waitForDom,
 } from "./fixtures/browser-harness.mjs";
 
-async function pressEscape(client) {
-  await client.evaluate(`document.activeElement?.blur?.()`);
-  await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-  await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-}
-
 async function pickMapView(client, label) {
+  const control = label === "Go-to-market" ? "GTM" : label === "Whole system" ? "System" : label;
   const picked = await client.evaluate(`(() => {
-    const tab = [...document.querySelectorAll('.venture-map-tabs [role="tab"]')]
-      .find((entry) => entry.textContent.trim() === ${JSON.stringify(label)});
+    const tab = [...document.querySelectorAll('.system-scope-tabs button')]
+      .find((entry) => entry.textContent.trim() === ${JSON.stringify(control)});
     tab?.click();
     return Boolean(tab);
   })()`);
   assert.equal(picked, true, `${label} graph tab was unavailable`);
   await waitForDom(
     client,
-    `document.querySelector('.venture-maps h1')?.textContent?.trim() === ${JSON.stringify(label)}`,
+    `document.querySelector('.system-workspace-title h1')?.textContent?.trim() === ${JSON.stringify(label)}`,
     `${label} graph did not render`,
   );
 }
@@ -54,7 +49,7 @@ test("the operating graph exposes the whole Product and go-to-market system", as
 
     await summonMap(client);
     const system = await client.evaluate(`(() => ({
-      heading: document.querySelector('.venture-maps h1')?.textContent?.trim(),
+      heading: document.querySelector('.system-workspace-title h1')?.textContent?.trim(),
       names: [...document.querySelectorAll('.venture-graph-node strong')].map((entry) => entry.textContent.trim()),
       motions: [...document.querySelectorAll('.venture-graph-node[data-kind="motion"] strong')].map((entry) => entry.textContent.trim()),
       links: document.querySelectorAll('.react-flow__edge').length,
@@ -77,7 +72,7 @@ test("the operating graph exposes the whole Product and go-to-market system", as
     assert.ok(gtm.names.includes(expected.campaign));
     assert.ok(gtm.names.includes("Builder started with the project"));
     assert.ok(gtm.motions >= 1, "GTM focus hid all motions");
-    assert.ok(gtm.productSupport >= 1, "GTM focus hid the Product capacity powering the route");
+    assert.ok(gtm.productSupport >= 1, "GTM scope hid the Product capacity powering the route");
 
     const inspected = await client.evaluate(`(() => {
       const node = [...document.querySelectorAll('.venture-graph-node-main')]
@@ -90,13 +85,13 @@ test("the operating graph exposes the whole Product and go-to-market system", as
     const route = await client.evaluate(`(() => ({
       connected: document.querySelectorAll('.venture-map-inspector li').length,
       quiet: document.querySelectorAll('.venture-graph-node[data-quiet="true"]').length,
-      open: document.querySelector('.venture-map-open')?.textContent?.trim(),
+      open: [...document.querySelectorAll('.system-inspector-actions button')].find((entry) => /open thread/i.test(entry.textContent || ''))?.textContent?.trim(),
     }))()`);
-    assert.ok(route.connected >= 2, "campaign inspection did not expose its operating links");
+    assert.ok(route.connected >= 1, "campaign inspection did not expose its in-scope operating links");
     assert.ok(route.quiet >= 1, "route focus did not quiet unrelated nodes");
-    assert.equal(route.open, "Open work");
+    assert.equal(route.open, "Open thread");
 
-    await client.evaluate(`document.querySelector('.venture-map-open')?.click()`);
+    await client.evaluate(`[...document.querySelectorAll('.system-inspector-actions button')].find((entry) => /open thread/i.test(entry.textContent || ''))?.click()`);
     await waitForDom(
       client,
       `document.querySelector('.thread-header-copy h1')?.textContent?.trim() === ${JSON.stringify(expected.direction)} && !document.querySelector('.venture-maps')`,
@@ -112,8 +107,13 @@ test("the operating graph exposes the whole Product and go-to-market system", as
     assert.equal(work.chat, true, "opening graph work hid the conversation");
 
     await summonMap(client);
-    await pressEscape(client);
-    await waitForDom(client, `!document.querySelector('.visual-stage') && !!document.querySelector('.thread-conversation [role="log"]')`, "Escape did not close the map beside the persistent conversation");
+    const directMode = await client.evaluate(`(() => ({
+      system: document.querySelector('.workspace-shell')?.dataset.mode === 'system',
+      map: Boolean(document.querySelector('.system-workspace > .venture-maps')),
+      agent: Boolean(document.querySelector('.workspace-chat .thread-conversation [role="log"]')),
+      overlay: Boolean(document.querySelector('.visual-stage')),
+    }))()`);
+    assert.deepEqual(directMode, { system: true, map: true, agent: true, overlay: false }, "Map did not remain a first-class Product / GTM surface");
 
     await assertBasicAccessibility(client);
     await assertNoUnhandledRejections(client);

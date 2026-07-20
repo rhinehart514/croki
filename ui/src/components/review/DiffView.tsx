@@ -80,16 +80,17 @@ function HunkRows({ header, lines }: { header: string; lines: DiffLine[] }) {
  * styling. Long lines scroll horizontally inside each file; the page never breaks. Empty or
  * unparseable input yields a quiet empty state.
  */
-export function DiffView({ diff }: { diff: string }) {
+export function DiffView({ diff, path = null }: { diff: string; path?: string | null }) {
   const files = useMemo(() => parseUnifiedDiff(diff), [diff]);
+  const visibleFiles = path ? files.filter((file) => file.path === path) : files;
 
-  if (files.length === 0) {
+  if (visibleFiles.length === 0) {
     return <div className="review-empty">No reviewable difference is available.</div>;
   }
 
   return (
     <div className="review-diff">
-      {files.map((file, i) => (
+      {visibleFiles.map((file, i) => (
         <FileBlock key={`${file.path}-${i}`} file={file} />
       ))}
     </div>

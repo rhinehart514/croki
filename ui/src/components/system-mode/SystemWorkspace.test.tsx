@@ -58,7 +58,7 @@ describe("SystemWorkspace", () => {
   it("selects nodes without changing mode and renders honest attention", () => {
     const { rerender } = render(<SystemWorkspace {...base} selectedRef={null} />);
     fireEvent.click(screen.getByRole("button", { name: "Select offer" }));
-    expect(base.onSelect).toHaveBeenCalledWith(index.objects[0]);
+    expect(base.onSelect).toHaveBeenCalledWith(index.objects[0], "thread:offer");
     rerender(<SystemWorkspace {...base} scope="attention" selectedRef={null} />);
     expect(screen.getByText("Distribution path is missing")).toBeInTheDocument();
     expect(screen.getByText("Working")).toBeInTheDocument();

@@ -126,6 +126,19 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.ok(claim, "the claim is visible in the thread before work begins");
   });
 
+  it("starts a Work coding turn nonblocking with the founder's selected model", async () => {
+    const venture = createVenture({ name: "reply selected model" }, options);
+    let driven = null;
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "implement the compact work composer", mode: "work", runtime: "codex", model: "gpt-5.4",
+    }, { deps: {
+      driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; },
+    } });
+    assert.equal(res.status, 202);
+    assert.equal(driven.runtime, "codex");
+    assert.equal(driven.model, "gpt-5.4");
+  });
+
   it("records the founder direction exactly once when routing through the real work loop", async () => {
     const venture = createVenture({ name: "reply new direction once" }, options);
     const direction = "new idea: pilot the referral partner motion";

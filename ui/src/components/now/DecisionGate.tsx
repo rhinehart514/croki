@@ -3,11 +3,24 @@
 // first (a real diff or a preview), then decides. A deploy still requires two explicit acts: Authorize,
 // then Send — the two-word invariant expressed as two deliberate clicks. Wires to decideWallItem; the
 // note carries a hold/answer reason.
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { decideWallItem, type WallDecision, type WallQueueItemView } from "@/api";
 import { reviewContent } from "@/components/lens/wallReviewContent";
 import { DiffView, FilesChanged, ArtifactPreview } from "@/components/review";
+import { parseUnifiedDiff } from "@/components/review/parseDiff";
 import { resolveEffectArtifact } from "./reviewArtifact";
+
+function ExactDiffReview({ diff }: { diff: string }) {
+  const files = useMemo(() => parseUnifiedDiff(diff), [diff]);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const path = selectedPath && files.some((file) => file.path === selectedPath) ? selectedPath : files[0]?.path ?? null;
+  return (
+    <div className="now-review-changes">
+      <FilesChanged diff={diff} selectedPath={path} onSelectFile={setSelectedPath} />
+      <DiffView diff={diff} path={path} />
+    </div>
+  );
+}
 
 export function DecisionGate({
   ventureId,
@@ -76,8 +89,7 @@ export function DecisionGate({
       {artifact?.kind === "diff" ? (
         <div className="now-detail-block">
           <span className="now-detail-block-label">What changed</span>
-          <FilesChanged diff={artifact.diff} />
-          <DiffView diff={artifact.diff} />
+          <ExactDiffReview diff={artifact.diff} />
         </div>
       ) : artifact?.kind === "preview" ? (
         <div className="now-detail-block">
@@ -96,7 +108,7 @@ export function DecisionGate({
       ) : null}
 
       <div className="now-gate-note">
-        This is the only outward act. Nothing leaves until you release it, and Drover remembers what you allow.
+        Nothing changes until you decide here. Drover records the exact decision.
         {isDeploy ? " A deploy needs two acts: authorize it, then send it." : ""}
       </div>
 

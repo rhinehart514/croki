@@ -212,12 +212,16 @@ venture store, provider runtimes, exact work, semantic model, visual-stage regis
 authority remain the only product authorities. A coding workspace is one feature-local record attached to a
 Run; provider events are translated into its commands, verification, session, and checkpoint receipts.
 
-Direct inspection of T3 Code showed stronger checkpoint, provider-event, git, terminal, and restart machinery,
-but those capabilities are coupled to T3's project, session, and event projections. Replatforming or importing
-that persistence would create competing project/thread/event truth and would make Product/release/evidence
-joins adapters around another system. Drover therefore adapted only T3's temporary-index checkpoint mechanism
-behind `brain/src/native-code/t3-checkpoint-store.mjs`; the upstream boundary and MIT notice live in
-`licenses/t3code-MIT.txt`. No T3 project, thread, event store, or checkpoint history became a Drover authority.
+Direct inspection of T3 Code showed stronger checkpoint, provider-event, git, terminal, restart, transcript,
+composer, diff, and status machinery, but those capabilities are coupled to T3's project, session, and event
+projections. Replatforming or importing that persistence would create competing project/thread/event truth and
+would make Product/release/evidence joins adapters around another system. Drover therefore adapted T3's
+temporary-index checkpoint mechanism behind `brain/src/native-code/t3-checkpoint-store.mjs` and ported the
+interaction geometry of the shipped `MessagesTimeline`, `ChatComposer`, `DiffPanel`,
+`ThreadTerminalDrawer`, and status/checkpoint components onto Drover contracts. The inspected installed build
+was T3 Code **0.0.28** at commit `fda6486233e0`; the upstream boundary and MIT notice live in
+`licenses/t3code-MIT.txt`. No T3 project, session, Thread, event, draft, terminal, or checkpoint store became
+a Drover authority.
 
 `GET /api/ventures/:id/work-index` now projects one production read model from Threads, Runs, process-local
 active drives, immutable settlement receipts, and pending founder decisions. Lifecycle, activity,

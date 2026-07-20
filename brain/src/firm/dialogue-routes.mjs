@@ -196,6 +196,9 @@ async function handleReply(ventureId, req, res, deps) {
   const message = trimOrNull(body?.message);
   const betId = trimOrNull(body?.betId);
   const threadRef = trimOrNull(body?.threadRef);
+  const workTurn = body?.mode === "work";
+  const runtime = workTurn ? trimOrNull(body?.runtime) : null;
+  const model = workTurn ? trimOrNull(body?.model) : null;
   const subjectRefs = Array.isArray(body?.subjectRefs)
     ? [...new Set(body.subjectRefs.map(trimOrNull).filter(Boolean))]
     : [];
@@ -266,6 +269,7 @@ async function handleReply(ventureId, req, res, deps) {
   const { act, steerText } = await classifyDialogueAct({ message, effortSummary: summary }, deps.dialogueDeps ?? {});
 
   if (act === "steer") {
+    if (workTurn) return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model);
     if (!betId) {
       // A steer with no effort to steer is just a new direction — route it.
       return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs);
@@ -315,13 +319,13 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   if (act === "new-direction") {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs);
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model);
   }
 
   json(res, 200, { act, betId, messageId: founderMessage.id });
 }
 
-async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null, subjectRefs = []) {
+async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null, subjectRefs = [], runtime = null, model = null) {
   const routed = await routeDirection({ direction, configuration }, deps.routingDeps ?? {});
   // A fresh, never-configured firm forms its first participant on the first direction — the same
   // founding-teammate fallback work-routes.mjs uses. Otherwise a firm with no claimable participant
@@ -353,6 +357,8 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
       recordInitiation: false,
       originMessageRef: fromMessageId ?? null,
       target: { threadRef: exactThreadRef },
+      ...(runtime ? { runtime } : {}),
+      ...(model ? { model } : {}),
       options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
     },
     ventureId, threadRef: exactThreadRef, betId: null, teammateRef, options: deps.appendOptions,

@@ -60,7 +60,7 @@ export function renderVisualStage({ visual, timeline, workIndex, directions, len
   if (visual.kind === "consequence") {
     const decision = item.decision as Record<string, unknown> | undefined;
     const wallItem = lens?.wallItems?.find((candidate) => candidate.id === decision?.id) ?? null;
-    return <div className="visual-consequence"><span>Exact founder review</span><h3>{text(item.title, "Consequence")}</h3>{wallItem ? <DecisionGate ventureId={timeline!.ventureId} item={wallItem} onDecided={onChanged} readOnlyReason={readOnlyReason} /> : <><pre>{JSON.stringify(item.decision, null, 2)}</pre><p>No external effect occurs from opening this review. Release, apply, deploy, spend, and destructive actions still require their exact host control.</p></>}</div>;
+    return <div className="visual-consequence">{wallItem ? <DecisionGate ventureId={timeline!.ventureId} item={wallItem} onDecided={onChanged} readOnlyReason={readOnlyReason} /> : <><h3>{text(item.title, "Consequence")}</h3><pre>{JSON.stringify(item.decision, null, 2)}</pre><p>No external effect occurs from opening this review. Release, apply, deploy, spend, and destructive actions still require their exact host control.</p></>}</div>;
   }
   return <pre className="visual-stage-json">{JSON.stringify(item, null, 2)}</pre>;
 }

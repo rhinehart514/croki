@@ -33,9 +33,7 @@ export function WorkSurface({ ventureId, timeline, conversation, readOnlyReason,
         terminal={renderTerminal ? renderTerminal(selected) : <NativeCapabilityNotice capability="Terminal" />}
         onSelectWorkspace={setSelectedWorkspaceId}
         onChanged={onWorkspaceChanged}
-      /> : <aside className="work-empty" aria-label="Coding workbench">
-        <div><span>Workbench</span><strong>Coding workspace begins when the agent starts repository work.</strong><p>Files, exact diffs, verification, preview, and terminal return here without replacing the conversation.</p></div>
-      </aside>}
+      /> : null}
     </div>
   );
 }

@@ -87,7 +87,7 @@ try {
   await waitFor(app.client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "founder review did not persist", 20_000);
   assert.equal(await app.client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Apply to source workspace'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
   assert.equal(await app.client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Confirm apply to source workspace'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
-  await waitFor(app.client, `(document.querySelector('.work-attempt [data-status]')?.textContent || '').trim() === 'applied'`, "the founder-held apply did not complete", 30_000);
+  await waitFor(app.client, `(document.querySelector('.work-status')?.textContent || '').trim() === 'applied'`, "the founder-held apply did not complete", 30_000);
 
   record = await app.client.evaluate(`fetch('/api/ventures/${fixture.venture.id}/coding-workspaces').then((response) => response.json()).then((body) => body.workspaces.find((entry) => entry.goal.includes('continuous integration')))`);
   fixture.workspace = record;

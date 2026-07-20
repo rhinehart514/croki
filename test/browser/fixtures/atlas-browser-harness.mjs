@@ -75,14 +75,12 @@ export async function openAtlasFixture(drover, {
     return Boolean(button);
   })()`);
   assert.equal(opened, true, `could not open ${ventureName}`);
-  // Workbench-first hierarchy: the workspace opens on the adaptive workbench, and the venture graph is a
-  // summoned mode. The atlas journeys are entirely about the plane, so opening the atlas fixture summons the
-  // map as part of "open" — the returned surface is the mounted venture graph, exactly as these journeys
-  // assume immediately after opening.
+  // Work opens on conversation. Atlas journeys are entirely about the Product / GTM plane, so opening the
+  // fixture routes there through the same Map affordance the founder uses.
   await waitForDom(
     client,
-    `!!document.querySelector('.venture-workspace [data-testid="venture-workbench"]')`,
-    `${ventureName} did not open the venture workspace on the workbench`,
+    `!!document.querySelector('.workspace-shell .thread-conversation [role="log"]')`,
+    `${ventureName} did not open the venture workspace conversation`,
   );
   await summonMap(client);
   return chrome;

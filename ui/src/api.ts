@@ -528,7 +528,7 @@ export type ConversationReplyResult = {
 
 export const replyInConversation = (
   ventureId: string,
-  body: { message: string; threadRef?: string | null; betId?: string | null; subjectRefs?: string[] },
+  body: { message: string; threadRef?: string | null; betId?: string | null; subjectRefs?: string[]; mode?: "work"; runtime?: string | null; model?: string | null },
 ) => guardedPost<ConversationReplyResult>(
   `/api/ventures/${encodeURIComponent(ventureId)}/conversation/reply`,
   body,

@@ -45,6 +45,33 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
   };
   const disabled = Boolean(readOnlyReason || busy);
   const reviewed = workspace.consequence?.review;
+  const founderActions = workspace.diff && workspace.status !== "discarded" ? <section className="code-workspace-section code-workspace-actions">
+    <header><span>Founder consequence</span><strong>{reviewed ? `Exact checkpoint ${reviewed}` : "Review the exact checkpoint first"}</strong></header>
+    {readOnlyReason ? <p>{readOnlyReason}</p> : null}
+    {!reviewed ? <div className="code-workspace-action-row">
+      <button type="button" disabled={disabled} onClick={() => void act("approve", () => reviewCodingWorkspace(ventureId, workspace.id, "approve"))}>Approve checkpoint</button>
+      <button type="button" disabled={disabled} onClick={() => void act("reject", () => reviewCodingWorkspace(ventureId, workspace.id, "reject"))}>Reject</button>
+    </div> : null}
+    {reviewed === "approved" ? <>
+      <div className="code-workspace-action-row">
+        {workspace.consequence?.action === "applied"
+          ? confirm === "revert" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("revert", () => revertCodingWorkspaceApply(ventureId, workspace.id))}>Confirm reverse applied change</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("revert")}>Reverse applied change</button>
+          : confirm === "apply" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("apply", () => applyCodingWorkspace(ventureId, workspace.id))}>Confirm apply to source workspace</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("apply")}>Apply to source workspace</button>}
+        <button type="button" disabled={disabled} onClick={() => void act("prepare", () => prepareCodingPullRequest(ventureId, workspace.id))}>Prepare branch / PR</button>
+      </div>
+      <div className="code-workspace-commit">
+        <input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Commit message" aria-label="Commit message" disabled={disabled} />
+        <button type="button" disabled={disabled || !commitMessage.trim()} onClick={() => void act("commit", () => commitCodingWorkspace(ventureId, workspace.id, commitMessage))}>Commit in isolated branch</button>
+      </div>
+      <div className="code-workspace-action-row">
+        {workspace.checkpoints.slice(0, -1).map((checkpoint) => confirm === `restore:${checkpoint.id}`
+          ? <button key={checkpoint.id} type="button" data-danger="true" disabled={disabled} onClick={() => void act("restore", () => restoreCodingCheckpoint(ventureId, workspace.id, checkpoint.id))}>Confirm restore {checkpoint.id}</button>
+          : <button key={checkpoint.id} type="button" disabled={disabled} onClick={() => setConfirm(`restore:${checkpoint.id}`)}>Restore {checkpoint.id}</button>)}
+        {confirm === "discard" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("discard", () => discardCodingWorkspace(ventureId, workspace.id))}>Confirm permanent discard</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("discard")}>Discard workspace</button>}
+      </div>
+    </> : null}
+    {workspace.consequence?.preparation ? <pre>{workspace.consequence.preparation.pushCommand}{"\n"}{workspace.consequence.preparation.pullRequestCommand}{"\n\n"}{workspace.consequence.preparation.note}</pre> : null}
+  </section> : null;
 
   return (
     <div className="code-workspace" data-variant={variant}>
@@ -70,6 +97,7 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
 
       {workspace.interruption ? <section className="code-workspace-alert" role="alert"><strong>Work was interrupted</strong><p>{workspace.interruption.message}</p><p>{workspace.interruption.recovery}</p></section> : null}
       {workspace.restoration ? <section className="code-workspace-alert"><strong>Checkpoint restored</strong><p>{workspace.restoration.note}</p></section> : null}
+      {variant === "review" ? founderActions : null}
 
       {variant === "full" ? <section className="code-workspace-section">
         <header><span>Implementation</span><strong>{workspace.changedFiles.length} changed {workspace.changedFiles.length === 1 ? "file" : "files"}</strong></header>
@@ -103,33 +131,7 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
         <div><span>Release / distribution question</span><p>{workspace.productConsequence.releaseQuestion}</p></div>
       </section> : null}
 
-      {workspace.diff && workspace.status !== "discarded" ? <section className="code-workspace-section code-workspace-actions">
-        <header><span>Founder consequence</span><strong>{reviewed ? `Exact checkpoint ${reviewed}` : "Review the exact checkpoint first"}</strong></header>
-        {readOnlyReason ? <p>{readOnlyReason}</p> : null}
-        {!reviewed ? <div className="code-workspace-action-row">
-          <button type="button" disabled={disabled} onClick={() => void act("approve", () => reviewCodingWorkspace(ventureId, workspace.id, "approve"))}>Approve checkpoint</button>
-          <button type="button" disabled={disabled} onClick={() => void act("reject", () => reviewCodingWorkspace(ventureId, workspace.id, "reject"))}>Reject</button>
-        </div> : null}
-        {reviewed === "approved" ? <>
-          <div className="code-workspace-action-row">
-            {workspace.consequence?.action === "applied"
-              ? confirm === "revert" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("revert", () => revertCodingWorkspaceApply(ventureId, workspace.id))}>Confirm reverse applied change</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("revert")}>Reverse applied change</button>
-              : confirm === "apply" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("apply", () => applyCodingWorkspace(ventureId, workspace.id))}>Confirm apply to source workspace</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("apply")}>Apply to source workspace</button>}
-            <button type="button" disabled={disabled} onClick={() => void act("prepare", () => prepareCodingPullRequest(ventureId, workspace.id))}>Prepare branch / PR</button>
-          </div>
-          <div className="code-workspace-commit">
-            <input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Commit message" aria-label="Commit message" disabled={disabled} />
-            <button type="button" disabled={disabled || !commitMessage.trim()} onClick={() => void act("commit", () => commitCodingWorkspace(ventureId, workspace.id, commitMessage))}>Commit in isolated branch</button>
-          </div>
-          <div className="code-workspace-action-row">
-            {workspace.checkpoints.slice(0, -1).map((checkpoint) => confirm === `restore:${checkpoint.id}`
-              ? <button key={checkpoint.id} type="button" data-danger="true" disabled={disabled} onClick={() => void act("restore", () => restoreCodingCheckpoint(ventureId, workspace.id, checkpoint.id))}>Confirm restore {checkpoint.id}</button>
-              : <button key={checkpoint.id} type="button" disabled={disabled} onClick={() => setConfirm(`restore:${checkpoint.id}`)}>Restore {checkpoint.id}</button>)}
-            {confirm === "discard" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("discard", () => discardCodingWorkspace(ventureId, workspace.id))}>Confirm permanent discard</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("discard")}>Discard workspace</button>}
-          </div>
-        </> : null}
-        {workspace.consequence?.preparation ? <pre>{workspace.consequence.preparation.pushCommand}{"\n"}{workspace.consequence.preparation.pullRequestCommand}{"\n\n"}{workspace.consequence.preparation.note}</pre> : null}
-      </section> : null}
+      {variant === "full" ? founderActions : null}
     </div>
   );
 }
