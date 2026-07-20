@@ -277,6 +277,15 @@ activity follows the path, and rename/end/reopen live in the compact Details con
 states **Nothing was sent**, preserves the provider error, and leaves the same action available as **Retry
 send**. A revoked Gmail grant opens the existing reconnect form; reconnecting never retries by itself.
 
+A deploy is available only when the bound repository supplies an exact `package.json` deploy script and the
+effect names its destination. Drover host-stamps the script name, current definition, destination, and digest
+before review; the gate shows the command and definition, then requires **Authorize deploy** followed by
+**Deploy**. Execution re-verifies the pinned contract and runs `npm run <script>` in that venture repository
+without exposing the desktop founder capability. A missing or changed contract stays visibly unavailable or
+fails as **Nothing was deployed**. This repository-owned adapter is deliberate: embedding Vercel, Netlify,
+or another provider SDK would add lock-in and credentials without improving the exact founder boundary; a
+venture may use any provider behind its reviewed package script.
+
 After a real Gmail action has a provider message identity, the Evidence end of the release path offers a
 separate bounded-observation contract. The founder sees and grants the exact source, purpose, start, end,
 return conditions, and number of sent messages in scope. The active contract exposes **Check now** and

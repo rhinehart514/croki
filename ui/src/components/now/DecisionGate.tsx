@@ -43,7 +43,9 @@ export function DecisionGate({
 }) {
   const content = reviewContent(item);
   const artifact = showArtifact ? resolveEffectArtifact(item.effect) : null;
-  const isDeploy = String(item.effect.kind ?? "").toLowerCase() === "deploy";
+  const effectKind = String(item.effect.kind ?? "").toLowerCase();
+  const isDeploy = effectKind === "deploy";
+  const failureHeading = isDeploy ? "Nothing was deployed." : effectKind === "product-change" ? "Nothing was applied." : "Nothing was sent.";
   const [authorized, setAuthorized] = useState<boolean>(Boolean(item.deployAuthorizedAt));
   const [busy, setBusy] = useState<WallDecision | null>(null);
   const [note, setNote] = useState("");
@@ -112,11 +114,11 @@ export function DecisionGate({
 
       <div className="now-gate-note">
         Nothing changes until you decide here. Drover records the exact decision.
-        {isDeploy ? " A deploy needs two acts: authorize it, then send it." : ""}
+        {isDeploy ? " A deploy needs two acts: authorize it, then deploy." : ""}
       </div>
 
       {item.lastExecutionError ? <div className="now-gate-execution-failure" role="alert">
-        <strong>Nothing was sent.</strong>
+        <strong>{failureHeading}</strong>
         <p>{item.lastExecutionError}</p>
         {item.needsReconnect && onReconnect ? <button type="button" className="now-gate-btn" onClick={onReconnect}>Reconnect Gmail</button> : null}
       </div> : null}
@@ -124,8 +126,8 @@ export function DecisionGate({
       {item.purpose === "release" ? (
         <div className="now-gate-actions">
           {isDeploy && !authorized ? (
-            <button type="button" className="now-gate-btn" data-intent="release" disabled={decisionDisabled} onClick={() => decide("authorize-deploy")}>
-              {busy === "authorize-deploy" ? "Arming…" : "Authorize deploy"}
+            <button type="button" className="now-gate-btn" data-intent="release" disabled={decisionDisabled || !content.releaseReady} onClick={() => decide("authorize-deploy")}>
+              {busy === "authorize-deploy" ? "Arming…" : content.releaseReady ? "Authorize deploy" : "Deploy unavailable"}
             </button>
           ) : (
             <button
@@ -135,7 +137,7 @@ export function DecisionGate({
               disabled={decisionDisabled || !content.releaseReady}
               onClick={() => decide("release", note.trim() || undefined)}
             >
-              {busy === "release" ? "Sending…" : item.lastExecutionError ? "Retry send" : isDeploy ? "Send it" : "Approve & send"}
+              {busy === "release" ? (isDeploy ? "Deploying…" : "Sending…") : item.lastExecutionError ? (isDeploy ? "Retry deploy" : "Retry send") : isDeploy ? "Deploy" : "Approve & send"}
             </button>
           )}
           {onRevise ? <button type="button" className="now-gate-btn" onClick={onRevise}>Revise</button> : null}
@@ -178,7 +180,7 @@ export function DecisionGate({
         </div>
       )}
 
-      {isDeploy && authorized ? <p className="now-gate-hint">Deploy armed. Send it to release, or reject to hold.</p> : null}
+      {isDeploy && authorized ? <p className="now-gate-hint">Deploy authorized. Deploy now, or reject to hold.</p> : null}
       {error ? (
         <p className="now-gate-error" role="alert">{error}</p>
       ) : readOnlyReason ? (

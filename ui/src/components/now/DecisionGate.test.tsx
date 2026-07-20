@@ -43,12 +43,23 @@ describe("DecisionGate", () => {
   it("requires two explicit acts for a deploy", () => {
     const deploy: WallQueueItemView = {
       ...productChange, id: "wall-2",
-      effect: { kind: "deploy", title: "Ship to production", body: "Deploy build 42 to the live site." },
+      effect: { kind: "deploy", title: "Ship to production", body: "Deploy build 42 to the live site.", deployContract: { command: "npm run deploy", definition: "vercel --prod", destination: "production" } },
     };
     render(<DecisionGate ventureId="v1" item={deploy} onDecided={() => {}} />);
     // First act is to arm the deploy, not to send it.
     expect(screen.getByRole("button", { name: /Authorize deploy/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Send it/ })).toBeNull();
+    expect(screen.getByText(/Repository script: vercel --prod/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Deploy$/ })).toBeNull();
+  });
+
+  it("makes an unverified deploy visibly unavailable", () => {
+    const deploy: WallQueueItemView = {
+      ...productChange, id: "wall-unavailable-deploy",
+      effect: { kind: "deploy", title: "Ship to production", deployUnavailableReason: "Name an existing package.json deploy script before authorizing this deploy." },
+    };
+    render(<DecisionGate ventureId="v1" item={deploy} onDecided={() => {}} />);
+    expect(screen.getByText(/Name an existing package.json deploy script/)).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Deploy unavailable" }).disabled).toBe(true);
   });
 
   it("shows one selected file diff instead of repeating every file", () => {

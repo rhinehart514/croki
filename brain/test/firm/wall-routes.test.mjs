@@ -153,8 +153,8 @@ test("deploy still needs its second explicit act through the real route — rele
   assert.equal(res.status, 409);
   assert.match(res.body.error, /second explicit founder authorization/i);
 
-  // Authorize, then release — now it reaches the real executor. The deploy branch exists and is
-  // fail-closed: no deploy provider is configured for this venture, so it returns an honest ok:false.
+  // Authorize, then release — now it reaches the real executor. This venture has no exact repository
+  // deploy script, so it returns an honest ok:false.
   // decide() refuses to record that as a completed release — the route reports 502 and the deploy
   // stays queued, never a fake success and never a dead "unrecognized kind" throw.
   await call(
@@ -170,9 +170,25 @@ test("deploy still needs its second explicit act through the real route — rele
     {},
   );
   assert.equal(released.status, 502);
-  assert.match(released.body.error, /No deploy provider is configured/);
+  assert.match(released.body.error, /deploy script|verified repository command/i);
   const stillQueued = (await call("GET", `/api/ventures/${venture.id}/wall`)).body.queue;
   assert.ok(stillQueued.some((entry) => entry.id === item.id), "the unshipped deploy stays queued");
+});
+
+test("the real route executes a reviewed package deploy after both founder acts", async () => {
+  const repository = fs.mkdtempSync(path.join(os.tmpdir(), "drover-route-deploy-"));
+  fs.writeFileSync(path.join(repository, "package.json"), JSON.stringify({ scripts: { deploy: "node -e \"require('fs').writeFileSync('deployed.txt','yes')\"" } }, null, 2));
+  const deployVenture = createVenture({ name: "Route deploy", repository }, options);
+  const item = park({ ventureId: deployVenture.id, effect: { kind: "deploy", destination: "test production" } }, options);
+  __resetPresence();
+  markPresent("test");
+  const authorized = await call("POST", `/api/ventures/${deployVenture.id}/wall/${item.id}/decide`, { decision: "authorize-deploy" });
+  assert.equal(authorized.status, 200);
+  const released = await call("POST", `/api/ventures/${deployVenture.id}/wall/${item.id}/decide`, { decision: "release" });
+  assert.equal(released.status, 200);
+  assert.equal(released.body.receipt.executionResult.detail.command, "npm run deploy");
+  assert.equal(fs.readFileSync(path.join(repository, "deployed.txt"), "utf8"), "yes");
+  fs.rmSync(repository, { recursive: true, force: true });
 });
 
 test("self-approval is still refused through the real route — agent-stamped release fails before the executor", async () => {

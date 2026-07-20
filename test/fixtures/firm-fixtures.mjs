@@ -452,6 +452,14 @@ export function createWallVentureFixture({ root, repository } = {}) {
       minute: 14,
       events: [{ type: "speak", detail: "The evidence no longer supports this line" }],
     }, options),
+    seedBet({
+      ventureId: venture.id,
+      id: "wall-bet-deploy",
+      intent: "Ship only through a verified repository deploy contract",
+      teammateRef: "steward",
+      minute: 16,
+      events: [{ type: "stage_outward", detail: "Deploy held because no repository command was verified" }],
+    }, options),
   ];
 
   const outcome = seedOutcome({
@@ -504,6 +512,19 @@ export function createWallVentureFixture({ root, repository } = {}) {
       minute: 23,
       effect: { kind: "kill-proposal", reason: "The repository and buyer return both contradict this line." },
     }, options),
+    seedWallItem({
+      ventureId: venture.id,
+      id: "wall-purpose-deploy",
+      betId: "wall-bet-deploy",
+      purpose: "release",
+      minute: 24,
+      effect: {
+        kind: "deploy",
+        title: "Deploy to production",
+        destination: "production",
+        deployUnavailableReason: "Name an existing package.json deploy script before authorizing this deploy.",
+      },
+    }, options),
   ];
 
   return {
@@ -511,7 +532,7 @@ export function createWallVentureFixture({ root, repository } = {}) {
     bets,
     outcomes: [outcome],
     wall,
-    expected: { wallItems: 4, wallPurposes: ["answer", "end-bet", "release", "review-outcome"] },
+    expected: { wallItems: 5, wallPurposes: ["answer", "end-bet", "release", "review-outcome"] },
   };
 }
 

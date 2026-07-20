@@ -14,6 +14,7 @@ const intents = {
   answer: "Ask for the one constraint the repository cannot answer",
   reviewOutcome: "Learn from the attributable buyer reply",
   endBet: "End a disproven line only through the founder",
+  deploy: "Ship only through a verified repository deploy contract",
 };
 
 async function openGate(client, intent) {
@@ -30,13 +31,28 @@ async function wallCount(client, ventureId, expected) {
   await waitForDom(client, `fetch('/api/ventures/${ventureId}/wall').then(r=>r.json()).then(w=>w.queue.length===${expected})`, `wall did not settle to ${expected}`);
 }
 
+async function decideUntilSettled(client, ventureId, selector, expected, { double = false } = {}) {
+  const deadline = Date.now() + 12_000;
+  while (Date.now() < deadline) {
+    const settled = await client.evaluate(`fetch('/api/ventures/${ventureId}/wall').then(r=>r.json()).then(w=>w.queue.length===${expected})`);
+    if (settled) return;
+    await client.evaluate(`(() => { const button=document.querySelector(${JSON.stringify(selector)}); if (!button || button.disabled) return false; button.click(); ${double ? "button.click();" : ""} return true; })()`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`wall did not settle to ${expected}`);
+}
+
 test("all founder consequences settle once from their owning threads and survive reload", async () => {
   const drover = await bootFixture(createWallVentureFixture);
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1440, height: 900 } });
   try {
     const { client } = chrome;
     const ventureId = drover.fixture.venture.id;
-    await wallCount(client, ventureId, 4);
+    await wallCount(client, ventureId, 5);
+
+    await openGate(client, intents.deploy);
+    assert.equal(await client.evaluate(`(() => { const button=[...document.querySelectorAll('.visual-stage .now-gate-btn')].find((entry) => entry.textContent.trim() === 'Deploy unavailable'); return Boolean(button?.disabled && document.querySelector('.visual-stage .now-gate')?.textContent.includes('Name an existing package.json deploy script')); })()`), true, "an unverified deploy exposed a live authorization control");
+    await decideUntilSettled(client, ventureId, '.visual-stage .now-gate-btn[data-intent="reject"]', 4);
 
     await openGate(client, intents.release);
     let releaseRequests = 0;
@@ -50,8 +66,7 @@ test("all founder consequences settle once from their owning threads and survive
     assert.equal(failed.decision, null, "a transport failure consumed the founder decision");
     assert.match(failed.lastExecutionError, /no recipient/i);
     releaseRequests = 0;
-    assert.equal(await client.evaluate(`(() => { const b=document.querySelector('.visual-stage .now-gate-btn[data-intent="reject"]'); b?.click(); b?.click(); return Boolean(b); })()`), true);
-    await wallCount(client, ventureId, 3);
+    await decideUntilSettled(client, ventureId, '.visual-stage .now-gate-btn[data-intent="reject"]', 3, { double: true });
     assert.equal(releaseRequests, 1, "double activation escaped the in-flight founder guard");
 
     await openGate(client, intents.answer);
@@ -72,6 +87,7 @@ test("all founder consequences settle once from their owning threads and survive
     assert.equal(receipts["wall-purpose-answer"].decision, "answer");
     assert.equal(receipts["wall-purpose-review-outcome"].decision, "acknowledge");
     assert.equal(receipts["wall-purpose-end-bet"].decision, "keep");
+    assert.equal(receipts["wall-purpose-deploy"].decision, "reject");
 
     await client.send("Page.reload", { ignoreCache: true });
     await waitForDom(client, `!!document.querySelector('.workspace-shell .thread-conversation')`, "workspace shell did not return after reload");

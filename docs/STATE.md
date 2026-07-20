@@ -63,7 +63,7 @@ mechanics.
 
 On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **835/835** and UI **507/507**, with lint and the production build green;
+- `npm test`: Brain **839/839** and UI **508/508**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
@@ -525,13 +525,16 @@ Repaired brain-side in Phase 3 (verified: 710 brain + 49 security-matrix green):
 
 - Product-change release now refuses a revision that was not separately founder-reviewed+approved
   (`product_change_not_approved` thrown before any status flip); a failed apply no longer self-approves.
-- A deploy effect executor exists and is fail-closed: with no configured provider it returns a persisted
-  `{ ok:false, executionError }` and never a fake success; the second authorization is unchanged.
+- Deploy has a shipped provider-agnostic executor. At park time Drover resolves the named or conventional
+  `package.json` deploy script from the bound venture repository and host-stamps its exact command,
+  definition, destination, and digest. After the unchanged two founder acts, execution re-verifies that
+  contract and runs it in the exact repository; missing or changed contracts fail closed and stay queued.
 - A failed message/deploy transport is persisted on the still-queued wall item
   (`lastExecutionError`/`needsReconnect`/`lastAttemptAt`) and thrown as `wall_release_execution_failed` (502);
   a genuine later success clears those markers and stamps `releasedAt` exactly once.
-- The shipped Work and Releases gates now render that persisted failure as **Nothing was sent**, preserve
-  the exact transport error, and keep **Retry send** on the same undecided action. `needsReconnect` adds a
+- The shipped Work and Releases gates render the consequence-specific failure as **Nothing was sent**,
+  **Nothing was deployed**, or **Nothing was applied**, preserve the exact transport error, and keep the
+  matching retry on the same undecided action. `needsReconnect` adds a
   working **Reconnect Gmail** affordance that opens the existing OAuth replacement form; successful OAuth
   replacement leaves the action for a fresh explicit founder retry rather than sending automatically.
 - A standing grant no longer claims "Sending" without sending: it skips the *wait*, not the *release* — the
@@ -575,7 +578,6 @@ The following are approved requirements or desired alpha evidence without suffic
 - immediate provisional whole-venture interpretation plus useful work in one founder-directed turn;
 - a real provider pass that independently selects and completes a second participant contribution;
 - hard concurrent spend authority;
-- a working deploy executor;
 - a real released send and returned reply;
 - a live attributable market result changing founder-adopted venture understanding and next work (the
   deterministic outcome projection and exact Work handoff are proven; no live Gmail return was performed);

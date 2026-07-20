@@ -27,6 +27,7 @@ import { end as endBet } from "./bet.mjs";
 import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { isFounderPresent as defaultIsFounderPresent } from "../presence.mjs";
 import { stampKnownEffectConsequences } from "./effect-consequences.mjs";
+import { stampDeployContract } from "./deploy-contract.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
 
 function genId(prefix) {
@@ -110,7 +111,11 @@ export function park({ ventureId, betId = null, workRef = null, purpose = null, 
   // Never overwrites an explicit joinKey the caller already set (e.g. a founder note keying to its own
   // one-off join). A betId with no such bet, or no betId at all (a question, a kill proposal), leaves
   // the effect untouched — nothing to stamp.
-  const clean = stampKnownEffectConsequences(stripAuthorizationClaims(effect), options);
+  const clean = stampDeployContract(
+    ventureId,
+    stampKnownEffectConsequences(stripAuthorizationClaims(effect), options),
+    options,
+  );
   const resolvedPurpose = purpose ?? inferPurpose(clean);
   if (!PURPOSE_DECISIONS[resolvedPurpose]) {
     throw new Error(`Unknown founder-attention purpose: ${resolvedPurpose}`);
@@ -278,7 +283,7 @@ export function decide(
       throw new Error("decide() cannot release without an executeEffect executor wired for this effect.");
     }
     const executionResult = executeEffect(released, item);
-    // A failed transport (Gmail 500, revoked token, no deploy provider) must NOT be recorded as a
+    // A failed transport (Gmail 500, revoked token, missing or changed deploy contract) must NOT be recorded as a
     // completed release. Do not consume the decision: persist the failure onto the still-QUEUED item so
     // it stays in the founder's queue for an explicit retry/reconnect, and throw so the release call
     // reports failure honestly instead of returning a success the world never saw. Only a genuine

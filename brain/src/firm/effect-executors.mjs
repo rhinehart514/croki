@@ -31,6 +31,7 @@
 import { hasWallRelease } from "./wall.mjs";
 import { applyProductBetChange } from "./product-change-decide.mjs";
 import { sendReleasedMessage } from "./message-send.mjs";
+import { executeNpmDeploy } from "../connectors/execute/npm-deploy.mjs";
 
 function assertReleased(effect, kind) {
   if (!hasWallRelease(effect)) {
@@ -63,17 +64,12 @@ function executeProductChange(effect, item, { founderActor, options }) {
   }
 }
 
-// deploy: the SECOND heavy outward class. Unlike message, no reusable transport exists in this tree yet
-// (brain/src/connectors/execute/ holds only gmail-oauth.mjs — there is NO deploy.mjs). So this branch is
-// built fail-closed FROM SCRATCH: it verifies the wall's release capability, re-verifies the founder's
+// deploy: the SECOND heavy outward class. It verifies the wall's release capability and re-verifies the founder's
 // SECOND authorization on the item (defense in depth mirroring wall.mjs's own deployAuthorizedAt gate —
 // so even a caller that reached this executor outside decide()'s path cannot ship a deploy the founder
-// never authorized twice), then hands off to an INJECTED deploy transport (deployDeps.transport, the same
-// test-injection seam messageDeps already uses). With no provider configured — the live default today —
-// it returns an honest { ok:false, executionError } persisted on the receipt, NEVER a fake ok:true. This
-// terminates the wall's deploy two-step in a real receipt instead of the old dead "unrecognized kind"
-// throw, without ever pretending a deploy happened.
-const NO_DEPLOY_PROVIDER = "No deploy provider is configured for this venture.";
+// never authorized twice), then executes the exact host-stamped package.json deploy contract in the bound
+// venture repository. Tests may inject a transport; production uses the provider-agnostic npm adapter.
+const NO_DEPLOY_CONTRACT = "This deploy has no verified repository command.";
 
 function executeDeploy(effect, item, { deployDeps, options }) {
   assertReleased(effect, "deploy");
@@ -83,16 +79,12 @@ function executeDeploy(effect, item, { deployDeps, options }) {
   if (!item?.deployAuthorizedAt) {
     return { ok: false, executionError: "Deploy is missing the founder's second authorization on this item." };
   }
-  const transport = deployDeps?.transport ?? null;
-  if (typeof transport !== "function") {
-    // No real deploy transport exists yet. Honest failure, persisted — never a fabricated success.
-    return { ok: false, executionError: NO_DEPLOY_PROVIDER };
-  }
+  const transport = deployDeps?.transport ?? executeNpmDeploy;
   const outcome = transport({ effect, ventureId: item?.ventureId ?? null, betId: item?.betId ?? null }, options);
   if (!outcome || outcome.ok !== true) {
     return {
       ok: false,
-      executionError: outcome?.error ?? NO_DEPLOY_PROVIDER,
+      executionError: outcome?.error ?? NO_DEPLOY_CONTRACT,
       ...(outcome?.needsReconnect ? { needsReconnect: true } : {}),
     };
   }
@@ -123,7 +115,7 @@ function executeMessage(effect, item, { messageDeps, options }) {
 // options every product-change/message call needs, messageDeps (test-only: a fake sync transport/
 // token mint for the message branch — production never sets this, so message-send.mjs's real spawnSync
 // transport is what actually runs), and deployDeps (a deploy transport; NONE is configured in this tree
-// today, so the deploy branch returns an honest ok:false rather than a fake success). Keyed on
+// defaults to the verified package.json adapter). Keyed on
 // effect.kind, the same open vocabulary a bet's staged content already uses — no closed effect-kind
 // enum, just the branches this firm core can actually execute today. An unrecognized kind refuses
 // rather than guessing.

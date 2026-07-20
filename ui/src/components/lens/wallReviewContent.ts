@@ -36,6 +36,16 @@ function exactRevision(effect: Record<string, unknown>): string | null {
   return typeof revision === "number" || typeof revision === "string" ? `Revision ${revision}` : null;
 }
 
+function deployContract(effect: Record<string, unknown>) {
+  const value = effect.deployContract;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const contract = value as Record<string, unknown>;
+  const command = readable(contract.command);
+  const definition = readable(contract.definition);
+  const destination = readable(contract.destination);
+  return command && definition && destination ? { command, definition, destination } : null;
+}
+
 function outcomeTitle(kind: string | null): string {
   switch (kind?.toLowerCase()) {
     case "reply": return "A reply came back";
@@ -73,18 +83,22 @@ function releaseContent(effect: Record<string, unknown>): ReviewContent {
   }
 
   if (kind === "deploy") {
+    const contract = deployContract(effect);
+    const unavailable = readable(effect.deployUnavailableReason);
     return {
       eyebrow: "Ready to deploy",
       title: firstReadable(effect, ["title", "subject", "intent"]) ?? "Deploy ready for review",
       why: firstReadable(effect, ["reason", "why"]) ?? "This release would change a live destination and requires a second explicit authorization.",
       details: [
-        { label: "Exact act", value: body ?? "The deploy contents could not be described safely." },
-        ...(destination ? [{ label: "Destination", value: destination }] : []),
+        { label: "Exact act", value: contract?.command ?? body ?? "The deploy contents could not be described safely." },
+        ...(contract ? [{ label: "Repository script", value: contract.definition }] : []),
+        ...((contract?.destination ?? destination) ? [{ label: "Destination", value: contract?.destination ?? destination! }] : []),
         ...(proof ? [{ label: "Proof", value: proof, tone: "receipt" as const }] : []),
+        ...(unavailable ? [{ label: "Unavailable", value: unavailable }] : []),
         { label: "Consequence", value: "Authorization permits only this deploy. Releasing remains a separate founder act." },
         ...(revision ? [{ label: "Revision crossing", value: revision, tone: "receipt" as const }] : []),
       ],
-      releaseReady: Boolean(body),
+      releaseReady: Boolean(contract),
     };
   }
 

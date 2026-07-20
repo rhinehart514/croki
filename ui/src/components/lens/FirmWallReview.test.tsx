@@ -223,7 +223,7 @@ describe("FirmWallReview", () => {
   });
 
   it("keeps deploy authorization separate from the outward release", () => {
-    const deploy = item({ effect: { kind: "deploy", destination: "production", body: "Publish the reviewed build" } });
+    const deploy = item({ effect: { kind: "deploy", destination: "production", body: "Publish the reviewed build", deployContract: { command: "npm run deploy", definition: "vercel --prod", destination: "production" } } });
     const view = render(<FirmWallReview items={[deploy]} onDecide={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Authorize deploy" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Release" })).toBeNull();

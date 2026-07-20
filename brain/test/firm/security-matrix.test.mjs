@@ -336,8 +336,8 @@ describe("DEPLOY TWO-STEP — pre-stamped confirmation on the parked effect neve
       /second explicit founder authorization/i,
     );
     decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: founderRequest() }, {}, options);
-    // The deploy branch now EXISTS and is fail-closed: with no deploy provider configured (the tree's
-    // live default), the executor returns an honest { ok:false, executionError } — never a fake success.
+    // The deploy branch is fail-closed: with no exact repository deploy contract, the executor returns
+    // an honest { ok:false, executionError } — never a fake success.
     // decide() refuses to consume that as a completed release: it throws wall_release_execution_failed
     // and leaves the item queued for the founder, so the two-step terminates in a real, retryable
     // failure receipt instead of shipping a deploy that never happened.
@@ -349,7 +349,7 @@ describe("DEPLOY TWO-STEP — pre-stamped confirmation on the parked effect neve
     }
     assert.ok(thrown, "an unwired deploy fails honestly rather than silently succeeding");
     assert.equal(thrown.code, "wall_release_execution_failed");
-    assert.match(thrown.message, /No deploy provider is configured/);
+    assert.match(thrown.message, /deploy script|verified repository command/i);
     const stillQueued = queue(venture.id, options).find((q) => q.id === item.id);
     assert.ok(stillQueued, "the deploy stays queued after a failed release — never consumed as shipped");
     assert.equal(stillQueued.decision, null, "no fake release was recorded for a deploy that never shipped");
