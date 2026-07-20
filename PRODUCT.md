@@ -31,19 +31,20 @@ Choosing or connecting a venture is exceptional: first use, recovery, or an expl
 in-workspace venture switcher.
 
 The compact workspace rail exposes three parallel founder jobs over one model: **Work**, **Product / GTM**,
-and **Releases**. Work organizes threads by return value. Product / GTM exposes Whole system, Product, GTM,
-attention, search, and reversible founder editing. Releases organizes needs-you, drafts, in-market movement,
-recent releases, and exact actions that have no release join.
+and **Releases**. Its body belongs to the active mode: Work organizes Threads by return value; Product / GTM
+exposes Whole venture, Product, Go-to-market, Needs attention, and mode-local search; Releases organizes Needs
+you, Preparing, In market, and Recent. The rail never displays every list at once.
 
 With no thread selected, venture chat shows what changed, what is still moving, and what needs founder
 judgment. Selecting a thread restores its meaningful conversation, active agents, artifacts, evidence, and
 consequences. Every founder turn uses the venture conversation contract and carries the exact selected
 `threadRef`; the server decides whether it continues, steers, observes, stops, critiques, or starts work.
 
-Conversation remains mounted in all three modes. It is the main Work workspace and opens contextually as a
-right drawer in Product / GTM and Releases, compressing those workspaces when room permits and overlaying
-them at narrow widths. Shared context deterministically resolves a linked thread, object, or release; when
-none exists, the destination overview retains the source context for the next action.
+Conversation is the main Work workspace and opens contextually as a closable right drawer in Product / GTM
+and Releases, compressing those workspaces when room permits and overlaying them at narrow widths. Closing it
+loses no draft, Thread identity, or coherent content. Mode switching preserves the focal subject and follows
+only existing direct references; when none exists, the destination retains the source context and exposes the
+missing link instead of invoking a generalized resolver.
 
 Previews, flows, comparisons, evidence, consequences, and exact changes can still open beside Work chat.
 Escape closes the topmost visual or drawer and restores focus to its opener without losing composer drafts.
@@ -101,8 +102,9 @@ revise, release again—not by code volume, campaign volume, or agent activity.
 
 ## Durable invariants
 
-1. One workspace rail supplies stable orientation across Work, Product / GTM, and Releases. These are
-   presentation-level founder jobs, not sequential stages or separate authorities.
+1. One mode-owned workspace rail supplies stable orientation across Work, Product / GTM, and Releases without
+   showing every list at once. These are presentation-level founder jobs, not sequential stages or separate
+   authorities.
 2. One model powers every view; no canvas, board, branch, workbench, or snapshot becomes a second authority.
 3. Product and go-to-market remain distinct and traceable parts of one venture.
 4. Work starts only from founder intent or a founder-invoked workflow.

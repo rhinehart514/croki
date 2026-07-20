@@ -1,9 +1,9 @@
 ---
 surface: desktop-founder-workspace
 authority: intended-experience
-date: 2026-07-19
+date: 2026-07-20
 north_star: one-venture-three-founder-jobs
-layout: thread-rail-primary-surface-persistent-agent
+layout: mode-rail-dominant-surface-contextual-agent
 ---
 
 # Drover desktop experience
@@ -20,42 +20,58 @@ parallel founder jobs over one canonical venture model and one shared selection:
 > **One venture, one context, three ways to work. Modes change the founder's working surface, never the
 > underlying authority or the lifecycle of the venture.**
 
-Conversation remains the direction and judgment surface. It is primary in Work and stays permanently visible
-beside Product / GTM and Releases. The release—not a thread, mode, workflow, or agent—is what moves the
-venture.
+Conversation remains the direction and judgment surface. It is primary in Work and contextual and closable
+in Product / GTM and Releases, where the canvas or release path owns the center. Closing it preserves its
+draft, Thread identity, and last coherent content. The release—not a Thread, mode, workflow, or agent—is what
+moves the venture.
 
-## Permanent frame
+Work → Product / GTM → Releases → Evidence describes causal venture physics, not navigation stages. The
+founder may enter anywhere. Switching modes preserves the focal subject and follows only existing direct
+references to the nearest exact linked context. With no destination link, Drover retains the source context
+and shows the missing link; it never fabricates a counterpart or invokes a generalized resolver.
+
+## Mode-owned frame
 
 The desktop frame begins with:
 
-- workspace rail: `240px`, resizable from `208px` to `320px`;
+- workspace rail: `240px`, resizable from `208px` to `320px`, with a mode-owned body;
 - the active mode workspace: all remaining width;
 - Work, Product / GTM, and Releases navigation below the venture switcher;
 - Settings at the rail bottom.
 
-Use `aria-current="page"` for the active mode. `⌘1`, `⌘2`, and `⌘3` switch modes; `⌘K` focuses
-Thread search. Do not add a decorative profile, Edit overlay, permanent agent roster, dashboard, or
-competing navigation root.
+Use `aria-current="page"` for the active mode. `⌘1`, `⌘2`, and `⌘3` switch modes; `⌘K` focuses the
+current mode's search. Do not add a decorative profile, Edit overlay, permanent agent roster, dashboard,
+global cross-mode search, or competing navigation root.
 
 Work is a stable agent development environment:
 
 - rail: its current width;
-- conversation: `minmax(380px, .82fr)`;
-- coding workbench: `minmax(480px, 1.18fr)`, with Files, Diff, and Preview above a collapsible terminal.
+- conversation: all remaining Work width until exact material or a coding workspace exists;
+- selected material: conversation beside the exact artifact, founder gate, or other inspectable return;
+- coding workbench: `minmax(480px, 1.18fr)`, with Changes and Preview above a collapsible terminal;
+- coding composer: bound repository, isolated-worktree posture, exact model selection, and founder guard.
 
-In Product / GTM and Releases, the primary canvas or release path occupies the center and conversation is a
-permanent right column. There is no Open chat control, chat drawer state, or mode-specific conversation
-navigation. Composer drafts remain scoped and intact while switching modes.
+Work conversation follows native coding-client geometry. Transcript rows and the composer share a centered
+`48rem` measure. Founder turns align right in compact bubbles no wider than 80% of that measure; agent output
+is unboxed and reads directly on the conversation plane. The transcript is the only vertical scroll owner.
+It restores each Thread's position, stays at the end while streaming only when the founder was already there,
+and otherwise exposes the scroll-to-latest control without moving the anchored composer.
 
-Below an effective width of `1120px`, including browser zoom, the thread rail collapses behind its launcher.
-The primary surface and agent stay usable; neither may collapse into decorative chrome.
+In Product / GTM and Releases, the primary canvas or release path occupies all available center space.
+**Ask Drover** opens contextual conversation as a right column when room permits and as an overlay at narrow
+desktop widths. It is scoped to the selected object, path, release, gap, or carried source context. Its
+composer does not inherit Work's repository, worktree, or model controls. Closing and reopening it preserves
+its draft, exact Thread identity, last coherent content, and scroll position.
+
+Below an effective width of `1120px`, including browser zoom, the mode rail collapses behind its launcher and
+contextual conversation overlays rather than compressing the primary surface. Both remain keyboard reachable.
 
 ## Startup and return
 
-Open the last active venture and restore the selected mode, thread, Product / GTM object, Release, system
-scope/camera, rail width, and per-thread conversation scroll from venture-keyed presentation memory. The v4
-reader maps useful v3, v2, and v1 selections forward while ignoring legacy drawer, subview, context-router,
-and persisted visual-stage fields.
+Open the last active venture and restore the selected mode, Thread, Product / GTM object, release, canvas
+scope/camera, rail width, contextual-conversation state, and per-Thread conversation scroll from venture-keyed
+presentation memory. Legacy readers may map useful selections forward but must ignore generalized
+context-router and focus-stack fields.
 
 When the venture has no used thread, show a lightweight conversation home using the same composer:
 
@@ -75,11 +91,12 @@ more than three truthful suggested review actions. The founder can always type a
 
 ## Workspace rail
 
-The rail provides stable orientation without becoming a second source of truth. Its body never changes into
-Product/GTM scopes or release lists. Across all three modes it contains the venture switcher, mode switch,
-New thread, thread search, compact Pinned, Active, Needs review, Recent and older rows, agent state on the
-corresponding thread, and Settings. Participant/runtime state stays attached to threads, headers, and
-conversation updates. Thread state uses an icon, label, and accessible text—not color alone:
+The rail provides stable orientation without becoming a second source of truth. The venture switcher, mode
+switch, and Settings remain stable; the body belongs to the selected mode and never shows every list at once.
+
+**Work** shows New thread, Thread search, and compact Pinned, Active, Needs review, Recent, and older rows.
+Participant/runtime state stays attached to Threads, headers, and conversation updates. Thread state uses an
+icon, label, and accessible text—not color alone:
 
 - active;
 - waiting for founder judgment;
@@ -88,9 +105,16 @@ conversation updates. Thread state uses an icon, label, and accessible text—no
 - quiet open;
 - closed.
 
-Product / GTM scope controls live in the canvas header. Release selection and New release live inside the
-Releases surface. New threads and releases begin as local drafts; canonical records form only on the first
-meaningful save or send. Thread search never changes the current mode.
+**Product / GTM** shows Whole venture, Product, Go-to-market, Needs attention, mode-local search, and compact
+context for the selected object or path. **System** is not a founder-facing label. The rail does not become an
+object explorer; exact editing remains on the canvas or selected-path depth.
+
+**Releases** shows New release when exact context can seed it, mode-local search, and Needs you, Preparing,
+In market, and Recent groups. It never opens a blank release form when selected work or Product / GTM truth
+already supplies context.
+
+New Threads and releases begin as local drafts; canonical records form only on first meaningful send or
+founder save. Mode-local search never changes modes or invents a global result router.
 
 ## Chat
 
@@ -106,8 +130,11 @@ Selecting a participant status scrolls to that participant’s latest meaningful
 an agent dashboard.
 
 The composer stays attached to the bottom of the chat column and always submits against the selected
-`threadRef`. Runtime, model, and participant assignment remain inferred unless the founder names a
-participant. A correction sent while a visual is open updates the same thread and material.
+`threadRef`. In Work, the founder can choose Auto or an exact connected Claude/Codex model; sending begins a
+nonblocking coding turn in that Thread. Product / GTM and Releases infer the runtime because their agent is
+context for the canvas or release path, not a second coding client. Participant assignment remains inferred
+unless the founder names a participant. A correction sent while a visual is open updates the same thread and
+material.
 
 ### Conversation information levels
 
@@ -117,7 +144,7 @@ The main conversation contains only:
 - Drover’s visible interpretation;
 - material progress and contradictions;
 - meaningful agent handoffs;
-- visual work products;
+- compact references to exact material;
 - results, failures, evidence, and exact founder questions.
 
 Each run may add one collapsed activity disclosure, for example:
@@ -130,29 +157,32 @@ Codex inspected 18 files, changed 6, and ran 4 checks.
 Full tool calls, sources, costs, runtime/model details, and low-level receipts remain available beneath that
 disclosure or in the side visual. They never stream through the primary conversation by default.
 
-## Rich conversation grammar
+## Conversation material references
 
 Model-generated prose always uses the shared markdown response renderer. Six domain projections may appear
-as first-class conversation items.
+as compact material references. The transcript never renders a full artifact body, code review, comparison,
+evidence collection, or founder gate card. A reference carries only enough kind, title, provenance, and state
+to identify the return; opening it shows the exact material beside conversation or routes to its canonical
+Product / GTM or Releases surface without moving the composer.
 
 ### Live visual work
 
-Show a compact real preview, owner/contributor and verification states, and only actions supported by truth:
-Open, Compare, and View code.
+Open the exact artifact or code return beside conversation. Owner, contributor, and verification states stay
+with that material, and only actions supported by truth appear there.
 
 ### Before and after
 
-Show current/proposed or before/after columns in the conversation and open the full comparison beside it.
+Open current/proposed or before/after columns beside conversation.
 
 ### Flow
 
-Show an accessible ordered flow in chat. Its larger view may expose interactive nodes and edges without
-making that graph the operating surface.
+Open an accessible ordered flow beside conversation. Interactive nodes and edges never make that graph the
+operating surface.
 
 ### Alternatives
 
-Show sibling attempts as approach cards derived from their existing bets/runs. Compare them side by side
-without duplicating their work records.
+Reference sibling attempts derived from their existing bets/runs and compare them beside conversation without
+duplicating their work records.
 
 ### Evidence
 
@@ -161,8 +191,9 @@ Never flatten evidence into an invented score.
 
 ### Consequence review
 
-Summarize the exact Product, go-to-market, code, and external effects. Opening the review grants nothing.
-Send, apply, deploy, spend, and destructive controls remain inside the precise founder gate and fail closed.
+The reference names the exact Product, go-to-market, code, or external effect awaiting review. Opening it
+grants nothing. Send, apply, deploy, spend, and destructive controls remain inside the precise founder gate
+and fail closed.
 
 Every rich item needs honest loading, empty, partial, stale, failed, and long-content behavior.
 
@@ -192,12 +223,14 @@ The visual is a projection of the current thread’s material. Its registry supp
 comparison, map, evidence, and consequence. It never owns business truth or changes conversation scope.
 
 Code artifacts do not open as optional overlays. When a Thread carries native coding work, Work shows its
-latest attempt in the permanent workbench and lets the founder select older attempts. Files, exact diff,
-preview, command and verification receipts, failures, checkpoints, and unresolved risk stay beside the
-conversation. A collapsible terminal runs only in the canonical isolated worktree; Electron resolves the
-workspace and executable rather than trusting renderer paths. Preview uses one sandboxed native view and
-accepts only HTTP(S). The browser harness states that these native capabilities require Electron rather than
-simulating them.
+latest attempt in the permanent workbench and lets the founder select older attempts. Changes combines a
+changed-file navigator with the exact selected diff; Preview is its sibling tab. Command and verification
+receipts, failures, checkpoints, and unresolved risk stay beside the conversation. Before repository work
+exists, Work reserves no empty workbench, but its composer still identifies the bound repository, worktree
+posture, selected model, and founder-held consequence boundary. A collapsible terminal runs only in the
+canonical isolated worktree; Electron resolves the workspace and executable rather than trusting renderer
+paths. Preview uses one sandboxed native view and accepts only HTTP(S). The browser harness states that these
+native capabilities require Electron rather than simulating them.
 
 Founder actions state the exact repository consequence: approve the current checkpoint, apply or reverse it
 in the source workspace, commit the isolated branch, prepare a branch or pull request, restore a checkpoint,
@@ -205,10 +238,16 @@ or discard the workspace. Multiple attempts open as separate material and can be
 overwrites another. Repository ambiguity disables the consequence instead of inviting a guess. Completed
 implementation also shows the resulting Product capability and its release or distribution question.
 
-The venture map is the primary Product / GTM workspace projection. Selecting a node opens its latest linked
-Thread in the permanent agent; without one, the next message creates a Thread scoped by the node’s existing
-`objectRef`. Node work state is derived from `WorkIndex`, never stored on the graph. The graph never becomes
-another authority or an executable workflow.
+The venture map is the primary Product / GTM workspace projection. Selecting a node changes the focal subject.
+If contextual conversation is open, it follows the latest exact linked Thread; without one, the next message
+creates a Thread scoped by the existing `objectRef`. Opening Work follows that direct Thread reference or
+carries the selected object as a visible missing Work link. Node work state is derived from `WorkIndex`, never
+stored on the graph. The graph never becomes another authority or an executable workflow.
+
+The current spatial composition is a hypothesis. Until one real release returns attributable evidence into
+next Work, do not introduce semantic-zoom capacity layers, reusable-method promotion, or reusable-capacity
+ontology. Founder-made joins save immediately and remain undoable; agent-inferred joins stay visibly
+provisional until adopted.
 
 Releases shows one connected path: Product delta → Customer consequence → Distribution → Outward action →
 Evidence. Every populated section traces to an existing relationship, Thread, decision, or outcome; an open
@@ -235,12 +274,13 @@ Motion is causal and fast-settling:
 
 ## Keyboard and accessibility
 
-- `Cmd/Ctrl+1`, `2`, and `3` switch founder modes; `Cmd/Ctrl+K` focuses thread search.
+- `Cmd/Ctrl+1`, `2`, and `3` switch founder modes; `Cmd/Ctrl+K` focuses the current mode's search.
 - `Esc` closes the topmost optional non-code visual and restores its originating control.
 - rail resize supports pointer and arrow-key adjustment.
 - the collapsed rail remains keyboard reachable.
 - all controls expose semantic roles, visible focus, accessible names, and non-color status text.
 - the conversation has log semantics, accessible auto-scroll, and an explicit scroll-to-latest control.
+- Work preserves one transcript scroll owner and a stable per-Thread position across ordinary updates.
 - at 200% zoom, the active workspace, rail overlay, and chat overlay remain usable.
 
 ## Truth and authority
@@ -257,10 +297,15 @@ conversation readable and disables consequential mutation honestly.
 
 The rebuilt shell is ready when deterministic journeys prove:
 
-1. startup restores the exact venture, mode, selected thread/object/release, system camera, and scroll state;
-2. switching modes preserves the selected Thread while node and release selection use direct existing refs;
-3. node or release selection opens its latest linked Thread or a correctly scoped local draft;
-4. Work exposes attempts, files, exact diff, native preview/terminal, verification, and founder consequences;
+1. startup restores the exact venture, mode, focal Thread/object/release, canvas camera, contextual-conversation
+   state, drafts, and scroll state;
+2. switching modes preserves the focal subject through direct existing references and shows a missing link
+   rather than restoring an unrelated selection;
+3. node or release selection scopes contextual conversation to its latest linked Thread or a correctly scoped
+   local draft, and closing it loses neither;
+4. Work starts a nonblocking coding turn with the selected connected model, keeps transcript and exact
+   material separate, exposes attempts and changed-file diffs in one Changes surface, and provides native
+   preview/terminal, verification, and founder consequences;
 5. Product / GTM objects and connections can be added and edited reversibly within venture scope;
 6. a release begins unsaved, persists on meaningful save, joins exact work and actions, receives evidence,
    and ends or reopens only by the founder;
@@ -269,3 +314,5 @@ The rebuilt shell is ready when deterministic journeys prove:
 9. stale/offline state preserves readability and prevents unsafe mutation;
 10. keyboard navigation, rail collapse, focus restoration, and reduced motion remain coherent at desktop and
     narrow desktop widths.
+11. each mode renders only its own rail content, and no founder-facing control or heading names Product / GTM
+    as System.

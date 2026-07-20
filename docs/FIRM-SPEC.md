@@ -1,7 +1,7 @@
 # Drover firm specification
 
 **Status:** durable product and build physics.
-**Last reconciled:** 2026-07-19 for the three-mode founder workspace.
+**Last reconciled:** 2026-07-20 for mode-owned space and bounded observation.
 **Scope:** product-agnostic and venture-agnostic. **Stage:** alpha.
 
 This is the product specification of record. [`STATE.md`](STATE.md) records what the current tree proves.
@@ -17,7 +17,7 @@ It does not run the company for the founder. It gives the founder the depth, mem
 cognition of a complete product and go-to-market organization.
 
 > **Work, Product / GTM, and Releases are parallel founder jobs over one canonical venture model and one
-> shared context. Conversation directs and reviews work; the system workspace makes the venture shapeable;
+> shared context. Conversation directs and reviews work; the Product / GTM workspace makes the venture shapeable;
 > the release workspace makes market movement and returned evidence exact. Claude and Codex expand what the
 > founder can accomplish without gaining founder authority.**
 
@@ -55,6 +55,12 @@ The venture has one shared underlying model. Work, Product / GTM, Releases, the 
 answers, operating arrangements, saved views, snapshots, conversation projections, and indexes are
 presentation-level projections of that model, never parallel sources of truth. Modes are neither lifecycle
 stages nor authority boundaries. Switching them changes view and next action, not canonical identity.
+
+The venture-development loop is causal physics, not a required navigation sequence. A founder may enter
+through Work, a Product or go-to-market object, a release, or returned evidence. Mode switching preserves the
+focal subject and follows only existing direct references to the nearest exact representation. If no linked
+representation exists, the destination retains the source context and exposes the missing link rather than
+inventing one. No generalized context router, resolver, or focus stack is part of the product.
 
 ### Visual understanding precedes administration
 
@@ -319,6 +325,20 @@ The founder sees exact purpose-specific verbs: release a message, apply a produc
 deploy, spend, answer, review evidence, keep, end, or perform a destructive act. A grant, configuration,
 prompt, conversation, or model claim can never mint the host release capability.
 
+### Bounded observation authority
+
+The founder may grant a release-scoped, read-only observation contract for an exact source, purpose, window,
+and return condition. Electron creates the grant at the founder wall; it remains durable across restart,
+revocable by the founder, and incapable of widening itself. The grant permits only the reads required to
+observe the named release and the recording of attributable source events or explicit silence inside that
+window. It cannot send, publish, deploy, spend, perform destructive work, start unrelated inward work, or
+change an established canonical interpretation.
+
+Observation records what happened with source identity, capture time, release reference, and attribution
+strength. Any model-authored meaning remains a separate provisional interpretation until the founder adopts
+it. Expiry, revocation, source mismatch, missing credentials, ambiguous attribution, or an unavailable source
+stops observation honestly and preserves the last coherent evidence without claiming a return.
+
 ### Claude, Codex, and configured participants
 
 Claude and Codex share one provider-neutral capability surface. Runtime identity, model, authentication,
@@ -387,25 +407,29 @@ consequence, returns evidence, or changes venture judgment.
 
 ## Interaction invariants
 
-1. One click selects canonical context. Work opens its thread; Product / GTM opens its object and inspector;
-   Releases opens its release. Escape closes the topmost visual or contextual conversation and returns
-   focus to its originating act.
+1. One click selects canonical context. Work opens its Thread; Product / GTM opens its object or path;
+   Releases opens its release. Escape closes the topmost visual or contextual conversation and returns focus
+   to its originating act without losing the draft, Thread identity, or last coherent conversation.
 2. Typing in venture chat starts a thread; typing in a thread continues that exact durable conversation.
 3. Moving, resizing, and visual grouping update placement immediately and remain reversible.
-4. An obvious semantic connection may apply directly and remains undoable.
-5. An ambiguous gesture exposes Drover's interpretation before semantic truth changes.
+4. A founder-made obvious semantic connection may apply directly and remains undoable.
+5. An ambiguous gesture or agent-inferred connection remains visibly provisional until the founder adopts it.
 6. Generated layouts never overwrite founder placement.
 7. Saving a live view, capturing a snapshot, and promoting an inferred finding are explicit acts.
 8. Every external act presents the exact consequence.
 9. Collapsing activity, opening or closing a visual or drawer, switching modes, or switching threads never
    loses scoped drafts, shared context, thread identity, or the last coherent conversation.
-10. Switching modes or lenses never duplicates objects or restores an unrelated selection.
-11. Search is mode-scoped in presentation while the underlying index can reach the whole venture model,
-   evidence, conversations, views, snapshots, and work.
+10. Switching modes or lenses preserves the focal subject through existing direct references only; it never
+    duplicates objects, restores an unrelated selection, or invents a destination counterpart.
+11. Search is mode-scoped. The underlying indexes may read the whole venture model, but the founder surface
+    does not expose a global cross-mode result router.
 12. Raw internal identifiers never become required founder vocabulary.
 13. Agent work attaches to the Product or go-to-market object it changes.
 14. A result without visible consequence or evidence is incomplete.
 15. Every major action remains reversible until it crosses into the world.
+16. The rail body belongs to the selected mode: Threads in Work; Product / GTM scopes and path context in
+    Product / GTM; Needs you, Preparing, In market, and Recent releases in Releases. Every list is never shown
+    at once.
 
 ## Firm rails
 
@@ -457,8 +481,8 @@ Each phase is a vertical completion gate. Nothing is called complete from compon
 4. **Consequence execution:** make product apply, deploy, send, spending, destructive actions, failure,
    retry, and MCP/Electron topology truthful under the founder wall.
 5. **One founder shell:** ship one venture-keyed WorkspaceShell with Work, Product / GTM, and Releases mode
-   navigation, shared context, scoped drafts, deterministic cross-mode resolution, and local presentation
-   restoration. Conversation stays mounted: primary in Work and contextual as a drawer elsewhere.
+   navigation, shared focal context, scoped drafts, direct-reference mode handoff, mode-owned rails, and local
+   presentation restoration. Conversation is primary in Work and contextual and closable elsewhere.
 6. **Work and visual stage:** project thread return value as Pinned, Active, Needs review, Recent, and
    history. Previews, diffs, comparisons, flows, evidence, consequences, and code open beside Work chat.
 7. **Product/GTM and Releases:** provide full direct workspaces over canonical semantic objects and

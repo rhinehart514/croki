@@ -1,6 +1,6 @@
 # STATE — Drover
 
-**Stage:** alpha. **Updated:** 2026-07-19.
+**Stage:** alpha. **Updated:** 2026-07-20.
 **Authority:** [`FIRM-SPEC.md`](FIRM-SPEC.md) defines durable product/build physics. Root
 [`DESIGN.md`](../DESIGN.md) defines the intended desktop experience.
 
@@ -18,6 +18,7 @@ The approved product has:
 
 - one canonical open venture model with permanent Product and go-to-market territories;
 - three parallel founder modes—Work, Product / GTM, and Releases—over one shared context;
+- a mode-owned rail and contextual, closable conversation outside Work;
 - one continuous venture conversation plus persistent scoped branches;
 - selection-scoped direction and direct manipulation;
 - Understand / Design / Execute / Learn as reversible lenses, never stages;
@@ -33,7 +34,7 @@ The approved product has:
 ### Implemented correction — three founder jobs, one venture context
 
 The shipped shell now has Work, Product / GTM, and Releases as complete presentation-level modes over the
-canonical venture model. Work is a stable conversation-and-workbench ADE. Product / GTM owns the node canvas
+canonical venture model. Work is a coding-first conversation-and-workbench ADE. Product / GTM owns the node canvas
 beside a permanently visible agent. Releases owns one connected release path beside the same permanent agent.
 Mode changes preserve the selected Thread; node and release selection use their existing direct references
 instead of a generalized context router.
@@ -48,21 +49,33 @@ normal product entrypoint.
 The detailed laws and compatibility boundaries live in `FIRM-SPEC.md`; experience behavior lives in root
 `DESIGN.md`.
 
+On 2026-07-20 the authority was reconciled toward mode-owned space. The causal Work → Product / GTM →
+Releases → Evidence loop is not a navigation sequence; Product / GTM is never founder-facing **System**;
+mode handoff follows existing direct references; founder joins are immediate and undoable while agent joins
+remain provisional; and the canvas's broader semantic-zoom/capacity architecture stays an unadopted
+hypothesis until a real loop runs. The implementation described above still proves the prior universal rail
+and permanent-agent composition, so the shell migration remains open below rather than being claimed complete.
+
 ## Verified current behavior — observed on this working tree
 
 ### Mechanical baseline
 
-On 2026-07-19, `npm run test:acceptance` passed against this working tree:
+On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree; after its
+sole stale Atlas keyboard expectation was corrected to the permanent mode switch, the remaining Atlas and
+Electron gates were rerun together and exited 0:
 
-- `npm test`: Brain **825/825** and UI **492/492**, with lint and the production build green;
+- `npm test`: Brain **826/826** and UI **497/497**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
 - Electron: **12/12**, including PTY worktree isolation, native preview security, real-host native-coding
   restart, and founder-authority receipts.
 
-The browser journeys exercise the universal Thread rail, stable Work conversation/workbench split, attempt
-selection, in-surface files/diff/review, node-scoped persistent agent, direct Thread/object/release selection,
+The browser journeys exercise the universal Thread rail; the coding-first Work composer with repository,
+isolated-worktree, founder-guard, and real Claude/Codex model choice; absence of those coding controls from
+Product / GTM and Releases; no reserved empty workbench before coding begins; stable Work
+conversation/workbench split; compact transcript material references; attempt selection; in-surface
+changes/diff/review; node-scoped persistent agent; direct Thread/object/release selection,
 the five-part Release Path, honest missing links, derived in-market state, joined exact gates and evidence,
 unsaved contextual release drafts, end/reopen, generated Whole system/Product/Go-to-market graphs, keyboard
 reachability, 120-node containment, venture isolation, zoom, and offline last-coherent reads. T3's
@@ -98,9 +111,17 @@ the venture switcher. The same compact pinned, active, needs-review, recent, and
 all three modes; scope and release lists no longer replace them. New threads become durable only on first
 send.
 
-Work mounts conversation beside a stable coding workbench. Native coding attempts are selectable without an
-overlay; the workbench exposes Files, Diff, Preview, a collapsible Terminal, command/verification receipts,
-checkpoints, and the existing approve/reject/apply/reverse/commit/prepare/restore/discard controls. Electron
+Work opens as coding conversation and gives it the available surface until repository work exists. Its
+composer exposes the repository, isolated-worktree promise, founder guard, and available Claude/Codex model
+choice. A direction starts a nonblocking coding turn in the same Thread with that exact runtime/model choice.
+Conversation holds intent, progress, and compact material references rather than rendering full artifacts or
+gates inline. Work now uses the native coding-client conversation geometry proven in the browser journey:
+founder turns are compact and right-aligned, agent output is unboxed, transcript rows and composer share a
+centered `48rem` measure, and one stable transcript scroller preserves per-Thread position without jumping on
+ordinary shell updates. Once coding begins, native attempts are selectable without an overlay; the adjacent workbench
+exposes Changes (file navigation plus the exact selected diff), Preview, a collapsible Terminal,
+command/verification receipts, checkpoints, and the existing
+approve/reject/apply/reverse/commit/prepare/restore/discard controls. Electron
 uses `node-pty` only after resolving `ventureId + workspaceId` to the canonical isolated worktree and owns one
 sandboxed HTTP(S)-only `WebContentsView` preview. The browser harness shows honest desktop-required states.
 
@@ -108,7 +129,9 @@ Product / GTM controls `VentureMaps` as the primary canvas across Whole system, 
 attention scopes, with those controls in its header. The founder can create open objects and labeled
 connections, edit open records directly, and edit compatibility-owned names/connections through the existing
 architecture adapter. Selecting a node visibly scopes the permanent agent and derives working, needs review,
-failed, or completed state from linked `WorkIndex` Threads. Graph pan, zoom, fit, and camera remain
+failed, or completed state from linked `WorkIndex` Threads. A load-order-safe direct-reference handoff opens
+the canonical linked Thread as soon as its shared index is current. The contextual composer stays free of
+repository/worktree/model controls. Graph pan, zoom, fit, and camera remain
 presentation only; the graph never becomes another authority.
 
 Releases are canonical semantic objects, not another collection. The workspace derives draft/in-market/ended
@@ -116,6 +139,7 @@ and needs-you state from exact references and presents Product delta → Custome
 Outward action → Evidence as one feature-local projection. Missing sections remain explicit; exact gates sit
 inside Outward action; joined activity follows the path; object/work links open from the relevant section;
 rename/end/reopen live in Details. There is no Overview/Build/Activity/Settings subnavigation.
+Its contextual agent likewise remains distinct from the Work coding composer.
 
 Conversation remains mounted and visible in every mode. A missing linked Thread becomes a local subject-scoped
 draft whose canonical Thread forms on first send. The v4 session restores mode, selected Thread/object/release,
@@ -374,8 +398,11 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 - The three presentation modes share one context but remain incomplete as a founder-validated composition;
   deterministic coverage proves navigation and restoration mechanics, not that the hierarchy is yet obvious
   to an outside founder.
-- The permanent rail searches Threads across every mode. Product/GTM and Release selection stay inside their
-  own surfaces; there is no cross-mode command palette or generalized result router.
+- **The shell still contradicts the reconciled mode-owned design.** Its rail searches Threads across every
+  mode and Product / GTM and Releases keep conversation permanently visible. Replace those with mode-scoped
+  rail bodies and contextual closable conversation while preserving drafts, exact Thread identity, direct
+  references, focal context, and narrow-width accessibility. Do not introduce a cross-mode command palette,
+  generalized resolver, or focus stack.
 - Product / GTM graph camera, selection, and scope restore through the v4 venture session. The older saved
   view/snapshot store still lacks a complete list/reopen/delete founder UI.
 - Exact thread targeting is carried through conversation replies and new Runs. Legacy bet-focused work
@@ -479,8 +506,9 @@ The following are approved requirements or desired alpha evidence without suffic
 - one canonical open model fully wired across Product/go-to-market canvas, conversation, runs, work,
   decisions, evidence, and saved views;
 - one venture conversation with durable persistent branches;
-- semantic zoom over exact work, evidence, and provenance (the canvas zooms over Product/go-to-market
-  structure today, but exact work, evidence, and provenance are not yet in the zoomed scene);
+- semantic zoom over exact work, evidence, and provenance is explicitly deferred until a real release returns
+  attributable evidence into next Work; the current structure zoom remains implemented evidence, not an
+  adopted capacity-layer direction;
 - a **reachable** saved-view lifecycle — the founder can save and snapshot, but cannot yet list, reopen, or
   delete a saved view from the UI;
 - immediate provisional whole-venture interpretation plus useful work in one founder-directed turn;
