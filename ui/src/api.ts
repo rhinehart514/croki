@@ -382,7 +382,13 @@ export type CodingWorkspace = {
   interruption?: { message: string; recovery: string; at: string } | null;
   consequence?: { review?: "approved" | "rejected"; note?: string; action?: string; commit?: string; preparation?: { pushCommand: string; pullRequestCommand: string; note: string } } | null;
   restoration?: { checkpointId: string; restoredAt: string; note: string } | null;
-  productConsequence?: { capability: string; system: string[]; claims: Array<{ status: string; statement: string }>; releaseQuestion: string } | null;
+  productConsequence?: {
+    capability: string;
+    system: string[];
+    claims: Array<{ status: string; statement: string }>;
+    releaseQuestion: string;
+    review?: { decision: "provisional" | "adopted" | "rejected"; reviewedAt: string };
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -396,6 +402,11 @@ const codingAction = (ventureId: string, id: string, action: string, body: Recor
   );
 
 export const reviewCodingWorkspace = (ventureId: string, id: string, decision: "approve" | "reject", note = "") => codingAction(ventureId, id, "review", { decision, note });
+export const reviewCodingProductConsequence = (
+  ventureId: string,
+  id: string,
+  input: { decision: "revise" | "adopt" | "reject"; capability: string; releaseQuestion: string },
+) => codingAction(ventureId, id, "product-consequence", input);
 export const applyCodingWorkspace = (ventureId: string, id: string) => codingAction(ventureId, id, "apply", { confirm: true });
 export const revertCodingWorkspaceApply = (ventureId: string, id: string) => codingAction(ventureId, id, "revert", { confirm: true });
 export const commitCodingWorkspace = (ventureId: string, id: string, message: string) => codingAction(ventureId, id, "commit", { confirm: true, message });

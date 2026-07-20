@@ -244,7 +244,9 @@ Founder actions state the exact repository consequence: approve the current chec
 in the source workspace, commit the isolated branch, prepare a branch or pull request, restore a checkpoint,
 or discard the workspace. Multiple attempts open as separate material and can be compared; one never
 overwrites another. Repository ambiguity disables the consequence instead of inviting a guess. Completed
-implementation also shows the resulting Product capability and its release or distribution question.
+implementation also shows an editable Product consequence and distribution question as provisional Work
+material. The founder may save the revision provisionally, reject it without changing Product / GTM, or adopt
+it after exact verification; only adoption makes the capability canonical and directly reachable on the map.
 
 The venture map is the primary Product / GTM workspace projection. Selecting a node changes the focal subject.
 If contextual conversation is open, it follows the latest exact linked Thread; without one, the next message

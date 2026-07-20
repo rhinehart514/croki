@@ -260,19 +260,22 @@ export function attachDriveRunWork(ventureId, runId, { workRef, participantRef, 
   return structuredClone(updated);
 }
 
-export function recordCodingProductConsequence(ventureId, workspace, options = {}) {
+export function recordCodingProductConsequence(ventureId, workspace, { actor } = {}, options = {}) {
   if (!workspace?.id || !workspace?.productConsequence) return null;
+  if (workspace.productConsequence.review?.decision !== "adopted" || actor?.authority !== "founder") {
+    throw new Error("A coding Product consequence enters canonical venture truth only after founder adoption.");
+  }
   const state = getSemanticModelState(ventureId, options);
   const id = `capability-${workspace.id}`;
   const existing = state.model.objects.find((entry) => entry.id === id);
   const timestamp = now();
   const record = {
     id,
-    type: "product-capability-change",
+    type: "capability",
     name: workspace.productConsequence.capability,
     statement: workspace.productConsequence.claims?.[0]?.statement ?? "Implementation exists; customer impact still needs evidence.",
-    assertion: "tentative",
-    provenance: { kind: "repository-implementation", sourceRef: `work:${workspace.id}` },
+    assertion: "founder-asserted",
+    provenance: { kind: "repository-implementation", sourceRef: `work:${workspace.id}`, actor: actor.id },
     properties: {
       coding: {
         workspaceRef: `work:${workspace.id}`,
@@ -286,6 +289,6 @@ export function recordCodingProductConsequence(ventureId, workspace, options = {
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
-  applyOne(ventureId, record, "objects", { actor: SYSTEM_ACTOR, at: timestamp }, options, existing ? "update-record" : "create-record");
+  applyOne(ventureId, record, "objects", { actor, at: timestamp }, options, existing ? "update-record" : "create-record");
   return structuredClone(record);
 }

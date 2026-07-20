@@ -10,6 +10,7 @@ import {
   prepareCodingPullRequest,
   revertCodingWorkspaceApply,
   restoreCodingWorkspaceCheckpoint,
+  reviewCodingProductConsequence,
   reviewCodingWorkspace,
 } from "./code-workspace.mjs";
 
@@ -43,7 +44,7 @@ export default async function handle({ req, res, url }) {
     return true;
   }
 
-  const actionMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/coding-workspaces\/([^/]+)\/(review|apply|revert|commit|prepare-pull-request|restore|discard)$/);
+  const actionMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/coding-workspaces\/([^/]+)\/(review|product-consequence|apply|revert|commit|prepare-pull-request|restore|discard)$/);
   if (req.method !== "POST" || !actionMatch) return false;
   const ventureId = decodeURIComponent(actionMatch[1]);
   const id = decodeURIComponent(actionMatch[2]);
@@ -56,6 +57,7 @@ export default async function handle({ req, res, url }) {
       throw new Error(`${action} requires explicit confirmation.`);
     }
     const workspace = action === "review" ? reviewCodingWorkspace(ventureId, id, body?.decision, body?.note)
+      : action === "product-consequence" ? reviewCodingProductConsequence(ventureId, id, body, { authority: "founder", id: "founder" })
       : action === "apply" ? applyCodingWorkspace(ventureId, id)
         : action === "revert" ? revertCodingWorkspaceApply(ventureId, id)
           : action === "commit" ? commitCodingWorkspace(ventureId, id, body?.message)

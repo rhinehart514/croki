@@ -5,9 +5,11 @@ import { CodeWorkspaceStage } from "./CodeWorkspaceStage";
 
 const review = vi.fn(async () => ({}));
 const apply = vi.fn(async () => ({}));
+const reviewProductConsequence = vi.fn(async () => ({}));
 vi.mock("@/api", async (original) => ({
   ...await original<typeof import("@/api")>(),
   reviewCodingWorkspace: (...args: unknown[]) => review(...args),
+  reviewCodingProductConsequence: (...args: unknown[]) => reviewProductConsequence(...args),
   applyCodingWorkspace: (...args: unknown[]) => apply(...args),
   commitCodingWorkspace: vi.fn(async () => ({})),
   discardCodingWorkspace: vi.fn(async () => ({})),
@@ -37,7 +39,22 @@ describe("native coding stage", () => {
     expect(screen.getAllByText("ui/src/App.tsx")).toHaveLength(2);
     expect(screen.getByText("npm test")).toBeInTheDocument();
     expect(screen.getByText("Which release carries this?")).toBeInTheDocument();
+    expect(screen.getByText(/does not alter Product \/ GTM truth until you adopt it/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve checkpoint" })).toBeInTheDocument();
+  });
+
+  it("lets the founder edit and adopt the provisional Product consequence", async () => {
+    const changed = vi.fn();
+    render(<CodeWorkspaceStage ventureId="v1" workspace={workspace()} readOnlyReason={null} onChanged={changed} />);
+    fireEvent.change(screen.getByLabelText("What became possible"), { target: { value: "Founders keep coding context in Drover" } });
+    fireEvent.change(screen.getByLabelText("Distribution question"), { target: { value: "Which founders should receive it first?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Adopt Product consequence" }));
+    await waitFor(() => expect(reviewProductConsequence).toHaveBeenCalledWith("v1", "code-one", {
+      decision: "adopt",
+      capability: "Founders keep coding context in Drover",
+      releaseQuestion: "Which founders should receive it first?",
+    }));
+    expect(changed).toHaveBeenCalled();
   });
 
   it("requires a distinct confirmation before applying an approved checkpoint", async () => {

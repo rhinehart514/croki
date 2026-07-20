@@ -284,7 +284,6 @@ export function settleCodingWorkspace(ventureId, id, { runRef, outcome, error = 
       releaseQuestion: `Which release should carry “${record.goal}”, and how will returned evidence change the Product or its distribution?`,
     } : null,
   }, options);
-  if (settled.productConsequence) recordCodingProductConsequence(ventureId, settled, options);
   return settled;
 }
 
@@ -340,6 +339,39 @@ export function reviewCodingWorkspace(ventureId, id, decision, note, options = {
   const record = getVentureDoc(ventureId, CODE_WORKSPACE_COLLECTION, id, options);
   assertExactReviewable(record);
   return save({ ...record, consequence: { ...(record.consequence ?? {}), review: decision === "approve" ? "approved" : "rejected", note: String(note ?? "").trim(), reviewedAt: now() } }, options);
+}
+
+export function reviewCodingProductConsequence(ventureId, id, input = {}, actor, options = {}) {
+  if (actor?.authority !== "founder") throw new Error("Adopting or rejecting a Product consequence is founder-only.");
+  const record = getVentureDoc(ventureId, CODE_WORKSPACE_COLLECTION, id, options);
+  if (!record?.productConsequence) throw new Error("This coding workspace has no Product consequence to review.");
+  const decision = String(input.decision ?? "").trim();
+  if (!["revise", "adopt", "reject"].includes(decision)) throw new Error("Product consequence review must revise, adopt, or reject the interpretation.");
+  if (record.productConsequence.review?.decision === "adopted" && decision !== "adopt") {
+    throw new Error("This Product consequence is already canonical. Update it here or change it directly in Product / GTM.");
+  }
+  const capability = String(input.capability ?? record.productConsequence.capability ?? "").trim();
+  const releaseQuestion = String(input.releaseQuestion ?? record.productConsequence.releaseQuestion ?? "").trim();
+  if (!capability) throw new Error("A Product consequence needs a concrete capability statement.");
+  if (!releaseQuestion) throw new Error("A Product consequence needs a distribution question.");
+  if (decision === "adopt") {
+    assertExactReviewable(record);
+    assertVerified(record);
+  }
+  const reviewed = save({
+    ...record,
+    productConsequence: {
+      ...record.productConsequence,
+      capability,
+      releaseQuestion,
+      review: {
+        decision: decision === "adopt" ? "adopted" : decision === "reject" ? "rejected" : "provisional",
+        reviewedAt: now(),
+      },
+    },
+  }, options);
+  if (decision === "adopt") recordCodingProductConsequence(ventureId, reviewed, { actor }, options);
+  return reviewed;
 }
 
 export function applyCodingWorkspace(ventureId, id, options = {}) {

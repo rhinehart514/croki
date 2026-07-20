@@ -13,6 +13,7 @@ import {
   openCodingWorkspace,
   recoverInterruptedCodingWorkspaces,
   revertCodingWorkspaceApply,
+  reviewCodingProductConsequence,
   reviewCodingWorkspace,
   restoreCodingWorkspaceCheckpoint,
   settleCodingWorkspace,
@@ -113,8 +114,18 @@ describe("Run-linked coding workspace", () => {
     assert.match(settled.diff, /implemented/);
     assert.match(settled.diff, /proof\.txt/);
     assert.equal(fs.readFileSync(path.join(repo, "product.txt"), "utf8"), "founder in progress\n", "provider work never touches the source checkout");
-    assert.ok(getSemanticModel(venture.id, options).objects.some((entry) => entry.id === `capability-${workspace.id}`), "the implementation creates a tentative, source-bearing Product consequence");
+    assert.equal(getSemanticModel(venture.id, options).objects.some((entry) => entry.id === `capability-${workspace.id}`), false, "a provisional interpretation does not silently change Product truth");
     assert.deepEqual(settled.productConsequence.claims.map((claim) => claim.status), ["supported-by-implementation", "unsupported", "stale-not-identified"]);
+    const adopted = reviewCodingProductConsequence(venture.id, workspace.id, {
+      decision: "adopt",
+      capability: "Native coding works inside the founder thread",
+      releaseQuestion: "Which founders should receive this exact verified change first?",
+    }, { authority: "founder", id: "founder" }, options);
+    assert.equal(adopted.productConsequence.review.decision, "adopted");
+    const capability = getSemanticModel(venture.id, options).objects.find((entry) => entry.id === `capability-${workspace.id}`);
+    assert.equal(capability.name, "Native coding works inside the founder thread");
+    assert.equal(capability.assertion, "founder-asserted");
+    assert.equal(capability.properties.coding.releaseQuestion, "Which founders should receive this exact verified change first?");
 
     reviewCodingWorkspace(venture.id, workspace.id, "approve", "Exact patch reviewed", options);
     const applied = applyCodingWorkspace(venture.id, workspace.id, options);
@@ -129,6 +140,28 @@ describe("Run-linked coding workspace", () => {
     assert.equal(restored.status, "no-change");
     assert.equal(restored.consequence, null, "restoring repository state invalidates prior review");
     assert.equal(restored.checkpoints.at(-1).restoredFrom, "baseline");
+    discardCodingWorkspace(venture.id, workspace.id, options);
+    cleanup();
+  });
+
+  it("keeps revised and rejected coding interpretations outside canonical Product truth", () => {
+    const { repo, options, venture, cleanup } = fixture();
+    const workspace = openCodingWorkspace({
+      ventureId: venture.id, runId: "drive-product-review", threadRef: "thread:product-review",
+      participantRef: "codex", provider: "codex", repository: repo, goal: "Improve onboarding", workRef: null,
+    }, options);
+    fs.writeFileSync(path.join(workspace.worktree, "product.txt"), "hello\nreviewable\n");
+    updateCodingSession(venture.id, workspace.id, { runRef: "run:drive-product-review", command: { command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "ok", verification: true } }, options);
+    settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-product-review", outcome: { kind: "completed" } }, options);
+    const revised = reviewCodingProductConsequence(venture.id, workspace.id, {
+      decision: "revise", capability: "Faster first value", releaseQuestion: "Who needs this proof?",
+    }, { authority: "founder", id: "founder" }, options);
+    assert.equal(revised.productConsequence.review.decision, "provisional");
+    const rejected = reviewCodingProductConsequence(venture.id, workspace.id, {
+      decision: "reject", capability: revised.productConsequence.capability, releaseQuestion: revised.productConsequence.releaseQuestion,
+    }, { authority: "founder", id: "founder" }, options);
+    assert.equal(rejected.productConsequence.review.decision, "rejected");
+    assert.equal(getSemanticModel(venture.id, options).objects.some((entry) => entry.id === `capability-${workspace.id}`), false);
     discardCodingWorkspace(venture.id, workspace.id, options);
     cleanup();
   });

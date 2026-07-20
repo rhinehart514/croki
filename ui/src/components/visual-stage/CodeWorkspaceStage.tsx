@@ -11,6 +11,7 @@ import {
   type CodingWorkspace,
 } from "@/api";
 import { DiffView, FilesChanged } from "@/components/review";
+import { ProductConsequenceReview } from "@/components/work-mode/ProductConsequenceReview";
 
 const label = (value: string) => value.replaceAll("-", " ");
 const activityLabel: Record<string, string> = {
@@ -22,6 +23,7 @@ const activityLabel: Record<string, string> = {
   commit: "Committing in the isolated branch…",
   restore: "Restoring the selected checkpoint…",
   discard: "Discarding the isolated workspace…",
+  "product-consequence": "Updating the Product consequence…",
 };
 
 export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onChanged, variant = "full" }: {
@@ -125,11 +127,16 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
         </div>
       </section>
 
-      {workspace.productConsequence ? <section className="code-workspace-section code-workspace-product">
-        <header><span>Product consequence</span><strong>{workspace.productConsequence.capability}</strong></header>
-        <ul>{workspace.productConsequence.claims.map((claim) => <li key={`${claim.status}:${claim.statement}`}><span>{claim.status.replaceAll("-", " ")}</span><p>{claim.statement}</p></li>)}</ul>
-        <div><span>Release / distribution question</span><p>{workspace.productConsequence.releaseQuestion}</p></div>
-      </section> : null}
+      {workspace.productConsequence ? <ProductConsequenceReview
+        key={`${workspace.id}:${workspace.updatedAt}`}
+        ventureId={ventureId}
+        workspace={workspace}
+        readOnlyReason={readOnlyReason}
+        busy={Boolean(busy)}
+        onBusy={(active) => setBusy(active ? "product-consequence" : null)}
+        onError={setError}
+        onChanged={onChanged}
+      /> : null}
 
       {variant === "full" ? founderActions : null}
     </div>

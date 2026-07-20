@@ -241,7 +241,7 @@ button.thread-agent-presence-row:focus-visible { outline: 2px solid var(--primar
 .code-workspace-summary > div { display: grid; min-width: 0; gap: 5px; padding: 13px 15px; border-right: 1px solid var(--n-line); border-bottom: 1px solid var(--n-line); }
 .code-workspace-summary > div:nth-child(2n) { border-right: 0; }
 .code-workspace-summary > div:nth-last-child(-n + 2) { border-bottom: 0; }
-.code-workspace-summary span, .code-workspace-section > header span, .code-workspace-product > div > span { color: var(--n-ink-4); font: var(--text-xs) var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.code-workspace-summary span, .code-workspace-section > header span, .code-workspace-product label > span { color: var(--n-ink-4); font: var(--text-xs) var(--mono); letter-spacing: .07em; text-transform: uppercase; }
 .code-workspace-summary strong, .code-workspace-summary code { overflow: hidden; color: var(--n-ink-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .code-workspace-summary strong[data-status="reviewable"] { color: #74ce9a; }
 .code-workspace-summary strong[data-status="needs-verification"], .code-workspace-summary strong[data-status="failed-verification"] { color: #e1b266; }
@@ -263,8 +263,11 @@ button.thread-agent-presence-row:focus-visible { outline: 2px solid var(--primar
 .code-workspace-checks summary[data-status="passed"] span { color: #74ce9a; }
 .code-workspace-checks summary[data-status="failed"] span { color: #f18383; }
 .code-workspace-checks pre, .code-workspace-actions > pre { max-height: 260px; margin: 0; overflow: auto; padding: 12px; border-top: 1px solid var(--n-line); background: var(--n-sunk); color: var(--n-ink-3); font: 11px/1.5 var(--mono); white-space: pre-wrap; }
-.code-workspace-product > div { padding: 13px 15px; border-left: 2px solid var(--primary); background: var(--n-panel); }
-.code-workspace-product > div p { margin-top: 7px; color: var(--n-ink-2); }
+.code-workspace-product-intro { max-width: 68ch; }
+.code-workspace-product > label { display: grid; gap: 7px; }
+.code-workspace-product textarea { min-height: 62px; resize: vertical; border: 1px solid var(--n-line); border-radius: 6px; background: var(--n-panel); color: var(--n-ink); font: inherit; line-height: 1.5; padding: 10px 12px; }
+.code-workspace-product textarea:focus { border-color: var(--primary); outline: 1px solid var(--primary); }
+.code-workspace-product-question { padding: 13px 15px; border-left: 2px solid var(--primary); background: var(--n-panel); }
 .code-workspace-product > ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .code-workspace-product > ul li { display: grid; grid-template-columns: minmax(128px, auto) 1fr; gap: 12px; align-items: baseline; }
 .code-workspace-product > ul li > span { color: var(--n-ink-4); font: var(--text-xs) var(--mono); text-transform: uppercase; }

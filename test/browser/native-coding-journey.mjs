@@ -16,6 +16,14 @@ function clickButton(label) {
   })()`;
 }
 
+function clickMode(label) {
+  return `(() => {
+    const button = [...document.querySelectorAll('.workspace-mode-nav button')].find((entry) => entry.querySelector('span')?.textContent.trim() === ${JSON.stringify(label)});
+    button?.click();
+    return Boolean(button && !button.disabled);
+  })()`;
+}
+
 test("native coding: exact work, restart recovery, and founder commit stay beside chat", async () => {
   const drover = await bootFixture(seedNativeCoding);
   let chrome = null;
@@ -70,8 +78,29 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
     await client.evaluate(`(() => { const select = document.querySelector('.work-workbench-tools select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('reviewable')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
     await waitForDom(client, `/native-coding-browser-proof.txt/.test(document.querySelector('.work-workbench')?.textContent || '')`, "the reviewable implementation was not selectable");
     assert.equal(await client.evaluate(`/git diff --check/.test(document.querySelector('.work-workbench')?.textContent || '')`), true, "attributed verification was not visible");
-    assert.equal(await client.evaluate(`(document.querySelector('.work-workbench')?.textContent || '').includes('Release / distribution question')`), true, "the Product change lost its release question");
+    assert.equal(await client.evaluate(`(document.querySelector('.work-workbench')?.textContent || '').includes('Distribution question')`), true, "the Product change lost its distribution question");
+    assert.equal(await client.evaluate(`(document.querySelector('.work-workbench')?.textContent || '').includes('does not alter Product / GTM truth until you adopt it')`), true, "the Product consequence was not visibly provisional");
     assert.equal(await client.evaluate(`!document.querySelector('.visual-stage .code-workspace')`), true, "code work regressed into an optional visual stage");
+
+    assert.equal(await client.evaluate(`(() => {
+      const capability = document.querySelector('[aria-label="What became possible"]');
+      const question = document.querySelector('[aria-label="Distribution question"]');
+      if (!capability || !question) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(capability, 'Founders can review verified code without leaving venture context');
+      capability.dispatchEvent(new Event('input', { bubbles: true }));
+      setter.call(question, 'Which founders should receive this exact verified change first?');
+      question.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`), true, "the Product consequence was not editable");
+    assert.equal(await client.evaluate(clickButton("Adopt Product consequence")), true);
+    await waitForDom(client, `document.querySelector('.code-workspace-product')?.dataset.review === 'adopted'`, "founder adoption did not persist");
+
+    assert.equal(await client.evaluate(clickMode("Product / GTM")), true);
+    await waitForDom(client, `/Founders can review verified code without leaving venture context/.test(document.querySelector('.workspace-primary')?.textContent || '')`, "the adopted consequence did not appear in Product / GTM");
+    assert.equal(await client.evaluate(`(document.querySelector('[aria-label="Selected Product and go-to-market context"]')?.textContent || '').includes('Founders can review verified code without leaving venture context')`), true, "mode switching did not preserve the exact linked Product subject");
+    assert.equal(await client.evaluate(clickMode("Work")), true);
+    await waitForDom(client, `!!document.querySelector('.work-workbench .code-workspace')`, "returning to Work lost the exact implementation");
 
     assert.equal(await client.evaluate(clickButton("Approve checkpoint")), true);
     await waitForDom(client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "the exact checkpoint review did not persist");

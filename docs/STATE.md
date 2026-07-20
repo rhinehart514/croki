@@ -35,7 +35,7 @@ The approved product has:
 
 The shipped shell now has Work, Product / GTM, and Releases as complete presentation-level modes over the
 canonical venture model. Work is a coding-first conversation-and-workbench ADE. Product / GTM owns the node canvas
-beside a permanently visible agent. Releases owns one connected release path beside the same permanent agent.
+and Releases owns one connected release path; each opens a contextual, closable conversation only when needed.
 Mode changes preserve the selected Thread; node and release selection use their existing direct references
 instead of a generalized context router.
 
@@ -62,7 +62,7 @@ comprehension and the complete causal loop remain open rather than being claimed
 
 On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **826/826** and UI **498/498**, with lint and the production build green;
+- `npm test`: Brain **827/827** and UI **499/499**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
@@ -124,6 +124,14 @@ command/verification receipts, checkpoints, and the existing
 approve/reject/apply/reverse/commit/prepare/restore/discard controls. Electron
 uses `node-pty` only after resolving `ventureId + workspaceId` to the canonical isolated worktree and owns one
 sandboxed HTTP(S)-only `WebContentsView` preview. The browser harness shows honest desktop-required states.
+
+Verified coding work now produces an editable Product consequence and distribution question on the exact
+workspace. It remains provisional through revisions and rejection; settlement no longer writes semantic
+truth. Founder adoption is a separate desktop-authorized action that requires the exact checkpoint and
+successful attributed verification, records a source-bearing `capability` as founder-asserted Product truth,
+and directly links it back to the owning Thread. The native-coding browser journey edits and adopts the card,
+switches to Product / GTM, observes the exact selected capability and its visible missing connection, returns
+to the same Work context, then completes the separate repository review and isolated commit.
 
 Product / GTM controls `VentureMaps` as the primary canvas across Whole venture, Product, Go-to-market, and Needs
 attention scopes, with those controls in its mode rail. The founder can create open objects and labeled

@@ -247,6 +247,11 @@ Every meaningful Product change must surface its distribution question. Every me
 must surface the Product or go-to-market consequence it creates. Evidence that changes no understanding or
 future release remains visible as an unclosed loop.
 
+A completed implementation may propose its Product consequence and distribution question, but that proposal
+remains on the exact Work record until the founder edits and adopts it. Adoption writes the source-bearing
+capability into canonical Product / GTM truth; rejection changes no venture truth. Verification failure or
+ambiguous repository lineage disables adoption rather than weakening the proof boundary.
+
 ### Venture development loop
 
 ```text

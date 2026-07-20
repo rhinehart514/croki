@@ -70,7 +70,10 @@ export function projectSystemIndex(model, { scope = "system", query = "" } = {})
     properties: object.properties ?? {},
     compatibilityOwned: Boolean(object.properties?.architecture || object.properties?.workingTheory),
     architectureRole: text(object.properties?.architecture?.role),
-    threadRefs: threadsByObject.get(object.id) ?? [],
+    threadRefs: [...new Set([
+      ...(threadsByObject.get(object.id) ?? []),
+      text(object.properties?.coding?.threadRef),
+    ].filter(Boolean))],
     attention: attention.get(object.id) ?? [],
     createdAt: object.createdAt ?? null,
     updatedAt: object.updatedAt ?? object.createdAt ?? null,
