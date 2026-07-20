@@ -31,16 +31,11 @@ test("native coding: the real Electron host restores work and holds founder auth
     await waitForDom(app.client, `document.querySelectorAll('.thread-rich-card[data-kind="native-code"]').length === 2`, "Electron did not restore both coding attempts");
     assert.equal(await app.client.evaluate(`/Drover restarted before the provider turn settled/.test(document.body.textContent)`), true, "the Electron restart hid interrupted provider work");
 
-    const opened = await app.client.evaluate(`(() => {
-      const card = [...document.querySelectorAll('.thread-rich-card[data-kind="native-code"]')]
-        .find((entry) => entry.textContent.includes('native coding browser proof'));
-      const button = [...(card?.querySelectorAll('button') || [])].find((entry) => /view code/i.test(entry.textContent));
-      button?.click(); return Boolean(button);
-    })()`);
-    assert.equal(opened, true);
-    await waitForDom(app.client, `!!document.querySelector('.visual-stage .code-workspace')`, "Electron did not mount exact code beside conversation");
+    await waitForDom(app.client, `!!document.querySelector('.work-workbench .code-workspace')`, "Electron did not mount exact code beside conversation");
+    await app.client.evaluate(`(() => { const select = document.querySelector('.work-attempt select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('reviewable')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await waitForDom(app.client, `/native-coding-browser-proof.txt/.test(document.querySelector('.work-workbench')?.textContent || '')`, "Electron did not select the reviewable attempt");
     assert.equal(await app.client.evaluate(clickButton("Approve checkpoint")), true, "the trusted Electron host could not exercise founder review authority");
-    await waitForDom(app.client, `/Exact checkpoint approved/.test(document.querySelector('.visual-stage')?.textContent || '')`, "Electron did not persist founder review");
+    await waitForDom(app.client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "Electron did not persist founder review");
 
     await app.close();
     app = await launchDroverElectron({ root: ROOT, home, port: await freePort() });

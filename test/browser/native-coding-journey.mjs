@@ -27,20 +27,15 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
     assert.equal(await client.evaluate(`/Drover restarted before the provider turn settled/.test(document.body.textContent)`), true, "restart recovery did not surface honestly");
     assert.equal(await client.evaluate(`/Implementation attempts/.test(document.body.textContent)`), true, "separate approaches were not comparable in the thread");
 
-    const opened = await client.evaluate(`(() => {
-      const card = [...document.querySelectorAll('.thread-rich-card[data-kind="native-code"]')]
-        .find((entry) => entry.textContent.includes('native coding browser proof'));
-      const button = [...(card?.querySelectorAll('button') || [])].find((entry) => /view code/i.test(entry.textContent));
-      button?.click(); return Boolean(button);
-    })()`);
-    assert.equal(opened, true, "the completed implementation could not be opened beside chat");
-    await waitForDom(client, `!!document.querySelector('.visual-stage .code-workspace')`, "the native code stage did not mount");
-    assert.equal(await client.evaluate(`/native-coding-browser-proof.txt/.test(document.querySelector('.visual-stage')?.textContent || '')`), true, "the exact changed file was not visible");
-    assert.equal(await client.evaluate(`/git diff --check/.test(document.querySelector('.visual-stage')?.textContent || '')`), true, "attributed verification was not visible");
-    assert.equal(await client.evaluate(`(document.querySelector('.visual-stage')?.textContent || '').includes('Release / distribution question')`), true, "the Product change lost its release question");
+    await waitForDom(client, `!!document.querySelector('.work-workbench .code-workspace')`, "the native code workbench did not mount beside conversation");
+    await client.evaluate(`(() => { const select = document.querySelector('.work-attempt select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('reviewable')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await waitForDom(client, `/native-coding-browser-proof.txt/.test(document.querySelector('.work-workbench')?.textContent || '')`, "the reviewable implementation was not selectable");
+    assert.equal(await client.evaluate(`/git diff --check/.test(document.querySelector('.work-workbench')?.textContent || '')`), true, "attributed verification was not visible");
+    assert.equal(await client.evaluate(`(document.querySelector('.work-workbench')?.textContent || '').includes('Release / distribution question')`), true, "the Product change lost its release question");
+    assert.equal(await client.evaluate(`!document.querySelector('.visual-stage .code-workspace')`), true, "code work regressed into an optional visual stage");
 
     assert.equal(await client.evaluate(clickButton("Approve checkpoint")), true);
-    await waitForDom(client, `/Exact checkpoint approved/.test(document.querySelector('.visual-stage')?.textContent || '')`, "the exact checkpoint review did not persist");
+    await waitForDom(client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "the exact checkpoint review did not persist");
     assert.equal(await client.evaluate(`(() => {
       const input = document.querySelector('[aria-label="Commit message"]');
       if (!input) return false;

@@ -42,10 +42,6 @@ async function send(client, text) {
   assert.equal(sent, true, "the direction was not submitted");
 }
 
-function cardExpression(inner) {
-  return `(() => { const card = [...document.querySelectorAll('.thread-rich-card[data-kind="native-code"]')].find((entry) => entry.textContent.includes('continuous integration')); return card ? (${inner}) : null; })()`;
-}
-
 const resumeArgument = process.argv.indexOf("--home");
 const resumedHome = resumeArgument >= 0 ? process.argv[resumeArgument + 1] : null;
 const home = resumedHome ? path.resolve(resumedHome) : fs.mkdtempSync(path.join(os.tmpdir(), "drover-live-dogfood-"));
@@ -86,10 +82,9 @@ try {
   }
   assert.equal(status, "reviewable", `live Codex returned ${status}`);
 
-  assert.equal(await app.client.evaluate(cardExpression(`(() => { const button = [...card.querySelectorAll('button')].find((entry) => /view code/i.test(entry.textContent)); button?.click(); return Boolean(button); })()`)), true);
-  await waitForDom(app.client, `!!document.querySelector('.visual-stage .code-workspace')`, "the live implementation did not open beside chat");
+  await waitForDom(app.client, `!!document.querySelector('.work-workbench .code-workspace')`, "the live implementation did not return in the Work ADE");
   assert.equal(await app.client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Approve checkpoint'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
-  await waitFor(app.client, `/Exact checkpoint approved/.test(document.querySelector('.visual-stage')?.textContent || '')`, "founder review did not persist", 20_000);
+  await waitFor(app.client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "founder review did not persist", 20_000);
   assert.equal(await app.client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Apply to source workspace'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
   assert.equal(await app.client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Confirm apply to source workspace'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
   await waitFor(app.client, `(document.querySelector('.code-workspace-summary [data-status]')?.textContent || '').trim() === 'applied'`, "the founder-held apply did not complete", 30_000);
