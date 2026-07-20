@@ -23,7 +23,7 @@ import {
   type WorkIndex,
   type WorkIndexItem,
 } from "@/api";
-import { ReleaseWorkspace } from "@/components/release-mode/ReleaseWorkspace";
+import { ReleaseWorkspace, type ReleaseSeed } from "@/components/release-mode/ReleaseWorkspace";
 import { SystemWorkspace } from "@/components/system-mode/SystemWorkspace";
 import { ThreadConversation } from "@/components/thread/ThreadConversation";
 import { useThreadTimeline } from "@/components/thread/useThreadTimeline";
@@ -99,11 +99,27 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
   const directions = useMemo(() => workIndex && lens ? directionsFromWorkIndex(workIndex, lens) : [], [lens, workIndex]);
   const selectedObject = systemIndexAll?.objects.find((entry) => entry.objectRef === systemSelection) ?? null;
   const selectedRelease = releaseIndex?.releases.find((entry) => entry.id === releaseSelection) ?? null;
-  const releaseSeed = useMemo(() => {
-    if (selectedObject) return { kind: "object", ref: selectedObject.objectRef, label: selectedObject.name, suggestedRole: selectedObject.territory === "gtm" ? "Distribution" : selectedObject.type === "claim" ? "Supported claim or offer" : "Product delta" };
-    if (selectedItem && selectedItem.threadRef !== ROOT_REF) return { kind: "thread", ref: selectedItem.threadRef, label: selectedItem.founderIntent, suggestedRole: "Exact work" };
+  const releaseSeed = useMemo<ReleaseSeed>(() => {
+    if (selectedObject) {
+      const coding = selectedObject.properties?.coding && typeof selectedObject.properties.coding === "object"
+        ? selectedObject.properties.coding as Record<string, unknown>
+        : null;
+      const threadRef = typeof coding?.threadRef === "string" ? coding.threadRef : undefined;
+      const workLabel = threadRef ? workIndex?.items.find((item) => item.threadRef === threadRef)?.founderIntent : undefined;
+      const releaseQuestion = typeof coding?.releaseQuestion === "string" ? coding.releaseQuestion : "";
+      return {
+        kind: "object", ref: selectedObject.objectRef, label: selectedObject.name,
+        suggestedRole: selectedObject.territory === "gtm" ? "Distribution" : selectedObject.type === "claim" ? "Supported claim or offer" : "Product delta",
+        name: selectedObject.name, statement: releaseQuestion || selectedObject.statement,
+        objectRef: selectedObject.objectRef, ...(threadRef ? { threadRef } : {}), ...(workLabel ? { workLabel } : {}),
+      };
+    }
+    if (selectedItem && selectedItem.threadRef !== ROOT_REF) return {
+      kind: "thread", ref: selectedItem.threadRef, label: selectedItem.founderIntent, suggestedRole: "Exact work",
+      name: selectedItem.founderIntent, statement: "", threadRef: selectedItem.threadRef, workLabel: selectedItem.founderIntent,
+    };
     return null;
-  }, [selectedItem, selectedObject]);
+  }, [selectedItem, selectedObject, workIndex?.items]);
   const readOnly = ["stale", "offline", "read-only"].includes(connection.phase);
   const readOnlyReason = connection.phase === "offline" ? "Offline. Nothing consequential can change until Drover is current again." : connection.message ?? "Drover is reconnecting.";
 
@@ -250,7 +266,7 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
     <button type="button" className="thread-rail-launcher" aria-label="Open workspace rail" aria-expanded={railOpen} onClick={() => setRailOpen((value) => !value)}><Menu aria-hidden="true" /></button>
     <WorkspaceRail venture={venture} ventures={ventures} mode={mode} width={railWidth} search={search} selectedThread={resolvedThreadRef} workIndex={searchWork ?? workIndex} systemIndex={systemIndexAll} scope={scope} selectedObjectRef={systemSelection} releaseIndex={releaseIndex} selectedReleaseId={releaseSelection} canStartRelease={Boolean(releaseSeed)} readOnly={readOnly} readOnlyReason={readOnlyReason} onMode={changeMode} onSearch={setSearch} onSelectThread={selectThread} onSelectObject={selectObject} onScope={setScope} onSelectRelease={selectRelease} onNew={newThread} onStartRelease={() => { if (releaseSeed) selectRelease(null); }} onSwitchVenture={onOpenVenture} onResize={setRailWidth} onChanged={refresh} />
     {mode === "work" ? <div className="workspace-work"><WorkSurface ventureId={venture.id} timeline={timeline.timeline} conversation={conversation} readOnlyReason={readOnly ? readOnlyReason : null} renderPreview={(workspace) => <WorkPreview workspaceId={workspace.id} disabledReason={readOnly ? readOnlyReason : null} unavailableReason={!workspace.worktree ? workspace.status === "discarded" ? "This coding worktree was discarded. Its files and receipts remain available for review." : "The isolated coding worktree is unavailable." : null} />} renderTerminal={(workspace) => <WorkTerminal ventureId={venture.id} workspaceId={workspace.id} disabledReason={readOnly ? readOnlyReason : null} unavailableReason={!workspace.worktree ? workspace.status === "discarded" ? "This coding worktree was discarded. Its files and receipts remain available for review." : "The isolated coding worktree is unavailable." : null} />} onWorkspaceChanged={() => { refresh(); void timeline.refresh(); void reloadSystem(); void reloadReleases(); }} /></div> : <>
-      <div className="workspace-primary">{mode === "system" ? <SystemWorkspace index={systemIndexAll} workIndex={workIndex} scope={scope} selectedRef={systemSelection} directions={directions} camera={systemCamera} readOnlyReason={readOnly ? readOnlyReason : null} onScope={setScope} onSelect={selectObject} onCameraChange={setSystemCamera} onMutate={async (mutations: SystemMutation[]) => { if (!systemIndexAll) return; await mutateSystem(venture.id, systemIndexAll.revision, mutations); await afterMutation(); }} onMutateArchitecture={async (operations, reason) => { if (!systemIndexAll) return; await mutateArchitecture(venture.id, { baseRevision: systemIndexAll.architectureRevision, operations, reason }); await afterMutation(); }} onOpenWork={(ref) => { openThread(ref); setMode("work"); }} /> : <ReleaseWorkspace index={releaseIndex} release={releaseDetail} draftContext={releaseSeed} objects={systemIndexAll?.objects ?? []} threads={workIndex?.items ?? []} readOnlyReason={readOnly ? readOnlyReason : null} onCreate={async (value) => { if (!releaseIndex) return; const seeded = releaseSeed?.kind === "object" ? { objectRef: releaseSeed.ref } : releaseSeed?.kind === "thread" ? { threadRef: releaseSeed.ref } : {}; const result = await createRelease(venture.id, releaseIndex.revision, { ...value, ...seeded }); setReleaseIndex(result.releaseIndex); selectRelease(result.release.id); }} onMutate={async (mutations) => { if (!releaseDetail) return; const result = await mutateRelease(venture.id, releaseDetail.id, releaseDetail.revision, mutations); setReleaseDetail(result.release); setReleaseIndex(result.releaseIndex); await reloadSystem(); }} onChanged={() => { refresh(); void reloadReleases().then(() => releaseSelection ? getRelease(venture.id, releaseSelection).then((result) => setReleaseDetail(result.release)) : undefined); }} />}</div>
+      <div className="workspace-primary">{mode === "system" ? <SystemWorkspace index={systemIndexAll} workIndex={workIndex} scope={scope} selectedRef={systemSelection} directions={directions} camera={systemCamera} readOnlyReason={readOnly ? readOnlyReason : null} onScope={setScope} onSelect={selectObject} onCameraChange={setSystemCamera} onMutate={async (mutations: SystemMutation[]) => { if (!systemIndexAll) return; await mutateSystem(venture.id, systemIndexAll.revision, mutations); await afterMutation(); }} onMutateArchitecture={async (operations, reason) => { if (!systemIndexAll) return; await mutateArchitecture(venture.id, { baseRevision: systemIndexAll.architectureRevision, operations, reason }); await afterMutation(); }} onOpenWork={(ref) => { openThread(ref); setMode("work"); }} /> : <ReleaseWorkspace index={releaseIndex} release={releaseDetail} draftContext={releaseSeed} objects={systemIndexAll?.objects ?? []} threads={workIndex?.items ?? []} readOnlyReason={readOnly ? readOnlyReason : null} onCreate={async (value) => { if (!releaseIndex || !releaseSeed) return; const result = await createRelease(venture.id, releaseIndex.revision, { ...value, ...(releaseSeed.objectRef ? { objectRef: releaseSeed.objectRef } : {}), ...(releaseSeed.threadRef ? { threadRef: releaseSeed.threadRef } : {}) }); setReleaseIndex(result.releaseIndex); selectRelease(result.release.id); }} onMutate={async (mutations) => { if (!releaseDetail) return; const result = await mutateRelease(venture.id, releaseDetail.id, releaseDetail.revision, mutations); setReleaseDetail(result.release); setReleaseIndex(result.releaseIndex); await reloadSystem(); }} onChanged={() => { refresh(); void reloadReleases().then(() => releaseSelection ? getRelease(venture.id, releaseSelection).then((result) => setReleaseDetail(result.release)) : undefined); }} />}</div>
       {contextualChatOpen ? <aside className="workspace-chat" aria-label="Ask Drover"><button type="button" className="workspace-chat-close" aria-label="Close Ask Drover" onClick={() => { setContextualChatOpen(false); opener.current?.focus(); }}><X aria-hidden="true" /></button>{conversation}</aside> : <div className="workspace-fab"><button type="button" onClick={(event) => { opener.current = event.currentTarget; setContextualChatOpen(true); }}><MessageCircle aria-hidden="true" />Ask Drover</button></div>}
     </>}
     <AnimatePresence initial={false}>{stage ? <VisualStage key={`${stage.kind}:${stage.ref}`} visual={stage} timeline={timeline.timeline} workIndex={workIndex} directions={directions} lens={lens} readOnlyReason={readOnly ? readOnlyReason : null} onClose={() => { setStage(null); opener.current?.focus(); }} onOpenThread={openThread} onChanged={() => { refresh(); void timeline.refresh(); }} /> : null}</AnimatePresence>

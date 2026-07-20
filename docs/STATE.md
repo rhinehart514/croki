@@ -62,7 +62,7 @@ comprehension and the complete causal loop remain open rather than being claimed
 
 On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **827/827** and UI **499/499**, with lint and the production build green;
+- `npm test`: Brain **828/828** and UI **499/499**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
@@ -149,6 +149,14 @@ inside Outward action; joined activity follows the path; object/work links open 
 rename/end/reopen live in Details. There is no Overview/Build/Activity/Settings subnavigation.
 Its contextual agent likewise remains distinct from the Work coding composer. Starting without exact source
 context produces a visible missing-link explanation rather than a blank release form.
+
+An adopted coding consequence now seeds release preparation with its exact capability name, distribution
+question, canonical `objectRef`, and owning `threadRef`. The founder reviews populated context instead of
+re-entering a blank release; one explicit **Prepare release** creates the canonical release and both joins in
+the same semantic-model revision. The resulting path shows the Product capability and exact Work while
+customer consequence, distribution, outward action, and evidence remain visibly open. Brain coverage proves
+the atomic dual-reference seed; the native-coding browser journey proves the populated founder surface and
+the resulting causal path.
 
 Conversation remains primary in Work. Product / GTM and Releases open it only through **Ask Drover** as a
 closable right column or narrow-width overlay. Closing and reopening preserves the exact Thread, subject-scoped

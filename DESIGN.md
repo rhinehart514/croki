@@ -117,12 +117,13 @@ icon, label, and accessible text—not color alone:
 context for the selected object or path. **System** is not a founder-facing label. The rail does not become an
 object explorer; exact editing remains on the canvas or selected-path depth.
 
-**Releases** shows New release when exact context can seed it, mode-local search, and Needs you, Preparing,
+**Releases** shows Prepare release when exact context can seed it, mode-local search, and Needs you, Preparing,
 In market, and Recent groups. It never opens a blank release form when selected work or Product / GTM truth
-already supplies context.
+already supplies context. An adopted coding consequence pre-fills its exact capability, distribution question,
+Product reference, and owning Work reference; explicit preparation creates the release and both joins together.
 
 New Threads and releases begin as local drafts; canonical records form only on first meaningful send or
-founder save. Mode-local search never changes modes or invents a global result router.
+explicit preparation. Mode-local search never changes modes or invents a global result router.
 
 ## Chat
 

@@ -99,6 +99,15 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
     assert.equal(await client.evaluate(clickMode("Product / GTM")), true);
     await waitForDom(client, `/Founders can review verified code without leaving venture context/.test(document.querySelector('.workspace-primary')?.textContent || '')`, "the adopted consequence did not appear in Product / GTM");
     assert.equal(await client.evaluate(`(document.querySelector('[aria-label="Selected Product and go-to-market context"]')?.textContent || '').includes('Founders can review verified code without leaving venture context')`), true, "mode switching did not preserve the exact linked Product subject");
+
+    assert.equal(await client.evaluate(clickMode("Releases")), true);
+    await waitForDom(client, `document.querySelector('.release-draft input')?.value === 'Founders can review verified code without leaving venture context'`, "the exact Product consequence did not seed the release name");
+    assert.equal(await client.evaluate(`document.querySelector('.release-draft textarea')?.value === 'Which founders should receive this exact verified change first?'`), true, "the distribution question was not carried into the release");
+    assert.equal(await client.evaluate(`(document.querySelector('.release-draft')?.textContent || '').includes('Implement the native coding browser proof')`), true, "the release did not expose its exact Work context");
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.release-draft button')].find((entry) => entry.textContent.trim() === 'Prepare release'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
+    await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === 'Founders can review verified code without leaving venture context' && !!document.querySelector('.release-path')`, "the seeded release did not become canonical");
+    assert.equal(await client.evaluate(`(() => { const text = document.querySelector('.release-path')?.textContent || ''; return text.includes('Founders can review verified code without leaving venture context') && text.includes('Implement the native coding browser proof'); })()`), true, "the release path lost its exact Product or Work join");
+    assert.equal(await client.evaluate(`document.querySelectorAll('.release-path-step[data-empty="true"]').length >= 3`), true, "the seeded release fabricated missing customer, distribution, action, or evidence links");
     assert.equal(await client.evaluate(clickMode("Work")), true);
     await waitForDom(client, `!!document.querySelector('.work-workbench .code-workspace')`, "returning to Work lost the exact implementation");
 

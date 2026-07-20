@@ -77,10 +77,10 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     await waitForDom(client, `document.querySelector('.thread-composer')?.textContent.includes('A project worth advancing')`, "an unlinked node did not scope the persistent agent draft");
     await chooseMode(client, "Releases");
     await client.evaluate(`document.querySelector('.releases-rail-body > .thread-new')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace h1')?.textContent.trim() === 'New release from this' && !!document.querySelector('.release-draft')`, "an unlinked object did not seed an unsaved release draft");
+    await waitForDom(client, `document.querySelector('.release-workspace h1')?.textContent.trim() === 'Release from selected truth' && !!document.querySelector('.release-draft')`, "an unlinked object did not seed an unsaved release draft");
     const draft = await client.evaluate(`(() => { const set = (node, value) => { const setter = Object.getOwnPropertyDescriptor(node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set; setter.call(node, value); node.dispatchEvent(new Event('input', { bubbles: true })); }; const name = document.querySelector('.release-draft input[placeholder="What is moving to market?"]'); const intent = document.querySelector('.release-draft textarea'); if (!name || !intent) return false; set(name, 'Project need release'); set(intent, 'Test the project-first need in market.'); return true; })()`);
     assert.equal(draft, true);
-    await client.evaluate(`[...document.querySelectorAll('.release-draft button')].find((entry) => entry.textContent.trim() === 'Save release')?.click()`);
+    await client.evaluate(`[...document.querySelectorAll('.release-draft button')].find((entry) => entry.textContent.trim() === 'Prepare release')?.click()`);
     await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === 'Project need release'`, "the meaningful release save did not persist");
     await waitForDom(client, `document.querySelector('.release-path')?.textContent.includes('A project worth advancing') && document.querySelector('.release-path')?.textContent.includes('Distribution')`, "the founder-confirmed context link was not canonical in the release path");
     assert.equal(await client.evaluate(`document.querySelectorAll('.release-path-step[data-empty="true"]').length > 0`), true, "missing release connections were hidden or fabricated");

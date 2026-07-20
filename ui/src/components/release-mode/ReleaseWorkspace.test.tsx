@@ -11,14 +11,16 @@ const thread = { threadRef: "thread:work", founderIntent: "Prepare exact launch 
 const base = { index, objects: [object, customer], threads: [thread], readOnlyReason: null, onCreate: vi.fn(async () => {}), onMutate: vi.fn(async () => {}), onChanged: vi.fn() };
 
 describe("ReleaseWorkspace", () => {
-  it("keeps a contextual release unsaved and asks the founder to confirm the inferred link", () => {
+  it("seeds a contextual release from exact Product and Work truth before creation", () => {
     const onCreate = vi.fn(async () => {});
-    render(<ReleaseWorkspace {...base} release={null} draftContext={{ kind: "object", ref: object.objectRef, label: object.name, suggestedRole: "Product delta" }} onCreate={onCreate} />);
+    render(<ReleaseWorkspace {...base} release={null} draftContext={{ kind: "object", ref: object.objectRef, label: object.name, suggestedRole: "Product delta", name: "Faster setup", statement: "Which customers should receive this first?", objectRef: object.objectRef, threadRef: thread.threadRef, workLabel: thread.founderIntent }} onCreate={onCreate} />);
     expect(screen.getByText("Unsaved draft")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Product delta")).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText("What is moving to market?"), { target: { value: "Setup launch" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save release" }));
-    expect(onCreate).toHaveBeenCalledWith({ name: "Setup launch", statement: "", linkLabel: "Product delta" });
+    expect(screen.getByDisplayValue("Faster setup")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Which customers should receive this first?")).toBeInTheDocument();
+    expect(screen.getByText("Prepare exact launch work")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Prepare release" }));
+    expect(onCreate).toHaveBeenCalledWith({ name: "Faster setup", statement: "Which customers should receive this first?", linkLabel: "Product delta" });
   });
 
   it("renders one honest path, preserves exact joins, and removes the old subnavigation", () => {

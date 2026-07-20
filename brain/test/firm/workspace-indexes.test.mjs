@@ -64,4 +64,20 @@ describe("canonical release projection", () => {
     const unlinked = mutateRelease({ ventureId: fx.venture.id, releaseId: "release-one", baseRevision: linked.release.revision, actor: fx.actor, mutations: [{ op: "unlink-thread", threadRef: "thread:launch-work" }] }, fx.options);
     assert.deepEqual(unlinked.release.threadRefs, []);
   });
+
+  it("seeds one release from the exact Product object and owning Work thread atomically", () => {
+    const fx = fixture();
+    const seeded = mutateSemanticModel({ ventureId: fx.venture.id, baseRevision: 0, actor: fx.actor, operations: [
+      { op: "create-record", family: "objects", record: { id: "verified-capability", type: "capability", name: "Verified capability", statement: "Repository-backed Product change.", assertion: "founder-asserted", properties: { territory: "product" }, provenance: { kind: "repository-implementation", sourceRef: "work:code-one" } } },
+      { op: "create-record", family: "threads", record: { id: "verified-work", name: "Build verified capability", lifecycle: "open", subjectRefs: ["object:verified-capability"], messageRefs: [], participantRefs: [], properties: {} } },
+    ] }, fx.options);
+    const created = createRelease({ ventureId: fx.venture.id, baseRevision: seeded.revision, actor: fx.actor, release: {
+      id: "verified-release", name: "Verified capability", statement: "Who should receive this first?",
+      objectRef: "object:verified-capability", threadRef: "thread:verified-work", linkLabel: "Product delta",
+    } }, fx.options);
+    assert.deepEqual(created.release.relatedObjectRefs, ["object:verified-capability"]);
+    assert.deepEqual(created.release.threadRefs, ["thread:verified-work"]);
+    assert.equal(created.release.relationships[0].label, "Product delta");
+    assert.equal(created.release.statement, "Who should receive this first?");
+  });
 });
