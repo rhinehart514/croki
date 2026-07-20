@@ -33,6 +33,14 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     const expected = drover.fixture.expected.maps;
     await chooseMode(client, "Product / GTM");
     await waitForDom(client, `document.querySelector('.venture-system-graph')?.getBoundingClientRect().height > 500`, "the mode-owned canvas collapsed behind its headerless composition");
+    const composition = await client.evaluate(`(() => {
+      const header = document.querySelector('.system-workspace-header')?.getBoundingClientRect();
+      const add = document.querySelector('.system-add-button')?.getBoundingClientRect();
+      const landmarks = document.querySelector('.venture-graph-landmarks')?.textContent?.replace(/\\s+/g, ' ').trim();
+      return { landmarks, addAtRight: Boolean(header && add && header.right - add.right <= 20) };
+    })()`);
+    assert.equal(composition.landmarks, "Product value→Market movement→Returned evidence", "the canvas did not expose its causal reading direction");
+    assert.equal(composition.addAtRight, true, "the Product / GTM action did not resolve to the header edge");
     assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Product / GTM");
     await chooseNode(client, expected.campaign);
     const saveDeadline = Date.now() + 12_000;
@@ -99,6 +107,7 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     assert.equal(await client.evaluate(`!!document.querySelector('.venture-graph-edge.is-return')`), true, "returned evidence did not curve back to an exact Product / GTM object");
     await waitForDom(client, `document.querySelector('.system-evidence-return')?.textContent.includes('I described the project before I thought about making a profile.')`, "the exact attributable outcome was absent from Product / GTM");
     assert.equal(await client.evaluate(`document.querySelector('.system-evidence-return')?.textContent.includes('No interpretation has been adopted.')`), true, "Drover fabricated a canonical evidence interpretation");
+    assert.equal(await client.evaluate(`document.querySelector('.system-evidence-return button')?.getBoundingClientRect().height <= 48`), true, "the next-Work action stretched into canvas content");
     await client.evaluate(`[...document.querySelectorAll('.system-evidence-return button')].find((entry) => entry.textContent.trim() === 'Start next work')?.click()`);
     await waitForDom(client, `document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Work') && document.querySelector('.thread-composer')?.textContent.includes('Reply returned')`, "returned evidence did not become exact next Work context");
 

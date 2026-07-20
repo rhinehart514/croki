@@ -42,6 +42,11 @@ test("generated maps are keyboard-reachable in mode-owned space and hand off exp
     await assertVisibleKeyboardFocus(client, "GTM scope");
     await pressKeyboardKey(client, "Enter");
     await waitForDom(client, `document.querySelector('.venture-maps')?.getAttribute('data-view') === 'gtm'`, "Enter did not switch to the GTM map");
+    await waitForDom(
+      client,
+      `[...document.querySelectorAll('.venture-graph-node-main')].some((entry) => entry.getAttribute('aria-label') === ${JSON.stringify(`Inspect ${drover.fixture.expected.maps.campaign}`)})`,
+      "the GTM graph did not settle its keyboard targets",
+    );
 
     await assertAtlasAccessibility(client);
 

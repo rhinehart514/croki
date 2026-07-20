@@ -61,8 +61,8 @@ npm run app:dist
 `release/`. `release/` is ignored and must never be treated as proof for a different package version
 or source tree.
 
-The current-tree package receipt is `Drover-0.3.3-arm64.dmg`, **187,216,672 bytes**, SHA-256
-`b0a136944169559508837fc16c1379c9a9fd2a650c18cb14357c26fa99a44eb5`. The app launched with its trusted
+The current-tree package receipt is `Drover-0.3.3-arm64.dmg`, **187,210,937 bytes**, SHA-256
+`ce2c70d139a28d886633bb27490a32bb5452c38a60a54a718e47423f0ad29c37`. The app launched with its trusted
 preload and matching dynamic Brain identity; `codesign --verify --deep --strict` and `hdiutil verify` passed.
 Rebuild and record a new hash after any source change.
 

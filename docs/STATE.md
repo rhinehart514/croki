@@ -83,14 +83,17 @@ founder-granted bounded Gmail observation, honest missing-source/credential stat
 drafts, blank-form refusal, end/reopen, generated Whole venture/Product/Go-to-market graphs, a visible
 release-scoped evidence return curve and exact next-Work handoff, keyboard
 reachability, a complete saved-view save/list/reopen/delete lifecycle, 120-node containment, venture
-isolation, zoom, and offline last-coherent reads. T3's
+isolation, zoom, and offline last-coherent reads. The Product / GTM canvas now names its causal reading
+direction with three quiet landmarks, uses assertion-aware relationship legend rather than decorative graph
+totals, keeps its primary add action at the header edge, and holds the returned-evidence next-Work action to
+its intended compact height. T3's
 collaborative preview automation required unavailable authentication during this run, so no outside-founder
 manual visual-QA claim is made. A deterministic 1440×900 Chrome capture was inspected and exposed a collapsed
 headerless canvas; the repaired full-height composition is now guarded in the browser journey. Browser and
 native-host receipts still prove deterministic behavior rather than comprehension.
 
-The same tree produced `release/Drover-0.3.3-arm64.dmg` (**187,216,672 bytes**, SHA-256
-`b0a136944169559508837fc16c1379c9a9fd2a650c18cb14357c26fa99a44eb5`). `codesign --verify --deep
+The same tree produced `release/Drover-0.3.3-arm64.dmg` (**187,210,937 bytes**, SHA-256
+`ce2c70d139a28d886633bb27490a32bb5452c38a60a54a718e47423f0ad29c37`). `codesign --verify --deep
 --strict` passed for the app bundle and `hdiutil verify` passed for the DMG. This proves the local ad-hoc
 arm64 package, not Developer ID signing, notarization, public hosting, clean-machine installation, upgrade,
 or rollback.
@@ -491,7 +494,8 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
   that preserve their real cross-boundary support. Canonical relationships and existing structured
   references supply every connector. Release-scoped outcomes add projection-only tentative return curves to
   directly connected objects and cannot establish an interpretation. There is no separate diagram store,
-  free placement, or invented connector data in this surface.
+  free placement, or invented connector data in this surface. Product value, market movement, and returned
+  evidence are explicit soft landmarks over that projection, not stored capacity layers or stages.
 - The older full canvas remains compatibility code with no normal founder entry. Its removal is deferred
   until retained compatibility journeys can be retired without losing migration evidence.
 - **Saved views/snapshots have a reachable founder lifecycle.** The Product / GTM rail saves the selected

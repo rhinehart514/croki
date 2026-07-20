@@ -55,7 +55,12 @@
   overflow: hidden;
   border: 1px solid var(--n-line);
   border-radius: var(--r-lg);
-  background: var(--n-sunk);
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--n-panel) 28%, transparent) 0 37%,
+      transparent 37% 72%,
+      color-mix(in srgb, var(--ember-ink) 3%, transparent) 72% 100%),
+    var(--n-sunk);
 }
 
 .venture-system-graph .react-flow__pane { cursor: grab; }
@@ -79,7 +84,7 @@
 .venture-graph-node { width: 244px; color: var(--n-ink); transition: opacity var(--dur-fast) var(--ease); }
 .venture-graph-node[data-kind="motion"] { width: 276px; }
 .venture-graph-node[data-kind="campaign"] { width: 258px; }
-.venture-graph-node[data-quiet="true"] { opacity: 0.24; }
+.venture-graph-node[data-quiet="true"] { opacity: 0.16; }
 .venture-graph-node-main {
   display: grid;
   gap: 7px;
@@ -92,12 +97,12 @@
   color: var(--n-ink);
   cursor: pointer;
   text-align: left;
-  box-shadow: var(--n-shadow);
+  box-shadow: 0 1px 0 color-mix(in srgb, white 3%, transparent);
   transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .venture-graph-node-main:hover { transform: translateY(-1px); border-color: var(--n-ink-4); background: var(--card-raised); }
 .venture-graph-node-main:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
-.venture-graph-node[data-selected="true"] .venture-graph-node-main { border-color: var(--primary); box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent), var(--n-shadow-pop); }
+.venture-graph-node[data-selected="true"] .venture-graph-node-main { border-color: var(--primary); box-shadow: inset 3px 0 0 var(--primary), 0 0 0 1px color-mix(in srgb, var(--primary) 38%, transparent), var(--n-shadow-pop); }
 .venture-graph-node[data-kind="motion"] .venture-graph-node-main { min-height: 120px; border-radius: var(--r-2xl); }
 .venture-graph-node[data-kind="product-loop"] .venture-graph-node-main { border-radius: var(--r-xl); box-shadow: inset 0 0 0 1px var(--n-line), var(--n-shadow); }
 .venture-graph-node[data-kind="system"] .venture-graph-node-main { background: linear-gradient(180deg, var(--n-panel), var(--n-rail)); }
@@ -156,10 +161,37 @@
 .venture-graph-node-work[data-state="completed"] { color: var(--ember-ink); }
 .venture-graph-handle { width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
 
+.venture-graph-landmarks {
+  position: absolute;
+  top: 14px;
+  right: 24px;
+  left: 24px;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  pointer-events: none;
+}
+.venture-graph-landmarks span {
+  color: var(--n-ink-4);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  letter-spacing: .06em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.venture-graph-landmarks i {
+  width: 32px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--n-line-2), transparent);
+  color: transparent;
+}
+
 .venture-graph-readout {
   position: absolute;
-  right: 12px;
+  right: auto;
   bottom: 12px;
+  left: 56px;
   z-index: 4;
   display: flex;
   gap: var(--space-3);
@@ -168,11 +200,13 @@
   border-radius: var(--r-tool);
   background: color-mix(in srgb, var(--n-sunk) 92%, transparent);
   color: var(--n-ink-4);
-  font-family: var(--mono);
   font-size: var(--text-xs);
   backdrop-filter: blur(10px);
 }
-.venture-graph-readout span[data-gap="true"] { color: var(--gap-ink); }
+.venture-graph-readout span { display: inline-flex; align-items: center; gap: 5px; }
+.venture-graph-readout i { display: block; width: 17px; height: 1px; background: var(--n-ink-4); }
+.venture-graph-readout i[data-line="provisional"] { background: repeating-linear-gradient(90deg, var(--n-ink-4) 0 3px, transparent 3px 6px); }
+.venture-graph-readout i[data-line="return"] { height: 2px; background: var(--ember-ink); }
 
 .venture-map-inspector {
   position: absolute;

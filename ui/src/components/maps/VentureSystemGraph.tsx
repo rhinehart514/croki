@@ -95,7 +95,7 @@ export function VentureSystemGraph({
         nodeTypes={NODE_TYPES}
         fitView={!camera}
         defaultViewport={camera ?? undefined}
-        fitViewOptions={{ padding: 0.18, minZoom: 0.35, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.1, minZoom: 0.35, maxZoom: 1 }}
         minZoom={0.22}
         maxZoom={1.55}
         nodesDraggable={false}
@@ -111,11 +111,13 @@ export function VentureSystemGraph({
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--canvas-dot)" />
         <Controls position="bottom-left" showInteractive={false} />
       </ReactFlow>
-      <div className="venture-graph-readout" aria-label="Graph summary">
-        <span>{graph.nodes.length} nodes</span>
-        <span>{graph.links.length} links</span>
-        <span>{graph.motionCount} {graph.motionCount === 1 ? "path" : "paths"} to market</span>
-        {graph.gapCount ? <span data-gap="true">{graph.gapCount} unconnected</span> : null}
+      <div className="venture-graph-landmarks" aria-hidden="true">
+        <span>Product value</span><i>→</i><span>Market movement</span><i>→</i><span>Returned evidence</span>
+      </div>
+      <div className="venture-graph-readout" aria-label="Relationship legend">
+        <span><i data-line="adopted" />Founder-set</span>
+        <span><i data-line="provisional" />Provisional</span>
+        <span><i data-line="return" />Evidence return</span>
       </div>
     </div>
   );
