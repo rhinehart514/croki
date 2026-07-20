@@ -61,16 +61,16 @@ npm run app:dist
 `release/`. `release/` is ignored and must never be treated as proof for a different package version
 or source tree.
 
-The current-tree package receipt is `Drover-0.3.3-arm64.dmg`, **187,210,937 bytes**, SHA-256
-`ce2c70d139a28d886633bb27490a32bb5452c38a60a54a718e47423f0ad29c37`. The app launched with its trusted
+The current-tree package receipt is `Drover-0.3.3-arm64.dmg`, **187,141,815 bytes**, SHA-256
+`904a2b168149312fc0f5e2aa4db8807a99d40a47cf5da151ff2dee6f2526fa8b`. The app launched with its trusted
 preload and matching dynamic Brain identity; `codesign --verify --deep --strict` and `hdiutil verify` passed.
 Rebuild and record a new hash after any source change.
 
 The package has no Developer ID signature or notarization. Gatekeeper therefore requires the
 founder to use the explicit one-time right-click **Open** path. `electron-builder.yml` sets
 `publish: null`; no update manifest is emitted and the app performs no update check.
-The local alpha also keeps its application files inspectable outside ASAR and uses Electron's default icon.
-A branded icon, hardened archive posture, signing, and notarization belong to the public-distribution pass.
+The local alpha carries Drover's own application icon but keeps its application files inspectable outside
+ASAR. Hardened archive posture, signing, and notarization belong to the public-distribution pass.
 
 The packaged display name is Drover. Compatibility identifiers stay unchanged: npm package
 `gtm-ide`, bundle id `com.gtmide.desktop`, storage path `~/.gtm-ide`, and historical `channel`

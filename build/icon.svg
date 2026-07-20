@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Drover">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256" role="img" aria-label="Drover">
   <rect width="256" height="256" rx="58" fill="#171717"/>
   <path d="M72 56v144h43c43 0 71-29 71-72s-28-72-71-72H72Z" fill="none" stroke="#f2efe7" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M157 96c16 18 16 46 0 64" fill="none" stroke="#d6a75b" stroke-width="12" stroke-linecap="round"/>

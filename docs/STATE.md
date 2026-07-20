@@ -69,8 +69,8 @@ On 2026-07-20, the complete `npm run test:acceptance` receipt passed against thi
 - Atlas browser journeys: **3/3**;
 - Electron: **13/13**, including PTY worktree isolation and terminal outcomes, native preview security, real-host native-coding
   restart, and founder-authority receipts;
-- packaged Electron: **1/1**, launching a disposable arm64 `Drover.app`, proving the trusted preload and
-  matching dynamic Brain instance, and clearing its runtime location on shutdown.
+- packaged Electron: **1/1**, launching a disposable arm64 `Drover.app`, proving the declared Drover icon,
+  trusted preload, matching dynamic Brain instance, and runtime-location cleanup on shutdown.
 
 The browser journeys exercise mode-owned rail bodies, contextual closable conversation outside Work, and
 visible offline/read-only truth on the owning Product / GTM or Releases surface; the coding-first Work composer with repository,
@@ -92,8 +92,8 @@ manual visual-QA claim is made. A deterministic 1440×900 Chrome capture was ins
 headerless canvas; the repaired full-height composition is now guarded in the browser journey. Browser and
 native-host receipts still prove deterministic behavior rather than comprehension.
 
-The same tree produced `release/Drover-0.3.3-arm64.dmg` (**187,210,937 bytes**, SHA-256
-`ce2c70d139a28d886633bb27490a32bb5452c38a60a54a718e47423f0ad29c37`). `codesign --verify --deep
+The same tree produced `release/Drover-0.3.3-arm64.dmg` (**187,141,815 bytes**, SHA-256
+`904a2b168149312fc0f5e2aa4db8807a99d40a47cf5da151ff2dee6f2526fa8b`). `codesign --verify --deep
 --strict` passed for the app bundle and `hdiutil verify` passed for the DMG. This proves the local ad-hoc
 arm64 package, not Developer ID signing, notarization, public hosting, clean-machine installation, upgrade,
 or rollback.
@@ -586,9 +586,9 @@ Explicit authority deferral:
 - The current arm64 app bundle and DMG are locally built, launched, integrity-checked, and covered by the
   acceptance gate. Developer ID signing, notarization, public hosting, clean-machine installation, upgrade,
   and rollback remain external distribution work requiring founder-owned credentials and decisions.
-- The local alpha bundle deliberately remains inspectable (`asar: false`) and still uses Electron's default
-  application icon. A branded icon and hardened archive/signing posture are deferred to the public
-  distribution pass rather than implied by the local package.
+- The packaged app and browser harness now share Drover's own restrained application mark; packaged
+  acceptance verifies the declared `icon.icns` and its bundled resource. The local alpha bundle deliberately
+  remains inspectable (`asar: false`); a hardened archive/signing posture is deferred to public distribution.
 
 ## Unproven
 

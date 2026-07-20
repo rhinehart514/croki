@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { test } from "node:test";
 
 import { freePort, ROOT, waitForDom } from "./fixtures/browser-harness.mjs";
@@ -20,6 +20,11 @@ test("the packaged Drover app boots its Brain and trusted founder bridge", async
   assert.equal(built.status, 0, `The packaged app could not be built.\n${built.stdout}\n${built.stderr}`);
 
   const executable = path.join(output, "mac-arm64", "Drover.app", "Contents", "MacOS", "Drover");
+  const appBundle = path.resolve(path.dirname(executable), "../..");
+  const infoPlist = path.join(appBundle, "Contents", "Info.plist");
+  const iconName = execFileSync("/usr/bin/plutil", ["-extract", "CFBundleIconFile", "raw", infoPlist], { encoding: "utf8" }).trim();
+  assert.equal(iconName, "icon.icns", "the packaged app did not declare Drover's application icon");
+  assert.ok(fs.statSync(path.join(appBundle, "Contents", "Resources", iconName)).size > 100_000, "the packaged Drover icon was missing or incomplete");
   const home = path.join(temp, "home");
   fs.mkdirSync(home, { recursive: true });
   let app = null;

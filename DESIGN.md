@@ -315,6 +315,10 @@ The shell is a near-black editorial split. DM Sans carries the conversation; Jet
 receipts, identifiers, and exact code. `#4f86f7` is the single interaction accent. Borders and type hierarchy
 do more work than card chrome. Dense information remains quiet until it earns emphasis.
 
+Drover's application mark is a warm-white `D` carrying one restrained amber return stroke on near-black. The
+desktop package and browser harness use the same mark; inherited provider or source-product branding never
+becomes Drover identity.
+
 Motion is causal and fast-settling:
 
 - opening and closing the side visual explains the spatial relationship to chat;
