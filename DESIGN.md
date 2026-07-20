@@ -263,7 +263,9 @@ provisional until adopted.
 Releases shows one connected path: Product delta → Customer consequence → Distribution → Outward action →
 Evidence. Every populated section traces to an existing relationship, Thread, decision, or outcome; an open
 section names the missing connection. Exact outward gates remain in the Outward action section, joined
-activity follows the path, and rename/end/reopen live in the compact Details control.
+activity follows the path, and rename/end/reopen live in the compact Details control. A failed transport
+states **Nothing was sent**, preserves the provider error, and leaves the same action available as **Retry
+send**. A revoked Gmail grant opens the existing reconnect form; reconnecting never retries by itself.
 
 Product and go-to-market material may appear together when a promise, capability, campaign, or evidence
 record crosses that boundary. Drover should explain the mismatch or consequence in chat and let the founder

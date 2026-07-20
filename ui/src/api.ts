@@ -647,6 +647,9 @@ export type WallQueueItemView = {
   parkedAt: string;
   decision: string | null;
   deployAuthorizedAt?: string | null;
+  lastExecutionError?: string | null;
+  needsReconnect?: boolean;
+  lastAttemptAt?: string | null;
 };
 
 export const getWallQueue = (ventureId: string) =>

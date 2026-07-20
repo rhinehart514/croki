@@ -2,13 +2,14 @@ import type { ReleaseDetail, ReleaseMutation, SystemIndexObject, WorkIndexItem }
 import { DecisionGate } from "@/components/now/DecisionGate";
 import { deriveReleasePath, pendingGate, recordTime, type ReleasePathKey } from "./releaseRecords";
 
-function ActionEntry({ entry, readOnlyReason, onChanged }: {
+function ActionEntry({ entry, readOnlyReason, onChanged, onReconnect }: {
   entry: ReturnType<typeof deriveReleasePath>[number]["entries"][number];
   readOnlyReason: string | null;
   onChanged: () => void;
+  onReconnect: () => void;
 }) {
   const gate = entry.raw ? pendingGate(entry.raw) : null;
-  if (gate) return <DecisionGate ventureId={gate.ventureId} item={gate} onDecided={onChanged} readOnlyReason={readOnlyReason} />;
+  if (gate) return <DecisionGate ventureId={gate.ventureId} item={gate} onDecided={onChanged} onReconnect={onReconnect} readOnlyReason={readOnlyReason} />;
   const failed = Boolean(entry.raw?.lastExecutionError);
   const released = Boolean(entry.raw?.releasedAt);
   return <div className="release-path-entry-body">
@@ -17,7 +18,7 @@ function ActionEntry({ entry, readOnlyReason, onChanged }: {
   </div>;
 }
 
-export function ReleasePath({ release, objects, threads, readOnlyReason, onConfigure, onMutate, onChanged }: {
+export function ReleasePath({ release, objects, threads, readOnlyReason, onConfigure, onMutate, onChanged, onReconnect }: {
   release: ReleaseDetail;
   objects: SystemIndexObject[];
   threads: WorkIndexItem[];
@@ -25,6 +26,7 @@ export function ReleasePath({ release, objects, threads, readOnlyReason, onConfi
   onConfigure: (key: ReleasePathKey) => void;
   onMutate: (mutations: ReleaseMutation[]) => Promise<void>;
   onChanged: () => void;
+  onReconnect: () => void;
 }) {
   const steps = deriveReleasePath(release, objects, threads);
   return <section className="release-path" aria-labelledby="release-path-title">
@@ -42,7 +44,7 @@ export function ReleasePath({ release, objects, threads, readOnlyReason, onConfi
           </header>
           {step.entries.length ? <ul>
             {step.entries.map((entry) => <li key={entry.id}>
-              {step.key === "action" ? <ActionEntry entry={entry} readOnlyReason={readOnlyReason} onChanged={onChanged} /> : <div className="release-path-entry-body">
+              {step.key === "action" ? <ActionEntry entry={entry} readOnlyReason={readOnlyReason} onChanged={onChanged} onReconnect={onReconnect} /> : <div className="release-path-entry-body">
                 {entry.eyebrow ? <small>{entry.eyebrow}</small> : null}<strong>{entry.label}</strong>
                 {step.key === "evidence" && entry.raw ? <small>{[entry.detail, recordTime(entry.raw)].filter(Boolean).join(" · ")}</small> : null}
               </div>}

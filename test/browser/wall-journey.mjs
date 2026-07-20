@@ -42,6 +42,14 @@ test("all founder consequences settle once from their owning threads and survive
     let releaseRequests = 0;
     await client.send("Network.enable");
     client.on("Network.requestWillBeSent", ({ request }) => { if (request.method === "POST" && /wall-purpose-release\/decide$/.test(request.url)) releaseRequests += 1; });
+    assert.equal(await client.evaluate(`(() => { const b=[...document.querySelectorAll('.visual-stage .now-gate-btn')].find((entry) => entry.textContent.trim() === 'Approve & send'); b?.click(); return Boolean(b); })()`), true);
+    await waitForDom(client, `document.querySelector('.visual-stage .now-gate-execution-failure')?.textContent.includes('Nothing was sent') && [...document.querySelectorAll('.visual-stage .now-gate-btn')].some((entry) => entry.textContent.trim() === 'Retry send')`, "the failed send did not return as a retryable founder action");
+    await wallCount(client, ventureId, 4);
+    assert.equal(releaseRequests, 1, "one failed send produced more than one release attempt");
+    const failed = getVentureDoc(ventureId, "decisions", "wall-purpose-release", { root: drover.home });
+    assert.equal(failed.decision, null, "a transport failure consumed the founder decision");
+    assert.match(failed.lastExecutionError, /no recipient/i);
+    releaseRequests = 0;
     assert.equal(await client.evaluate(`(() => { const b=document.querySelector('.visual-stage .now-gate-btn[data-intent="reject"]'); b?.click(); b?.click(); return Boolean(b); })()`), true);
     await wallCount(client, ventureId, 3);
     assert.equal(releaseRequests, 1, "double activation escaped the in-flight founder guard");

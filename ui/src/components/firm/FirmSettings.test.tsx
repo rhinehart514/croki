@@ -70,4 +70,13 @@ describe("FirmSettings", () => {
     expect(await screen.findByRole("checkbox")).toBeDisabled();
     expect(screen.getAllByRole("status").some((status) => status.textContent?.includes("Desktop host required"))).toBe(true);
   });
+
+  it("opens the real OAuth replacement form from a failed release reconnect", async () => {
+    getCredentials.mockResolvedValue({
+      credentials: [{ provider: "gmail", label: "Gmail (OAuth)", savedAt: "now", hasToken: true, authType: "oauth" }],
+    });
+    render(<FirmSettings venture={venture} initialConnection="gmail" onClose={() => undefined} />);
+    expect(await screen.findByRole("group", { name: "Reconnect Gmail" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue to Google" })).toBeDisabled();
+  });
 });

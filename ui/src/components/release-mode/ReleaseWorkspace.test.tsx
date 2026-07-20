@@ -8,7 +8,7 @@ const index: ReleaseIndex = { ventureId: "v1", revision: 3, releases: [release],
 const object: SystemIndexObject = { id: "product", objectRef: "object:product", name: "Faster setup", statement: "", type: "open", territory: "product", assertion: "founder-asserted", provenance: null, properties: {}, compatibilityOwned: false, architectureRole: null, threadRefs: [], attention: [], createdAt: null, updatedAt: null };
 const customer: SystemIndexObject = { ...object, id: "customer", objectRef: "object:customer", name: "Customers finish setup unaided" };
 const thread = { threadRef: "thread:work", founderIntent: "Prepare exact launch work" } as WorkIndexItem;
-const base = { index, objects: [object, customer], threads: [thread], readOnlyReason: null, onCreate: vi.fn(async () => {}), onMutate: vi.fn(async () => {}), onChanged: vi.fn() };
+const base = { index, objects: [object, customer], threads: [thread], readOnlyReason: null, onCreate: vi.fn(async () => {}), onMutate: vi.fn(async () => {}), onChanged: vi.fn(), onReconnect: vi.fn() };
 
 describe("ReleaseWorkspace", () => {
   it("seeds a contextual release from exact Product and Work truth before creation", () => {
@@ -52,5 +52,24 @@ describe("ReleaseWorkspace", () => {
     render(<ReleaseWorkspace {...base} release={null} draftContext={null} />);
     expect(screen.getByRole("heading", { name: "Start from exact venture context" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("What is moving to market?")).not.toBeInTheDocument();
+  });
+
+  it("keeps a failed outward action in its release with retry and reconnect", () => {
+    const reconnect = vi.fn();
+    const failed = {
+      ...release,
+      attention: ["failed-action", "reconnect"] as ReleaseDetail["attention"],
+      decisions: [{
+        id: "send-one", ventureId: "v1", betId: null, purpose: "release", blocksBet: true,
+        parkedAt: "2026-07-20T10:00:00.000Z", decision: null,
+        effect: { kind: "message", to: "founder@example.com", subject: "Proof", body: "Exact release copy" },
+        lastExecutionError: "Gmail API 401: invalid credentials", needsReconnect: true,
+      }],
+    };
+    render(<ReleaseWorkspace {...base} release={failed} draftContext={null} onReconnect={reconnect} />);
+    expect(screen.getByText("Nothing was sent.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry send" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect Gmail" }));
+    expect(reconnect).toHaveBeenCalledOnce();
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { DecisionGate } from "./DecisionGate";
 import type { WallQueueItemView } from "@/api";
@@ -92,5 +92,23 @@ describe("DecisionGate", () => {
     expect(screen.getByRole<HTMLButtonElement>("button", { name: /Approve & send/ }).disabled).toBe(true);
     expect(screen.getByRole<HTMLButtonElement>("button", { name: /Reject/ }).disabled).toBe(true);
     expect(screen.getByText(/Nothing consequential can change/)).toBeTruthy();
+  });
+
+  it("shows a persisted failed send with retry and a working reconnect affordance", () => {
+    const reconnect = vi.fn();
+    const failed: WallQueueItemView = {
+      ...productChange,
+      id: "wall-failed-send",
+      effect: { kind: "message", to: "founder@example.com", subject: "Proof", body: "Exact release copy" },
+      lastExecutionError: "Gmail API 401: invalid credentials",
+      needsReconnect: true,
+      lastAttemptAt: "2026-07-15T10:01:00Z",
+    };
+    render(<DecisionGate ventureId="v1" item={failed} onDecided={() => {}} onReconnect={reconnect} />);
+    expect(screen.getByText("Nothing was sent.")).toBeInTheDocument();
+    expect(screen.getByText(/invalid credentials/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry send" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect Gmail" }));
+    expect(reconnect).toHaveBeenCalledOnce();
   });
 });

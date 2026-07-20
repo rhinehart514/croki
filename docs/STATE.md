@@ -62,7 +62,7 @@ comprehension and the complete causal loop remain open rather than being claimed
 
 On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **828/828** and UI **499/499**, with lint and the production build green;
+- `npm test`: Brain **828/828** and UI **502/502**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
@@ -488,6 +488,10 @@ Repaired brain-side in Phase 3 (verified: 710 brain + 49 security-matrix green):
 - A failed message/deploy transport is persisted on the still-queued wall item
   (`lastExecutionError`/`needsReconnect`/`lastAttemptAt`) and thrown as `wall_release_execution_failed` (502);
   a genuine later success clears those markers and stamps `releasedAt` exactly once.
+- The shipped Work and Releases gates now render that persisted failure as **Nothing was sent**, preserve
+  the exact transport error, and keep **Retry send** on the same undecided action. `needsReconnect` adds a
+  working **Reconnect Gmail** affordance that opens the existing OAuth replacement form; successful OAuth
+  replacement leaves the action for a fresh explicit founder retry rather than sending automatically.
 - A standing grant no longer claims "Sending" without sending: it skips the *wait*, not the *release* — the
   act parks honestly (`sent:false`) and the founder still performs the release. The wall release capability
   is minted only inside `wall.decide()`.
@@ -497,8 +501,6 @@ Remaining consequence follow-ups (tracked; not authority holes):
 - **Grant true auto-send is a deliberate product/authority decision, not a bug.** A background drive holds no
   live founder request and cannot obtain the founder capability, so a grant cannot ship a real send in-spec.
   If auto-send is actually wanted, it needs a new host-authority path — surfaced for Jacob, not smuggled in.
-- The founder wall UI does not yet render `lastExecutionError`/`needsReconnect` as a retry/reconnect
-  affordance (belongs to the Phase 4 shell rebuild).
 - `executeProductChange` throws on apply failure instead of returning `{ok:false}`, bypassing the
   persist-failure path (item stays queued, honest, but without `lastExecutionError`) — normalize in Phase 4/6.
 - A crash mid-apply leaves a product-change revision `applying`; the approved-only gate then refuses retry

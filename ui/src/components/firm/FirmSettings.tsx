@@ -28,17 +28,19 @@ export function FirmSettings({
   readOnlyReason = "Reconnecting before settings can change…",
   onCapabilitiesChanged,
   onClose,
+  initialConnection = null,
 }: {
   venture: FirmVenture;
   readOnly?: boolean;
   readOnlyReason?: string;
   onCapabilitiesChanged?: () => void;
   onClose: () => void;
+  initialConnection?: "gmail" | null;
 }) {
   const panelRef = useRef<HTMLElement>(null);
   const [credentials, setCredentials] = useState<FounderCredential[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [connectOpen, setConnectOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(initialConnection === "gmail");
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
@@ -161,7 +163,25 @@ export function FirmSettings({
                   <li><ShieldCheck aria-hidden="true" /> Send only after your release</li>
                 </ul>
 
-                {gmail ? (
+                {connectOpen ? (
+                  <div className="firm-settings-connect-form" role="group" aria-label={gmail ? "Reconnect Gmail" : "Connect Gmail"}>
+                    <label>
+                      <span>Google OAuth client ID</span>
+                      <Input autoComplete="off" disabled={busy || readOnly} value={clientId} onChange={(event) => setClientId(event.target.value)} />
+                    </label>
+                    <label>
+                      <span>Google OAuth client secret</span>
+                      <Input type="password" autoComplete="new-password" disabled={busy || readOnly} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} />
+                    </label>
+                    <small>Drover opens Google consent and replaces the local Gmail grant only after connection succeeds.</small>
+                    <span>
+                      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConnectOpen(false)}>Cancel</Button>
+                      <Button type="button" size="sm" disabled={busy || readOnly || !clientId.trim() || !clientSecret.trim()} onClick={() => void connect()}>
+                        {busy ? "Waiting for Google…" : "Continue to Google"}
+                      </Button>
+                    </span>
+                  </div>
+                ) : gmail ? (
                   <div className="firm-settings-connection-actions">
                     <small>{gmail.label ?? "Gmail OAuth"} · available to every venture</small>
                     {disconnectOpen ? (
@@ -171,27 +191,7 @@ export function FirmSettings({
                           {busy ? "Disconnecting…" : "Disconnect Gmail"}
                         </Button>
                       </span>
-                    ) : (
-                      <Button type="button" variant="ghost" size="sm" disabled={readOnly} onClick={() => setDisconnectOpen(true)}>Disconnect</Button>
-                    )}
-                  </div>
-                ) : connectOpen ? (
-                  <div className="firm-settings-connect-form" role="group" aria-label="Connect Gmail">
-                    <label>
-                      <span>Google OAuth client ID</span>
-                      <Input autoComplete="off" disabled={busy || readOnly} value={clientId} onChange={(event) => setClientId(event.target.value)} />
-                    </label>
-                    <label>
-                      <span>Google OAuth client secret</span>
-                      <Input type="password" autoComplete="new-password" disabled={busy || readOnly} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} />
-                    </label>
-                    <small>Drover opens Google consent and stores the resulting refresh token locally.</small>
-                    <span>
-                      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConnectOpen(false)}>Cancel</Button>
-                      <Button type="button" size="sm" disabled={busy || readOnly || !clientId.trim() || !clientSecret.trim()} onClick={() => void connect()}>
-                        {busy ? "Waiting for Google…" : "Continue to Google"}
-                      </Button>
-                    </span>
+                    ) : <span><Button type="button" variant="ghost" size="sm" disabled={readOnly} onClick={() => setConnectOpen(true)}>Reconnect</Button><Button type="button" variant="ghost" size="sm" disabled={readOnly} onClick={() => setDisconnectOpen(true)}>Disconnect</Button></span>}
                   </div>
                 ) : (
                   <Button type="button" variant="outline" size="sm" disabled={!loaded || readOnly} onClick={() => setConnectOpen(true)}>Connect Gmail</Button>

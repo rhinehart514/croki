@@ -29,6 +29,7 @@ export function DecisionGate({
   onRevise,
   readOnlyReason = null,
   showArtifact = true,
+  onReconnect,
 }: {
   ventureId: string;
   item: WallQueueItemView;
@@ -38,6 +39,7 @@ export function DecisionGate({
   // When the exact change is already rendered prominently above (Exact changes), the gate suppresses
   // its own copy so the diff is shown once, not twice.
   showArtifact?: boolean;
+  onReconnect?: () => void;
 }) {
   const content = reviewContent(item);
   const artifact = showArtifact ? resolveEffectArtifact(item.effect) : null;
@@ -62,6 +64,7 @@ export function DecisionGate({
       else onDecided();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Drover could not record that decision.");
+      if (decision === "release") onDecided();
     } finally { setBusy(null); inFlight.current = false; }
   };
 
@@ -112,6 +115,12 @@ export function DecisionGate({
         {isDeploy ? " A deploy needs two acts: authorize it, then send it." : ""}
       </div>
 
+      {item.lastExecutionError ? <div className="now-gate-execution-failure" role="alert">
+        <strong>Nothing was sent.</strong>
+        <p>{item.lastExecutionError}</p>
+        {item.needsReconnect && onReconnect ? <button type="button" className="now-gate-btn" onClick={onReconnect}>Reconnect Gmail</button> : null}
+      </div> : null}
+
       {item.purpose === "release" ? (
         <div className="now-gate-actions">
           {isDeploy && !authorized ? (
@@ -126,7 +135,7 @@ export function DecisionGate({
               disabled={decisionDisabled || !content.releaseReady}
               onClick={() => decide("release", note.trim() || undefined)}
             >
-              {busy === "release" ? "Sending…" : isDeploy ? "Send it" : "Approve & send"}
+              {busy === "release" ? "Sending…" : item.lastExecutionError ? "Retry send" : isDeploy ? "Send it" : "Approve & send"}
             </button>
           )}
           {onRevise ? <button type="button" className="now-gate-btn" onClick={onRevise}>Revise</button> : null}
