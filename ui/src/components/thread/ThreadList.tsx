@@ -14,8 +14,6 @@ function Rows({ items, selected, onSelect }: { items: WorkIndexItem[]; selected:
 }
 
 function relative(value: string | null) { const elapsed = Date.now() - Date.parse(value ?? ""); if (!Number.isFinite(elapsed)) return ""; if (elapsed < 3_600_000) return `${Math.max(1, Math.round(elapsed / 60_000))}m`; if (elapsed < 86_400_000) return `${Math.round(elapsed / 3_600_000)}h`; return `${Math.round(elapsed / 86_400_000)}d`; }
-function Cards({ items, selected, onSelect }: { items: WorkIndexItem[]; selected: string | null; onSelect: (item: WorkIndexItem) => void }) { return items.map((item) => <button type="button" className="thread-rail-card" data-selected={selected === item.threadRef || undefined} key={item.threadRef} onClick={() => onSelect(item)}><span className="thread-card-state"><ThreadState item={item} /></span><strong>{item.founderIntent}</strong><small>{item.activeParticipantRefs[0] ?? item.participantRefs[0] ?? "Drover"} · {item.latestMeaningfulEvent.summary ?? (item.activity !== "idle" ? "Working" : item.unread ? "Result ready" : "Needs review")}</small></button>); }
-
 function historyGroups(items: WorkIndexItem[]) {
   const startToday = new Date().setHours(0, 0, 0, 0);
   return [
@@ -35,8 +33,8 @@ export function ThreadList({ workIndex, search, selected, onSelect }: { workInde
   const older = items.filter((item) => item.lifecycle === "closed" && !recent.includes(item) && !item.pinnedAt);
   return <nav className="thread-rail-list">
     {pinned.length ? <section><h2>Pinned</h2><Rows items={pinned} selected={selected} onSelect={onSelect} /></section> : null}
-    {active.length ? <section><h2>Active</h2><Cards items={active} selected={selected} onSelect={onSelect} /></section> : null}
-    {review.length ? <section><h2>Needs review</h2><Cards items={review} selected={selected} onSelect={onSelect} /></section> : null}
+    {active.length ? <section><h2>Active</h2><Rows items={active} selected={selected} onSelect={onSelect} /></section> : null}
+    {review.length ? <section><h2>Needs review</h2><Rows items={review} selected={selected} onSelect={onSelect} /></section> : null}
     <section><h2>{search ? `Results · ${workIndex?.counts.matchCount ?? 0}` : "Recent"}</h2>{recent.length ? <Rows items={recent} selected={selected} onSelect={onSelect} /> : <p className="thread-rail-empty">{search ? "No matching threads" : "Start with a direction"}</p>}</section>
     {!search && older.length ? <details className="thread-history"><summary>Older work</summary>{historyGroups(older).map(([label, group]) => group.length ? <div key={label}><h3>{label}</h3><Rows items={group} selected={selected} onSelect={onSelect} /></div> : null)}</details> : null}
   </nav>;

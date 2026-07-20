@@ -2,20 +2,18 @@ const ACTIVE_VENTURE_KEY = "drover:active-venture:v1";
 const WORKSPACE_PREFIX = "drover:workspace-session:v1:";
 const THREAD_PREFIX = "drover:thread-session:v2:";
 const WORKSPACE_V3_PREFIX = "drover:workspace-session:v3:";
+const WORKSPACE_V4_PREFIX = "drover:workspace-session:v4:";
 
 export type WorkspaceMode = "work" | "system" | "releases";
-export type WorkspaceContext =
-  | { kind: "thread" | "object" | "release" | "decision"; ref: string }
-  | null;
-
 export type WorkspaceSession = {
   mode: WorkspaceMode;
   railWidth: number;
-  context: WorkspaceContext;
-  work: ThreadSession;
-  system: { scope: "system" | "product" | "gtm" | "attention"; selection: string | null; camera: { x: number; y: number; zoom: number } | null };
-  releases: { selection: string | null; subview: "overview" | "build" | "activity" | "settings" };
-  chatDrawerOpen: boolean;
+  selectedThreadRef: string | null;
+  selectedObjectRef: string | null;
+  selectedReleaseId: string | null;
+  systemScope: "system" | "product" | "gtm" | "attention";
+  systemCamera: { x: number; y: number; zoom: number } | null;
+  chatScrollByThread: Record<string, number>;
 };
 
 export type ThreadSessionVisual = {
@@ -73,39 +71,83 @@ export function rememberThreadSession(ventureId: string, session: ThreadSession)
 
 function defaultWorkspaceSession(): WorkspaceSession {
   return {
-    mode: "work", railWidth: 240, context: null,
-    work: { threadRef: null, stage: null, railWidth: 240, chatScrollByThread: {} },
-    system: { scope: "system", selection: null, camera: null },
-    releases: { selection: null, subview: "overview" }, chatDrawerOpen: false,
+    mode: "work",
+    railWidth: 240,
+    selectedThreadRef: null,
+    selectedObjectRef: null,
+    selectedReleaseId: null,
+    systemScope: "system",
+    systemCamera: null,
+    chatScrollByThread: {},
   };
+}
+
+function stringOrNull(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function cameraOrNull(value: unknown): WorkspaceSession["systemCamera"] {
+  if (!value || typeof value !== "object") return null;
+  const camera = value as Record<string, unknown>;
+  return [camera.x, camera.y, camera.zoom].every((entry) => Number.isFinite(Number(entry)))
+    ? { x: Number(camera.x), y: Number(camera.y), zoom: Number(camera.zoom) }
+    : null;
+}
+
+function scopeOrDefault(value: unknown): WorkspaceSession["systemScope"] {
+  return ["system", "product", "gtm", "attention"].includes(String(value))
+    ? value as WorkspaceSession["systemScope"]
+    : "system";
 }
 
 export function readWorkspaceSession(ventureId: string): WorkspaceSession {
   const fallback = defaultWorkspaceSession();
   if (!ventureId.trim()) return fallback;
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V3_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
+    const parsed = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V4_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
     if (parsed) {
       const mode = ["work", "system", "releases"].includes(String(parsed.mode)) ? parsed.mode as WorkspaceMode : "work";
-      const work = parsed.work && typeof parsed.work === "object" ? parsed.work : fallback.work;
       return {
-        ...fallback, ...parsed, mode, railWidth: safeRailWidth(parsed.railWidth),
-        context: parsed.context && ["thread", "object", "release", "decision"].includes(parsed.context.kind) && typeof parsed.context.ref === "string" ? parsed.context : null,
-        work: { threadRef: typeof work.threadRef === "string" ? work.threadRef : null, stage: work.stage ?? null, railWidth: safeRailWidth(parsed.railWidth ?? work.railWidth), chatScrollByThread: work.chatScrollByThread && typeof work.chatScrollByThread === "object" ? work.chatScrollByThread : {} },
-        system: { ...fallback.system, ...(parsed.system ?? {}) }, releases: { ...fallback.releases, ...(parsed.releases ?? {}) }, chatDrawerOpen: Boolean(parsed.chatDrawerOpen),
+        mode,
+        railWidth: safeRailWidth(parsed.railWidth),
+        selectedThreadRef: stringOrNull(parsed.selectedThreadRef),
+        selectedObjectRef: stringOrNull(parsed.selectedObjectRef),
+        selectedReleaseId: stringOrNull(parsed.selectedReleaseId),
+        systemScope: scopeOrDefault(parsed.systemScope),
+        systemCamera: cameraOrNull(parsed.systemCamera),
+        chatScrollByThread: parsed.chatScrollByThread && typeof parsed.chatScrollByThread === "object" ? parsed.chatScrollByThread : {},
+      };
+    }
+    const v3 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V3_PREFIX}${ventureId}`) ?? "null") as {
+      mode?: unknown; railWidth?: unknown; context?: { kind?: unknown; ref?: unknown };
+      work?: Partial<ThreadSession>; system?: { scope?: unknown; selection?: unknown; camera?: unknown };
+      releases?: { selection?: unknown };
+    } | null;
+    if (v3) {
+      const contextRef = stringOrNull(v3.context?.ref);
+      const contextKind = String(v3.context?.kind ?? "");
+      return {
+        mode: ["work", "system", "releases"].includes(String(v3.mode)) ? v3.mode as WorkspaceMode : "work",
+        railWidth: safeRailWidth(v3.railWidth ?? v3.work?.railWidth),
+        selectedThreadRef: stringOrNull(v3.work?.threadRef) ?? (contextKind === "thread" ? contextRef : null),
+        selectedObjectRef: stringOrNull(v3.system?.selection) ?? (contextKind === "object" ? contextRef : null),
+        selectedReleaseId: stringOrNull(v3.releases?.selection) ?? (contextKind === "release" ? contextRef?.replace(/^object:/, "") ?? null : null),
+        systemScope: scopeOrDefault(v3.system?.scope),
+        systemCamera: cameraOrNull(v3.system?.camera),
+        chatScrollByThread: v3.work?.chatScrollByThread && typeof v3.work.chatScrollByThread === "object" ? v3.work.chatScrollByThread : {},
       };
     }
     const v2 = readThreadSession(ventureId);
-    if (v2) return { ...fallback, railWidth: v2.railWidth, context: v2.threadRef ? { kind: "thread", ref: v2.threadRef } : null, work: v2 };
+    if (v2) return { ...fallback, railWidth: v2.railWidth, selectedThreadRef: v2.threadRef, chatScrollByThread: v2.chatScrollByThread };
     const legacy = readLegacyWorkspaceRaw(ventureId);
-    if (legacy?.mode === "map" && legacy.objectRef) return { ...fallback, mode: "system", context: { kind: "object", ref: legacy.objectRef }, system: { ...fallback.system, selection: legacy.objectRef } };
+    if (legacy?.mode === "map" && legacy.objectRef) return { ...fallback, mode: "system", selectedObjectRef: legacy.objectRef };
     return fallback;
   } catch { return fallback; }
 }
 
 export function rememberWorkspaceSession(ventureId: string, session: WorkspaceSession) {
   if (!ventureId.trim()) return;
-  try { window.localStorage.setItem(`${WORKSPACE_V3_PREFIX}${ventureId}`, JSON.stringify({ ...session, railWidth: safeRailWidth(session.railWidth) })); } catch { /* presentation memory is disposable */ }
+  try { window.localStorage.setItem(`${WORKSPACE_V4_PREFIX}${ventureId}`, JSON.stringify({ ...session, railWidth: safeRailWidth(session.railWidth) })); } catch { /* presentation memory is disposable */ }
 }
 
 export function readActiveVentureId(): string | null {
