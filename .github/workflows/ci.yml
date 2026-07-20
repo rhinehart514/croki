@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    name: Complete readiness gate
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            brain/package-lock.json
+            ui/package-lock.json
+            design-system/package-lock.json
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Install design-system dependencies
+        run: npm --prefix design-system ci
+
+      - name: Run complete readiness gate
+        run: npm run test:acceptance

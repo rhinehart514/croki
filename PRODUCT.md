@@ -24,24 +24,29 @@ acts, measurement, and returned evidence as far as reality supports.
 
 ## Founder experience
 
-Drover returns directly to the founder's last active venture and thread. A deliberately open visual returns
-beside that conversation when space permits; obsolete work/map presentation state is never restored.
+Drover returns directly to the founder's last active venture, mode, and shared context. Work restores its
+thread and deliberate visual; Product / GTM restores scope and selection; Releases restores the release and
+subview. Presentation state remains venture-keyed and local.
 Choosing or connecting a venture is exceptional: first use, recovery, or an explicit action from the
 in-workspace venture switcher.
 
-The workspace opens on a compact **thread rail** beside the permanent conversation. The rail shows pinned,
-open, active, waiting, and historical threads rather than exposing Product and Go-to-market ontology as
-navigation. Search returns to the owning thread; a founder direction creates a durable thread only when it
-is sent, and returning continues that exact identity.
+The compact workspace rail exposes three parallel founder jobs over one model: **Work**, **Product / GTM**,
+and **Releases**. Work organizes threads by return value. Product / GTM exposes Whole system, Product, GTM,
+attention, search, and reversible founder editing. Releases organizes needs-you, drafts, in-market movement,
+recent releases, and exact actions that have no release join.
 
 With no thread selected, venture chat shows what changed, what is still moving, and what needs founder
 judgment. Selecting a thread restores its meaningful conversation, active agents, artifacts, evidence, and
 consequences. Every founder turn uses the venture conversation contract and carries the exact selected
 `threadRef`; the server decides whether it continues, steers, observes, stops, critiques, or starts work.
 
-Previews, flows, comparisons, evidence, consequences, exact changes, and the venture graph open in an
-optional visual stage beside chat. Opening material never changes the thread or moves the founder into a
-different product mode. Escape closes the stage and restores focus to chat.
+Conversation remains mounted in all three modes. It is the main Work workspace and opens contextually as a
+right drawer in Product / GTM and Releases, compressing those workspaces when room permits and overlaying
+them at narrow widths. Shared context deterministically resolves a linked thread, object, or release; when
+none exists, the destination overview retains the source context for the next action.
+
+Previews, flows, comparisons, evidence, consequences, and exact changes can still open beside Work chat.
+Escape closes the topmost visual or drawer and restores focus to its opener without losing composer drafts.
 
 A broad founder direction may immediately generate an ambitious provisional interpretation and begin safe
 inward work. Generated structure remains visibly inferred until founder action or evidence strengthens it.
@@ -64,6 +69,13 @@ Claude and Codex retain freedom over method within the direction's authority.
 An ordinary direction may use one model, consultation, handoff, parallel approaches, independent critique,
 or verification. Composition remains visible and steerable. Claude and Codex appear in provenance and run
 inspection, not as fictional employees or an AI org chart.
+
+Coding is native work. An implementation direction starts Claude or Codex in an isolated repository
+workspace attached to a Run, returns the composer immediately, and brings meaningful progress, exact files,
+diffs, checks, failures, and recovery back to the same Thread. Provider sessions and checkpoints are runtime
+and repository machinery, not parallel project or conversation systems. Separate attempts remain comparable;
+only the founder may apply, reverse, commit, prepare a branch or pull request, restore, or discard exact work.
+The resulting capability stays joined to Product understanding and its next release or distribution question.
 
 Safe, reversible inward work may proceed after direction begins. The founder wall remains fail-closed: no
 browser, model, MCP, stale, replayed, forged, or prior-process claim can mint release authority. The founder
@@ -89,9 +101,8 @@ revise, release again—not by code volume, campaign volume, or agent activity.
 
 ## Durable invariants
 
-1. A thread rail supplies stable orientation without exposing the underlying ontology as navigation; chat
-   is the default founder surface; visuals open beside it and never become a separate mode or permanent
-   center.
+1. One workspace rail supplies stable orientation across Work, Product / GTM, and Releases. These are
+   presentation-level founder jobs, not sequential stages or separate authorities.
 2. One model powers every view; no canvas, board, branch, workbench, or snapshot becomes a second authority.
 3. Product and go-to-market remain distinct and traceable parts of one venture.
 4. Work starts only from founder intent or a founder-invoked workflow.
@@ -101,6 +112,9 @@ revise, release again—not by code volume, campaign volume, or agent activity.
 8. No external consequence occurs without the founder's exact hand.
 9. Ventures remain isolated, local-first, readable, and exportable.
 10. Historical implementation nouns remain compatibility seams, not product identity.
+11. Release lifecycle is derived from exact semantic joins: draft before any successful outward release,
+    in market after a joined released act, and ended only by the founder. Gaps are concrete, never a
+    percentage-complete score.
 
 ## Platform
 

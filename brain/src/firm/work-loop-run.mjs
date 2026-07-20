@@ -12,7 +12,7 @@
 // The run id is the activeDrive.id, so a run is 1:1 with the drive that produced it and never collides.
 // Legacy drives are not backfilled: only a drive that begins a run here can complete one.
 
-import { ensureDirectionThread, extendDirectionThread, recordRun, completeDriveRun } from "./semantic-model-store.mjs";
+import { ensureDirectionThread, extendDirectionThread, recordRun, completeDriveRun, attachDriveRunWork } from "./semantic-model-store.mjs";
 import { setVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { createWorkflowExecutionReceipt } from "./workflow-execution-receipt.mjs";
 import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
@@ -82,6 +82,21 @@ export function beginDriveRun({
     return { ventureId, runId, betId, architectureRef, threadRef: direction.threadRef, options };
   } catch {
     // Honest degrade: the drive must never be aborted or changed by a run-recording error.
+    return null;
+  }
+}
+
+export function joinDriveRunToWork(handle, { workRef, participantRef, provider, repository, branch, worktree }, options = {}) {
+  if (!handle) return null;
+  try {
+    const run = attachDriveRunWork(handle.ventureId, handle.runId, {
+      workRef,
+      participantRef,
+      properties: { provider, repository, branch, worktree, workspaceKind: "native-code" },
+    }, options);
+    extendDirectionThread(handle.ventureId, handle.threadRef, { subjectRefs: [workRef] }, options);
+    return run;
+  } catch {
     return null;
   }
 }

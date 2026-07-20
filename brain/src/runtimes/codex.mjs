@@ -46,10 +46,19 @@ export function codexAuthModeLabel(mode) {
   return mode === "chatgpt-login" ? "ChatGPT subscription" : null;
 }
 
-export function buildCodexDriveArgs({ model, resumeId, mcpUrl } = {}) {
+export function buildCodexDriveArgs({ model, resumeId, mcpUrl, nativeCoding = false } = {}) {
   const common = [
     "--json",
     "--skip-git-repo-check",
+    ...(nativeCoding ? [
+      "-s", "workspace-write",
+      "-c", 'approval_policy="never"',
+      "-c", "sandbox_workspace_write.network_access=true",
+      "-c", "features.network_proxy.enabled=true",
+      "-c", 'features.network_proxy.domains={ "localhost" = "allow", "127.0.0.1" = "allow" }',
+      "-c", "features.network_proxy.allow_local_binding=true",
+      "-c", "features.network_proxy.allow_upstream_proxy=false",
+    ] : []),
     ...(mcpUrl ? ["-c", `mcp_servers.drover.url=${JSON.stringify(mcpUrl)}`] : []),
     ...(model ? ["-m", model] : []),
   ];
@@ -171,9 +180,17 @@ function drivePrompt(ctx) {
     "Drover adds a native MCP server named drover for venture truth, durable work, and founder-held",
     "consequences. Use those tools when work must attach to the venture. A Drover tool can prepare or",
     "park an outward consequence, but only the founder can authorize it.",
+    ctx.nativeCoding
+      ? "You are in a Drover-owned isolated worktree. Implement and verify here. Do not commit, merge, push, create a pull request, deploy, or apply changes to another workspace; Drover presents those exact consequences to the founder."
+      : "",
     "",
     `Founder's outcome: ${ctx.goal}`,
   ].join("\n");
+}
+
+function isVerificationCommand(command) {
+  const value = String(command ?? "");
+  return /(?:^|[;&|]\s*|["'])(?:npm(?:\s+--prefix\s+\S+)?\s+(?:test|run\s+(?:test[^\s]*|lint|build|typecheck|check|verify[^\s]*))|node\s+--(?:test|check)|git\s+diff\s+--check|(?:npx\s+)?(?:tsc|vitest|eslint)\b)/i.test(value);
 }
 
 export async function runCodexDriveTurn({
@@ -190,16 +207,20 @@ export async function runCodexDriveTurn({
   env = process.env,
   spawnProcess = spawn,
   startBridge = startCodexMcpBridge,
-  timeoutMs = Number(env.GTM_IDE_CODEX_TIMEOUT_MS) || 600_000,
+  timeoutMs = null,
   isCancelled = () => false,
   signal = null,
+  nativeCoding = false,
+  onCommand = null,
+  onRuntimeSession = null,
 } = {}) {
   const binary = findCodexBinary(env);
   if (!binary.ok) return { threadId: null, text: "", error: binary.reason };
   const bridge = tools.length && typeof runTool === "function"
     ? await startBridge({ tools, runTool, onToolStart, onToolError, onTurn, maxSteps })
     : null;
-  const args = buildCodexDriveArgs({ model, resumeId, mcpUrl: bridge?.url });
+  const args = buildCodexDriveArgs({ model, resumeId, mcpUrl: bridge?.url, nativeCoding });
+  const effectiveTimeoutMs = Number(timeoutMs) || Number(env.GTM_IDE_CODEX_TIMEOUT_MS) || (nativeCoding ? 30 * 60_000 : 600_000);
   return new Promise((resolve) => {
     const child = spawnProcess(binary.path, args, {
       cwd,
@@ -237,15 +258,29 @@ export async function runCodexDriveTurn({
     };
     const consume = (line) => {
       const event = parseCodexEvent(line);
-      if (event?.type === "thread" && event.id) threadId = event.id;
+      if (event?.type === "thread" && event.id) {
+        threadId = event.id;
+        onRuntimeSession?.(event.id);
+      }
       if (event?.type === "text" && event.text) text = String(event.text);
       if (event?.type === "completed" && event.summary) text ||= String(event.summary);
       if (event?.type === "error") terminalError = String(event.message || "Codex failed.");
+      if (event?.type === "command-start") onToolStart?.("command", { summary: event.command ? `Running ${event.command}` : "Running a command" });
+      if (event?.type === "command-complete") onCommand?.({
+        id: event.id ?? null,
+        command: event.command ?? "Command",
+        status: event.exitCode === 0 ? "passed" : "failed",
+        exitCode: event.exitCode,
+        startedAt: event.startedAt ?? null,
+        completedAt: new Date().toISOString(),
+        output: String(event.output ?? "").slice(-8_000),
+        verification: isVerificationCommand(event.command),
+      });
     };
     const timeout = setTimeout(() => {
       timedOut = true;
       requestStop("timeout");
-    }, timeoutMs);
+    }, effectiveTimeoutMs);
     const cancelPoll = setInterval(() => {
       if (!isCancelled()) return;
       requestStop("cancelled");
@@ -386,6 +421,15 @@ export function parseCodexEvent(line) {
   if ((event.type === "item.started" || event.type === "item.completed") && /mcp.*tool|tool.*mcp/i.test(item.type ?? "")) {
     return { type: "tool", name: item.tool_name ?? item.name ?? item.tool?.name ?? null };
   }
+  if ((event.type === "item.started" || event.type === "item.completed") && /command_execution/i.test(item.type ?? "")) {
+    return {
+      type: event.type === "item.started" ? "command-start" : "command-complete",
+      id: item.id ?? null,
+      command: item.command ?? null,
+      exitCode: Number.isInteger(item.exit_code) ? item.exit_code : (item.status === "completed" ? 0 : 1),
+      output: item.aggregated_output ?? item.output ?? "",
+    };
+  }
   if (event.type === "turn.failed" || event.type === "error") {
     return { type: "error", message: event.error?.message ?? event.message ?? "Codex failed." };
   }
@@ -436,6 +480,9 @@ export const codexRuntime = {
         env: ctx.env ?? process.env,
         isCancelled: ctx.isCancelled,
         signal: ctx.signal,
+        nativeCoding: ctx.nativeCoding === true,
+        onCommand: ctx.onCommand,
+        onRuntimeSession: ctx.onRuntimeSession,
       });
       if (turn.error === "cancelled") return { kind: "cancelled" };
       if (turn.error) {

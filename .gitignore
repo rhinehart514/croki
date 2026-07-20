@@ -34,6 +34,9 @@ output/
 # Dogfood builder worktrees (feature-builder.mjs) — transient checkouts, branches survive
 .dogfood-worktrees/
 
+# Native coding workspaces — retained until the founder applies, commits, or discards them
+.drover-worktrees/
+
 # Playwright MCP screenshot scratch
 .playwright-mcp/
 .tmp-canvas/

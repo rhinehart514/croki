@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { WorkIndexOutline, WorkIndexOutlineObject } from "@/api";
+import type { Viewport } from "@xyflow/react";
 import type { Direction } from "@/components/now/directionModel";
 import { objectMapFacts, objectMapTypeLabel, ventureGraph, type VentureMapView } from "./ventureMapModel";
 import { VentureSystemGraph } from "./VentureSystemGraph";
@@ -16,14 +17,30 @@ export function VentureMaps({
   directions,
   onOpenDirection,
   onOpenObject,
+  view: controlledView,
+  selectedId: controlledSelectedId,
+  onViewChange,
+  onSelectionChange,
+  camera,
+  onCameraChange,
 }: {
   outline: WorkIndexOutline | null | undefined;
   directions: Direction[];
   onOpenDirection: (direction: Direction) => void;
   onOpenObject: (object: WorkIndexOutlineObject) => void;
+  view?: VentureMapView;
+  selectedId?: string | null;
+  onViewChange?: (view: VentureMapView) => void;
+  onSelectionChange?: (id: string | null) => void;
+  camera?: Viewport | null;
+  onCameraChange?: (camera: Viewport) => void;
 }) {
-  const [view, setView] = useState<VentureMapView>("system");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [localView, setLocalView] = useState<VentureMapView>("system");
+  const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
+  const view = controlledView ?? localView;
+  const selectedId = controlledSelectedId === undefined ? localSelectedId : controlledSelectedId;
+  const setView = (next: VentureMapView) => { setLocalView(next); onViewChange?.(next); };
+  const setSelectedId = (next: string | null) => { setLocalSelectedId(next); onSelectionChange?.(next); };
   const directionByRef = useMemo(() => new Map(directions.map((direction) => [direction.id, direction])), [directions]);
   const graph = useMemo(() => ventureGraph(outline, view), [outline, view]);
   const outlineObjects = outline?.objects ?? [];
@@ -75,6 +92,8 @@ export function VentureMaps({
           view={view}
           selectedId={visibleSelectedId}
           onSelect={setSelectedId}
+          camera={camera}
+          onCameraChange={onCameraChange}
         />
       )}
 

@@ -14,7 +14,7 @@
 //   • Publishing NEVER throws into a caller's happy path: a firm mutation that emits an event must not
 //     fail because a listener did. Every emit is best-effort.
 
-const KINDS = new Set(["lens", "conversation", "drive", "wall", "outcome", "timeline"]);
+const KINDS = new Set(["lens", "conversation", "drive", "wall", "outcome", "timeline", "system", "release"]);
 
 const subscribers = new Map(); // subscriptionId -> { ventureId, listener }
 let nextId = 1;

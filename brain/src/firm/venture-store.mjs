@@ -50,6 +50,7 @@ export const VENTURE_COLLECTIONS = Object.freeze([
   "decisions",
   "settings",
   "productChanges",
+  "codeWorkspaces",
   "conversation",
   "placement",
   "configuration",
@@ -214,7 +215,7 @@ export function exportVenture(ventureId, options = {}) {
   const documents = {};
   for (const collection of VENTURE_COLLECTIONS) {
     const docs = venturePersistence(options, ventureId).list(collection);
-    documents[collection] = collection === "productChanges" ? docs.map(portableProductChange) : docs;
+    documents[collection] = ["productChanges", "codeWorkspaces"].includes(collection) ? docs.map(portableProductChange) : docs;
   }
   const souls = teammateSoulStore.listForVenture(ventureId, options);
   return { manifest, documents, souls };

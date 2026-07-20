@@ -9,7 +9,7 @@ import { createOvernightVentureFixture } from "../fixtures/firm-fixtures.mjs";
 import { assertNoUnhandledRejections, assertPerformanceBudgets, bootFixture, openFixtureVenture, setNetworkOffline, waitForDom } from "./fixtures/browser-harness.mjs";
 
 async function selectThread(client, intent) {
-  const selected = await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row')].find((entry) => entry.textContent.includes(${JSON.stringify(intent)})); row?.click(); return Boolean(row); })()`);
+  const selected = await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row, .thread-rail-card')].find((entry) => entry.textContent.includes(${JSON.stringify(intent)})); row?.click(); return Boolean(row); })()`);
   assert.equal(selected, true, `thread was unavailable: ${intent}`);
   await waitForDom(client, `document.querySelector('.thread-header-copy h1')?.textContent?.includes(${JSON.stringify(intent)})`, `thread did not open: ${intent}`);
 }

@@ -156,6 +156,15 @@ describe("NowComposer contextual routing", () => {
     );
     expect(screen.getByLabelText(/Say what you want/)).toHaveValue("Draft for the first direction");
   });
+
+  it("keeps contextual new-thread drafts attached to their semantic subject", () => {
+    const { rerender } = render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} subjectRefs={["object:one"]} scopeLabel={null} hasWork variant="dock" submissionMode="conversation" />);
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Draft for object one" } });
+    rerender(<NowComposer ventureId="v1" ventureName="Acme" selection={null} subjectRefs={["object:two"]} scopeLabel={null} hasWork variant="dock" submissionMode="conversation" />);
+    expect(screen.getByLabelText(/Say what you want/)).toHaveValue("");
+    rerender(<NowComposer ventureId="v1" ventureName="Acme" selection={null} subjectRefs={["object:one"]} scopeLabel={null} hasWork variant="dock" submissionMode="conversation" />);
+    expect(screen.getByLabelText(/Say what you want/)).toHaveValue("Draft for object one");
+  });
 });
 
 describe("NowComposer post-submit receipt", () => {

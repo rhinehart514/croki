@@ -1,11 +1,12 @@
 /* eslint-disable react-refresh/only-export-components -- the registry returns domain renderers by visual kind. */
-import type { ThreadTimeline, ThreadTimelineItem, VisualReference, WorkIndex } from "@/api";
+import type { CodingWorkspace, ThreadTimeline, ThreadTimelineItem, VisualReference, WorkIndex } from "@/api";
 import type { Direction } from "@/components/now/directionModel";
 import { VentureMaps } from "@/components/maps/VentureMaps";
 import { ExactArtifact } from "@/components/thread/RichThreadItems";
 import { DecisionGate } from "@/components/now/DecisionGate";
 import type { FirmLens } from "@/types";
 import { Background, Controls, MarkerType, Position, ReactFlow } from "@xyflow/react";
+import { CodeWorkspaceStage } from "./CodeWorkspaceStage";
 
 const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
 const records = (value: unknown) => Array.isArray(value) ? value as Array<Record<string, unknown>> : [];
@@ -50,7 +51,11 @@ export function renderVisualStage({ visual, timeline, workIndex, directions, len
   if (!item) return <div className="visual-stage-empty"><strong>This material is no longer in the current view.</strong><p>The conversation remains intact. Close this view and reopen the latest visual from chat.</p></div>;
   if (visual.kind === "flow") return <FlowStage item={item} />;
   if (visual.kind === "comparison") return <ComparisonStage item={item} />;
-  if (visual.kind === "preview" || visual.kind === "diff") return <ExactArtifact item={item} />;
+  if (visual.kind === "preview" || visual.kind === "diff") {
+    const artifact = item.artifact as Record<string, unknown> | undefined;
+    if (artifact?.kind === "native-code") return <CodeWorkspaceStage ventureId={timeline!.ventureId} workspace={artifact as unknown as CodingWorkspace} readOnlyReason={readOnlyReason} onChanged={onChanged} />;
+    return <ExactArtifact item={item} />;
+  }
   if (visual.kind === "evidence") return <div className="visual-evidence"><h3>{text(item.title, "Evidence")}</h3>{records(item.evidence).map((entry, index) => <article key={text(entry.id, String(index))}><blockquote>{text(entry.body, text(entry.content, text(entry.summary, "Evidence record")))}</blockquote><small>{text(entry.source, text(entry.channel, "Venture evidence"))}</small></article>)}</div>;
   if (visual.kind === "consequence") {
     const decision = item.decision as Record<string, unknown> | undefined;

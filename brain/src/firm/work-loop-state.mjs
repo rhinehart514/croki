@@ -33,3 +33,28 @@ export function saveWork({ ventureId, teammateRef, betId, bet, work, options }) 
   setVentureDoc(ventureId, "crew", workKey(teammateRef), { work, updatedAt: now() }, options);
   return work;
 }
+
+export function prepareRuntimeResume({ work, goal, steerBrief, architectureContext, adapterId }) {
+  const resumePrompt = work.runtimeSessionId
+    ? [
+        work.pausedFor ? `Prior pause context: ${work.pausedFor}` : null,
+        `New founder direction: ${goal}`,
+        steerBrief,
+      ].filter(Boolean).join("\n\n")
+    : null;
+  const currentWork = {
+    ...work,
+    pausedFor: null,
+    ...(architectureContext ? {
+      architectureRevision: architectureContext.architectureRevision,
+      architectureTarget: { id: architectureContext.selected.id, stepId: architectureContext.stepId },
+    } : {}),
+  };
+  const stored = typeof currentWork.runtimeSessionId === "string" ? currentWork.runtimeSessionId : null;
+  const separator = stored?.indexOf(":") ?? -1;
+  const storedAdapter = separator > 0 ? stored.slice(0, separator) : null;
+  const runtimeSessionId = storedAdapter
+    ? (storedAdapter === adapterId ? stored.slice(separator + 1) : null)
+    : stored;
+  return { currentWork, resumePrompt, runtimeSessionId };
+}

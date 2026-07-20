@@ -70,6 +70,8 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
   const messageRefs = new Set(list(thread.messageRefs));
   const decisions = listVentureDocs(ventureId, "decisions", options);
   const outcomes = listVentureDocs(ventureId, "outcomes", options);
+  const codeWorkspaces = listVentureDocs(ventureId, "codeWorkspaces", options)
+    .filter((workspace) => workspace.threadRef === threadRef || list(workspace.runRefs).some((ref) => runs.some((run) => ref === `run:${run.id}`)));
   const bets = allBets.filter((bet) => betIds.has(bet.id));
   const active = listActiveDrives(ventureId).filter((drive) => betIds.has(drive.betId) || runs.some((run) => run.id === drive.id));
   const isRoot = thread.id === ROOT_THREAD_ID;
@@ -151,6 +153,50 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
         betRef: `bet:${bet.id}`,
       });
     }
+  }
+
+  for (const workspace of codeWorkspaces) {
+    const artifactRef = `work:${workspace.id}`;
+    const title = workspace.goal ?? "Native coding attempt";
+    const visualRef = visual("diff", artifactRef, threadRef, title, list(workspace.runRefs));
+    visuals.push(visualRef);
+    items.push({
+      kind: "artifact",
+      id: `artifact:${workspace.id}`,
+      ref: artifactRef,
+      at: at(workspace),
+      title,
+      artifact: {
+        ...workspace,
+        content: { kind: "diff", diff: workspace.diff ?? "" },
+        verifiedAt: workspace.status === "reviewable" ? workspace.updatedAt : null,
+      },
+      ownerLabels: list(workspace.participantRefs).map(participantLabel).filter(Boolean),
+      contributorLabels: [],
+      betRef: workspace.betId ? `bet:${workspace.betId}` : null,
+      visual: visualRef,
+    });
+    if (workspace.status === "interrupted") {
+      items.push({
+        kind: "agent-status", id: `agent:${workspace.id}:failed`, ref: artifactRef,
+        at: workspace.interruption?.at ?? at(workspace), participantRef: workspace.participantRefs?.at(-1) ?? null,
+        participantLabel: participantLabel(workspace.participantRefs?.at(-1)), state: "failed",
+        summary: workspace.interruption?.message ?? "Provider work was interrupted; the isolated workspace was retained.",
+        updatedAt: workspace.updatedAt, recovery: workspace.interruption?.recovery ?? null,
+      });
+    }
+  }
+
+  if (codeWorkspaces.length > 1) {
+    const comparisonRef = `${threadRef}#code-attempts`;
+    const comparisonVisual = visual("comparison", comparisonRef, threadRef, "Implementation attempts", codeWorkspaces.map((workspace) => `work:${workspace.id}`));
+    visuals.push(comparisonVisual);
+    items.push({
+      kind: "comparison", id: `comparison:${thread.id}:code`, ref: comparisonRef,
+      at: at(codeWorkspaces.at(-1), at(thread)), title: "Implementation attempts", variant: "alternatives",
+      alternatives: codeWorkspaces.map((workspace) => ({ id: workspace.id, title: workspace.goal, items: [{ label: workspace.status, detail: workspace.diffStat }], artifactRefs: [`work:${workspace.id}`] })),
+      visual: comparisonVisual,
+    });
   }
 
   const siblingGroups = new Map();

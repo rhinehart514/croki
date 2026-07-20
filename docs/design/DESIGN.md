@@ -1,6 +1,6 @@
 ---
 status: canonical-current-code-record
-refreshed: 2026-07-18
+refreshed: 2026-07-19
 experience_direction: ../../DESIGN.md
 token_source: ../../ui/src/index.css
 feature_styles:
@@ -12,9 +12,9 @@ feature_styles:
   - ../../ui/src/styles/portfolio-frontier.css
   - ../../ui/src/styles/venture-atlas.css
   - ../../ui/src/styles/workyard.css
-  - ../../ui/src/components/workspace/venture-workspace.css
-  - ../../ui/src/components/workspace/workspace-index.css
-  - ../../ui/src/components/workbench/workbench.css
+  - ../../ui/src/components/workspace/workspace-shell.css
+  - ../../ui/src/components/thread/thread-shell.css
+  - ../../ui/src/components/maps/venture-maps.css
 tokens:
   colors:
     ink: { value: "#f5f5f5", ref: "ui/src/index.css" }
@@ -88,13 +88,14 @@ consequence boundary create specificity. Agent machinery and decoration do not.
 ## Current-code boundary
 
 This file records what the current UI can render; it does not turn product aspirations into proof. The
-working tree has one `VentureWorkspace`: a resizable work index, `VentureHome`, a selected work stream beside
-persistent registry-backed material, a docked scoped composer, and an explicitly summoned map. Removed
-Now/immersive/legacy shells are not part of the current boundary.
+working tree has one founder entry backed by `WorkspaceShell`: a resizable Work/Product-GTM/Releases rail,
+one shared context, mounted conversation, optional Work visual, controlled system graph, and semantic release
+workspace. `ThreadShell` remains source compatibility during migration but is not mounted by the entry.
 
-Important incomplete capabilities remain: universal search across the canonical model, generalized
-non-bet selection, synchronized saved live views and immutable snapshots, outcome-contract workflows, and
-complete consequence execution. `docs/STATE.md` remains authoritative for the exact proof boundary.
+Compatibility-owned architecture edits continue through the architecture adapter; founder-authored open
+objects and relationships use the semantic mutation adapter. The v3 venture session persists graph camera
+changes alongside mode, selection, and conversation state. Synchronized saved-view and snapshot management
+remains incomplete. `docs/STATE.md` remains authoritative for the exact proof boundary.
 
 ## Stack
 
@@ -232,18 +233,26 @@ the same contract and becomes immediate when `prefers-reduced-motion` is active.
 
 - **`VenturePicker`** — existing venture, create another venture, repository selection, loading, empty,
   busy, and error.
-- **`VentureWorkspace`** — the sole founder shell; owns one selection, work/map mode, and composer scope.
-- **`WorkspaceIndex`** — resizable persisted venture/work navigation, search, attention filter, active work,
-  compact conversation context, and Settings.
-- **`VentureHome`** — grouped return list for decisions, market returns, active work, and recent change.
-- **`Workbench`** — selected narrative/material split, safe registry precedence, persistent material tabs,
-  and the path to Map.
-- **`WorkNarrative`** — the selected work's conversation projection, status, runtime receipts, and founder
-  authority cue.
+- **`VentureWorkspace` + `WorkspaceShell`** — sole founder entry and state owner for mode, shared context,
+  v3 restoration, Work conversation/visual, System scope, Release selection, and contextual drawer.
+- **`WorkspaceRail` + `WorkspaceModeNav`** — venture navigation, 208–320px resize, `⌘1`–`⌘3`, mode-scoped
+  `⌘K`, Settings, and mode-specific index bodies.
+- **`ThreadList`** — optional Pinned, Active, Needs review, Recent, and older history without a separate
+  participant roster.
+- **`SystemWorkspace`** — controlled graph/attention projection plus founder creation and editing through
+  the open semantic adapter or existing architecture compatibility adapter.
+- **`ReleaseWorkspace`** — contextual unsaved draft, four subviews, editable object/work joins, exact
+  founder gates, concrete gaps, derived lifecycle, and reversible end/reopen without deletion or percentage
+  readiness.
+- **`ThreadConversation`** — continuously mounted direction/review surface with contextual first-message
+  `subjectRefs`.
 - **`NowComposer`** — whole-venture and selected-work scope, voice, busy/held/error states, and exact receipt.
 - **Stage registry bodies** — consequence, exact product artifact, comparison, direction, and overview.
-- **`VentureMaps` + `VentureSystemGraph`** — explicitly summoned generated operating graph with Whole system,
-  Product, and Go-to-market views; route focus; pan/zoom; and explicit handoff back to real work.
+- **Thread rich items** — compact artifact, comparison, evidence, and consequence projections. The title and
+  truthful open action share one header; the produced material owns the body; only recorded provenance gets
+  a receipt row. Missing evidence stays visible as a quiet unavailable-source state rather than fake content.
+- **`VentureMaps` + `VentureSystemGraph`** — controlled Product / GTM workspace with Whole system, Product,
+  and Go-to-market views, contextual inspection, pan/zoom, and handoff to linked work.
 - **`FirmFreshness`** — reconnect/offline honesty over the coherent workspace read model.
 
 Feature primitives remain feature-local product behavior, not a request to extract a component package.
@@ -255,13 +264,14 @@ product ontology.
 ### Real
 
 - Dark-first neutral tokens in `ui/src/index.css` and their Tailwind aliases.
-- One 52px chrome line, a persisted 208–420px work index, and one adaptive center.
-- `VentureHome` at rest; selected work stream and 360–540px exact-material panel together.
-- Persistent material tabs backed by the open stage registry and safe consequence precedence.
-- A floating scoped composer aligned to the narrative rather than the material panel.
+- A persisted 208–320px workspace rail and one adaptive center across three founder jobs.
+- Work conversation with optional 420–520px visual; Product / GTM or Releases with an optional 420–520px
+  contextual chat drawer.
+- Venture-keyed v3 restoration with v2 thread and v1 map migration.
+- A docked scoped composer whose draft survives mode switching because conversation remains mounted.
 - 150–200ms entry, disclosure, focus, and active-work motion with a reduced-motion settlement.
-- An explicitly summoned whole-system operating graph that keeps Product capacity, paths to market, market
-  work, and returned evidence connected; route focus hands descent back to work.
+- A full Product / GTM operating graph that keeps Product capacity, paths to market, work, and returned
+  evidence connected; shared context hands descent back to Work or Releases.
 - Shared Base UI button/input primitives in high-consequence forms.
 - Card/popover/modal elevation roles.
 - Purpose-specific wall actions and configuration receipts.
@@ -350,11 +360,11 @@ The token parity command reads all production CSS, rejects undefined production 
 all 78 canonical tokens with the compatibility projection, validates the extension registry, and
 exits nonzero on any drift.
 
-The acceptance browser coverage includes the 1440×900 desktop, 100–150% dense-map zoom, keyboard focus,
-workbench/graph descent, founder consequence, dense/empty states, stale/offline recovery, venture isolation,
-errors, and long content. On 2026-07-18 the complete local command passed: Brain 787/787, UI 484/484,
-token parity, firm browser 5/5, and Atlas browser 3/3. This remains a local browser-harness receipt, not a
-packaged Electron end-to-end receipt or evidence of outside-founder comprehension.
+The acceptance coverage includes 1440×900 and 1280×800 desktop layouts, 100–200% zoom, keyboard focus,
+three-mode context resolution, graph descent, contextual chat, canonical release lifecycle and exact gates,
+founder consequence, dense/empty states, stale/offline recovery, venture isolation, errors, and long content.
+The complete current receipt is recorded in `docs/STATE.md`; it includes both deterministic browser journeys
+and real Electron-host tests. It remains implementation proof, not evidence of outside-founder comprehension.
 
 Refresh this record only from current code and a current render. Promote inline values and
 consolidate duplicates by observed reuse; do not build a speculative component library.

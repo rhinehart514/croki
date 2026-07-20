@@ -1,7 +1,7 @@
 # Drover firm specification
 
 **Status:** durable product and build physics.
-**Last reconciled:** 2026-07-17 from Jacob's Product and Experience Laws.
+**Last reconciled:** 2026-07-19 for the three-mode founder workspace.
 **Scope:** product-agnostic and venture-agnostic. **Stage:** alpha.
 
 This is the product specification of record. [`STATE.md`](STATE.md) records what the current tree proves.
@@ -16,9 +16,10 @@ intelligence of agentic software development.**
 It does not run the company for the founder. It gives the founder the depth, memory, leverage, and visual
 cognition of a complete product and go-to-market organization.
 
-> **Chat is the operating surface. Visuals are inspectable, interactive outputs of the current
-> conversation. The thread rail preserves continuity; the canonical venture model supplies memory,
-> consequence, and evidence behind the interface. Claude and Codex expand what the founder can accomplish.**
+> **Work, Product / GTM, and Releases are parallel founder jobs over one canonical venture model and one
+> shared context. Conversation directs and reviews work; the system workspace makes the venture shapeable;
+> the release workspace makes market movement and returned evidence exact. Claude and Codex expand what the
+> founder can accomplish without gaining founder authority.**
 
 The first proof is one real venture. The destination may span a portfolio, but each venture remains an
 isolated, readable, transferable operating environment behind the founder's authority.
@@ -50,9 +51,10 @@ not because it simulates constant activity.
 
 ### One model, many views
 
-The venture has one shared underlying model. The visual stage, generated answers, operating arrangements,
-saved views, snapshots, conversation projections, and thread index are projections of that model, never
-parallel sources of truth.
+The venture has one shared underlying model. Work, Product / GTM, Releases, the visual stage, generated
+answers, operating arrangements, saved views, snapshots, conversation projections, and indexes are
+presentation-level projections of that model, never parallel sources of truth. Modes are neither lifecycle
+stages nor authority boundaries. Switching them changes view and next action, not canonical identity.
 
 ### Visual understanding precedes administration
 
@@ -294,6 +296,18 @@ Each venture binds to a real product repository. Product claims cite repository 
 inference. Product changes occur in isolated git worktrees, retain exact diffs and verification, and require
 founder review before local apply. Deploy is a separate exact consequence with a second authorization.
 
+Native coding uses the existing venture model rather than introducing an IDE authority. A Thread preserves
+founder intent and continuity; each implementation attempt is a Run; a provider session is runtime machinery
+attached to that Run; and a worktree is isolated filesystem state attached to exact work. A checkpoint is a
+recoverable repository snapshot, and a diff is an artifact and proof of change—not a project history or a
+release. Separate attempts remain separate work records even when they share a Thread.
+
+Provider and git activity is translated into venture-owned Runs, exact-work records, artifacts, and
+projections. Provider turn completion alone cannot complete implementation. The selected outcome requires a
+retained repository state, attributable verification, unambiguous source/worktree lineage, and the exact
+founder-held consequence. Apply, reverse apply, commit, branch/PR preparation, restore, and discard each name
+their target and fail closed when the reviewed checkpoint, source state, or authority no longer matches.
+
 ### Founder wall
 
 One non-forgeable founder boundary holds every world-touching consequence. Electron owns the volatile
@@ -373,8 +387,9 @@ consequence, returns evidence, or changes venture judgment.
 
 ## Interaction invariants
 
-1. One click selects a thread or opens material beside its conversation. Opening material never changes
-   the current thread implicitly; Escape closes the visual stage and returns focus to its originating act.
+1. One click selects canonical context. Work opens its thread; Product / GTM opens its object and inspector;
+   Releases opens its release. Escape closes the topmost visual or contextual conversation and returns
+   focus to its originating act.
 2. Typing in venture chat starts a thread; typing in a thread continues that exact durable conversation.
 3. Moving, resizing, and visual grouping update placement immediately and remain reversible.
 4. An obvious semantic connection may apply directly and remains undoable.
@@ -382,10 +397,11 @@ consequence, returns evidence, or changes venture judgment.
 6. Generated layouts never overwrite founder placement.
 7. Saving a live view, capturing a snapshot, and promoting an inferred finding are explicit acts.
 8. Every external act presents the exact consequence.
-9. Collapsing activity, opening or closing a visual, or switching threads never loses the current draft,
-   thread identity, or last coherent conversation.
-10. Switching lenses never duplicates objects.
-11. Search reaches the whole venture model, evidence, conversations, views, snapshots, and work.
+9. Collapsing activity, opening or closing a visual or drawer, switching modes, or switching threads never
+   loses scoped drafts, shared context, thread identity, or the last coherent conversation.
+10. Switching modes or lenses never duplicates objects or restores an unrelated selection.
+11. Search is mode-scoped in presentation while the underlying index can reach the whole venture model,
+   evidence, conversations, views, snapshots, and work.
 12. Raw internal identifiers never become required founder vocabulary.
 13. Agent work attaches to the Product or go-to-market object it changes.
 14. A result without visible consequence or evidence is incomplete.
@@ -440,15 +456,15 @@ Each phase is a vertical completion gate. Nothing is called complete from compon
    adaptive multi-agent composition, steering, stopping, branching, closing, and persistent run receipts.
 4. **Consequence execution:** make product apply, deploy, send, spending, destructive actions, failure,
    retry, and MCP/Electron topology truthful under the founder wall.
-5. **One founder shell:** ship a thread rail, persistent venture/thread chat, scoped composer, contextual
-   founder gates inside the conversation, and an optional visual stage beside chat. Threads are the
-   founder-facing continuity model; Product and Go-to-market remain canonical system memory rather than
-   permanent navigation taxonomy.
-6. **Visual stage:** previews, diffs, comparisons, flows, evidence, consequences, and the venture map open
-   beside the current chat. The stage may inspect or manipulate canonical material, but it never becomes a
-   second product mode or hides the conversation that produced the work.
-7. **Product/GTM loop:** permanent territories, reversible operating lens, cross-boundary traceability,
-   temporary/live/snapshot views, and evidence-driven learning.
+5. **One founder shell:** ship one venture-keyed WorkspaceShell with Work, Product / GTM, and Releases mode
+   navigation, shared context, scoped drafts, deterministic cross-mode resolution, and local presentation
+   restoration. Conversation stays mounted: primary in Work and contextual as a drawer elsewhere.
+6. **Work and visual stage:** project thread return value as Pinned, Active, Needs review, Recent, and
+   history. Previews, diffs, comparisons, flows, evidence, consequences, and code open beside Work chat.
+7. **Product/GTM and Releases:** provide full direct workspaces over canonical semantic objects and
+   relationships. Product / GTM supports reversible founder edits. Releases use semantic objects, exact
+   joins, derived lifecycle/attention, existing founder gates, and concrete gaps rather than completeness
+   percentages.
 8. **Deletion:** remove competing shells, duplicate data paths, dead controls, stale docs, and obsolete
    compatibility UI after parity.
 9. **Release proof:** mechanical, browser, Electron, security, migration, accessibility, performance, and

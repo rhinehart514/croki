@@ -51,6 +51,7 @@ export function NowComposer({
   onClearScope,
   onDriven,
   onOpenResult,
+  subjectRefs = [],
 }: {
   ventureId: string;
   ventureName: string;
@@ -74,9 +75,11 @@ export function NowComposer({
   onDriven?: (result?: DriveTeammateResult) => void;
   // When provided (the home composer), the receipt offers a way into the direction the drive produced.
   onOpenResult?: (targetBetId: string | null) => void;
+  subjectRefs?: string[];
 }) {
   const route = composerRoute(selection);
-  const [draft, setDraft] = useScopedDraft(composerScopeKey(ventureId, selection));
+  const contextualDraftRef = !selection && subjectRefs.length ? `:subjects:${[...subjectRefs].sort().join("|")}` : "";
+  const [draft, setDraft] = useScopedDraft(`${composerScopeKey(ventureId, selection)}${contextualDraftRef}`);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<DriveReceipt | null>(null);
@@ -119,6 +122,7 @@ export function NowComposer({
           message: goal,
           ...(selection?.betId ? { betId: selection.betId } : {}),
           ...(selection?.threadRef ? { threadRef: selection.threadRef } : {}),
+          ...(!selection?.threadRef && subjectRefs.length ? { subjectRefs } : {}),
         });
         setReceipt(readReplyReceipt(reply));
         onDriven?.();

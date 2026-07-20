@@ -121,7 +121,7 @@ export function parseStreamLine(line) {
       .trim();
     const toolUses = blocks
       .filter((block) => block.type === "tool_use")
-      .map((block) => ({ name: stripServer(block.name), input: block.input ?? {} }));
+      .map((block) => ({ id: block.id ?? null, name: stripServer(block.name), nativeName: block.name, input: block.input ?? {} }));
     return { type: "assistant", text, toolUses };
   }
   if (event.type === "result") {
@@ -210,6 +210,14 @@ export const PAUSE_STATUSES = new Set(["paused"]);
 export function isResumeFailure(error) {
   const message = (error instanceof Error ? error.message : String(error || "")).toLowerCase();
   return /resume|session/.test(message) && /not found|no longer|does not exist|missing|unknown|no conversation|cannot/.test(message);
+}
+
+export async function nativeCodingPermission(toolName, input = {}) {
+  const command = String(input?.command ?? "");
+  if (toolName === "Bash" && /(^|[;&|]\s*|\bgit\s+)(commit|push|merge|rebase\b|reset\s+--hard)|\bgh\s+pr\s+(create|merge)|\b(vercel|npm)\s+(deploy|publish)\b/i.test(command)) {
+    return { behavior: "deny", message: "Drover keeps commit, merge, push, PR creation, deploy, and destructive restoration behind the founder's exact consequence controls." };
+  }
+  return { behavior: "allow", updatedInput: input };
 }
 
 export function createFirmSdkServer(ctx) {
@@ -333,7 +341,7 @@ export const claudeCodeRuntime = {
     // raw key" is the product invariant. When the key is the only credential,
     // leave it in place; that's the honest fallback.
     const auth = detectClaudeAuth(ctx.env ?? process.env);
-    const childEnv = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "gtm-ide/0.3.0" };
+    const childEnv = { ...(ctx.env ?? process.env), CLAUDE_AGENT_SDK_CLIENT_APP: "gtm-ide/0.3.0" };
     if (auth.mode === "oauth-token" || auth.mode === "oauth-login") {
       delete childEnv.ANTHROPIC_API_KEY;
     }
@@ -350,6 +358,7 @@ export const claudeCodeRuntime = {
       const stderr = [];
       let terminalResult = null;
       let captured = false;
+      const pendingCommands = new Map();
       const prompt = resumeId
         ? (ctx.resumePrompt || "Continue from where you left off.")
         : ctx.goal;
@@ -378,12 +387,13 @@ export const claudeCodeRuntime = {
               ? {
                   type: "preset",
                   preset: "claude_code",
-                  append: `${ctx.system}\n\nThis is a Drover teammate session inside the founder's full native Claude Code harness. Use the native tools, settings, skills, agents, plugins, and configured MCP servers normally. Use the added Drover MCP tools for Drover venture truth, durable work, and any Drover-owned outward staging. Those tools cannot approve, send, or publish on the founder's behalf; only the founder resolves a Drover wall. Native tools and integrations remain governed by the founder's own Claude Code policy.`,
+                  append: `${ctx.system}\n\nThis is a Drover teammate session inside the founder's full native Claude Code harness. Use the native tools, settings, skills, agents, plugins, and configured MCP servers normally. Use the added Drover MCP tools for Drover venture truth, durable work, and any Drover-owned outward staging. Those tools cannot approve, send, or publish on the founder's behalf; only the founder resolves a Drover wall.${ctx.nativeCoding ? " You are in a Drover-owned isolated worktree. Implement and verify here, but do not commit, merge, push, create a pull request, deploy, or apply changes elsewhere; Drover presents those consequences to the founder." : " Native tools and integrations remain governed by the founder's own Claude Code policy."}`,
                 }
               : ctx.system,
             tools: harness === "full" ? { type: "preset", preset: "claude_code" } : [],
             allowedTools,
             permissionMode: harness === "full" ? "auto" : "dontAsk",
+            ...(ctx.nativeCoding ? { canUseTool: nativeCodingPermission } : {}),
             strictMcpConfig: harness === "caged",
             // Omitting settingSources in full mode preserves Claude Code's normal CLI behavior:
             // user, project, and local settings all load. Caged mode opts out explicitly.
@@ -418,7 +428,31 @@ export const claudeCodeRuntime = {
           if (message.type === "assistant" && message.message?.content) {
             const parsed = parseStreamLine(JSON.stringify(message));
             if (parsed?.text) ctx.onText(parsed.text);
-            if (parsed?.toolUses?.length) ctx.onTurn();
+            if (parsed?.toolUses?.length) {
+              ctx.onTurn();
+              for (const tool of parsed.toolUses) {
+                ctx.onToolStart?.(tool.name, { summary: tool.name === "Bash" && tool.input?.command ? `Running ${tool.input.command}` : `Using ${tool.name}` });
+                if (tool.name === "Bash" && tool.id) pendingCommands.set(tool.id, { command: String(tool.input?.command ?? "Command"), startedAt: new Date().toISOString() });
+              }
+            }
+          }
+
+          if (message.type === "user" && Array.isArray(message.message?.content)) {
+            for (const block of message.message.content.filter((entry) => entry?.type === "tool_result")) {
+              const pending = pendingCommands.get(block.tool_use_id);
+              if (!pending) continue;
+              pendingCommands.delete(block.tool_use_id);
+              const output = typeof block.content === "string" ? block.content : JSON.stringify(block.content ?? "");
+              ctx.onCommand?.({
+                id: block.tool_use_id,
+                command: pending.command,
+                status: block.is_error ? "failed" : "passed",
+                exitCode: block.is_error ? 1 : 0,
+                startedAt: pending.startedAt,
+                completedAt: new Date().toISOString(),
+                output: output.slice(-8_000),
+              });
+            }
           }
 
           if (message.type === "result") terminalResult = message;

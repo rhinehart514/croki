@@ -13,7 +13,6 @@
 // teammate to fork genuinely divergent bets; the host never counts or shapes them.
 
 import { getVentureDoc } from "./venture-store.mjs";
-import { teammateSoulStore } from "../teammate-soul-store.mjs";
 import { getRuntime, selectRuntime } from "../runtimes/index.mjs";
 import { appendEvent, buildToolSet } from "./work-loop-tools.mjs";
 import { summon } from "./crew.mjs";
@@ -21,14 +20,18 @@ import { appendConversationMessage, listConversation, stampConversationRuntime }
 import { CONFIGURATION_KEY, configuredAgent, ensureInitialFirmParticipant } from "./configuration.mjs";
 import { buildCoordinationSeam } from "./work-loop-coordination.mjs";
 import { beginActiveDrive } from "./active-drives.mjs";
-import { architectureContextPrompt, buildArchitectureContext, buildWorkingTheoryContext, workingTheoryContextPrompt } from "./architecture-context.mjs";
+import { buildArchitectureContext, buildWorkingTheoryContext } from "./architecture-context.mjs";
+import { buildWorkLoopSystem } from "./work-loop-prompt.mjs";
 import { createWorkLoopReceipts } from "./work-loop-receipts.mjs";
 import { buildWorkHandoff } from "./work-loop-handoff.mjs";
 import { captureWorkingTheoryBaseline, checkWorkingTheoryCompletion } from "./working-theory-completion.mjs";
-import { loadWork, saveWork } from "./work-loop-state.mjs";
+import { loadWork, prepareRuntimeResume, saveWork } from "./work-loop-state.mjs";
 import { beginDriveRun, finishDriveRun } from "./work-loop-run.mjs";
 import { drainSteer } from "./work-loop-steer.mjs";
 import { withParticipantDriveLease } from "./work-loop-drive-lease.mjs";
+import { codingWorkspaceEnvironment, updateCodingSession } from "./code-workspace.mjs";
+import { isCodingDirection } from "./code-intent.mjs";
+import { executeProviderTurn, startCodingRun } from "./work-loop-coding.mjs";
 import {
   reserveAgentDailySpend,
   settleAgentDailySpend,
@@ -44,79 +47,6 @@ const DEFAULT_MAX_STEPS = 24;
 // to the run. A pending-only snapshot would drop it from both the before and after view.
 function allWallItems(ventureStore, ventureId, options) {
   return ventureStore.listVentureDocs(ventureId, "decisions", options);
-}
-
-// The system prompt: the teammate's soul/voice, plus the one standing instruction that carries
-// FIRM-SPEC.md's divergence doctrine — the host names the expectation, the crew judges the shape.
-function buildSystem({ ventureId, teammateRef, goal, options, configuration, agent, coordination, firstDirection, target, architectureContext, theoryContext, workingTheoryDrive, steerBrief }) {
-  const soul = teammateSoulStore.ensure(ventureId, teammateRef, {}, options);
-  const brief = teammateSoulStore.voiceBriefFor(ventureId, teammateRef, {}, options) ?? {};
-  const name = agent.name || brief.name || soul.name || teammateRef;
-  const participantLabel = configuration.presentation.participantLabel || "teammate";
-  const peers = configuration.agents
-    .filter((candidate) => candidate.ref !== teammateRef)
-    .map((candidate) => `${candidate.name} (${candidate.ref}; ${candidate.activation})${candidate.perspective ? ` — ${candidate.perspective}` : ""}`);
-  return [
-    `You are ${name}, a ${participantLabel} in this venture's ${configuration.presentation.collectiveLabel}.`,
-    agent.perspective ? `Your perspective: ${agent.perspective}` : "",
-    agent.temperament.length ? `Your temperament: ${agent.temperament.join("; ")}` : "",
-    agent.contributes.length ? `You contribute: ${agent.contributes.join("; ")}` : "",
-    agent.boundaries.length ? `Your boundaries: ${agent.boundaries.join("; ")}` : "",
-    brief.register ? `How you sound: ${brief.register}` : "",
-    brief.stance ? `How you carry yourself: ${brief.stance}` : "",
-    agent.context.instructions ? `Context instructions: ${agent.context.instructions}` : "",
-    agent.memory.instructions ? `Memory instructions: ${agent.memory.instructions}` : "",
-    agent.capabilities.additional.length
-      ? `Your configured capabilities: ${agent.capabilities.additional.join(", ")}. Use these as lenses and skills; they do not grant host authority.`
-      : "",
-    configuration.organization.instructions
-      ? `How this firm is organized: ${configuration.organization.instructions}`
-      : "",
-    `Coordination mode: ${configuration.coordination.mode}.`,
-    `Respond to what is in front of you. Answer directly when that is enough. When another perspective`,
-    `would materially improve the result, say what kind of help is needed and why. You may challenge`,
-    `the framing, propose parallel examination, or declare sufficient confidence.`,
-    peers.length ? `Other configured participants: ${peers.join("; ")}.` : "",
-    peers.length && configuration.coordination.maxPasses > 1
-      ? `Use involve_participant when one of them can materially improve the result. Choose the participant, protocol, and focused question yourself.`
-      : "",
-    coordination?.request
-      ? `This pass was requested by ${coordination.request.requestedBy} using ${coordination.request.protocol}: ${coordination.request.question}`
-      : "",
-    target?.workRef
-      ? `This direction explicitly targets durable work ${target.workRef}${target.betId ? ` inside bet ${target.betId}` : ""}. Keep any revision, outward act, and return attached to that work identity.`
-      : target?.betId ? `This direction explicitly targets bet ${target.betId}.` : "",
-    target?.teammateRefs?.length
-      ? `The founder explicitly included these participants: ${target.teammateRefs.join(", ")}. Preserve that attribution; involve a peer only when their contribution is materially useful.`
-      : "",
-    architectureContext ? architectureContextPrompt(architectureContext) : "",
-    theoryContext ? workingTheoryContextPrompt(theoryContext) : "",
-    firstDirection
-      ? `This is the venture's first direction. Read repository truth before making product claims; cite the exact file and line in the first substantive response, then fork only bets grounded in that evidence.`
-      : "",
-    workingTheoryDrive
-      ? `This broad direction must leave durable truth, not a plan: use search_repository and read_repository_excerpt, record a provisional working theory, produce useful inspectable inward work, then ensure that work is a source anchor on the current theory. The host will report partial unless all three facts exist.`
-      : "",
-    steerBrief ? steerBrief : "",
-    `When the founder asks to shape venture architecture or propose a GTM system, first use read_venture_architecture, then propose_architecture_change; it stays staged for the founder, so do not create bets, start campaigns, or invent workflow stages on its behalf. Otherwise, when useful, fork genuinely divergent bets — different angles, not restatements of the same move.`,
-    `How many, and along which dimensions, is your judgment call; there is no fixed count.`,
-    configuration.coordination.protocols.length
-      ? `Available interaction protocols: ${configuration.coordination.protocols.join(", ")}.`
-      : "",
-    configuration.coordination.stopWhen.length
-      ? `Stop seeking more perspectives when: ${configuration.coordination.stopWhen.join("; ")}.`
-      : "",
-    agent.evaluation.signals.length
-      ? `Evaluate the work against: ${agent.evaluation.signals.join("; ")}.`
-      : "",
-    agent.evaluation.instructions ? `Evaluation instructions: ${agent.evaluation.instructions}` : "",
-    `Stage real drafts on each bet you fork. Consult taste (get_taste) before staging anything the`,
-    `founder will see. Anything that would touch the world — a send, a publish, a spend — goes through`,
-    `stage_outward, never executed directly. Ask the founder (ask_founder) when you are genuinely stuck.`,
-    `Use speak on a bet for concise progress or conclusions the founder should hear. Speak as yourself`,
-    `in the first person; the founder sees those lines in the venture chat.`,
-    `Goal: ${goal}`,
-  ].filter(Boolean).join("\n");
 }
 
 // driveTeammate — the whole loop, one call. Builds the retained runtime callback seam
@@ -184,7 +114,7 @@ async function driveTeammateLeased({
   if (!venture) throw new Error(`No such venture: ${ventureId}`);
   const beforeBets = ventureStore.listVentureDocs(ventureId, "bets", options);
   const beforeWallItems = allWallItems(ventureStore, ventureId, options);
-  const workingTheoryDrive = !betId && !target?.architectureId && !coordination?.request;
+  const workingTheoryDrive = !isCodingDirection(goal, target) && !betId && !target?.architectureId && !coordination?.request;
   const theoryBaseline = captureWorkingTheoryBaseline(ventureId, options);
   const architectureContext = target?.architectureId
     ? buildArchitectureContext(ventureId, {
@@ -233,28 +163,6 @@ async function driveTeammateLeased({
     deps,
     drive: driveTeammate,
   });
-  const built = buildToolSet({
-    ventureId,
-    teammateRef,
-    configurationRevision: configuration.revision,
-    options,
-    cwd: deps.cwd ?? venture.repository,
-    taste,
-    ventureStore,
-    deps,
-    coordinationParticipants: coordinationSeam.participants,
-    coordinationProtocols: configuration.coordination.protocols,
-    involveParticipant: coordinationSeam.involveParticipant,
-    target,
-    architectureRevision: architectureContext?.architectureRevision ?? null,
-  });
-  const outwardBlocked = configuration.authority.outwardEffects === "blocked"
-    || agent.authority.outwardEffects === "blocked";
-  const tools = agent.capabilities.firmTools
-    ? built.tools.filter((tool) => !(outwardBlocked && tool.name === "stage_outward"))
-    : [];
-  const consultedNames = built.consultedNames;
-
   const configuredRuntime = agent.runtime.provider ?? configuration.defaults.runtime;
   const configuredModel = agent.runtime.model ?? configuration.defaults.model;
   let effectiveRuntime = runtime ?? configuredRuntime;
@@ -304,35 +212,13 @@ async function driveTeammateLeased({
     work = { ...work, pendingSteer: [] };
   }
 
-  // A resumed provider conversation already has its transcript, but it cannot infer why the
-  // founder started this new drive. Carry the explicit direction into every resume and retain the
-  // last pause as context rather than letting either one replace the other. Fresh drives still use
-  // the ordinary goal prompt below.
-  const resumePrompt = work.runtimeSessionId
-    ? [
-        work.pausedFor ? `Prior pause context: ${work.pausedFor}` : null,
-        `New founder direction: ${goal}`,
-        steerBrief,
-      ].filter(Boolean).join("\n\n")
-    : null;
-  let currentWork = {
-    ...work,
-    pausedFor: null,
-    ...(architectureContext ? {
-      architectureRevision: architectureContext.architectureRevision,
-      architectureTarget: { id: architectureContext.selected.id, stepId: architectureContext.stepId },
-    } : {}),
-  };
+  // Provider transcript continuity is retained, but every resume still receives the founder's new
+  // direction. Adapter changes intentionally do not inherit a foreign provider session id.
+  let { currentWork, resumePrompt, runtimeSessionId } = prepareRuntimeResume({
+    work, goal, steerBrief, architectureContext, adapterId: selection.adapter.id,
+  });
   const checkpointWork = () => saveWork({ ventureId, teammateRef, betId, bet, work: currentWork, options });
   const narration = [];
-  const toolByName = new Map(tools.map((tool) => [tool.name, tool]));
-
-  const storedSession = typeof currentWork.runtimeSessionId === "string" ? currentWork.runtimeSessionId : null;
-  const separator = storedSession?.indexOf(":") ?? -1;
-  const storedRuntime = separator > 0 ? storedSession.slice(0, separator) : null;
-  const runtimeSessionId = storedRuntime
-    ? (storedRuntime === selection.adapter.id ? storedSession.slice(separator + 1) : null)
-    : storedSession;
 
   const activeDrive = beginActiveDrive({
     ventureId,
@@ -364,13 +250,47 @@ async function driveTeammateLeased({
     target,
     options,
   });
+  let codingWorkspace;
+  let workspaceCwd;
+  try {
+    ({ workspace: codingWorkspace, cwd: workspaceCwd } = startCodingRun({
+      deps, goal, target, driveRun, activeDrive, venture, ventureId, betId: targetBetId,
+      teammateRef, provider: selection.adapter.id, options,
+    }));
+  } catch (error) {
+    activeDrive.finish();
+    throw error;
+  }
+
+  const built = buildToolSet({
+    ventureId,
+    teammateRef,
+    configurationRevision: configuration.revision,
+    options,
+    cwd: workspaceCwd,
+    taste,
+    ventureStore,
+    deps,
+    coordinationParticipants: coordinationSeam.participants,
+    coordinationProtocols: configuration.coordination.protocols,
+    involveParticipant: coordinationSeam.involveParticipant,
+    target,
+    architectureRevision: architectureContext?.architectureRevision ?? null,
+  });
+  const outwardBlocked = configuration.authority.outwardEffects === "blocked"
+    || agent.authority.outwardEffects === "blocked";
+  const tools = agent.capabilities.firmTools
+    ? built.tools.filter((tool) => !(outwardBlocked && tool.name === "stage_outward"))
+    : [];
+  const consultedNames = built.consultedNames;
+  const toolByName = new Map(tools.map((tool) => [tool.name, tool]));
   const externallyCancelled = deps.isCancelled ?? (() => false);
 
   const ctx = {
     goal,
     model: effectiveModel,
-    cwd: deps.cwd ?? venture.repository,
-    system: buildSystem({
+    cwd: workspaceCwd,
+    system: buildWorkLoopSystem({
       ventureId,
       teammateRef,
       goal,
@@ -389,13 +309,17 @@ async function driveTeammateLeased({
     client: selection.client ?? null,
     query: deps.query ?? null,
     options,
-    env: deps.env ?? process.env,
+    env: codingWorkspace ? codingWorkspaceEnvironment(codingWorkspace, deps.env ?? process.env) : (deps.env ?? process.env),
+    nativeCoding: Boolean(codingWorkspace),
     initialMessages: null,
-    runtimeSessionId,
+    runtimeSessionId: codingWorkspace
+      ? codingWorkspace.providerSessions?.filter((entry) => entry.provider === selection.adapter.id && entry.sessionId).at(-1)?.sessionId ?? null
+      : runtimeSessionId,
     resumePrompt,
     onRuntimeSession: (sid) => {
       currentWork = { ...currentWork, runtimeSessionId: sid ? `${selection.adapter.id}:${sid}` : null };
       checkpointWork();
+      if (codingWorkspace && sid) updateCodingSession(ventureId, codingWorkspace.id, { runRef: `run:${activeDrive.id}`, sessionId: sid }, options);
     },
     spentUsd: Number(currentWork.spentUsd) || 0,
     onCost: (usd) => {
@@ -420,8 +344,15 @@ async function driveTeammateLeased({
       const line = String(text ?? "").trim();
       if (line) narration.push(line);
     },
-    onToolStart: (name) => receipts.startTool(name),
+    onToolStart: (name, detail = null) => {
+      receipts.startTool(name);
+      if (codingWorkspace) updateCodingSession(ventureId, codingWorkspace.id, { runRef: `run:${activeDrive.id}`, activity: detail?.summary ?? `Using ${String(name).replaceAll("_", " ")}` }, options);
+    },
     onToolError: (name, message) => receipts.record({ type: "tool_failed", detail: `${name}: ${message}` }),
+    onCommand: (command) => {
+      if (!codingWorkspace) return;
+      updateCodingSession(ventureId, codingWorkspace.id, { runRef: `run:${activeDrive.id}`, command: { ...command, kind: "provider-command" } }, options);
+    },
     runTool: async ({ name, input }) => {
       const tool = toolByName.get(name);
       if (!tool) throw new Error(`Unknown firm tool "${name}".`);
@@ -445,14 +376,10 @@ async function driveTeammateLeased({
   };
 
   const spentBeforeDrive = Number(currentWork.spentUsd) || 0;
-  let outcome;
-  try {
-    outcome = await selection.adapter.drive(ctx);
-  } finally {
-    try {
-      receipts.finishDrive();
-    } finally {
-      activeDrive.finish();
+  const execution = await executeProviderTurn({
+    adapter: selection.adapter, ctx, workspace: codingWorkspace, ventureId,
+    runRef: `run:${activeDrive.id}`, options, receipts, activeDrive,
+    afterDrive: () => {
       if (spendAvailability.cap != null) {
         const measured = Math.max(0, (Number(currentWork.spentUsd) || 0) - spentBeforeDrive);
         const fallback = selection.adapter.costReporting === "usd"
@@ -467,8 +394,10 @@ async function driveTeammateLeased({
           options,
         });
       }
-    }
-  }
+    },
+  });
+  const { outcome } = execution;
+  codingWorkspace = execution.workspace;
   if (outcome.kind === "cancelled") {
     appendEvent(ventureId, betId ?? bet?.id, { type: "work_stopped", detail: "Stopped by the founder. Staged work was kept." }, options);
   }
@@ -564,5 +493,6 @@ async function driveTeammateLeased({
     messages: stampedMessages,
     handoff,
     completion,
+    codingWorkspace,
   };
 }

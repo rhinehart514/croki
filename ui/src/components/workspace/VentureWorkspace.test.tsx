@@ -14,21 +14,30 @@ const timeline: ThreadTimeline = { ventureId: venture.id, revision: 2, thread: i
 
 vi.mock("@/hooks/use-firm-connection", () => ({ useFirmConnection: () => ({ lens: { bets: [{ id: "onboarding", intent: "Improve onboarding", staged: [], evidence: [] }], crew: [], wallItems: [] }, messages: [], activeDrives: [], workIndex, connection: { phase: "fresh", lastUpdatedAt: Date.now(), retryAt: null, failures: 0, message: null }, refresh: vi.fn(), setWorkIndex: vi.fn() }) }));
 vi.mock("@/components/thread/useThreadTimeline", () => ({ useThreadTimeline: (_ventureId: string, threadRef: string | null) => ({ timeline: threadRef === item.threadRef ? timeline : null, loading: false, error: null, streaming: true, refresh: vi.fn() }) }));
-vi.mock("@/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/api")>()), listVentures: vi.fn(async () => ({ ventures: [venture] })), getWorkIndex: vi.fn(async () => ({ workIndex })), markWorkIndexReviewed: vi.fn(), setThreadPinned: vi.fn(async () => ({ item, workIndex })) }));
+vi.mock("@/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/api")>()), listVentures: vi.fn(async () => ({ ventures: [venture] })), getWorkIndex: vi.fn(async () => ({ workIndex })), getSystemIndex: vi.fn(async () => ({ systemIndex: { ventureId: venture.id, revision: 2, architectureRevision: 1, scope: "system", objects: [], relationships: [], counts: { total: 0, product: 0, gtm: 0, attention: 0, matchCount: 0 } } })), getReleaseIndex: vi.fn(async () => ({ releaseIndex: { ventureId: venture.id, revision: 2, releases: [], unassignedActions: [], counts: { needsYou: 0, drafts: 0, inMarket: 0, ended: 0 } } })), markWorkIndexReviewed: vi.fn(), setThreadPinned: vi.fn(async () => ({ item, workIndex })) }));
 
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem("drover:thread-session:v2:buffalo", JSON.stringify({ threadRef: item.threadRef, stage: null, railWidth: 240, chatScrollByThread: {} }));
 });
 
-describe("VentureWorkspace — chat-first ADE shell", () => {
-  it("renders a thread-only rail and permanent conversation without ontology folders", async () => {
+describe("VentureWorkspace — three-mode founder shell", () => {
+  it("renders Work with permanent conversation and three first-class mode choices", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     expect(await screen.findByRole("heading", { name: "Improve onboarding" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Buffalo Projects threads")).toBeInTheDocument();
+    expect(screen.getByLabelText("Buffalo Projects workspace rail")).toBeInTheDocument();
     expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
-    expect(screen.queryByText("PRODUCT")).not.toBeInTheDocument();
-    expect(screen.queryByText("GO-TO-MARKET")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Product \/ GTM/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Releases/ })).toBeInTheDocument();
+  });
+
+  it("switches modes with keyboard shortcuts while preserving the mounted conversation", async () => {
+    render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
+    await screen.findByText("Make setup feel immediate.");
+    fireEvent.keyDown(window, { key: "2", metaKey: true });
+    expect((await screen.findAllByRole("heading", { name: "Whole system" })).length).toBeGreaterThan(0);
+    expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Product \/ GTM/ })).toHaveAttribute("aria-current", "page");
   });
 
   it("opens visual material beside chat and Escape restores focus without unmounting chat", async () => {

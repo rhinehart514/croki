@@ -708,11 +708,35 @@ export function createGeneratedMapsFixture({ root, repository } = {}) {
     operations: [...objects, ...relationships],
     actor: { authority: "founder", id: "jacob" },
   }, options);
-  ensureDirectionThread(ventureId, {
+  const direction = ensureDirectionThread(ventureId, {
     name: "Test project-first entry with recent graduates",
     identityKey: "generated-map-project-drop",
     subjectRefs: ["object:map-campaign", "bet:buffalo-bet-project-first"],
     at: at(52),
+  }, options);
+  const joinedModel = getSemanticModel(ventureId, options);
+  mutateSemanticModel({
+    ventureId,
+    baseRevision: joinedModel.revision,
+    operations: [{
+      op: "create-record",
+      family: "runs",
+      record: {
+        id: "generated-map-release-run",
+        threadRef: direction.threadRef,
+        betRefs: ["bet:buffalo-bet-project-first"],
+        eventRefs: [],
+        workRefs: ["work:buffalo-work-project-drop-v1", "work:buffalo-work-project-drop-v2"],
+        decisionRefs: ["decision:buffalo-bet-project-first-released-receipt", "decision:buffalo-bet-project-first-pending-wall"],
+        outcomeRefs: ["outcome:buffalo-outcome-project-drop"],
+        scopeRefs: ["object:map-release", "object:map-campaign"],
+        participantRefs: [],
+        properties: {},
+        createdAt: at(52),
+        completedAt: at(53),
+      },
+    }],
+    actor: { authority: "founder", id: "jacob" },
   }, options);
   return {
     ...fixture,

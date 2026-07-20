@@ -8,6 +8,7 @@ import {
   ReactFlow,
   type Edge,
   type NodeTypes,
+  type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { WorkIndexOutline } from "@/api";
@@ -21,11 +22,15 @@ export function VentureSystemGraph({
   view,
   selectedId,
   onSelect,
+  camera,
+  onCameraChange,
 }: {
   outline: WorkIndexOutline;
   view: VentureMapView;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  camera?: Viewport | null;
+  onCameraChange?: (camera: Viewport) => void;
 }) {
   const graph = useMemo(() => ventureGraph(outline, view), [outline, view]);
   const route = useMemo(() => connectedIds(graph, selectedId), [graph, selectedId]);
@@ -79,7 +84,8 @@ export function VentureSystemGraph({
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
-        fitView
+        fitView={!camera}
+        defaultViewport={camera ?? undefined}
         fitViewOptions={{ padding: 0.18, minZoom: 0.35, maxZoom: 1 }}
         minZoom={0.22}
         maxZoom={1.55}
@@ -89,6 +95,7 @@ export function VentureSystemGraph({
         selectionOnDrag={false}
         onNodeClick={(_event, node) => node.data.onSelect(node.id)}
         onPaneClick={() => onSelect(null)}
+        onMoveEnd={(_event, viewport) => onCameraChange?.(viewport)}
         proOptions={{ hideAttribution: true }}
         aria-label="Full venture system graph. Product systems connect to people, market work, and returned evidence."
       >

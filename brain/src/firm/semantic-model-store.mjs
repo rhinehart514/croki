@@ -34,6 +34,7 @@ function externalRefResolver(ventureId, options) {
     for (const event of list(bet.events)) if (event?.id) refs.add(`event:${event.id}`);
   }
   for (const outcome of listVentureDocs(ventureId, "outcomes", options)) refs.add(`outcome:${outcome.id}`);
+  for (const work of listVentureDocs(ventureId, "codeWorkspaces", options)) refs.add(`work:${work.id}`);
   for (const decision of listVentureDocs(ventureId, "decisions", options)) {
     refs.add(`wall-item:${decision.id}`);
     refs.add(`decision:${decision.id}`);
@@ -241,4 +242,50 @@ export function completeDriveRun(ventureId, runId, { at, decisionRefs = [], outc
   const completed = completeRun(existing, { at: completedAt, decisionRefs, outcomeRefs });
   applyOne(ventureId, completed, "runs", { actor, at: completedAt }, options, "update-record");
   return { runRef: `run:${id}`, id };
+}
+
+// Attach exact isolated work after the Run exists but before provider dispatch. The work record remains
+// authoritative for filesystem/runtime detail; the Run only holds its semantic join and participant.
+export function attachDriveRunWork(ventureId, runId, { workRef, participantRef, properties = {}, actor = SYSTEM_ACTOR, at } = {}, options = {}) {
+  const id = String(runId ?? "").trim();
+  const existing = getSemanticModelState(ventureId, options).model.runs.find((run) => run.id === id);
+  if (!existing) throw Object.assign(new Error(`No such run: ${id}`), { code: "semantic_model_missing_ref", status: 404 });
+  const updated = {
+    ...existing,
+    workRefs: [...new Set([...(existing.workRefs ?? []), workRef].filter(Boolean))],
+    participantRefs: [...new Set([...(existing.participantRefs ?? []), participantRef].filter(Boolean))],
+    properties: { ...(existing.properties ?? {}), ...structuredClone(properties) },
+  };
+  applyOne(ventureId, updated, "runs", { actor, at }, options, "update-record");
+  return structuredClone(updated);
+}
+
+export function recordCodingProductConsequence(ventureId, workspace, options = {}) {
+  if (!workspace?.id || !workspace?.productConsequence) return null;
+  const state = getSemanticModelState(ventureId, options);
+  const id = `capability-${workspace.id}`;
+  const existing = state.model.objects.find((entry) => entry.id === id);
+  const timestamp = now();
+  const record = {
+    id,
+    type: "product-capability-change",
+    name: workspace.productConsequence.capability,
+    statement: workspace.productConsequence.claims?.[0]?.statement ?? "Implementation exists; customer impact still needs evidence.",
+    assertion: "tentative",
+    provenance: { kind: "repository-implementation", sourceRef: `work:${workspace.id}` },
+    properties: {
+      coding: {
+        workspaceRef: `work:${workspace.id}`,
+        threadRef: workspace.threadRef,
+        runRefs: workspace.runRefs,
+        changedFiles: workspace.productConsequence.system,
+        releaseQuestion: workspace.productConsequence.releaseQuestion,
+        verificationStatus: workspace.status,
+      },
+    },
+    createdAt: existing?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  };
+  applyOne(ventureId, record, "objects", { actor: SYSTEM_ACTOR, at: timestamp }, options, existing ? "update-record" : "create-record");
+  return structuredClone(record);
 }

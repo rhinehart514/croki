@@ -19,8 +19,11 @@ import firmRoutes from "./firm/routes.mjs";
 import firmHeatRoutes from "./firm/heat-routes.mjs";
 import firmLensRoutes from "./firm/lens-routes.mjs";
 import firmWorkIndexRoutes from "./firm/work-index-routes.mjs";
+import firmSystemIndexRoutes from "./firm/system-routes.mjs";
+import firmReleaseRoutes from "./firm/release-routes.mjs";
 import firmViewRoutes from "./firm/view-routes.mjs";
 import firmProductChangeRoutes from "./firm/product-routes.mjs";
+import firmCodeWorkspaceRoutes from "./firm/code-workspace-routes.mjs";
 import firmWorkRoutes from "./firm/work-routes.mjs";
 import firmDialogueRoutes from "./firm/dialogue-routes.mjs";
 import firmVentureRoutes from "./firm/venture-routes.mjs";
@@ -40,8 +43,11 @@ const ROUTE_GROUPS = [
   firmHeatRoutes,
   firmLensRoutes,
   firmWorkIndexRoutes,
+  firmSystemIndexRoutes,
+  firmReleaseRoutes,
   firmViewRoutes,
   firmProductChangeRoutes,
+  firmCodeWorkspaceRoutes,
   firmWorkRoutes,
   firmDialogueRoutes,
   firmConfigurationRoutes,
@@ -152,6 +158,10 @@ function startServer() {
     } catch (err) {
       console.log(`  Dogfood recovery skipped: ${err instanceof Error ? err.message : err}`);
     }
+    import("./firm/code-workspace.mjs").then(({ recoverInterruptedCodingWorkspaces }) => {
+      const recovered = recoverInterruptedCodingWorkspaces();
+      if (recovered.length) console.log(`  Native coding recovery: ${recovered.map((entry) => entry.id).join(", ")}`);
+    }).catch((err) => console.log(`  Native coding recovery skipped: ${err instanceof Error ? err.message : err}`));
   });
 }
 

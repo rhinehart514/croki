@@ -1,4 +1,5 @@
 import { Menu } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getWorkIndex,
@@ -101,9 +102,11 @@ export function ThreadShell({ venture, onOpenVenture }: { venture: FirmVenture; 
   return (
     <div className="thread-shell" data-stage-open={stage ? "true" : undefined} data-rail-open={railOpen || undefined} style={{ "--thread-rail-width": `${railWidth}px` } as React.CSSProperties}>
       <button type="button" className="thread-rail-launcher" aria-label="Open thread rail" aria-expanded={railOpen} onClick={() => setRailOpen((value) => !value)}><Menu aria-hidden="true" /></button>
-      <ThreadRail venture={venture} ventures={ventures} workIndex={searchIndex ?? workIndex} search={search} width={railWidth} selected={resolvedThreadRef} readOnly={readOnly} readOnlyReason={readOnlyReason} onSearch={setSearch} onSelect={select} onNew={newThread} onSwitchVenture={onOpenVenture} onResize={setRailWidth} onConfigurationChanged={refresh} />
+      <ThreadRail venture={venture} ventures={ventures} workIndex={searchIndex ?? workIndex} crew={lens?.crew ?? []} search={search} width={railWidth} selected={resolvedThreadRef} readOnly={readOnly} readOnlyReason={readOnlyReason} onSearch={setSearch} onSelect={select} onNew={newThread} onSwitchVenture={onOpenVenture} onResize={setRailWidth} onConfigurationChanged={refresh} />
       <ThreadConversation ventureId={venture.id} ventureName={venture.name} item={selectedItem} timeline={timelineState.timeline} lens={lens} connection={connection} loading={timelineState.loading} error={timelineState.error} draft={draft} initialScrollTop={resolvedThreadRef ? chatScrollByThread[resolvedThreadRef] ?? null : null} onScrollChange={rememberChatScroll} onOpenVisual={openVisual} onOpenThread={openThread} onTogglePin={() => { if (!selectedItem || selectedItem.threadRef === ROOT_REF) return; void setThreadPinned(venture.id, selectedItem.threadRef, !selectedItem.pinnedAt).then((response) => setWorkIndex(response.workIndex)).catch(refresh); }} onDriven={onDriven} />
-      {stage ? <VisualStage visual={stage} timeline={timelineState.timeline} workIndex={workIndex} directions={directions} lens={lens} readOnlyReason={readOnly ? readOnlyReason : null} onClose={closeStage} onOpenThread={openThread} onChanged={onDriven} /> : null}
+      <AnimatePresence initial={false}>
+        {stage ? <VisualStage key={`${stage.kind}:${stage.ref}`} visual={stage} timeline={timelineState.timeline} workIndex={workIndex} directions={directions} lens={lens} readOnlyReason={readOnly ? readOnlyReason : null} onClose={closeStage} onOpenThread={openThread} onChanged={onDriven} /> : null}
+      </AnimatePresence>
     </div>
   );
 }

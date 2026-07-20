@@ -1,6 +1,22 @@
 const ACTIVE_VENTURE_KEY = "drover:active-venture:v1";
 const WORKSPACE_PREFIX = "drover:workspace-session:v1:";
 const THREAD_PREFIX = "drover:thread-session:v2:";
+const WORKSPACE_V3_PREFIX = "drover:workspace-session:v3:";
+
+export type WorkspaceMode = "work" | "system" | "releases";
+export type WorkspaceContext =
+  | { kind: "thread" | "object" | "release" | "decision"; ref: string }
+  | null;
+
+export type WorkspaceSession = {
+  mode: WorkspaceMode;
+  railWidth: number;
+  context: WorkspaceContext;
+  work: ThreadSession;
+  system: { scope: "system" | "product" | "gtm" | "attention"; selection: string | null; camera: { x: number; y: number; zoom: number } | null };
+  releases: { selection: string | null; subview: "overview" | "build" | "activity" | "settings" };
+  chatDrawerOpen: boolean;
+};
 
 export type ThreadSessionVisual = {
   kind: "preview" | "diff" | "flow" | "comparison" | "map" | "evidence" | "consequence";
@@ -55,6 +71,43 @@ export function rememberThreadSession(ventureId: string, session: ThreadSession)
   }
 }
 
+function defaultWorkspaceSession(): WorkspaceSession {
+  return {
+    mode: "work", railWidth: 240, context: null,
+    work: { threadRef: null, stage: null, railWidth: 240, chatScrollByThread: {} },
+    system: { scope: "system", selection: null, camera: null },
+    releases: { selection: null, subview: "overview" }, chatDrawerOpen: false,
+  };
+}
+
+export function readWorkspaceSession(ventureId: string): WorkspaceSession {
+  const fallback = defaultWorkspaceSession();
+  if (!ventureId.trim()) return fallback;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V3_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
+    if (parsed) {
+      const mode = ["work", "system", "releases"].includes(String(parsed.mode)) ? parsed.mode as WorkspaceMode : "work";
+      const work = parsed.work && typeof parsed.work === "object" ? parsed.work : fallback.work;
+      return {
+        ...fallback, ...parsed, mode, railWidth: safeRailWidth(parsed.railWidth),
+        context: parsed.context && ["thread", "object", "release", "decision"].includes(parsed.context.kind) && typeof parsed.context.ref === "string" ? parsed.context : null,
+        work: { threadRef: typeof work.threadRef === "string" ? work.threadRef : null, stage: work.stage ?? null, railWidth: safeRailWidth(parsed.railWidth ?? work.railWidth), chatScrollByThread: work.chatScrollByThread && typeof work.chatScrollByThread === "object" ? work.chatScrollByThread : {} },
+        system: { ...fallback.system, ...(parsed.system ?? {}) }, releases: { ...fallback.releases, ...(parsed.releases ?? {}) }, chatDrawerOpen: Boolean(parsed.chatDrawerOpen),
+      };
+    }
+    const v2 = readThreadSession(ventureId);
+    if (v2) return { ...fallback, railWidth: v2.railWidth, context: v2.threadRef ? { kind: "thread", ref: v2.threadRef } : null, work: v2 };
+    const legacy = readLegacyWorkspaceRaw(ventureId);
+    if (legacy?.mode === "map" && legacy.objectRef) return { ...fallback, mode: "system", context: { kind: "object", ref: legacy.objectRef }, system: { ...fallback.system, selection: legacy.objectRef } };
+    return fallback;
+  } catch { return fallback; }
+}
+
+export function rememberWorkspaceSession(ventureId: string, session: WorkspaceSession) {
+  if (!ventureId.trim()) return;
+  try { window.localStorage.setItem(`${WORKSPACE_V3_PREFIX}${ventureId}`, JSON.stringify({ ...session, railWidth: safeRailWidth(session.railWidth) })); } catch { /* presentation memory is disposable */ }
+}
+
 export function readActiveVentureId(): string | null {
   try {
     return window.localStorage.getItem(ACTIVE_VENTURE_KEY)?.trim() || null;
@@ -86,4 +139,13 @@ function readLegacyWorkspaceSession(ventureId: string): { threadRef: string | nu
   } catch {
     return null;
   }
+}
+
+function readLegacyWorkspaceRaw(ventureId: string): { mode: unknown; objectRef: string | null } | null {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(`${WORKSPACE_PREFIX}${ventureId}`) ?? "null") as { mode?: unknown; focus?: { architectureId?: unknown; target?: { architectureId?: unknown } } } | null;
+    if (!parsed) return null;
+    const raw = parsed.focus?.target?.architectureId ?? parsed.focus?.architectureId;
+    return { mode: parsed.mode, objectRef: typeof raw === "string" && raw.trim() ? `object:${raw.replace(/^(?:object|architecture):/, "")}` : null };
+  } catch { return null; }
 }

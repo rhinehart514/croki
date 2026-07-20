@@ -463,14 +463,14 @@ export async function assertVisibleKeyboardFocus(client, label) {
 export async function assertAtlasAccessibility(client) {
   await assertBasicAccessibility(client);
   await assertAxeNoCritical(client, {
-    context: "document.querySelector('.thread-shell')",
+    context: "document.querySelector('.workspace-shell')",
     label: "thread shell",
   });
   // The outline ("o") is the deterministic keyboard access path now, not a permanent visible toggle
   // button — so accessible-name coverage is checked generically (assertBasicAccessibility above) rather
   // than for a specific "outline" labelled button that no longer exists as chrome.
   const canvasContract = await client.evaluate(`(() => ({
-    unnamedButtons: [...document.querySelectorAll('.thread-shell button')]
+    unnamedButtons: [...document.querySelectorAll('.workspace-shell button')]
       .filter((button) => !(button.getAttribute('aria-label') || button.textContent || '').trim())
       .map((button) => button.outerHTML.slice(0, 160)),
   }))()`);

@@ -196,6 +196,9 @@ async function handleReply(ventureId, req, res, deps) {
   const message = trimOrNull(body?.message);
   const betId = trimOrNull(body?.betId);
   const threadRef = trimOrNull(body?.threadRef);
+  const subjectRefs = Array.isArray(body?.subjectRefs)
+    ? [...new Set(body.subjectRefs.map(trimOrNull).filter(Boolean))]
+    : [];
   if (!message) {
     const error = new Error("A conversation reply needs a message.");
     error.status = 400;
@@ -210,6 +213,7 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   if (threadRef) {
+    if (subjectRefs.length) throw Object.assign(new Error("subjectRefs are only accepted when forming a new contextual thread."), { status: 400 });
     const threadId = threadRef.replace(/^thread:/, "");
     const ownsThread = getSemanticModel(ventureId).threads.some((thread) => thread.id === threadId && thread.id !== "venture-root");
     if (!ownsThread) throw Object.assign(new Error(`No such direction thread: ${threadId}`), { status: 404 });
@@ -264,7 +268,7 @@ async function handleReply(ventureId, req, res, deps) {
   if (act === "steer") {
     if (!betId) {
       // A steer with no effort to steer is just a new direction — route it.
-      return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef);
+      return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs);
     }
     enqueueSteer({ ventureId, betId, text: steerText ?? message, fromMessageId: founderMessage.id });
     json(res, 200, { act: "steer", betId, applied: "next-step", messageId: founderMessage.id });
@@ -311,13 +315,13 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   if (act === "new-direction") {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef);
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs);
   }
 
   json(res, 200, { act, betId, messageId: founderMessage.id });
 }
 
-async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null) {
+async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null, subjectRefs = []) {
   const routed = await routeDirection({ direction, configuration }, deps.routingDeps ?? {});
   // A fresh, never-configured firm forms its first participant on the first direction — the same
   // founding-teammate fallback work-routes.mjs uses. Otherwise a firm with no claimable participant
@@ -334,6 +338,7 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
     name: direction,
     originMessageRef: fromMessageId,
     identityKey: fromMessageId,
+    subjectRefs,
     actor: { authority: "founder", id: "founder" },
   }, deps.appendOptions).threadRef;
   // The claim is visible in the thread with a one-line why, BEFORE work begins (§4A.1).

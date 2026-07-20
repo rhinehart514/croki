@@ -128,7 +128,7 @@ function setControl(selector, value) {
   })()`;
 }
 
-test("cutover: opening a venture lands the chat-first ADE shell", async () => {
+test("cutover: opening a venture lands the three-mode founder workspace", async () => {
   const drover = await bootDrover();
   const chrome = await launchChrome({
     port: await freePort(),
@@ -147,14 +147,15 @@ test("cutover: opening a venture lands the chat-first ADE shell", async () => {
     );
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => /start venture/i.test(entry.textContent)); button?.click(); return Boolean(button && !button.disabled); })()`), true);
 
-    await waitForDom(client, `!!document.querySelector('.thread-shell .thread-rail')`, "the thread rail did not mount");
-    await waitForDom(client, `!!document.querySelector('.thread-shell .thread-conversation [role="log"]')`, "the permanent conversation did not mount");
+    await waitForDom(client, `!!document.querySelector('.workspace-shell .thread-rail')`, "the workspace rail did not mount");
+    await waitForDom(client, `!!document.querySelector('.workspace-shell .thread-conversation [role="log"]')`, "the mounted conversation did not render");
     await waitForDom(client, `/What do you want to work on/i.test(document.querySelector('.thread-conversation')?.textContent ?? '')`, "the venture conversation home did not render");
     assert.equal(await client.evaluate(`document.querySelector('.thread-rail')?.getBoundingClientRect().width`), 240, "the default thread rail is not 240px");
     assert.equal(await client.evaluate(`document.querySelector('.thread-conversation')?.getBoundingClientRect().width`), 1680, "chat does not own the remaining desktop width");
     assert.equal(await client.evaluate(`!document.querySelector('.visual-stage')`), true, "a visual mounted before the founder opened one");
     assert.equal(await client.evaluate(`!document.querySelector('[data-testid="venture-workbench"]')`), true, "the retired workbench leaked into the default shell");
-    assert.equal(await client.evaluate(`!/(^|\\n)(Product|Go-to-market)(\\n|$)/.test(document.querySelector('.thread-rail')?.innerText ?? '')`), true, "ontology folders leaked into the thread rail");
+    assert.equal(await client.evaluate(`['Work', 'Product / GTM', 'Releases'].every((label) => [...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes(label)))`), true, "the three founder modes did not mount");
+    assert.equal(await client.evaluate(`document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Work')`), true, "Work was not the initial mode");
 
     // A fresh thread stays local until the founder sends its first direction.
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.thread-rail button')].find((entry) => /new thread/i.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);

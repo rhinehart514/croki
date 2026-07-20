@@ -17,7 +17,7 @@ const intents = {
 };
 
 async function openGate(client, intent) {
-  const selected = await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row')].find((entry) => entry.textContent.includes(${JSON.stringify(intent)})); row?.click(); return Boolean(row); })()`);
+  const selected = await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row, .thread-rail-card')].find((entry) => entry.textContent.includes(${JSON.stringify(intent)})); row?.click(); return Boolean(row); })()`);
   assert.equal(selected, true, `thread was unavailable: ${intent}`);
   await waitForDom(client, `document.querySelector('.thread-header-copy h1')?.textContent?.includes(${JSON.stringify(intent)})`, `thread did not open: ${intent}`);
   await waitForDom(client, `!!document.querySelector('.thread-rich-card[data-kind="consequence"] .thread-inline-action')`, `consequence did not appear in: ${intent}`);
@@ -66,7 +66,7 @@ test("all founder consequences settle once from their owning threads and survive
     assert.equal(receipts["wall-purpose-end-bet"].decision, "keep");
 
     await client.send("Page.reload", { ignoreCache: true });
-    await waitForDom(client, `!!document.querySelector('.thread-shell .thread-conversation')`, "chat-first shell did not return after reload");
+    await waitForDom(client, `!!document.querySelector('.workspace-shell .thread-conversation')`, "workspace shell did not return after reload");
     await wallCount(client, ventureId, 0);
     assert.equal(await client.evaluate(`!!document.querySelector('.thread-conversation [role="log"]')`), true);
     await assertBasicAccessibility(client);

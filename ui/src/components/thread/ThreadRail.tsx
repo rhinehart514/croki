@@ -1,14 +1,16 @@
 import { Plus, Search, Settings } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import type { FirmVenture, WorkIndex, WorkIndexItem } from "@/api";
+import type { FirmCrewMember } from "@/types";
 import { FirmSettings } from "@/components/firm/FirmSettings";
 import { VentureCreateDialog } from "@/components/firm/VentureCreateDialog";
 import { ThreadList } from "./ThreadList";
 
-export function ThreadRail({ venture, ventures, workIndex, search, width, selected, readOnly, readOnlyReason, onSearch, onSelect, onNew, onSwitchVenture, onResize, onConfigurationChanged }: {
+export function ThreadRail({ venture, ventures, workIndex, crew, search, width, selected, readOnly, readOnlyReason, onSearch, onSelect, onNew, onSwitchVenture, onResize, onConfigurationChanged }: {
   venture: FirmVenture;
   ventures: FirmVenture[];
   workIndex: WorkIndex | null;
+  crew: FirmCrewMember[];
   search: string;
   width: number;
   selected: string | null;
@@ -43,7 +45,7 @@ export function ThreadRail({ venture, ventures, workIndex, search, width, select
       <details className="thread-venture-switcher"><summary><span>{venture.name.charAt(0)}</span><strong>{venture.name}</strong></summary><div>{ventures.map((candidate) => <button type="button" key={candidate.id} onClick={() => onSwitchVenture(candidate)}>{candidate.name}</button>)}<button type="button" onClick={() => setCreate(true)}><Plus aria-hidden="true" />Start another venture</button></div></details>
       <button type="button" className="thread-new" onClick={onNew}><Plus aria-hidden="true" />New thread</button>
       <label className="thread-search"><Search aria-hidden="true" /><span className="sr-only">Search threads and their material</span><input ref={searchRef} type="search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search" /><kbd>⌘K</kbd></label>
-      <ThreadList workIndex={workIndex} search={search} selected={selected} onSelect={onSelect} />
+      <ThreadList workIndex={workIndex} crew={crew} search={search} selected={selected} onSelect={onSelect} />
       <button type="button" className="thread-settings" onClick={() => setSettings(true)}><Settings aria-hidden="true" />Settings</button>
       <div className="thread-rail-resizer" role="separator" aria-label="Resize thread rail" aria-orientation="vertical" aria-valuemin={208} aria-valuemax={320} aria-valuenow={width} tabIndex={0} onPointerDown={beginResize} onKeyDown={(event) => { if (event.key === "ArrowLeft") onResize(Math.max(208, width - 8)); if (event.key === "ArrowRight") onResize(Math.min(320, width + 8)); }} />
       {settings ? <FirmSettings venture={venture} readOnly={readOnly} readOnlyReason={readOnlyReason} onCapabilitiesChanged={onConfigurationChanged} onClose={() => setSettings(false)} /> : null}

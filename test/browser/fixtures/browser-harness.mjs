@@ -105,7 +105,7 @@ export async function bootFixture(seedFixture) {
   process.env.GTM_IDE_PERSISTENCE = "json";
   let fixture;
   try {
-    fixture = seedFixture({ root: home, repository: PRODUCT_REPOSITORY });
+    fixture = await seedFixture({ root: home, repository: PRODUCT_REPOSITORY });
   } finally {
     if (previousPersistence === undefined) delete process.env.GTM_IDE_PERSISTENCE;
     else process.env.GTM_IDE_PERSISTENCE = previousPersistence;
@@ -137,6 +137,14 @@ export async function bootFixture(seedFixture) {
       fixture,
       founderCapability,
       home,
+      founderFetch(pathname, init = {}) {
+        const url = new URL(pathname, base).toString();
+        const method = init.method ?? "GET";
+        return fetch(url, {
+          ...init,
+          headers: { ...(init.headers ?? {}), "x-drover-founder-capability": signFounderRequest(founderCapability, method, url) },
+        });
+      },
       async close() {
         child.kill("SIGTERM");
         await Promise.race([once(child, "exit"), delay(2000).then(() => child.kill("SIGKILL"))]);
@@ -173,7 +181,7 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
   const ventureName = drover.fixture.venture.name;
   await waitForDom(
     client,
-    `!!document.querySelector('.thread-shell .thread-conversation') || /Resume work/i.test(document.body.textContent)`,
+    `!!document.querySelector('.workspace-shell .thread-conversation') || /Resume work/i.test(document.body.textContent)`,
     "fixture venture neither auto-opened nor offered a picker",
   );
 
@@ -181,7 +189,7 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
   // an explicit portfolio return, so acceptance must accept both launch states. A multi-venture fixture can
   // auto-open a different venture; use the real in-workspace switcher to reach the fixture under test.
   const launchState = await client.evaluate(`(() => ({
-    workspace: Boolean(document.querySelector('.thread-shell .thread-conversation')),
+    workspace: Boolean(document.querySelector('.workspace-shell .thread-conversation')),
     current: document.querySelector('.thread-venture-switcher summary strong')?.textContent?.trim() || null,
   }))()`);
   if (!launchState.workspace) {
@@ -215,7 +223,7 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
   try {
     await waitForDom(
       client,
-      `!!document.querySelector('.thread-shell .thread-conversation') && document.querySelector('.thread-venture-switcher summary strong')?.textContent?.trim() === ${JSON.stringify(ventureName)}`,
+      `!!document.querySelector('.workspace-shell .thread-conversation') && document.querySelector('.thread-venture-switcher summary strong')?.textContent?.trim() === ${JSON.stringify(ventureName)}`,
       "fixture venture did not open in the conversation shell",
     );
   } catch (error) {

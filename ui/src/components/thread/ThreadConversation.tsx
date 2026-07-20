@@ -10,7 +10,7 @@ import { ThreadHome } from "./ThreadHome";
 import { ThreadMessage } from "./ThreadMessage";
 import { ThreadComposer } from "./ThreadComposer";
 
-export function ThreadConversation({ ventureId, ventureName, item, timeline, lens, connection, loading, error, draft, initialScrollTop, onScrollChange, onOpenVisual, onOpenThread, onTogglePin, onDriven }: {
+export function ThreadConversation({ ventureId, ventureName, item, timeline, lens, connection, loading, error, draft, subjectRefs = [], initialScrollTop, onScrollChange, onOpenVisual, onOpenThread, onTogglePin, onDriven }: {
   ventureId: string;
   ventureName: string;
   item: WorkIndexItem | null;
@@ -20,6 +20,7 @@ export function ThreadConversation({ ventureId, ventureName, item, timeline, len
   loading: boolean;
   error: string | null;
   draft: boolean;
+  subjectRefs?: string[];
   initialScrollTop: number | null;
   onScrollChange: (threadRef: string, scrollTop: number) => void;
   onOpenVisual: (visual: VisualReference, origin: HTMLElement) => void;
@@ -58,7 +59,7 @@ export function ThreadConversation({ ventureId, ventureName, item, timeline, len
         </ConversationContent>
         <ConversationScrollButton aria-label="Scroll to newest message" />
       </Conversation>
-      <ThreadComposer ventureId={ventureId} ventureName={ventureName} item={item} lens={lens} draft={draft} isHome={isHome} readOnly={readOnly} readOnlyReason={readOnlyReason} onDriven={onDriven} />
+      <ThreadComposer ventureId={ventureId} ventureName={ventureName} item={item} lens={lens} draft={draft} isHome={isHome} readOnly={readOnly} readOnlyReason={readOnlyReason} subjectRefs={subjectRefs} onDriven={onDriven} />
     </section>
   );
 }

@@ -28,6 +28,21 @@ export function ThreadMessage({ item, onOpenVisual, onOpenThread }: Props) {
     return <ThreadAgentUpdate item={item} />;
   }
 
+  if (item.kind === "message" && item.messageKind === "handoff") {
+    const participant = text(item.participantLabel, text(item.participantRef, "Drover"));
+    const content = text(item.content);
+    const detail = content.toLocaleLowerCase().startsWith(`${participant.toLocaleLowerCase()} `)
+      ? content.slice(participant.length + 1)
+      : content;
+    return (
+      <article className="thread-handoff" aria-label={`${participant} accepted this direction`}>
+        <span className="thread-handoff-mark" aria-hidden="true" />
+        <strong>{participant}</strong>
+        <p>{detail}</p>
+      </article>
+    );
+  }
+
   if (item.kind === "return-summary") {
     const counts = item.counts as Record<string, number> | undefined;
     const actions = Array.isArray(item.actions) ? item.actions as Array<Record<string, unknown>> : [];

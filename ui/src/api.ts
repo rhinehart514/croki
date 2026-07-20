@@ -265,6 +265,36 @@ export type WorkIndex = {
 export const getWorkIndex = (ventureId: string, query = "") =>
   get<{ workIndex: WorkIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/work-index${query ? `?q=${encodeURIComponent(query)}` : ""}`);
 
+export type SystemIndexObject = {
+  id: string; objectRef: string; name: string; statement: string; type: string;
+  territory: "product" | "gtm" | null; assertion: "tentative" | "founder-asserted";
+  provenance: Record<string, unknown> | null; properties: Record<string, unknown>;
+  compatibilityOwned: boolean; architectureRole: string | null; threadRefs: string[];
+  attention: Array<{ kind: string; reason: string }>; createdAt: string | null; updatedAt: string | null;
+};
+export type SystemIndexRelationship = WorkIndexOutlineRelationship & { relationshipRef: string; compatibilityOwned: boolean };
+export type SystemAttentionItem = SystemIndexObject["attention"][number] & { objectRef: string };
+export type SystemIndex = { ventureId: string; revision: number; architectureRevision: number; scope: "system" | "product" | "gtm" | "attention"; objects: SystemIndexObject[]; relationships: SystemIndexRelationship[]; counts: { total: number; product: number; gtm: number; attention: number; matchCount: number } };
+export type SystemMutation =
+  | { op: "create-object"; name: string; statement: string; territory: "product" | "gtm" }
+  | { op: "update-object"; objectRef: string; name?: string; statement?: string; territory?: "product" | "gtm" }
+  | { op: "create-relationship"; fromRef: string; toRef: string; label: string }
+  | { op: "update-relationship"; relationshipRef: string; label: string }
+  | { op: "remove-relationship"; relationshipRef: string };
+export const getSystemIndex = (ventureId: string, scope = "system", query = "") => get<{ systemIndex: SystemIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/system-index?scope=${encodeURIComponent(scope)}${query ? `&q=${encodeURIComponent(query)}` : ""}`);
+export const mutateSystem = (ventureId: string, baseRevision: number, mutations: SystemMutation[]) => guardedPost<{ systemIndex: SystemIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/system/mutations`, { baseRevision, mutations });
+
+export type ReleaseLifecycle = "draft" | "in-market" | "ended";
+export type ReleaseAttention = "decision" | "failed-action" | "reconnect" | "judgment";
+export type ReleaseSummary = { id: string; releaseRef: string; name: string; statement: string; lifecycle: ReleaseLifecycle; attention: ReleaseAttention[]; updatedAt: string | null; createdAt: string | null; endedAt: string | null; endedBy: string | null; relatedObjectRefs: string[]; threadRefs: string[]; runRefs: string[]; threads?: Array<Record<string, unknown>>; runs?: Array<Record<string, unknown>>; receipts?: Array<Record<string, unknown>>; decisions: Array<Record<string, unknown>>; outcomes: Array<Record<string, unknown>>; relationships: SystemIndexRelationship[]; externalRefs: Record<string, string[]> };
+export type ReleaseDetail = ReleaseSummary & { revision: number };
+export type ReleaseIndex = { ventureId: string; revision: number; releases: ReleaseSummary[]; unassignedActions: Array<Record<string, unknown>>; counts: { needsYou: number; drafts: number; inMarket: number; ended: number } };
+export type ReleaseMutation = { op: "rename"; name: string } | { op: "update"; name?: string; statement?: string } | { op: "end"; at?: string } | { op: "reopen" } | { op: "link-object"; objectRef: string; label: string } | { op: "unlink-object"; relationshipRef: string } | { op: "link-thread" | "unlink-thread"; threadRef: string };
+export const getReleaseIndex = (ventureId: string, query = "") => get<{ releaseIndex: ReleaseIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/releases${query ? `?q=${encodeURIComponent(query)}` : ""}`);
+export const getRelease = (ventureId: string, releaseId: string) => get<{ release: ReleaseDetail }>(`/api/ventures/${encodeURIComponent(ventureId)}/releases/${encodeURIComponent(releaseId)}`);
+export const createRelease = (ventureId: string, baseRevision: number, release: { name: string; statement?: string; objectRef?: string; threadRef?: string; linkLabel?: string }) => guardedPost<{ release: ReleaseSummary; releaseIndex: ReleaseIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/releases`, { baseRevision, release });
+export const mutateRelease = (ventureId: string, releaseId: string, baseRevision: number, mutations: ReleaseMutation[]) => guardedPost<{ release: ReleaseDetail; releaseIndex: ReleaseIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/releases/${encodeURIComponent(releaseId)}/mutations`, { baseRevision, mutations });
+
 export const setThreadPinned = (ventureId: string, threadRef: string, pinned: boolean) => {
   const threadId = threadRef.replace(/^thread:/, "");
   return guardedPut<{ item: WorkIndexItem; workIndex: WorkIndex }>(
@@ -325,6 +355,53 @@ export type ThreadTimeline = {
   agents: ThreadAgentStatus[];
   visuals: VisualReference[];
 };
+
+export type CodingWorkspace = {
+  id: string;
+  kind: "native-code";
+  ventureId: string;
+  threadRef: string;
+  betId: string | null;
+  goal: string;
+  repository: string;
+  sourceHead: string;
+  branch: string;
+  worktree: string | null;
+  runRefs: string[];
+  participantRefs: string[];
+  providerSessions: Array<{ runRef: string; provider: string; sessionId: string | null; startedAt: string; completedAt: string | null; terminal?: string }>;
+  checkpoints: Array<{ id: string; ref: string; commit: string; capturedAt: string; runRef?: string }>;
+  commands?: Array<{ command: string; kind: string; status: "passed" | "failed" | "running"; exitCode?: number; startedAt?: string | null; completedAt?: string | null; output?: string }>;
+  verification: Array<{ command: string; kind: string; status: "passed" | "failed" | "running"; exitCode?: number; startedAt?: string | null; completedAt?: string | null; output?: string }>;
+  changedFiles: Array<{ status: string; path: string }>;
+  diff: string;
+  diffStat: string;
+  patchHash: string;
+  status: string;
+  currentActivity: string | null;
+  interruption?: { message: string; recovery: string; at: string } | null;
+  consequence?: { review?: "approved" | "rejected"; note?: string; action?: string; commit?: string; preparation?: { pushCommand: string; pullRequestCommand: string; note: string } } | null;
+  restoration?: { checkpointId: string; restoredAt: string; note: string } | null;
+  productConsequence?: { capability: string; system: string[]; claims: Array<{ status: string; statement: string }>; releaseQuestion: string } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CodingReadiness = { ready: boolean; approved: boolean; verified: boolean; exact: boolean; source: { head: string; patchHash: string; unchanged: boolean }; reasons: string[] };
+
+const codingAction = (ventureId: string, id: string, action: string, body: Record<string, unknown>) =>
+  guardedPost<{ workspace: CodingWorkspace; readiness: CodingReadiness | null }>(
+    `/api/ventures/${encodeURIComponent(ventureId)}/coding-workspaces/${encodeURIComponent(id)}/${action}`,
+    body,
+  );
+
+export const reviewCodingWorkspace = (ventureId: string, id: string, decision: "approve" | "reject", note = "") => codingAction(ventureId, id, "review", { decision, note });
+export const applyCodingWorkspace = (ventureId: string, id: string) => codingAction(ventureId, id, "apply", { confirm: true });
+export const revertCodingWorkspaceApply = (ventureId: string, id: string) => codingAction(ventureId, id, "revert", { confirm: true });
+export const commitCodingWorkspace = (ventureId: string, id: string, message: string) => codingAction(ventureId, id, "commit", { confirm: true, message });
+export const prepareCodingPullRequest = (ventureId: string, id: string) => codingAction(ventureId, id, "prepare-pull-request", {});
+export const restoreCodingCheckpoint = (ventureId: string, id: string, checkpointId: string) => codingAction(ventureId, id, "restore", { confirm: true, checkpointId });
+export const discardCodingWorkspace = (ventureId: string, id: string) => codingAction(ventureId, id, "discard", { confirm: true });
 
 export const getThreadTimeline = (ventureId: string, threadRef: string) => {
   const threadId = threadRef.replace(/^thread:/, "");
@@ -451,7 +528,7 @@ export type ConversationReplyResult = {
 
 export const replyInConversation = (
   ventureId: string,
-  body: { message: string; threadRef?: string | null; betId?: string | null },
+  body: { message: string; threadRef?: string | null; betId?: string | null; subjectRefs?: string[] },
 ) => guardedPost<ConversationReplyResult>(
   `/api/ventures/${encodeURIComponent(ventureId)}/conversation/reply`,
   body,
@@ -464,7 +541,7 @@ export const replyInConversation = (
 // unsubscribe function that closes the connection.
 export type FirmStreamEvent = {
   ventureId: string;
-  kind: "lens" | "conversation" | "drive" | "wall" | "outcome" | "timeline";
+  kind: "lens" | "conversation" | "drive" | "wall" | "outcome" | "timeline" | "system" | "release";
   at: string;
   betId?: string;
   threadRef?: string;

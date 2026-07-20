@@ -65,8 +65,12 @@ criterion into a completion claim. Superseded repository-change and GTM-engine e
 
 - Configured participants may answer, form genuinely different alternatives, consult another configured
   participant, stage artifacts, and ask the founder through the direct work loop.
-- A product change uses an isolated git worktree, retains its exact diff, and requires founder review plus
-  explicit local apply. Deploy keeps a second explicit authorization.
+- An implementation Run uses an isolated git worktree, records provider-session and checkpoint lineage,
+  retains exact files, diff, commands, and verification, and survives restart without false completion.
+- Separate attempts remain inspectable and comparable in one Thread. Apply, reverse apply, commit, branch/PR
+  preparation, restore, and discard require an exact founder consequence and fail closed on lineage drift.
+- A completed implementation projects its Product consequence and release or distribution question. Deploy
+  keeps a second explicit authorization.
 - Only the founder ends active work. Runtime completion never silently becomes founder-ended work.
 - Work awaiting a founder decision remains inspectable and discussable without mutating the exact staged
   consequence.
@@ -116,13 +120,13 @@ npm run test:acceptance
 ```
 
 The command must pass Brain tests, UI unit tests, lint, production build, design-token parity, the preserved
-firm browser journeys, and the Atlas browser journeys. Run `npm run test:atlas:fixtures` and
-`npm run test:electron` separately; they are supporting local receipts, not steps hidden inside the acceptance
-script. Record exact counts in `STATE.md` only after rerunning them on the current tree.
+firm browser journeys including native coding, the Atlas browser journeys, and the real Electron native-coding
+receipt. Run `npm run test:atlas:fixtures` separately as a supporting fixture receipt. Record exact counts in
+`STATE.md` only after rerunning them on the current tree.
 
-This is a local readiness gate. The repository has no CI workflow, the browser remains a deterministic harness,
-and no packaged Electron end-to-end journey exists. A green run does not prove live provider behavior,
-world-touching effects, outside-founder comprehension, or market value.
+The same complete gate runs on pushes to `main` and pull requests through the macOS GitHub Actions workflow.
+The browser remains a deterministic harness. A green run does not prove live provider behavior,
+world-touching effects, outside-founder comprehension, or market value; those require separate receipts.
 
 ## Alpha proof gate
 

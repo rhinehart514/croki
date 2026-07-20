@@ -155,6 +155,13 @@ describe("firm-mcp — fork_product_bet stages without any founder authority", (
     });
     const built = await enqueued.build;
     assert.equal(built.status, "ready-for-review", "a real isolated worktree diff was staged, no founder act anywhere in this call");
+    // This assertion used to leak the retained 100+ MB fixture on every suite run. Cleanup is a separate
+    // direct founder act after the no-authority staging proof has completed; it changes none of that proof.
+    const { discardProductBetChange } = await import("../../src/firm/product-change-decide.mjs");
+    discardProductBetChange(venture.id, bet.id, path.basename(built.file), "founder", { confirm: true }, {
+      ...options,
+      queueDir: path.join(root, "dogfood-queue"),
+    });
   });
 });
 
