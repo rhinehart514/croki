@@ -4,10 +4,9 @@ import type { CodingWorkspace } from "@/api";
 import { CodeWorkspaceStage } from "@/components/visual-stage/CodeWorkspaceStage";
 import { WorkChangesPane } from "./WorkChangesPane";
 import { WorkTerminalDrawer } from "./WorkTerminalDrawer";
+import { workStatusLabel } from "./workStatusLabel";
 
 export type WorkbenchTab = "changes" | "preview";
-
-const statusLabel = (status: string) => status.replaceAll("-", " ");
 
 export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspaceId, readOnlyReason, preview, terminal, onSelectWorkspace, onChanged }: {
   ventureId: string;
@@ -31,8 +30,8 @@ export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspac
         </div>
         <div className="work-workbench-tools">
           <span className="work-change-stat">{workspace.diffStat || `${workspace.changedFiles.length} ${workspace.changedFiles.length === 1 ? "file" : "files"}`}</span>
-          {attempts.length > 1 ? <label><span className="sr-only">Coding attempt</span><select value={selectedWorkspaceId} onChange={(event) => onSelectWorkspace(event.target.value)}>{attempts.map((attempt, index) => <option key={attempt.id} value={attempt.id}>Attempt {attempts.length - index} · {statusLabel(attempt.status)}</option>)}</select></label> : null}
-          <strong className="work-status" data-status={workspace.status}>{statusLabel(workspace.status)}</strong>
+          {attempts.length > 1 ? <label><span className="sr-only">Coding attempt</span><select value={selectedWorkspaceId} onChange={(event) => onSelectWorkspace(event.target.value)}>{attempts.map((attempt, index) => <option key={attempt.id} value={attempt.id}>Attempt {attempts.length - index} · {workStatusLabel(attempt.status)}</option>)}</select></label> : null}
+          <strong className="work-status" data-status={workspace.status}>{workStatusLabel(workspace.status)}</strong>
         </div>
       </header>
 

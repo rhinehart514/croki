@@ -69,6 +69,21 @@ describe("licensed checkpoint boundary", () => {
 });
 
 describe("Run-linked coding workspace", () => {
+  it("projects a founder-cancelled coding Run with the canonical terminal word", () => {
+    const { repo, options, venture, cleanup } = fixture();
+    const workspace = openCodingWorkspace({
+      ventureId: venture.id, runId: "drive-cancelled", threadRef: "thread:cancelled",
+      participantRef: "codex", provider: "codex", repository: repo, goal: "Stop this exact attempt",
+    }, options);
+    const settled = settleCodingWorkspace(venture.id, workspace.id, {
+      runRef: "run:drive-cancelled", outcome: { kind: "cancelled" },
+    }, options);
+    assert.equal(settled.status, "cancelled");
+    assert.equal(settled.providerSessions.at(-1).terminal, "cancelled");
+    discardCodingWorkspace(venture.id, workspace.id, options);
+    cleanup();
+  });
+
   it("drives a provider inside the worktree and projects exact work beside the durable thread", async () => {
     const { repo, options, venture, cleanup } = fixture();
     const runtime = {

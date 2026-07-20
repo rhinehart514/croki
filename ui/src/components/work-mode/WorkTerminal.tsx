@@ -4,7 +4,7 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import "./work-runtime.css";
 
-type TerminalState = "connecting" | "ready" | "exited" | "failed" | "unavailable";
+type TerminalState = "connecting" | "ready" | "completed" | "failed" | "cancelled" | "error" | "unavailable";
 
 export type WorkTerminalProps = {
   ventureId: string;
@@ -14,11 +14,13 @@ export type WorkTerminalProps = {
   className?: string;
 };
 
-function message(state: TerminalState, exitCode: number | null) {
+function message(state: TerminalState, exitCode: number | null, signal: number | null) {
   if (state === "connecting") return "Connecting";
   if (state === "ready") return "Live";
-  if (state === "exited") return `Exited${exitCode === null ? "" : ` · ${exitCode}`}`;
-  if (state === "failed") return "Unavailable";
+  if (state === "completed") return `Completed${exitCode === null ? "" : ` · exit ${exitCode}`}`;
+  if (state === "failed") return `Failed${exitCode === null ? "" : ` · exit ${exitCode}`}`;
+  if (state === "cancelled") return `Cancelled${signal === null ? "" : ` · signal ${signal}`}`;
+  if (state === "error") return "Unavailable";
   return "Desktop only";
 }
 
@@ -29,6 +31,7 @@ export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, un
   const [state, setState] = useState<TerminalState>("connecting");
   const [error, setError] = useState<string | null>(null);
   const [exitCode, setExitCode] = useState<number | null>(null);
+  const [signal, setSignal] = useState<number | null>(null);
   const [sessionWorkspaceId, setSessionWorkspaceId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,7 +66,7 @@ export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, un
 
     const report = (reason: unknown) => {
       if (disposed) return;
-      setState("failed");
+      setState("error");
       setError(reason instanceof Error ? reason.message : String(reason));
     };
     const pendingData: string[] = [];
@@ -74,7 +77,8 @@ export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, un
     const stopExit = bridge.onExit((event) => {
       if (event.sessionId !== sessionRef.current) return;
       setExitCode(event.exitCode);
-      setState("exited");
+      setSignal(event.signal ?? null);
+      setState(event.terminal);
     });
     const input = terminal.onData((data) => {
       const sessionId = sessionRef.current;
@@ -105,7 +109,8 @@ export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, un
       }
       if (opened.exit) {
         setExitCode(opened.exit.exitCode);
-        setState("exited");
+        setSignal(opened.exit.signal ?? null);
+        setState(opened.exit.terminal);
       } else setState("ready");
       resize();
     }).catch(report);
@@ -127,20 +132,20 @@ export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, un
     const terminal = terminalRef.current;
     const sessionId = sessionRef.current;
     if (!bridge || !terminal || !sessionId) return;
-    setState("connecting"); setError(null); setExitCode(null); terminal.reset();
+    setState("connecting"); setError(null); setExitCode(null); setSignal(null); terminal.reset();
     try { await bridge.restart(sessionId); setState("ready"); }
-    catch (reason) { setState("failed"); setError(reason instanceof Error ? reason.message : String(reason)); }
+    catch (reason) { setState("error"); setError(reason instanceof Error ? reason.message : String(reason)); }
   };
 
   return (
     <section className={`work-terminal ${className}`.trim()} aria-label="Coding workspace terminal">
       <header className="work-runtime-bar">
         <strong>Terminal</strong>
-        <span data-state={state}>{message(state, exitCode)}</span>
-        {(state === "exited" || state === "failed") && sessionWorkspaceId === workspaceId ? <button type="button" onClick={() => void restart()} disabled={Boolean(disabledReason)}>Restart</button> : null}
+        <span data-state={state}>{message(state, exitCode, signal)}</span>
+        {(["completed", "failed", "cancelled", "error"] as TerminalState[]).includes(state) && sessionWorkspaceId === workspaceId ? <button type="button" onClick={() => void restart()} disabled={Boolean(disabledReason)}>Restart</button> : null}
       </header>
       {disabledReason ? <p className="work-runtime-notice">{disabledReason}</p> : null}
-      {error ? <p className="work-runtime-notice" role={state === "failed" ? "alert" : "status"}>{error}</p> : null}
+      {error ? <p className="work-runtime-notice" role={state === "error" ? "alert" : "status"}>{error}</p> : null}
       <div ref={hostRef} className="work-terminal-host" />
     </section>
   );

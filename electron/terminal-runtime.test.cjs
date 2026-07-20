@@ -4,7 +4,13 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const pty = require("node-pty");
-const { createTerminalRuntime } = require("./terminal-runtime.cjs");
+const { createTerminalRuntime, terminalOutcome } = require("./terminal-runtime.cjs");
+
+test("terminal exits use the same completed, failed, and cancelled vocabulary as Work", () => {
+  assert.equal(terminalOutcome(0), "completed");
+  assert.equal(terminalOutcome(7), "failed");
+  assert.equal(terminalOutcome(0, 15), "cancelled");
+});
 
 test("terminal runtime resolves and retains one PTY per canonical workspace", async (t) => {
   const worktree = await mkdtemp(path.join(os.tmpdir(), "drover-terminal-"));
@@ -35,6 +41,16 @@ test("terminal runtime resolves and retains one PTY per canonical workspace", as
   assert.equal(second.sessionId, first.sessionId);
   assert.match(second.snapshot, new RegExp(worktree.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.equal(resolveCount, 2, "reopening revalidates the canonical workspace");
+  runtime.write(7, first.sessionId, "exit 7\n");
+  await assert.doesNotReject(async () => {
+    const deadline = Date.now() + 2_000;
+    while (!events.some((event) => event.channel === "terminal-exit")) {
+      if (Date.now() > deadline) throw new Error("PTY did not report its terminal outcome.");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  });
+  const exit = events.find((event) => event.channel === "terminal-exit").payload;
+  assert.deepEqual({ exitCode: exit.exitCode, terminal: exit.terminal }, { exitCode: 7, terminal: "failed" });
 });
 
 test("terminal runtime rejects removed and mismatched workspaces", async () => {

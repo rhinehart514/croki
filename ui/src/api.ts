@@ -382,7 +382,7 @@ export type CodingWorkspace = {
   diff: string;
   diffStat: string;
   patchHash: string;
-  status: string;
+  status: "preparing" | "running" | "interrupted" | "cancelled" | "reviewable" | "needs-verification" | "failed-verification" | "no-change" | "applied" | "committed" | "discarded";
   currentActivity: string | null;
   interruption?: { message: string; recovery: string; at: string } | null;
   consequence?: { review?: "approved" | "rejected"; note?: string; action?: string; commit?: string; preparation?: { pushCommand: string; pullRequestCommand: string; note: string } } | null;

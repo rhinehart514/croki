@@ -17,6 +17,11 @@ function defaultShell(platform = process.platform, env = process.env) {
   return { file: env.SHELL || "/bin/zsh", args: ["-l"] };
 }
 
+function terminalOutcome(exitCode, signal) {
+  if (Number.isInteger(signal) && signal > 0) return "cancelled";
+  return exitCode === 0 ? "completed" : "failed";
+}
+
 function validateTarget(target) {
   const ventureId = text(target?.ventureId);
   const workspaceId = text(target?.workspaceId);
@@ -75,7 +80,7 @@ function createTerminalRuntime({ pty, resolveWorkspace, send, platform = process
     processHandle.onExit(({ exitCode, signal }) => {
       if (session.generation !== generation) return;
       session.process = null;
-      session.exit = { exitCode, signal };
+      session.exit = { exitCode, signal, terminal: terminalOutcome(exitCode, signal) };
       emit(session, "terminal-exit", session.exit);
     });
   }
@@ -156,4 +161,4 @@ function createTerminalRuntime({ pty, resolveWorkspace, send, platform = process
   return { open, write, resize, restart, close, stopOwner, stopAll };
 }
 
-module.exports = { createTerminalRuntime, defaultShell, validateTarget };
+module.exports = { createTerminalRuntime, defaultShell, terminalOutcome, validateTarget };

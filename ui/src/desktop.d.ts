@@ -11,7 +11,12 @@ type DroverTerminalTarget = {
 };
 
 type DroverTerminalData = { sessionId: string; data: string };
-type DroverTerminalExit = { sessionId: string; exitCode: number; signal?: number };
+type DroverTerminalExit = {
+  sessionId: string;
+  exitCode: number;
+  signal?: number;
+  terminal: "completed" | "failed" | "cancelled";
+};
 type DroverTerminalOpen = { sessionId: string; snapshot: string; exit: DroverTerminalExit | null };
 
 type DroverPreviewBounds = { x: number; y: number; width: number; height: number };

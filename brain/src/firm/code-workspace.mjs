@@ -11,6 +11,7 @@ import { captureCheckpoint, diffCheckpoints, restoreCheckpoint, snapshotTree } f
 import { emitFirmEvent } from "./firm-events.mjs";
 import { listVentures, getVentureDoc, listVentureDocs, now, setVentureDoc } from "./venture-store.mjs";
 import { recordCodingProductConsequence } from "./semantic-model-store.mjs";
+import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
 
 export const CODE_WORKSPACE_COLLECTION = "codeWorkspaces";
 const ACTIVE = new Set(["preparing", "running", "interrupted", "reviewable", "needs-verification", "failed-verification"]);
@@ -258,13 +259,14 @@ export function settleCodingWorkspace(ventureId, id, { runRef, outcome, error = 
   const verification = [...(record.verification ?? []), diffCheck, ...(projectCheck ? [projectCheck] : [])];
   const proof = verificationReadiness({ verification });
   const patchHash = patchDigest(diff);
-  const terminal = error || outcome?.kind === "failed" ? "interrupted"
-    : outcome?.kind === "cancelled" ? "stopped"
+  const runTerminal = normalizeWorkflowOutcome(error ? { kind: "failed", reason: error } : (outcome ?? { kind: "completed" })).kind;
+  const terminal = error || runTerminal === "failed" ? "interrupted"
+    : runTerminal === "cancelled" ? "cancelled"
       : !diff ? "no-change"
         : proof.failed ? "failed-verification"
           : proof.ready ? "reviewable" : "needs-verification";
   const completedAt = now();
-  const sessions = (record.providerSessions ?? []).map((entry) => entry.runRef === runRef ? { ...entry, completedAt, terminal: error ? "interrupted" : outcome?.kind ?? "completed" } : entry);
+  const sessions = (record.providerSessions ?? []).map((entry) => entry.runRef === runRef ? { ...entry, completedAt, terminal: runTerminal } : entry);
   const settled = save({
     ...record, status: terminal, currentActivity: null, providerSessions: sessions,
     checkpoints: [...(record.checkpoints ?? []), { id: `turn-${sequence}`, runRef, ...checkpoint }],

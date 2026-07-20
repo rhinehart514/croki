@@ -63,11 +63,11 @@ mechanics.
 
 On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **839/839** and UI **508/508**, with lint and the production build green;
+- `npm test`: Brain **840/840** and UI **509/509**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
-- Electron: **12/12**, including PTY worktree isolation, native preview security, real-host native-coding
+- Electron: **13/13**, including PTY worktree isolation and terminal outcomes, native preview security, real-host native-coding
   restart, and founder-authority receipts.
 
 The browser journeys exercise mode-owned rail bodies, contextual closable conversation outside Work, and
@@ -512,9 +512,11 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
   is refused; only a founder starts fresh work.
 - Participant composition is directed in chat; all active participants in the selected Thread are visible
   in the header and their latest inline activity.
-- The brain work-index projection distinguishes runtime terminals (`completed`, `failed`, `cancelled`,
-  `paused`, `budget-exhausted`, `interrupted`), but founder-ended work, external execution, returned evidence,
-  and the current UI projection are not yet unified on those semantics.
+- Brain Run receipts, provider sessions, coding-workspace settlement, the Electron PTY bridge, and Work's
+  terminal header now share `completed`, `failed`, and `cancelled`; agent-only terminals retain `paused`,
+  `budget-exhausted`, and `interrupted`. Raw exit codes and signals remain receipts. Older retained `stopped`
+  UI values render as `cancelled` without rewriting founder data. Founder-ended work, outward execution, and
+  returned evidence remain distinct consequences rather than being flattened into Run terminals.
 - Outcome-contract workflows are not implemented.
 - Selected-thread timelines and relevant index facets revalidate from the venture SSE stream. A slower
   reconnect/offline poll preserves the last coherent read; it is not the normal five-request 1.2-second

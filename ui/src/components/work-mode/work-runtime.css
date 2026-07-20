@@ -21,9 +21,11 @@
 
 .work-runtime-bar strong { color: var(--ink); font-weight: 650; }
 .work-runtime-bar > span { margin-left: auto; color: var(--muted); }
-.work-runtime-bar > span[data-state="ready"] { color: var(--green); }
+.work-runtime-bar > span[data-state="ready"],
+.work-runtime-bar > span[data-state="completed"] { color: var(--green); }
 .work-runtime-bar > span[data-state="failed"],
-.work-runtime-bar > span[data-state="exited"] { color: var(--amber-ink); }
+.work-runtime-bar > span[data-state="cancelled"],
+.work-runtime-bar > span[data-state="error"] { color: var(--amber-ink); }
 
 .work-runtime-bar button,
 .work-preview-toolbar button {

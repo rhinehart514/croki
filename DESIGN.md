@@ -241,7 +241,10 @@ receipts, failures, checkpoints, and unresolved risk stay beside the conversatio
 exists, Work reserves no empty workbench, but its composer still identifies the bound repository, worktree
 posture, selected model, and founder-held consequence boundary. A collapsible terminal runs only in the
 canonical isolated worktree; Electron resolves the workspace and executable rather than trusting renderer
-paths. Preview uses one sandboxed native view and accepts only HTTP(S). The browser harness states that these
+paths. Brain Run receipts, coding-workspace settlement, and the native terminal use the same terminal words:
+`completed`, `failed`, and `cancelled`, with `paused`, `budget-exhausted`, and `interrupted` retained where
+only agent work can produce them. Raw exit code and signal remain visible receipts rather than competing
+states. Preview uses one sandboxed native view and accepts only HTTP(S). The browser harness states that these
 native capabilities require Electron rather than simulating them.
 
 Founder actions state the exact repository consequence: approve the current checkpoint, apply or reverse it

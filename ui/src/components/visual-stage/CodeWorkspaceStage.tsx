@@ -12,8 +12,8 @@ import {
 } from "@/api";
 import { DiffView, FilesChanged } from "@/components/review";
 import { ProductConsequenceReview } from "@/components/work-mode/ProductConsequenceReview";
+import { workStatusLabel } from "@/components/work-mode/workStatusLabel";
 
-const label = (value: string) => value.replaceAll("-", " ");
 const activityLabel: Record<string, string> = {
   approve: "Approving checkpoint…",
   reject: "Rejecting checkpoint…",
@@ -78,7 +78,7 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
   return (
     <div className="code-workspace" data-variant={variant}>
       {variant === "full" ? <section className="code-workspace-summary">
-        <div><span>Status</span><AnimatePresence initial={false} mode="popLayout"><motion.strong key={workspace.status} data-status={workspace.status} initial={reducedMotion ? false : { opacity: 0, y: 4, filter: "blur(2px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -2 }} transition={{ duration: reducedMotion ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}>{label(workspace.status)}</motion.strong></AnimatePresence></div>
+        <div><span>Status</span><AnimatePresence initial={false} mode="popLayout"><motion.strong key={workspace.status} data-status={workspace.status} initial={reducedMotion ? false : { opacity: 0, y: 4, filter: "blur(2px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -2 }} transition={{ duration: reducedMotion ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}>{workStatusLabel(workspace.status)}</motion.strong></AnimatePresence></div>
         <div><span>Branch</span><code>{workspace.branch}</code></div>
         <div><span>Workspace</span><code>{workspace.worktree ?? "Removed"}</code></div>
         <div><span>Lineage</span><code>{workspace.runRefs.length} {workspace.runRefs.length === 1 ? "Run" : "Runs"} · {workspace.checkpoints.length} checkpoints</code></div>
