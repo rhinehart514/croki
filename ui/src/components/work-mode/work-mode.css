@@ -1,0 +1,74 @@
+.work-surface {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(380px, .82fr) minmax(480px, 1.18fr);
+  overflow: hidden;
+  background: var(--n-app);
+}
+
+.work-conversation { min-width: 0; min-height: 0; overflow: hidden; border-right: 1px solid var(--n-line); }
+.work-conversation > .thread-conversation { height: 100%; border-right: 0; }
+
+.work-workbench { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto auto auto minmax(0, 1fr) auto; overflow: hidden; background: var(--n-sunk); }
+.work-workbench-head { display: flex; min-width: 0; min-height: 64px; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 16px; border-bottom: 1px solid var(--n-line); background: var(--n-panel); }
+.work-workbench-title { display: grid; min-width: 0; gap: 3px; }
+.work-workbench-title > span { color: var(--n-ink-4); font: var(--text-xs) var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.work-workbench-title > strong { overflow: hidden; color: var(--n-ink); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.work-attempt { display: flex; flex: 0 0 auto; align-items: center; gap: 9px; color: var(--n-ink-4); font-size: 11px; }
+.work-attempt select { max-width: 190px; min-height: 30px; padding: 0 25px 0 8px; border: 1px solid var(--n-line-2); border-radius: 6px; background: var(--n-sunk); color: var(--n-ink-2); font-size: 11px; }
+.work-attempt > strong { color: var(--n-ink-3); font: 600 var(--text-xs) var(--mono); text-transform: capitalize; }
+.work-attempt > strong[data-status="reviewable"] { color: var(--green); }
+.work-attempt > strong[data-status="needs-verification"], .work-attempt > strong[data-status="failed-verification"] { color: var(--amber-ink); }
+.work-attempt > strong[data-status="interrupted"] { color: var(--danger); }
+
+.work-workbench-meta { display: grid; min-height: 42px; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 58px; border-bottom: 1px solid var(--n-line); background: var(--n-panel); }
+.work-workbench-meta > span { display: flex; min-width: 0; align-items: center; gap: 7px; padding: 0 11px; border-right: 1px solid var(--n-line); }
+.work-workbench-meta > span:last-child { border-right: 0; }
+.work-workbench-meta b { color: var(--n-ink-4); font-size: 10px; font-weight: 500; text-transform: uppercase; }
+.work-workbench-meta code { overflow: hidden; color: var(--n-ink-3); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+
+.work-tabs { display: flex; min-height: 38px; align-items: end; gap: 18px; padding: 0 16px; border-bottom: 1px solid var(--n-line); background: var(--n-panel); }
+.work-tabs button { position: relative; height: 38px; color: var(--n-ink-4); font-size: 12px; text-transform: capitalize; }
+.work-tabs button:hover { color: var(--n-ink-2); }
+.work-tabs button[aria-selected="true"] { color: var(--n-ink); }
+.work-tabs button[aria-selected="true"]::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--primary); content: ""; }
+
+.work-workbench-scroll { min-width: 0; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.work-tab-panel { min-height: 230px; padding: 16px; border-bottom: 1px solid var(--n-line); background: var(--n-sunk); }
+.work-tab-panel .review-diff { gap: 10px; }
+.work-tab-panel .review-diff-file, .work-tab-panel .review-files { border-radius: 7px; background: var(--n-panel); }
+.work-pane-empty, .work-native-notice { color: var(--n-ink-4); font-size: 12px; line-height: 1.55; }
+.work-native-notice { display: grid; min-height: 190px; place-content: center; gap: 5px; text-align: center; }
+.work-native-notice strong { color: var(--n-ink-2); font-size: 13px; }
+.work-native-notice p { max-width: 330px; margin: 0; }
+.work-file-list { border: 1px solid var(--n-line); border-radius: 7px; background: var(--n-panel); }
+.work-file-list > div { padding: 11px 12px; border-bottom: 1px solid var(--n-line); color: var(--n-ink-2); font-size: 12px; }
+.work-file-list ul { margin: 0; padding: 0; list-style: none; }
+.work-file-list li { display: grid; min-height: 34px; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--n-line); }
+.work-file-list li:last-child { border-bottom: 0; }
+.work-file-list li span { color: var(--n-ink-4); font: 10px var(--mono); }
+.work-file-list li code { overflow: hidden; color: var(--n-ink-2); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+
+.work-workbench-scroll > .code-workspace { max-width: none; margin: 0; padding: 18px 16px 26px; }
+.work-terminal { min-width: 0; border-top: 1px solid var(--n-line-2); background: #111; }
+.work-terminal > button { display: grid; width: 100%; min-height: 34px; grid-template-columns: 15px minmax(0, 1fr) 14px; align-items: center; gap: 7px; padding: 0 12px; color: var(--n-ink-3); font-size: 11px; text-align: left; }
+.work-terminal > button:hover { color: var(--n-ink); }
+.work-terminal > button svg { width: 14px; }
+.work-terminal > button svg:last-child { transition: transform var(--dur-fast) var(--ease-out); }
+.work-terminal[data-open="true"] > button svg:last-child { transform: rotate(180deg); }
+.work-terminal-body { min-height: 180px; max-height: 36vh; overflow: auto; border-top: 1px solid var(--n-line); }
+
+.work-empty { display: grid; min-width: 0; min-height: 0; place-items: center; padding: 28px; background: var(--n-sunk); }
+.work-empty > div { display: grid; max-width: 380px; gap: 9px; }
+.work-empty span { color: var(--primary); font: var(--text-xs) var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.work-empty strong { color: var(--n-ink-2); font-size: 15px; line-height: 1.4; }
+.work-empty p { margin: 0; color: var(--n-ink-4); font-size: 12px; line-height: 1.55; }
+
+@media (max-width: 1120px) {
+  .work-surface { grid-template-columns: minmax(360px, 44%) minmax(420px, 56%); }
+  .work-workbench-meta > span:nth-child(2) { display: none; }
+  .work-workbench-meta { grid-template-columns: minmax(0, 1fr) 58px; }
+}
+
+@media (prefers-reduced-motion: reduce) { .work-terminal > button svg:last-child { transition: none; } }

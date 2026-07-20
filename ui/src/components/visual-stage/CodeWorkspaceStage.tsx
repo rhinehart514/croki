@@ -24,11 +24,12 @@ const activityLabel: Record<string, string> = {
   discard: "Discarding the isolated workspace…",
 };
 
-export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onChanged }: {
+export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onChanged, variant = "full" }: {
   ventureId: string;
   workspace: CodingWorkspace;
   readOnlyReason: string | null;
   onChanged: () => void;
+  variant?: "full" | "review";
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,13 +47,13 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
   const reviewed = workspace.consequence?.review;
 
   return (
-    <div className="code-workspace">
-      <section className="code-workspace-summary">
+    <div className="code-workspace" data-variant={variant}>
+      {variant === "full" ? <section className="code-workspace-summary">
         <div><span>Status</span><AnimatePresence initial={false} mode="popLayout"><motion.strong key={workspace.status} data-status={workspace.status} initial={reducedMotion ? false : { opacity: 0, y: 4, filter: "blur(2px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -2 }} transition={{ duration: reducedMotion ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}>{label(workspace.status)}</motion.strong></AnimatePresence></div>
         <div><span>Branch</span><code>{workspace.branch}</code></div>
         <div><span>Workspace</span><code>{workspace.worktree ?? "Removed"}</code></div>
         <div><span>Lineage</span><code>{workspace.runRefs.length} {workspace.runRefs.length === 1 ? "Run" : "Runs"} · {workspace.checkpoints.length} checkpoints</code></div>
-      </section>
+      </section> : null}
 
       <AnimatePresence initial={false}>
         {busy || error ? <motion.div
@@ -70,10 +71,10 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
       {workspace.interruption ? <section className="code-workspace-alert" role="alert"><strong>Work was interrupted</strong><p>{workspace.interruption.message}</p><p>{workspace.interruption.recovery}</p></section> : null}
       {workspace.restoration ? <section className="code-workspace-alert"><strong>Checkpoint restored</strong><p>{workspace.restoration.note}</p></section> : null}
 
-      <section className="code-workspace-section">
+      {variant === "full" ? <section className="code-workspace-section">
         <header><span>Implementation</span><strong>{workspace.changedFiles.length} changed {workspace.changedFiles.length === 1 ? "file" : "files"}</strong></header>
         {workspace.diff ? <><FilesChanged diff={workspace.diff} /><DiffView diff={workspace.diff} /></> : <p>No repository change is captured at the latest checkpoint.</p>}
-      </section>
+      </section> : null}
 
       {workspace.commands?.length ? <section className="code-workspace-section">
         <header><span>Command activity</span><strong>{workspace.commands.length} captured</strong></header>
