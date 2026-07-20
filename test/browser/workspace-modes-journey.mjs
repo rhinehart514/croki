@@ -32,6 +32,7 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     const { client } = chrome;
     const expected = drover.fixture.expected.maps;
     await chooseMode(client, "Product / GTM");
+    await waitForDom(client, `document.querySelector('.venture-system-graph')?.getBoundingClientRect().height > 500`, "the mode-owned canvas collapsed behind its headerless composition");
     assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Product / GTM");
     await chooseNode(client, expected.campaign);
     await waitForDom(client, `document.querySelector('.venture-map-agent')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the selected node did not expose its linked agent context");
@@ -72,6 +73,17 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     assert.equal(await client.evaluate(`document.querySelector('.release-observation')?.textContent.includes('no sends, spend, or interpretation changes')`), true, "the observation authority boundary was not visible");
     await client.evaluate(`[...document.querySelectorAll('.release-observation button')].find((entry) => entry.textContent.trim() === 'Check now')?.click()`);
     await waitForDom(client, `document.querySelector('.release-observation-contract')?.textContent.includes('No connected Gmail account')`, "an unavailable Gmail read did not fail honestly inside the release contract");
+
+    await chooseMode(client, "Product / GTM");
+    await chooseNode(client, "Reply returned");
+    assert.equal(await client.evaluate(`!!document.querySelector('.venture-graph-edge.is-return')`), true, "returned evidence did not curve back to an exact Product / GTM object");
+    await waitForDom(client, `document.querySelector('.system-evidence-return')?.textContent.includes('I described the project before I thought about making a profile.')`, "the exact attributable outcome was absent from Product / GTM");
+    assert.equal(await client.evaluate(`document.querySelector('.system-evidence-return')?.textContent.includes('No interpretation has been adopted.')`), true, "Drover fabricated a canonical evidence interpretation");
+    await client.evaluate(`[...document.querySelectorAll('.system-evidence-return button')].find((entry) => entry.textContent.trim() === 'Start next work')?.click()`);
+    await waitForDom(client, `document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Work') && document.querySelector('.thread-composer')?.textContent.includes('Reply returned')`, "returned evidence did not become exact next Work context");
+
+    await chooseMode(client, "Releases");
+    await chooseRelease(client, "Project-drop invitation v1");
 
     await client.evaluate(`document.querySelector('.release-details summary')?.click()`);
     await client.evaluate(`[...document.querySelectorAll('.release-details button')].find((entry) => entry.textContent.trim() === 'End release')?.click()`);

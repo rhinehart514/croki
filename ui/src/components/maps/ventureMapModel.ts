@@ -8,7 +8,7 @@ export type VentureGraphLink = {
   target: string;
   label: string;
   assertion: "tentative" | "founder-asserted";
-  sourceKind: "relationship" | "structure";
+  sourceKind: "relationship" | "structure" | "evidence-return";
 };
 
 export type VentureGraphNode = {
@@ -38,6 +38,7 @@ const TYPE_LABELS: Record<string, string> = {
   response: "Market response",
   revenue: "Revenue",
   telemetry: "Product evidence",
+  return: "Returned evidence",
 };
 
 function normalizedType(object: WorkIndexOutlineObject) {
@@ -118,7 +119,7 @@ function canonicalLinks(relationships: WorkIndexOutlineRelationship[]): VentureG
       target,
       label: relationship.label || relationship.type || "connects to",
       assertion: relationship.assertion,
-      sourceKind: "relationship" as const,
+      sourceKind: relationship.type === "evidence-return" ? "evidence-return" as const : "relationship" as const,
     }];
   });
 }
@@ -157,7 +158,7 @@ function columnFor(object: WorkIndexOutlineObject) {
   if (["experience", "surface", "product-loop", "release", "capability", "system", "implementation", "design-system", "component", "token"].includes(type)) return "product";
   if (["motion", "channel"].includes(type)) return "motions";
   if (["campaign", "asset"].includes(type)) return "market-work";
-  if (["response", "revenue", "telemetry", "insight"].includes(type)) return "evidence";
+  if (["response", "revenue", "telemetry", "insight", "return"].includes(type)) return "evidence";
   return "other";
 }
 

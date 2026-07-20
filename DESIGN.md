@@ -255,6 +255,13 @@ creates a Thread scoped by the existing `objectRef`. Opening Work follows that d
 carries the selected object as a visible missing Work link. Node work state is derived from `WorkIndex`, never
 stored on the graph. The graph never becomes another authority or an executable workflow.
 
+An outcome joined to a release returns as a distinct evidence node at the market edge. Restrained backward
+curves reach only the Product / GTM objects connected directly to that release; no similarity match or context
+resolver invents another target. Its inspector separates **What happened**, **What it may mean**, and
+**Affects**, states when no interpretation has been adopted, and offers **Start next work** with the exact
+outcome and affected object references. The evidence node is projection-only and cannot be edited as canonical
+Product truth. The headerless mode-owned map must retain the full available center height.
+
 The current spatial composition is a hypothesis. Until one real release returns attributable evidence into
 next Work, do not introduce semantic-zoom capacity layers, reusable-method promotion, or reusable-capacity
 ontology. Founder-made joins save immediately and remain undoable; agent-inferred joins stay visibly
@@ -336,3 +343,5 @@ The rebuilt shell is ready when deterministic journeys prove:
     narrow desktop widths.
 11. each mode renders only its own rail content, and no founder-facing control or heading names Product / GTM
     as System.
+12. returned evidence curves to exact release-connected Product / GTM objects, keeps interpretation unresolved,
+    and can seed next Work with the outcome and affected-object references without mutating canonical truth.

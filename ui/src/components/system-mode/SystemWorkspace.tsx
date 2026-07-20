@@ -6,6 +6,8 @@ import type { FirmArchitectureOperation } from "@/types";
 import type { Viewport } from "@xyflow/react";
 import { SystemCreateDialog } from "./SystemCreateDialog";
 import { SystemObjectEditor, SystemRelationshipEditor } from "./SystemEditPanel";
+import { SystemEvidenceReturn } from "./SystemEvidenceReturn";
+import { isReturnedEvidence } from "./returnedEvidence";
 import { systemAgentContext, systemWorkByObject, type SystemAgentContext } from "./systemWorkState";
 import "./system-workspace.css";
 
@@ -33,9 +35,10 @@ export type SystemWorkspaceProps = {
   onMutate: (mutations: SystemMutation[]) => Promise<void>;
   onMutateArchitecture: (operations: FirmArchitectureOperation[], reason: string) => Promise<void>;
   onOpenWork: (threadRef: string) => void;
+  onStartWork: (subjectRefs: string[]) => void;
 };
 
-export function SystemWorkspace({ index, workIndex, scope, selectedRef, directions, camera, readOnlyReason, onScope, onSelect, onAgentContextChange, onCameraChange, onMutate, onMutateArchitecture, onOpenWork }: SystemWorkspaceProps) {
+export function SystemWorkspace({ index, workIndex, scope, selectedRef, directions, camera, readOnlyReason, onScope, onSelect, onAgentContextChange, onCameraChange, onMutate, onMutateArchitecture, onOpenWork, onStartWork }: SystemWorkspaceProps) {
   const [adding, setAdding] = useState<"object" | "connection" | null>(null);
   const [editingObject, setEditingObject] = useState(false);
   const [editingRelationship, setEditingRelationship] = useState<string | null>(null);
@@ -59,7 +62,7 @@ export function SystemWorkspace({ index, workIndex, scope, selectedRef, directio
     if (!object) setEditingObject(false);
   };
 
-  const inspectorActions = selected ? <div className="system-inspector-actions">
+  const inspectorActions = isReturnedEvidence(selected) ? <SystemEvidenceReturn object={selected} objects={index?.objects ?? []} onStartWork={onStartWork} /> : selected ? <div className="system-inspector-actions">
     <button type="button" onClick={() => setEditingObject(true)}>Edit object</button>
     {selectedContext?.threadRef ? <button type="button" onClick={() => onOpenWork(selectedContext.threadRef!)}>Open thread</button> : null}
     {selectedRelationships.map((entry) => <button type="button" key={entry.id} onClick={() => setEditingRelationship(entry.id)}>Edit “{entry.label}”</button>)}

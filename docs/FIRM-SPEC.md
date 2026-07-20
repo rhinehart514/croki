@@ -362,6 +362,12 @@ and returns. Evidence is a durable record of what happened and its source. Attri
 provider identity or other captured evidence supports it. Silence and unattributed signals remain
 first-class rather than being guessed from chronology.
 
+Product / GTM may project one returned-evidence node from an exact outcome without copying it into the
+canonical model. Its return connection may follow only the release's existing direct relationships. The
+founder sees what happened separately from what it may mean; interpretation remains unresolved until adopted.
+Starting Work from the return carries the outcome reference and affected object references into one Thread,
+never a synthesized context or silently changed Product truth.
+
 ### One event and projection model
 
 Durable truth lives only in the venture store. Live events announce that a scoped record changed; clients

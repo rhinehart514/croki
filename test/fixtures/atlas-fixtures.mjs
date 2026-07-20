@@ -709,6 +709,11 @@ export function createGeneratedMapsFixture({ root, repository } = {}) {
     operations: [...objects, ...relationships],
     actor: { authority: "founder", id: "jacob" },
   }, options);
+  setVentureDoc(ventureId, "outcomes", fixture.reality.outcome.id, {
+    ...fixture.reality.outcome,
+    releaseRef: "object:map-release",
+    observationContractRef: "observation:fixture-project-drop",
+  }, options);
   const direction = ensureDirectionThread(ventureId, {
     name: "Test project-first entry with recent graduates",
     identityKey: "generated-map-project-drop",

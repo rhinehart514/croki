@@ -271,6 +271,7 @@ export type SystemIndexObject = {
   provenance: Record<string, unknown> | null; properties: Record<string, unknown>;
   compatibilityOwned: boolean; architectureRole: string | null; threadRefs: string[];
   attention: Array<{ kind: string; reason: string }>; createdAt: string | null; updatedAt: string | null;
+  projectionOnly?: boolean;
 };
 export type SystemIndexRelationship = WorkIndexOutlineRelationship & { relationshipRef: string; compatibilityOwned: boolean };
 export type SystemAttentionItem = SystemIndexObject["attention"][number] & { objectRef: string };

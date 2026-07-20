@@ -52,34 +52,39 @@ export function VentureSystemGraph({
       onSelect: (id: string) => onSelect(selectedId === id ? null : id),
     },
   })), [graph.nodes, onSelect, route, selectedId, workByObject]);
-  const edges = useMemo<Edge[]>(() => graph.links.map((link) => {
-    const highlighted = Boolean(selectedId && (link.source === selectedId || link.target === selectedId));
-    return {
-      id: link.id,
-      source: link.source,
-      target: link.target,
-      type: "smoothstep",
-      label: highlighted ? link.label : undefined,
-      animated: false,
-      className: highlighted ? "venture-graph-edge is-active" : "venture-graph-edge",
-      style: {
-        stroke: highlighted ? "var(--primary)" : "var(--n-line-2)",
-        strokeWidth: highlighted ? 2 : 1,
-        strokeDasharray: link.assertion === "tentative" ? "5 5" : undefined,
-        opacity: selectedId && !highlighted ? 0.24 : 1,
-      },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 12,
-        height: 12,
-        color: highlighted ? "var(--primary)" : "var(--n-ink-4)",
-      },
-      labelStyle: { fill: "var(--n-ink-2)", fontSize: 11, fontFamily: "var(--sans)" },
-      labelBgStyle: { fill: "var(--n-sunk)", fillOpacity: 0.96 },
-      labelBgPadding: [6, 4] as [number, number],
-      labelBgBorderRadius: 4,
-    };
-  }), [graph.links, selectedId]);
+  const edges = useMemo<Edge[]>(() => {
+    const firstHighlightedReturn = graph.links.findIndex((link) => link.sourceKind === "evidence-return" && Boolean(selectedId && (link.source === selectedId || link.target === selectedId)));
+    return graph.links.map((link, index) => {
+      const highlighted = Boolean(selectedId && (link.source === selectedId || link.target === selectedId));
+      const returned = link.sourceKind === "evidence-return";
+      const showLabel = highlighted && (!returned || index === firstHighlightedReturn);
+      return {
+        id: link.id,
+        source: link.source,
+        target: link.target,
+        type: returned ? "bezier" : "smoothstep",
+        label: showLabel ? link.label : undefined,
+        animated: false,
+        className: `venture-graph-edge${returned ? " is-return" : ""}${highlighted ? " is-active" : ""}`,
+        style: {
+          stroke: returned ? "var(--ember-ink)" : highlighted ? "var(--primary)" : "var(--n-line-2)",
+          strokeWidth: returned || highlighted ? 2 : 1,
+          strokeDasharray: link.assertion === "tentative" ? "5 5" : undefined,
+          opacity: selectedId && !highlighted ? 0.24 : 1,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 12,
+          height: 12,
+          color: returned ? "var(--ember-ink)" : highlighted ? "var(--primary)" : "var(--n-ink-4)",
+        },
+        labelStyle: { fill: "var(--n-ink-2)", fontSize: 11, fontFamily: "var(--sans)" },
+        labelBgStyle: { fill: "var(--n-sunk)", fillOpacity: 0.96 },
+        labelBgPadding: [6, 4] as [number, number],
+        labelBgBorderRadius: 4,
+      };
+    });
+  }, [graph.links, selectedId]);
 
   return (
     <div className="venture-system-graph" data-testid="venture-system-graph">

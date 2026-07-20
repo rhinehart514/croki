@@ -17,6 +17,7 @@ export type VentureGraphFlowNode = Node<VentureGraphNodeData>;
 
 function VentureGraphNodeView({ data }: NodeProps<VentureGraphFlowNode>) {
   const type = data.object.type.toLowerCase();
+  const returned = type === "return";
   const summary = objectMapSummary(data.object);
   return (
     <article
@@ -28,7 +29,7 @@ function VentureGraphNodeView({ data }: NodeProps<VentureGraphFlowNode>) {
       data-gap={data.connectionCount === 0 ? "true" : "false"}
       data-work-state={data.workState ?? "none"}
     >
-      <Handle className="venture-graph-handle" type="target" position={Position.Left} />
+      <Handle className="venture-graph-handle" type="target" position={returned ? Position.Right : Position.Left} />
       <button
         type="button"
         className="venture-graph-node-main nodrag"
@@ -44,7 +45,7 @@ function VentureGraphNodeView({ data }: NodeProps<VentureGraphFlowNode>) {
           {data.object.assertion === "tentative" ? <i>Working read</i> : null}
         </span>
       </button>
-      <Handle className="venture-graph-handle" type="source" position={Position.Right} />
+      <Handle className="venture-graph-handle" type="source" position={returned ? Position.Left : Position.Right} />
     </article>
   );
 }

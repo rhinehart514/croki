@@ -9,6 +9,7 @@
   color: var(--n-ink);
   overflow: hidden;
 }
+.venture-maps[data-header="false"] { grid-template-rows: minmax(0, 1fr); }
 
 .venture-maps-head {
   display: flex;
@@ -73,6 +74,7 @@
 }
 .venture-system-graph .react-flow__controls-button:hover { background: var(--n-selected); }
 .venture-system-graph .react-flow__edge-path { transition: stroke var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease); }
+.venture-system-graph .venture-graph-edge.is-return .react-flow__edge-path { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--ember-ink) 24%, transparent)); }
 
 .venture-graph-node { width: 244px; color: var(--n-ink); transition: opacity var(--dur-fast) var(--ease); }
 .venture-graph-node[data-kind="motion"] { width: 276px; }
@@ -100,6 +102,13 @@
 .venture-graph-node[data-kind="product-loop"] .venture-graph-node-main { border-radius: var(--r-xl); box-shadow: inset 0 0 0 1px var(--n-line), var(--n-shadow); }
 .venture-graph-node[data-kind="system"] .venture-graph-node-main { background: linear-gradient(180deg, var(--n-panel), var(--n-rail)); }
 .venture-graph-node[data-kind="campaign"] .venture-graph-node-main { border-style: dashed; background: var(--n-rail); }
+.venture-graph-node[data-kind="return"] { width: 264px; }
+.venture-graph-node[data-kind="return"] .venture-graph-node-main {
+  border-color: color-mix(in srgb, var(--ember-ink) 48%, var(--n-line-2));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ember-ink) 8%, var(--n-panel)), var(--n-panel) 64%);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--ember-ink) 72%, transparent), var(--n-shadow);
+}
+.venture-graph-node[data-kind="return"] .venture-graph-node-type { color: var(--ember-ink); }
 .venture-graph-node[data-territory="context"] .venture-graph-node-main { border-style: dashed; box-shadow: none; }
 .venture-graph-node[data-gap="true"] .venture-graph-node-main { border-color: var(--gap); border-style: dashed; }
 
@@ -198,6 +207,7 @@
 }
 .venture-map-inspector > header button:hover { background: var(--n-hover); color: var(--n-ink); }
 .venture-map-inspector h2 { margin: 0; font-size: var(--text-lg); line-height: var(--leading-tight); }
+.venture-map-inspector[data-kind="return"] { grid-template-rows: auto auto minmax(0, 1fr); }
 .venture-map-inspector > p, .venture-map-inspector section > p { margin: 0; color: var(--n-ink-3); font-size: var(--text-sm); line-height: var(--leading-normal); }
 .venture-map-inspector dl { display: grid; gap: var(--space-3); margin: 0; }
 .venture-map-inspector dl div { display: grid; gap: 3px; }

@@ -5,10 +5,10 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { emptySemanticModel } from "../../src/firm/semantic-model.mjs";
-import { mutateSemanticModel } from "../../src/firm/semantic-model-store.mjs";
-import { applySystemMutations } from "../../src/firm/system-index.mjs";
+import { getSemanticModel, mutateSemanticModel } from "../../src/firm/semantic-model-store.mjs";
+import { applySystemMutations, buildSystemIndex } from "../../src/firm/system-index.mjs";
 import { buildReleaseIndex, createRelease, mutateRelease, projectReleaseIndex } from "../../src/firm/release-index.mjs";
-import { createVenture } from "../../src/firm/venture-store.mjs";
+import { createVenture, setVentureDoc } from "../../src/firm/venture-store.mjs";
 
 const directory = (prefix) => fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 function fixture() {
@@ -25,6 +25,31 @@ describe("workspace system mutations", () => {
     assert.equal(second.systemIndex.objects.length, 2);
     assert.equal(second.systemIndex.relationships[0].label, "promised by");
     assert.throws(() => applySystemMutations({ ventureId: fx.venture.id, baseRevision: 0, actor: fx.actor, mutations: [{ op: "create-object", name: "Stale", territory: "product" }] }, fx.options), (error) => error.status === 409);
+  });
+
+  it("projects release-scoped evidence back to exact connected objects without changing truth", () => {
+    const fx = fixture();
+    mutateSemanticModel({ ventureId: fx.venture.id, baseRevision: 0, actor: fx.actor, operations: [
+      { op: "create-record", family: "objects", record: { id: "capability", type: "capability", name: "Continuous context", statement: "Context survives the venture loop.", assertion: "founder-asserted", properties: { territory: "product" } } },
+      { op: "create-record", family: "objects", record: { id: "release", type: "release", name: "Continuity release", statement: "Put continuity in market.", assertion: "founder-asserted", properties: { territory: "product", release: {} } } },
+      { op: "create-record", family: "relationships", record: { id: "capability-release", fromRef: "object:capability", toRef: "object:release", label: "ships in", type: "trace", assertion: "founder-asserted", sourceRefs: [], properties: {} } },
+    ] }, fx.options);
+    setVentureDoc(fx.venture.id, "outcomes", "reply-one", {
+      id: "reply-one", outcomeKind: "reply", body: "Continuity matters more than replacing every tool.",
+      from: "founder@example.com", source: "gmail", observedAt: "2026-07-20T12:00:00.000Z",
+      attribution: "joined", releaseRef: "object:release", observationContractRef: "observation:one",
+    }, fx.options);
+
+    const index = buildSystemIndex(fx.venture.id, fx.options);
+    const returned = index.objects.find((object) => object.objectRef === "outcome:reply-one");
+    assert.equal(returned?.projectionOnly, true);
+    assert.equal(returned?.properties.returnedEvidence.interpretation, "unresolved");
+    assert.deepEqual(returned?.properties.returnedEvidence.affectedObjectRefs, ["object:capability"]);
+    const returnLink = index.relationships.find((entry) => entry.type === "evidence-return");
+    assert.equal(returnLink?.fromRef, "object:outcome:reply-one");
+    assert.equal(returnLink?.toRef, "object:capability");
+    assert.equal(returnLink?.assertion, "tentative");
+    assert.equal(getSemanticModel(fx.venture.id, fx.options).objects.length, 2);
   });
 });
 

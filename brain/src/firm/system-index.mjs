@@ -5,6 +5,7 @@
 import crypto from "node:crypto";
 
 import { getSemanticModel, mutateSemanticModel } from "./semantic-model-store.mjs";
+import { listVentureDocs } from "./venture-store.mjs";
 import { deriveVentureTraceability, objectTerritory } from "./venture-traceability.mjs";
 
 function list(value) {
@@ -45,7 +46,39 @@ function attentionFor(model) {
   return byObject;
 }
 
-export function projectSystemIndex(model, { scope = "system", query = "" } = {}) {
+function returnedEvidence(model, outcomes) {
+  const canonicalIds = new Set(model.objects.map((object) => object.id));
+  const objects = [];
+  const relationships = [];
+  for (const outcome of outcomes) {
+    const releaseId = objectId(outcome.releaseRef);
+    if (!releaseId || !canonicalIds.has(releaseId)) continue;
+    const affected = model.relationships.flatMap((entry) => {
+      if (objectId(entry.fromRef) === releaseId) return [objectId(entry.toRef)];
+      if (objectId(entry.toRef) === releaseId) return [objectId(entry.fromRef)];
+      return [];
+    }).filter((id) => id && id !== releaseId && canonicalIds.has(id));
+    const id = `outcome:${outcome.id}`;
+    const kind = text(outcome.outcomeKind);
+    objects.push({
+      id, objectRef: `outcome:${outcome.id}`, name: kind ? `${kind[0].toUpperCase()}${kind.slice(1)} returned` : "Evidence returned",
+      statement: text(outcome.body) ?? "A release-scoped source returned evidence.", type: "return", territory: null,
+      assertion: "tentative", provenance: { kind: "release-observation", sourceRef: `outcome:${outcome.id}` },
+      properties: { returnedEvidence: { outcomeRef: `outcome:${outcome.id}`, releaseRef: outcome.releaseRef, observationContractRef: outcome.observationContractRef ?? null, from: outcome.from ?? null, source: outcome.source ?? null, observedAt: outcome.observedAt ?? null, attribution: outcome.attribution ?? "unattributed", affectedObjectRefs: [...new Set(affected.map((entry) => `object:${entry}`))], interpretation: "unresolved" } },
+      compatibilityOwned: false, architectureRole: null, threadRefs: [], attention: [],
+      createdAt: outcome.observedAt ?? null, updatedAt: outcome.observedAt ?? null, projectionOnly: true,
+    });
+    for (const affectedId of new Set(affected)) relationships.push({
+      id: `return-${outcome.id}-${affectedId}`, relationshipRef: `return:${outcome.id}:${affectedId}`,
+      fromRef: `object:${id}`, toRef: `object:${affectedId}`, label: "returned through this release",
+      type: "evidence-return", assertion: "tentative", sourceRefs: [`outcome:${outcome.id}`],
+      properties: { projectionOnly: true }, compatibilityOwned: false, projectionOnly: true,
+    });
+  }
+  return { objects, relationships };
+}
+
+export function projectSystemIndex(model, { scope = "system", query = "", outcomes = [] } = {}) {
   const normalizedScope = ["system", "product", "gtm", "attention"].includes(scope) ? scope : "system";
   const needle = text(query)?.toLocaleLowerCase() ?? "";
   const attention = attentionFor(model);
@@ -58,7 +91,8 @@ export function projectSystemIndex(model, { scope = "system", query = "" } = {})
       threadsByObject.get(id).push(`thread:${thread.id}`);
     }
   }
-  const objects = model.objects.map((object) => ({
+  const returns = returnedEvidence(model, outcomes);
+  const objects = [...model.objects.map((object) => ({
     id: object.id,
     objectRef: `object:${object.id}`,
     name: object.name,
@@ -77,14 +111,14 @@ export function projectSystemIndex(model, { scope = "system", query = "" } = {})
     attention: attention.get(object.id) ?? [],
     createdAt: object.createdAt ?? null,
     updatedAt: object.updatedAt ?? object.createdAt ?? null,
-  })).filter((object) => {
+  })), ...returns.objects].filter((object) => {
     if (normalizedScope === "product" && object.territory !== "product") return false;
     if (normalizedScope === "gtm" && object.territory !== "gtm") return false;
     if (normalizedScope === "attention" && !object.attention.length) return false;
     return !needle || searchText(object).includes(needle);
   });
   const visible = new Set(objects.map((object) => object.id));
-  const relationships = model.relationships.filter((relationship) => {
+  const relationships = [...model.relationships, ...returns.relationships].filter((relationship) => {
     const from = objectId(relationship.fromRef);
     const to = objectId(relationship.toRef);
     if (!from || !to) return false;
@@ -109,7 +143,7 @@ export function projectSystemIndex(model, { scope = "system", query = "" } = {})
 }
 
 export function buildSystemIndex(ventureId, options = {}) {
-  return projectSystemIndex(getSemanticModel(ventureId, options), options);
+  return projectSystemIndex(getSemanticModel(ventureId, options), { ...options, outcomes: listVentureDocs(ventureId, "outcomes", options) });
 }
 
 function generatedId(prefix) {
@@ -176,5 +210,5 @@ export function applySystemMutations({ ventureId, baseRevision, mutations, actor
     throw Object.assign(new Error(`Unsupported system mutation: ${mutation?.op ?? "missing"}`), { status: 400 });
   });
   const next = mutateSemanticModel({ ventureId, baseRevision, operations, actor }, options);
-  return { model: next, systemIndex: projectSystemIndex(next) };
+  return { model: next, systemIndex: projectSystemIndex(next, { outcomes: listVentureDocs(ventureId, "outcomes", options) }) };
 }

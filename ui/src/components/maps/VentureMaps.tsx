@@ -53,6 +53,7 @@ export function VentureMaps({
   const outlineObjects = outline?.objects ?? [];
   const visibleSelectedId = selectedId && graph.nodes.some((node) => node.object.id === selectedId) ? selectedId : null;
   const selected = visibleSelectedId ? outlineObjects.find((object) => object.id === visibleSelectedId) ?? null : null;
+  const returned = selected?.type.toLowerCase() === "return";
   const facts = selected ? objectMapFacts(selected) : [];
   const connections = selected ? graph.links.filter((link) => link.source === selected.id || link.target === selected.id) : [];
   const agentContext = selected ? workByObject?.get(selected.id) ?? null : null;
@@ -64,7 +65,7 @@ export function VentureMaps({
   };
 
   return (
-    <section className="venture-maps" aria-label="Venture Product and go-to-market map" data-view={view}>
+    <section className="venture-maps" aria-label="Venture Product and go-to-market map" data-view={view} data-header={showHeader ? "true" : "false"}>
       {showHeader ? <header className="venture-maps-head">
         <div>
           <span>Generated from venture truth</span>
@@ -107,19 +108,19 @@ export function VentureMaps({
       )}
 
       {selected ? (
-        <aside className="venture-map-inspector" aria-label={`${selected.name} route`}>
+        <aside className="venture-map-inspector" aria-label={`${selected.name} route`} data-kind={returned ? "return" : undefined}>
           <header>
             <span>{objectMapTypeLabel(selected)}</span>
             <button type="button" aria-label="Close route" onClick={() => setSelectedId(null)}>×</button>
           </header>
           <h2>{selected.name}</h2>
-          {agentContext ? <AgentContext context={agentContext} objectName={selected.name} /> : null}
-          {facts.length ? (
+          {!returned && agentContext ? <AgentContext context={agentContext} objectName={selected.name} /> : null}
+          {!returned && facts.length ? (
             <dl>
               {facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}
             </dl>
-          ) : selected.statement ? <p>{selected.statement}</p> : null}
-          <section>
+          ) : !returned && selected.statement ? <p>{selected.statement}</p> : null}
+          {!returned ? <section>
             <h3>{connections.length ? `Connected to ${connections.length}` : "Missing connection"}</h3>
             {connections.length ? (
               <ul>
@@ -130,7 +131,7 @@ export function VentureMaps({
                 })}
               </ul>
             ) : <p>This node is visible, but it is not part of an operating path yet.</p>}
-          </section>
+          </section> : null}
           {inspectorActions ?? <button type="button" className="venture-map-open" onClick={() => open(selected)}>{selected.threadRefs.length ? "Open work" : "Open context"}</button>}
         </aside>
       ) : (

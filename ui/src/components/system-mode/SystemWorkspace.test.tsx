@@ -37,7 +37,7 @@ vi.mock("@/components/maps/VentureMaps", () => ({
 const base = {
   index, workIndex, scope: "system" as const, selectedRef: "object:offer", directions: [], camera: null, readOnlyReason: null,
   onScope: vi.fn(), onSelect: vi.fn(), onAgentContextChange: vi.fn(), onCameraChange: vi.fn(), onMutate: vi.fn(async () => undefined),
-  onMutateArchitecture: vi.fn(async () => undefined), onOpenWork: vi.fn(),
+  onMutateArchitecture: vi.fn(async () => undefined), onOpenWork: vi.fn(), onStartWork: vi.fn(),
 };
 
 describe("SystemWorkspace", () => {
@@ -62,5 +62,20 @@ describe("SystemWorkspace", () => {
     rerender(<SystemWorkspace {...base} scope="attention" selectedRef={null} />);
     expect(screen.getByText("Distribution path is missing")).toBeInTheDocument();
     expect(screen.getByText("Working")).toBeInTheDocument();
+  });
+
+  it("keeps returned evidence provisional and starts Work with exact affected refs", () => {
+    const returned = {
+      ...index.objects[0], id: "outcome:reply-one", objectRef: "outcome:reply-one", name: "reply returned", type: "return",
+      territory: null, assertion: "tentative" as const, projectionOnly: true, threadRefs: [], attention: [],
+      statement: "Continuity matters more than replacing every tool.",
+      properties: { returnedEvidence: { outcomeRef: "outcome:reply-one", releaseRef: "object:release-one", observationContractRef: "observation:one", from: "founder@example.com", source: "gmail", observedAt: "2026-07-20T12:00:00.000Z", attribution: "joined", affectedObjectRefs: ["object:offer"], interpretation: "unresolved" } },
+    };
+    render(<SystemWorkspace {...base} index={{ ...index, objects: [...index.objects, returned] }} selectedRef={returned.objectRef} />);
+    expect(screen.getByText("Continuity matters more than replacing every tool.")).toBeInTheDocument();
+    expect(screen.getByText("No interpretation has been adopted.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit object" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start next work" }));
+    expect(base.onStartWork).toHaveBeenCalledWith(["outcome:reply-one", "object:offer"]);
   });
 });

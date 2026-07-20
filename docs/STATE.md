@@ -54,7 +54,8 @@ Releases → Evidence loop is not a navigation sequence; Product / GTM is never 
 mode handoff follows existing direct references; founder joins are immediate and undoable while agent joins
 remain provisional; and the canvas's broader semantic-zoom/capacity architecture stays an unadopted
 hypothesis until a real loop runs. The founder shell now implements that mode-owned correction; outside-founder
-comprehension and the complete causal loop remain open rather than being claimed from shell mechanics.
+comprehension and a live external causal loop remain open rather than being claimed from deterministic shell
+mechanics.
 
 ## Verified current behavior — observed on this working tree
 
@@ -62,7 +63,7 @@ comprehension and the complete causal loop remain open rather than being claimed
 
 On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **831/831** and UI **504/504**, with lint and the production build green;
+- `npm test`: Brain **832/832** and UI **505/505**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
@@ -77,10 +78,13 @@ conversation/workbench split; compact transcript material references; attempt se
 changes/diff/review; node-scoped contextual agent; direct Thread/object/release selection,
 the five-part Release Path, honest missing links, derived in-market state, joined exact gates and evidence,
 founder-granted bounded Gmail observation, honest missing-source/credential states, unsaved contextual release
-drafts, blank-form refusal, end/reopen, generated Whole venture/Product/Go-to-market graphs, keyboard
+drafts, blank-form refusal, end/reopen, generated Whole venture/Product/Go-to-market graphs, a visible
+release-scoped evidence return curve and exact next-Work handoff, keyboard
 reachability, 120-node containment, venture isolation, zoom, and offline last-coherent reads. T3's
-collaborative preview automation timed out during this run, so no new outside-founder manual visual-QA claim is
-made; the browser and native-host receipts prove deterministic behavior rather than comprehension.
+collaborative preview automation required unavailable authentication during this run, so no outside-founder
+manual visual-QA claim is made. A deterministic 1440×900 Chrome capture was inspected and exposed a collapsed
+headerless canvas; the repaired full-height composition is now guarded in the browser journey. Browser and
+native-host receipts still prove deterministic behavior rather than comprehension.
 
 The macOS GitHub Actions workflow runs the same complete gate on pull requests and pushes to `main`; its first
 remote execution remains unobserved until this working tree is committed and pushed. The browser remains a
@@ -142,6 +146,14 @@ failed, or completed state from linked `WorkIndex` Threads. A load-order-safe di
 the canonical linked Thread as soon as its shared index is current. The contextual composer stays free of
 repository/worktree/model controls. Graph pan, zoom, fit, and camera remain
 presentation only; the graph never becomes another authority.
+
+A release-scoped outcome now projects into Product / GTM as a temporary returned-evidence node. It follows
+only the release's existing canonical relationships back to affected objects, renders restrained tentative
+return curves, and separates the exact outcome from the explicitly unresolved interpretation. The evidence
+inspector cannot edit projection-only evidence as Product truth. **Start next work** switches to Work with the
+exact `outcomeRef` plus every directly affected `objectRef`; the first message forms the durable Thread under
+those subjects. The mode-owned headerless canvas also has an explicit height contract after visual inspection
+found that its graph could render into a two-pixel grid row while DOM nodes remained test-visible.
 
 Releases are canonical semantic objects, not another collection. The workspace derives draft/in-market/ended
 and needs-you state from exact references and presents Product delta → Customer consequence → Distribution →
@@ -288,7 +300,10 @@ canonical-interpretation authority. Nothing polls on a timer.
 source mismatch failure, expiry/revocation failure, and the absence of outward or semantic authority. The
 three-mode browser journey grants a contract against one exact released Gmail identity, reloads it from the
 canonical release projection, and proves a missing credential returns honestly without reading another
-source. `ReleaseObservation.test.tsx` proves the control is visibly unavailable before a real send.
+source. It then selects an attributable fixture outcome in Product / GTM, proves the tentative backward return
+edge and unresolved interpretation, and starts exact next Work from the outcome and affected Product/GTM refs.
+`ReleaseObservation.test.tsx` proves the control is visibly unavailable before a real send. Brain projection
+coverage proves this read path does not add or change canonical objects.
 
 ### Product/GTM territory + traceability substrate (Phase 6, brain-side)
 
@@ -446,8 +461,9 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 - The active map surface is a generated operating graph with direct founder creation and editing through
   venture-scoped mutation adapters. Whole venture is the default; Product and Go-to-market are focused views
   that preserve their real cross-boundary support. Canonical relationships and existing structured
-  references supply every connector. There is no separate diagram store, free placement, or invented
-  connector data in this surface.
+  references supply every connector. Release-scoped outcomes add projection-only tentative return curves to
+  directly connected objects and cannot establish an interpretation. There is no separate diagram store,
+  free placement, or invented connector data in this surface.
 - The older full canvas remains compatibility code, not the normal map-mode UI. Its persistence, saved-view,
   and coordinator caveats below still apply if that surface is restored or reused.
 - **Saved views/snapshots are write-only in the UI.** The backend (`views-store.mjs` / `view-routes.mjs`)
@@ -549,7 +565,8 @@ The following are approved requirements or desired alpha evidence without suffic
 - hard concurrent spend authority;
 - a working deploy executor;
 - a real released send and returned reply;
-- a real attributable market result changing the venture model and next work;
+- a live attributable market result changing founder-adopted venture understanding and next work (the
+  deterministic outcome projection and exact Work handoff are proven; no live Gmail return was performed);
 - cross-machine import with destination repository rebind;
 - an outside founder completing the Product/go-to-market loop without a walkthrough;
 - repeated use proving the canvas stays legible without manual grooming.
