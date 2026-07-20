@@ -1,4 +1,4 @@
-import { Menu } from "lucide-react";
+import { Menu, MessageCircle, X } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -61,6 +61,7 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
   const [draftSubjectRef, setDraftSubjectRef] = useState<string | null>(null);
   const [stage, setStage] = useState<VisualReference | null>(null);
   const [railWidth, setRailWidth] = useState(initial.railWidth);
+  const [contextualChatOpen, setContextualChatOpen] = useState(initial.contextualChatOpen);
   const [scrolls, setScrolls] = useState(initial.chatScrollByThread);
   const [railOpen, setRailOpen] = useState(false);
   const [scope, setScope] = useState(initial.systemScope);
@@ -122,19 +123,19 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
   }, [venture.id, workIndex?.revision]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (!search.trim()) setSearchWork(null);
+      if (mode !== "work" || !search.trim()) setSearchWork(null);
       else void getWorkIndex(venture.id, search).then((value) => setSearchWork(value.workIndex)).catch(() => undefined);
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [search, venture.id]);
+  }, [mode, search, venture.id]);
   useEffect(() => {
     if (!releaseSelection) return;
     void getRelease(venture.id, releaseSelection).then((result) => setReleaseDetail(result.release)).catch(() => setReleaseDetail(null));
   }, [releaseIndex?.revision, releaseSelection, venture.id]);
   useEffect(() => rememberWorkspaceSession(venture.id, {
-    mode, railWidth, selectedThreadRef: resolvedThreadRef, selectedObjectRef: systemSelection,
+    mode, railWidth, contextualChatOpen, selectedThreadRef: resolvedThreadRef, selectedObjectRef: systemSelection,
     selectedReleaseId: releaseSelection, systemScope: scope, systemCamera, chatScrollByThread: scrolls,
-  }), [mode, railWidth, releaseSelection, resolvedThreadRef, scope, scrolls, systemCamera, systemSelection, venture.id]);
+  }), [contextualChatOpen, mode, railWidth, releaseSelection, resolvedThreadRef, scope, scrolls, systemCamera, systemSelection, venture.id]);
 
   const openThread = useCallback((next: string) => {
     setThreadRef(next); setDraft(false); setDraftSubjectRef(null); setStage(null); setRailOpen(false);
@@ -195,12 +196,13 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
   }, [changeMode]);
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || !stage) return;
-      event.preventDefault(); setStage(null); opener.current?.focus();
+      if (event.key !== "Escape") return;
+      if (stage) { event.preventDefault(); setStage(null); opener.current?.focus(); return; }
+      if (mode !== "work" && contextualChatOpen) { event.preventDefault(); setContextualChatOpen(false); opener.current?.focus(); }
     };
     window.addEventListener("keydown", escape, true);
     return () => window.removeEventListener("keydown", escape, true);
-  }, [stage]);
+  }, [contextualChatOpen, mode, stage]);
   useEffect(() => {
     if (!draft || !workIndex || draftStartedAt.current == null) return;
     const created = workIndex.items.find((item) => Date.parse(item.createdAt ?? "") >= draftStartedAt.current! - 1000);
@@ -238,12 +240,12 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
 
   const conversation = <ThreadConversation ventureId={venture.id} ventureName={venture.name} repository={venture.repository} surface={mode === "work" ? "work" : "context"} item={selectedItem} timeline={timeline.timeline} lens={lens} connection={connection} loading={timeline.loading} error={timeline.error} draft={activeDraft} subjectRefs={activeDraft && draftSubjectRef ? [draftSubjectRef] : []} scopeLabel={draftSubjectRef === selectedObject?.objectRef ? selectedObject.name : draftSubjectRef === selectedRelease?.releaseRef ? selectedRelease.name : null} initialScrollTop={resolvedThreadRef ? scrolls[resolvedThreadRef] ?? null : null} onScrollChange={rememberThreadScroll} onOpenVisual={openVisual} onOpenThread={openThread} onTogglePin={() => { if (!selectedItem || selectedItem.threadRef === ROOT_REF) return; void setThreadPinned(venture.id, selectedItem.threadRef, !selectedItem.pinnedAt).then((response) => setWorkIndex(response.workIndex)).catch(refresh); }} onDriven={() => { draftStartedAt.current = activeDraft ? Date.now() : null; refresh(); void timeline.refresh(); }} />;
 
-  return <div className="workspace-shell" data-mode={mode} data-stage-open={stage ? "true" : undefined} data-rail-open={railOpen ? "true" : undefined} style={{ "--thread-rail-width": `${railWidth}px` } as React.CSSProperties}>
+  return <div className="workspace-shell" data-mode={mode} data-stage-open={stage ? "true" : undefined} data-chat-open={mode !== "work" && contextualChatOpen ? "true" : undefined} data-rail-open={railOpen ? "true" : undefined} style={{ "--thread-rail-width": `${railWidth}px` } as React.CSSProperties}>
     <button type="button" className="thread-rail-launcher" aria-label="Open workspace rail" aria-expanded={railOpen} onClick={() => setRailOpen((value) => !value)}><Menu aria-hidden="true" /></button>
-    <WorkspaceRail venture={venture} ventures={ventures} mode={mode} width={railWidth} search={search} selectedThread={resolvedThreadRef} workIndex={searchWork ?? workIndex} readOnly={readOnly} readOnlyReason={readOnlyReason} onMode={changeMode} onSearch={setSearch} onSelectThread={selectThread} onNew={newThread} onSwitchVenture={onOpenVenture} onResize={setRailWidth} onChanged={refresh} />
+    <WorkspaceRail venture={venture} ventures={ventures} mode={mode} width={railWidth} search={search} selectedThread={resolvedThreadRef} workIndex={searchWork ?? workIndex} systemIndex={systemIndexAll} scope={scope} selectedObjectRef={systemSelection} releaseIndex={releaseIndex} selectedReleaseId={releaseSelection} canStartRelease={Boolean(releaseSeed)} readOnly={readOnly} readOnlyReason={readOnlyReason} onMode={changeMode} onSearch={setSearch} onSelectThread={selectThread} onSelectObject={selectObject} onScope={setScope} onSelectRelease={selectRelease} onNew={newThread} onStartRelease={() => { if (releaseSeed) selectRelease(null); }} onSwitchVenture={onOpenVenture} onResize={setRailWidth} onChanged={refresh} />
     {mode === "work" ? <div className="workspace-work"><WorkSurface ventureId={venture.id} timeline={timeline.timeline} conversation={conversation} readOnlyReason={readOnly ? readOnlyReason : null} renderPreview={(workspace) => <WorkPreview workspaceId={workspace.id} disabledReason={readOnly ? readOnlyReason : null} unavailableReason={!workspace.worktree ? workspace.status === "discarded" ? "This coding worktree was discarded. Its files and receipts remain available for review." : "The isolated coding worktree is unavailable." : null} />} renderTerminal={(workspace) => <WorkTerminal ventureId={venture.id} workspaceId={workspace.id} disabledReason={readOnly ? readOnlyReason : null} unavailableReason={!workspace.worktree ? workspace.status === "discarded" ? "This coding worktree was discarded. Its files and receipts remain available for review." : "The isolated coding worktree is unavailable." : null} />} onWorkspaceChanged={() => { refresh(); void timeline.refresh(); }} /></div> : <>
-      <div className="workspace-primary">{mode === "system" ? <SystemWorkspace index={systemIndexAll} workIndex={workIndex} scope={scope} selectedRef={systemSelection} directions={directions} camera={systemCamera} readOnlyReason={readOnly ? readOnlyReason : null} onScope={setScope} onSelect={selectObject} onCameraChange={setSystemCamera} onMutate={async (mutations: SystemMutation[]) => { if (!systemIndexAll) return; await mutateSystem(venture.id, systemIndexAll.revision, mutations); await afterMutation(); }} onMutateArchitecture={async (operations, reason) => { if (!systemIndexAll) return; await mutateArchitecture(venture.id, { baseRevision: systemIndexAll.architectureRevision, operations, reason }); await afterMutation(); }} onOpenWork={(ref) => { openThread(ref); setMode("work"); }} /> : <ReleaseWorkspace index={releaseIndex} release={releaseDetail} draftContext={releaseSeed} objects={systemIndexAll?.objects ?? []} threads={workIndex?.items ?? []} readOnlyReason={readOnly ? readOnlyReason : null} onSelectRelease={selectRelease} onStartRelease={() => selectRelease(null)} onCreate={async (value) => { if (!releaseIndex) return; const seeded = releaseSeed?.kind === "object" ? { objectRef: releaseSeed.ref } : releaseSeed?.kind === "thread" ? { threadRef: releaseSeed.ref } : {}; const result = await createRelease(venture.id, releaseIndex.revision, { ...value, ...seeded }); setReleaseIndex(result.releaseIndex); selectRelease(result.release.id); }} onMutate={async (mutations) => { if (!releaseDetail) return; const result = await mutateRelease(venture.id, releaseDetail.id, releaseDetail.revision, mutations); setReleaseDetail(result.release); setReleaseIndex(result.releaseIndex); await reloadSystem(); }} onChanged={() => { refresh(); void reloadReleases().then(() => releaseSelection ? getRelease(venture.id, releaseSelection).then((result) => setReleaseDetail(result.release)) : undefined); }} />}</div>
-      <div className="workspace-chat">{conversation}</div>
+      <div className="workspace-primary">{mode === "system" ? <SystemWorkspace index={systemIndexAll} workIndex={workIndex} scope={scope} selectedRef={systemSelection} directions={directions} camera={systemCamera} readOnlyReason={readOnly ? readOnlyReason : null} onScope={setScope} onSelect={selectObject} onCameraChange={setSystemCamera} onMutate={async (mutations: SystemMutation[]) => { if (!systemIndexAll) return; await mutateSystem(venture.id, systemIndexAll.revision, mutations); await afterMutation(); }} onMutateArchitecture={async (operations, reason) => { if (!systemIndexAll) return; await mutateArchitecture(venture.id, { baseRevision: systemIndexAll.architectureRevision, operations, reason }); await afterMutation(); }} onOpenWork={(ref) => { openThread(ref); setMode("work"); }} /> : <ReleaseWorkspace index={releaseIndex} release={releaseDetail} draftContext={releaseSeed} objects={systemIndexAll?.objects ?? []} threads={workIndex?.items ?? []} readOnlyReason={readOnly ? readOnlyReason : null} onCreate={async (value) => { if (!releaseIndex) return; const seeded = releaseSeed?.kind === "object" ? { objectRef: releaseSeed.ref } : releaseSeed?.kind === "thread" ? { threadRef: releaseSeed.ref } : {}; const result = await createRelease(venture.id, releaseIndex.revision, { ...value, ...seeded }); setReleaseIndex(result.releaseIndex); selectRelease(result.release.id); }} onMutate={async (mutations) => { if (!releaseDetail) return; const result = await mutateRelease(venture.id, releaseDetail.id, releaseDetail.revision, mutations); setReleaseDetail(result.release); setReleaseIndex(result.releaseIndex); await reloadSystem(); }} onChanged={() => { refresh(); void reloadReleases().then(() => releaseSelection ? getRelease(venture.id, releaseSelection).then((result) => setReleaseDetail(result.release)) : undefined); }} />}</div>
+      {contextualChatOpen ? <aside className="workspace-chat" aria-label="Ask Drover"><button type="button" className="workspace-chat-close" aria-label="Close Ask Drover" onClick={() => { setContextualChatOpen(false); opener.current?.focus(); }}><X aria-hidden="true" /></button>{conversation}</aside> : <div className="workspace-fab"><button type="button" onClick={(event) => { opener.current = event.currentTarget; setContextualChatOpen(true); }}><MessageCircle aria-hidden="true" />Ask Drover</button></div>}
     </>}
     <AnimatePresence initial={false}>{stage ? <VisualStage key={`${stage.kind}:${stage.ref}`} visual={stage} timeline={timeline.timeline} workIndex={workIndex} directions={directions} lens={lens} readOnlyReason={readOnly ? readOnlyReason : null} onClose={() => { setStage(null); opener.current?.focus(); }} onOpenThread={openThread} onChanged={() => { refresh(); void timeline.refresh(); }} /> : null}</AnimatePresence>
   </div>;

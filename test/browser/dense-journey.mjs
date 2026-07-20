@@ -18,10 +18,9 @@ import {
 } from "./fixtures/browser-harness.mjs";
 
 async function pickView(client, label, heading) {
-  const control = label === "Go-to-market" ? "GTM" : label;
   const clicked = await client.evaluate(`(() => {
-    const tab = [...document.querySelectorAll('.system-scope-tabs button')]
-      .find((entry) => entry.textContent.trim() === ${JSON.stringify(control)});
+    const tab = [...document.querySelectorAll('.product-rail-body nav button')]
+      .find((entry) => entry.textContent.trim() === ${JSON.stringify(label)});
     tab?.click();
     return Boolean(tab);
   })()`);
@@ -55,12 +54,12 @@ test("dense venture: generated maps stay honest and contained without canonical 
 
     assert.ok(await client.evaluate(`!!document.querySelector('.thread-conversation [role="log"]') && !document.querySelector('.venture-maps')`), "dense venture did not rest in chat");
     await summonMap(client);
-    await waitForDom(client, `/No connected system yet/i.test(document.querySelector('.venture-map-empty')?.textContent || '')`, "empty whole-system graph overstated legacy records as map truth");
+    await waitForDom(client, `(document.querySelector('.venture-map-empty')?.textContent || '').includes('No connected Product / GTM context yet')`, "empty whole-venture graph overstated legacy records as map truth");
 
     await pickView(client, "Go-to-market", "Go-to-market");
-    await waitForDom(client, `/No connected system yet/i.test(document.querySelector('.venture-map-empty')?.textContent || '')`, "empty GTM graph was not honest");
+    await waitForDom(client, `(document.querySelector('.venture-map-empty')?.textContent || '').includes('No connected Product / GTM context yet')`, "empty GTM graph was not honest");
     await pickView(client, "Product", "Product");
-    await waitForDom(client, `/No connected system yet/i.test(document.querySelector('.venture-map-empty')?.textContent || '')`, "empty Product graph was not honest");
+    await waitForDom(client, `(document.querySelector('.venture-map-empty')?.textContent || '').includes('No connected Product / GTM context yet')`, "empty Product graph was not honest");
 
     const contained = await client.evaluate(`(() => {
       const map = document.querySelector('.venture-maps')?.getBoundingClientRect();
@@ -83,10 +82,11 @@ test("dense venture: generated maps stay honest and contained without canonical 
       overflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
       map: Boolean(document.querySelector('.venture-maps')),
       composer: Boolean(document.querySelector('.thread-composer .now-composer textarea')),
+      ask: Boolean(document.querySelector('.workspace-fab button')),
       index: Boolean(document.querySelector('.thread-rail')),
     }))()`);
     assert.ok(zoomed.overflow <= 1, `125% browser zoom introduced ${zoomed.overflow}px horizontal overflow`);
-    assert.deepEqual({ map: zoomed.map, composer: zoomed.composer, index: zoomed.index }, { map: true, composer: true, index: true });
+    assert.deepEqual({ map: zoomed.map, composer: zoomed.composer, ask: zoomed.ask, index: zoomed.index }, { map: true, composer: false, ask: true, index: true });
 
     await assertBasicAccessibility(client);
     await assertNoUnhandledRejections(client);

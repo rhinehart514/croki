@@ -8,7 +8,7 @@ const index: ReleaseIndex = { ventureId: "v1", revision: 3, releases: [release],
 const object: SystemIndexObject = { id: "product", objectRef: "object:product", name: "Faster setup", statement: "", type: "open", territory: "product", assertion: "founder-asserted", provenance: null, properties: {}, compatibilityOwned: false, architectureRole: null, threadRefs: [], attention: [], createdAt: null, updatedAt: null };
 const customer: SystemIndexObject = { ...object, id: "customer", objectRef: "object:customer", name: "Customers finish setup unaided" };
 const thread = { threadRef: "thread:work", founderIntent: "Prepare exact launch work" } as WorkIndexItem;
-const base = { index, objects: [object, customer], threads: [thread], readOnlyReason: null, onCreate: vi.fn(async () => {}), onMutate: vi.fn(async () => {}), onChanged: vi.fn(), onSelectRelease: vi.fn(), onStartRelease: vi.fn() };
+const base = { index, objects: [object, customer], threads: [thread], readOnlyReason: null, onCreate: vi.fn(async () => {}), onMutate: vi.fn(async () => {}), onChanged: vi.fn() };
 
 describe("ReleaseWorkspace", () => {
   it("keeps a contextual release unsaved and asks the founder to confirm the inferred link", () => {
@@ -36,15 +36,19 @@ describe("ReleaseWorkspace", () => {
     expect(screen.queryByText(/%/)).not.toBeInTheDocument();
   });
 
-  it("selects releases in the surface and opens a link control from the relevant path step", () => {
-    const onSelectRelease = vi.fn();
-    render(<ReleaseWorkspace {...base} release={release} draftContext={null} onSelectRelease={onSelectRelease} />);
-    fireEvent.change(screen.getByRole("combobox", { name: "Release" }), { target: { value: "launch" } });
-    expect(onSelectRelease).toHaveBeenCalledWith("launch");
+  it("keeps release selection in the rail and opens a link control from the relevant path step", () => {
+    render(<ReleaseWorkspace {...base} release={release} draftContext={null} />);
+    expect(screen.queryByRole("combobox", { name: "Release" })).not.toBeInTheDocument();
     const customerStep = screen.getByText("Customer consequence").closest("article");
     expect(customerStep).not.toBeNull();
     fireEvent.click(within(customerStep!).getByRole("button", { name: "Link" }));
     expect(screen.getByRole("region", { name: "Link customer consequence" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Customers finish setup unaided" })).toBeInTheDocument();
+  });
+
+  it("shows the missing link instead of a blank release form", () => {
+    render(<ReleaseWorkspace {...base} release={null} draftContext={null} />);
+    expect(screen.getByRole("heading", { name: "Start from exact venture context" })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("What is moving to market?")).not.toBeInTheDocument();
   });
 });

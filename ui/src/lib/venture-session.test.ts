@@ -34,14 +34,14 @@ describe("venture return session", () => {
   });
 
   it("restores the collapsed v4 mode and direct selections", () => {
-    const session = { mode: "releases" as const, railWidth: 280, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", selectedReleaseId: "release-one", systemScope: "product" as const, systemCamera: { x: 1, y: 2, zoom: 0.8 }, chatScrollByThread: { "thread:one": 44 } };
+    const session = { mode: "releases" as const, railWidth: 280, contextualChatOpen: true, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", selectedReleaseId: "release-one", systemScope: "product" as const, systemCamera: { x: 1, y: 2, zoom: 0.8 }, chatScrollByThread: { "thread:one": 44 } };
     rememberWorkspaceSession("venture-2", session);
     expect(readWorkspaceSession("venture-2")).toEqual(session);
   });
 
   it("migrates v3 while discarding resolver, drawer, subview, and visual-stage state", () => {
     window.localStorage.setItem("drover:workspace-session:v3:venture-2", JSON.stringify({ mode: "releases", railWidth: 280, context: { kind: "release", ref: "object:release-one" }, work: { threadRef: "thread:one", stage: { kind: "preview" }, railWidth: 280, chatScrollByThread: { "thread:one": 44 } }, system: { scope: "product", selection: "object:product-one", camera: { x: 1, y: 2, zoom: 0.8 } }, releases: { selection: "release-one", subview: "activity" }, chatDrawerOpen: true }));
-    expect(readWorkspaceSession("venture-2")).toEqual({ mode: "releases", railWidth: 280, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", selectedReleaseId: "release-one", systemScope: "product", systemCamera: { x: 1, y: 2, zoom: 0.8 }, chatScrollByThread: { "thread:one": 44 } });
+    expect(readWorkspaceSession("venture-2")).toEqual({ mode: "releases", railWidth: 280, contextualChatOpen: false, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", selectedReleaseId: "release-one", systemScope: "product", systemCamera: { x: 1, y: 2, zoom: 0.8 }, chatScrollByThread: { "thread:one": 44 } });
   });
 
   it("ignores malformed presentation state", () => {

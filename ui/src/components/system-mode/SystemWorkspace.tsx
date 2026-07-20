@@ -11,15 +11,8 @@ import "./system-workspace.css";
 
 export type SystemScope = "system" | "product" | "gtm" | "attention";
 
-const SCOPES: Array<{ id: SystemScope; label: string }> = [
-  { id: "system", label: "System" },
-  { id: "product", label: "Product" },
-  { id: "gtm", label: "GTM" },
-  { id: "attention", label: "Needs attention" },
-];
-
 const SCOPE_TITLE: Record<SystemScope, string> = {
-  system: "Whole system",
+  system: "Whole venture",
   product: "Product",
   gtm: "Go-to-market",
   attention: "Needs attention",
@@ -76,11 +69,9 @@ export function SystemWorkspace({ index, workIndex, scope, selectedRef, directio
     <main className="mode-workspace system-workspace">
       <header className="system-workspace-header">
         <div className="system-workspace-title"><span>Product / GTM</span><h1>{SCOPE_TITLE[scope]}</h1><small>{index ? `${index.counts.total} objects` : "Loading"}</small></div>
-        <nav className="system-scope-tabs" aria-label="Product and go-to-market scope">
-          {SCOPES.map(({ id, label }) => <button key={id} type="button" aria-pressed={scope === id} onClick={() => onScope(id)}>{label}{id === "attention" && index?.counts.attention ? <i>{index.counts.attention}</i> : null}</button>)}
-        </nav>
-        <button className="system-add-button" type="button" disabled={Boolean(readOnlyReason)} onClick={() => setAdding("object")}>Add to system</button>
+        <button className="system-add-button" type="button" disabled={Boolean(readOnlyReason)} onClick={() => setAdding("object")}>Add to Product / GTM</button>
       </header>
+      {readOnlyReason ? <p className="mode-connection-state" role="status">{readOnlyReason}</p> : null}
 
       {scope === "attention" ? (
         <SystemAttention index={index} workByObject={workByObject} onSelect={selectObject} />
@@ -110,10 +101,10 @@ export function SystemWorkspace({ index, workIndex, scope, selectedRef, directio
 }
 
 function SystemAttention({ index, workByObject, onSelect }: { index: SystemIndex | null; workByObject: Map<string, SystemAgentContext>; onSelect: (object: SystemIndexObject) => void }) {
-  if (!index) return <div className="system-state" role="status"><strong>Loading the venture system…</strong><p>Product and market truth will appear here when the current revision arrives.</p></div>;
+  if (!index) return <div className="system-state" role="status"><strong>Loading Product / GTM…</strong><p>Product and market truth will appear here when the current revision arrives.</p></div>;
   const objects = index.objects.filter((object) => object.attention.length > 0);
-  if (!objects.length) return <div className="system-state"><strong>No system gaps need attention</strong><p>Unresolved proposals, stale claims, traceability gaps, and disconnected objects will appear here.</p></div>;
-  return <section className="system-attention" aria-label="System attention">{objects.map((object) => {
+  if (!objects.length) return <div className="system-state"><strong>No Product / GTM gaps need attention</strong><p>Unresolved proposals, stale claims, traceability gaps, and disconnected objects will appear here.</p></div>;
+  return <section className="system-attention" aria-label="Product and go-to-market attention">{objects.map((object) => {
     const context = workByObject.get(object.id);
     return <button key={object.id} type="button" onClick={() => onSelect(object)}><span><strong>{object.name}</strong><small>{object.attention[0]?.reason ?? "Needs founder judgment"}</small></span>{context?.state ? <i data-state={context.state}>{stateLabel(context.state)}</i> : null}</button>;
   })}</section>;

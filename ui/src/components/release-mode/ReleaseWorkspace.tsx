@@ -18,24 +18,7 @@ export type ReleaseWorkspaceProps = {
   onCreate: (value: { name: string; statement: string; linkLabel?: string }) => Promise<void>;
   onMutate: (mutations: ReleaseMutation[]) => Promise<void>;
   onChanged: () => void;
-  onSelectRelease?: (releaseId: string) => void;
-  onStartRelease?: () => void;
 };
-
-function ReleaseSelector({ index, release, onSelect, onStart }: {
-  index: ReleaseIndex | null;
-  release: ReleaseDetail | null;
-  onSelect?: (releaseId: string) => void;
-  onStart?: () => void;
-}) {
-  return <div className="release-selector">
-    <label><span>Release</span><select aria-label="Release" value={release?.id ?? ""} disabled={!index?.releases.length || !onSelect} onChange={(event) => onSelect?.(event.target.value)}>
-      {!release ? <option value="">{index?.releases.length ? "Choose a release" : "No releases yet"}</option> : null}
-      {index?.releases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-    </select></label>
-    <button type="button" disabled={!onStart} onClick={onStart}>New release</button>
-  </div>;
-}
 
 function ReleaseDetails({ release, readOnlyReason, onMutate }: {
   release: ReleaseDetail;
@@ -75,16 +58,17 @@ function ReleaseDraft({ draftContext, readOnlyReason, onCreate }: Pick<ReleaseWo
 }
 
 export function ReleaseWorkspace(props: ReleaseWorkspaceProps) {
-  const { index, release, draftContext, objects, threads, readOnlyReason, onCreate, onMutate, onChanged, onSelectRelease, onStartRelease } = props;
+  const { index, release, draftContext, objects, threads, readOnlyReason, onCreate, onMutate, onChanged } = props;
   const [configure, setConfigure] = useState<{ releaseId: string; step: Exclude<ReleasePathKey, "evidence"> } | null>(null);
   const lifecycle = release?.lifecycle === "in-market" ? "In market" : release?.lifecycle === "ended" ? "Ended" : "Draft";
 
   return <main className="mode-workspace release-workspace">
     <header className="mode-workspace-header release-workspace-header">
       <div><span>{release ? lifecycle : "Releases"}</span><h1>{release?.name ?? (draftContext ? "New release from this" : "Market movement")}</h1><p>{release?.statement || "Join the product change, its path outward, the exact action, and what reality sends back."}</p></div>
-      <div className="release-header-actions"><ReleaseSelector index={index} release={release} onSelect={onSelectRelease} onStart={onStartRelease} />{release ? <ReleaseDetails key={release.id} release={release} readOnlyReason={readOnlyReason} onMutate={onMutate} /> : null}</div>
+      <div className="release-header-actions">{release ? <ReleaseDetails key={release.id} release={release} readOnlyReason={readOnlyReason} onMutate={onMutate} /> : null}</div>
     </header>
-    {!release ? <><ReleaseDraft draftContext={draftContext} readOnlyReason={readOnlyReason} onCreate={onCreate} />{index?.unassignedActions.length ? <aside className="release-unassigned"><strong>Unassigned release actions</strong><p>{index.unassignedActions.length} exact founder-held {index.unassignedActions.length === 1 ? "action is" : "actions are"} not joined to a release. Nothing was assigned by inference.</p></aside> : null}</> : <div className="release-workspace-body">
+    {readOnlyReason ? <p className="mode-connection-state" role="status">{readOnlyReason}</p> : null}
+    {!release ? <>{draftContext ? <ReleaseDraft draftContext={draftContext} readOnlyReason={readOnlyReason} onCreate={onCreate} /> : <section className="release-draft release-missing-link"><span>Missing link</span><h2>Start from exact venture context</h2><p>Select verified Work or a Product / GTM capability, audience, offer, or gap first. Drover will carry that truth into the release instead of asking for a blank record.</p></section>}{index?.unassignedActions.length ? <aside className="release-unassigned"><strong>Unassigned release actions</strong><p>{index.unassignedActions.length} exact founder-held {index.unassignedActions.length === 1 ? "action is" : "actions are"} not joined to a release. Nothing was assigned by inference.</p></aside> : null}</> : <div className="release-workspace-body">
       {release.attention.length ? <p className="release-attention" role="status"><strong>Needs you</strong> · {release.attention.map((item) => item.replace("-", " ")).join(" · ")}</p> : null}
       <ReleasePath release={release} objects={objects} threads={threads} readOnlyReason={readOnlyReason} onConfigure={(step) => { if (step !== "evidence") setConfigure({ releaseId: release.id, step }); }} onMutate={onMutate} onChanged={onChanged} />
       {configure?.releaseId === release.id ? <ReleaseBuild key={`${release.id}:${configure.step}`} release={release} step={configure.step} objects={objects} threads={threads} readOnlyReason={readOnlyReason} onMutate={onMutate} onClose={() => setConfigure(null)} /> : null}

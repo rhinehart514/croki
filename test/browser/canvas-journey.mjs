@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// Generated operating-graph acceptance. Work remains the resting product; Map routes directly to the
-// truth-backed Product / GTM mode while the persistent agent stays mounted.
+// Generated Product / GTM acceptance. Work remains the resting product; Map routes directly to the
+// truth-backed canvas while contextual conversation stays closed until requested.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -17,10 +17,9 @@ import {
 } from "./fixtures/browser-harness.mjs";
 
 async function pickMapView(client, label) {
-  const control = label === "Go-to-market" ? "GTM" : label === "Whole system" ? "System" : label;
   const picked = await client.evaluate(`(() => {
-    const tab = [...document.querySelectorAll('.system-scope-tabs button')]
-      .find((entry) => entry.textContent.trim() === ${JSON.stringify(control)});
+    const tab = [...document.querySelectorAll('.product-rail-body nav button')]
+      .find((entry) => entry.textContent.trim() === ${JSON.stringify(label)});
     tab?.click();
     return Boolean(tab);
   })()`);
@@ -48,6 +47,7 @@ test("the operating graph exposes the whole Product and go-to-market system", as
     assert.deepEqual(rest, { rail: true, chat: true, graph: false, visual: false });
 
     await summonMap(client);
+    await waitForDom(client, `document.querySelectorAll('.react-flow__edge').length >= 5`, "whole-venture relationships did not finish rendering");
     const system = await client.evaluate(`(() => ({
       heading: document.querySelector('.system-workspace-title h1')?.textContent?.trim(),
       names: [...document.querySelectorAll('.venture-graph-node strong')].map((entry) => entry.textContent.trim()),
@@ -55,7 +55,7 @@ test("the operating graph exposes the whole Product and go-to-market system", as
       links: document.querySelectorAll('.react-flow__edge').length,
       draggable: document.querySelectorAll('.react-flow__node.draggable').length,
     }))()`);
-    assert.equal(system.heading, "Whole system");
+    assert.equal(system.heading, "Whole venture");
     for (const name of ["A project worth advancing", "Start with the work", "Project intake", "Project-drop invitation v1", expected.campaign, "Builder started with the project"]) {
       assert.ok(system.names.includes(name), `whole-system graph omitted ${name}`);
     }
@@ -111,9 +111,10 @@ test("the operating graph exposes the whole Product and go-to-market system", as
       system: document.querySelector('.workspace-shell')?.dataset.mode === 'system',
       map: Boolean(document.querySelector('.system-workspace > .venture-maps')),
       agent: Boolean(document.querySelector('.workspace-chat .thread-conversation [role="log"]')),
+      ask: Boolean(document.querySelector('.workspace-fab button')),
       overlay: Boolean(document.querySelector('.visual-stage')),
     }))()`);
-    assert.deepEqual(directMode, { system: true, map: true, agent: true, overlay: false }, "Map did not remain a first-class Product / GTM surface");
+    assert.deepEqual(directMode, { system: true, map: true, agent: false, ask: true, overlay: false }, "Map did not remain a first-class Product / GTM surface");
 
     await assertBasicAccessibility(client);
     await assertNoUnhandledRejections(client);

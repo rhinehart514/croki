@@ -15,7 +15,7 @@ import {
   pressKeyboardKey,
 } from "./fixtures/atlas-browser-harness.mjs";
 
-test("generated maps are keyboard-reachable beside chat and hand off explicitly to real work", async () => {
+test("generated maps are keyboard-reachable in mode-owned space and hand off explicitly to real work", async () => {
   const drover = await bootFixture(createGeneratedMapsFixture);
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1920, height: 1080 } });
   try {
@@ -35,7 +35,7 @@ test("generated maps are keyboard-reachable beside chat and hand off explicitly 
 
     const gtmTab = await focusKeyboardTarget(
       client,
-      (target) => target.name === "GTM" && target.pressed !== null,
+      (target) => target.name === "Go-to-market",
       "GTM scope was not keyboard-reachable",
     );
     assert.ok(gtmTab);

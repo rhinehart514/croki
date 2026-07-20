@@ -84,7 +84,7 @@ test("generated maps stay isolated across ventures and hold their last coherent 
     await client.evaluate(`window.dispatchEvent(new Event('offline'))`);
     await waitForDom(
       client,
-      `/Offline|Reconnecting/i.test(document.querySelector('.firm-freshness')?.textContent || '')`,
+      `/Offline|Reconnecting/i.test(document.querySelector('.mode-connection-state')?.textContent || '')`,
       "offline freshness state never appeared",
     );
     const offline = await client.evaluate(`(() => ({

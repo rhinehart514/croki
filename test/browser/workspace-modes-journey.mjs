@@ -19,13 +19,13 @@ async function chooseNode(client, name) {
 }
 
 async function chooseRelease(client, name) {
-  await waitForDom(client, `!!document.querySelector('.release-selector select[aria-label="Release"]')`, "Release selector did not mount");
-  const changed = await client.evaluate(`(() => { const select = document.querySelector('.release-selector select[aria-label="Release"]'); const option = [...(select?.options || [])].find((entry) => entry.textContent.trim() === ${JSON.stringify(name)}); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-  assert.equal(changed, true, `release was unavailable: ${name}`);
+  await waitForDom(client, `!![...document.querySelectorAll('.releases-rail-body section > button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === ${JSON.stringify(name)})`, "Release rail did not mount");
+  const changed = await client.evaluate(`(() => { const button = [...document.querySelectorAll('.releases-rail-body section > button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === ${JSON.stringify(name)}); button?.click(); return Boolean(button); })()`);
+  assert.equal(changed, true, `release was unavailable in its mode rail: ${name}`);
   await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === ${JSON.stringify(name)}`, `${name} did not become current`);
 }
 
-test("one thread rail and persistent agent connect Product / GTM to the release path", async () => {
+test("mode-owned rails and contextual conversation connect Product / GTM to Releases", async () => {
   const drover = await bootFixture(createGeneratedMapsFixture);
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1440, height: 900 } });
   try {
@@ -35,6 +35,8 @@ test("one thread rail and persistent agent connect Product / GTM to the release 
     assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Product / GTM");
     await chooseNode(client, expected.campaign);
     await waitForDom(client, `document.querySelector('.venture-map-agent')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the selected node did not expose its linked agent context");
+    assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat') && !document.querySelector('.workspace-rail .thread-rail-list') && !!document.querySelector('.product-rail-body')`), true, "Product / GTM did not own the center and rail");
+    await client.evaluate(`[...document.querySelectorAll('.workspace-fab button')].find((entry) => entry.textContent.includes('Ask Drover'))?.click()`);
     try {
       await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the persistent agent did not open the node's linked thread");
     } catch (error) {
@@ -52,12 +54,12 @@ test("one thread rail and persistent agent connect Product / GTM to the release 
       }))()`);
       throw new Error(`${error.message}: ${JSON.stringify({ ...state, campaignThreads: campaign?.threadRefs, workThreads: work.items.map((entry) => entry.threadRef) })}`);
     }
-    assert.equal(await client.evaluate(`!!document.querySelector('.workspace-rail .thread-rail-list')`), true, "Product / GTM replaced the universal thread rail");
+    assert.equal(await client.evaluate(`!!document.querySelector('.workspace-chat') && !!document.querySelector('.workspace-chat-close')`), true, "contextual conversation did not open as a closable surface");
 
     await chooseMode(client, "Releases");
     assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Releases");
     await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "switching modes replaced the selected thread");
-    assert.equal(await client.evaluate(`!!document.querySelector('.workspace-rail .thread-rail-list')`), true, "Releases replaced the universal thread rail");
+    assert.equal(await client.evaluate(`!document.querySelector('.workspace-rail .thread-rail-list') && !!document.querySelector('.releases-rail-body')`), true, "Releases did not own its rail");
     await chooseRelease(client, "Project-drop invitation v1");
     assert.equal(await client.evaluate(`document.querySelector('.release-workspace-header > div > span')?.textContent.trim()`), "In market", "a released joined action did not derive in-market lifecycle");
     await waitForDom(client, `["Product delta", "Customer consequence", "Distribution", "Outward action", "Evidence"].every((label) => (document.querySelector('.release-path')?.textContent || '').includes(label))`, "the connected release path was incomplete");
@@ -74,7 +76,7 @@ test("one thread rail and persistent agent connect Product / GTM to the release 
     await chooseNode(client, "A project worth advancing");
     await waitForDom(client, `document.querySelector('.thread-composer')?.textContent.includes('A project worth advancing')`, "an unlinked node did not scope the persistent agent draft");
     await chooseMode(client, "Releases");
-    await client.evaluate(`[...document.querySelectorAll('.release-selector button')].find((entry) => entry.textContent.trim() === 'New release')?.click()`);
+    await client.evaluate(`document.querySelector('.releases-rail-body > .thread-new')?.click()`);
     await waitForDom(client, `document.querySelector('.release-workspace h1')?.textContent.trim() === 'New release from this' && !!document.querySelector('.release-draft')`, "an unlinked object did not seed an unsaved release draft");
     const draft = await client.evaluate(`(() => { const set = (node, value) => { const setter = Object.getOwnPropertyDescriptor(node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set; setter.call(node, value); node.dispatchEvent(new Event('input', { bubbles: true })); }; const name = document.querySelector('.release-draft input[placeholder="What is moving to market?"]'); const intent = document.querySelector('.release-draft textarea'); if (!name || !intent) return false; set(name, 'Project need release'); set(intent, 'Test the project-first need in market.'); return true; })()`);
     assert.equal(draft, true);

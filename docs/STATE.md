@@ -53,33 +53,32 @@ On 2026-07-20 the authority was reconciled toward mode-owned space. The causal W
 Releases → Evidence loop is not a navigation sequence; Product / GTM is never founder-facing **System**;
 mode handoff follows existing direct references; founder joins are immediate and undoable while agent joins
 remain provisional; and the canvas's broader semantic-zoom/capacity architecture stays an unadopted
-hypothesis until a real loop runs. The implementation described above still proves the prior universal rail
-and permanent-agent composition, so the shell migration remains open below rather than being claimed complete.
+hypothesis until a real loop runs. The founder shell now implements that mode-owned correction; outside-founder
+comprehension and the complete causal loop remain open rather than being claimed from shell mechanics.
 
 ## Verified current behavior — observed on this working tree
 
 ### Mechanical baseline
 
-On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree; after its
-sole stale Atlas keyboard expectation was corrected to the permanent mode switch, the remaining Atlas and
-Electron gates were rerun together and exited 0:
+On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
 
-- `npm test`: Brain **826/826** and UI **497/497**, with lint and the production build green;
+- `npm test`: Brain **826/826** and UI **498/498**, with lint and the production build green;
 - design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
 - firm browser acceptance: **7/7**, including the native-coding and three-mode workspace journeys;
 - Atlas browser journeys: **3/3**;
 - Electron: **12/12**, including PTY worktree isolation, native preview security, real-host native-coding
   restart, and founder-authority receipts.
 
-The browser journeys exercise the universal Thread rail; the coding-first Work composer with repository,
+The browser journeys exercise mode-owned rail bodies, contextual closable conversation outside Work, and
+visible offline/read-only truth on the owning Product / GTM or Releases surface; the coding-first Work composer with repository,
 isolated-worktree, founder-guard, and real Claude/Codex model choice; absence of those coding controls from
 Product / GTM and Releases; no reserved empty workbench before coding begins; stable Work
 conversation/workbench split; compact transcript material references; attempt selection; in-surface
-changes/diff/review; node-scoped persistent agent; direct Thread/object/release selection,
+changes/diff/review; node-scoped contextual agent; direct Thread/object/release selection,
 the five-part Release Path, honest missing links, derived in-market state, joined exact gates and evidence,
-unsaved contextual release drafts, end/reopen, generated Whole system/Product/Go-to-market graphs, keyboard
+unsaved contextual release drafts, blank-form refusal, end/reopen, generated Whole venture/Product/Go-to-market graphs, keyboard
 reachability, 120-node containment, venture isolation, zoom, and offline last-coherent reads. T3's
-collaborative preview did not attach during this run, so no new outside-founder manual visual-QA claim is
+collaborative preview automation timed out during this run, so no new outside-founder manual visual-QA claim is
 made; the browser and native-host receipts prove deterministic behavior rather than comprehension.
 
 The macOS GitHub Actions workflow runs the same complete gate on pull requests and pushes to `main`; its first
@@ -107,9 +106,10 @@ shell roots, and no query-parameter product switching** — the venture workspac
 founder surface. The prior immersive/Now/legacy shells were deleted from the tree (see "Removed surfaces").
 
 The workspace opens on `WorkspaceShell`: a resizable 240px rail with Work, Product / GTM, and Releases below
-the venture switcher. The same compact pinned, active, needs-review, recent, and older Thread rows remain in
-all three modes; scope and release lists no longer replace them. New threads become durable only on first
-send.
+the venture switcher. Its body belongs to the current mode: Work shows compact Thread groups and search;
+Product / GTM shows Whole venture, Product, Go-to-market, Needs attention, mode-local search, and selected
+context; Releases shows Needs you, Preparing, In market, Recent, mode-local search, and release preparation
+only when exact Work or Product / GTM context can seed it. New Threads become durable only on first send.
 
 Work opens as coding conversation and gives it the available surface until repository work exists. Its
 composer exposes the repository, isolated-worktree promise, founder guard, and available Claude/Codex model
@@ -125,10 +125,10 @@ approve/reject/apply/reverse/commit/prepare/restore/discard controls. Electron
 uses `node-pty` only after resolving `ventureId + workspaceId` to the canonical isolated worktree and owns one
 sandboxed HTTP(S)-only `WebContentsView` preview. The browser harness shows honest desktop-required states.
 
-Product / GTM controls `VentureMaps` as the primary canvas across Whole system, Product, GTM, and Needs
-attention scopes, with those controls in its header. The founder can create open objects and labeled
+Product / GTM controls `VentureMaps` as the primary canvas across Whole venture, Product, Go-to-market, and Needs
+attention scopes, with those controls in its mode rail. The founder can create open objects and labeled
 connections, edit open records directly, and edit compatibility-owned names/connections through the existing
-architecture adapter. Selecting a node visibly scopes the permanent agent and derives working, needs review,
+architecture adapter. Selecting a node scopes the contextual agent and derives working, needs review,
 failed, or completed state from linked `WorkIndex` Threads. A load-order-safe direct-reference handoff opens
 the canonical linked Thread as soon as its shared index is current. The contextual composer stays free of
 repository/worktree/model controls. Graph pan, zoom, fit, and camera remain
@@ -139,12 +139,15 @@ and needs-you state from exact references and presents Product delta → Custome
 Outward action → Evidence as one feature-local projection. Missing sections remain explicit; exact gates sit
 inside Outward action; joined activity follows the path; object/work links open from the relevant section;
 rename/end/reopen live in Details. There is no Overview/Build/Activity/Settings subnavigation.
-Its contextual agent likewise remains distinct from the Work coding composer.
+Its contextual agent likewise remains distinct from the Work coding composer. Starting without exact source
+context produces a visible missing-link explanation rather than a blank release form.
 
-Conversation remains mounted and visible in every mode. A missing linked Thread becomes a local subject-scoped
-draft whose canonical Thread forms on first send. The v4 session restores mode, selected Thread/object/release,
-rail width, Product / GTM scope/camera, and conversation scroll, while mapping useful v3/v2/v1 selections
-forward and ignoring retired context, drawer, Release subview, and visual-stage fields.
+Conversation remains primary in Work. Product / GTM and Releases open it only through **Ask Drover** as a
+closable right column or narrow-width overlay. Closing and reopening preserves the exact Thread, subject-scoped
+draft, last coherent timeline, and scroll; a missing linked Thread remains a local draft until first send. The
+v4 session restores mode, selected Thread/object/release, contextual-chat state, rail width, Product / GTM
+scope/camera, and conversation scroll, while mapping useful v3/v2/v1 selections forward and ignoring retired
+resolver, Release-subview, and visual-stage fields.
 
 The former free-canvas implementation remains in `ui/src/components/canvas/` as compatibility code and is
 still covered by unit tests, but it has no founder product entrypoint. This proves the local projection and
@@ -402,11 +405,9 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 - The three presentation modes share one context but remain incomplete as a founder-validated composition;
   deterministic coverage proves navigation and restoration mechanics, not that the hierarchy is yet obvious
   to an outside founder.
-- **The shell still contradicts the reconciled mode-owned design.** Its rail searches Threads across every
-  mode and Product / GTM and Releases keep conversation permanently visible. Replace those with mode-scoped
-  rail bodies and contextual closable conversation while preserving drafts, exact Thread identity, direct
-  references, focal context, and narrow-width accessibility. Do not introduce a cross-mode command palette,
-  generalized resolver, or focus stack.
+- Mode-owned rail bodies and contextual conversation are implemented and deterministic across desktop and
+  narrow-width layouts. Outside-founder comprehension remains unproven; no cross-mode command palette,
+  generalized resolver, or focus stack was added.
 - Product / GTM graph camera, selection, and scope restore through the v4 venture session. The older saved
   view/snapshot store still lacks a complete list/reopen/delete founder UI.
 - Exact thread targeting is carried through conversation replies and new Runs. Legacy bet-focused work
@@ -417,7 +418,7 @@ declares the same complete gate; remote enforcement remains unproven until GitHu
 - The canonical storage model is open, but its shipped architecture compatibility projection still requires
   the legacy five roles.
 - The active map surface is a generated operating graph with direct founder creation and editing through
-  venture-scoped mutation adapters. Whole system is the default; Product and Go-to-market are focused views
+  venture-scoped mutation adapters. Whole venture is the default; Product and Go-to-market are focused views
   that preserve their real cross-boundary support. Canonical relationships and existing structured
   references supply every connector. There is no separate diagram store, free placement, or invented
   connector data in this surface.

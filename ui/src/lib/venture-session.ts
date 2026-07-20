@@ -8,6 +8,7 @@ export type WorkspaceMode = "work" | "system" | "releases";
 export type WorkspaceSession = {
   mode: WorkspaceMode;
   railWidth: number;
+  contextualChatOpen: boolean;
   selectedThreadRef: string | null;
   selectedObjectRef: string | null;
   selectedReleaseId: string | null;
@@ -73,6 +74,7 @@ function defaultWorkspaceSession(): WorkspaceSession {
   return {
     mode: "work",
     railWidth: 240,
+    contextualChatOpen: false,
     selectedThreadRef: null,
     selectedObjectRef: null,
     selectedReleaseId: null,
@@ -110,6 +112,7 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
       return {
         mode,
         railWidth: safeRailWidth(parsed.railWidth),
+        contextualChatOpen: parsed.contextualChatOpen === true,
         selectedThreadRef: stringOrNull(parsed.selectedThreadRef),
         selectedObjectRef: stringOrNull(parsed.selectedObjectRef),
         selectedReleaseId: stringOrNull(parsed.selectedReleaseId),
@@ -129,6 +132,7 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
       return {
         mode: ["work", "system", "releases"].includes(String(v3.mode)) ? v3.mode as WorkspaceMode : "work",
         railWidth: safeRailWidth(v3.railWidth ?? v3.work?.railWidth),
+        contextualChatOpen: false,
         selectedThreadRef: stringOrNull(v3.work?.threadRef) ?? (contextKind === "thread" ? contextRef : null),
         selectedObjectRef: stringOrNull(v3.system?.selection) ?? (contextKind === "object" ? contextRef : null),
         selectedReleaseId: stringOrNull(v3.releases?.selection) ?? (contextKind === "release" ? contextRef?.replace(/^object:/, "") ?? null : null),

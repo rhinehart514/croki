@@ -8,7 +8,7 @@ import { VentureSystemGraph } from "./VentureSystemGraph";
 import "./venture-maps.css";
 
 const VIEW_LABEL: Record<VentureMapView, string> = {
-  system: "Whole system",
+  system: "Whole venture",
   product: "Product",
   gtm: "Go-to-market",
 };
@@ -64,12 +64,12 @@ export function VentureMaps({
   };
 
   return (
-    <section className="venture-maps" aria-label="Venture system map" data-view={view}>
+    <section className="venture-maps" aria-label="Venture Product and go-to-market map" data-view={view}>
       {showHeader ? <header className="venture-maps-head">
         <div>
           <span>Generated from venture truth</span>
           <h1>{VIEW_LABEL[view]}</h1>
-          <p>{view === "system" ? "Product capability → people reached → evidence returned" : view === "gtm" ? "Every path to market and the Product systems behind it" : "How the product creates and delivers value"}</p>
+          <p>{view === "system" ? "Product capability → people reached → evidence returned" : view === "gtm" ? "Every path to market and the Product capabilities behind it" : "How the product creates and delivers value"}</p>
         </div>
         <div className="venture-map-tabs" role="tablist" aria-label="Map view">
           {(Object.keys(VIEW_LABEL) as VentureMapView[]).map((id) => (
@@ -91,7 +91,7 @@ export function VentureMaps({
 
       {!outline || graph.nodes.length === 0 ? (
         <div className="venture-map-empty" role="status">
-          <strong>No connected system yet</strong>
+          <strong>No connected Product / GTM context yet</strong>
           <p>Direct Product or market work. Drover will place real nodes and links here automatically.</p>
         </div>
       ) : (
@@ -134,7 +134,7 @@ export function VentureMaps({
           {inspectorActions ?? <button type="button" className="venture-map-open" onClick={() => open(selected)}>{selected.threadRefs.length ? "Open work" : "Open context"}</button>}
         </aside>
       ) : (
-        <div className="venture-map-hint">Select a path to see every system and piece of market work it uses.</div>
+        <div className="venture-map-hint">Select a path to see every Product capability and piece of market work it uses.</div>
       )}
     </section>
   );

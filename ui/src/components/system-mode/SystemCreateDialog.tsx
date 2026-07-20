@@ -25,7 +25,7 @@ export function SystemCreateDialog({ kind, objects, readOnlyReason, onClose, onS
           ? { op: "create-object", name, statement, territory }
           : { op: "create-relationship", fromRef, toRef, label });
       }}>
-        <header><div><span>Add to system</span><h2>{kind === "object" ? "New object" : "New connection"}</h2></div><button type="button" onClick={onClose} aria-label="Close">×</button></header>
+        <header><div><span>Add to Product / GTM</span><h2>{kind === "object" ? "New object" : "New connection"}</h2></div><button type="button" onClick={onClose} aria-label="Close">×</button></header>
         <div className="workspace-dialog-tabs">
           <button type="button" aria-pressed={kind === "object"} onClick={() => onSwitchKind("object")}>Object</button>
           <button type="button" aria-pressed={kind === "connection"} onClick={() => onSwitchKind("connection")}>Connection</button>

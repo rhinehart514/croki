@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThreadTimeline, WorkIndex } from "@/api";
 import { VentureWorkspace } from "./VentureWorkspace";
@@ -32,14 +32,19 @@ describe("VentureWorkspace — three-mode founder shell", () => {
     expect(screen.getByRole("button", { name: /Releases/ })).toBeInTheDocument();
   });
 
-  it("switches modes with keyboard shortcuts while preserving the mounted conversation", async () => {
+  it("switches modes into mode-owned space and restores contextual conversation on demand", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     await screen.findByText("Make setup feel immediate.");
     fireEvent.keyDown(window, { key: "2", metaKey: true });
-    expect((await screen.findAllByRole("heading", { name: "Whole system" })).length).toBeGreaterThan(0);
-    expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
+    expect((await screen.findAllByRole("heading", { name: "Whole venture" })).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Make setup feel immediate.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New thread" })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Product and go-to-market scopes" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ask Drover" }));
     expect(screen.getByText("Make setup feel immediate.").closest(".thread-conversation")).toHaveAttribute("data-surface", "context");
-    expect(screen.getByRole("button", { name: /Product \/ GTM/ })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(screen.getByRole("button", { name: "Close Ask Drover" }));
+    expect(screen.queryByText("Make setup feel immediate.")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /Product \/ GTM/ })).toHaveAttribute("aria-current", "page");
   });
 
   it("opens visual material beside chat and Escape restores focus without unmounting chat", async () => {

@@ -101,7 +101,7 @@ export function VentureSystemGraph({
         onPaneClick={() => onSelect(null)}
         onMoveEnd={(_event, viewport) => onCameraChange?.(viewport)}
         proOptions={{ hideAttribution: true }}
-        aria-label="Full venture system graph. Product systems connect to people, market work, and returned evidence."
+        aria-label="Full Product and go-to-market graph. Product capabilities connect to people, market work, and returned evidence."
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--canvas-dot)" />
         <Controls position="bottom-left" showInteractive={false} />

@@ -43,12 +43,12 @@ const base = {
 describe("SystemWorkspace", () => {
   beforeEach(() => Object.values(base).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }));
 
-  it("keeps scope in the canvas header and exposes the selected node to the agent", () => {
+  it("keeps scope in the mode rail and exposes the selected node to the agent", () => {
     render(<SystemWorkspace {...base} />);
     expect(screen.getByText("working")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "GTM" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Product" }));
-    expect(base.onScope).toHaveBeenCalledWith("product");
+    expect(screen.getByRole("heading", { name: "Whole venture" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to Product / GTM" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Product and go-to-market scope" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Select offer" }));
     expect(base.onAgentContextChange).toHaveBeenCalledWith(expect.objectContaining({ objectRef: "object:offer", subjectRefs: ["object:offer"], threadRef: "thread:offer", state: "working" }));
     fireEvent.click(screen.getByRole("button", { name: "Open thread" }));

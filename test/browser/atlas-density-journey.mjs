@@ -41,7 +41,7 @@ test("dense generated maps contain 120 earned records without desktop overflow",
     assert.equal(system.draggable, 0, "dense system graph became a manual diagram editor");
 
     const switched = await client.evaluate(`(() => {
-      const tab = [...document.querySelectorAll('.system-scope-tabs button')].find((entry) => entry.textContent.trim() === 'GTM');
+      const tab = [...document.querySelectorAll('.product-rail-body nav button')].find((entry) => entry.textContent.trim() === 'Go-to-market');
       tab?.click();
       return Boolean(tab);
     })()`);
@@ -64,12 +64,13 @@ test("dense generated maps contain 120 earned records without desktop overflow",
           map: Boolean(document.querySelector('.venture-maps')),
           composer: Boolean(document.querySelector('.thread-composer textarea')),
           chat: Boolean(document.querySelector('.thread-conversation [role="log"]')),
+          ask: Boolean(document.querySelector('.workspace-fab button')),
           rail: Boolean(document.querySelector('.thread-rail, .thread-rail-launcher')),
         };
       })()`);
       assert.ok(contained.pageOverflow <= 1, `${percent}% browser zoom introduced ${contained.pageOverflow}px page overflow`);
       assert.equal(contained.mapWithinStage, true, `${percent}% let the map escape Product / GTM`);
-      assert.deepEqual({ map: contained.map, composer: contained.composer, chat: contained.chat, rail: contained.rail }, { map: true, composer: true, chat: true, rail: true });
+      assert.deepEqual({ map: contained.map, composer: contained.composer, chat: contained.chat, ask: contained.ask, rail: contained.rail }, { map: true, composer: false, chat: false, ask: true, rail: true });
     }
 
     await assertNoUnhandledRejections(client);
