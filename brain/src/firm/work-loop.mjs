@@ -42,6 +42,34 @@ export { getAgentDailySpend } from "./work-loop-budget.mjs";
 
 const DEFAULT_MAX_STEPS = 24;
 
+function directSdkConfiguration(persisted, teammateRef, runtime, model) {
+  const name = runtime === "codex" ? "Codex" : runtime === "claude-code" ? "Claude Code" : teammateRef;
+  const agent = {
+    ref: teammateRef,
+    name,
+    label: "SDK model",
+    perspective: null,
+    temperament: [],
+    contributes: [],
+    boundaries: [],
+    activation: "direct",
+    capabilities: { firmTools: true, additional: [] },
+    context: { scope: "venture", instructions: null },
+    memory: { scope: "none", instructions: null },
+    runtime: { provider: runtime, model },
+    budget: { maxSteps: null, dailySpendUsd: null },
+    authority: { outwardEffects: "blocked" },
+    evaluation: { signals: [], instructions: null },
+  };
+  return {
+    ...persisted,
+    presentation: { ...persisted.presentation, participant: "named", participantLabel: "SDK model", collectiveLabel: "Work" },
+    organization: { ...persisted.organization, instructions: null, relationships: [] },
+    coordination: { ...persisted.coordination, mode: "direct", coordinatorRef: null, maxPasses: 1, protocols: [], stopWhen: [] },
+    agents: [agent],
+  };
+}
+
 // The whole wall-item collection at a moment in time — the run's decision-join diff (work-loop-run.mjs)
 // needs every item, decided or not, so an item DECIDED by the founder during the drive is still attributed
 // to the run. A pending-only snapshot would drop it from both the before and after view.
@@ -76,6 +104,7 @@ async function driveTeammateLeased({
   betId = null,
   runtime = null,
   model = null,
+  directSdk = false,
   initiatedBy = null,
   coordination = null,
   target = null,
@@ -85,15 +114,18 @@ async function driveTeammateLeased({
   deps = {},
 } = {}, lease) {
   const persistedConfiguration = getVentureDoc(ventureId, "configuration", CONFIGURATION_KEY, options);
+  if (directSdk && !persistedConfiguration) throw new Error("Direct SDK Work needs an existing venture configuration.");
   const canFormFirstParticipant = !persistedConfiguration
     || (persistedConfiguration.revision === 1 && persistedConfiguration.agents?.length === 0);
-  if (persistedConfiguration && !configuredAgent(persistedConfiguration, teammateRef) && !canFormFirstParticipant) {
+  if (!directSdk && persistedConfiguration && !configuredAgent(persistedConfiguration, teammateRef) && !canFormFirstParticipant) {
     const error = new Error(`Participant "${teammateRef}" is not in this venture's firm configuration.`);
     error.code = "participant_not_configured";
     throw error;
   }
-  summon(ventureId, teammateRef, { templateRef: teammateRef }, options);
-  const configuration = ensureInitialFirmParticipant(ventureId, teammateRef, options);
+  if (!directSdk) summon(ventureId, teammateRef, { templateRef: teammateRef }, options);
+  const configuration = directSdk
+    ? directSdkConfiguration(persistedConfiguration, teammateRef, runtime, model)
+    : ensureInitialFirmParticipant(ventureId, teammateRef, options);
   const agent = configuredAgent(configuration, teammateRef);
   if (!agent) {
     const error = new Error(`Participant "${teammateRef}" is not in this venture's firm configuration.`);
@@ -304,6 +336,7 @@ async function driveTeammateLeased({
       theoryContext,
       workingTheoryDrive,
       steerBrief,
+      directSdk,
     }),
     tools: tools.map(({ run: _run, ...definition }) => definition),
     client: selection.client ?? null,

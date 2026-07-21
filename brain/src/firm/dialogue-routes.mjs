@@ -349,7 +349,19 @@ async function handleReply(ventureId, req, res, deps) {
 }
 
 async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null, subjectRefs = [], runtime = null, model = null, responseAct = "new-direction", material = {}) {
-  const routed = await routeDirection({ direction, configuration }, deps.routingDeps ?? {});
+  // Form the founder's exact Work address before any provider or routing work can fail. A failed
+  // dispatch must remain a visible, resumable Thread rather than an orphaned conversation message.
+  const exactThreadRef = threadRef ?? ensureDirectionThread(ventureId, {
+    name: direction,
+    originMessageRef: fromMessageId,
+    identityKey: fromMessageId,
+    subjectRefs,
+    actor: { authority: "founder", id: "founder" },
+  }, deps.appendOptions).threadRef;
+  const directSdk = Boolean(runtime);
+  const routed = directSdk
+    ? { teammateRef: runtime, why: `Continuing with ${runtime === "codex" ? "Codex" : runtime === "claude-code" ? "Claude Code" : runtime}.` }
+    : await routeDirection({ direction, configuration }, deps.routingDeps ?? {});
   // A fresh, never-configured firm forms its first participant on the first direction — the same
   // founding-teammate fallback work-routes.mjs uses. Otherwise a firm with no claimable participant
   // refuses rather than inventing an activation path.
@@ -361,13 +373,6 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
     throw error;
   }
   const why = routed.why ?? "Taking this one.";
-  const exactThreadRef = threadRef ?? ensureDirectionThread(ventureId, {
-    name: direction,
-    originMessageRef: fromMessageId,
-    identityKey: fromMessageId,
-    subjectRefs,
-    actor: { authority: "founder", id: "founder" },
-  }, deps.appendOptions).threadRef;
   // The claim is visible in the thread with a one-line why, BEFORE work begins (§4A.1).
   appendThreadReply({ ventureId, threadRef: exactThreadRef, betId: null, teammateRef, content: why, options: deps.appendOptions });
   const drive = deps.driveTeammate ?? driveTeammate;
@@ -390,6 +395,7 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
       },
       ...(runtime ? { runtime } : {}),
       ...(model ? { model } : {}),
+      ...(directSdk ? { directSdk: true } : {}),
       options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
     },
     ventureId, threadRef: exactThreadRef, betId: null, teammateRef, options: deps.appendOptions,

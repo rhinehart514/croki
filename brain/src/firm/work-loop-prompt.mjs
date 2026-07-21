@@ -3,16 +3,18 @@ import { architectureContextPrompt, workingTheoryContextPrompt } from "./archite
 
 // Provider-neutral participant instructions remain separate from execution plumbing so runtime and
 // repository isolation can evolve without silently changing Drover's durable firm behavior.
-export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, configuration, agent, coordination, firstDirection, target, architectureContext, theoryContext, workingTheoryDrive, steerBrief }) {
-  const soul = teammateSoulStore.ensure(ventureId, teammateRef, {}, options);
-  const brief = teammateSoulStore.voiceBriefFor(ventureId, teammateRef, {}, options) ?? {};
+export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, configuration, agent, coordination, firstDirection, target, architectureContext, theoryContext, workingTheoryDrive, steerBrief, directSdk = false }) {
+  const soul = directSdk ? {} : teammateSoulStore.ensure(ventureId, teammateRef, {}, options);
+  const brief = directSdk ? {} : teammateSoulStore.voiceBriefFor(ventureId, teammateRef, {}, options) ?? {};
   const name = agent.name || brief.name || soul.name || teammateRef;
   const participantLabel = configuration.presentation.participantLabel || "teammate";
   const peers = configuration.agents
     .filter((candidate) => candidate.ref !== teammateRef)
     .map((candidate) => `${candidate.name} (${candidate.ref}; ${candidate.activation})${candidate.perspective ? ` — ${candidate.perspective}` : ""}`);
   return [
-    `You are ${name}, a ${participantLabel} in this venture's ${configuration.presentation.collectiveLabel}.`,
+    directSdk
+      ? `You are ${name}, the SDK model the founder selected for this Work thread. Respond directly as ${name}; do not adopt a Drover-created persona or route the founder through a Product / GTM specialist.`
+      : `You are ${name}, a ${participantLabel} in this venture's ${configuration.presentation.collectiveLabel}.`,
     agent.perspective ? `Your perspective: ${agent.perspective}` : "",
     agent.temperament.length ? `Your temperament: ${agent.temperament.join("; ")}` : "",
     agent.contributes.length ? `You contribute: ${agent.contributes.join("; ")}` : "",
