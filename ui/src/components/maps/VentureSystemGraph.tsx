@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -6,6 +6,7 @@ import {
   MarkerType,
   Position,
   ReactFlow,
+  useNodesState,
   type Edge,
   type NodeTypes,
   type Viewport,
@@ -42,7 +43,7 @@ export function VentureSystemGraph({
 }) {
   const graph = useMemo(() => ventureGraph(outline, view), [outline, view]);
   const route = useMemo(() => connectedIds(graph, selectedId), [graph, selectedId]);
-  const nodes = useMemo<Array<VentureGraphFlowNode | VenturePipelineLaneNode>>(() => [
+  const projectedNodes = useMemo<Array<VentureGraphFlowNode | VenturePipelineLaneNode>>(() => [
     ...graph.pipelines.map((pipeline, index): VenturePipelineLaneNode => ({
       id: `pipeline-lane:${pipeline.id}`,
       type: "pipelineLane",
@@ -89,6 +90,8 @@ export function VentureSystemGraph({
       },
     })),
   ], [graph.nodes, graph.pipelines, onSelect, positions, route, selectedId, workByObject]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<VentureGraphFlowNode | VenturePipelineLaneNode>(projectedNodes);
+  useEffect(() => setNodes(projectedNodes), [projectedNodes, setNodes]);
   const edges = useMemo<Edge[]>(() => {
     const firstHighlightedReturn = graph.links.findIndex((link) => link.sourceKind === "evidence-return" && Boolean(selectedId && route.has(link.source) && route.has(link.target)));
     return graph.links.map((link, index) => {
@@ -129,6 +132,7 @@ export function VentureSystemGraph({
       <ReactFlow<VentureGraphFlowNode | VenturePipelineLaneNode>
         key={`${view}:${outline.architectureRevision}`}
         nodes={nodes}
+        onNodesChange={onNodesChange}
         edges={edges}
         nodeTypes={NODE_TYPES}
         fitView={!camera}
@@ -141,7 +145,7 @@ export function VentureSystemGraph({
         panOnDrag
         selectionOnDrag={false}
         onNodeClick={(_event, node) => { if (node.type === "venture") (node.data as VentureGraphNodeData).onSelect(node.id); }}
-        onNodeDragStop={(_event, node) => { if (node.type === "venture") onNodeMove?.(`object:${node.id}`, node.position); }}
+        onNodeDragStop={(_event, node) => { if (node.type === "venture") onNodeMove?.((node.data as VentureGraphNodeData).object.objectRef, node.position); }}
         onPaneClick={() => onSelect(null)}
         onMoveEnd={(_event, viewport) => onCameraChange?.(viewport)}
         proOptions={{ hideAttribution: true }}

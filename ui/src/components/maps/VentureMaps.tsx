@@ -159,7 +159,7 @@ export function VentureMaps({
         </aside>
       ) : (
         <div className="venture-map-hint">Select a signal, pipeline, campaign, or outcome to inspect its exact context and work.</div>
-      ) : null}
+      )}
     </section>
   );
 }
