@@ -1,15 +1,9 @@
-import { lazy, Suspense } from "react";
+import { VisualMemo } from "./VisualMemo";
+import type { ArtifactSectionFocus } from "./artifactSectionFocus";
 import "./review.css";
 
-// Match message.tsx: Streamdown's markdown/diagram parser is substantial, so it loads only when an
-// actual markdown artifact reaches this surface rather than on every review.
-const LazyStreamdown = lazy(async () => {
-  const module = await import("streamdown");
-  return { default: module.Streamdown };
-});
-
 export interface ReviewArtifact {
-  kind: "image" | "html" | "markdown" | "text";
+  kind: "image" | "html" | "markdown" | "text" | "code";
   /** For image: the src (a data: URI or URL). */
   src?: string;
   /** For html/markdown/text: the raw content string. */
@@ -19,10 +13,16 @@ export interface ReviewArtifact {
 
 /**
  * Render a produced artifact so the founder reviews the thing, not its description. image → <img>,
- * html → a sandboxed iframe with a visible Preview label, markdown → Streamdown, text → monospace
- * <pre> in a scroll container. Unknown or empty artifacts fall to a quiet empty state.
+ * html → a sandboxed iframe, prose → a normalized editorial document, code → monospace. Unknown or
+ * empty artifacts fall to a quiet empty state.
  */
-export function ArtifactPreview({ artifact }: { artifact: ReviewArtifact }) {
+export function ArtifactPreview({ artifact, artifactRef, artifactAt, focusedSectionId, onFocusSection }: {
+  artifact: ReviewArtifact;
+  artifactRef?: string;
+  artifactAt?: string | null;
+  focusedSectionId?: string | null;
+  onFocusSection?: (focus: ArtifactSectionFocus) => void;
+}) {
   const { kind, src, content, caption } = artifact ?? {};
 
   if (kind === "image" && src) {
@@ -49,20 +49,11 @@ export function ArtifactPreview({ artifact }: { artifact: ReviewArtifact }) {
     );
   }
 
-  if (kind === "markdown" && content) {
-    return (
-      <div className="review-artifact">
-        <div className="review-artifact-markdown">
-          <Suspense fallback={<pre className="review-artifact-text">{content}</pre>}>
-            <LazyStreamdown>{content}</LazyStreamdown>
-          </Suspense>
-        </div>
-        {caption ? <p className="review-artifact-caption">{caption}</p> : null}
-      </div>
-    );
+  if ((kind === "markdown" || kind === "text") && content) {
+    return <VisualMemo content={content} title={caption} artifactRef={artifactRef} artifactAt={artifactAt} focusedSectionId={focusedSectionId} onFocusSection={onFocusSection} />;
   }
 
-  if (kind === "text" && content) {
+  if (kind === "code" && content) {
     return (
       <div className="review-artifact">
         <pre className="review-artifact-text">{content}</pre>

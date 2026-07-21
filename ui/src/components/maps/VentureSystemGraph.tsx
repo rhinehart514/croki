@@ -14,9 +14,10 @@ import "@xyflow/react/dist/style.css";
 import type { WorkIndexOutline } from "@/api";
 import type { SystemAgentContext } from "@/components/system-mode/systemWorkState";
 import { connectedIds, ventureGraph, type VentureMapView } from "./ventureMapModel";
-import { VentureGraphNode, type VentureGraphFlowNode } from "./VentureGraphNode";
+import { VentureGraphNode, type VentureGraphFlowNode, type VentureGraphNodeData } from "./VentureGraphNode";
+import { VenturePipelineLane, type VenturePipelineLaneNode } from "./VenturePipelineLane";
 
-const NODE_TYPES: NodeTypes = { venture: VentureGraphNode };
+const NODE_TYPES: NodeTypes = { venture: VentureGraphNode, pipelineLane: VenturePipelineLane };
 
 export function VentureSystemGraph({
   outline,
@@ -26,6 +27,8 @@ export function VentureSystemGraph({
   camera,
   onCameraChange,
   workByObject,
+  positions,
+  onNodeMove,
 }: {
   outline: WorkIndexOutline;
   view: VentureMapView;
@@ -34,30 +37,65 @@ export function VentureSystemGraph({
   camera?: Viewport | null;
   onCameraChange?: (camera: Viewport) => void;
   workByObject?: ReadonlyMap<string, SystemAgentContext>;
+  positions?: Record<string, { x: number; y: number }>;
+  onNodeMove?: (objectRef: string, position: { x: number; y: number }) => void;
 }) {
   const graph = useMemo(() => ventureGraph(outline, view), [outline, view]);
   const route = useMemo(() => connectedIds(graph, selectedId), [graph, selectedId]);
-  const nodes = useMemo<VentureGraphFlowNode[]>(() => graph.nodes.map((node) => ({
-    id: node.object.id,
-    type: "venture",
-    position: node.position,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    data: {
-      object: node.object,
-      connectionCount: node.connectionCount,
-      selected: selectedId === node.object.id,
-      quiet: Boolean(selectedId && !route.has(node.object.id)),
-      workState: workByObject?.get(node.object.id)?.state ?? null,
-      onSelect: (id: string) => onSelect(selectedId === id ? null : id),
-    },
-  })), [graph.nodes, onSelect, route, selectedId, workByObject]);
+  const nodes = useMemo<Array<VentureGraphFlowNode | VenturePipelineLaneNode>>(() => [
+    ...graph.pipelines.map((pipeline, index): VenturePipelineLaneNode => ({
+      id: `pipeline-lane:${pipeline.id}`,
+      type: "pipelineLane",
+      position: pipeline.position,
+      style: { width: pipeline.width, height: pipeline.height },
+      initialWidth: pipeline.width,
+      initialHeight: pipeline.height,
+      selectable: false,
+      draggable: false,
+      focusable: false,
+      zIndex: 0,
+      data: {
+        index,
+        name: pipeline.name,
+        audience: pipeline.audience,
+        trigger: pipeline.trigger,
+        value: pipeline.value,
+        repeatability: pipeline.repeatability,
+        signalCount: pipeline.signalCount,
+        campaignCount: pipeline.campaignCount,
+        releaseCount: pipeline.releaseCount,
+        outcomeCount: pipeline.outcomeCount,
+        workState: workByObject?.get(pipeline.id)?.state ?? null,
+        active: Boolean(selectedId && pipeline.nodeIds.includes(selectedId)),
+        quiet: Boolean(selectedId && !pipeline.nodeIds.includes(selectedId)),
+      },
+    })),
+    ...graph.nodes.map((node): VentureGraphFlowNode => ({
+      id: node.object.id,
+      type: "venture",
+      position: positions?.[node.object.objectRef] ?? positions?.[node.object.id] ?? node.position,
+      initialWidth: ["motion", "pipeline"].includes(node.object.type.toLowerCase()) ? 276 : node.object.type.toLowerCase() === "campaign" ? 258 : node.object.type.toLowerCase() === "return" ? 264 : 244,
+      initialHeight: ["motion", "pipeline"].includes(node.object.type.toLowerCase()) ? 132 : 126,
+      zIndex: 1,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      data: {
+        object: node.object,
+        connectionCount: node.connectionCount,
+        selected: selectedId === node.object.id,
+        quiet: Boolean(selectedId && !route.has(node.object.id)),
+        workState: workByObject?.get(node.object.id)?.state ?? null,
+        onSelect: (id: string) => onSelect(selectedId === id ? null : id),
+      },
+    })),
+  ], [graph.nodes, graph.pipelines, onSelect, positions, route, selectedId, workByObject]);
   const edges = useMemo<Edge[]>(() => {
-    const firstHighlightedReturn = graph.links.findIndex((link) => link.sourceKind === "evidence-return" && Boolean(selectedId && (link.source === selectedId || link.target === selectedId)));
+    const firstHighlightedReturn = graph.links.findIndex((link) => link.sourceKind === "evidence-return" && Boolean(selectedId && route.has(link.source) && route.has(link.target)));
     return graph.links.map((link, index) => {
-      const highlighted = Boolean(selectedId && (link.source === selectedId || link.target === selectedId));
+      const highlighted = Boolean(selectedId && route.has(link.source) && route.has(link.target));
+      const touchesSelection = Boolean(selectedId && (link.source === selectedId || link.target === selectedId));
       const returned = link.sourceKind === "evidence-return";
-      const showLabel = highlighted && (!returned || index === firstHighlightedReturn);
+      const showLabel = touchesSelection && (!returned || index === firstHighlightedReturn);
       return {
         id: link.id,
         source: link.source,
@@ -70,7 +108,7 @@ export function VentureSystemGraph({
           stroke: returned ? "var(--ember-ink)" : highlighted ? "var(--primary)" : "var(--n-line-2)",
           strokeWidth: returned || highlighted ? 2 : 1,
           strokeDasharray: link.assertion === "tentative" ? "5 5" : undefined,
-          opacity: selectedId && !highlighted ? 0.24 : 1,
+          opacity: selectedId ? (highlighted ? 0.9 : 0.07) : (returned ? 0.48 : 0.18),
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -84,11 +122,11 @@ export function VentureSystemGraph({
         labelBgBorderRadius: 4,
       };
     });
-  }, [graph.links, selectedId]);
+  }, [graph.links, route, selectedId]);
 
   return (
     <div className="venture-system-graph" data-testid="venture-system-graph">
-      <ReactFlow<VentureGraphFlowNode>
+      <ReactFlow<VentureGraphFlowNode | VenturePipelineLaneNode>
         key={`${view}:${outline.architectureRevision}`}
         nodes={nodes}
         edges={edges}
@@ -98,22 +136,21 @@ export function VentureSystemGraph({
         fitViewOptions={{ padding: 0.1, minZoom: 0.35, maxZoom: 1 }}
         minZoom={0.22}
         maxZoom={1.55}
-        nodesDraggable={false}
+        nodesDraggable={Boolean(onNodeMove)}
         nodesConnectable={false}
         panOnDrag
         selectionOnDrag={false}
-        onNodeClick={(_event, node) => node.data.onSelect(node.id)}
+        onNodeClick={(_event, node) => { if (node.type === "venture") (node.data as VentureGraphNodeData).onSelect(node.id); }}
+        onNodeDragStop={(_event, node) => { if (node.type === "venture") onNodeMove?.(`object:${node.id}`, node.position); }}
         onPaneClick={() => onSelect(null)}
         onMoveEnd={(_event, viewport) => onCameraChange?.(viewport)}
         proOptions={{ hideAttribution: true }}
-        aria-label="Full Product and go-to-market graph. Product capabilities connect to people, market work, and returned evidence."
+        aria-label="Product and go-to-market system. Meaningful signals activate reusable agent pipelines, bounded campaigns, and returned outcomes."
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--canvas-dot)" />
         <Controls position="bottom-left" showInteractive={false} />
       </ReactFlow>
-      <div className="venture-graph-landmarks" aria-hidden="true">
-        <span>Product value</span><i>→</i><span>Market movement</span><i>→</i><span>Returned evidence</span>
-      </div>
+      {view === "product" ? <div className="venture-graph-landmarks is-product" aria-hidden="true"><span>Product truth</span><i>→</i><span>Customer value</span><i>→</i><span>Market support</span></div> : <div className="venture-graph-foundation-label" aria-hidden="true"><span>Connected venture context</span><strong>Audiences, offers, channels, releases, agents, tools, and evidence attach to the loop</strong></div>}
       <div className="venture-graph-readout" aria-label="Relationship legend">
         <span><i data-line="adopted" />Founder-set</span>
         <span><i data-line="provisional" />Provisional</span>

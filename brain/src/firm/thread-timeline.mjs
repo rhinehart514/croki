@@ -10,6 +10,34 @@ import { getFirmConfiguration } from "./configuration.mjs";
 
 const list = (value) => Array.isArray(value) ? value : [];
 const refId = (value, prefix) => String(value ?? "").replace(new RegExp(`^${prefix}:`), "");
+const TOOL_ACTIVITY = {
+  read_truth: "Read venture truth",
+  search_repository: "Searched the repository",
+  read_repository_excerpt: "Read source evidence",
+  get_firm_configuration: "Checked venture configuration",
+  get_taste: "Checked venture taste",
+  read_venture_architecture: "Read the venture model",
+  record_working_theory: "Updated venture understanding",
+  propose_architecture_change: "Prepared a venture-model proposal",
+  fork_bet: "Opened an approach",
+  stage_artifact: "Prepared an artifact",
+  stage_outward: "Prepared founder review",
+  ask_founder: "Prepared a founder question",
+  speak: "Shared a progress update",
+  involve_participant: "Involved another participant",
+};
+
+function inspectableActivity(bet) {
+  return list(bet?.events).flatMap((event) => {
+    if (event?.type === "tool_started") {
+      return [{ id: event.id, label: TOOL_ACTIVITY[event.detail] ?? "Used a venture capability", at: event.at ?? null, durationMs: Number.isFinite(event.durationMs) ? event.durationMs : null }];
+    }
+    if (event?.type === "tool_failed") return [{ id: event.id, label: "A work step needs attention", at: event.at ?? null, durationMs: null }];
+    if (event?.type === "asked") return [{ id: event.id, label: "Prepared a founder question", at: event.at ?? null, durationMs: null }];
+    if (event?.type === "speak") return [{ id: event.id, label: "Shared a progress update", at: event.at ?? null, durationMs: null }];
+    return [];
+  }).slice(-8);
+}
 
 function at(value, fallback = null) {
   return value?.updatedAt ?? value?.createdAt ?? value?.stagedAt ?? value?.at ?? fallback;
@@ -101,6 +129,7 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
 
   for (const drive of active) {
     const state = agentState(drive);
+    const activitySteps = inspectableActivity(bets.find((bet) => bet.id === drive.betId));
     items.push({
       kind: "agent-status",
       id: `agent:${drive.id}:${state}`,
@@ -113,6 +142,7 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
       startedAt: drive.startedAt,
       updatedAt: drive.lastBeatAt ?? drive.startedAt,
       betRef: drive.betId ? `bet:${drive.betId}` : null,
+      activitySteps,
     });
   }
 

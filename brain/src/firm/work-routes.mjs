@@ -25,6 +25,7 @@ import { buildArchitectureContext, buildWorkingTheoryContext } from "./architect
 import { routeDirection } from "./direction-routing.mjs";
 import { appendConversationMessage } from "./conversation.mjs";
 import { fork } from "./bet.mjs";
+import { getSemanticModel } from "./semantic-model-store.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -206,6 +207,7 @@ export default async function handle({ req, res, url, deps = {} }) {
     const betId = branchedBetId ?? trimOrNull(body?.betId);
     const workRef = branchedBetId ? null : trimOrNull(body?.workRef);
     const threadRef = branchedBetId ? null : trimOrNull(body?.threadRef);
+    const subjectRefs = [...new Set((Array.isArray(body?.subjectRefs) ? body.subjectRefs : []).map(trimOrNull).filter(Boolean))];
     const architectureId = trimOrNull(body?.architectureTarget?.id ?? body?.architectureId);
     const architectureStepId = trimOrNull(body?.architectureTarget?.stepId ?? body?.architectureStepId);
     const requestedArchitectureRevision = Number.isInteger(body?.architectureTarget?.revision)
@@ -223,6 +225,25 @@ export default async function handle({ req, res, url, deps = {} }) {
       const error = new Error("A direction can focus durable architecture or one provisional theory claim, not both.");
       error.status = 400;
       throw error;
+    }
+    if (subjectRefs.length > 8) {
+      const error = new Error("A direction can target at most eight exact venture subjects.");
+      error.status = 400;
+      throw error;
+    }
+    if (subjectRefs.length && (architectureId || theorySubjectId || theoryRelationshipId)) {
+      const error = new Error("A direction can target exact venture subjects or one architecture/theory focus, not both.");
+      error.status = 400;
+      throw error;
+    }
+    if (subjectRefs.length) {
+      const objectRefs = new Set(getSemanticModel(ventureId).objects.map((object) => `object:${object.id}`));
+      const unknown = subjectRefs.find((ref) => !objectRefs.has(ref));
+      if (unknown) {
+        const error = new Error(`No venture object ${unknown} belongs to this venture.`);
+        error.status = 404;
+        throw error;
+      }
     }
     const architectureContext = architectureId
       ? buildArchitectureContext(ventureId, { id: architectureId, stepId: architectureStepId, revision: requestedArchitectureRevision })
@@ -261,6 +282,7 @@ export default async function handle({ req, res, url, deps = {} }) {
         theoryId: theoryContext?.theoryId ?? null,
         theorySubjectId: theoryContext?.selectionKind === "subject" ? theoryContext.selected.id : null,
         theoryRelationshipId: theoryContext?.selectionKind === "relationship" ? theoryContext.selected.id : null,
+        ...(subjectRefs.length ? { subjectRefs } : {}),
         teammateRefs: targetedTeammateRefs,
       },
       deps,

@@ -126,6 +126,18 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.ok(claim, "the claim is visible in the thread before work begins");
   });
 
+  it("answers a contextual workflow question through the SDK without routing the surface to Work", async () => {
+    const venture = createVenture({ name: "contextual workflow question" }, options);
+    let driven = null;
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "what is considered garbage right now in this project",
+      mode: "context",
+    }, { deps: { driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; } } });
+    assert.equal(res.status, 202);
+    assert.equal(res.body.act, "answer");
+    assert.deepEqual(driven.target, { threadRef: res.body.threadRef });
+  });
+
   it("starts a Work coding turn nonblocking with the founder's selected model", async () => {
     const venture = createVenture({ name: "reply selected model" }, options);
     let driven = null;
@@ -137,6 +149,38 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.equal(res.status, 202);
     assert.equal(driven.runtime, "codex");
     assert.equal(driven.model, "gpt-5.4");
+  });
+
+  it("routes Product / GTM graph corrections to the exact staged work in the same bet", async () => {
+    const { venture, bet, threadRef } = configuredThread("revise workflow graph");
+    let driven = null;
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "Wait seven days before taking the silence branch", mode: "work", threadRef,
+      betId: bet.id, workRef: "workflow-one", workflowSketch: true,
+    }, { deps: { driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; } } });
+    assert.equal(res.status, 202);
+    assert.equal(driven.betId, bet.id);
+    assert.equal(driven.target.threadRef, threadRef);
+    assert.equal(driven.target.workRef, "workflow-one");
+    assert.equal(driven.target.workflowSketch, true);
+  });
+
+  it("routes a selected artifact section as an exact in-place correction", async () => {
+    const { venture, bet, threadRef } = configuredThread("revise artifact section");
+    let driven = null;
+    const founderWords = "Use founder introductions before cold outreach";
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: founderWords, mode: "context", threadRef, betId: bet.id, workRef: "launch-brief",
+      artifactSection: { title: "Channel W", index: 0 },
+    }, { deps: {
+      dialogueDeps: { classify: async () => "steer" },
+      driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; },
+    } });
+    assert.equal(res.status, 202);
+    assert.equal(driven.target.threadRef, threadRef);
+    assert.equal(driven.target.workRef, "launch-brief");
+    assert.deepEqual(driven.target.artifactSection, { title: "Channel W", index: 0 });
+    assert.ok(listConversation(venture.id, options).some((message) => message.role === "founder" && message.content === founderWords));
   });
 
   it("records the founder direction exactly once when routing through the real work loop", async () => {

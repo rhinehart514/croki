@@ -63,7 +63,7 @@ export function beginDriveRun({
     const originMessageRef = conversationRef(originMessageId);
     const betRefs = betId ? [`bet:${betId}`] : [];
     const architectureRef = target?.architectureId ? `architecture:${target.architectureId}` : null;
-    const subjectRefs = [...betRefs, ...(architectureRef ? [architectureRef] : [])];
+    const subjectRefs = [...new Set([...betRefs, ...(architectureRef ? [architectureRef] : []), ...(target?.subjectRefs ?? [])])];
     const direction = ensureDirectionThread(ventureId, {
       name: threadName,
       originMessageRef,

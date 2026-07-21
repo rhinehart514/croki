@@ -3,6 +3,7 @@ import type { WorkIndexOutline, WorkIndexOutlineObject } from "@/api";
 import type { Viewport } from "@xyflow/react";
 import type { Direction } from "@/components/now/directionModel";
 import type { SystemAgentContext, SystemWorkState } from "@/components/system-mode/systemWorkState";
+import type { WorkflowCapability } from "@/components/workspace/workflowCapabilities";
 import { objectMapFacts, objectMapTypeLabel, ventureGraph, type VentureMapView } from "./ventureMapModel";
 import { VentureSystemGraph } from "./VentureSystemGraph";
 import "./venture-maps.css";
@@ -26,6 +27,15 @@ export function VentureMaps({
   onCameraChange,
   workByObject,
   inspectorActions,
+  onEmptyAction,
+  onAgentDrop,
+  onCapabilityDrop,
+  onAgentRemove,
+  onCapabilityRemove,
+  onDeclareWorkflow,
+  onChatObject,
+  positions,
+  onNodeMove,
   showHeader = true,
 }: {
   outline: WorkIndexOutline | null | undefined;
@@ -40,6 +50,15 @@ export function VentureMaps({
   onCameraChange?: (camera: Viewport) => void;
   workByObject?: ReadonlyMap<string, SystemAgentContext>;
   inspectorActions?: ReactNode;
+  onEmptyAction?: () => void;
+  onAgentDrop?: (agentRef: string, pipelineRef: string) => void;
+  onCapabilityDrop?: (capability: WorkflowCapability, pipelineRef: string, step: "trigger" | "agent" | "gate" | "action" | "evidence") => void;
+  onAgentRemove?: (agentRef: string, pipelineRef: string) => void;
+  onCapabilityRemove?: (capabilityId: string, pipelineRef: string, step: "trigger" | "agent" | "gate" | "action" | "evidence") => void;
+  onDeclareWorkflow?: (objectRefs: string[]) => void;
+  onChatObject?: (objectRef: string) => void;
+  positions?: Record<string, { x: number; y: number }>;
+  onNodeMove?: (objectRef: string, position: { x: number; y: number }) => void;
   showHeader?: boolean;
 }) {
   const [localView, setLocalView] = useState<VentureMapView>("system");
@@ -70,7 +89,7 @@ export function VentureMaps({
         <div>
           <span>Generated from venture truth</span>
           <h1>{VIEW_LABEL[view]}</h1>
-          <p>{view === "system" ? "Product capability → people reached → evidence returned" : view === "gtm" ? "Every path to market and the Product capabilities behind it" : "How the product creates and delivers value"}</p>
+          <p>{view === "system" ? "Product truth and GTM execution in one evidence loop" : view === "gtm" ? "Signals → pipelines → campaigns → outcomes" : "How the product creates and delivers value"}</p>
         </div>
         <div className="venture-map-tabs" role="tablist" aria-label="Map view">
           {(Object.keys(VIEW_LABEL) as VentureMapView[]).map((id) => (
@@ -91,20 +110,24 @@ export function VentureMaps({
       </header> : null}
 
       {!outline || graph.nodes.length === 0 ? (
-        <div className="venture-map-empty" role="status">
-          <strong>No connected Product / GTM context yet</strong>
-          <p>Direct Product or market work. Drover will place real nodes and links here automatically.</p>
+        <div className="venture-map-empty-canvas" role="region" aria-label="Empty Product and go-to-market canvas">
+          <header><div><strong>Describe the mechanism you want to create</strong><p>Drover will open a Work thread and sketch the conditional graph before anything becomes Product / GTM truth.</p></div><div>{onEmptyAction ? <button type="button" onClick={onEmptyAction}>Describe workflow</button> : null}{onDeclareWorkflow ? <button type="button" className="is-secondary" onClick={() => onDeclareWorkflow([])}>Create on canvas</button> : null}</div></header>
+          <ol aria-label="Product and go-to-market visual structure">
+            {[['Signal', 'A market fact or opportunity enters'], ['Pipeline', 'Agents and tools repeatedly advance it'], ['Campaign', 'A bounded execution goes to market'], ['Outcome', 'Evidence returns and changes the system']].map(([title, detail], index) => <li key={title}><span>{index + 1}</span><div><small>Open</small><strong>{title}</strong><p>{detail}</p></div>{index < 3 ? <i aria-hidden="true">→</i> : null}</li>)}
+          </ol>
         </div>
       ) : (
-        <VentureSystemGraph
-          outline={outline}
-          view={view}
-          selectedId={visibleSelectedId}
-          onSelect={setSelectedId}
-          camera={camera}
-          onCameraChange={onCameraChange}
-          workByObject={workByObject}
-        />
+        <><VentureSystemGraph
+            outline={outline}
+            view={view}
+            selectedId={visibleSelectedId}
+            onSelect={setSelectedId}
+            camera={camera}
+            onCameraChange={onCameraChange}
+            workByObject={workByObject}
+            positions={positions}
+            onNodeMove={onNodeMove}
+          />{view === "gtm" && onDeclareWorkflow ? <button type="button" className="venture-map-create-workflow" onClick={() => onDeclareWorkflow([])}>Create workflow</button> : null}</>
       )}
 
       {selected ? (
@@ -135,8 +158,8 @@ export function VentureMaps({
           {inspectorActions ?? <button type="button" className="venture-map-open" onClick={() => open(selected)}>{selected.threadRefs.length ? "Open work" : "Open context"}</button>}
         </aside>
       ) : (
-        <div className="venture-map-hint">Select a path to see every Product capability and piece of market work it uses.</div>
-      )}
+        <div className="venture-map-hint">Select a signal, pipeline, campaign, or outcome to inspect its exact context and work.</div>
+      ) : null}
     </section>
   );
 }

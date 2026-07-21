@@ -2,26 +2,26 @@
 surface: desktop-founder-workspace
 authority: intended-experience
 date: 2026-07-20
-north_star: one-venture-three-founder-jobs
-layout: mode-rail-dominant-surface-contextual-agent
+north_star: one-venture-two-surfaces-one-market-loop
+layout: surface-rail-with-collapsible-release-section
 ---
 
 # Drover desktop experience
 
 ## North star
 
-Drover is a true agentic development environment for building a venture. Its three presentation modes serve
+Drover is a true agentic development environment for building a venture. Its two presentation surfaces serve
 parallel founder jobs over one canonical venture model and one shared selection:
 
-- **Work** directs agents, monitors active work, and reviews returns through conversation.
-- **Product / GTM** makes the connected venture system understandable and directly shapeable.
-- **Releases** assembles market movement, holds exact outward authority, and joins returned evidence.
+- **Work** talks directly to the selected Claude or Codex SDK model, monitors active work, and reviews returns through conversation.
+- **Product / GTM** makes the connected venture system understandable and directly shapeable. Its distinct
+  **Releases** section assembles market movement, holds exact outward authority, and joins returned evidence.
 
-> **One venture, one context, three ways to work. Modes change the founder's working surface, never the
+> **One venture, one context, two working surfaces. Sections change the focal workspace, never the
 > underlying authority or the lifecycle of the venture.**
 
 Conversation remains the direction and judgment surface. It is primary in Work and contextual and closable
-in Product / GTM and Releases, where the canvas or release path owns the center. Closing it preserves its
+in Product / GTM, where either the venture canvas or its release path owns the center. Closing it preserves its
 draft, Thread identity, and last coherent content. The release—not a Thread, mode, workflow, or agent—is what
 moves the venture.
 
@@ -34,18 +34,20 @@ and shows the missing link; it never fabricates a counterpart or invokes a gener
 
 The desktop frame begins with:
 
-- workspace rail: `240px`, resizable from `208px` to `320px`, with a mode-owned body;
+- workspace rail: `272px`, resizable from `272px` to `360px`, with a mode-owned body;
 - the active mode workspace: all remaining width;
-- Work, Product / GTM, and Releases navigation below the venture switcher;
+- Work and Product / GTM navigation below the venture switcher; Releases is a collapsible Product / GTM rail section;
 - Settings at the rail bottom.
 
-Use `aria-current="page"` for the active mode. `⌘1`, `⌘2`, and `⌘3` switch modes; `⌘K` focuses the
-current mode's search. Do not add a decorative profile, Edit overlay, permanent agent roster, dashboard,
+Use `aria-current="page"` for the active surface. `⌘1` opens Work and `⌘2` opens Product / GTM; `⌘K` focuses the
+current surface's search. Do not add a decorative profile, Edit overlay, dashboard,
 global cross-mode search, or competing navigation root.
 
 Work is a stable agent development environment:
 
 - rail: its current width;
+- SDK participant: the selected Claude or Codex model is who the founder is talking to; model/session state
+  stays in the composer, Thread, transcript, and exact run receipts rather than a separate character roster;
 - conversation: all remaining Work width until exact material or a coding workspace exists;
 - selected material: conversation beside the exact artifact, founder gate, or other inspectable return;
 - coding workbench: `minmax(480px, 1.18fr)`, with Changes and Preview above a collapsible terminal;
@@ -65,14 +67,20 @@ interaction accents with Drover's restrained neutral/amber authority language, o
 and keeps exact consequential controls in Drover's wall. Those are intentional product differences, not a
 second visual kit.
 
-In Product / GTM and Releases, the primary canvas or release path occupies all available center space.
-**Ask Drover** opens contextual conversation as a right column when room permits and as an overlay at narrow
-desktop widths. It is scoped to the selected object, path, release, gap, or carried source context. Its
+In Product / GTM, the selected venture canvas or release path occupies all available center space.
+**Ask about this** opens a compact contextual composer over the owning surface. It is scoped to the selected
+object, path, release, gap, or carried source context. Its
 composer does not inherit Work's repository, worktree, or model controls. Closing and reopening it preserves
 its draft, exact Thread identity, last coherent content, and scroll position.
 
-Below an effective width of `1120px`, including browser zoom, the mode rail collapses behind its launcher and
-contextual conversation overlays rather than compressing the primary surface. Both remain keyboard reachable.
+Contextual conversation is visually a composer, not a miniature Work window. It omits the duplicate Thread
+title, lifecycle label, Map action, and empty transcript frame. Exact history expands above the composer only
+when messages exist; restoring state stays one quiet line. The same SDK routing classifies the turn. A real
+clear question answers in place; a real new direction opens its exact Thread in Work immediately, while the
+canvas/path retains its direct reference.
+
+Below an effective width of `1120px`, including browser zoom, the mode rail collapses behind its launcher.
+The contextual composer remains an overlay at every width and stays keyboard reachable.
 
 ## Startup and return
 
@@ -102,9 +110,13 @@ more than three truthful suggested review actions. The founder can always type a
 The rail provides stable orientation without becoming a second source of truth. The venture switcher, mode
 switch, and Settings remain stable; the body belongs to the selected mode and never shows every list at once.
 
-**Work** shows New thread, Thread search, and compact Pinned, Active, Needs review, Recent, and older rows.
-Participant/runtime state stays attached to Threads, headers, and conversation updates. Thread state uses an
-icon, label, and accessible text—not color alone:
+**Work** places New thread beside Thread search, then shows compact Pinned, Active, Needs review, Recent, and older rows.
+When five or more Threads need judgment, Recent yields into a count-bearing disclosure so return work remains
+the rail's clear center; the founder can reopen Recent in place without losing or rerouting anything.
+There is no separate agent roster or agent-creation path in Work. The composer exposes the connected Claude
+and Codex models directly, and the selected model is the participant addressed by the next turn. Provider and
+run state remain attached to Threads, headers, and conversation updates. Thread state uses an icon, label,
+and accessible text—not color alone:
 
 - active;
 - waiting for founder judgment;
@@ -113,17 +125,27 @@ icon, label, and accessible text—not color alone:
 - quiet open;
 - closed.
 
-**Product / GTM** shows Whole venture, Product, Go-to-market, Needs attention, mode-local search, and compact
-context for the selected object or path. **System** is not a founder-facing label. The rail does not become an
-object explorer; exact editing remains on the canvas or selected-path depth. A selected canonical object can
-seed a named saved view. Saved live views and snapshots remain reachable in this rail: the founder can reopen
-or delete them, while reopening resolves their exact durable references against current venture truth and
-never restores canvas position as authority.
+**Product / GTM** opens directly to one connected agent-workflow canvas with mode-local search and a palette of
+available agents and connected capabilities.
+Product, go-to-market action, founder authority, attention, and returned evidence appear in the workflow itself rather
+than separate scopes, lists, saved-view sections, or diagnostic destinations. Selecting a step expands it in place;
+working with an agent opens scoped conversation in a bottom dock over the still-visible canvas. **System** is not a founder-facing
+label, and the rail never becomes an object explorer. This is an advanced node editor, not a simplified flow strip:
+conditional branches, loops, gates, retries, agent/tool assignments, and evidence-return paths should feel dense,
+precise, and directly manipulable. Complexity is compressed spatially; it is not removed or converted into forms.
 
-**Releases** shows Prepare release when exact context can seed it, mode-local search, and Needs you, Preparing,
-In market, and Recent groups. It never opens a blank release form when selected work or Product / GTM truth
+**Releases** is a collapsible Product / GTM rail section showing Prepare release when exact context can seed
+it and Needs you, Preparing, In market, and Recent groups. Selecting the section or a release keeps Product /
+GTM active and replaces the center canvas with the full release workspace. It never opens a blank release form when selected work or Product / GTM truth
 already supplies context. An adopted coding consequence pre-fills its exact capability, distribution question,
 Product reference, and owning Work reference; explicit preparation creates the release and both joins together.
+Releases is an autonomous spatial operating surface, not a release record editor. It uses the same node, edge,
+conditional-path, selection, and contextual-conversation grammar as Product / GTM, scoped to one exact release.
+Starting or resuming its operator
+immediately directs an agent against the exact release and its visible gaps. The agent advances every reversible,
+supported step, prepares concrete outward actions, and establishes evidence return; it stops only at founder
+authority or a genuinely unsupported decision. Product / GTM context stays visible in the release and opens back
+to the exact node on the full canvas. Gap controls direct the agent and never open relationship forms.
 
 New Threads and releases begin as local drafts; canonical records form only on first meaningful send or
 explicit preparation. Mode-local search never changes modes or invents a global result router.
@@ -142,9 +164,14 @@ Selecting a participant status scrolls to that participant’s latest meaningful
 an agent dashboard.
 
 The composer stays attached to the bottom of the chat column and always submits against the selected
-`threadRef`. In Work, the founder can choose Auto or an exact connected Claude/Codex model; sending begins a
-nonblocking coding turn in that Thread. Product / GTM and Releases infer the runtime because their agent is
-context for the canvas or release path, not a second coding client. Participant assignment remains inferred
+`threadRef`. In Work, one quiet in-chat switch changes who receives the next turn without changing the Thread,
+draft, transcript, scroll position, or workspace. **Code** exposes an exact connected Claude/Codex model and
+begins a nonblocking coding turn. **Product / GTM** hides coding controls and directs Drover agents to ideate
+workflows, branches, founder gates, capabilities, and evidence loops; its restrained moving spectrum edge and
+agent marks make the authority change unmistakable. The selector slides between participants, and submission lifts
+the still-readable prompt toward the transcript, where it immediately becomes the founder turn in the same Thread,
+before the asynchronous work state takes over. Product / GTM’s canvas-owned contextual composer still infers the runtime because
+it is context for the canvas or release path, not a second coding client. Participant assignment remains inferred
 unless the founder names a participant. A correction sent while a visual is open updates the same thread and
 material.
 
@@ -166,8 +193,22 @@ Codex inspected 18 files, changed 6, and ran 4 checks.
 [Show activity]
 ```
 
-Full tool calls, sources, costs, runtime/model details, and low-level receipts remain available beneath that
-disclosure or in the side visual. They never stream through the primary conversation by default.
+Factual tool steps, sources consulted, exact questions, and measured durations remain available beneath that
+disclosure or in the side visual. They never stream through the primary conversation by default. Raw private
+chain-of-thought and unshaped model prose are never presented as inspectable activity.
+
+Exact material beside Work is one calm review workspace across artifacts, comparisons, evidence, consequences,
+and code. Non-HTML Product / GTM output is projected as an intentional visual artifact, not a typeset memo: the exact
+content becomes a hero, artifact metadata, section bands, structured list tiles, grouped approaches, and a distinct
+next-action panel as its semantics support. Legacy all-caps memo headings are normalized at the projection seam.
+Each semantic section is also a direct steering target. Clicking a section focuses the existing Thread composer on
+that exact section and durable work identity; the founder writes the correction in their own words, while structured
+section context tells the agent to revise in place. The selected section remains visibly active, submission confirms
+that the revision stayed in the same Thread, and clearing the target returns the composer to whole-artifact direction.
+This is local correction, not a freeform document editor or a second artifact truth.
+Evidence uses source-bearing quotations, comparisons share one aligned frame, and consequences center the exact
+question and decision controls. Never dump a long prose block into one oversized card, bury the operative question in
+a disclosure, or leave a small decision floating above an unexplained empty canvas.
 
 ## Conversation material references
 
@@ -256,17 +297,47 @@ material. The founder may save the revision provisionally, reject it without cha
 it after exact verification; only adoption makes the capability canonical and directly reachable on the map.
 
 The venture map is the primary Product / GTM workspace projection. Selecting a node changes the focal subject.
+Go-to-market pipelines read left to right as compact operating workflows: trigger, agent work, founder gate,
+market action, and evidence return. They never duplicate the same truth as background lanes plus floating cards.
+The Product / GTM rail exposes available agents and genuinely connected capabilities as draggable materials. A
+capability names the access the founder has configured, never its secret, and distinguishes safe reading or inward
+work from outward work that still requires an exact founder gate. Provider marks make connected access recognizable
+without relying on initials. Dropping an agent or capability onto a step persists that composition on the workflow;
+the entire workflow is also a drop target, routing agents to Agent Work, safe capabilities to Agent Work, and outward
+capabilities to the Founder Gate when the founder does not choose a more exact step.
+clicking an agent opens a focused purpose view with its runtime, tools, authority, and current workflow assignments.
+That view can open scoped conversation without navigating to Work or exposing configuration UI. The founder can drag
+across nodes or modifier-click them to select exact canonical objects,
+then declare the selection as a workflow. Double-clicking empty canvas creates an unresolved workflow and opens
+scoped conversation to shape it rather than opening a form.
+The easier primary path starts with Product / GTM conversation. A substantive direction routes to one exact
+Work Thread and generates a provisional conditional graph. In Work, that graph is a collapsible panel pinned
+immediately above the composer—not a detached artifact card—so conversational corrections revise the same
+mechanism in place. **Review full graph** opens its complete staged shape without promoting it. **Adopt in
+Product / GTM** is the explicit truth boundary; adoption creates or updates one canonical workflow and focuses
+it on the full canvas. Later staged revisions read as **Workflow changes** and require adoption again.
 If contextual conversation is open, it follows the latest exact linked Thread; without one, the next message
 creates a Thread scoped by the existing `objectRef`. Opening Work follows that direct Thread reference or
 carries the selected object as a visible missing Work link. Node work state is derived from `WorkIndex`, never
 stored on the graph. The graph never becomes another authority or an executable workflow.
 
-At rest, three quiet landmarks make the proven causal reading direction explicit: **Product value → Market
-movement → Returned evidence**. They are presentation guides over the same canonical objects, not capacity
-layers or lifecycle stages. Broad tonal fields may distinguish those regions without category color, while
-editorial nodes keep shape, border, assertion, and exact relationship lines as the meaningful signals. The
-canvas legend explains founder-set, provisional, and evidence-return connections instead of displaying
-decorative node/link totals.
+At rest, Product / GTM reads as a live go-to-market engineering system rather than a generic object graph or
+strategy diagram. Every reusable go-to-market mechanism reads left to right through **Signal → Pipeline →
+Campaign → Outcome**. Returned outcomes connect back to the next meaningful signal through canonical
+evidence-return relationships; the canvas never fabricates that interpretation.
+
+A pipeline contains only its trigger, intended outcome, connected agents, available data and tools, founder
+authority boundaries, and evidence to return. A campaign is one bounded activation for an audience,
+objective, offer or Product release, period or batch, and stop/continue conditions. Audience, offer, message,
+channel, assets, agents, tools, releases, Product proof, and evidence stay as connected venture objects rather
+than becoming additional permanent bands. Selecting a pipeline reveals its complete contract, active
+campaigns, and evidence. Selecting a campaign reveals live agent work, founder gates, and returned outcomes.
+
+The four bands are presentation guides over canonical Product / GTM objects and SDK-backed work, not a fixed
+node executor or generalized workflow ontology. Existing relationship lines remain the only connectors.
+Agent state and **Start agent work** attach to the exact selected object or gap; the canvas does not invent a
+marketing-agent organization. Editorial nodes keep shape, border, assertion, and exact relationship lines as
+the meaningful signals, while the legend explains founder-set, provisional, and evidence-return connections.
 
 An outcome joined to a release returns as a distinct evidence node at the market edge. Restrained backward
 curves reach only the Product / GTM objects connected directly to that release; no similarity match or context
@@ -277,15 +348,17 @@ Product truth. The headerless mode-owned map must retain the full available cent
 The evidence inspector keeps **Start next work** as a compact exact action immediately after the affected
 objects; it must not stretch to fill unused inspector height.
 
-The current spatial composition is a hypothesis. Until one real release returns attributable evidence into
-next Work, do not introduce semantic-zoom capacity layers, reusable-method promotion, or reusable-capacity
-ontology. Founder-made joins save immediately and remain undoable; agent-inferred joins stay visibly
-provisional until adopted.
+The four-part GTM composition is the current approved operating model. Keep the pipeline contract compact and
+feature-local; do not turn it into fixed execution nodes, semantic-zoom capacity layers, reusable-method
+promotion, or generalized workflow machinery. Founder-made joins save immediately and remain undoable;
+agent-inferred joins stay visibly provisional until adopted.
 
-Releases shows one connected path: Product delta → Customer consequence → Distribution → Outward action →
-Evidence. Every populated section traces to an existing relationship, Thread, decision, or outcome; an open
-section names the missing connection. Exact outward gates remain in the Outward action section, joined
-activity follows the path, and rename/end/reopen live in the compact Details control. A failed transport
+Releases shows one connected spatial graph whose causal spine is Product delta → Customer consequence →
+Distribution → Outward action → Evidence. Supported branches, conditions, retries, gates, and evidence-return
+loops remain visible on the canvas without becoming fabricated ontology. Every populated node traces to an
+existing relationship, Thread, decision, or outcome; an open node names the missing connection. Exact outward
+gates remain attached to Outward action, joined activity follows the path, and rename/end/reopen live in the
+compact Details control. A failed transport
 states **Nothing was sent**, preserves the provider error, and leaves the same action available as **Retry
 send**. A revoked Gmail grant opens the existing reconnect form; reconnecting never retries by itself.
 
@@ -363,9 +436,10 @@ The rebuilt shell is ready when deterministic journeys prove:
    rather than restoring an unrelated selection;
 3. node or release selection scopes contextual conversation to its latest linked Thread or a correctly scoped
    local draft, and closing it loses neither;
-4. Work starts a nonblocking coding turn with the selected connected model, keeps transcript and exact
-   material separate, exposes attempts and changed-file diffs in one Changes surface, and provides native
-   preview/terminal, verification, and founder consequences;
+4. Work switches within the same chat between direct Claude/Codex coding and Product / GTM agent ideation
+   without losing the draft or Thread; coding turns keep transcript and exact material separate, expose attempts
+   and changed-file diffs in one Changes surface, and provide native preview/terminal, verification, and founder
+   consequences;
 5. Product / GTM objects and connections can be added and edited reversibly within venture scope;
 6. a release begins unsaved, persists on meaningful save, joins exact work and actions, receives evidence,
    and ends or reopens only by the founder;

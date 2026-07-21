@@ -54,13 +54,15 @@ function normalizeTarget(value) {
   const theoryId = trimOrNull(value?.theoryId ?? value?.theoryTarget?.theoryId);
   const theorySubjectId = trimOrNull(value?.theorySubjectId ?? value?.theoryTarget?.subjectId);
   const theoryRelationshipId = trimOrNull(value?.theoryRelationshipId ?? value?.theoryTarget?.relationshipId);
-  return betId || workRef || architectureId || theorySubjectId || theoryRelationshipId || teammateRefs.length
+  const subjectRefs = [...new Set((value?.subjectRefs ?? []).map(trimOrNull).filter(Boolean))];
+  return betId || workRef || architectureId || theorySubjectId || theoryRelationshipId || subjectRefs.length || teammateRefs.length
     ? {
         betId,
         workRef,
         ...(architectureId ? { architectureId, architectureStepId, architectureRevision } : {}),
         ...(theorySubjectId ? { theoryId, theorySubjectId } : {}),
         ...(theoryRelationshipId ? { theoryId, theoryRelationshipId } : {}),
+        ...(subjectRefs.length ? { subjectRefs } : {}),
         teammateRefs,
       }
     : null;

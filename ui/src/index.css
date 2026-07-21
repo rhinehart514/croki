@@ -52,8 +52,17 @@
   --danger: #f87171;
   --blind: #737373;
 
+  /* The agent spectrum marks the exact boundary where direct Claude/Codex work becomes
+     Product / GTM collaboration. It is a boundary signal, never ambient decoration. */
+  --agent-spectrum-cyan: #6ee7f5;
+  --agent-spectrum-blue: #7c9cff;
+  --agent-spectrum-violet: #a78bfa;
+  --agent-spectrum-rose: #fb7185;
+  --agent-spectrum-amber: #fbbf24;
+  --agent-spectrum-green: #6ee7b7;
+
   --text-xs: 0.6875rem;
-  --thread-rail-width: 240px;
+  --thread-rail-width: 272px;
   --text-meta: 0.75rem;
   --text-sm: 0.8125rem;
   --text-base: 0.875rem;

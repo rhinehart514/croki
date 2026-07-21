@@ -3,10 +3,14 @@ const WORKSPACE_PREFIX = "drover:workspace-session:v1:";
 const THREAD_PREFIX = "drover:thread-session:v2:";
 const WORKSPACE_V3_PREFIX = "drover:workspace-session:v3:";
 const WORKSPACE_V4_PREFIX = "drover:workspace-session:v4:";
+const WORKSPACE_V5_PREFIX = "drover:workspace-session:v5:";
+const WORKSPACE_V6_PREFIX = "drover:workspace-session:v6:";
 
 export type WorkspaceMode = "work" | "system" | "releases";
+export type ProductWorkspaceSection = "canvas" | "releases";
 export type WorkspaceSession = {
   mode: WorkspaceMode;
+  productSection: ProductWorkspaceSection;
   railWidth: number;
   contextualChatOpen: boolean;
   selectedThreadRef: string | null;
@@ -34,7 +38,7 @@ export type ThreadSession = {
 
 function safeRailWidth(value: unknown) {
   const width = Number(value);
-  return Number.isFinite(width) ? Math.min(320, Math.max(208, width)) : 240;
+  return Number.isFinite(width) ? Math.min(360, Math.max(272, width)) : 272;
 }
 
 export function readThreadSession(ventureId: string): ThreadSession | null {
@@ -55,7 +59,7 @@ export function readThreadSession(ventureId: string): ThreadSession | null {
     // v1 migration: restore its linked direction, but deliberately discard work/map mode and stage.
     const legacy = readLegacyWorkspaceSession(ventureId);
     const threadRef = legacy?.threadRef ?? null;
-    return legacy ? { threadRef, stage: null, railWidth: 240, chatScrollByThread: {} } : null;
+    return legacy ? { threadRef, stage: null, railWidth: 272, chatScrollByThread: {} } : null;
   } catch {
     return null;
   }
@@ -73,7 +77,8 @@ export function rememberThreadSession(ventureId: string, session: ThreadSession)
 function defaultWorkspaceSession(): WorkspaceSession {
   return {
     mode: "work",
-    railWidth: 240,
+    productSection: "canvas",
+    railWidth: 272,
     contextualChatOpen: false,
     selectedThreadRef: null,
     selectedObjectRef: null,
@@ -106,11 +111,27 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
   const fallback = defaultWorkspaceSession();
   if (!ventureId.trim()) return fallback;
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V4_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
-    if (parsed) {
-      const mode = ["work", "system", "releases"].includes(String(parsed.mode)) ? parsed.mode as WorkspaceMode : "work";
+    const current = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V6_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
+    if (current) {
       return {
-        mode,
+        mode: current.mode === "work" ? "work" : "system",
+        productSection: current.mode === "releases" || current.productSection === "releases" ? "releases" : "canvas",
+        railWidth: safeRailWidth(current.railWidth),
+        contextualChatOpen: current.contextualChatOpen === true,
+        selectedThreadRef: stringOrNull(current.selectedThreadRef),
+        selectedObjectRef: stringOrNull(current.selectedObjectRef),
+        selectedReleaseId: stringOrNull(current.selectedReleaseId),
+        systemScope: scopeOrDefault(current.systemScope),
+        systemCamera: cameraOrNull(current.systemCamera),
+        chatScrollByThread: current.chatScrollByThread && typeof current.chatScrollByThread === "object" ? current.chatScrollByThread : {},
+      };
+    }
+    const parsed = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V5_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
+    if (parsed) {
+      const legacyMode = ["work", "system", "releases"].includes(String(parsed.mode)) ? parsed.mode as WorkspaceMode : "work";
+      return {
+        mode: legacyMode === "work" ? "work" : "system",
+        productSection: legacyMode === "releases" ? "releases" : "canvas",
         railWidth: safeRailWidth(parsed.railWidth),
         contextualChatOpen: parsed.contextualChatOpen === true,
         selectedThreadRef: stringOrNull(parsed.selectedThreadRef),
@@ -119,6 +140,21 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
         systemScope: scopeOrDefault(parsed.systemScope),
         systemCamera: cameraOrNull(parsed.systemCamera),
         chatScrollByThread: parsed.chatScrollByThread && typeof parsed.chatScrollByThread === "object" ? parsed.chatScrollByThread : {},
+      };
+    }
+    const v4 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V4_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
+    if (v4) {
+      return {
+        mode: v4.mode === "work" ? "work" : "system",
+        productSection: v4.mode === "releases" ? "releases" : "canvas",
+        railWidth: safeRailWidth(v4.railWidth),
+        contextualChatOpen: v4.contextualChatOpen === true,
+        selectedThreadRef: stringOrNull(v4.selectedThreadRef),
+        selectedObjectRef: stringOrNull(v4.selectedObjectRef),
+        selectedReleaseId: stringOrNull(v4.selectedReleaseId),
+        systemScope: scopeOrDefault(v4.systemScope),
+        systemCamera: null,
+        chatScrollByThread: v4.chatScrollByThread && typeof v4.chatScrollByThread === "object" ? v4.chatScrollByThread : {},
       };
     }
     const v3 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V3_PREFIX}${ventureId}`) ?? "null") as {
@@ -130,14 +166,15 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
       const contextRef = stringOrNull(v3.context?.ref);
       const contextKind = String(v3.context?.kind ?? "");
       return {
-        mode: ["work", "system", "releases"].includes(String(v3.mode)) ? v3.mode as WorkspaceMode : "work",
+        mode: v3.mode === "work" ? "work" : "system",
+        productSection: v3.mode === "releases" ? "releases" : "canvas",
         railWidth: safeRailWidth(v3.railWidth ?? v3.work?.railWidth),
         contextualChatOpen: false,
         selectedThreadRef: stringOrNull(v3.work?.threadRef) ?? (contextKind === "thread" ? contextRef : null),
         selectedObjectRef: stringOrNull(v3.system?.selection) ?? (contextKind === "object" ? contextRef : null),
         selectedReleaseId: stringOrNull(v3.releases?.selection) ?? (contextKind === "release" ? contextRef?.replace(/^object:/, "") ?? null : null),
         systemScope: scopeOrDefault(v3.system?.scope),
-        systemCamera: cameraOrNull(v3.system?.camera),
+        systemCamera: null,
         chatScrollByThread: v3.work?.chatScrollByThread && typeof v3.work.chatScrollByThread === "object" ? v3.work.chatScrollByThread : {},
       };
     }
@@ -151,7 +188,7 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
 
 export function rememberWorkspaceSession(ventureId: string, session: WorkspaceSession) {
   if (!ventureId.trim()) return;
-  try { window.localStorage.setItem(`${WORKSPACE_V4_PREFIX}${ventureId}`, JSON.stringify({ ...session, railWidth: safeRailWidth(session.railWidth) })); } catch { /* presentation memory is disposable */ }
+  try { window.localStorage.setItem(`${WORKSPACE_V6_PREFIX}${ventureId}`, JSON.stringify({ ...session, railWidth: safeRailWidth(session.railWidth) })); } catch { /* presentation memory is disposable */ }
 }
 
 export function readActiveVentureId(): string | null {

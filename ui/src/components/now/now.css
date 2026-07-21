@@ -249,6 +249,14 @@
 }
 .now-composer-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-composer-scope button { background: none; border: none; color: inherit; cursor: pointer; padding: 0; display: inline-flex; }
+.now-composer-artifact-target { display: grid; min-width: 0; grid-template-columns: minmax(0, auto) minmax(0, 1fr) 24px; align-items: center; gap: 9px; padding: 7px 8px 7px 9px; border-bottom: 1px solid var(--n-line); color: var(--n-ink-2); }
+.now-composer-artifact-target > span { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.now-composer-artifact-target svg { width: 13px; height: 13px; flex: 0 0 auto; color: #9aa6ff; }
+.now-composer-artifact-target strong { overflow: hidden; font-size: 11px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.now-composer-artifact-target small { overflow: hidden; color: var(--n-ink-4); font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.now-composer-artifact-target > button { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 7px; color: var(--n-ink-4); }
+.now-composer-artifact-target > button:hover { background: var(--n-hover); color: var(--n-ink-2); }
+.now-composer-artifact-target > button svg { width: 12px; height: 12px; color: inherit; }
 .now-composer-field { display: flex; align-items: flex-end; gap: var(--space-2); }
 .now-composer-field textarea {
   flex: 1; resize: none; border: none; background: none;
@@ -277,6 +285,7 @@
 .now-composer-send svg { width: 16px; height: 16px; }
 .now-composer-send:disabled { opacity: 0.3; cursor: default; }
 .now-composer-send:not(:disabled):hover { background: #000; }
+.now-composer-spinner { animation: now-composer-spin 800ms linear infinite; }
 .now-composer-provenance {
   display: flex; gap: var(--space-2); align-items: center;
   padding: 0 var(--space-1);
@@ -299,6 +308,12 @@
 /* On the dock the first-direction chips sit ABOVE the field (there is no plane below the dock), spaced a
    hair looser so they read as offered first moves over the empty canvas, not attached provenance. */
 .now-composer[data-variant="dock"] .now-composer-chips { margin-bottom: var(--space-1); }
+
+@keyframes now-composer-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .now-composer-spinner { animation: none; }
+}
 
 /* The post-submit receipt — a composed confirmation of what the drive made concrete, in place of a status
    line into a void. Green by default (work landed); amber when a decision now waits on the founder. */

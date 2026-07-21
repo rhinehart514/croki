@@ -114,7 +114,7 @@ async function driveTeammateLeased({
   if (!venture) throw new Error(`No such venture: ${ventureId}`);
   const beforeBets = ventureStore.listVentureDocs(ventureId, "bets", options);
   const beforeWallItems = allWallItems(ventureStore, ventureId, options);
-  const workingTheoryDrive = !isCodingDirection(goal, target) && !betId && !target?.architectureId && !coordination?.request;
+  const workingTheoryDrive = !isCodingDirection(goal, target) && !betId && !target?.architectureId && !target?.workflowSketch && !coordination?.request;
   const theoryBaseline = captureWorkingTheoryBaseline(ventureId, options);
   const architectureContext = target?.architectureId
     ? buildArchitectureContext(ventureId, {

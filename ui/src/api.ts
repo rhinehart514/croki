@@ -277,8 +277,8 @@ export type SystemIndexRelationship = WorkIndexOutlineRelationship & { relations
 export type SystemAttentionItem = SystemIndexObject["attention"][number] & { objectRef: string };
 export type SystemIndex = { ventureId: string; revision: number; architectureRevision: number; scope: "system" | "product" | "gtm" | "attention"; objects: SystemIndexObject[]; relationships: SystemIndexRelationship[]; counts: { total: number; product: number; gtm: number; attention: number; matchCount: number } };
 export type SystemMutation =
-  | { op: "create-object"; name: string; statement: string; territory: "product" | "gtm" }
-  | { op: "update-object"; objectRef: string; name?: string; statement?: string; territory?: "product" | "gtm" }
+  | { op: "create-object"; id?: string; name: string; statement: string; territory: "product" | "gtm"; type?: string; properties?: Record<string, unknown> }
+  | { op: "update-object"; objectRef: string; name?: string; statement?: string; territory?: "product" | "gtm"; properties?: Record<string, unknown> }
   | { op: "create-relationship"; fromRef: string; toRef: string; label: string }
   | { op: "update-relationship"; relationshipRef: string; label: string }
   | { op: "remove-relationship"; relationshipRef: string };
@@ -319,7 +319,13 @@ export type VisualReference = {
 export type RichArtifactPayload =
   | {
       kind: "flow";
-      steps: Array<{ id: string; label: string; detail?: string }>;
+      purpose?: "product-gtm-workflow";
+      steps: Array<{
+        id: string;
+        label: string;
+        detail?: string;
+        type?: "trigger" | "agent-work" | "condition" | "founder-decision" | "founder-gate" | "external-action" | "observation" | "outcome";
+      }>;
       edges: Array<{ from: string; to: string; label?: string }>;
     }
   | {
@@ -523,7 +529,7 @@ export const getConversation = (ventureId: string) =>
 // existing seams server-side. `betId` scopes the reply to the effort it answers. INTEGRATION POINT:
 // added to the shared api.ts; a conversation component calls this instead of a per-purpose button set.
 export type ConversationReplyResult = {
-  act: "steer" | "stop-run" | "involve-participant" | "parallel-attempts" | "critique" | "approve" | "approve-standing" | "close-thread" | "close" | "new-direction" | "observe";
+  act: "steer" | "answer" | "stop-run" | "involve-participant" | "parallel-attempts" | "critique" | "approve" | "approve-standing" | "close-thread" | "close" | "new-direction" | "observe";
   betId?: string | null;
   messageId?: string;
   applied?: string;
@@ -544,7 +550,7 @@ export type ConversationReplyResult = {
 
 export const replyInConversation = (
   ventureId: string,
-  body: { message: string; threadRef?: string | null; betId?: string | null; subjectRefs?: string[]; mode?: "work"; runtime?: string | null; model?: string | null },
+  body: { message: string; threadRef?: string | null; betId?: string | null; workRef?: string | null; subjectRefs?: string[]; mode?: "work" | "context"; runtime?: string | null; model?: string | null; workflowSketch?: boolean; artifactSection?: { title: string; index: number } },
 ) => guardedPost<ConversationReplyResult>(
   `/api/ventures/${encodeURIComponent(ventureId)}/conversation/reply`,
   body,
@@ -614,6 +620,16 @@ export type FirmConfigurationReceipt = {
   source: string;
   summary: string;
 };
+
+export const putFirmConfiguration = (
+  ventureId: string,
+  expectedRevision: number,
+  configuration: FirmConfiguration,
+  summary: string,
+) => guardedPut<{ configuration: FirmConfiguration; receipt: FirmConfigurationReceipt; message: FirmConversationMessage }>(
+  `/api/ventures/${encodeURIComponent(ventureId)}/configuration`,
+  { expectedRevision, configuration, summary },
+);
 
 export const applyConfigurationProposal = (ventureId: string, proposalId: string, expectedRevision: number) =>
   guardedPost<{ configuration: FirmConfiguration; receipt: FirmConfigurationReceipt; message: FirmConversationMessage }>(
@@ -765,6 +781,7 @@ export const driveTeammate = (
     branchFrom?: string | null;
     workRef?: string | null;
     threadRef?: string | null;
+    subjectRefs?: string[];
     architectureTarget?: { id: string; stepId?: string | null; revision: number };
     theoryTarget?: { theoryId: string; subjectId: string };
     runtime?: string | null;

@@ -1,6 +1,17 @@
 .system-workspace.system-workspace {
+  position: relative;
   overflow: hidden;
   background: var(--n-app);
+}
+
+.system-proposal-surface {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 12;
+  width: min(720px, calc(100% - 36px));
+  max-height: calc(100% - 90px);
+  overflow: auto;
 }
 
 .system-workspace-header {
@@ -119,6 +130,8 @@
   background: var(--n-rail);
 }
 .system-inspector-actions button:hover { background: var(--n-selected); color: var(--n-ink); }
+.system-inspector-actions button.is-primary { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+.system-inspector-actions button.is-primary:hover { background: var(--primary); color: var(--on-primary); filter: brightness(1.06); }
 
 .system-evidence-return {
   display: grid;
@@ -152,35 +165,68 @@
 .system-evidence-return > button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 
 .system-attention {
-  display: grid;
-  align-content: start;
-  gap: 1px;
-  width: min(840px, calc(100% - 48px));
-  margin: 28px auto;
+  position: absolute;
+  top: 66px;
+  left: 12px;
+  z-index: 12;
+  display: flex;
+  width: min(390px, calc(100% - 24px));
+  max-height: calc(100% - 78px);
+  flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--n-line);
+  border: 1px solid var(--n-line-2);
   border-radius: var(--r-tool);
-  background: var(--n-line);
+  background: var(--n-panel);
+  box-shadow: var(--n-shadow-pop);
 }
 
-.system-attention > button {
+.system-attention > header {
   display: flex;
-  min-height: 64px;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 9px 10px 9px 13px;
+  border-bottom: 1px solid var(--n-line);
+}
+.system-attention > header > div { display: grid; gap: 2px; }
+.system-attention > header strong { color: var(--n-ink); font-size: var(--text-sm); font-weight: 620; }
+.system-attention > header small { color: var(--n-ink-4); font: var(--text-xs) var(--mono); }
+.system-attention > header button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--n-ink-3);
+}
+.system-attention > header button:hover { background: var(--n-hover); color: var(--n-ink); }
+.system-attention > header button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.system-attention > header svg { width: 14px; }
+.system-attention > p { margin: 0; padding: 16px 13px; color: var(--n-ink-4); font-size: var(--text-xs); line-height: var(--leading-normal); }
+.system-attention-list { min-height: 0; overflow-y: auto; }
+.system-attention-list > button {
+  display: flex;
+  width: 100%;
+  min-height: 58px;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
   padding: 10px 13px;
   border: 0;
+  border-bottom: 1px solid var(--n-line);
   background: var(--n-panel);
   color: var(--n-ink-2);
   cursor: pointer;
   text-align: left;
 }
-.system-attention > button:hover { background: var(--n-hover); }
-.system-attention > button:focus-visible { position: relative; outline: 2px solid var(--primary); outline-offset: -2px; }
-.system-attention > button > span { display: grid; gap: 3px; }
+.system-attention-list > button:last-child { border-bottom: 0; }
+.system-attention-list > button:hover { background: var(--n-hover); }
+.system-attention-list > button:focus-visible { position: relative; outline: 2px solid var(--primary); outline-offset: -2px; }
+.system-attention-list > button > span { display: grid; min-width: 0; gap: 3px; }
 .system-attention strong { font-size: var(--text-sm); font-weight: 620; }
-.system-attention small { color: var(--amber-ink); font-size: var(--text-xs); }
+.system-attention-list small { display: -webkit-box; overflow: hidden; color: var(--amber-ink); font-size: var(--text-xs); line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .system-attention i { flex: 0 0 auto; color: var(--n-ink-4); font-family: var(--mono); font-size: var(--text-xs); font-style: normal; }
 .system-attention i[data-state="working"] { color: var(--link); }
 .system-attention i[data-state="needs-review"] { color: var(--amber-ink); }

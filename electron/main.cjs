@@ -277,7 +277,15 @@ async function createWindow(port) {
   // A window saved while maximized reopens maximized; unmaximizing restores the tracked normal size.
   if (initial.maximized) mainWindow.maximize();
 
-  mainWindow.once("ready-to-show", () => mainWindow.show());
+  mainWindow.once("ready-to-show", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+  });
+  mainWindow.webContents.on("did-fail-load", (_event, code, description, url) => {
+    process.stderr.write(`[desktop] Renderer failed to load ${url}: ${code} ${description}\n`);
+  });
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    process.stderr.write(`[desktop] Renderer exited: ${details.reason} (${details.exitCode})\n`);
+  });
 
   // Founder authority stays below the renderer. Electron signs a fresh method + path claim for each
   // request returning to this exact brain process. The page cannot read, persist, or mint the root
@@ -304,7 +312,11 @@ async function createWindow(port) {
   });
 
   const ownerId = mainWindow.webContents.id;
-  mainWindow.loadURL(`http://${HOST}:${port}/`);
+  await mainWindow.loadURL(`http://${HOST}:${port}/`);
+  // `ready-to-show` can be missed or withheld by a renderer that paints before this listener's
+  // platform notification. A successful load is enough to reveal the founder surface; never leave
+  // a healthy Brain behind an indefinitely hidden desktop window.
+  if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show();
   mainWindow.on("closed", () => {
     terminalRuntime.stopOwner(ownerId);
     previewRuntime.stopOwner(ownerId);

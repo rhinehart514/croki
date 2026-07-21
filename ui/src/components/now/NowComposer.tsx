@@ -4,13 +4,14 @@
 // a centred `hero` when no direction is open, and a persistent `dock` anchored to the bottom of the
 // active workspace. Freshness lives at the workspace level, never inside the field.
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowRight, ArrowUp, Mic, X } from "lucide-react";
+import { ArrowRight, ArrowUp, LoaderCircle, Mic, PencilLine, X } from "lucide-react";
 import { driveTeammate, replyInConversation, type DriveTeammateResult } from "@/api";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
 import { composerRoute, composerScopeKey } from "./composerScope";
 import { readDriveReceipt, readReplyReceipt, type DriveReceipt } from "./driveReceipt";
 import { useScopedDraft } from "./useScopedDraft";
 import { useSpeechInput } from "./useSpeechInput";
+import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 
 const EMPTY_SUGGESTIONS = [
   "Find the strongest next move",
@@ -26,6 +27,8 @@ function scopedBody(goal: string, selection: CanvasSelection) {
     ...(selection.betId ? { betId: selection.betId } : {}),
     ...(selection.workRef ? { workRef: selection.workRef } : {}),
     ...(selection.threadRef ? { threadRef: selection.threadRef } : {}),
+    ...(selection.teammateRefs.length === 1 ? { teammateRef: selection.teammateRefs[0] } : {}),
+    ...(selection.teammateRefs.length > 1 ? { teammateRefs: selection.teammateRefs } : {}),
     ...(selection.architectureId && selection.architectureRevision != null
       ? { architectureTarget: { id: selection.architectureId, stepId: selection.architectureStepId ?? null, revision: selection.architectureRevision } }
       : {}),
@@ -49,12 +52,18 @@ export function NowComposer({
   placeholder: placeholderOverride,
   submissionMode = "auto",
   onClearScope,
+  onSubmitStart,
+  onSubmitFailed,
   onDriven,
+  onWorkRouted,
   onOpenResult,
   subjectRefs = [],
   runtimeOverride = null,
   modelOverride = null,
   composerControls = null,
+  workflowSketch = false,
+  artifactSection = null,
+  onClearArtifactSection,
 }: {
   ventureId: string;
   ventureName: string;
@@ -71,17 +80,25 @@ export function NowComposer({
   // Optional placeholder override. The default (below) is unchanged, so every existing mount is
   // byte-identical; the venture canvas passes the spec's "Direct the venture".
   placeholder?: string;
-  submissionMode?: "auto" | "conversation" | "work";
+  submissionMode?: "auto" | "conversation" | "work" | "product-gtm";
   onClearScope?: () => void;
+  onSubmitStart?: (message: string) => void;
+  onSubmitFailed?: (message: string) => void;
   // Called after a turn lands so the frame re-polls. The result is present for a /drive (start work) and
   // omitted for a scoped conversation reply (steer/answer/approve), which returns no DriveTeammateResult.
   onDriven?: (result?: DriveTeammateResult) => void;
+  // Contextual conversation may discover that the founder asked for real work. The server returns
+  // the exact durable Thread; the owning surface decides how to reveal it.
+  onWorkRouted?: (threadRef: string) => void;
   // When provided (the home composer), the receipt offers a way into the direction the drive produced.
   onOpenResult?: (targetBetId: string | null) => void;
   subjectRefs?: string[];
   runtimeOverride?: string | null;
   modelOverride?: string | null;
   composerControls?: ReactNode;
+  workflowSketch?: boolean;
+  artifactSection?: ArtifactSectionFocus | null;
+  onClearArtifactSection?: () => void;
 }) {
   const route = composerRoute(selection);
   const contextualDraftRef = !selection && subjectRefs.length ? `:subjects:${[...subjectRefs].sort().join("|")}` : "";
@@ -89,6 +106,8 @@ export function NowComposer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<DriveReceipt | null>(null);
+  const [departingPrompt, setDepartingPrompt] = useState<{ id: number; text: string } | null>(null);
+  const [sentArtifactSectionKey, setSentArtifactSectionKey] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const speech = useSpeechInput((text) => {
@@ -103,6 +122,13 @@ export function NowComposer({
     node.style.height = "auto";
     node.style.height = `${Math.min(node.scrollHeight, window.innerHeight * 0.4)}px`;
   }, [draft]);
+  useEffect(() => {
+    if (!departingPrompt) return undefined;
+    const timer = window.setTimeout(() => setDepartingPrompt(null), 520);
+    return () => window.clearTimeout(timer);
+  }, [departingPrompt]);
+  const artifactSectionKey = artifactSection ? `${artifactSection.artifactRef}\u0000${artifactSection.sectionId}\u0000${artifactSection.artifactAt ?? ""}` : null;
+  const artifactRevisionSent = Boolean(artifactSectionKey && sentArtifactSectionKey === artifactSectionKey);
 
   const placeholder = placeholderOverride
     ?? (route === "correct"
@@ -121,20 +147,28 @@ export function NowComposer({
   const submit = async (value: string) => {
     const goal = value.trim();
     if (!goal || busy || readOnly) return;
+    onSubmitStart?.(goal);
+    setDepartingPrompt({ id: Date.now(), text: goal });
     setBusy(true); setError(null); setReceipt(null); setDraft("");
     try {
-      if (submissionMode === "conversation" || submissionMode === "work" || route === "steer") {
+      if (submissionMode === "conversation" || submissionMode === "work" || submissionMode === "product-gtm" || route === "steer") {
         const reply = await replyInConversation(ventureId, {
           message: goal,
           ...(selection?.betId ? { betId: selection.betId } : {}),
+          ...(selection?.workRef ? { workRef: selection.workRef } : {}),
           ...(selection?.threadRef ? { threadRef: selection.threadRef } : {}),
           ...(!selection?.threadRef && subjectRefs.length ? { subjectRefs } : {}),
           ...(submissionMode === "work" ? { mode: "work" as const } : {}),
+          ...(submissionMode === "conversation" || submissionMode === "product-gtm" ? { mode: "context" as const } : {}),
           ...(submissionMode === "work" && runtimeOverride ? { runtime: runtimeOverride } : {}),
           ...(submissionMode === "work" && modelOverride ? { model: modelOverride } : {}),
+          ...(workflowSketch ? { workflowSketch: true } : {}),
+          ...(artifactSection ? { artifactSection: { title: artifactSection.sectionTitle, index: artifactSection.sectionIndex } } : {}),
         });
+        if (artifactSectionKey) setSentArtifactSectionKey(artifactSectionKey);
         setReceipt(readReplyReceipt(reply));
         onDriven?.();
+        if ((submissionMode === "conversation" || submissionMode === "product-gtm") && reply.act === "new-direction" && reply.threadRef) onWorkRouted?.(reply.threadRef);
       } else {
         const response = await driveTeammate(ventureId, {
           ...scopedBody(goal, selection),
@@ -145,6 +179,8 @@ export function NowComposer({
         onDriven?.(response);
       }
     } catch (cause) {
+      onSubmitFailed?.(goal);
+      setSentArtifactSectionKey(null);
       setDraft(goal);
       setError(cause instanceof Error ? cause.message : "Drover could not take that direction.");
     } finally { setBusy(false); }
@@ -164,8 +200,9 @@ export function NowComposer({
   const showChips = !hasWork && !busy && !scopeLabel && !readOnly;
 
   return (
-    <section className="now-composer" data-variant={variant} data-busy={busy ? "true" : "false"} aria-label="Direct this venture">
+    <section className="now-composer" data-variant={variant} data-busy={busy ? "true" : "false"} data-launching={departingPrompt ? "true" : undefined} data-submission-mode={submissionMode} aria-label="Direct this venture">
       <div className="now-composer-shell">
+        {departingPrompt ? <span key={departingPrompt.id} className="now-composer-flight" aria-hidden="true">{departingPrompt.text}</span> : null}
         {scopeLabel ? (
           <span className="now-composer-scope">
             <span className="now-composer-scope-label" title={scopeLabel}>{scopeLabel}</span>
@@ -175,6 +212,13 @@ export function NowComposer({
               </button>
             ) : null}
           </span>
+        ) : null}
+        {artifactSection ? (
+          <div className="now-composer-artifact-target">
+            <span><PencilLine aria-hidden="true" /><strong>{artifactSection.sectionTitle}</strong></span>
+            <small>{busy ? "Sending revision…" : artifactRevisionSent ? "Revision sent to this Thread" : "Revise this section in the same Thread"}</small>
+            {onClearArtifactSection ? <button type="button" aria-label="Clear artifact section" onClick={onClearArtifactSection}><X aria-hidden="true" /></button> : null}
+          </div>
         ) : null}
         <form className="now-composer-field" onSubmit={(event) => { event.preventDefault(); void submit(draft); }}>
           <textarea
@@ -204,10 +248,10 @@ export function NowComposer({
             <button
               type="submit"
               className="now-composer-send"
-              aria-label={submissionMode === "conversation" || submissionMode === "work" ? "Send to this thread" : route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
+              aria-label={busy ? "Working" : submissionMode === "conversation" || submissionMode === "work" || submissionMode === "product-gtm" ? "Send to this thread" : route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
               disabled={busy || readOnly || !draft.trim()}
             >
-              <ArrowUp aria-hidden="true" />
+              {busy ? <LoaderCircle className="now-composer-spinner" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
             </button>
           </div>
         </form>
@@ -230,7 +274,7 @@ export function NowComposer({
 
       <div className="now-composer-feedback" aria-live="polite">
         {speech.recording ? <span role="status">Listening…</span> : null}
-        {busy ? <span role="status">{submissionMode === "work" ? "Starting coding work…" : submissionMode === "conversation" || route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
+        {busy ? <span role="status">{submissionMode === "work" ? "Starting coding work…" : submissionMode === "product-gtm" ? "Agents are shaping the workflow…" : submissionMode === "conversation" || route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
         {error ? <span role="alert">{error}</span> : null}
         {readOnly && readOnlyReason && !error ? (
           <span className="now-composer-held" role="status">{readOnlyReason}</span>

@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SystemIndex, WorkIndex, WorkIndexItem } from "@/api";
 import { SystemWorkspace } from "./SystemWorkspace";
@@ -27,44 +26,48 @@ const workIndex = {
 } satisfies WorkIndex;
 
 vi.mock("@/components/maps/VentureMaps", () => ({
-  VentureMaps: ({ workByObject, onSelectionChange, inspectorActions }: {
+  VentureMaps: ({ workByObject, view, onSelectionChange, onChatObject }: {
     workByObject: Map<string, { state: string }>;
+    view: string;
     onSelectionChange: (id: string | null) => void;
-    inspectorActions: ReactNode;
-  }) => <section aria-label="Mock system map"><span>{workByObject.get("offer")?.state}</span><button type="button" onClick={() => onSelectionChange("offer")}>Select offer</button>{inspectorActions}</section>,
+    onChatObject: (ref: string) => void;
+  }) => <section aria-label="Mock system map" data-view={view}><span>{workByObject.get("offer")?.state}</span><button type="button" onClick={() => onSelectionChange("offer")}>Select offer</button><button type="button" onClick={() => onChatObject("object:offer")}>Work with agent</button></section>,
+}));
+
+vi.mock("@/components/atlas/propose/ArchitectureProposalSurface", () => ({
+  ArchitectureProposalSurface: () => null,
 }));
 
 const base = {
-  index, workIndex, scope: "system" as const, selectedRef: "object:offer", directions: [], camera: null, readOnlyReason: null,
-  onScope: vi.fn(), onSelect: vi.fn(), onAgentContextChange: vi.fn(), onCameraChange: vi.fn(), onMutate: vi.fn(async () => undefined),
-  onMutateArchitecture: vi.fn(async () => undefined), onOpenWork: vi.fn(), onStartWork: vi.fn(),
+  index, ventureId: "v", architecture: null, workIndex, scope: "system" as const, selectedRef: "object:offer", directions: [], camera: null, readOnlyReason: null,
+  onScope: vi.fn(), onSelect: vi.fn(), onAgentContextChange: vi.fn(), onCameraChange: vi.fn(),
+  onOpenWork: vi.fn(), onStartWork: vi.fn(), onAskAgent: vi.fn(), onProposalDecision: vi.fn(), onAssignAgent: vi.fn(),
 };
 
 describe("SystemWorkspace", () => {
   beforeEach(() => Object.values(base).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }));
 
-  it("keeps scope in the mode rail and exposes the selected node to the agent", () => {
+  it("renders one workflow canvas and scopes node work to chat", () => {
     render(<SystemWorkspace {...base} />);
     expect(screen.getByText("working")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Whole venture" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add to Product / GTM" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Agent workflows" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Mock system map" })).toHaveAttribute("data-view", "gtm");
     expect(screen.queryByRole("navigation", { name: "Product and go-to-market scope" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Select offer" }));
-    expect(base.onAgentContextChange).toHaveBeenCalledWith(expect.objectContaining({ objectRef: "object:offer", subjectRefs: ["object:offer"], threadRef: "thread:offer", state: "working" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open thread" }));
-    expect(base.onOpenWork).toHaveBeenCalledWith("thread:offer");
+    fireEvent.click(screen.getByRole("button", { name: "Work with agent" }));
+    expect(base.onAskAgent).toHaveBeenCalledWith("object:offer");
   });
 
-  it("selects nodes without changing mode and renders honest attention", () => {
+  it("selects nodes without changing the unified canvas", () => {
     const { rerender } = render(<SystemWorkspace {...base} selectedRef={null} />);
     fireEvent.click(screen.getByRole("button", { name: "Select offer" }));
     expect(base.onSelect).toHaveBeenCalledWith(index.objects[0], "thread:offer");
     rerender(<SystemWorkspace {...base} scope="attention" selectedRef={null} />);
-    expect(screen.getByText("Distribution path is missing")).toBeInTheDocument();
-    expect(screen.getByText("Working")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Mock system map" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Mock system map" })).toHaveAttribute("data-view", "gtm");
+    expect(screen.queryByText("Distribution path is missing")).not.toBeInTheDocument();
   });
 
-  it("keeps returned evidence provisional and starts Work with exact affected refs", () => {
+  it("keeps returned evidence in the same connected canvas", () => {
     const returned = {
       ...index.objects[0], id: "outcome:reply-one", objectRef: "outcome:reply-one", name: "reply returned", type: "return",
       territory: null, assertion: "tentative" as const, projectionOnly: true, threadRefs: [], attention: [],
@@ -72,10 +75,8 @@ describe("SystemWorkspace", () => {
       properties: { returnedEvidence: { outcomeRef: "outcome:reply-one", releaseRef: "object:release-one", observationContractRef: "observation:one", from: "founder@example.com", source: "gmail", observedAt: "2026-07-20T12:00:00.000Z", attribution: "joined", affectedObjectRefs: ["object:offer"], interpretation: "unresolved" } },
     };
     render(<SystemWorkspace {...base} index={{ ...index, objects: [...index.objects, returned] }} selectedRef={returned.objectRef} />);
-    expect(screen.getByText("Continuity matters more than replacing every tool.")).toBeInTheDocument();
-    expect(screen.getByText("No interpretation has been adopted.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Edit object" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Start next work" }));
-    expect(base.onStartWork).toHaveBeenCalledWith(["outcome:reply-one", "object:offer"]);
+    expect(screen.getByText("2 connected objects")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Mock system map" })).toHaveAttribute("data-view", "gtm");
   });
+
 });

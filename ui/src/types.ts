@@ -589,6 +589,7 @@ export type FirmPlacement = {
 
 export type FirmLens = {
   ventureId: string;
+  architecture?: FirmArchitectureDocument;
   crew: FirmCrewMember[];
   bets: FirmBet[];
   outcomes?: FirmOutcome[];

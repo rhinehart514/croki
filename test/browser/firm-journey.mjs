@@ -128,7 +128,7 @@ function setControl(selector, value) {
   })()`;
 }
 
-test("cutover: opening a venture lands the three-mode founder workspace", async () => {
+test("cutover: opening a venture lands the two-surface founder workspace", async () => {
   const drover = await bootDrover();
   const chrome = await launchChrome({
     port: await freePort(),
@@ -155,9 +155,9 @@ test("cutover: opening a venture lands the three-mode founder workspace", async 
     assert.equal(await client.evaluate(`document.querySelector('.thread-conversation')?.getBoundingClientRect().width > 1500 && !document.querySelector('.work-workbench')`), true, "a fresh venture did not give conversation the available Work surface until repository work exists");
     assert.equal(await client.evaluate(`!document.querySelector('.visual-stage')`), true, "a visual mounted before the founder opened one");
     assert.equal(await client.evaluate(`!document.querySelector('[data-testid="venture-workbench"]')`), true, "the retired workbench leaked into the default shell");
-    assert.equal(await client.evaluate(`['Work', 'Product / GTM', 'Releases'].every((label) => [...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes(label)))`), true, "the three founder modes did not mount");
+    assert.equal(await client.evaluate(`['Work', 'Product / GTM'].every((label) => [...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes(label))) && ![...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes('Releases'))`), true, "the two founder surfaces did not mount cleanly");
     assert.equal(await client.evaluate(`document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Work')`), true, "Work was not the initial mode");
-    assert.equal(await client.evaluate(`(() => { const bar = document.querySelector('.work-composer-bar'); const model = bar?.querySelector('select[aria-label="Model"]'); const text = bar?.textContent || ''; return Boolean(model && text.includes('acme-saas') && text.includes('Worktree') && text.includes('Guarded')); })()`), true, "Work did not expose repository, worktree, founder guard, and model context");
+    assert.equal(await client.evaluate(`(() => { const bar = document.querySelector('.work-composer-bar'); const model = bar?.querySelector('select[aria-label="SDK model"]'); const text = bar?.textContent || ''; return Boolean(model && text.includes('acme-saas') && text.includes('Worktree') && text.includes('Guarded')); })()`), true, "Work did not expose repository, worktree, founder guard, and model context");
 
     // A fresh thread stays local until the founder sends its first direction.
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.thread-rail button')].find((entry) => /new thread/i.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);

@@ -4,6 +4,7 @@
 //   approve        — release the act waiting at the gate (through the UNCHANGED wall path)
 //   approve-standing — approve AND bless this act type going forward (mints a trust grant; §4A.3)
 //   close          — end the effort (founder-only; the classifier only proposes, the message is authority)
+//   answer         — answer a contextual question without moving the founder away from the owning surface
 //   new-direction  — a fresh direction, routed back through direction-routing (§4A.1)
 //
 // This is the ONE honestly-fuzzy call in review. It stays small (message + effort summary → one label +
@@ -14,7 +15,7 @@
 // founder ends work; a model classification never ends an effort on its own, and here "close" is merely
 // the proposed routing of the founder's OWN message, which is the authority).
 
-const ACTS = new Set(["steer", "approve", "approve-standing", "close", "new-direction"]);
+const ACTS = new Set(["steer", "answer", "approve", "approve-standing", "close", "new-direction"]);
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -29,6 +30,7 @@ const STANDING_APPROVAL = /\b(you can (send|do|handle|ship|post|run|reach out wi
 const APPROVAL = /\b(send it|ship it|approve|go ahead|release it|looks good,? send|yes,? send|do it|that'?s good,? send)\b/i;
 const CLOSE = /\b(close (it|this|that)|end (this|it|the effort)|stop (this|it)|we'?re done( here)?|that'?s done|drop (this|it)|kill (this|it)|abandon (this|it)|shut (this|it) down|we'?ve learned enough)\b/i;
 const NEW_DIRECTION = /\b(instead,? (try|do|go|let'?s)|forget (this|that|it),?|new (idea|direction|angle|plan)|start (over|fresh)|scrap (this|that|it)|change course|pivot to)\b/i;
+const QUESTION = /^\s*(what|why|who|where|when|which|explain|describe|tell me|is|are|does|do)\b/i;
 
 // A best-effort deterministic pass. Returns an act label, or null when nothing is confident enough to
 // override the model / the steer default. STANDING_APPROVAL is checked before APPROVAL (superset-first),
@@ -39,6 +41,7 @@ function lexicalAct(message) {
   if (CLOSE.test(text)) return "close";
   if (NEW_DIRECTION.test(text)) return "new-direction";
   if (APPROVAL.test(text)) return "approve";
+  if (QUESTION.test(text)) return "answer";
   return null;
 }
 

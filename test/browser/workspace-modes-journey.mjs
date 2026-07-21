@@ -11,6 +11,13 @@ async function chooseMode(client, label) {
   await waitForDom(client, `document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes(${JSON.stringify(label)})`, `${label} mode did not become current`);
 }
 
+async function chooseReleaseSection(client) {
+  await chooseMode(client, "Product / GTM");
+  const opened = await client.evaluate(`(() => { const button = document.querySelector('.product-release-toggle'); if (!button) return false; if (button.getAttribute('aria-expanded') !== 'true') button.click(); return true; })()`);
+  assert.equal(opened, true, "Releases section was unavailable inside Product / GTM");
+  await waitForDom(client, `document.querySelector('.product-release-toggle[aria-expanded="true"][aria-current="page"]') && document.querySelector('.release-workspace')`, "Releases did not open within the Product / GTM surface");
+}
+
 async function chooseNode(client, name) {
   await waitForDom(client, `!!document.querySelector('.system-workspace .venture-system-graph')`, "Product / GTM graph did not mount");
   const clicked = await client.evaluate(`(() => { const node = [...document.querySelectorAll('.system-workspace .venture-graph-node-main')].find((entry) => entry.querySelector('strong')?.textContent.trim() === ${JSON.stringify(name)}); node?.click(); return Boolean(node); })()`);
@@ -36,12 +43,19 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     const composition = await client.evaluate(`(() => {
       const header = document.querySelector('.system-workspace-header')?.getBoundingClientRect();
       const add = document.querySelector('.system-add-button')?.getBoundingClientRect();
-      const landmarks = document.querySelector('.venture-graph-landmarks')?.textContent?.replace(/\\s+/g, ' ').trim();
-      return { landmarks, addAtRight: Boolean(header && add && header.right - add.right <= 20) };
+      const foundation = document.querySelector('.venture-graph-foundation-label')?.textContent?.replace(/\\s+/g, ' ').trim();
+      const stages = [...document.querySelectorAll('.venture-pipeline-lane')].map((lane) => [...lane.querySelectorAll('.venture-pipeline-stage > small')].map((entry) => entry.textContent.trim()));
+      return { foundation, stages, lanes: document.querySelectorAll('.venture-pipeline-lane').length, rail: document.querySelector('.product-rail-gtm-summary')?.textContent?.replace(/\\s+/g, ' ').trim(), addAtRight: Boolean(header && add && header.right - add.right <= 20) };
     })()`);
-    assert.equal(composition.landmarks, "Product value→Market movement→Returned evidence", "the canvas did not expose its causal reading direction");
+    assert.equal(composition.foundation, "Connected venture contextAudiences, offers, channels, releases, agents, tools, and evidence attach to the loop", "the canvas did not preserve the venture objects attached to GTM execution");
+    assert.ok(composition.lanes >= 3, "the founder-authored distribution motions did not become GTM lanes");
+    assert.deepEqual(composition.stages[0], ["Signal", "Pipeline 01", "Campaign", "Outcome"], "a GTM pipeline did not expose the complete operating loop");
+    assert.match(composition.rail, /\d+ signals · 3 pipelines · \d+ active campaigns · \d+ outcomes/, "the mode rail did not summarize the GTM system");
     assert.equal(composition.addAtRight, true, "the Product / GTM action did not resolve to the header edge");
     assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Product / GTM");
+    await chooseNode(client, "Project-first graduate entry");
+    assert.equal(await client.evaluate(`document.querySelectorAll('.venture-pipeline-lane[data-active="true"]').length === 1 && document.querySelectorAll('.venture-pipeline-lane[data-quiet="true"]').length >= 2`), true, "selecting a motion did not isolate its exact GTM path");
+    assert.equal(await client.evaluate(`[...document.querySelectorAll('.system-inspector-actions button')].some((entry) => ['Start agent work', 'Open agent work'].includes(entry.textContent.trim()))`), true, "the selected GTM gap did not expose real agent work");
     await chooseNode(client, expected.campaign);
     const saveDeadline = Date.now() + 12_000;
     let saved = false;
@@ -85,14 +99,16 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     }
     assert.equal(await client.evaluate(`!!document.querySelector('.workspace-chat') && !!document.querySelector('.workspace-chat-close')`), true, "contextual conversation did not open as a closable surface");
 
-    await chooseMode(client, "Releases");
+    await chooseReleaseSection(client);
     assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Releases");
     await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "switching modes replaced the selected thread");
-    assert.equal(await client.evaluate(`!document.querySelector('.workspace-rail .thread-rail-list') && !!document.querySelector('.releases-rail-body')`), true, "Releases did not own its rail");
+    assert.equal(await client.evaluate(`!document.querySelector('.workspace-rail .thread-rail-list') && !!document.querySelector('.releases-rail-body') && document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Product / GTM')`), true, "Releases did not remain a distinct section of Product / GTM");
     await chooseRelease(client, "Project-drop invitation v1");
     assert.equal(await client.evaluate(`document.querySelector('.release-workspace-header > div > span')?.textContent.trim()`), "In market", "a released joined action did not derive in-market lifecycle");
-    await waitForDom(client, `["Product delta", "Customer consequence", "Distribution", "Outward action", "Evidence"].every((label) => (document.querySelector('.release-path')?.textContent || '').includes(label))`, "the connected release path was incomplete");
-    await waitForDom(client, `!!document.querySelector('.release-path .now-gate') && document.querySelector('.release-activity')?.textContent.includes('Evidence returned')`, "the path lost its exact founder gate or returned evidence");
+    await waitForDom(client, `["Product delta", "Customer consequence", "Distribution", "Outward action", "Evidence"].every((label) => (document.querySelector('.release-canvas')?.textContent || '').includes(label))`, "the connected release canvas was incomplete");
+    await waitForDom(client, `!!document.querySelector('.release-canvas .now-gate')`, "the release canvas lost its exact founder gate");
+    await client.evaluate(`document.querySelector('.release-canvas-toolbar button')?.click()`);
+    await waitForDom(client, `document.querySelector('.release-activity')?.textContent.includes('Evidence returned')`, "the release trace lost returned evidence");
     assert.equal(await client.evaluate(`!document.querySelector('.release-subnav') && ![...document.querySelectorAll('.release-workspace button')].some((entry) => entry.textContent.trim() === 'Open chat')`), true, "legacy release navigation returned");
 
     await waitForDom(client, `document.querySelector('.release-observation')?.textContent.includes('1 exact released Gmail message is in scope')`, "bounded observation did not resolve the exact released Gmail source");
@@ -111,7 +127,7 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     await client.evaluate(`[...document.querySelectorAll('.system-evidence-return button')].find((entry) => entry.textContent.trim() === 'Start next work')?.click()`);
     await waitForDom(client, `document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Work') && document.querySelector('.thread-composer')?.textContent.includes('Reply returned')`, "returned evidence did not become exact next Work context");
 
-    await chooseMode(client, "Releases");
+    await chooseReleaseSection(client);
     await chooseRelease(client, "Project-drop invitation v1");
 
     await client.evaluate(`document.querySelector('.release-details summary')?.click()`);
@@ -123,15 +139,13 @@ test("mode-owned rails and contextual conversation connect Product / GTM to Rele
     await chooseMode(client, "Product / GTM");
     await chooseNode(client, "A project worth advancing");
     await waitForDom(client, `document.querySelector('.thread-composer')?.textContent.includes('A project worth advancing')`, "an unlinked node did not scope the persistent agent draft");
-    await chooseMode(client, "Releases");
+    await chooseReleaseSection(client);
     await client.evaluate(`document.querySelector('.releases-rail-body > .thread-new')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace h1')?.textContent.trim() === 'Release from selected truth' && !!document.querySelector('.release-draft')`, "an unlinked object did not seed an unsaved release draft");
-    const draft = await client.evaluate(`(() => { const set = (node, value) => { const setter = Object.getOwnPropertyDescriptor(node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set; setter.call(node, value); node.dispatchEvent(new Event('input', { bubbles: true })); }; const name = document.querySelector('.release-draft input[placeholder="What is moving to market?"]'); const intent = document.querySelector('.release-draft textarea'); if (!name || !intent) return false; set(name, 'Project need release'); set(intent, 'Test the project-first need in market.'); return true; })()`);
-    assert.equal(draft, true);
-    await client.evaluate(`[...document.querySelectorAll('.release-draft button')].find((entry) => entry.textContent.trim() === 'Prepare release')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === 'Project need release'`, "the meaningful release save did not persist");
-    await waitForDom(client, `document.querySelector('.release-path')?.textContent.includes('A project worth advancing') && document.querySelector('.release-path')?.textContent.includes('Distribution')`, "the founder-confirmed context link was not canonical in the release path");
-    assert.equal(await client.evaluate(`document.querySelectorAll('.release-path-step[data-empty="true"]').length > 0`), true, "missing release connections were hidden or fabricated");
+    await waitForDom(client, `document.querySelector('.release-workspace h1')?.textContent.trim() === 'Release from selected truth' && !!document.querySelector('.release-draft-canvas')`, "an unlinked object did not seed an unsaved release draft");
+    await client.evaluate(`[...document.querySelectorAll('.release-draft-action button')].find((entry) => entry.textContent.trim() === 'Build release with agent')?.click()`);
+    await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === 'A project worth advancing'`, "the meaningful release save did not persist");
+    await waitForDom(client, `document.querySelector('.release-canvas')?.textContent.includes('A project worth advancing') && document.querySelector('.release-canvas')?.textContent.includes('Distribution')`, "the founder-confirmed context link was not canonical in the release canvas");
+    assert.equal(await client.evaluate(`document.querySelectorAll('.release-canvas-node[data-empty="true"]').length > 0`), true, "missing release connections were hidden or fabricated");
     assert.equal(await client.evaluate(`!/\b\d+%/.test(document.querySelector('.release-workspace')?.textContent || '')`), true, "release readiness became a percentage");
     await assertNoUnhandledRejections(client);
   } finally {

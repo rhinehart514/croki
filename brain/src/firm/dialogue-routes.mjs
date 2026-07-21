@@ -197,8 +197,18 @@ async function handleReply(ventureId, req, res, deps) {
   const betId = trimOrNull(body?.betId);
   const threadRef = trimOrNull(body?.threadRef);
   const workTurn = body?.mode === "work";
+  const contextTurn = body?.mode === "context";
   const runtime = workTurn ? trimOrNull(body?.runtime) : null;
   const model = workTurn ? trimOrNull(body?.model) : null;
+  const workRef = trimOrNull(body?.workRef);
+  const workflowSketch = body?.workflowSketch === true;
+  const artifactSectionTitle = trimOrNull(body?.artifactSection?.title);
+  const artifactSectionIndex = Number.isInteger(body?.artifactSection?.index) && body.artifactSection.index >= 0
+    ? body.artifactSection.index
+    : null;
+  const artifactSection = artifactSectionTitle && artifactSectionIndex != null
+    ? { title: artifactSectionTitle.slice(0, 240), index: artifactSectionIndex }
+    : null;
   const subjectRefs = Array.isArray(body?.subjectRefs)
     ? [...new Set(body.subjectRefs.map(trimOrNull).filter(Boolean))]
     : [];
@@ -220,6 +230,9 @@ async function handleReply(ventureId, req, res, deps) {
     const threadId = threadRef.replace(/^thread:/, "");
     const ownsThread = getSemanticModel(ventureId).threads.some((thread) => thread.id === threadId && thread.id !== "venture-root");
     if (!ownsThread) throw Object.assign(new Error(`No such direction thread: ${threadId}`), { status: 404 });
+  }
+  if (artifactSection && (!threadRef || !workRef)) {
+    throw Object.assign(new Error("An artifact section correction needs its exact Thread and durable work reference."), { status: 400 });
   }
 
   // The founder's own message is recorded first — it is the authority every dispatch below rests on.
@@ -268,8 +281,14 @@ async function handleReply(ventureId, req, res, deps) {
 
   const { act, steerText } = await classifyDialogueAct({ message, effortSummary: summary }, deps.dialogueDeps ?? {});
 
+  // A section selected in the artifact is already an exact work correction. Preserve the founder's
+  // words in the transcript, but do not make a general dialogue classifier rediscover that scope.
+  if (artifactSection) {
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, "new-direction", { betId, workRef, workflowSketch, artifactSection });
+  }
+
   if (act === "steer") {
-    if (workTurn) return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model);
+    if (workTurn) return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, "new-direction", { betId, workRef, workflowSketch, artifactSection });
     if (!betId) {
       // A steer with no effort to steer is just a new direction — route it.
       return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs);
@@ -277,6 +296,10 @@ async function handleReply(ventureId, req, res, deps) {
     enqueueSteer({ ventureId, betId, text: steerText ?? message, fromMessageId: founderMessage.id });
     json(res, 200, { act: "steer", betId, applied: "next-step", messageId: founderMessage.id });
     return;
+  }
+
+  if (act === "answer") {
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, contextTurn ? "answer" : "new-direction", { betId, workRef, workflowSketch, artifactSection });
   }
 
   if (act === "close") {
@@ -319,13 +342,13 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   if (act === "new-direction") {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model);
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, "new-direction", { betId, workRef, workflowSketch, artifactSection });
   }
 
   json(res, 200, { act, betId, messageId: founderMessage.id });
 }
 
-async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null, subjectRefs = [], runtime = null, model = null) {
+async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null, subjectRefs = [], runtime = null, model = null, responseAct = "new-direction", material = {}) {
   const routed = await routeDirection({ direction, configuration }, deps.routingDeps ?? {});
   // A fresh, never-configured firm forms its first participant on the first direction — the same
   // founding-teammate fallback work-routes.mjs uses. Otherwise a firm with no claimable participant
@@ -352,11 +375,19 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
     drive,
     input: {
       ventureId, teammateRef, goal: direction, initiatedBy: "founder",
+      ...(material.workRef && material.betId ? { betId: material.betId } : {}),
       // The founder direction was already recorded above, so the work loop must not write it again — but its
       // id still becomes the run's originMessageRef so founder intent → run stays an exact join.
       recordInitiation: false,
       originMessageRef: fromMessageId ?? null,
-      target: { threadRef: exactThreadRef },
+      target: {
+        threadRef: exactThreadRef,
+        ...(subjectRefs.length ? { subjectRefs } : {}),
+        ...(material.betId ? { betId: material.betId } : {}),
+        ...(material.workRef ? { workRef: material.workRef } : {}),
+        ...(material.workflowSketch ? { workflowSketch: true } : {}),
+        ...(material.artifactSection ? { artifactSection: material.artifactSection } : {}),
+      },
       ...(runtime ? { runtime } : {}),
       ...(model ? { model } : {}),
       options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
@@ -364,7 +395,7 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
     ventureId, threadRef: exactThreadRef, betId: null, teammateRef, options: deps.appendOptions,
   });
   json(res, 202, {
-    act: "new-direction",
+    act: responseAct,
     accepted: true,
     teammateRef,
     why,

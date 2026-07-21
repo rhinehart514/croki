@@ -27,6 +27,21 @@ describe("workspace system mutations", () => {
     assert.throws(() => applySystemMutations({ ventureId: fx.venture.id, baseRevision: 0, actor: fx.actor, mutations: [{ op: "create-object", name: "Stale", territory: "product" }] }, fx.options), (error) => error.status === 409);
   });
 
+  it("persists and refines the compact agentic pipeline contract", () => {
+    const fx = fixture();
+    const created = applySystemMutations({ ventureId: fx.venture.id, baseRevision: 0, actor: fx.actor, mutations: [{
+      op: "create-object", id: "inbound", type: "pipeline", name: "Inbound founder leads", territory: "gtm",
+      statement: "Turn qualified interest into a founder conversation.",
+      properties: { trigger: "A qualified founder visits", intendedOutcome: "A booked conversation", agentRefs: ["mira"], tools: ["browser", "gmail"], authority: "Founder sends", evidenceToReturn: "Booking, reply, or silence" },
+    }] }, fx.options);
+    assert.equal(created.systemIndex.objects[0].type, "pipeline");
+    assert.deepEqual(created.systemIndex.objects[0].properties.agentRefs, ["mira"]);
+    const refined = applySystemMutations({ ventureId: fx.venture.id, baseRevision: created.model.revision, actor: fx.actor, mutations: [{ op: "update-object", objectRef: "object:inbound", properties: { intendedOutcome: "A qualified booked conversation", tools: ["browser", "gmail", "calendar"] } }] }, fx.options);
+    assert.equal(refined.systemIndex.objects[0].properties.trigger, "A qualified founder visits");
+    assert.equal(refined.systemIndex.objects[0].properties.intendedOutcome, "A qualified booked conversation");
+    assert.deepEqual(refined.systemIndex.objects[0].properties.tools, ["browser", "gmail", "calendar"]);
+  });
+
   it("projects release-scoped evidence back to exact connected objects without changing truth", () => {
     const fx = fixture();
     mutateSemanticModel({ ventureId: fx.venture.id, baseRevision: 0, actor: fx.actor, operations: [

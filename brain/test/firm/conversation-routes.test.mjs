@@ -16,6 +16,7 @@ const { createVenture, setVentureDoc } = await import("../../src/firm/venture-st
 const { createBet } = await import("../../src/firm/bet.mjs");
 const { applyFirmConfiguration, getFirmConfiguration } = await import("../../src/firm/configuration.mjs");
 const { recordWorkingTheory } = await import("../../src/firm/architecture-proposals.mjs");
+const { getSemanticModel, mutateSemanticModel } = await import("../../src/firm/semantic-model-store.mjs");
 
 const options = { root };
 const venture = createVenture({ name: "Conversation route" }, options);
@@ -165,6 +166,38 @@ test("POST carries explicit bet, work, and multiple-participant targeting into t
     workRef: "staged-offer",
     teammateRefs: ["yara", "reed"],
   });
+});
+
+test("POST scopes GTM work to the exact pipeline object", async () => {
+  const gtmSystem = createVenture({ name: "GTM system" }, options);
+  const initial = getFirmConfiguration(gtmSystem.id, options);
+  applyFirmConfiguration({
+    ventureId: gtmSystem.id,
+    expectedRevision: initial.revision,
+    configuration: { ...initial, agents: [{ ref: "mara", name: "Mara", activation: "direct" }] },
+  }, options);
+  mutateSemanticModel({
+    ventureId: gtmSystem.id,
+    baseRevision: 0,
+    actor: { authority: "founder", id: "jacob" },
+    operations: [{ op: "create-record", family: "objects", record: {
+      id: "qualified-signal", type: "motion", name: "Qualified signal pipeline", statement: "Turn a meaningful signal into a bounded campaign.",
+      assertion: "founder-asserted", properties: { pipeline: {} },
+    } }],
+  }, options);
+
+  const response = await call("POST", `/api/ventures/${gtmSystem.id}/drive`, {
+    goal: "Activate the qualified signal pipeline.", teammateRef: "mara", subjectRefs: ["object:qualified-signal"],
+  }, { runtime: { id: "gtm-runtime", label: "GTM runtime", async drive() { return { kind: "completed", summary: "prepared" }; } } });
+
+  assert.equal(response.status, 200);
+  const model = getSemanticModel(gtmSystem.id, options);
+  const direction = model.threads.find((thread) => thread.subjectRefs.includes("object:qualified-signal"));
+  assert.ok(direction, JSON.stringify(model.threads));
+  assert.deepEqual(direction.subjectRefs, ["object:qualified-signal"]);
+  const messages = (await call("GET", `/api/ventures/${gtmSystem.id}/conversation`)).body.messages;
+  const initiation = messages.find((message) => message.target?.subjectRefs?.includes("object:qualified-signal"));
+  assert.deepEqual(initiation.target.subjectRefs, ["object:qualified-signal"]);
 });
 
 test("POST keeps execution assignment distinct from explicit participant targeting", async () => {

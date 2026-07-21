@@ -7,9 +7,14 @@ import { DecisionGate } from "@/components/now/DecisionGate";
 import type { FirmLens } from "@/types";
 import { Background, Controls, MarkerType, Position, ReactFlow } from "@xyflow/react";
 import { CodeWorkspaceStage } from "./CodeWorkspaceStage";
+import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 
 const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
 const records = (value: unknown) => Array.isArray(value) ? value as Array<Record<string, unknown>> : [];
+const dateLabel = (value: unknown) => {
+  const parsed = Date.parse(text(value));
+  return Number.isNaN(parsed) ? "" : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(parsed);
+};
 
 function FlowStage({ item }: { item: ThreadTimelineItem }) {
   const artifact = item.artifact as Record<string, unknown> | undefined;
@@ -33,16 +38,25 @@ function ComparisonStage({ item }: { item: ThreadTimelineItem }) {
   const artifact = item.artifact as Record<string, unknown> | undefined;
   const content = artifact?.content as Record<string, unknown> | undefined;
   const columns = records(item.alternatives).length ? records(item.alternatives) : records(content?.columns);
-  return <div className="visual-comparison">{columns.map((column, index) => <article key={text(column.id, String(index))}><span>Approach {String.fromCharCode(65 + index)}</span><h3>{text(column.title, `Option ${index + 1}`)}</h3>{records(column.items).map((entry) => <div key={text(entry.label)}><strong>{text(entry.label)}</strong>{text(entry.detail) ? <p>{text(entry.detail)}</p> : null}</div>)}</article>)}</div>;
+  if (!columns.length) return <div className="visual-stage-empty"><strong>No approaches were returned.</strong><p>The conversation remains the source of truth until an exact comparison is staged.</p></div>;
+  return <section className="visual-comparison" aria-label="Approach comparison">{columns.map((column, index) => <article key={text(column.id, String(index))}><header><span>{String.fromCharCode(65 + index)}</span><h3>{text(column.title, `Option ${index + 1}`)}</h3></header><div className="visual-comparison-body">{records(column.items).map((entry) => <section key={text(entry.label)}><strong>{text(entry.label)}</strong>{text(entry.detail) ? <p>{text(entry.detail)}</p> : null}</section>)}</div></article>)}</section>;
 }
 
-export function renderVisualStage({ visual, timeline, workIndex, directions, lens, readOnlyReason, onOpenThread, onChanged }: {
+function EvidenceStage({ item }: { item: ThreadTimelineItem }) {
+  const evidence = records(item.evidence);
+  if (!evidence.length) return <div className="visual-stage-empty"><strong>No source records are attached.</strong><p>This work has not returned inspectable evidence yet.</p></div>;
+  return <section className="visual-evidence" aria-label="Returned evidence">{evidence.map((entry, index) => <figure key={text(entry.id, String(index))}><blockquote>{text(entry.body, text(entry.content, text(entry.summary, "Evidence record")))}</blockquote><figcaption><span>{text(entry.source, text(entry.channel, "Venture evidence"))}</span>{dateLabel(entry.at ?? entry.createdAt) ? <small>{dateLabel(entry.at ?? entry.createdAt)}</small> : null}</figcaption></figure>)}</section>;
+}
+
+export function renderVisualStage({ visual, timeline, workIndex, directions, lens, readOnlyReason, artifactFocus, onArtifactFocus, onOpenThread, onChanged }: {
   visual: VisualReference;
   timeline: ThreadTimeline | null;
   workIndex: WorkIndex | null;
   directions: Direction[];
   lens: FirmLens | null;
   readOnlyReason: string | null;
+  artifactFocus?: ArtifactSectionFocus | null;
+  onArtifactFocus?: (focus: ArtifactSectionFocus) => void;
   onOpenThread: (threadRef: string) => void;
   onChanged: () => void;
 }) {
@@ -54,9 +68,9 @@ export function renderVisualStage({ visual, timeline, workIndex, directions, len
   if (visual.kind === "preview" || visual.kind === "diff") {
     const artifact = item.artifact as Record<string, unknown> | undefined;
     if (artifact?.kind === "native-code") return <CodeWorkspaceStage ventureId={timeline!.ventureId} workspace={artifact as unknown as CodingWorkspace} readOnlyReason={readOnlyReason} onChanged={onChanged} />;
-    return <ExactArtifact item={item} />;
+    return <ExactArtifact item={item} artifactRef={visual.ref} artifactFocus={artifactFocus} onArtifactFocus={onArtifactFocus} />;
   }
-  if (visual.kind === "evidence") return <div className="visual-evidence"><h3>{text(item.title, "Evidence")}</h3>{records(item.evidence).map((entry, index) => <article key={text(entry.id, String(index))}><blockquote>{text(entry.body, text(entry.content, text(entry.summary, "Evidence record")))}</blockquote><small>{text(entry.source, text(entry.channel, "Venture evidence"))}</small></article>)}</div>;
+  if (visual.kind === "evidence") return <EvidenceStage item={item} />;
   if (visual.kind === "consequence") {
     const decision = item.decision as Record<string, unknown> | undefined;
     const wallItem = lens?.wallItems?.find((candidate) => candidate.id === decision?.id) ?? null;

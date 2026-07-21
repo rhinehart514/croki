@@ -4,6 +4,7 @@ export type ReleasePathKey = "product" | "customer" | "distribution" | "action" 
 
 export type ReleasePathEntry = {
   id: string;
+  objectRef?: string;
   eyebrow?: string;
   label: string;
   detail?: string;
@@ -84,6 +85,7 @@ export function deriveReleasePath(release: ReleaseDetail, objects: SystemIndexOb
     if (!key) continue;
     grouped.get(key)?.push({
       id: relationship.id,
+      objectRef: otherRef,
       eyebrow: relationship.label,
       label: objectNames.get(otherRef) ?? otherRef,
       relationshipRef: relationship.relationshipRef || `relationship:${relationship.id}`,

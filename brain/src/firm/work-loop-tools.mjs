@@ -232,7 +232,7 @@ function makeForkBet({ ventureId, teammateRef, configurationRevision, architectu
 function makeStageArtifact({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, contributingRefs }) {
   return {
     name: "stage_artifact",
-    description: "Attach local work to a bet without releasing it. Arbitrary legacy content remains valid. For a deliberate flow use { kind: 'flow', steps: [{ id, label, detail? }], edges: [{ from, to, label? }] }. For a deliberate comparison use { kind: 'comparison', variant: 'before-after' | 'alternatives', columns: [{ id, title, items: [{ label, detail?, artifactRef? }] }] }.",
+    description: "Attach local work to a bet without releasing it. Arbitrary legacy content remains valid. For a deliberate Product/GTM workflow sketch use { kind: 'flow', purpose: 'product-gtm-workflow', steps: [{ id, label, detail?, type? }], edges: [{ from, to, label? }] }. For a deliberate comparison use { kind: 'comparison', variant: 'before-after' | 'alternatives', columns: [{ id, title, items: [{ label, detail?, artifactRef? }] }] }.",
     input_schema: {
       type: "object",
       properties: {
@@ -242,7 +242,8 @@ function makeStageArtifact({ ventureId, teammateRef, configurationRevision, arch
             {
               type: "object", properties: {
                 kind: { const: "flow" },
-                steps: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, detail: { type: "string" } }, required: ["id", "label"] } },
+                purpose: { enum: ["product-gtm-workflow"] },
+                steps: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, detail: { type: "string" }, type: { enum: ["trigger", "agent-work", "condition", "founder-decision", "founder-gate", "external-action", "observation", "outcome"] } }, required: ["id", "label"] } },
                 edges: { type: "array", items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" }, label: { type: "string" } }, required: ["from", "to"] } },
               }, required: ["kind", "steps", "edges"],
             },

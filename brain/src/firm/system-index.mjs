@@ -107,6 +107,7 @@ export function projectSystemIndex(model, { scope = "system", query = "", outcom
     threadRefs: [...new Set([
       ...(threadsByObject.get(object.id) ?? []),
       text(object.properties?.coding?.threadRef),
+      text(object.properties?.workflowGraph?.threadRef),
     ].filter(Boolean))],
     attention: attention.get(object.id) ?? [],
     createdAt: object.createdAt ?? null,
@@ -184,7 +185,7 @@ export function applySystemMutations({ ventureId, baseRevision, mutations, actor
       return { op: "update-record", family: "objects", id, record: {
         ...(mutation.name != null ? { name: text(mutation.name) } : {}),
         ...(mutation.statement != null ? { statement: String(mutation.statement) } : {}),
-        properties: { ...current.properties, ...(territory ? { territory } : {}) },
+        properties: { ...current.properties, ...(mutation.properties ?? {}), ...(territory ? { territory } : {}) },
       } };
     }
     if (mutation?.op === "create-relationship") {

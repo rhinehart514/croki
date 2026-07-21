@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ThreadTimelineItem } from "@/api";
 import { ThreadMessage } from "./ThreadMessage";
@@ -29,9 +29,9 @@ describe("thread material grammar", () => {
     expect(screen.getByText("No external action until you decide")).toBeInTheDocument();
   });
 
-  it("keeps activity collapsed and long model prose inside the primary conversation", () => {
+  it("keeps internal activity out of the transcript and long model prose inside the primary conversation", () => {
     const { rerender } = render(<ThreadMessage item={item("activity-summary", { summary: "Codex inspected 18 files." })} onOpenVisual={open} onOpenThread={openThread} />);
-    expect(screen.getByText("Codex inspected 18 files.").closest("details")).not.toHaveAttribute("open");
+    expect(screen.queryByText("Codex inspected 18 files.")).not.toBeInTheDocument();
     const prose = "Material finding ".repeat(120);
     rerender(<ThreadMessage item={item("message", { role: "teammate", participantRef: "codex", content: prose })} onOpenVisual={open} onOpenThread={openThread} />);
     expect(screen.getByText(prose.trim())).toBeInTheDocument();
@@ -41,7 +41,41 @@ describe("thread material grammar", () => {
     render(<ThreadMessage item={item("agent-status", { participantRef: "founding-teammate", participantLabel: "Yara", state: "working", summary: "Searching the repository", startedAt: new Date(Date.now() - 65_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
     expect(screen.getByText("Yara")).toBeInTheDocument();
     expect(screen.getByText("Searching the repository")).toBeInTheDocument();
-    expect(screen.getByText(/working · 1m/)).toBeInTheDocument();
+    expect(screen.getByText(/Working · 1m/)).toBeInTheDocument();
+  });
+
+  it("keeps Work progress in the response flow without presenting a Drover persona", () => {
+    render(<ThreadMessage surface="work" item={item("agent-status", { participantRef: "founding-teammate", participantLabel: "Mara", state: "working", summary: "Reading venture context", startedAt: new Date(Date.now() - 12_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.getByText("Reading venture context")).toBeInTheDocument();
+    expect(screen.getByText(/Working · 12s/)).toBeInTheDocument();
+    expect(screen.queryByText("Mara")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveAccessibleName(/^Reading venture context/);
+  });
+
+  it("expands a factual work log without exposing hidden model prose", () => {
+    render(<ThreadMessage surface="work" item={item("agent-status", {
+      participantRef: "founding-teammate",
+      state: "working",
+      summary: "Reading source evidence",
+      startedAt: new Date(Date.now() - 12_000).toISOString(),
+      activitySteps: [
+        { id: "event:search", label: "Searched the repository", durationMs: 145 },
+        { id: "event:read", label: "Read source evidence", durationMs: 1_420 },
+      ],
+      hiddenText: "private internal reasoning",
+    })} onOpenVisual={open} onOpenThread={openThread} />);
+    fireEvent.click(screen.getByText("Show activity"));
+    expect(screen.getByText("Searched the repository")).toBeVisible();
+    expect(screen.getByText("145ms")).toBeVisible();
+    expect(screen.getByText("Read source evidence")).toBeVisible();
+    expect(screen.getByText("1.4s")).toBeVisible();
+    expect(screen.queryByText("private internal reasoning")).not.toBeInTheDocument();
+  });
+
+  it("identifies the participating agent inside Product and GTM chat", () => {
+    render(<ThreadMessage surface="work" chatMode="product-gtm" item={item("agent-status", { participantRef: "founding-teammate", participantLabel: "Mara", state: "working", summary: "Shaping the evidence loop", startedAt: new Date(Date.now() - 12_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.getByText("Mara")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveAccessibleName(/^Mara: Shaping the evidence loop/);
   });
 
   it("renders a routing handoff as a compact participant beat", () => {

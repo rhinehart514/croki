@@ -76,9 +76,7 @@ export function DecisionGate({
   const options = Array.isArray(item.effect.options)
     ? (item.effect.options as unknown[]).filter((option): option is string => typeof option === "string")
     : [];
-  const conciseAsk = rawQuestion && rawQuestion.length <= 140 && !rawQuestion.includes("_")
-    ? rawQuestion
-    : "Drover needs your judgment on how to proceed.";
+  const decisionTitle = isAnswer ? "How should this work continue?" : content.title;
 
   // Detail rows minus the raw-diff row (rendered visually) and, for a judgment request, minus the raw
   // question rows (surfaced as concise language + provenance instead).
@@ -88,8 +86,9 @@ export function DecisionGate({
   return (
     <div className="now-gate">
       <div className="now-gate-head">
-        <span className="now-gate-eyebrow">{isAnswer ? "Drover needs your judgment" : content.eyebrow}</span>
-        <span className="now-gate-title">{isAnswer ? conciseAsk : content.title}</span>
+        <span className="now-gate-eyebrow">{isAnswer ? "Your judgment is needed" : content.eyebrow}</span>
+        <span className="now-gate-title">{decisionTitle}</span>
+        {isAnswer && rawQuestion ? <p className="now-gate-question">{rawQuestion}</p> : null}
       </div>
       {artifact?.kind === "diff" ? (
         <div className="now-detail-block">
@@ -162,12 +161,6 @@ export function DecisionGate({
           <div className="now-gate-actions">
             <button type="button" className="now-gate-btn" data-intent="reject" disabled={decisionDisabled} onClick={() => decide("dismiss")}>Dismiss</button>
           </div>
-          {rawQuestion && rawQuestion !== conciseAsk ? (
-            <details className="now-machinery">
-              <summary>The exact question Drover asked</summary>
-              <p className="now-detail-why">{rawQuestion}</p>
-            </details>
-          ) : null}
         </div>
       ) : item.purpose === "end-bet" ? (
         <div className="now-gate-actions">

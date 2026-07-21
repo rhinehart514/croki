@@ -2,6 +2,7 @@ import { ChevronRight } from "lucide-react";
 import type { ThreadTimelineItem, VisualReference } from "@/api";
 import { ArtifactPreview, DiffView, FilesChanged } from "@/components/review";
 import { resolveStagedArtifact } from "@/components/now/reviewArtifact";
+import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 
 type OpenVisual = (visual: VisualReference, origin: HTMLElement) => void;
 
@@ -81,14 +82,15 @@ export function ConsequenceMessage({ item, onOpenVisual }: { item: ThreadTimelin
   return <MaterialReference item={item} onOpenVisual={onOpenVisual} kind={waiting ? "Needs review" : "Reviewed"} materialKind="consequence" title={text(item.title, "Ready for approval")} detail={detail} action="Review" attention={waiting} />;
 }
 
-export function ActivityDisclosure({ item }: { item: ThreadTimelineItem }) {
-  return <details className="thread-activity"><summary>{text(item.summary, "Run activity available")}</summary><p>Full receipts remain available with the work.</p></details>;
-}
-
-export function ExactArtifact({ item }: { item: ThreadTimelineItem }) {
+export function ExactArtifact({ item, artifactRef, artifactFocus, onArtifactFocus }: {
+  item: ThreadTimelineItem;
+  artifactRef?: string;
+  artifactFocus?: ArtifactSectionFocus | null;
+  onArtifactFocus?: (focus: ArtifactSectionFocus) => void;
+}) {
   const artifact = item.artifact as Record<string, unknown> | undefined;
   const resolved = resolveStagedArtifact(artifact?.content);
   if (resolved?.kind === "diff") return <div className="visual-stage-artifact"><FilesChanged diff={resolved.diff} /><DiffView diff={resolved.diff} /></div>;
-  if (resolved?.kind === "preview") return <div className="visual-stage-artifact"><ArtifactPreview artifact={resolved.artifact} /></div>;
+  if (resolved?.kind === "preview") return <div className="visual-stage-artifact"><ArtifactPreview artifact={{ ...resolved.artifact, caption: resolved.artifact.caption ?? text(item.title) }} artifactRef={artifactRef} artifactAt={item.at ?? null} focusedSectionId={artifactFocus && artifactFocus.artifactRef === artifactRef ? artifactFocus.sectionId : null} onFocusSection={onArtifactFocus} /></div>;
   return <pre className="visual-stage-json">{JSON.stringify(artifact?.content ?? item, null, 2)}</pre>;
 }

@@ -105,6 +105,20 @@ describe("DecisionGate", () => {
     expect(screen.getByText(/Nothing consequential can change/)).toBeTruthy();
   });
 
+  it("keeps the exact founder question visible instead of hiding it as machinery", () => {
+    const question = "The current direction lost the exact object at the source. Which staged feature should this thread continue with, and what outcome should it preserve?";
+    const answer: WallQueueItemView = {
+      ...productChange,
+      id: "wall-answer",
+      purpose: "answer",
+      effect: { kind: "question", question },
+    };
+    render(<DecisionGate ventureId="v1" item={answer} onDecided={() => {}} />);
+    expect(screen.getByText(question)).toBeVisible();
+    expect(screen.getByText("How should this work continue?")).toBeVisible();
+    expect(screen.queryByText("The exact question Drover asked")).not.toBeInTheDocument();
+  });
+
   it("shows a persisted failed send with retry and a working reconnect affordance", () => {
     const reconnect = vi.fn();
     const failed: WallQueueItemView = {

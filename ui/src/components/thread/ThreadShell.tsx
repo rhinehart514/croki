@@ -18,6 +18,7 @@ import { VisualStage } from "@/components/visual-stage/VisualStage";
 import { ThreadConversation } from "./ThreadConversation";
 import { ThreadRail } from "./ThreadRail";
 import { useThreadTimeline } from "./useThreadTimeline";
+import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 import "./thread-shell.css";
 
 const ROOT_REF = "thread:venture-root";
@@ -33,6 +34,8 @@ export function ThreadShell({ venture, onOpenVenture }: { venture: FirmVenture; 
   const [threadRef, setThreadRef] = useState<string | null>(() => session?.threadRef ?? null);
   const [draft, setDraft] = useState(false);
   const [stage, setStage] = useState<VisualReference | null>(() => window.innerWidth >= 960 ? session?.stage ?? null : null);
+  const [artifactFocus, setArtifactFocus] = useState<ArtifactSectionFocus | null>(null);
+  const [artifactFocusRequest, setArtifactFocusRequest] = useState(0);
   const [railWidth, setRailWidth] = useState(session?.railWidth ?? 240);
   const [chatScrollByThread, setChatScrollByThread] = useState<Record<string, number>>(session?.chatScrollByThread ?? {});
   const [railOpen, setRailOpen] = useState(false);
@@ -70,9 +73,10 @@ export function ThreadShell({ venture, onOpenVenture }: { venture: FirmVenture; 
   const readOnly = ["stale", "offline", "read-only"].includes(connection.phase);
   const readOnlyReason = connection.phase === "offline" ? "Offline. Nothing consequential can change until Drover is current again." : connection.message ?? "Drover is reconnecting.";
 
-  const closeStage = useCallback(() => { setStage(null); originRef.current?.focus(); }, []);
-  const openVisual = useCallback((visual: VisualReference, origin: HTMLElement) => { originRef.current = origin; setStage(visual); }, []);
-  const openThread = useCallback((next: string) => { setDraft(false); setThreadRef(next); setStage(null); setRailOpen(false); }, []);
+  const closeStage = useCallback(() => { setStage(null); setArtifactFocus(null); originRef.current?.focus(); }, []);
+  const openVisual = useCallback((visual: VisualReference, origin: HTMLElement) => { originRef.current = origin; setArtifactFocus(null); setStage(visual); }, []);
+  const openThread = useCallback((next: string) => { setDraft(false); setThreadRef(next); setStage(null); setArtifactFocus(null); setRailOpen(false); }, []);
+  const focusArtifactSection = useCallback((focus: ArtifactSectionFocus) => { setArtifactFocus(focus); setArtifactFocusRequest((value) => value + 1); }, []);
   const select = useCallback((item: WorkIndexItem) => {
     openThread(item.threadRef);
     if (item.unread && !readOnly && !item.threadRef.startsWith("thread:legacy-")) void markWorkIndexReviewed(venture.id, item).then((response) => setWorkIndex(response.workIndex)).catch(refresh);
@@ -103,9 +107,9 @@ export function ThreadShell({ venture, onOpenVenture }: { venture: FirmVenture; 
     <div className="thread-shell" data-stage-open={stage ? "true" : undefined} data-rail-open={railOpen || undefined} style={{ "--thread-rail-width": `${railWidth}px` } as React.CSSProperties}>
       <button type="button" className="thread-rail-launcher" aria-label="Open thread rail" aria-expanded={railOpen} onClick={() => setRailOpen((value) => !value)}><Menu aria-hidden="true" /></button>
       <ThreadRail venture={venture} ventures={ventures} workIndex={searchIndex ?? workIndex} crew={lens?.crew ?? []} search={search} width={railWidth} selected={resolvedThreadRef} readOnly={readOnly} readOnlyReason={readOnlyReason} onSearch={setSearch} onSelect={select} onNew={newThread} onSwitchVenture={onOpenVenture} onResize={setRailWidth} onConfigurationChanged={refresh} />
-      <ThreadConversation ventureId={venture.id} ventureName={venture.name} item={selectedItem} timeline={timelineState.timeline} lens={lens} connection={connection} loading={timelineState.loading} error={timelineState.error} draft={draft} initialScrollTop={resolvedThreadRef ? chatScrollByThread[resolvedThreadRef] ?? null : null} onScrollChange={rememberChatScroll} onOpenVisual={openVisual} onOpenThread={openThread} onTogglePin={() => { if (!selectedItem || selectedItem.threadRef === ROOT_REF) return; void setThreadPinned(venture.id, selectedItem.threadRef, !selectedItem.pinnedAt).then((response) => setWorkIndex(response.workIndex)).catch(refresh); }} onDriven={onDriven} />
+      <ThreadConversation ventureId={venture.id} ventureName={venture.name} item={selectedItem} timeline={timelineState.timeline} lens={lens} connection={connection} loading={timelineState.loading} error={timelineState.error} draft={draft} artifactFocus={artifactFocus} artifactFocusRequest={artifactFocusRequest} onClearArtifactFocus={() => setArtifactFocus(null)} initialScrollTop={resolvedThreadRef ? chatScrollByThread[resolvedThreadRef] ?? null : null} onScrollChange={rememberChatScroll} onOpenVisual={openVisual} onOpenThread={openThread} onTogglePin={() => { if (!selectedItem || selectedItem.threadRef === ROOT_REF) return; void setThreadPinned(venture.id, selectedItem.threadRef, !selectedItem.pinnedAt).then((response) => setWorkIndex(response.workIndex)).catch(refresh); }} onDriven={onDriven} />
       <AnimatePresence initial={false}>
-        {stage ? <VisualStage key={`${stage.kind}:${stage.ref}`} visual={stage} timeline={timelineState.timeline} workIndex={workIndex} directions={directions} lens={lens} readOnlyReason={readOnly ? readOnlyReason : null} onClose={closeStage} onOpenThread={openThread} onChanged={onDriven} /> : null}
+        {stage ? <VisualStage key={`${stage.kind}:${stage.ref}`} visual={stage} timeline={timelineState.timeline} workIndex={workIndex} directions={directions} lens={lens} readOnlyReason={readOnly ? readOnlyReason : null} artifactFocus={artifactFocus} onArtifactFocus={focusArtifactSection} onClose={closeStage} onOpenThread={openThread} onChanged={onDriven} /> : null}
       </AnimatePresence>
     </div>
   );

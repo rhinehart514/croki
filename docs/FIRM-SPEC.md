@@ -1,7 +1,8 @@
 # Drover firm specification
 
 **Status:** durable product and build physics.
-**Last reconciled:** 2026-07-20 for mode-owned space and bounded observation.
+**Last reconciled:** 2026-07-20 for direct SDK conversation, a unified Product / GTM surface with a distinct
+Releases section, conditional venture and release canvases, and bounded observation.
 **Scope:** product-agnostic and venture-agnostic. **Stage:** alpha.
 
 This is the product specification of record. [`STATE.md`](STATE.md) records what the current tree proves.
@@ -16,17 +17,21 @@ intelligence of agentic software development.**
 It does not run the company for the founder. It gives the founder the depth, memory, leverage, and visual
 cognition of a complete product and go-to-market organization.
 
-> **Work, Product / GTM, and Releases are parallel founder jobs over one canonical venture model and one
-> shared context. Conversation directs and reviews work; the Product / GTM workspace makes the venture shapeable;
-> the release workspace makes market movement and returned evidence exact. Claude and Codex expand what the
+> **Work and Product / GTM are the two founder surfaces over one canonical venture model and shared context.
+> Releases is a distinct, collapsible section of Product / GTM—not a competing mode. Conversation directs and
+> reviews work; the Product / GTM canvas makes the venture shapeable; its release workspace makes market movement and returned evidence exact. Claude and Codex expand what the
 > founder can accomplish without gaining founder authority.**
 
 The first proof is one real venture. The destination may span a portfolio, but each venture remains an
 isolated, readable, transferable operating environment behind the founder's authority.
 
-The founder's mental model is: **I am continuously developing and releasing my product and its path to
-market in one environment.** A thread carries direction and continuity. An agent is a runtime participant.
-A workflow is an executable mechanism. A release is the primary unit of market movement.
+The founder's mental model is: **I continuously develop and release my product and its path to market in one
+environment.** A thread carries direction and continuity. In Work, the agent the founder talks to is the
+selected native Claude or Codex SDK model and its resumable session—not a Drover-created persona in front of
+that model. Reusable specialists may carry durable context, tools, and boundaries for Product / GTM work, but
+they do not replace or obscure the direct SDK relationship in Work. A release is the primary unit of market
+movement and may anchor a bounded campaign. The go-to-market operating loop is
+**Signal → Pipeline → Campaign → Outcome → next Signal**.
 
 ## Product principles
 
@@ -51,7 +56,7 @@ not because it simulates constant activity.
 
 ### One model, many views
 
-The venture has one shared underlying model. Work, Product / GTM, Releases, the visual stage, generated
+The venture has one shared underlying model. Work, Product / GTM, its Releases section, the visual stage, generated
 answers, operating arrangements, saved views, snapshots, conversation projections, and indexes are
 presentation-level projections of that model, never parallel sources of truth. Modes are neither lifecycle
 stages nor authority boundaries. Switching them changes view and next action, not canonical identity.
@@ -169,6 +174,18 @@ A workflow defines the intended result, constraints, required artifacts, proof, 
 completion conditions. Claude and Codex retain freedom over method. Explicit orchestration exists only
 where sequencing, independent verification, separation of responsibility, or reproducibility materially
 matters. A workflow never runs continuously unless a future founder decision introduces that authority.
+In Product / GTM, the founder may declare a workflow from a spatial selection of existing canonical objects or
+from empty canvas. That declaration creates one unresolved outcome contract and exact joins; it does not copy
+the selected truth or require a configuration form. Agent and capability drops compose the contract directly.
+Only configured access appears as a capability, secrets never enter the venture graph, and outward access remains
+visibly subject to the founder gate.
+
+Natural language is the primary workflow-creation path. A substantive Product / GTM direction forms an exact
+Work Thread and one provisional graph artifact. That graph remains pinned directly above the Work composer so
+the founder can correct its mechanism conversationally; every correction targets the same exact staged work
+identity. Missing conditions, authority, or evidence stay visibly unresolved. Opening the full graph is review,
+not promotion. Only explicit founder adoption creates or updates the canonical Product / GTM workflow, preserving
+its source Work and Thread references. Manual canvas declaration remains a secondary creation path.
 
 ### 14. Open work uses adaptive composition
 
@@ -176,11 +193,29 @@ An ordinary direction may use one model, consultation, handoff, parallel approac
 or verification. Composition remains visible and steerable but is not configured before every run. A
 founder-authored workflow may determine a specific composition.
 
-### 15. Work remains primary over AI identity
+### 15. Work talks directly to SDK agents
 
-Claude and Codex remain visible in conversation, provenance, verification, and run inspection. They do not
-dominate the canvas as fictional employees. Persistent specialists exist only when the founder intentionally
-creates reusable identity, context, or operating methods.
+The Work composer is the native conversation boundary with the selected Claude or Codex SDK model. Model,
+repository, worktree, and authority posture remain visible at the point of direction. Work does not insert a
+founder-created character, teammate roster, or custom planning layer between the founder and that SDK
+session. Provider identity and live status remain visible in the Thread, transcript, and exact run receipts.
+Reusable specialists are allowed only when their durable context, tools, or operating boundaries create real
+Product / GTM leverage; they are not alternate Work chat identities. Runtime activity never substitutes for
+campaign consequence or evidence.
+
+### 16. Signal, pipeline, campaign, and outcome are the GTM operating loop
+
+A signal records a meaningful change and why it matters now. A pipeline is reusable agent-powered capacity
+defined only by its trigger, intended outcome, connected agents, available data and tools, founder authority
+boundaries, and evidence to return. A campaign is one bounded activation of a pipeline for an audience,
+objective, offer or Product release, period or batch, and explicit stop/continue conditions. An outcome is
+what reality returned, including silence, and must be able to change the next pipeline or Product decision.
+
+Audience, offer, message, channel, assets, agents, tools, releases, and evidence remain connected venture
+objects rather than permanent GTM stages. The Claude and Codex SDKs retain freedom over research,
+enrichment, judgment, asset creation, routing, and coordination. Drover supplies the compact pipeline and
+campaign contracts, venture context, durable runs, artifacts, traces, and founder authority rather than
+rebuilding agent execution as fixed nodes or a weaker custom runtime.
 
 ## Canonical product physics
 
@@ -233,6 +268,11 @@ A release is broader than a deployment. It is the open, traceable join between a
 customer consequence, supported claim or offer, audience, distribution mechanism, exact external actions,
 measurement, and returned evidence. Not every release needs every record, and this list must not become a
 required form or closed ontology. Missing links remain visible rather than being invented.
+
+The release workspace expresses that join as a spatial canvas using the same direct-manipulation language as
+Product / GTM. The causal spine remains Product delta → Customer consequence → Distribution → Outward action
+→ Evidence, while supported conditions, branches, retries, gates, and return loops may remain visibly
+nonlinear. Releases must not collapse this graph into a stacked record editor.
 
 ```text
 Every release = Product delta × market mechanism × evidence path
@@ -418,8 +458,8 @@ consequence, returns evidence, or changes venture judgment.
 
 ## Interaction invariants
 
-1. One click selects canonical context. Work opens its Thread; Product / GTM opens its object or path;
-   Releases opens its release. Escape closes the topmost visual or contextual conversation and returns focus
+1. One click selects canonical context. Work opens its Thread; Product / GTM opens its object or path; its
+   Releases section opens the exact release in the same center workspace. Escape closes the topmost visual or contextual conversation and returns focus
    to its originating act without losing the draft, Thread identity, or last coherent conversation.
 2. Typing in venture chat starts a thread; typing in a thread continues that exact durable conversation.
 3. Moving, resizing, and visual grouping update placement immediately and remain reversible.
@@ -438,9 +478,15 @@ consequence, returns evidence, or changes venture judgment.
 13. Agent work attaches to the Product or go-to-market object it changes.
 14. A result without visible consequence or evidence is incomplete.
 15. Every major action remains reversible until it crosses into the world.
-16. The rail body belongs to the selected mode: Threads in Work; Product / GTM scopes and path context in
-    Product / GTM; Needs you, Preparing, In market, and Recent releases in Releases. Every list is never shown
-    at once.
+16. The rail body belongs to the selected surface: Threads in Work; Product / GTM owns agent and
+    connected-capability palettes plus surface-local search. Within Product / GTM, Releases is one collapsible
+    section containing Needs you, Preparing, In market, and Recent; selecting it replaces the center canvas
+    with the exact release workspace while retaining Product / GTM as the active surface. Every list is never shown at once.
+17. Contextual conversation in Product / GTM, including its Releases section, remains a compact composer over the owning surface.
+    It may show exact prior messages when they exist, but it does not reproduce Work's Thread chrome. When the
+    SDK classifies a turn as a contextual answer, it returns in place. When it classifies the turn as a new
+    direction, Drover opens the exact returned Thread in Work; it does not keep implementation running behind
+    a workflow-shaped chat overlay.
 
 ## Firm rails
 
@@ -464,13 +510,14 @@ consequence, returns evidence, or changes venture judgment.
 Drover must never become:
 
 - an autonomous company simulator;
-- an agent activity dashboard;
+- an agent activity dashboard that substitutes runtime motion for consequential work;
 - a task or issue tracker with a decorative graph;
 - a CRM pipeline;
-- a workflow-node editor as the default experience;
+- a generic automation-node editor unrelated to Product and go-to-market outcomes; advanced node editing is
+  valuable only when its conditions, gates, loops, and branches remain exact venture and release causality;
 - a chat wrapper that buries durable understanding in transcripts;
 - a canvas requiring constant taxonomy maintenance;
-- an AI org chart;
+- a decorative AI org chart whose identities have no durable context, tools, or work;
 - a collection of disconnected boards;
 - a fixed four-stage process;
 - a system that equates generation with truth;
@@ -491,13 +538,14 @@ Each phase is a vertical completion gate. Nothing is called complete from compon
    adaptive multi-agent composition, steering, stopping, branching, closing, and persistent run receipts.
 4. **Consequence execution:** make product apply, deploy, send, spending, destructive actions, failure,
    retry, and MCP/Electron topology truthful under the founder wall.
-5. **One founder shell:** ship one venture-keyed WorkspaceShell with Work, Product / GTM, and Releases mode
-   navigation, shared focal context, scoped drafts, direct-reference mode handoff, mode-owned rails, and local
+5. **One founder shell:** ship one venture-keyed WorkspaceShell with Work and Product / GTM navigation,
+   a distinct collapsible Releases section inside Product / GTM, shared focal context, scoped drafts,
+   direct-reference handoff, surface-owned rails, and local
    presentation restoration. Conversation is primary in Work and contextual and closable elsewhere.
 6. **Work and visual stage:** project thread return value as Pinned, Active, Needs review, Recent, and
    history. Previews, diffs, comparisons, flows, evidence, consequences, and code open beside Work chat.
 7. **Product/GTM and Releases:** provide full direct workspaces over canonical semantic objects and
-   relationships. Product / GTM supports reversible founder edits. Releases use semantic objects, exact
+   relationships on one Product / GTM surface. Product / GTM supports reversible founder edits. Releases use semantic objects, exact
    joins, derived lifecycle/attention, existing founder gates, and concrete gaps rather than completeness
    percentages.
 8. **Deletion:** remove competing shells, duplicate data paths, dead controls, stale docs, and obsolete

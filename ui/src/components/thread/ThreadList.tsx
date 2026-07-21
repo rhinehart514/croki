@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2, Circle, Clock3, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, Circle, Clock3, Sparkles } from "lucide-react";
+import { useState } from "react";
 import type { WorkIndex, WorkIndexItem } from "@/api";
 
 function ThreadState({ item }: { item: WorkIndexItem }) {
@@ -31,11 +32,18 @@ export function ThreadList({ workIndex, search, selected, onSelect }: { workInde
   const review = items.filter((item) => item.activity === "idle" && item.attention !== "none" && !item.pinnedAt);
   const recent = items.filter((item) => item.activity === "idle" && item.attention === "none" && !item.pinnedAt).slice(0, search ? undefined : 12);
   const older = items.filter((item) => item.lifecycle === "closed" && !recent.includes(item) && !item.pinnedAt);
+  const recentSelected = recent.some((item) => selected === item.threadRef);
+  const [recentExpanded, setRecentExpanded] = useState(false);
+  const recentOpen = review.length < 5 || recentSelected || recentExpanded;
+  if (search) return <nav className="thread-rail-list"><section><h2><span>Results</span><small>{workIndex?.counts.matchCount ?? items.length}</small></h2>{items.length ? <Rows items={items} selected={selected} onSelect={onSelect} /> : <p className="thread-rail-empty">No matching threads</p>}</section></nav>;
   return <nav className="thread-rail-list">
-    {pinned.length ? <section><h2>Pinned</h2><Rows items={pinned} selected={selected} onSelect={onSelect} /></section> : null}
-    {active.length ? <section><h2>Active</h2><Rows items={active} selected={selected} onSelect={onSelect} /></section> : null}
-    {review.length ? <section><h2>Needs review</h2><Rows items={review} selected={selected} onSelect={onSelect} /></section> : null}
-    <section><h2>{search ? `Results · ${workIndex?.counts.matchCount ?? 0}` : "Recent"}</h2>{recent.length ? <Rows items={recent} selected={selected} onSelect={onSelect} /> : <p className="thread-rail-empty">{search ? "No matching threads" : "Start with a direction"}</p>}</section>
-    {!search && older.length ? <details className="thread-history"><summary>Older work</summary>{historyGroups(older).map(([label, group]) => group.length ? <div key={label}><h3>{label}</h3><Rows items={group} selected={selected} onSelect={onSelect} /></div> : null)}</details> : null}
+    {pinned.length ? <section><h2><span>Pinned</span><small>{pinned.length}</small></h2><Rows items={pinned} selected={selected} onSelect={onSelect} /></section> : null}
+    {active.length ? <section><h2><span>Active</span><small>{active.length}</small></h2><Rows items={active} selected={selected} onSelect={onSelect} /></section> : null}
+    {review.length ? <section><h2><span>Needs review</span><small>{review.length}</small></h2><Rows items={review} selected={selected} onSelect={onSelect} /></section> : null}
+    <details className="thread-list-disclosure" open={recentOpen} onToggle={(event) => { if (review.length >= 5 && !recentSelected) setRecentExpanded(event.currentTarget.open); }}>
+      <summary><ChevronRight aria-hidden="true" /><span>Recent</span><small>{recent.length}</small></summary>
+      <div>{recent.length ? <Rows items={recent} selected={selected} onSelect={onSelect} /> : <p className="thread-rail-empty">Start with a direction</p>}</div>
+    </details>
+    {older.length ? <details className="thread-history"><summary>Older work</summary>{historyGroups(older).map(([label, group]) => group.length ? <div key={label}><h3>{label}</h3><Rows items={group} selected={selected} onSelect={onSelect} /></div> : null)}</details> : null}
   </nav>;
 }

@@ -74,6 +74,27 @@ describe("NowComposer contextual routing", () => {
     expect(replyInConversation).not.toHaveBeenCalled();
   });
 
+  it("targets one selected SDK agent explicitly", async () => {
+    driveTeammate.mockResolvedValue(result({ handoff: handoff({ openedBetIds: ["b-agent"] }) }));
+    render(
+      <NowComposer
+        ventureId="v1" ventureName="Acme"
+        selection={{ betId: null, workRef: null, teammateRefs: ["mara"] }}
+        scopeLabel="Mara" hasWork variant="dock" submissionMode="auto"
+        runtimeOverride="claude-code" onDriven={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Plan the founder outbound campaign" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start work" }));
+
+    await waitFor(() => expect(driveTeammate).toHaveBeenCalledWith("v1", {
+      goal: "Plan the founder outbound campaign",
+      teammateRef: "mara",
+      runtime: "claude-code",
+    }));
+    expect(replyInConversation).not.toHaveBeenCalled();
+  });
+
   it("keeps the thread composer on the nonblocking conversation surface", async () => {
     replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:one" } as ConversationReplyResult);
     render(
@@ -85,8 +106,22 @@ describe("NowComposer contextual routing", () => {
     );
     fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Stop Claude" } });
     fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
-    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", { message: "Stop Claude", threadRef: "thread:one" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", { message: "Stop Claude", threadRef: "thread:one", mode: "context" }));
     expect(driveTeammate).not.toHaveBeenCalled();
+  });
+
+  it("hands a contextual work direction to its exact Work thread", async () => {
+    const onWorkRouted = vi.fn();
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:work-one" } as ConversationReplyResult);
+    render(
+      <NowComposer ventureId="v1" ventureName="Acme" selection={null} subjectRefs={["object:pipeline"]}
+        scopeLabel="Founder insight workflow" hasWork variant="dock" submissionMode="conversation"
+        workflowSketch onDriven={() => {}} onWorkRouted={onWorkRouted} />,
+    );
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Implement the workflow repair" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(onWorkRouted).toHaveBeenCalledWith("thread:work-one"));
+    expect(replyInConversation).toHaveBeenCalledWith("v1", { message: "Implement the workflow repair", subjectRefs: ["object:pipeline"], mode: "context", workflowSketch: true });
   });
 
   it("starts an immediate coding turn in Work with the selected model", async () => {
@@ -105,6 +140,50 @@ describe("NowComposer contextual routing", () => {
       message: "Collapse the workbench", betId: "bet-1", threadRef: "thread:one", mode: "work", runtime: "codex", model: "gpt-5.4",
     }));
     expect(driveTeammate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the submitted prompt visible as it leaves for Product and GTM agents", async () => {
+    let resolveReply!: (value: ConversationReplyResult) => void;
+    replyInConversation.mockImplementation(() => new Promise((resolve) => { resolveReply = resolve; }));
+    const { container } = render(
+      <NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork
+        variant="dock" submissionMode="product-gtm" workflowSketch onDriven={() => {}} />,
+    );
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Shape the launch evidence loop" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+
+    expect(container.querySelector(".now-composer")).toHaveAttribute("data-launching", "true");
+    expect(container.querySelector(".now-composer")).toHaveAttribute("data-submission-mode", "product-gtm");
+    expect(container.querySelector(".now-composer-flight")).toHaveTextContent("Shape the launch evidence loop");
+    resolveReply({ act: "answer", accepted: true } as ConversationReplyResult);
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalled());
+  });
+
+  it("revises the exact provisional Product / GTM graph in its Work thread", async () => {
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:workflow" } as ConversationReplyResult);
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: "bet-1", workRef: "workflow-one", teammateRefs: [], threadRef: "thread:workflow" }} scopeLabel="Customer return loop" hasWork variant="dock" submissionMode="work" workflowSketch onDriven={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Wait seven days before taking the silence branch" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", {
+      message: "Wait seven days before taking the silence branch", betId: "bet-1", workRef: "workflow-one",
+      threadRef: "thread:workflow", mode: "work", workflowSketch: true,
+    }));
+  });
+
+  it("sends a selected artifact section as structured context while preserving the founder message", async () => {
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:artifact" } as ConversationReplyResult);
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: "bet-1", workRef: "artifact-one", teammateRefs: [], threadRef: "thread:artifact" }} scopeLabel="Launch brief" hasWork variant="dock" submissionMode="work" artifactSection={{ artifactRef: "work:artifact-one", artifactTitle: "Launch brief", artifactAt: "2026-07-20T12:00:00.000Z", sectionId: "0:Channel W", sectionTitle: "Channel W", sectionIndex: 0 }} onDriven={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Use founder introductions before cold outreach" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", {
+      message: "Use founder introductions before cold outreach",
+      betId: "bet-1",
+      workRef: "artifact-one",
+      threadRef: "thread:artifact",
+      mode: "work",
+      artifactSection: { title: "Channel W", index: 0 },
+    }));
+    expect(await screen.findByText("Revision sent to this Thread")).toBeVisible();
   });
 
   it("CORRECTS exact work through /drive without dropping its work reference", async () => {

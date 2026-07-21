@@ -33,6 +33,12 @@ describe("classifyDialogueAct — deterministic lexical intents", () => {
     const result = await classifyDialogueAct({ message: "forget this, new idea: try referrals instead" }, {});
     assert.equal(result.act, "new-direction");
   });
+
+  it("keeps a clear workflow question on the contextual answer path", async () => {
+    const result = await classifyDialogueAct({ message: "what is considered garbage right now in this project" }, {});
+    assert.equal(result.act, "answer");
+    assert.equal(result.usedModel, false);
+  });
 });
 
 describe("classifyDialogueAct — the fuzzy path and the safe default", () => {

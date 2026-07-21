@@ -4,14 +4,17 @@ import type { Direction } from "@/components/now/directionModel";
 import type { FirmLens } from "@/types";
 import { VisualStageHeader } from "./VisualStageHeader";
 import { renderVisualStage } from "./visualStageRegistry";
+import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 
-export function VisualStage({ visual, timeline, workIndex, directions, lens, readOnlyReason, onClose, onOpenThread, onChanged }: {
+export function VisualStage({ visual, timeline, workIndex, directions, lens, readOnlyReason, artifactFocus, onArtifactFocus, onClose, onOpenThread, onChanged }: {
   visual: VisualReference;
   timeline: ThreadTimeline | null;
   workIndex: WorkIndex | null;
   directions: Direction[];
   lens: FirmLens | null;
   readOnlyReason: string | null;
+  artifactFocus?: ArtifactSectionFocus | null;
+  onArtifactFocus?: (focus: ArtifactSectionFocus) => void;
   onClose: () => void;
   onOpenThread: (threadRef: string) => void;
   onChanged: () => void;
@@ -27,7 +30,7 @@ export function VisualStage({ visual, timeline, workIndex, directions, lens, rea
       transition={{ duration: reducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
     >
       <VisualStageHeader visual={visual} onClose={onClose} />
-      <div className="visual-stage-body">{renderVisualStage({ visual, timeline, workIndex, directions, lens, readOnlyReason, onOpenThread, onChanged })}</div>
+      <div className="visual-stage-body">{renderVisualStage({ visual, timeline, workIndex, directions, lens, readOnlyReason, artifactFocus, onArtifactFocus, onOpenThread, onChanged })}</div>
     </motion.aside>
   );
 }

@@ -41,6 +41,12 @@ export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, con
     target?.workRef
       ? `This direction explicitly targets durable work ${target.workRef}${target.betId ? ` inside bet ${target.betId}` : ""}. Keep any revision, outward act, and return attached to that work identity.`
       : target?.betId ? `This direction explicitly targets bet ${target.betId}.` : "",
+    target?.workflowSketch
+      ? `This direction came from Product / GTM and must return one inspectable provisional workflow sketch. ${target.workRef ? `Revise ${target.workRef} in place with stage_artifact; do not create a duplicate.` : "Fork one focused bet, then stage one flow artifact."} Use purpose \"product-gtm-workflow\". Give every step a plain-business label and one of: trigger, agent-work, condition, founder-decision, founder-gate, external-action, observation, or outcome. Put branch meaning on edges. Preserve unknowns as unresolved steps instead of inventing truth. This sketch is proposed work, not canonical Product / GTM truth.`
+      : "",
+    target?.artifactSection
+      ? `The founder selected section ${target.artifactSection.index + 1}, “${target.artifactSection.title},” inside the targeted artifact. Treat the founder's message as a local correction: revise that section in place and preserve the rest unless the requested change creates a necessary contradiction. Return the revision through the same durable work identity; do not create a sibling artifact.`
+      : "",
     target?.teammateRefs?.length
       ? `The founder explicitly included these participants: ${target.teammateRefs.join(", ")}. Preserve that attribution; involve a peer only when their contribution is materially useful.`
       : "",

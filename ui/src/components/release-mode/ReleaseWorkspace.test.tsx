@@ -8,29 +8,30 @@ const index: ReleaseIndex = { ventureId: "v1", revision: 3, releases: [release],
 const object: SystemIndexObject = { id: "product", objectRef: "object:product", name: "Faster setup", statement: "", type: "open", territory: "product", assertion: "founder-asserted", provenance: null, properties: {}, compatibilityOwned: false, architectureRole: null, threadRefs: [], attention: [], createdAt: null, updatedAt: null };
 const customer: SystemIndexObject = { ...object, id: "customer", objectRef: "object:customer", name: "Customers finish setup unaided" };
 const thread = { threadRef: "thread:work", founderIntent: "Prepare exact launch work" } as WorkIndexItem;
-const base = { index, objects: [object, customer], threads: [thread], readOnlyReason: null, onCreate: vi.fn(async () => {}), onMutate: vi.fn(async () => {}), onChanged: vi.fn(), onReconnect: vi.fn(), onGrantObservation: vi.fn(async () => {}), onCheckObservation: vi.fn(async () => {}), onRevokeObservation: vi.fn(async () => {}) };
+const base = { index, objects: [object, customer], threads: [thread], readOnlyReason: null, onCreate: vi.fn(async () => "object:launch"), onRunAgent: vi.fn(), onOpenProductGtm: vi.fn(), onMutate: vi.fn(async () => {}), onChanged: vi.fn(), onReconnect: vi.fn(), onGrantObservation: vi.fn(async () => {}), onCheckObservation: vi.fn(async () => {}), onRevokeObservation: vi.fn(async () => {}) };
 
 describe("ReleaseWorkspace", () => {
   it("seeds a contextual release from exact Product and Work truth before creation", () => {
     const onCreate = vi.fn(async () => {});
     render(<ReleaseWorkspace {...base} release={null} draftContext={{ kind: "object", ref: object.objectRef, label: object.name, suggestedRole: "Product delta", name: "Faster setup", statement: "Which customers should receive this first?", objectRef: object.objectRef, threadRef: thread.threadRef, workLabel: thread.founderIntent }} onCreate={onCreate} />);
-    expect(screen.getByText("Unsaved draft")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Product delta")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Faster setup")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Which customers should receive this first?")).toBeInTheDocument();
-    expect(screen.getByText("Prepare exact launch work")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Prepare release" }));
+    expect(screen.getByText("Unsaved release")).toBeInTheDocument();
+    expect(screen.getAllByText("Product delta").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Faster setup").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Open connection")).toHaveLength(4);
+    expect(screen.getByText(/Prepare exact launch work/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Build release with agent" }));
     expect(onCreate).toHaveBeenCalledWith({ name: "Faster setup", statement: "Which customers should receive this first?", linkLabel: "Product delta" });
   });
 
   it("renders one honest path, preserves exact joins, and removes the old subnavigation", () => {
     const onMutate = vi.fn(async () => {});
     render(<ReleaseWorkspace {...base} release={release} draftContext={null} onMutate={onMutate} />);
-    expect(screen.getByRole("heading", { name: "From product change to returned reality" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Release path canvas" })).toBeInTheDocument();
+    expect(screen.getByRole("application", { name: /Product delta, customer consequence/ })).toBeInTheDocument();
     for (const label of ["Product delta", "Customer consequence", "Distribution", "Outward action", "Evidence"]) expect(screen.getAllByText(label).length).toBeGreaterThan(0);
-    expect(screen.getByText("Faster setup")).toBeInTheDocument();
-    expect(screen.getByText("Prepare exact launch work")).toBeInTheDocument();
-    expect(screen.getAllByText("Open")).toHaveLength(4);
+    expect(screen.getAllByText("Faster setup").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Open connection")).toHaveLength(4);
+    fireEvent.click(screen.getByRole("button", { name: /Product deltaFaster setup/ }));
     fireEvent.click(screen.getByRole("button", { name: "Remove Faster setup" }));
     expect(onMutate).toHaveBeenCalledWith([{ op: "unlink-object", relationshipRef: "relationship:link" }]);
     expect(screen.queryByRole("navigation", { name: "Release views" })).not.toBeInTheDocument();
@@ -38,19 +39,19 @@ describe("ReleaseWorkspace", () => {
     expect(screen.queryByText(/%/)).not.toBeInTheDocument();
   });
 
-  it("keeps release selection in the rail and opens a link control from the relevant path step", () => {
-    render(<ReleaseWorkspace {...base} release={release} draftContext={null} />);
+  it("sends an open path step to the release operator instead of opening a link form", () => {
+    const onRunAgent = vi.fn();
+    render(<ReleaseWorkspace {...base} release={release} draftContext={null} onRunAgent={onRunAgent} />);
     expect(screen.queryByRole("combobox", { name: "Release" })).not.toBeInTheDocument();
-    const customerStep = screen.getByText("Customer consequence").closest("article");
-    expect(customerStep).not.toBeNull();
-    fireEvent.click(within(customerStep!).getByRole("button", { name: "Link" }));
-    expect(screen.getByRole("region", { name: "Link customer consequence" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Customers finish setup unaided" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Customer consequenceLink what becomes/ }));
+    const customerStep = screen.getByRole("complementary", { name: "Customer consequence release step" });
+    fireEvent.click(within(customerStep).getByRole("button", { name: "Resolve this step with agent" }));
+    expect(onRunAgent).toHaveBeenCalledWith(["object:launch", "release-step:customer"], expect.stringContaining("Resolve the customer gap"));
   });
 
   it("shows the missing link instead of a blank release form", () => {
     render(<ReleaseWorkspace {...base} release={null} draftContext={null} />);
-    expect(screen.getByRole("heading", { name: "Start from exact venture context" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Start from something real" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("What is moving to market?")).not.toBeInTheDocument();
   });
 

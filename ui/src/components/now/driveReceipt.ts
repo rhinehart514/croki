@@ -99,6 +99,9 @@ export function readReplyReceipt(result: ConversationReplyResult): DriveReceipt 
     case "new-direction":
       headline = "A new direction is underway.";
       break;
+    case "answer":
+      headline = "The SDK is answering here.";
+      break;
     case "stop-run":
       headline = result.stoppedRunRef ? "Stop requested — the rest of this thread stays active." : "Drover needs a more specific run to stop.";
       break;

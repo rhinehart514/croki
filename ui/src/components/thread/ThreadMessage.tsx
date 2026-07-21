@@ -1,32 +1,33 @@
 import type { ThreadTimelineItem, VisualReference } from "@/api";
 import { MessageResponse } from "@/components/ai-elements/message";
 import {
-  ActivityDisclosure,
   ArtifactMessage,
   ComparisonMessage,
   ConsequenceMessage,
   EvidenceMessage,
 } from "./RichThreadItems";
 import { ThreadAgentUpdate } from "./ThreadAgentUpdate";
+import type { WorkChatMode } from "@/components/work-mode/WorkComposerBar";
 
 type Props = {
   item: ThreadTimelineItem;
   surface?: "work" | "context";
+  chatMode?: WorkChatMode;
   onOpenVisual: (visual: VisualReference, origin: HTMLElement) => void;
   onOpenThread: (threadRef: string) => void;
 };
 
 const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
 
-export function ThreadMessage({ item, surface = "context", onOpenVisual, onOpenThread }: Props) {
+export function ThreadMessage({ item, surface = "context", chatMode = "code", onOpenVisual, onOpenThread }: Props) {
   if (item.kind === "artifact") return <ArtifactMessage item={item} onOpenVisual={onOpenVisual} />;
   if (item.kind === "comparison") return <ComparisonMessage item={item} onOpenVisual={onOpenVisual} />;
   if (item.kind === "evidence") return <EvidenceMessage item={item} onOpenVisual={onOpenVisual} />;
   if (item.kind === "consequence") return <ConsequenceMessage item={item} onOpenVisual={onOpenVisual} />;
-  if (item.kind === "activity-summary") return <ActivityDisclosure item={item} />;
+  if (item.kind === "activity-summary") return null;
 
   if (item.kind === "agent-status") {
-    return <ThreadAgentUpdate item={item} />;
+    return <ThreadAgentUpdate item={item} surface={surface} chatMode={chatMode} />;
   }
 
   if (item.kind === "message" && item.messageKind === "handoff") {

@@ -24,24 +24,25 @@ acts, measurement, and returned evidence as far as reality supports.
 
 ## Founder experience
 
-Drover returns directly to the founder's last active venture, mode, and shared context. Work restores its
-thread and deliberate visual; Product / GTM restores scope and selection; Releases restores the release and
-subview. Presentation state remains venture-keyed and local.
+Drover returns directly to the founder's last active venture, surface, and shared context. Work restores its
+thread and deliberate visual; Product / GTM restores either its node-canvas selection or its exact release
+section and canvas. Presentation state remains venture-keyed and local.
 Choosing or connecting a venture is exceptional: first use, recovery, or an explicit action from the
 in-workspace venture switcher.
 
-The compact workspace rail exposes three parallel founder jobs over one model: **Work**, **Product / GTM**,
-and **Releases**. Its body belongs to the active mode: Work organizes Threads by return value; Product / GTM
-exposes Whole venture, Product, Go-to-market, Needs attention, and mode-local search; Releases organizes Needs
-you, Preparing, In market, and Recent. The rail never displays every list at once.
+The compact workspace rail exposes two founder surfaces over one model: **Work** and **Product / GTM**.
+Work organizes Threads by return value. Product / GTM supplies agents, connected capabilities, and surface-local
+search to an advanced conditional-logic node editor; a distinct collapsible **Releases** section organizes
+Needs you, Preparing, In market, and Recent beside a release-scoped spatial canvas. The
+rail never displays every list at once.
 
 With no thread selected, venture chat shows what changed, what is still moving, and what needs founder
 judgment. Selecting a thread restores its meaningful conversation, active agents, artifacts, evidence, and
 consequences. Every founder turn uses the venture conversation contract and carries the exact selected
 `threadRef`; the server decides whether it continues, steers, observes, stops, critiques, or starts work.
 
-Conversation is the main Work workspace and opens contextually as a closable right drawer in Product / GTM
-and Releases, compressing those workspaces when room permits and overlaying them at narrow widths. Closing it
+Conversation is the main Work workspace and opens contextually over Product / GTM and its Releases section,
+compressing those workspaces when room permits and overlaying them at narrow widths. Closing it
 loses no draft, Thread identity, or coherent content. Mode switching preserves the focal subject and follows
 only existing direct references; when none exists, the destination retains the source context and exposes the
 missing link instead of invoking a generalized resolver.
@@ -53,6 +54,12 @@ A broad founder direction may immediately generate an ambitious provisional inte
 inward work. Generated structure remains visibly inferred until founder action or evidence strengthens it.
 The founder does not approve an empty plan, configure a workflow graph, or maintain a taxonomy before seeing
 value.
+
+Describing a Product or go-to-market mechanism is enough to begin. A substantive Product / GTM turn opens its
+exact Work Thread with a provisional conditional graph pinned above the composer. The founder corrects the
+graph through ordinary conversation; those turns revise the same staged work rather than creating competing
+drafts. Reviewing the full graph does not change venture truth. Explicit adoption creates or updates the one
+canonical workflow on the Product / GTM canvas, retaining its exact Work and Thread lineage.
 
 Understand, Design, Execute, and Learn are reversible lenses over Product and go-to-market, never stages.
 Generated visual answers are disposable by default. The founder may explicitly save a synchronized live
@@ -102,9 +109,9 @@ revise, release again—not by code volume, campaign volume, or agent activity.
 
 ## Durable invariants
 
-1. One mode-owned workspace rail supplies stable orientation across Work, Product / GTM, and Releases without
-   showing every list at once. These are presentation-level founder jobs, not sequential stages or separate
-   authorities.
+1. One surface-owned workspace rail supplies stable orientation across Work and Product / GTM without
+   showing every list at once. Releases remains a distinct Product / GTM section, not a sequential stage,
+   separate authority, or competing top-level destination.
 2. One model powers every view; no canvas, board, branch, workbench, or snapshot becomes a second authority.
 3. Product and go-to-market remain distinct and traceable parts of one venture.
 4. Work starts only from founder intent or a founder-invoked workflow.

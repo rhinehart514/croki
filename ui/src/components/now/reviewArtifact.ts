@@ -37,7 +37,7 @@ export function resolveStagedArtifact(content: unknown): ResolvedArtifact {
   if (content == null) return null;
   if (typeof content === "object") {
     return resolveEffectArtifact(content as Record<string, unknown>)
-      ?? { kind: "preview", artifact: { kind: "text", content: JSON.stringify(content, null, 2) } };
+      ?? { kind: "preview", artifact: { kind: "code", content: JSON.stringify(content, null, 2) } };
   }
   const text = String(content).trim();
   if (!text) return null;

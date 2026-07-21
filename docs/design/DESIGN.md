@@ -1,6 +1,6 @@
 ---
 status: canonical-current-code-record
-refreshed: 2026-07-19
+refreshed: 2026-07-20
 experience_direction: ../../DESIGN.md
 token_source: ../../ui/src/index.css
 feature_styles:
@@ -83,7 +83,8 @@ only on the floating composer.
 **Work is the primary object. Conversation carries its intent; exact material proves its consequence.**
 The visual system is a quiet, near-black founder IDE for one canonical Product and go-to-market model.
 Direct manipulation, exact differences, evidence, interpretation, runtime provenance, and the founder-held
-consequence boundary create specificity. Agent machinery and decoration do not.
+consequence boundary create specificity. Founder-created agents are compact operating instruments in the
+Work rail; decorative agent machinery does not belong on the canvas.
 
 ## Current-code boundary
 
@@ -92,10 +93,17 @@ working tree has one founder entry backed by `WorkspaceShell`: a resizable Work/
 one shared context, mounted conversation, optional Work visual, controlled system graph, and semantic release
 workspace. `ThreadShell` remains source compatibility during migration but is not mounted by the entry.
 
+Non-HTML visual artifacts now expose section-level steering in both the mounted `WorkspaceShell` and the
+compatibility `ThreadShell`. `VisualMemo` emits an exact artifact/section target; the existing composer keeps the
+same Thread and durable work reference, and `conversation/reply` carries that target separately from the founder's
+verbatim message. The work-loop prompt constrains the participant to an in-place local revision rather than a sibling
+artifact. Selection, focus, clear, sending, and sent states are visible and keyboard reachable.
+
 Compatibility-owned architecture edits continue through the architecture adapter; founder-authored open
-objects and relationships use the semantic mutation adapter. The v3 venture session persists graph camera
-changes alongside mode, selection, and conversation state. Synchronized saved-view and snapshot management
-remains incomplete. `docs/STATE.md` remains authoritative for the exact proof boundary.
+objects and relationships use the semantic mutation adapter. The v5 venture session persists graph camera
+changes alongside mode, selection, and conversation state; v4/v3 migration preserves founder context while
+clearing only the obsolete map camera. Saved live views and snapshots have a reachable list, reopen, and
+delete lifecycle. `docs/STATE.md` remains authoritative for the exact proof boundary.
 
 ## Stack
 
@@ -136,6 +144,13 @@ extensions serve package-only historical components.
 - `--green-2` marks verified active work.
 - `--danger` marks destructive or failed states.
 - `--blind` marks missing signal.
+- `--agent-spectrum-*` is the cyan-to-amber spectrum reserved for the in-chat authority switch between
+  direct Claude/Codex and Product / GTM agents. It may edge the participant switch and active composer;
+  a slow continuous drift may signal active agent participation, with a static reduced-motion fallback. It is
+  not an ambient background or general accent system.
+- The Work participant switch moves one shared selection indicator rather than swapping independent button fills.
+  Sending a prompt gives the exact text one short directional departure into the transcript; Code uses its neutral
+  primary color while Product / GTM uses the agent spectrum. Network latency never controls this motion's duration.
 
 The UI has no production `--proven` token. Do not reintroduce positive/negative outcome color or
 inherit the standalone package's green status vocabulary. Outcomes remain language and evidence.
@@ -162,8 +177,9 @@ The spacing scale is 4, 8, 12, 16, 20, 24, 32, and 48px. The working radius scal
 16, and 20px; 20px is reserved for the composer and full circles for status or identity.
 
 Dense does not mean microscopic. Metadata can be quieter than body copy but must stay readable at the
-two supported desktop sizes. The work index defaults to 256px and resizes from 208–420px. Selected exact
-material is 360–540px; the narrative consumes the remaining field. Crew does not occupy a duplicate roster.
+two supported desktop sizes. The work index defaults to 272px and resizes from 272–360px. Selected exact
+material is 360–540px; the narrative consumes the remaining field. Work's SDK participant controls share
+the anchored composer measure; they do not create a second organization surface.
 
 ## Elevation and material
 
@@ -173,7 +189,9 @@ material is 360–540px; the narrative consumes the remaining field. Crew does n
 - Conversation and review content are opaque. The composer alone may use restrained backdrop blur.
 - Hairlines and spacing group related content before another container does.
 
-The rail is separated by a hairline, not elevation. Do not create a speculative shadow catalog.
+The rail is separated by a hairline, not elevation. Work has no agent operator or character roster; ready,
+working, stopping, interrupted, and needs-you remain explicit in the owning Thread and transcript. Do not
+create a speculative shadow catalog.
 
 ## Current legacy Atlas grammar
 
@@ -234,25 +252,38 @@ the same contract and becomes immediate when `prefers-reduced-motion` is active.
 - **`VenturePicker`** — existing venture, create another venture, repository selection, loading, empty,
   busy, and error.
 - **`VentureWorkspace` + `WorkspaceShell`** — sole founder entry and state owner for mode, shared context,
-  v3 restoration, Work conversation/visual, System scope, Release selection, and contextual drawer.
-- **`WorkspaceRail` + `WorkspaceModeNav`** — venture navigation, 208–320px resize, `⌘1`–`⌘3`, mode-scoped
+  v5 restoration, Work conversation/visual, Product / GTM scope, Release selection, and contextual drawer.
+- **`WorkspaceRail` + `WorkspaceModeNav`** — venture navigation, 272–360px resize, `⌘1`–`⌘2`, surface-scoped
   `⌘K`, Settings, and mode-specific index bodies.
 - **`ThreadList`** — optional Pinned, Active, Needs review, Recent, and older history without a separate
   participant roster.
 - **`SystemWorkspace`** — controlled graph/attention projection plus founder creation and editing through
   the open semantic adapter or existing architecture compatibility adapter.
-- **`ReleaseWorkspace`** — contextual unsaved draft, four subviews, editable object/work joins, exact
-  founder gates, concrete gaps, derived lifecycle, and reversible end/reopen without deletion or percentage
-  readiness.
+- **`ReleaseWorkspace`** — the current release read model and transition seam toward a release-scoped canvas:
+  contextual unsaved draft, editable object/work joins, exact founder gates, concrete gaps, derived lifecycle,
+  and reversible end/reopen without deletion or percentage readiness. The intended surface uses the same
+  spatial node/edge grammar as Product / GTM rather than retaining the current stacked path composition.
 - **`ThreadConversation`** — continuously mounted direction/review surface with contextual first-message
-  `subjectRefs`.
+  `subjectRefs`; Product / GTM workflow Threads pin their latest staged graph immediately above the composer.
+- **`WorkGraphSketch` + `workflowSketch`** — typed provisional graph projection, exact staged-work identity,
+  collapsed/current/changed states, full-graph review, and the founder adoption boundary.
 - **`NowComposer`** — whole-venture and selected-work scope, voice, busy/held/error states, and exact receipt.
 - **Stage registry bodies** — consequence, exact product artifact, comparison, direction, and overview.
 - **Thread rich items** — compact artifact, comparison, evidence, and consequence projections. The title and
   truthful open action share one header; the produced material owns the body; only recorded provenance gets
   a receipt row. Missing evidence stays visible as a quiet unavailable-source state rather than fake content.
-- **`VentureMaps` + `VentureSystemGraph`** — controlled Product / GTM workspace with Whole system, Product,
-  and Go-to-market views, contextual inspection, pan/zoom, and handoff to linked work.
+- **`VentureMaps` + `VentureAgentWorkflow`** — one advanced Product / GTM conditional-logic canvas with Product
+  truth, go-to-market action, branches, loops, founder gates, returned evidence, in-place expansion, explicit
+  creation, reversible agent/capability composition, spatial workflow declaration, and handoff to scoped agent
+  work. Its density and manipulability are the product; do not simplify it into a flow strip or form editor.
+- **`VentureConditionalWorkflow` + `workflowAdoption`** — founder-adopted conditional graph projection and the
+  feature-local mutation that creates or updates one canonical pipeline while retaining exact Work and Thread
+  lineage. The projection does not advertise placement edits until those positions can be persisted.
+- **`AgentPurposeDialog` + `CapabilityLogo`** — the Product / GTM composition vocabulary: provider-recognizable
+  capability marks and a focused agent identity view exposing purpose, runtime, tools, authority, and exact workflow
+  use before the founder begins scoped conversation.
+- **`VenturePipelineLane`** — presentation-only projection of one reusable GTM pipeline through Signal,
+  Pipeline, Campaign, and Outcome, including exact missing links and attached agent state.
 - **`FirmFreshness`** — reconnect/offline honesty over the coherent workspace read model.
 
 Feature primitives remain feature-local product behavior, not a request to extract a component package.
@@ -264,14 +295,15 @@ product ontology.
 ### Real
 
 - Dark-first neutral tokens in `ui/src/index.css` and their Tailwind aliases.
-- A persisted 208–320px workspace rail and one adaptive center across three founder jobs.
+- A persisted 272–360px workspace rail and one adaptive center across three founder jobs.
 - Work conversation with optional 420–520px visual; Product / GTM or Releases with an optional 420–520px
   contextual chat drawer.
-- Venture-keyed v3 restoration with v2 thread and v1 map migration.
+- Venture-keyed v5 restoration with v4/v3 context migration and older selection migration.
 - A docked scoped composer whose draft survives mode switching because conversation remains mounted.
 - 150–200ms entry, disclosure, focus, and active-work motion with a reduced-motion settlement.
-- A full Product / GTM operating graph that keeps Product capacity, paths to market, work, and returned
-  evidence connected; shared context hands descent back to Work or Releases.
+- A full Product / GTM operating graph that keeps supporting Product truth, founder-authored distribution
+  motions, live market work, and returned evidence connected; shared context hands descent back to Work or
+  Releases.
 - Shared Base UI button/input primitives in high-consequence forms.
 - Card/popover/modal elevation roles.
 - Purpose-specific wall actions and configuration receipts.
@@ -340,7 +372,7 @@ Checkable rules for this repository:
 - No connection failure may leave a "Live" claim without a visible freshness qualifier.
 - No generic approval verb may cross wall purposes.
 - Product-owned copy names concrete work and consequences; it never exposes `bet`, `motion`, `fork`,
-  `outcome`, `the wall`, `pipeline`, `stage`, or `work item`. Historical component, route, storage,
+  `the wall`, `stage`, or `work item`. Pipeline, campaign, and outcome are approved GTM nouns. Historical component, route, storage,
   and test identifiers remain until an intentional migration.
 - No mobile breakpoint or phone/tablet design work.
 
@@ -361,7 +393,7 @@ all 78 canonical tokens with the compatibility projection, validates the extensi
 exits nonzero on any drift.
 
 The acceptance coverage includes 1440×900 and 1280×800 desktop layouts, 100–200% zoom, keyboard focus,
-three-mode context resolution, graph descent, contextual chat, canonical release lifecycle and exact gates,
+two-surface context resolution, graph descent, contextual chat, the nested release section, canonical release lifecycle and exact gates,
 founder consequence, dense/empty states, stale/offline recovery, venture isolation, errors, and long content.
 The complete current receipt is recorded in `docs/STATE.md`; it includes both deterministic browser journeys
 and real Electron-host tests. It remains implementation proof, not evidence of outside-founder comprehension.

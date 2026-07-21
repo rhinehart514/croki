@@ -15,6 +15,8 @@ const { ensureDirectionThread, recordRun } = await import("../../src/firm/semant
 const { buildThreadTimeline } = await import("../../src/firm/thread-timeline.mjs");
 const { buildWorkIndex } = await import("../../src/firm/work-index.mjs");
 const { applyFirmConfiguration, getFirmConfiguration } = await import("../../src/firm/configuration.mjs");
+const { beginActiveDrive, __resetActiveDrives } = await import("../../src/firm/active-drives.mjs");
+const { appendEvent } = await import("../../src/firm/work-loop-tools.mjs");
 
 const options = { root };
 
@@ -71,5 +73,23 @@ describe("thread timeline projection", () => {
     assert.ok(returned, "the venture root carries a return summary instead of a dashboard");
     assert.equal(returned.actions[0].threadRef, fx.thread.threadRef);
     assert.ok(returned.counts.attention >= 1);
+  });
+
+  it("projects inspectable tool receipts for live work without model reasoning", () => {
+    const fx = fixture();
+    const drive = beginActiveDrive({ ventureId: fx.venture.id, teammateRef: "codex", betId: fx.bet.id, runtime: "codex", abortSupported: true });
+    try {
+      appendEvent(fx.venture.id, fx.bet.id, { id: "event-search", type: "tool_started", detail: "search_repository", durationMs: 145 }, options);
+      appendEvent(fx.venture.id, fx.bet.id, { id: "event-private", type: "text", detail: "private internal reasoning" }, options);
+      appendEvent(fx.venture.id, fx.bet.id, { id: "event-read", type: "tool_started", detail: "read_repository_excerpt", durationMs: 1_420 }, options);
+      const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
+      const status = timeline.items.find((item) => item.kind === "agent-status");
+      assert.deepEqual(status.activitySteps.map((step) => step.label), ["Searched the repository", "Read source evidence"]);
+      assert.deepEqual(status.activitySteps.map((step) => step.durationMs), [145, 1_420]);
+      assert.equal(JSON.stringify(status.activitySteps).includes("private internal reasoning"), false);
+    } finally {
+      drive.finish();
+      __resetActiveDrives();
+    }
   });
 });
