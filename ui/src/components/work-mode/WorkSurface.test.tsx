@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CodingWorkspace, ThreadTimeline } from "@/api";
 import { WorkSurface } from "./WorkSurface";
@@ -54,12 +54,39 @@ describe("Work surface", () => {
     expect(screen.getByText("drover/older")).toBeInTheDocument();
   });
 
+  it("opens the reviewable return before a newer interrupted attempt", () => {
+    const value = timeline();
+    const newest = (value.items[1].artifact as CodingWorkspace);
+    newest.status = "interrupted";
+
+    render(<WorkSurface ventureId="venture-one" timeline={value} conversation={<div />} readOnlyReason={null} onWorkspaceChanged={vi.fn()} />);
+
+    expect(screen.getByText("Earlier approach")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Coding attempt" })).toHaveValue("older");
+  });
+
   it("states the native capability boundary instead of simulating desktop behavior", () => {
     render(<WorkSurface ventureId="venture-one" timeline={timeline()} conversation={<div />} readOnlyReason={null} onWorkspaceChanged={vi.fn()} />);
     fireEvent.click(screen.getByRole("tab", { name: "preview" }));
     expect(screen.getByText("Preview requires the desktop app.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Terminal" }));
     expect(screen.getByText("Terminal requires the desktop app.")).toBeInTheDocument();
+  });
+
+  it("compares two attempts side by side and focuses the founder's pick", () => {
+    render(<WorkSurface ventureId="venture-one" timeline={timeline()} conversation={<div />} readOnlyReason={null} onWorkspaceChanged={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Compare attempts" }));
+    expect(screen.getByLabelText("Compare coding attempts")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByLabelText("Right attempt")).getByRole("button", { name: "Focus this attempt" }));
+    expect(screen.getByRole("combobox", { name: "Coding attempt" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Compare coding attempts")).not.toBeInTheDocument();
+  });
+
+  it("does not offer compare with a single attempt", () => {
+    const value = timeline();
+    value.items = [value.items[1]];
+    render(<WorkSurface ventureId="venture-one" timeline={value} conversation={<div />} readOnlyReason={null} onWorkspaceChanged={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Compare attempts" })).not.toBeInTheDocument();
   });
 
   it("does not reserve an empty workbench before repository work begins", () => {

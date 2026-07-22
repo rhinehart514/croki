@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createVenture,
   getPortfolioWall,
   listRepositoryChoices,
   listVentures,
@@ -29,6 +30,7 @@ const venture: FirmVenture = {
 
 describe("VenturePicker portfolio gate", () => {
   beforeEach(() => {
+    vi.mocked(createVenture).mockReset();
     vi.mocked(listRepositoryChoices).mockResolvedValue({ repositories: [] });
     vi.mocked(getPortfolioWall).mockResolvedValue({
       eligibility: {
@@ -44,7 +46,7 @@ describe("VenturePicker portfolio gate", () => {
   it("does not request or mention the portfolio frontier during first-venture onboarding", async () => {
     vi.mocked(listVentures).mockResolvedValue({ ventures: [] });
     render(<VenturePicker onOpen={vi.fn()} />);
-    expect(await screen.findByRole("heading", { name: "Start your first venture" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Move from the real Product" })).toBeTruthy();
     expect(getPortfolioWall).not.toHaveBeenCalled();
     expect(screen.queryByText(/portfolio|one wall/i)).toBeNull();
   });
@@ -76,12 +78,27 @@ describe("VenturePicker portfolio gate", () => {
 
     render(<VenturePicker onOpen={vi.fn()} />);
 
-    const toggle = await screen.findByRole("button", { name: /start another venture/i });
+    const toggle = await screen.findByRole("button", { name: /add another codebase/i });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByRole("form", { name: "Start a venture" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Add a codebase" })).toBeNull();
 
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("form", { name: "Start a venture" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Add a codebase" })).toBeTruthy();
+  });
+
+  it("opens a codebase immediately after one repository choice", async () => {
+    const next = { ...venture, id: "venture-b", name: "Product B", repository: "/products/b" };
+    vi.mocked(listVentures).mockResolvedValue({ ventures: [venture] });
+    vi.mocked(listRepositoryChoices).mockResolvedValue({ repositories: [{ name: "Product B", path: "/products/b", source: "workspace" }] });
+    vi.mocked(createVenture).mockResolvedValue({ venture: next });
+    const onOpen = vi.fn();
+
+    render(<VenturePicker onOpen={onOpen} />);
+    fireEvent.click(await screen.findByRole("button", { name: /add another codebase/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add Product B codebase" }));
+
+    await waitFor(() => expect(createVenture).toHaveBeenCalledWith("Product B", "/products/b"));
+    expect(onOpen).toHaveBeenCalledWith(next);
   });
 });

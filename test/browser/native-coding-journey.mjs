@@ -97,38 +97,48 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
     await waitForDom(client, `document.querySelector('.code-workspace-product')?.dataset.review === 'adopted'`, "founder adoption did not persist");
 
     assert.equal(await client.evaluate(clickMode("Product / GTM")), true);
-    await waitForDom(client, `/Founders can review verified code without leaving venture context/.test(document.querySelector('.workspace-primary')?.textContent || '')`, "the adopted consequence did not appear in Product / GTM");
-    assert.equal(await client.evaluate(`(document.querySelector('[aria-label="Selected Product and go-to-market context"]')?.textContent || '').includes('Founders can review verified code without leaving venture context')`), true, "mode switching did not preserve the exact linked Product subject");
+    try {
+      await waitForDom(client, `!!document.querySelector('.product-gtm-surface') && [...document.querySelectorAll('.product-gtm-node[data-kind="truth"] strong')].some((entry) => entry.textContent.trim() === 'Founders can review verified code without leaving venture context')`, "the adopted consequence did not appear in Product / GTM");
+    } catch (error) {
+      const state = await client.evaluate(`({ mode: document.querySelector('.workspace-shell')?.dataset.mode, productGtm: Boolean(document.querySelector('.product-gtm-surface')), text: document.querySelector('.workspace-primary')?.textContent?.replace(/\\s+/g, ' ').trim().slice(0, 500) })`);
+      throw new Error(`${error.message}: ${JSON.stringify(state)}`);
+    }
+    assert.equal(await client.evaluate(`(() => { const name = 'Founders can review verified code without leaving venture context'; if (document.querySelector('.product-gtm-node[data-expanded="true"] strong')?.textContent.trim() === name) return true; const node = [...document.querySelectorAll('.product-gtm-node[data-kind="truth"]')].find((entry) => entry.querySelector('strong')?.textContent.trim() === name); node?.click(); return Boolean(node); })()`), true, "mode switching did not preserve the exact linked Product subject");
+    await waitForDom(client, `document.querySelector('.product-gtm-node[data-expanded="true"] strong')?.textContent.trim() === 'Founders can review verified code without leaving venture context' && !document.querySelector('.product-gtm-inspector')`, "the adopted Product consequence did not expand in the living model");
 
-    assert.equal(await client.evaluate(`(() => { const button = document.querySelector('.product-release-toggle'); button?.click(); return Boolean(button); })()`), true);
-    await waitForDom(client, `document.querySelector('.release-draft-canvas h2')?.textContent.trim() === 'Founders can review verified code without leaving venture context'`, "the exact Product consequence did not seed the release name");
-    assert.equal(await client.evaluate(`(document.querySelector('.release-draft-canvas')?.textContent || '').includes('Which founders should receive this exact verified change first?')`), true, "the distribution question was not carried into the release");
-    assert.equal(await client.evaluate(`(document.querySelector('.release-draft-canvas')?.textContent || '').includes('Implement the native coding browser proof')`), true, "the release did not expose its exact Work context");
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.release-draft-action button')].find((entry) => entry.textContent.trim() === 'Build release with agent'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
-    await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === 'Founders can review verified code without leaving venture context' && !!document.querySelector('.release-canvas')`, "the seeded release did not become canonical");
-    assert.equal(await client.evaluate(`(() => { const text = document.querySelector('.release-canvas')?.textContent || ''; return text.includes('Founders can review verified code without leaving venture context') && text.includes('Implement the native coding browser proof'); })()`), true, "the release canvas lost its exact Product or Work join");
-    assert.equal(await client.evaluate(`document.querySelectorAll('.release-canvas-node[data-empty="true"]').length >= 3`), true, "the seeded release fabricated missing customer, distribution, action, or evidence links");
     assert.equal(await client.evaluate(clickMode("Work")), true);
+    await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row')].find((entry) => entry.querySelector('span')?.textContent.trim() === 'Implement the native coding browser proof'); row?.click(); return Boolean(row); })()`);
     await waitForDom(client, `!!document.querySelector('.work-workbench .code-workspace')`, "returning to Work lost the exact implementation");
 
     assert.equal(await client.evaluate(clickButton("Approve checkpoint")), true);
     await waitForDom(client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "the exact checkpoint review did not persist");
     assert.equal(await client.evaluate(`(() => {
-      const input = document.querySelector('[aria-label="Commit message"]');
+      const input = document.querySelector('.work-workbench [aria-label="Commit message"]');
       if (!input) return false;
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
       setter.call(input, 'prove native coding journey');
       input.dispatchEvent(new Event('input', { bubbles: true }));
       return true;
     })()`), true);
-    await waitForDom(client, `[...document.querySelectorAll('button')].some((entry) => entry.textContent.trim() === 'Commit in isolated branch' && !entry.disabled)`, "commit consequence did not become available");
-    assert.equal(await client.evaluate(clickButton("Commit in isolated branch")), true);
-    await waitForDom(client, `document.querySelector('.code-workspace-activity[data-state="error"]') || (document.querySelector('.work-status')?.textContent || '').trim() === 'committed'`, "the isolated branch commit produced no receipt");
-    const commitState = await client.evaluate(`({ status: document.querySelector('.work-status')?.textContent?.trim(), error: document.querySelector('.code-workspace-activity[data-state="error"]')?.textContent?.trim() })`);
-    assert.equal(commitState.status, "committed", commitState.error || "the isolated branch commit was not recorded");
+    await waitForDom(client, `[...document.querySelectorAll('.work-workbench button')].some((entry) => entry.textContent.trim() === 'Commit in isolated branch' && !entry.disabled)`, "commit consequence did not become available");
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.work-workbench button')].find((entry) => entry.textContent.trim() === 'Commit in isolated branch'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
+    const commitDeadline = Date.now() + 12_000;
+    let committed = null;
+    while (Date.now() < commitDeadline && committed?.workspace?.status !== "committed") {
+      const response = await drover.founderFetch(`/api/ventures/${encodeURIComponent(drover.fixture.venture.id)}/coding-workspaces/${encodeURIComponent(drover.fixture.completed.id)}`);
+      committed = await response.json();
+      if (committed.workspace?.status !== "committed") await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(committed?.workspace?.status, "committed", committed?.error || "the isolated branch commit was not recorded");
     assert.equal(fs.existsSync(path.join(ROOT, "native-coding-browser-proof.txt")), false, "committing isolated work changed the founder source workspace");
 
     await client.send("Page.reload", { ignoreCache: true });
+    await waitForDom(client, `!!document.querySelector('.workspace-mode-nav')`, "the venture did not return after reload");
+    assert.equal(await client.evaluate(clickMode("Work")), true);
+    await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row')].find((entry) => entry.querySelector('span')?.textContent.trim() === 'Implement the native coding browser proof'); row?.click(); return Boolean(row); })()`);
+    await waitForDom(client, `!!document.querySelector('.work-workbench-tools select')`, "the committed implementation did not restore its exact workbench");
+    await client.evaluate(`(() => { const select = document.querySelector('.work-workbench-tools select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('committed')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await waitForDom(client, `(document.querySelector('.work-workbench .work-status')?.textContent || '').trim() === 'committed'`, "the durable commit receipt was not visible after reload");
     await waitForDom(client, `document.querySelectorAll('.thread-material[data-kind="native-code"]').length === 2`, "refresh lost durable coding attempts");
 
   } finally {

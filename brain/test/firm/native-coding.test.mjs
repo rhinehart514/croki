@@ -9,6 +9,7 @@ import { isCodingDirection } from "../../src/firm/code-intent.mjs";
 import {
   applyCodingWorkspace,
   codingWorkspaceEnvironment,
+  commitCodingWorkspace,
   discardCodingWorkspace,
   openCodingWorkspace,
   recoverInterruptedCodingWorkspaces,
@@ -69,13 +70,13 @@ describe("licensed checkpoint boundary", () => {
 });
 
 describe("Run-linked coding workspace", () => {
-  it("projects a founder-cancelled coding Run with the canonical terminal word", () => {
+  it("projects a founder-cancelled coding Run with the canonical terminal word", async () => {
     const { repo, options, venture, cleanup } = fixture();
     const workspace = openCodingWorkspace({
       ventureId: venture.id, runId: "drive-cancelled", threadRef: "thread:cancelled",
       participantRef: "codex", provider: "codex", repository: repo, goal: "Stop this exact attempt",
     }, options);
-    const settled = settleCodingWorkspace(venture.id, workspace.id, {
+    const settled = await settleCodingWorkspace(venture.id, workspace.id, {
       runRef: "run:drive-cancelled", outcome: { kind: "cancelled" },
     }, options);
     assert.equal(settled.status, "cancelled");
@@ -113,7 +114,7 @@ describe("Run-linked coding workspace", () => {
     cleanup();
   });
 
-  it("forks the founder's exact dirty source, captures provider proof, and applies only after exact approval", () => {
+  it("forks the founder's exact dirty source, captures provider proof, and applies only after exact approval", async () => {
     const { repo, options, venture, cleanup } = fixture();
     fs.writeFileSync(path.join(repo, "product.txt"), "founder in progress\n");
     const workspace = openCodingWorkspace({
@@ -124,7 +125,7 @@ describe("Run-linked coding workspace", () => {
     fs.writeFileSync(path.join(workspace.worktree, "product.txt"), "founder in progress\nimplemented\n");
     fs.writeFileSync(path.join(workspace.worktree, "proof.txt"), "untracked proof\n");
     updateCodingSession(venture.id, workspace.id, { runRef: "run:drive-1234567890", command: { command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "ok", verification: true } }, options);
-    const settled = settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-1234567890", outcome: { kind: "completed" } }, options);
+    const settled = await settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-1234567890", outcome: { kind: "completed" } }, options);
     assert.equal(settled.status, "reviewable");
     assert.match(settled.diff, /implemented/);
     assert.match(settled.diff, /proof\.txt/);
@@ -159,7 +160,7 @@ describe("Run-linked coding workspace", () => {
     cleanup();
   });
 
-  it("keeps revised and rejected coding interpretations outside canonical Product truth", () => {
+  it("keeps revised and rejected coding interpretations outside canonical Product truth", async () => {
     const { repo, options, venture, cleanup } = fixture();
     const workspace = openCodingWorkspace({
       ventureId: venture.id, runId: "drive-product-review", threadRef: "thread:product-review",
@@ -167,7 +168,7 @@ describe("Run-linked coding workspace", () => {
     }, options);
     fs.writeFileSync(path.join(workspace.worktree, "product.txt"), "hello\nreviewable\n");
     updateCodingSession(venture.id, workspace.id, { runRef: "run:drive-product-review", command: { command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "ok", verification: true } }, options);
-    settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-product-review", outcome: { kind: "completed" } }, options);
+    await settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-product-review", outcome: { kind: "completed" } }, options);
     const revised = reviewCodingProductConsequence(venture.id, workspace.id, {
       decision: "revise", capability: "Faster first value", releaseQuestion: "Who needs this proof?",
     }, { authority: "founder", id: "founder" }, options);
@@ -181,7 +182,7 @@ describe("Run-linked coding workspace", () => {
     cleanup();
   });
 
-  it("preserves an apply receipt when the isolated workspace is later discarded", () => {
+  it("preserves an apply receipt when the isolated workspace is later discarded", async () => {
     const { repo, options, venture, cleanup } = fixture();
     options.nativeCodingHostVerification = false;
     const workspace = openCodingWorkspace({
@@ -190,7 +191,7 @@ describe("Run-linked coding workspace", () => {
     }, options);
     fs.writeFileSync(path.join(workspace.worktree, "product.txt"), "audited implementation\n");
     updateCodingSession(venture.id, workspace.id, { runRef: "run:drive-apply-audit", command: { command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "ok", verification: true } }, options);
-    settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-apply-audit", outcome: { kind: "completed" } }, options);
+    await settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-apply-audit", outcome: { kind: "completed" } }, options);
     reviewCodingWorkspace(venture.id, workspace.id, "approve", "Exact patch reviewed", options);
     applyCodingWorkspace(venture.id, workspace.id, options);
 
@@ -202,7 +203,7 @@ describe("Run-linked coding workspace", () => {
     cleanup();
   });
 
-  it("blocks provider commits through the workspace environment", () => {
+  it("blocks provider commits while allowing the explicit founder commit action", async () => {
     const { repo, options, venture, cleanup } = fixture();
     const workspace = openCodingWorkspace({
       ventureId: venture.id, runId: "drive-guard", threadRef: "thread:direction-guard",
@@ -213,6 +214,11 @@ describe("Run-linked coding workspace", () => {
     const attempt = spawnSync("git", ["commit", "-m", "provider must not commit"], { cwd: workspace.worktree, env: codingWorkspaceEnvironment(workspace), encoding: "utf8" });
     assert.notEqual(attempt.status, 0);
     assert.match(attempt.stderr, /founder-held consequences/);
+    updateCodingSession(venture.id, workspace.id, { runRef: "run:drive-guard", command: { command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "ok", verification: true } }, options);
+    await settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-guard", outcome: { kind: "completed" } }, options);
+    reviewCodingWorkspace(venture.id, workspace.id, "approve", "Exact patch reviewed", options);
+    const committed = commitCodingWorkspace(venture.id, workspace.id, "founder approved commit", options);
+    assert.equal(committed.status, "committed");
     const nested = fs.mkdtempSync(path.join(os.tmpdir(), "drover-guard-nested-"));
     git(nested, ["init", "-q"]); git(nested, ["config", "user.email", "test@example.com"]); git(nested, ["config", "user.name", "Test"]);
     fs.writeFileSync(path.join(nested, "allowed.txt"), "fixture\n"); git(nested, ["add", "."]);
@@ -223,14 +229,14 @@ describe("Run-linked coding workspace", () => {
     cleanup();
   });
 
-  it("recovers an interrupted process honestly and preserves distinct attempts", () => {
+  it("recovers an interrupted process honestly and preserves distinct attempts", async () => {
     const { repo, options, venture, cleanup } = fixture();
     const first = openCodingWorkspace({
       ventureId: venture.id, runId: "drive-first", threadRef: "thread:one", participantRef: "codex",
       provider: "codex", repository: repo, goal: "Implement recovery",
     }, options);
     fs.writeFileSync(path.join(first.worktree, "recovery.txt"), "survived\n");
-    const [recovered] = recoverInterruptedCodingWorkspaces(options);
+    const [recovered] = await recoverInterruptedCodingWorkspaces(options);
     assert.equal(recovered.id, first.id);
     assert.equal(recovered.status, "interrupted");
     assert.match(recovered.diff, /survived/);

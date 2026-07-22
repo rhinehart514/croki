@@ -7,6 +7,7 @@
 // turn and asks GTM IDE to execute the tool calls it produced.
 
 import { Anthropic } from "@anthropic-ai/sdk";
+import { imageUserContent } from "./image-input.mjs";
 
 export const anthropicRuntime = {
   id: "anthropic",
@@ -29,7 +30,7 @@ export const anthropicRuntime = {
     const client = ctx.client || new Anthropic();
     let messages = ctx.initialMessages?.length
       ? ctx.initialMessages
-      : [{ role: "user", content: ctx.goal }];
+      : [{ role: "user", content: imageUserContent(ctx.goal, ctx.attachments ?? []) }];
     let steps = ctx.stepCount;
 
     // The system prompt (teammate doctrine) + tool list are the stable prefix of every turn in this
@@ -52,12 +53,13 @@ export const anthropicRuntime = {
           // prior 4096 could truncate a reasoned turn; streaming isn't used here, so stay under the HTTP
           // timeout ceiling. The teammate loop is reasoning-heavy — this is where thinking earns its cost.
           max_tokens: 16000,
-          // Adaptive thinking + high effort: the teammate plans multi-step GTM work across tool calls, the
-          // reasoning-heavy creator case the harness wants to think hard. Opus 4.8 (the pinned default)
-          // takes adaptive thinking; effort lives inside output_config. A founder-injected client in tests
-          // ignores these, so they only shape the real subscription-billed run.
+          // Adaptive thinking + founder-selected effort: the teammate plans multi-step GTM work across tool
+          // calls, the reasoning-heavy creator case the harness wants to think hard. Opus 4.8 (the pinned
+          // default) takes adaptive thinking; effort lives inside output_config and defaults to "high" when
+          // the founder never chose a level. A founder-injected client in tests ignores these, so they only
+          // shape the real subscription-billed run.
           thinking: { type: "adaptive" },
-          output_config: { effort: "high" },
+          output_config: { effort: ctx.effort ?? "high" },
           system: cachedSystem,
           tools: ctx.tools,
           messages,

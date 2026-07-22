@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { CodingWorkspace, ThreadTimeline } from "@/api";
-import { codingWorkspacesFromTimeline } from "./workspaceProjection";
+import { codingWorkspacesFromTimeline, defaultCodingWorkspace } from "./workspaceProjection";
 
-const attempt = (id: string, updatedAt: string): CodingWorkspace => ({
+const attempt = (id: string, updatedAt: string, status: CodingWorkspace["status"] = "running"): CodingWorkspace => ({
   id, kind: "native-code", ventureId: "venture-one", threadRef: "thread:one", betId: null,
   goal: id, repository: "/repo", sourceHead: "abc", branch: `drover/${id}`, worktree: `/worktrees/${id}`,
   runRefs: [], participantRefs: [], providerSessions: [], checkpoints: [], verification: [], changedFiles: [],
-  diff: "", diffStat: "", patchHash: "", status: "working", currentActivity: null,
+  diff: "", diffStat: "", patchHash: "", status, currentActivity: null,
   createdAt: updatedAt, updatedAt,
 });
 
@@ -22,5 +22,11 @@ describe("coding workspace projection", () => {
 
     expect(codingWorkspacesFromTimeline(timeline).map((workspace) => workspace.id)).toEqual(["latest", "older"]);
   });
-});
 
+  it("defaults to the attempt that needs founder judgment instead of a newer interruption", () => {
+    const reviewable = attempt("reviewable", "2026-07-18T12:00:00.000Z", "reviewable");
+    const interrupted = attempt("interrupted", "2026-07-19T12:00:00.000Z", "interrupted");
+
+    expect(defaultCodingWorkspace([interrupted, reviewable])?.id).toBe("reviewable");
+  });
+});

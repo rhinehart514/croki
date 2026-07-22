@@ -38,7 +38,10 @@ describe("AgentCreateDialog", () => {
         authority: { outwardEffects: "wall" },
       })],
     }), "Created Product Strategist");
-    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ ref: "product-strategist" })));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ ref: "product-strategist" }),
+      expect.objectContaining({ agents: [expect.objectContaining({ ref: "product-strategist" })] }),
+    ));
   });
 
   it("refuses a duplicate agent identifier", async () => {

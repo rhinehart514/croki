@@ -13,7 +13,6 @@ import {
 import { buildArchitectureContext, architectureContextPrompt } from "../../src/firm/architecture-context.mjs";
 import { buildArchitectureProjection } from "../../src/firm/architecture-projection.mjs";
 import { decideArchitectureProposal, proposeArchitectureChange } from "../../src/firm/architecture-proposals.mjs";
-import { startArchitectureCampaign } from "../../src/firm/architecture-campaign.mjs";
 import { clearPlacement } from "../../src/firm/lens.mjs";
 import { driveTeammate } from "../../src/firm/work-loop.mjs";
 import { listConversation } from "../../src/firm/conversation.mjs";
@@ -106,24 +105,6 @@ describe("living venture architecture domain", () => {
     assert.equal(motion.descriptiveOnly, false);
     assert.deepEqual(new Set(motion.relatedElements.map((entry) => entry.id)), new Set(["loop-proof", "system-intake", "system-proof"]));
     assert.match(architectureContextPrompt(motion), /grants no tool or outward authority/);
-  });
-
-  it("starts a campaign by creating a real governing bet without a parallel task record", () => {
-    const fx = fixture();
-    const operations = atlasOperations(fx).filter((entry) => entry.element?.role !== "campaign");
-    applyArchitectureMutations({ ventureId: fx.venture.id, baseRevision: 0, operations, actor: { authority: "founder", id: "jacob" } }, fx.options);
-    const started = startArchitectureCampaign({
-      ventureId: fx.venture.id,
-      baseRevision: 1,
-      motionId: "motion-project",
-      campaign: { name: "Graduate project drops", audience: "Recent graduates", objective: "Get useful work before identity", measurement: { observation: "A qualified project is described", window: "First twenty accepted drops" } },
-      bet: { intent: "Project drop converts better than profile creation" },
-      actor: { authority: "founder", id: "jacob" },
-    }, fx.options);
-    assert.equal(started.revision, 2);
-    assert.equal(started.campaign.governingBetId, started.bet.id);
-    assert.equal(started.bet.architectureTarget.id, started.campaign.id);
-    assert.equal(getVentureDoc(fx.venture.id, "bets", started.bet.id, fx.options).campaignId, started.campaign.id);
   });
 
   it("changes real teammate context and captures the architecture revision on work and conversation", async () => {

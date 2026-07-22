@@ -89,6 +89,13 @@ describe("thread material grammar", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("removes legacy direct-provider continuation prose from existing Work transcripts", () => {
+    const { container, rerender } = render(<ThreadMessage surface="work" item={item("message", { role: "teammate", participantRef: "claude-code", participantLabel: "claude-code", content: "Continuing with Claude Code." })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<ThreadMessage surface="work" item={item("message", { role: "teammate", participantRef: "codex", participantLabel: "codex", content: "Continuing with Codex." })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("presents native coding as exact work rather than provider completion", () => {
     render(<ThreadMessage item={item("artifact", {
       title: "Implement native coding",

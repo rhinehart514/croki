@@ -2,23 +2,22 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["electron/**/*.cjs"],
+      "entry": ["electron/main.cjs", "electron/launch.cjs", "electron/prepare-node-pty.cjs"],
       "project": ["electron/**/*.{cjs,js,mjs}"]
     },
     "brain": {
       "entry": [
+        "src/desktop-runtime.mjs",
         "src/server.mjs",
-        "src/mcp.mjs",
-        "test/**/*.test.mjs"
+        "src/mcp.mjs"
       ],
-      "project": ["src/**/*.mjs"]
+      "project": ["src/**/*.mjs"],
+      "ignore": ["src/firm/founding-crew.mjs"]
     },
     "ui": {
-      "entry": [
-        "src/main.tsx",
-        "**/*.test.{ts,tsx}"
-      ],
+      "entry": ["src/main.tsx"],
       "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["src/desktop.d.ts", "src/test/setupTests.ts"],
       "ignoreDependencies": [
         "@fontsource-variable/geist",
         "@fontsource-variable/geist-mono",

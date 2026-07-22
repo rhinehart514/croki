@@ -35,21 +35,25 @@ function read(file) {
 }
 
 function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const directory = path.dirname(file);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  fs.chmodSync(directory, 0o700);
   const temp = `${file}.${process.pid}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`;
-  fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`);
+  fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(temp, file);
+  fs.chmodSync(file, 0o600);
   return structuredClone(value);
 }
 
 function withLock(root, collection, key, operation) {
   const digest = crypto.createHash("sha256").update(`${collection}\u0000${key}`).digest("hex");
   const lock = path.join(root, ".locks", `${digest}.lock`);
-  fs.mkdirSync(path.dirname(lock), { recursive: true });
+  fs.mkdirSync(path.dirname(lock), { recursive: true, mode: 0o700 });
+  fs.chmodSync(path.dirname(lock), 0o700);
   const deadline = Date.now() + 5_000;
   while (true) {
     try {
-      fs.mkdirSync(lock);
+      fs.mkdirSync(lock, { mode: 0o700 });
       break;
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
@@ -156,5 +160,4 @@ export function persistence(options = {}) {
   return createFileStore(storeRoot(options));
 }
 
-export const jsonPersistence = persistence;
 export function closePersistence() {}

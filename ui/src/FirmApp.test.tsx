@@ -19,11 +19,11 @@ const stopActiveDrive = vi.fn();
 const getWallQueue = vi.fn();
 const getPortfolioWall = vi.fn();
 const driveTeammate = vi.fn();
+const getWorkIndex = vi.fn();
+const createWorkScope = vi.fn();
 const getRuntimeStatuses = vi.fn();
 const markFounderPresent = vi.fn();
 const markFounderAway = vi.fn();
-const getHeatSettings = vi.fn();
-const setHeatSettings = vi.fn();
 const getCredentials = vi.fn();
 const connectGmail = vi.fn();
 const removeCredential = vi.fn();
@@ -41,11 +41,11 @@ vi.mock("@/api", () => ({
   getWallQueue: (...args: unknown[]) => getWallQueue(...args),
   getPortfolioWall: (...args: unknown[]) => getPortfolioWall(...args),
   driveTeammate: (...args: unknown[]) => driveTeammate(...args),
+  getWorkIndex: (...args: unknown[]) => getWorkIndex(...args),
+  createWorkScope: (...args: unknown[]) => createWorkScope(...args),
   getRuntimeStatuses: (...args: unknown[]) => getRuntimeStatuses(...args),
   markFounderPresent: (...args: unknown[]) => markFounderPresent(...args),
   markFounderAway: (...args: unknown[]) => markFounderAway(...args),
-  getHeatSettings: (...args: unknown[]) => getHeatSettings(...args),
-  setHeatSettings: (...args: unknown[]) => setHeatSettings(...args),
   getCredentials: (...args: unknown[]) => getCredentials(...args),
   connectGmail: (...args: unknown[]) => connectGmail(...args),
   removeCredential: (...args: unknown[]) => removeCredential(...args),
@@ -86,8 +86,10 @@ describe("FirmApp", () => {
     });
     driveTeammate.mockReset().mockResolvedValue({
       outcome: { kind: "completed" }, work: {}, runtime: { id: "codex", label: "Codex", auth: "chatgpt-login" },
-      handoff: null,
+      handoff: null, messages: [{ id: "direction-one" }],
     });
+    getWorkIndex.mockReset().mockResolvedValue({ workIndex: { items: [{ threadRef: "thread:one", originMessageRef: "conversation:direction-one" }] } });
+    createWorkScope.mockReset().mockResolvedValue({ workScope: { id: "scope:one" } });
     getRuntimeStatuses.mockReset().mockResolvedValue({
       runtimes: [
         { id: "claude-code", label: "Claude Code (Agent SDK)", connected: true, auth: "oauth-login", authLabel: "Claude subscription", reason: null },
@@ -96,8 +98,6 @@ describe("FirmApp", () => {
     });
     markFounderPresent.mockReset().mockResolvedValue({ present: true });
     markFounderAway.mockReset().mockResolvedValue({ present: false });
-    getHeatSettings.mockReset().mockResolvedValue({ heat: "off", dailySpendUsd: 0 });
-    setHeatSettings.mockReset().mockResolvedValue({ heat: "off", dailySpendUsd: 0 });
     getCredentials.mockReset().mockResolvedValue({ credentials: [] });
     connectGmail.mockReset();
     removeCredential.mockReset();
@@ -105,9 +105,9 @@ describe("FirmApp", () => {
 
   it("explains the venture model and makes starting the first venture the primary path", async () => {
     render(<FirmApp />);
-    expect(await screen.findByRole("heading", { name: /start your first venture/i })).toBeTruthy();
-    expect(screen.getByText(/one venture per product/i)).toHaveTextContent(/repository.*parallel work.*market returns.*founder decisions/i);
-    expect(screen.getByRole("form", { name: /start a venture/i })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: /move from the real product/i })).toBeTruthy();
+    expect(screen.getByText(/folder name becomes the product name/i)).toHaveTextContent(/start directing work as soon as it opens/i);
+    expect(screen.getByRole("region", { name: /add a codebase/i })).toBeTruthy();
   });
 
   it("reopens the last active venture without showing a resume chooser", async () => {
@@ -146,37 +146,34 @@ describe("FirmApp", () => {
   });
 
   it("starting a new venture creates it and opens it directly", async () => {
-    createVenture.mockResolvedValue({ venture: { id: "v2", name: "A new venture", repository: "/products/new", createdAt: "now", updatedAt: "now" } });
+    createVenture.mockResolvedValue({ venture: { id: "v2", name: "new", repository: "/products/new", createdAt: "now", updatedAt: "now" } });
     render(<FirmApp />);
-    await screen.findByRole("heading", { name: /start your first venture/i });
+    await screen.findByRole("heading", { name: /move from the real product/i });
 
-    fireEvent.change(screen.getByLabelText(/new venture name/i), { target: { value: "A new venture" } });
-    await screen.findByRole("button", { name: /selected new product folder/i });
-    expect(screen.queryByLabelText(/product repository path/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /start venture/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /add new codebase/i }));
 
-    await waitFor(() => expect(createVenture).toHaveBeenCalledWith("A new venture", "/products/new"));
+    await waitFor(() => expect(createVenture).toHaveBeenCalledWith("new", "/products/new"));
     await screen.findByTestId("venture-canvas-stub");
   });
 
-  it("offers trusted local folders as explicit choices and keeps the derived name in sync", async () => {
+  it("offers trusted local folders as one-click codebase choices", async () => {
     listRepositoryChoices.mockResolvedValue({
       repositories: [
         { name: "drover", path: "/products/drover", source: "workspace" },
         { name: "second-product", path: "/products/second", source: "venture" },
       ],
     });
+    createVenture.mockResolvedValue({ venture: { id: "v2", name: "second-product", repository: "/products/second", createdAt: "now", updatedAt: "now" } });
     render(<FirmApp />);
 
-    const current = await screen.findByRole("button", { name: /selected drover product folder/i });
-    expect(current).toHaveAttribute("aria-pressed", "true");
+    const current = await screen.findByRole("button", { name: /add drover codebase/i });
     expect(current).toHaveTextContent(/current workspace/i);
-    expect(screen.getByLabelText(/new venture name/i)).toHaveValue("drover");
     expect(screen.queryByLabelText(/product repository path/i)).toBeNull();
+    expect(screen.queryByLabelText(/product name/i)).toBeNull();
+    expect(screen.queryByLabelText(/what are you trying to make true/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /use second-product product folder/i }));
-    expect(screen.getByLabelText(/new venture name/i)).toHaveValue("second-product");
-    expect(screen.getByRole("button", { name: /selected second-product product folder/i })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /add second-product codebase/i }));
+    await waitFor(() => expect(createVenture).toHaveBeenCalledWith("second-product", "/products/second"));
   });
 
   it("chooses a product folder in the desktop shell and derives the venture name", async () => {
@@ -184,15 +181,12 @@ describe("FirmApp", () => {
     window.droverDesktop = { selectRepository };
     createVenture.mockResolvedValue({ venture: { id: "v2", name: "chosen", repository: "/products/chosen", createdAt: "now", updatedAt: "now" } });
     render(<FirmApp />);
-    await screen.findByRole("heading", { name: /start your first venture/i });
+    await screen.findByRole("heading", { name: /move from the real product/i });
 
     expect(screen.queryByLabelText(/product repository path/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /choose product folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose a codebase/i }));
     await waitFor(() => expect(selectRepository).toHaveBeenCalledOnce());
-    expect(screen.getByLabelText(/new venture name/i)).toHaveValue("chosen");
-    expect(screen.getByText("/products/chosen")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /start venture/i }));
     await waitFor(() => expect(createVenture).toHaveBeenCalledWith("chosen", "/products/chosen"));
+    await screen.findByTestId("venture-canvas-stub");
   });
 });

@@ -1,4 +1,4 @@
-import { GitBranch, Globe2 } from "lucide-react";
+import { FileText, GitBranch, Globe2 } from "lucide-react";
 import type { WorkflowCapability } from "./workflowCapabilities";
 
 export function CapabilityLogo({ capability, size = 28 }: { capability: WorkflowCapability; size?: number }) {
@@ -7,5 +7,6 @@ export function CapabilityLogo({ capability, size = 28 }: { capability: Workflow
   if (capability.provider === "exa") return <svg className="capability-logo capability-logo--exa" style={style} viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14l-5.1 8L19 20H5l5.1-8L5 4Z" fill="currentColor"/></svg>;
   if (capability.id === "repository") return <GitBranch className="capability-logo" style={style} aria-hidden="true" />;
   if (capability.id === "browser") return <Globe2 className="capability-logo" style={style} aria-hidden="true" />;
+  if (capability.kind === "markdown") return <FileText className="capability-logo" style={style} aria-hidden="true" />;
   return <span className="capability-logo capability-logo--monogram" style={style} aria-hidden="true">{capability.label.slice(0, 1)}</span>;
 }

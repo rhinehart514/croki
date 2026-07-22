@@ -3,77 +3,16 @@
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { recoverStaleBuilds } from "./feature-builder.mjs";
-import { clearBrainRuntime, publishBrainRuntime } from "./brain-runtime-location.mjs";
 import { devFounderAuthorityEnabled } from "./routes/founder-authority.mjs";
+import { dispatchRequest } from "./request-dispatcher.mjs";
+import { recoverDesktopWork } from "./desktop-runtime.mjs";
 import { json, serveFile } from "./routes/util.mjs";
-
-// Per-domain route modules. The single request handler this file used to hold was split into these
-// cohesive groups (behavior-preserving, W8): each exports `handle({ req, res, url })` that runs its
-// slice of the original if-chain and returns `true` when it handled the request. The dispatch below
-// calls them in the original route order, then falls through to the static-file + 405 tail — so the
-// FIRST matching route still wins, exactly as when every route lived inline.
-import systemRoutes, { shellStatus } from "./routes/system.mjs";
-import presenceRoutes from "./routes/presence.mjs";
-import credentialRoutes from "./routes/credentials.mjs";
-import firmRoutes from "./firm/routes.mjs";
-import firmHeatRoutes from "./firm/heat-routes.mjs";
-import firmLensRoutes from "./firm/lens-routes.mjs";
-import firmWorkIndexRoutes from "./firm/work-index-routes.mjs";
-import firmSystemIndexRoutes from "./firm/system-routes.mjs";
-import firmReleaseRoutes from "./firm/release-routes.mjs";
-import firmViewRoutes from "./firm/view-routes.mjs";
-import firmProductChangeRoutes from "./firm/product-routes.mjs";
-import firmCodeWorkspaceRoutes from "./firm/code-workspace-routes.mjs";
-import firmWorkRoutes from "./firm/work-routes.mjs";
-import firmDialogueRoutes from "./firm/dialogue-routes.mjs";
-import firmVentureRoutes from "./firm/venture-routes.mjs";
-import firmConfigurationRoutes from "./firm/configuration-routes.mjs";
-import firmArchitectureRoutes from "./firm/architecture-routes.mjs";
 
 const port = Number(process.env.PORT || 4317);
 const host = "127.0.0.1";
-const serverInstance = shellStatus().instanceId;
-
-// Surviving harness routes plus the firm's live venture/bet/wall surface.
-const ROUTE_GROUPS = [
-  systemRoutes,
-  presenceRoutes,
-  credentialRoutes,
-  firmRoutes,
-  firmHeatRoutes,
-  firmLensRoutes,
-  firmWorkIndexRoutes,
-  firmSystemIndexRoutes,
-  firmReleaseRoutes,
-  firmViewRoutes,
-  firmProductChangeRoutes,
-  firmCodeWorkspaceRoutes,
-  firmWorkRoutes,
-  firmDialogueRoutes,
-  firmConfigurationRoutes,
-  firmArchitectureRoutes,
-  firmVentureRoutes,
-];
-
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || `${host}:${port}`}`);
-
-  if (url.pathname.startsWith("/api/")) {
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader("X-Drover-Server-Instance", serverInstance);
-    res.setHeader("X-Drover-Responded-At", new Date().toISOString());
-  }
-
-  const ctx = { req, res, url };
-  for (const group of ROUTE_GROUPS) {
-    if (await group(ctx)) return;
-  }
-
-  if (url.pathname.startsWith("/api/")) {
-    json(res, 404, { error: "API route not found." });
-    return;
-  }
+  if (await dispatchRequest(req, res)) return;
 
   // Static files
   if (req.method === "GET") { serveFile(url.pathname, res); return; }
@@ -86,8 +25,6 @@ export { server };
 
 // No ambient loop runs at boot. Work begins ONLY through explicit founder direction or a founder-
 // invoked workflow (FIRM-SPEC rail #1; STATE.md); there is no perpetual firm loop to arm here, and no
-// timer for shutdown to clear. heat.mjs still owns the founder dial + spend rail + a founder-invokable
-// runHeatTick, but nothing starts it on a schedule by default.
 let shutdownPromise = null;
 let shutdownFailSafe = null;
 
@@ -113,9 +50,7 @@ function closeHttpServer() {
 function shutdownServer() {
   if (shutdownPromise) return shutdownPromise;
 
-  shutdownPromise = closeHttpServer().then(() => {
-    if (process.env.GTM_IDE_DESKTOP === "1") clearBrainRuntime(serverInstance);
-  }).catch((err) => {
+  shutdownPromise = closeHttpServer().catch((err) => {
     server.closeAllConnections?.();
     process.exitCode = 1;
     console.error(`Drover shutdown failed: ${err instanceof Error ? err.message : err}`);
@@ -147,28 +82,21 @@ function shutdownAfterSignal() {
 function startServer() {
   server.listen(port, host, () => {
     const activePort = server.address().port;
-    if (process.env.GTM_IDE_DESKTOP === "1") {
-      publishBrainRuntime({ port: activePort, instanceId: serverInstance, pid: process.pid, startedAt: shellStatus().startedAt });
-    }
     console.log(`Drover running at http://${host}:${activePort}`);
     if (devFounderAuthorityEnabled()) {
       console.warn("  Development founder writes enabled for non-agent loopback browser requests.");
     }
     // No ambient loop is armed here. Work starts only through an explicit founder direction or a
     // founder-invoked workflow (the /drive route with founder authority, or a founder-invoked call into
-    // heat.mjs's runHeatTick). A fresh boot wakes nothing.
     // Dogfood crash recovery: no feature build survives a restart, so flip stale queued/building
     // items to `interrupted` and salvage any orphaned worktree work onto its branch. Best-effort.
-    try {
-      const recovered = recoverStaleBuilds();
-      if (recovered.length) console.log(`  Dogfood recovery: ${recovered.map((r) => r.item ?? r.worktree).join(", ")}`);
-    } catch (err) {
+    void recoverDesktopWork().then(({ recoveredBuilds, recoveredWorkspaces, authorizedScopes }) => {
+      if (recoveredBuilds.length) console.log(`  Dogfood recovery: ${recoveredBuilds.map((r) => r.item ?? r.worktree).join(", ")}`);
+      if (recoveredWorkspaces.length) console.log(`  Native coding recovery: ${recoveredWorkspaces.map((entry) => entry.id).join(", ")}`);
+      if (authorizedScopes.length) console.log(`  Authorized continuing work discovered: ${authorizedScopes.length}`);
+    }).catch((err) => {
       console.log(`  Dogfood recovery skipped: ${err instanceof Error ? err.message : err}`);
-    }
-    import("./firm/code-workspace.mjs").then(({ recoverInterruptedCodingWorkspaces }) => {
-      const recovered = recoverInterruptedCodingWorkspaces();
-      if (recovered.length) console.log(`  Native coding recovery: ${recovered.map((entry) => entry.id).join(", ")}`);
-    }).catch((err) => console.log(`  Native coding recovery skipped: ${err instanceof Error ? err.message : err}`));
+    });
   });
 }
 

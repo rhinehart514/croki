@@ -1,7 +1,4 @@
-// The safe tool set work-loop.mjs hands a driving participant.
-// Every tool here is an ordinary function over the firm core, screened by FORBIDDEN_TOOL through
-// filterSafeTools before it ever reaches a model. None of them execute an outward effect themselves —
-// stage_outward only classifies and parks; the founder's own decision (F3) is the only door out.
+// Safe tools for one drive. Outward effects only classify and park; the founder's decision is the door out.
 
 import crypto from "node:crypto";
 import { getVentureDoc, setVentureDoc, now } from "./venture-store.mjs";
@@ -15,12 +12,13 @@ import { appendConversationMessage } from "./conversation.mjs";
 import { getFirmConfiguration, proposeFirmConfiguration } from "./configuration.mjs";
 import { buildArchitectureWorkLoopTools } from "./architecture-work-loop-tools.mjs";
 import { buildRepositoryWorkLoopTools } from "./repository-work-loop-tools.mjs";
+import { buildModelWorkLoopTools } from "./model-branches.mjs";
 import { parkOutwardAtWall } from "./grant-stage-outward.mjs";
 import { extendDirectionThread } from "./semantic-model-store.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
+import { buildBrowserReadTools, buildExaReadTools } from "../connected-read-capabilities.mjs";
 
 const MAX_EVENTS_PER_BET = 200;
-
 function genId(prefix) {
   const stamp = now().replace(/\D/g, "").slice(0, 14);
   return `${prefix}-${stamp}-${crypto.randomBytes(4).toString("hex")}`;
@@ -232,13 +230,14 @@ function makeForkBet({ ventureId, teammateRef, configurationRevision, architectu
 function makeStageArtifact({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, contributingRefs }) {
   return {
     name: "stage_artifact",
-    description: "Attach local work to a bet without releasing it. Arbitrary legacy content remains valid. For a deliberate Product/GTM workflow sketch use { kind: 'flow', purpose: 'product-gtm-workflow', steps: [{ id, label, detail?, type? }], edges: [{ from, to, label? }] }. For a deliberate comparison use { kind: 'comparison', variant: 'before-after' | 'alternatives', columns: [{ id, title, items: [{ label, detail?, artifactRef? }] }] }.",
+    description: "Attach local work to a bet without releasing it. Arbitrary legacy content remains valid. For a provisional local Product/GTM view use { kind: 'model-view', purpose: 'product-gtm-local-model', question, branchRef, nodes: [{ id, label, detail?, kind, state, sourceRef? }], edges: [{ from, to, label?, kind? }] }. Use a flow only when the material truly has ordered mechanics. For a deliberate comparison use { kind: 'comparison', variant: 'before-after' | 'alternatives', columns: [{ id, title, items: [{ label, detail?, artifactRef? }] }] }.",
     input_schema: {
       type: "object",
       properties: {
         betId: { type: "string" },
         content: {
           anyOf: [
+            { type: "object", properties: { kind: { const: "model-view" }, purpose: { const: "product-gtm-local-model" }, question: { type: "string" }, branchRef: { type: "string" }, nodes: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, detail: { type: "string" }, kind: { enum: ["question", "truth", "proposal", "alternative", "unknown", "evidence", "action", "gate", "outcome"] }, state: { enum: ["current", "provisional", "unresolved"] }, sourceRef: { type: "string" } }, required: ["id", "label", "kind", "state"] } }, edges: { type: "array", items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" }, label: { type: "string" }, kind: { enum: ["relationship", "dependency", "alternative", "return"] } }, required: ["from", "to"] } } }, required: ["kind", "purpose", "question", "branchRef", "nodes", "edges"] },
             {
               type: "object", properties: {
                 kind: { const: "flow" },
@@ -460,6 +459,9 @@ export function buildToolSet({
   const definitions = [
     makeReadTruth({ cwd }),
     ...buildRepositoryWorkLoopTools({ cwd, trackCall, capturedSources }),
+    ...buildBrowserReadTools({ trackCall }),
+    ...buildExaReadTools({ options, trackCall }),
+    ...buildModelWorkLoopTools({ ventureId, teammateRef, target, options, trackCall }),
     makeGetFirmConfiguration({ ventureId, options }),
     makeGetTaste({ ventureId, options, taste, ventureStore }),
     ...buildArchitectureWorkLoopTools({

@@ -3,150 +3,166 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createGeneratedMapsFixture } from "../fixtures/atlas-fixtures.mjs";
-import { assertNoUnhandledRejections, bootFixture, openFixtureVenture, waitForDom } from "./fixtures/browser-harness.mjs";
+import { assertNoUnhandledRejections, bootFixture, openFixtureVenture, waitForCanvasViewportStable, waitForDom } from "./fixtures/browser-harness.mjs";
 
 async function chooseMode(client, label) {
-  const clicked = await client.evaluate(`(() => { const button = [...document.querySelectorAll('.workspace-mode-nav button')].find((entry) => entry.textContent.includes(${JSON.stringify(label)})); button?.click(); return Boolean(button); })()`);
-  assert.equal(clicked, true, `${label} mode was unavailable`);
-  await waitForDom(client, `document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes(${JSON.stringify(label)})`, `${label} mode did not become current`);
+  const clicked = await client.evaluate(`(() => {
+    const button = [...document.querySelectorAll('.workspace-mode-nav button')]
+      .find((entry) => entry.textContent.includes(${JSON.stringify(label)}));
+    if (!button) return false;
+    if (button.getAttribute('aria-current') !== 'page') button.click();
+    return true;
+  })()`);
+  assert.equal(clicked, true, `${label} surface was unavailable`);
+  await waitForDom(client, `document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes(${JSON.stringify(label)})`, `${label} did not become current`);
 }
 
-async function chooseReleaseSection(client) {
-  await chooseMode(client, "Product / GTM");
-  const opened = await client.evaluate(`(() => { const button = document.querySelector('.product-release-toggle'); if (!button) return false; if (button.getAttribute('aria-expanded') !== 'true') button.click(); return true; })()`);
-  assert.equal(opened, true, "Releases section was unavailable inside Product / GTM");
-  await waitForDom(client, `document.querySelector('.product-release-toggle[aria-expanded="true"][aria-current="page"]') && document.querySelector('.release-workspace')`, "Releases did not open within the Product / GTM surface");
-}
-
-async function chooseNode(client, name) {
-  await waitForDom(client, `!!document.querySelector('.system-workspace .venture-system-graph')`, "Product / GTM graph did not mount");
-  const clicked = await client.evaluate(`(() => { const node = [...document.querySelectorAll('.system-workspace .venture-graph-node-main')].find((entry) => entry.querySelector('strong')?.textContent.trim() === ${JSON.stringify(name)}); node?.click(); return Boolean(node); })()`);
-  assert.equal(clicked, true, `system object was unavailable: ${name}`);
-  await waitForDom(client, `document.querySelector('.venture-map-inspector h2')?.textContent.trim() === ${JSON.stringify(name)}`, `system context did not select ${name}`);
-}
-
-async function chooseRelease(client, name) {
-  await waitForDom(client, `!![...document.querySelectorAll('.releases-rail-body section > button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === ${JSON.stringify(name)})`, "Release rail did not mount");
-  const changed = await client.evaluate(`(() => { const button = [...document.querySelectorAll('.releases-rail-body section > button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === ${JSON.stringify(name)}); button?.click(); return Boolean(button); })()`);
-  assert.equal(changed, true, `release was unavailable in its mode rail: ${name}`);
-  await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === ${JSON.stringify(name)}`, `${name} did not become current`);
-}
-
-test("mode-owned rails and contextual conversation connect Product / GTM to Releases", async () => {
+test("Product / GTM shows current truth, durable alternatives, exact work, and founder-gated outward action", async () => {
   const drover = await bootFixture(createGeneratedMapsFixture);
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1440, height: 900 } });
   try {
     const { client } = chrome;
-    const expected = drover.fixture.expected.maps;
-    await chooseMode(client, "Product / GTM");
-    await waitForDom(client, `document.querySelector('.venture-system-graph')?.getBoundingClientRect().height > 500`, "the mode-owned canvas collapsed behind its headerless composition");
-    const composition = await client.evaluate(`(() => {
-      const header = document.querySelector('.system-workspace-header')?.getBoundingClientRect();
-      const add = document.querySelector('.system-add-button')?.getBoundingClientRect();
-      const foundation = document.querySelector('.venture-graph-foundation-label')?.textContent?.replace(/\\s+/g, ' ').trim();
-      const stages = [...document.querySelectorAll('.venture-pipeline-lane')].map((lane) => [...lane.querySelectorAll('.venture-pipeline-stage > small')].map((entry) => entry.textContent.trim()));
-      return { foundation, stages, lanes: document.querySelectorAll('.venture-pipeline-lane').length, rail: document.querySelector('.product-rail-gtm-summary')?.textContent?.replace(/\\s+/g, ' ').trim(), addAtRight: Boolean(header && add && header.right - add.right <= 20) };
+    await client.evaluate(`(() => {
+      localStorage.setItem(${JSON.stringify(`drover:workspace-session:v12:${drover.fixture.venture.id}`)}, JSON.stringify({
+        mode: 'product-gtm', railWidth: 272, contextualChatOpen: false,
+        selectedThreadRef: null, selectedObjectRef: null,
+        systemCamera: { x: 200, y: 505, zoom: 0.56 }, chatScrollByThread: {},
+      }));
+      location.reload();
     })()`);
-    assert.equal(composition.foundation, "Connected venture contextAudiences, offers, channels, releases, agents, tools, and evidence attach to the loop", "the canvas did not preserve the venture objects attached to GTM execution");
-    assert.ok(composition.lanes >= 3, "the founder-authored distribution motions did not become GTM lanes");
-    assert.deepEqual(composition.stages[0], ["Signal", "Pipeline 01", "Campaign", "Outcome"], "a GTM pipeline did not expose the complete operating loop");
-    assert.match(composition.rail, /\d+ signals · 3 pipelines · \d+ active campaigns · \d+ outcomes/, "the mode rail did not summarize the GTM system");
-    assert.equal(composition.addAtRight, true, "the Product / GTM action did not resolve to the header edge");
-    assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Product / GTM");
-    await chooseNode(client, "Project-first graduate entry");
-    assert.equal(await client.evaluate(`document.querySelectorAll('.venture-pipeline-lane[data-active="true"]').length === 1 && document.querySelectorAll('.venture-pipeline-lane[data-quiet="true"]').length >= 2`), true, "selecting a motion did not isolate its exact GTM path");
-    assert.equal(await client.evaluate(`[...document.querySelectorAll('.system-inspector-actions button')].some((entry) => ['Start agent work', 'Open agent work'].includes(entry.textContent.trim()))`), true, "the selected GTM gap did not expose real agent work");
-    await chooseNode(client, expected.campaign);
-    const saveDeadline = Date.now() + 12_000;
-    let saved = false;
-    while (!saved && Date.now() < saveDeadline) {
-      saved = await client.evaluate(`Boolean(document.querySelector('[aria-label="Reopen ${expected.campaign}"]'))`);
-      if (!saved) {
-        await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-saved-views button')].find((entry) => entry.textContent.includes('Save current view') && !entry.disabled); button?.click(); })()`);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
-    if (!saved) {
-      const state = await client.evaluate(`({ text: document.querySelector('.product-saved-views')?.textContent?.replace(/\\s+/g, ' ').trim(), selected: document.querySelector('.venture-map-inspector h2')?.textContent?.trim(), connection: document.querySelector('.mode-connection-state')?.textContent?.replace(/\\s+/g, ' ').trim() })`);
-      const response = await drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/views`);
-      throw new Error(`the selected Product / GTM path did not become a reachable saved view: ${JSON.stringify({ state, views: await response.json() })}`);
-    }
-    await chooseNode(client, "A project worth advancing");
-    await client.evaluate(`document.querySelector('[aria-label="Reopen ${expected.campaign}"]')?.click()`);
-    await waitForDom(client, `document.querySelector('.venture-map-inspector h2')?.textContent.trim() === ${JSON.stringify(expected.campaign)}`, "the saved Product / GTM view did not reopen its exact focal object");
-    await client.evaluate(`document.querySelector('[aria-label="Delete ${expected.campaign}"]')?.click()`);
-    await client.evaluate(`document.querySelector('[aria-label="Confirm delete ${expected.campaign}"]')?.click()`);
-    await waitForDom(client, `!document.querySelector('[aria-label="Reopen ${expected.campaign}"]')`, "the saved Product / GTM view did not delete after confirmation");
-    await waitForDom(client, `document.querySelector('.venture-map-agent')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the selected node did not expose its linked agent context");
-    assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat') && !document.querySelector('.workspace-rail .thread-rail-list') && !!document.querySelector('.product-rail-body')`), true, "Product / GTM did not own the center and rail");
-    await client.evaluate(`[...document.querySelectorAll('.workspace-fab button')].find((entry) => entry.textContent.includes('Ask Drover'))?.click()`);
-    try {
-      await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "the persistent agent did not open the node's linked thread");
-    } catch (error) {
-      const [systemResponse, workResponse] = await Promise.all([
-        drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/system-index?scope=system`),
-        drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/work-index`),
-      ]);
-      const system = (await systemResponse.json()).systemIndex;
-      const work = (await workResponse.json()).workIndex;
-      const campaign = system.objects.find((entry) => entry.name === expected.campaign);
-      const state = await client.evaluate(`(() => ({
-        header: document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent?.trim() || null,
-        agent: document.querySelector('.venture-map-agent')?.textContent?.replace(/\\s+/g, ' ').trim() || null,
-        selectedRows: [...document.querySelectorAll('.thread-rail-row[aria-current="true"]')].map((entry) => entry.textContent?.replace(/\\s+/g, ' ').trim()),
-      }))()`);
-      throw new Error(`${error.message}: ${JSON.stringify({ ...state, campaignThreads: campaign?.threadRefs, workThreads: work.items.map((entry) => entry.threadRef) })}`);
-    }
-    assert.equal(await client.evaluate(`!!document.querySelector('.workspace-chat') && !!document.querySelector('.workspace-chat-close')`), true, "contextual conversation did not open as a closable surface");
-
-    await chooseReleaseSection(client);
-    assert.equal(await client.evaluate(`!document.querySelector('.workspace-chat .work-composer-bar')`), true, "coding controls leaked into Releases");
-    await waitForDom(client, `document.querySelector('.workspace-chat .thread-header-copy h1')?.textContent.includes(${JSON.stringify(expected.direction)})`, "switching modes replaced the selected thread");
-    assert.equal(await client.evaluate(`!document.querySelector('.workspace-rail .thread-rail-list') && !!document.querySelector('.releases-rail-body') && document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Product / GTM')`), true, "Releases did not remain a distinct section of Product / GTM");
-    await chooseRelease(client, "Project-drop invitation v1");
-    assert.equal(await client.evaluate(`document.querySelector('.release-workspace-header > div > span')?.textContent.trim()`), "In market", "a released joined action did not derive in-market lifecycle");
-    await waitForDom(client, `["Product delta", "Customer consequence", "Distribution", "Outward action", "Evidence"].every((label) => (document.querySelector('.release-canvas')?.textContent || '').includes(label))`, "the connected release canvas was incomplete");
-    await waitForDom(client, `!!document.querySelector('.release-canvas .now-gate')`, "the release canvas lost its exact founder gate");
-    await client.evaluate(`document.querySelector('.release-canvas-toolbar button')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-activity')?.textContent.includes('Evidence returned')`, "the release trace lost returned evidence");
-    assert.equal(await client.evaluate(`!document.querySelector('.release-subnav') && ![...document.querySelectorAll('.release-workspace button')].some((entry) => entry.textContent.trim() === 'Open chat')`), true, "legacy release navigation returned");
-
-    await waitForDom(client, `document.querySelector('.release-observation')?.textContent.includes('1 exact released Gmail message is in scope')`, "bounded observation did not resolve the exact released Gmail source");
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.release-observation button')].find((entry) => entry.textContent.trim() === 'Authorize observation'); button?.click(); return Boolean(button && !button.disabled); })()`), true, "the founder could not authorize bounded observation");
-    await waitForDom(client, `document.querySelector('.release-observation-contract')?.textContent.includes('Gmail · 1 exact sent message')`, "the observation grant did not persist as release-scoped authority");
-    assert.equal(await client.evaluate(`document.querySelector('.release-observation')?.textContent.includes('no sends, spend, or interpretation changes')`), true, "the observation authority boundary was not visible");
-    await client.evaluate(`[...document.querySelectorAll('.release-observation button')].find((entry) => entry.textContent.trim() === 'Check now')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-observation-contract')?.textContent.includes('No connected Gmail account')`, "an unavailable Gmail read did not fail honestly inside the release contract");
-
+    await waitForDom(client, `Boolean(document.querySelector('.workspace-shell'))`, "the workspace did not restore its stale canvas camera fixture");
     await chooseMode(client, "Product / GTM");
-    await chooseNode(client, "Reply returned");
-    assert.equal(await client.evaluate(`!!document.querySelector('.venture-graph-edge.is-return')`), true, "returned evidence did not curve back to an exact Product / GTM object");
-    await waitForDom(client, `document.querySelector('.system-evidence-return')?.textContent.includes('I described the project before I thought about making a profile.')`, "the exact attributable outcome was absent from Product / GTM");
-    assert.equal(await client.evaluate(`document.querySelector('.system-evidence-return')?.textContent.includes('No interpretation has been adopted.')`), true, "Drover fabricated a canonical evidence interpretation");
-    assert.equal(await client.evaluate(`document.querySelector('.system-evidence-return button')?.getBoundingClientRect().height <= 48`), true, "the next-Work action stretched into canvas content");
-    await client.evaluate(`[...document.querySelectorAll('.system-evidence-return button')].find((entry) => entry.textContent.trim() === 'Start next work')?.click()`);
-    await waitForDom(client, `document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Work') && document.querySelector('.thread-composer')?.textContent.includes('Reply returned')`, "returned evidence did not become exact next Work context");
+    await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-kind="truth"]').length >= 6`, "current Product/GTM truth did not materialize");
+    await waitForDom(client, `!!document.querySelector('.product-gtm-node[data-kind="branch"]') && !!document.querySelector('.product-gtm-node[data-kind="action"][data-waiting="true"]')`, "the provisional Product alternative and founder-gated action were not visible together");
+    await waitForDom(client, `document.querySelectorAll('.product-gtm-edge-path.is-cross-territory').length > 0`, "territory-crossing relationships did not render");
+    await waitForCanvasViewportStable(client);
 
-    await chooseReleaseSection(client);
-    await chooseRelease(client, "Project-drop invitation v1");
+    const composition = await client.evaluate(`(() => ({
+      mode: document.querySelector('.workspace-shell')?.dataset.mode,
+      truth: document.querySelectorAll('.product-gtm-node[data-kind="truth"]').length,
+      branches: document.querySelectorAll('.product-gtm-node[data-kind="branch"]').length,
+      work: document.querySelectorAll('.product-gtm-node[data-kind="work"]').length,
+      gates: document.querySelectorAll('.product-gtm-node[data-kind="action"][data-waiting="true"]').length,
+      oldSystem: Boolean(document.querySelector('.system-workspace')),
+      oldRelease: Boolean(document.querySelector('.release-workspace')),
+      oldPipeline: Boolean(document.querySelector('.venture-pipeline-lane')),
+      codingControls: Boolean(document.querySelector('.workspace-primary .work-composer-bar')),
+    }))()`);
+    assert.equal(composition.mode, "product-gtm");
+    assert.ok(composition.truth >= 6 && composition.branches >= 1 && composition.work >= 1 && composition.gates >= 1, JSON.stringify(composition));
+    assert.deepEqual({ oldSystem: composition.oldSystem, oldRelease: composition.oldRelease, oldPipeline: composition.oldPipeline, codingControls: composition.codingControls }, { oldSystem: false, oldRelease: false, oldPipeline: false, codingControls: false });
 
-    await client.evaluate(`document.querySelector('.release-details summary')?.click()`);
-    await client.evaluate(`[...document.querySelectorAll('.release-details button')].find((entry) => entry.textContent.trim() === 'End release')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace-header > div > span')?.textContent.trim() === 'Ended'`, "the founder could not explicitly end the release");
-    await client.evaluate(`[...document.querySelectorAll('.release-details button')].find((entry) => entry.textContent.trim() === 'Reopen')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace-header > div > span')?.textContent.trim() !== 'Ended'`, "the ended release did not reopen");
+    const causalStory = await client.evaluate(`(() => {
+      const byName = (name) => [...document.querySelectorAll('.product-gtm-node')].find((entry) => entry.querySelector('strong')?.textContent === name);
+      const spineNames = ['A project worth advancing', 'Start with the work', 'Project intake', 'Project-drop invitation v1', 'Project-first invitation test', 'Builder started with the project'];
+      const spine = spineNames.map((name) => byName(name)?.getBoundingClientRect()).filter(Boolean);
+      const flow = document.querySelector('.product-gtm-canvas')?.getBoundingClientRect();
+      const attachedWork = byName('Test project-first entry with recent graduates')?.getBoundingClientRect();
+      const workSubject = byName('Project-first invitation test')?.getBoundingClientRect();
+      const founderGate = byName('founder interview')?.getBoundingClientRect();
+      const transform = document.querySelector('.react-flow__viewport')?.style.transform || '';
+      const labels = [...document.querySelectorAll('.product-gtm-node small')].map((entry) => entry.textContent);
+      return {
+        spineCount: spine.length,
+        strictlyLeftToRight: spine.every((entry, index) => index === 0 || entry.left > spine[index - 1].left),
+        crossesTerritory: document.querySelectorAll('.product-gtm-edge-path.is-cross-territory').length > 0,
+        readableOpeningZoom: Number(transform.match(/scale\\(([^)]+)\\)/)?.[1] || 0),
+        workAttachedToSubject: Boolean(attachedWork && workSubject && Math.abs(attachedWork.left - workSubject.left) < 24),
+        founderGateInOpeningFrame: Boolean(flow && founderGate && founderGate.left >= flow.left && founderGate.right <= flow.right && founderGate.top >= flow.top && founderGate.bottom <= flow.bottom),
+        inlineExpansionOnly: !document.querySelector('.product-gtm-inspector'),
+        direction: byName('A project worth advancing')?.querySelector('strong')?.textContent,
+        context: document.querySelector('.product-gtm-context strong')?.textContent,
+        compatibilityLabels: labels.filter((label) => ['Pipeline', 'Campaign', 'Channel', 'Signal', 'Working-Theory'].includes(label)),
+        provisionalBranches: document.querySelectorAll('.product-gtm-node[data-kind="branch"][data-provisional="true"]').length,
+      };
+    })()`);
+    assert.deepEqual({ spineCount: causalStory.spineCount, strictlyLeftToRight: causalStory.strictlyLeftToRight, crossesTerritory: causalStory.crossesTerritory, inlineExpansionOnly: causalStory.inlineExpansionOnly }, { spineCount: 6, strictlyLeftToRight: true, crossesTerritory: true, inlineExpansionOnly: true }, JSON.stringify(causalStory));
+    assert.ok(causalStory.readableOpeningZoom >= 0.81, `the default frame made the causal chapter too small: ${JSON.stringify(causalStory)}`);
+    assert.equal(causalStory.workAttachedToSubject, true, `live work drifted away from its subject: ${JSON.stringify(causalStory)}`);
+    assert.equal(causalStory.founderGateInOpeningFrame, true, `the default frame omitted the exact founder decision: ${JSON.stringify(causalStory)}`);
+    assert.equal(causalStory.direction, "A project worth advancing");
+    assert.equal(causalStory.context, "product release");
+    assert.deepEqual(causalStory.compatibilityLabels, []);
+    assert.ok(causalStory.provisionalBranches >= 1, "the Product alternative was not visibly provisional");
 
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-gtm-context button')].find((entry) => /Whole venture/.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
+    await waitForDom(client, `!document.querySelector('.product-gtm-context') && !document.querySelector('.product-gtm-surface[data-has-focus="true"]')`, "the founder could not return to the whole venture");
+
+    assert.equal(await client.evaluate(`(() => { const node = [...document.querySelectorAll('.product-gtm-node')].find((entry) => entry.querySelector('strong')?.textContent === 'Start with the work'); node?.click(); return Boolean(node); })()`), true);
+    await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-focus="false"]').length > 0`, "selection did not quiet unrelated Product/GTM material");
+    const focusCounts = await client.evaluate(`({ focused: document.querySelectorAll('.product-gtm-node[data-focus="true"]').length, quiet: document.querySelectorAll('.product-gtm-node[data-focus="false"]').length })`);
+    assert.ok(focusCounts.focused > 0 && focusCounts.quiet > 0, JSON.stringify(focusCounts));
+    assert.match(await client.evaluate(`document.querySelector('.product-gtm-context')?.textContent || ''`), /Start with the work/);
+
+    assert.equal(await client.evaluate(`(() => { const node = document.querySelector('.product-gtm-node[data-kind="branch"]'); node?.click(); return Boolean(node); })()`), true);
+    await waitForDom(client, `/Should bespoke onboarding become the Product/.test(document.querySelector('.product-gtm-node[data-expanded="true"] .product-gtm-review[data-inline="true"]')?.textContent || '')`, "the exact Product-model delta did not expand in its owning node");
+    assert.match(await client.evaluate(`document.querySelector('.product-gtm-review')?.textContent || ''`), /doing the unscalable work before automating it/i);
+    assert.equal(await client.evaluate(`document.querySelectorAll('.product-gtm-review input[type="checkbox"]:checked').length`), 1, "the selective merge did not expose its exact selected change");
+
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-gtm-review button')].find((entry) => /Make 1 current/.test(entry.textContent)); button?.click(); return Boolean(button && !button.disabled); })()`), true);
+    await waitForDom(client, `!document.querySelector('.product-gtm-review')`, "the founder merge did not settle");
+    assert.equal(await client.evaluate(`(() => { const node = [...document.querySelectorAll('.product-gtm-node[data-kind="truth"]')].find((entry) => entry.querySelector('strong')?.textContent === 'Start with the work'); node?.click(); return Boolean(node); })()`), true);
+    await waitForDom(client, `/manually shapes the first useful project/.test(document.querySelector('.product-gtm-node[data-expanded="true"]')?.textContent || '')`, "the selectively merged Product change did not become current truth in place");
+
+    const currentIndex = await drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/system-index?scope=system`).then((response) => response.json());
+    const workflowResponse = await drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/system/mutations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        baseRevision: currentIndex.systemIndex.revision,
+        mutations: [{
+          op: "create-object",
+          id: "proof-referral-loop",
+          type: "pipeline",
+          territory: "gtm",
+          name: "Proof to referral",
+          statement: "Turn returned proof into the next qualified builder conversation.",
+          properties: { workflowGraph: {
+            steps: [
+              { id: "proof", label: "Proof returns", detail: "A builder result stays attached to its exact invitation.", type: "trigger" },
+              { id: "shape", label: "Shape the proof story", detail: "An agent prepares the claim and preserves its source.", type: "agent-work" },
+              { id: "fit", label: "Credible enough to share?", detail: "Weak proof loops back for another observation.", type: "condition" },
+              { id: "approve", label: "Approve the exact claim", detail: "The founder sees the destination and exact material.", type: "founder-gate" },
+              { id: "send", label: "Send the warm introduction", detail: "One exact message crosses into the world.", type: "external-action" },
+              { id: "observe", label: "Observe the reply", detail: "The authorized source returns the reply or silence.", type: "observation" },
+              { id: "learn", label: "Update the next invitation", detail: "Returned language changes the Product or GTM claim.", type: "outcome" },
+            ],
+            edges: [
+              { from: "proof", to: "shape" }, { from: "shape", to: "fit" },
+              { from: "fit", to: "approve", label: "credible" }, { from: "fit", to: "observe", label: "needs more evidence" },
+              { from: "approve", to: "send" }, { from: "send", to: "observe" }, { from: "observe", to: "learn" },
+              { from: "learn", to: "shape", label: "evidence sharpens the next pass" },
+            ],
+          } },
+        }],
+      }),
+    });
+    assert.equal(workflowResponse.status, 200, await workflowResponse.text());
+    await client.evaluate("location.reload()");
+    await waitForDom(client, "Boolean(document.querySelector('.workspace-shell'))", "the workspace did not return after adopting the workflow");
     await chooseMode(client, "Product / GTM");
-    await chooseNode(client, "A project worth advancing");
-    await waitForDom(client, `document.querySelector('.thread-composer')?.textContent.includes('A project worth advancing')`, "an unlinked node did not scope the persistent agent draft");
-    await chooseReleaseSection(client);
-    await client.evaluate(`document.querySelector('.releases-rail-body > .thread-new')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace h1')?.textContent.trim() === 'Release from selected truth' && !!document.querySelector('.release-draft-canvas')`, "an unlinked object did not seed an unsaved release draft");
-    await client.evaluate(`[...document.querySelectorAll('.release-draft-action button')].find((entry) => entry.textContent.trim() === 'Build release with agent')?.click()`);
-    await waitForDom(client, `document.querySelector('.release-workspace-header h1')?.textContent.trim() === 'A project worth advancing'`, "the meaningful release save did not persist");
-    await waitForDom(client, `document.querySelector('.release-canvas')?.textContent.includes('A project worth advancing') && document.querySelector('.release-canvas')?.textContent.includes('Distribution')`, "the founder-confirmed context link was not canonical in the release canvas");
-    assert.equal(await client.evaluate(`document.querySelectorAll('.release-canvas-node[data-empty="true"]').length > 0`), true, "missing release connections were hidden or fabricated");
-    assert.equal(await client.evaluate(`!/\b\d+%/.test(document.querySelector('.release-workspace')?.textContent || '')`), true, "release readiness became a percentage");
+    await waitForDom(client, `document.querySelector('.product-gtm-workflow-shortcut strong')?.textContent === 'Proof to referral'`, "the adopted GTM workflow did not become the visible canvas shortcut");
+    assert.equal(await client.evaluate(`(() => { const button = document.querySelector('.product-gtm-workflow-shortcut'); button?.click(); return Boolean(button); })()`), true);
+    await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-kind="workflow"]').length === 7`, "the GTM path did not unfold its complete workflow");
+    const workflow = await client.evaluate(`(() => ({
+      steps: document.querySelectorAll('.product-gtm-node[data-kind="workflow"]').length,
+      founderGates: document.querySelectorAll('.product-gtm-node[data-workflow-step="founder-gate"]').length,
+      outwardActions: document.querySelectorAll('.product-gtm-node[data-workflow-step="external-action"]').length,
+      returnEdges: document.querySelectorAll('.product-gtm-edge-path.is-return').length,
+      context: document.querySelector('.product-gtm-context')?.textContent || '',
+    }))()`);
+    assert.deepEqual({ steps: workflow.steps, founderGates: workflow.founderGates, outwardActions: workflow.outwardActions }, { steps: 7, founderGates: 1, outwardActions: 1 }, JSON.stringify(workflow));
+    assert.ok(workflow.returnEdges >= 1, `the evidence loop still read as forward progress: ${JSON.stringify(workflow)}`);
+    assert.match(workflow.context, /trigger, work, conditions, founder gates, outward action, and return path/i);
+
+    assert.equal(await client.evaluate(`(() => { const node = [...document.querySelectorAll('.product-gtm-node[data-kind="workflow"]')].find((entry) => entry.querySelector('strong')?.textContent === 'Observe the reply'); node?.click(); return Boolean(node); })()`), true);
+    await waitForDom(client, `/authorized source returns the reply or silence/i.test(document.querySelector('.product-gtm-node[data-kind="workflow"][data-expanded="true"]')?.textContent || '')`, "the founder could not inspect exact workflow-step material in place");
+    assert.match(await client.evaluate(`document.querySelector('.product-gtm-context')?.textContent || ''`), /Observe the reply/);
+    assert.match(await client.evaluate(`document.querySelector('.product-gtm-node[data-kind="workflow"][data-expanded="true"]')?.textContent || ''`), /Work on this step/);
+
+    await chooseMode(client, "Work");
+    await waitForDom(client, `!!document.querySelector('.work-surface .thread-conversation') && !!document.querySelector('.work-composer-bar [aria-label="SDK model"]')`, "Work did not restore the direct SDK environment");
+    assert.equal(await client.evaluate(`!!document.querySelector('.work-surface .thread-conversation') && !!document.querySelector('.work-composer-bar [aria-label="SDK model"]')`), true, "Work did not restore the direct SDK environment");
     await assertNoUnhandledRejections(client);
   } finally {
     await chrome.close();

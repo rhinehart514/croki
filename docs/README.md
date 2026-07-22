@@ -24,7 +24,8 @@ a design intention cannot claim proof; an operating instruction cannot silently 
 - [`DISTRIBUTION.md`](DISTRIBUTION.md) — dated source/package delivery mechanics.
 - [`../RUN.md`](../RUN.md) — durable resume and run-verification contract.
 - [`../ui/README.md`](../ui/README.md) — interface projection and platform contract.
-- [`design/DESIGN.md`](design/DESIGN.md) — current-code design-system record, subordinate to root `DESIGN.md`.
+- [`design/DESIGN.md`](design/DESIGN.md) — current-code visual-system record, subordinate to root `DESIGN.md`.
+- [`design/INDEX.md`](design/INDEX.md) — curated authority/adoption/history index for retained design evidence.
 - [`design/PRODUCTION-FOUNDER-SCRIPT.md`](design/PRODUCTION-FOUNDER-SCRIPT.md) — outside-founder proof protocol;
   it is not implementation proof.
 
@@ -39,7 +40,8 @@ They may explain why a rail exists, but cannot supply current product nouns, wor
 or implementation tasks.
 
 The current approved direction supersedes prior Atlas-first, Now/direction-first, immersive, legacy
-triptych, experiment-machine, configurable-firm, permanent-AI-staff, ambient-loop, and workflow-builder
+triptych, experiment-machine, configurable-firm, permanent-AI-staff, ambient-loop, workflow-builder,
+Signal→Pipeline→Campaign→Outcome, fixed-pipeline-lane, release-manager, and release-as-universal-market-unit
 interpretations. Useful mechanics—one canonical model, provisional structure, direct manipulation, spatial
 focus, exact receipts, provider provenance, founder authority, no default DAG—must be folded into authority
 before use.

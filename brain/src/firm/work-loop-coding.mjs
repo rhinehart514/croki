@@ -39,7 +39,7 @@ export async function executeProviderTurn({ adapter, ctx, workspace, ventureId, 
   } finally {
     if (workspace) {
       try {
-        workspace = settleCodingWorkspace(ventureId, workspace.id, {
+        workspace = await settleCodingWorkspace(ventureId, workspace.id, {
           runRef,
           outcome: outcome ?? { kind: "failed" },
           error: driveError ? (driveError instanceof Error ? driveError.message : String(driveError)) : null,

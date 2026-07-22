@@ -22,8 +22,11 @@ export function safeId(value, fallback = "default") {
 
 // Serialize to a per-process temp file, then atomically rename into place.
 export function atomicWrite(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const directory = path.dirname(file);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  fs.chmodSync(directory, 0o700);
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
+  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(tmp, file);
+  fs.chmodSync(file, 0o600);
 }

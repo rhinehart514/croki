@@ -42,6 +42,16 @@ function normalizeOutcomeReport(value) {
   };
 }
 
+function normalizeAttachments(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((attachment) => ({
+    id: trimOrNull(attachment?.id),
+    name: trimOrNull(attachment?.name),
+    mediaType: trimOrNull(attachment?.mediaType),
+    size: Number(attachment?.size),
+  })).filter((attachment) => attachment.id && attachment.name && /^image\/(jpeg|png|gif|webp)$/.test(attachment.mediaType) && Number.isSafeInteger(attachment.size) && attachment.size > 0);
+}
+
 function normalizeTarget(value) {
   const betId = trimOrNull(value?.betId);
   const workRef = trimOrNull(value?.workRef);
@@ -115,6 +125,7 @@ export function appendConversationMessage({
   coordination = null,
   target = null,
   outcomeReport = null,
+  attachments = [],
 } = {}, options = {}) {
   if (!ventureId) throw new Error("A conversation message needs a ventureId.");
   if (!ROLES.has(role)) throw new Error(`Unknown conversation role: ${role}`);
@@ -167,6 +178,7 @@ export function appendConversationMessage({
     coordination: normalizeCoordination(coordination),
     target: normalizeTarget(target),
     outcomeReport: normalizeOutcomeReport(outcomeReport),
+    attachments: normalizeAttachments(attachments),
     createdAt,
   };
   setVentureDoc(ventureId, "conversation", message.id, message, options);

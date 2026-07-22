@@ -3,10 +3,12 @@
 
 import { json, readBody } from "../routes/util.mjs";
 import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
+import { abortActiveDrive, listActiveDrives } from "./active-drives.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
-import { markDirectionThreadReviewed, setDirectionThreadPinned } from "./semantic-model-store.mjs";
+import { deleteDirectionThread, getSemanticModel, markDirectionThreadReviewed, setDirectionThreadName, setDirectionThreadPinned } from "./semantic-model-store.mjs";
 import { buildThreadTimeline } from "./thread-timeline.mjs";
 import { buildWorkIndex } from "./work-index.mjs";
+import { listWorkScopes, revokeWorkScope } from "./work-scopes.mjs";
 
 function statusFor(error) {
   if (error?.code === "venture_not_found" || error?.code === "semantic_model_missing_ref") return 404;
@@ -53,6 +55,82 @@ export default async function handle({ req, res, url }) {
       json(res, 200, { item: after.items.find((entry) => entry.threadRef === threadRef), workIndex: after });
     } catch (error) {
       json(res, statusFor(error), { error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  const nameMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/threads\/([^/]+)\/name$/);
+  if (req.method === "PUT" && nameMatch) {
+    try {
+      authorizeFounderWriteForRequest(req, "Renaming a thread");
+      const ventureId = decodeURIComponent(nameMatch[1]);
+      const threadId = decodeURIComponent(nameMatch[2]);
+      const body = await readBody(req);
+      const threadRef = `thread:${threadId}`;
+      setDirectionThreadName(ventureId, threadRef, body?.name, { actor: { authority: "founder", id: "founder" } });
+      const after = buildWorkIndex(ventureId);
+      emitFirmEvent(ventureId, "timeline", { threadRef });
+      json(res, 200, { item: after.items.find((entry) => entry.threadRef === threadRef), workIndex: after });
+    } catch (error) {
+      json(res, statusFor(error), { error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  const deleteMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/threads\/([^/]+)$/);
+  if (req.method === "DELETE" && deleteMatch) {
+    try {
+      authorizeFounderWriteForRequest(req, "Deleting a chat and stopping its work");
+      const ventureId = decodeURIComponent(deleteMatch[1]);
+      const threadId = decodeURIComponent(deleteMatch[2]);
+      const threadRef = `thread:${threadId}`;
+      const model = getSemanticModel(ventureId);
+      const thread = model.threads.find((entry) => entry.id === threadId && !entry.deletedAt);
+      if (!thread || threadId === "venture-root") {
+        throw Object.assign(new Error(`No such direction thread: ${threadId}`), { code: "semantic_model_missing_ref", status: 404 });
+      }
+
+      const runs = model.runs.filter((run) => run.threadRef === threadRef);
+      const runIds = new Set(runs.map((run) => run.id));
+      const betIds = new Set([
+        ...(thread.subjectRefs ?? []),
+        ...runs.flatMap((run) => run.betRefs ?? []),
+      ].filter((ref) => String(ref).startsWith("bet:")).map((ref) => String(ref).replace(/^bet:/, "")));
+      const active = listActiveDrives(ventureId).filter((drive) => runIds.has(drive.id) || (drive.betId && betIds.has(drive.betId)));
+      const unsafe = active.find((drive) => !drive.abortSupported);
+      if (unsafe) {
+        throw Object.assign(new Error(`${unsafe.runtime} cannot safely stop this chat yet, so Drover did not delete it.`), { code: "thread_delete_stop_unsupported", status: 409 });
+      }
+
+      // Tombstone first: no new continuation may target this Thread once deletion begins. Existing live
+      // transports are then cancelled and every restartable authority rooted here is revoked.
+      deleteDirectionThread(ventureId, threadRef, { actor: { authority: "founder", id: "founder" } });
+      const revokedWorkScopeRefs = [];
+      for (const scope of listWorkScopes(ventureId).filter((entry) => entry.originThreadRef === threadRef && !entry.revokedAt)) {
+        revokeWorkScope({
+          ventureId,
+          scopeId: scope.id,
+          reason: "The founder deleted the originating chat.",
+          actor: { authority: "founder", id: "founder" },
+        });
+        revokedWorkScopeRefs.push(`work-scope:${scope.id}`);
+      }
+      const stoppedRunRefs = [];
+      for (const drive of active) {
+        try {
+          abortActiveDrive({ ventureId, driveId: drive.id });
+          stoppedRunRefs.push(`run:${drive.id}`);
+        } catch (error) {
+          // A drive that settled between discovery and cancellation is already stopped. Any other
+          // failure is consequential and must remain visible rather than being mistaken for success.
+          if (error?.status !== 404) throw error;
+        }
+      }
+      const workIndex = buildWorkIndex(ventureId);
+      emitFirmEvent(ventureId, "timeline", { threadRef, deleted: true });
+      json(res, 200, { deleted: true, threadRef, stoppedRunRefs, revokedWorkScopeRefs, workIndex });
+    } catch (error) {
+      json(res, statusFor(error), { error: error instanceof Error ? error.message : String(error), ...(error?.code ? { code: error.code } : {}) });
     }
     return true;
   }

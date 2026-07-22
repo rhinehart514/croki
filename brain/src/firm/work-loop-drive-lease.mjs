@@ -35,11 +35,12 @@ function registry(provider) {
   return stored ?? blankRegistry();
 }
 
-function resourcesFor(teammateRef, betId) {
-  return [
-    `participant:${teammateRef}`,
-    betId ? `resume:bet:${betId}` : `resume:participant:${teammateRef}`,
-  ].filter((value, index, all) => all.indexOf(value) === index).sort();
+function resourcesFor(teammateRef, betId, workScopeRef) {
+  return [betId
+    ? `resume:bet:${betId}`
+    : workScopeRef
+      ? `resume:${workScopeRef}`
+      : `resume:participant:${teammateRef}`];
 }
 
 function conflictOwners(state, resources) {
@@ -70,10 +71,10 @@ function cas(provider, state, resources, interruptions = state.interruptions ?? 
   });
 }
 
-async function acquire({ ventureId, teammateRef, betId, explicitContinuation, options, deps }) {
+async function acquire({ ventureId, teammateRef, betId, workScopeRef, explicitContinuation, options, deps }) {
   getVentureDoc(ventureId, "configuration", "firm", options); // fail closed before writing a lease
   const provider = venturePersistence(options, ventureId);
-  const requested = resourcesFor(teammateRef, betId);
+  const requested = resourcesFor(teammateRef, betId, workScopeRef);
   const deadline = Date.now() + (deps.driveLeaseWaitMs ?? DEFAULT_WAIT_MS);
 
   while (true) {
@@ -149,11 +150,12 @@ export async function withParticipantDriveLease({
   ventureId,
   teammateRef,
   betId = null,
+  workScopeRef = null,
   explicitContinuation = false,
   options = {},
   deps = {},
 }, drive) {
-  const lease = await acquire({ ventureId, teammateRef, betId, explicitContinuation, options, deps });
+  const lease = await acquire({ ventureId, teammateRef, betId, workScopeRef, explicitContinuation, options, deps });
   try {
     return await drive(lease);
   } finally {

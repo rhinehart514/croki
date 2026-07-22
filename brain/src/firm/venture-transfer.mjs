@@ -167,7 +167,7 @@ function validateTransfer(file) {
 function validateTransferredArchitecture(documents, ventureId) {
   const atlas = (documents.architecture ?? [])[0];
   if (!atlas) return;
-  if (atlas.schemaVersion === 2) {
+  if (atlas.schemaVersion === 2 || atlas.schemaVersion === 3) {
     const refs = new Set([`venture:${ventureId}`, "placement:canvas"]);
     for (const bet of documents.bets ?? []) {
       refs.add(`bet:${bet.id}`);

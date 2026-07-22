@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import { anthropicRuntime } from "../src/runtimes/anthropic.mjs";
 import { buildCodexDriveArgs, buildCodexProductChangeArgs, codexRuntime, runCodexDriveTurn, startCodexMcpBridge } from "../src/runtimes/codex.mjs";
@@ -60,6 +63,86 @@ describe("Anthropic drive adapter", () => {
     const client = { messages: { async create() { return { content: [{ type: "text", text: "Done." }] }; } } };
     const result = await anthropicRuntime.drive(baseContext({ client }));
     assert.deepEqual(result, { kind: "completed", summary: "Done." });
+  });
+
+  it("sends every founder image as a native vision block", async () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "anthropic-images-")), "screen.png");
+    fs.writeFileSync(file, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    let request;
+    const client = { messages: { async create(input) { request = input; return { content: [{ type: "text", text: "Seen." }] }; } } };
+    await anthropicRuntime.drive(baseContext({ client, attachments: [{ path: file, mediaType: "image/png" }] }));
+    assert.equal(request.messages[0].content[0].type, "image");
+    assert.equal(request.messages[0].content[1].text, "Explore a distinct bet");
+  });
+});
+
+describe("reasoning effort reaches each runtime", () => {
+  const captureAnthropicEffort = async (effort) => {
+    let request;
+    const client = { messages: { async create(input) { request = input; return { content: [{ type: "text", text: "Done." }] }; } } };
+    await anthropicRuntime.drive(baseContext({ client, ...(effort === undefined ? {} : { effort }) }));
+    return request.output_config.effort;
+  };
+
+  it("sends the founder-selected effort to the Anthropic Messages API and defaults to high when unset", async () => {
+    assert.equal(await captureAnthropicEffort("low"), "low");
+    assert.equal(await captureAnthropicEffort(undefined), "high");
+    assert.equal(await captureAnthropicEffort(null), "high");
+  });
+
+  it("passes the founder-selected effort to the Claude Agent SDK query and omits it when unset", async () => {
+    const capture = async (effort) => {
+      let invocation;
+      await claudeCodeRuntime.drive(baseContext({
+        currentStatus: () => "running",
+        env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+        ...(effort === undefined ? {} : { effort }),
+        query: (input) => { invocation = input; return (async function* () { yield { type: "result", subtype: "success", is_error: false, result: "Done." }; })(); },
+      }));
+      return invocation.options;
+    };
+    assert.equal((await capture("medium")).effort, "medium");
+    // The Claude Agent SDK reasons up through max — its top tiers must reach the query, not be flattened.
+    assert.equal((await capture("xhigh")).effort, "xhigh");
+    assert.equal((await capture("max")).effort, "max");
+    assert.equal(Object.hasOwn(await capture(undefined), "effort"), false);
+    assert.equal(Object.hasOwn(await capture(null), "effort"), false);
+  });
+
+  it("streams multiple images into the Claude Agent SDK user turn", async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "claude-sdk-images-"));
+    const paths = [path.join(directory, "one.png"), path.join(directory, "two.jpg")];
+    fs.writeFileSync(paths[0], Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    fs.writeFileSync(paths[1], Buffer.from([0xff, 0xd8, 0xff]));
+    let prompt;
+    await claudeCodeRuntime.drive(baseContext({
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      attachments: [{ path: paths[0], mediaType: "image/png" }, { path: paths[1], mediaType: "image/jpeg" }],
+      query: (input) => { prompt = input.prompt; return (async function* () { yield { type: "result", subtype: "success", is_error: false, result: "Done." }; })(); },
+    }));
+    const messages = [];
+    for await (const message of prompt) messages.push(message);
+    assert.deepEqual(messages[0].message.content.map((block) => block.type), ["image", "image", "text"]);
+  });
+
+  it("passes the founder-selected effort to the Codex config and omits it when unset", () => {
+    const withEffort = buildCodexDriveArgs({ model: "gpt-test", effort: "xhigh" });
+    const idx = withEffort.indexOf("model_reasoning_effort=\"xhigh\"");
+    assert.ok(idx > 0 && withEffort[idx - 1] === "-c", "effort rides on a -c config override");
+    assert.equal(buildCodexDriveArgs({ model: "gpt-test" }).some((arg) => String(arg).startsWith("model_reasoning_effort")), false);
+  });
+
+  it("passes multiple image paths through Codex's native image flags", () => {
+    const args = buildCodexDriveArgs({ images: ["/tmp/one.png", "/tmp/two.jpg"] });
+    assert.equal(args.filter((arg) => arg === "--image").length, 2);
+    assert.ok(args.includes("/tmp/one.png"));
+    assert.ok(args.includes("/tmp/two.jpg"));
+  });
+
+  it("forwards the max tier to Codex verbatim (GPT-5.6 Sol reaches max)", () => {
+    const args = buildCodexDriveArgs({ model: "gpt-5.6-sol", effort: "max" });
+    assert.ok(args.includes("model_reasoning_effort=\"max\""), "codex forwards the founder-selected tier unchanged");
   });
 });
 

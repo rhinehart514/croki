@@ -2,13 +2,15 @@
 // venture lookup and CAS, while this module owns schema normalization, validation, mutation, and the
 // temporary schema-v1 architecture projection.
 
+import { replaceArchitectureCompatibility as replaceArchitectureCompatibilityProjection } from "./semantic-model-architecture-compat.mjs";
+
 // Territory is an optional, founder/earned FACET on an object's open properties — never a sixth
 // architecture role. objectTerritory reads it tolerant of absence; the derivation lives feature-local in
 // venture-traceability.mjs and is re-exported here so the facet reads as first-class on the canonical
 // model. Validation imposes no reserved property keys on objects, so territory needs no schema change.
 export { objectTerritory, TERRITORIES } from "./venture-traceability.mjs";
 
-export const SEMANTIC_MODEL_SCHEMA_VERSION = 2;
+export const SEMANTIC_MODEL_SCHEMA_VERSION = 3;
 export const SEMANTIC_MODEL_FAMILIES = Object.freeze([
   "objects",
   "relationships",
@@ -17,6 +19,11 @@ export const SEMANTIC_MODEL_FAMILIES = Object.freeze([
   "views",
   "workflowContracts",
   "insights",
+  "modelBranches",
+  "modelChanges",
+  "modelMergeReceipts",
+  "workScopes",
+  "outwardActions",
 ]);
 
 const ASSERTIONS = new Set(["tentative", "founder-asserted"]);
@@ -25,6 +32,9 @@ const INTERNAL_REF_FAMILIES = new Map([
   ["architecture", "objects"], ["object", "objects"], ["relationship", "relationships"],
   ["thread", "threads"], ["run", "runs"], ["view", "views"],
   ["workflow-contract", "workflowContracts"], ["insight", "insights"],
+  ["model-branch", "modelBranches"], ["model-change", "modelChanges"],
+  ["model-merge", "modelMergeReceipts"], ["work-scope", "workScopes"],
+  ["outward-action", "outwardActions"],
 ]);
 
 function list(value) {
@@ -50,7 +60,7 @@ function without(value, keys) {
   return result;
 }
 
-function compatibilityMetadata(current, stored = {}) {
+export function compatibilityMetadata(current, stored = {}) {
   return {
     revision: Number.isInteger(current.revision) ? current.revision : 0,
     intent: structuredClone(current.intent ?? { statement: "", constraints: [] }),
@@ -230,7 +240,7 @@ function workingTheoryRecords(proposals, current, architectureObjectIds) {
   return { objects: [...objects.values()], relationships: [...relationships.values()], insights };
 }
 
-function modelFromArchitecture(stored, ventureId) {
+export function modelFromArchitecture(stored, ventureId) {
   const current = structuredClone(stored.current ?? {});
   const storageRevision = Number.isInteger(stored.revision) ? stored.revision : (current.revision ?? 0);
   const architectureObjects = list(current.elements).map((entry) => objectFromElement(entry, current));
@@ -248,6 +258,7 @@ function modelFromArchitecture(stored, ventureId) {
     views: list(current.groups).map((entry) => viewFromGroup(entry, current)),
     workflowContracts: list(current.elements).filter((entry) => entry.role === "campaign").map((entry) => contractFromCampaign(entry, current)),
     insights: [...list(current.evidenceAnnotations).map((entry) => insightFromEvidence(entry, current)), ...theories.insights],
+    modelBranches: [], modelChanges: [], modelMergeReceipts: [], workScopes: [], outwardActions: [],
     compatibility: { architecture: compatibilityMetadata(current, stored) },
     updatedAt: current.updatedAt ?? null,
     updatedBy: structuredClone(current.updatedBy ?? null),
@@ -260,6 +271,7 @@ export function emptySemanticModel(ventureId) {
     ventureId,
     revision: 0,
     objects: [], relationships: [], threads: [], runs: [], views: [], workflowContracts: [], insights: [],
+    modelBranches: [], modelChanges: [], modelMergeReceipts: [], workScopes: [], outwardActions: [],
     compatibility: { architecture: { revision: 0, intent: { statement: "", constraints: [] }, revisions: [], proposals: [] } },
     updatedAt: null,
     updatedBy: null,
@@ -271,6 +283,19 @@ export function normalizeSemanticModel(stored, { ventureId, externalRefExists = 
   if (stored == null) return { model: emptySemanticModel(ventureId), sourceFormat: "absent", storageRevision: 0, storageRevisionPresent: true };
   if (stored.schemaVersion === SEMANTIC_MODEL_SCHEMA_VERSION) {
     const model = structuredClone(stored);
+    validateSemanticModel(model, { ventureId, externalRefExists });
+    return { model, sourceFormat: "v3", storageRevision: model.revision, storageRevisionPresent: true };
+  }
+  if (stored.schemaVersion === 2) {
+    const model = {
+      ...structuredClone(stored),
+      schemaVersion: SEMANTIC_MODEL_SCHEMA_VERSION,
+      modelBranches: [],
+      modelChanges: [],
+      modelMergeReceipts: [],
+      workScopes: [],
+      outwardActions: [],
+    };
     validateSemanticModel(model, { ventureId, externalRefExists });
     return { model, sourceFormat: "v2", storageRevision: model.revision, storageRevisionPresent: true };
   }
@@ -411,74 +436,54 @@ export function validateSemanticModel(model, { ventureId = model?.ventureId, ext
     validateRefs(insight.supersedes, model, indexes, externalRefExists, `Insight ${insight.id} supersedes`);
     if (insight.proposedBy?.authority !== "founder" && (insight.assertion !== "tentative" || !list(insight.sourceRefs).length)) fail(`Non-founder insight ${insight.id} must be tentative and source-bearing.`);
   }
+  for (const branch of model.modelBranches) {
+    if (!text(branch.name) || !text(branch.question) || !Number.isInteger(branch.baseModelRevision) || branch.baseModelRevision < 0) fail(`Model branch ${branch.id} needs a name, question, and base revision.`);
+    if (!branch.createdBy?.authority || !text(branch.createdBy?.id)) fail(`Model branch ${branch.id} needs creator provenance.`);
+    optionalRef(branch.parentBranchRef, "model-branch:", model, indexes, externalRefExists, `Model branch ${branch.id} parentBranchRef`);
+    validateRefs(branch.scopeRefs, model, indexes, externalRefExists, `Model branch ${branch.id} scopeRefs`);
+    requireEach(branch.threadRefs, "thread:", model, indexes, externalRefExists, `Model branch ${branch.id} threadRefs`);
+    validateRefs(branch.sourceRefs, model, indexes, externalRefExists, `Model branch ${branch.id} sourceRefs`);
+    if (branch.closedBy && branch.closedBy.authority !== "founder") fail(`Only the founder can close model branch ${branch.id}.`, "semantic_model_authority_denied", 403);
+  }
+  for (const change of model.modelChanges) {
+    requireRef(change.branchRef, "model-branch:", model, indexes, externalRefExists, `Model change ${change.id} branchRef`);
+    if (!["objects", "relationships"].includes(change.targetFamily) || !["create", "update", "remove"].includes(change.operation)) fail(`Model change ${change.id} has an unsupported target or operation.`);
+    if (change.operation === "create" && !change.proposedRecord) fail(`Model change ${change.id} needs a proposed record.`);
+    if (change.operation === "update" && (!text(change.targetRef) || !change.patch || typeof change.patch !== "object")) fail(`Model change ${change.id} needs a target and patch.`);
+    if (change.operation === "remove" && !text(change.targetRef)) fail(`Model change ${change.id} needs a target.`);
+    if (!text(change.rationale) || !change.proposedBy?.authority || !text(change.proposedBy?.id)) fail(`Model change ${change.id} needs rationale and proposer provenance.`);
+    validateRefs(change.sourceRefs, model, indexes, externalRefExists, `Model change ${change.id} sourceRefs`);
+    optionalRef(change.supersedesRef, "model-change:", model, indexes, externalRefExists, `Model change ${change.id} supersedesRef`);
+  }
+  for (const receipt of model.modelMergeReceipts) {
+    requireRef(receipt.branchRef, "model-branch:", model, indexes, externalRefExists, `Model merge ${receipt.id} branchRef`);
+    requireEach(receipt.selectedChangeRefs, "model-change:", model, indexes, externalRefExists, `Model merge ${receipt.id} selectedChangeRefs`);
+    if (receipt.actor?.authority !== "founder" || !Number.isInteger(receipt.previousModelRevision) || !Number.isInteger(receipt.resultingModelRevision)) fail(`Model merge ${receipt.id} needs founder provenance and revisions.`);
+  }
+  for (const scope of model.workScopes) {
+    requireRef(scope.originThreadRef, "thread:", model, indexes, externalRefExists, `Work scope ${scope.id} originThreadRef`);
+    requireRef(scope.originMessageRef, "conversation:", model, indexes, externalRefExists, `Work scope ${scope.id} originMessageRef`);
+    if (!text(scope.objective)) fail(`Work scope ${scope.id} needs an objective.`);
+    validateRefs(scope.subjectRefs, model, indexes, externalRefExists, `Work scope ${scope.id} subjectRefs`);
+    requireEach(scope.branchRefs, "model-branch:", model, indexes, externalRefExists, `Work scope ${scope.id} branchRefs`);
+    validateRefs(scope.wakeOnEvidenceRefs, model, indexes, externalRefExists, `Work scope ${scope.id} wakeOnEvidenceRefs`);
+    if (scope.revokedBy && scope.revokedBy.authority !== "founder") fail(`Only the founder can revoke work scope ${scope.id}.`, "semantic_model_authority_denied", 403);
+  }
+  for (const action of model.outwardActions) {
+    if (!text(action.kind) || !text(action.decisionRef)) fail(`Outward action ${action.id} needs a kind and founder decision reference.`);
+    validateRefs(action.subjectRefs, model, indexes, externalRefExists, `Outward action ${action.id} subjectRefs`);
+    requireEach(action.branchRefs, "model-branch:", model, indexes, externalRefExists, `Outward action ${action.id} branchRefs`);
+    validateRefs(action.motionRefs, model, indexes, externalRefExists, `Outward action ${action.id} motionRefs`);
+    validateRefs(action.productDeltaRefs, model, indexes, externalRefExists, `Outward action ${action.id} productDeltaRefs`);
+    validateRefs(action.workRefs, model, indexes, externalRefExists, `Outward action ${action.id} workRefs`);
+    validateRefs(action.observationRefs, model, indexes, externalRefExists, `Outward action ${action.id} observationRefs`);
+    validateRefs(action.outcomeRefs, model, indexes, externalRefExists, `Outward action ${action.id} outcomeRefs`);
+  }
   return model;
 }
 
-function architectureMetadata(model) {
-  return model.compatibility?.architecture ?? { revision: 0, intent: { statement: "", constraints: [] }, revisions: [], proposals: [] };
-}
+export { projectArchitectureCompatibility } from "./semantic-model-architecture-compat.mjs";
 
-export function projectArchitectureCompatibility(model) {
-  const metadata = architectureMetadata(model);
-  const elements = model.objects.filter((entry) => ARCHITECTURE_ROLES.has(entry.properties?.architecture?.role)).map((entry) => {
-    const architecture = entry.properties.architecture;
-    return {
-      id: entry.id,
-      role: architecture.role,
-      name: entry.name,
-      ...(architecture.statementPresent ? { statement: entry.statement } : {}),
-      ...(entry.provenance ? { provenance: structuredClone(entry.provenance) } : {}),
-      ...structuredClone(architecture.fields ?? {}),
-    };
-  });
-  const connections = model.relationships.filter((entry) => entry.properties?.architecture?.connection).map((entry) => ({
-    id: entry.id, fromRef: entry.fromRef, toRef: entry.toRef, label: entry.label, assertion: entry.assertion,
-    ...structuredClone(entry.properties.architecture.fields ?? {}),
-  }));
-  const groups = model.views.filter((entry) => entry.properties?.architecture?.group).map((entry) => ({
-    id: entry.id, name: entry.name, memberRefs: structuredClone(entry.rootRefs), ...structuredClone(entry.properties.architecture.fields ?? {}),
-  }));
-  const evidenceAnnotations = model.insights.filter((entry) => entry.properties?.architecture?.evidence).map((entry) => ({
-    id: entry.id, subjectRef: entry.subjectRefs[0], evidenceRef: entry.sourceRefs[0], stance: entry.stance,
-    note: entry.statement, appliedBy: structuredClone(entry.appliedBy), appliedAt: entry.updatedAt ?? entry.createdAt,
-    ...structuredClone(entry.properties.architecture.fields ?? {}),
-  }));
-  return {
-    current: {
-      schemaVersion: 1,
-      ventureId: model.ventureId,
-      revision: metadata.revision,
-      intent: structuredClone(metadata.intent),
-      elements, connections, groups, evidenceAnnotations,
-      updatedAt: metadata.updatedAt ?? null,
-      updatedBy: structuredClone(metadata.updatedBy ?? null),
-    },
-    revisions: structuredClone(list(metadata.revisions)),
-    proposals: structuredClone(list(metadata.proposals)),
-  };
-}
-
-function mergeDerived(existing, incoming, predicate, family) {
-  const incomingIds = new Set(incoming.map((entry) => entry.id));
-  for (const entry of existing) {
-    if (incomingIds.has(entry.id) && !predicate(entry)) {
-      fail(`Architecture compatibility cannot replace canonical ${family} record ${entry.id}.`, "semantic_model_compatibility_conflict", 409);
-    }
-  }
-  return [...existing.filter((entry) => !predicate(entry) && !incomingIds.has(entry.id)), ...incoming];
-}
-
-export function replaceArchitectureCompatibility(model, { current, revisions = [], proposals = [] }, { revision, updatedAt = current.updatedAt, updatedBy = current.updatedBy } = {}) {
-  const lifted = modelFromArchitecture({ current, revisions, proposals, revision: model.revision }, model.ventureId);
-  const next = structuredClone(model);
-  next.objects = mergeDerived(next.objects, lifted.objects, (entry) => ARCHITECTURE_ROLES.has(entry.properties?.architecture?.role) || entry.properties?.workingTheory, "object");
-  next.relationships = mergeDerived(next.relationships, lifted.relationships, (entry) => entry.properties?.architecture?.connection || entry.properties?.workingTheory, "relationship");
-  next.views = mergeDerived(next.views, lifted.views, (entry) => entry.properties?.architecture?.group, "view");
-  next.workflowContracts = mergeDerived(next.workflowContracts, lifted.workflowContracts, (entry) => entry.properties?.architecture?.campaign, "workflow contract");
-  next.insights = mergeDerived(next.insights, lifted.insights, (entry) => entry.properties?.architecture?.evidence || entry.properties?.workingTheory, "insight");
-  next.compatibility = { ...(next.compatibility ?? {}), architecture: compatibilityMetadata(current, { revisions, proposals }) };
-  next.revision = revision ?? model.revision + 1;
-  next.updatedAt = updatedAt ?? null;
-  next.updatedBy = structuredClone(updatedBy ?? null);
-  return next;
+export function replaceArchitectureCompatibility(model, stored, options) {
+  return replaceArchitectureCompatibilityProjection(model, stored, options, { modelFromArchitecture });
 }

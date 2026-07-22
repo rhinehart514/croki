@@ -14,6 +14,10 @@ async function launchElectron({ executable, args, cwd, home, port }) {
   // Codex and some package runners set this for their own Electron-based host. It would turn the
   // product under test into a plain Node process, so the native acceptance child must not inherit it.
   delete childEnv.ELECTRON_RUN_AS_NODE;
+  // nvm refuses to initialize a login shell when an unrelated parent npm prefix leaks into the
+  // packaged app. The desktop product does not own or need the package runner's installation prefix.
+  delete childEnv.npm_config_prefix;
+  delete childEnv.NPM_CONFIG_PREFIX;
   const child = spawn(executable, [
     "--headless",
     "--no-sandbox",
@@ -38,7 +42,7 @@ async function launchElectron({ executable, args, cwd, home, port }) {
       if (child.exitCode !== null) throw new Error(`Electron exited before Drover opened.\n${output}`);
       try {
         const targets = await fetch(`${endpoint}/json/list`).then((response) => response.json());
-        page = targets.find((target) => target.type === "page" && /^http:\/\/127\.0\.0\.1:/.test(target.url));
+        page = targets.find((target) => target.type === "page" && target.url !== "about:blank");
         if (page?.webSocketDebuggerUrl) break;
       } catch { /* the actual Electron host is still booting */ }
       await delay(50);

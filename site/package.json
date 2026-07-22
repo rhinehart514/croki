@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test:truth": "node --test test/public-truth.test.mjs",
     "start": "next start",
     "lint": "eslint"
   },

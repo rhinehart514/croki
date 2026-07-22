@@ -4,15 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getCredentials = vi.fn();
 const connectGmail = vi.fn();
 const removeCredential = vi.fn();
-const getHeatSettings = vi.fn();
-const setHeatSettings = vi.fn();
+const saveCredential = vi.fn();
 
 vi.mock("@/api", () => ({
   getCredentials: (...args: unknown[]) => getCredentials(...args),
   connectGmail: (...args: unknown[]) => connectGmail(...args),
   removeCredential: (...args: unknown[]) => removeCredential(...args),
-  getHeatSettings: (...args: unknown[]) => getHeatSettings(...args),
-  setHeatSettings: (...args: unknown[]) => setHeatSettings(...args),
+  saveCredential: (...args: unknown[]) => saveCredential(...args),
 }));
 
 import { FirmSettings } from "./FirmSettings";
@@ -33,8 +31,22 @@ describe("FirmSettings", () => {
       credentials: [{ provider: "gmail", label: "Gmail (OAuth)", savedAt: "now", hasToken: true, authType: "oauth" }],
     });
     removeCredential.mockReset().mockResolvedValue({ removed: true, credentials: [] });
-    getHeatSettings.mockReset().mockResolvedValue({ heat: "off", dailySpendUsd: 0 });
-    setHeatSettings.mockReset().mockResolvedValue({ heat: "off", dailySpendUsd: 0 });
+    saveCredential.mockReset().mockResolvedValue({
+      credential: { provider: "exa", label: "Exa", savedAt: "now", hasToken: true, authType: "token" },
+      credentials: [{ provider: "exa", label: "Exa", savedAt: "now", hasToken: true, authType: "token" }],
+    });
+  });
+
+  it("connects Exa as a read-only research source", async () => {
+    const onCapabilitiesChanged = vi.fn();
+    render(<FirmSettings venture={venture} onCapabilitiesChanged={onCapabilitiesChanged} onClose={() => undefined} />);
+    await screen.findByRole("button", { name: "Connect Exa" });
+    fireEvent.click(screen.getByRole("button", { name: "Connect Exa" }));
+    fireEvent.change(screen.getByLabelText("Exa API key"), { target: { value: "exa-key" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Exa key" }));
+    await waitFor(() => expect(saveCredential).toHaveBeenCalledWith("exa", "exa-key", "Exa"));
+    expect(await screen.findByText("Available to every venture")).toBeTruthy();
+    expect(onCapabilitiesChanged).toHaveBeenCalledOnce();
   });
 
   it("shows only real crew capabilities and connects Gmail through OAuth", async () => {
@@ -67,7 +79,7 @@ describe("FirmSettings", () => {
     );
 
     expect(await screen.findByRole("button", { name: "Connect Gmail" })).toBeDisabled();
-    expect(await screen.findByRole("checkbox")).toBeDisabled();
+    expect(screen.queryByText(/Heat|always-on/i)).not.toBeInTheDocument();
     expect(screen.getAllByRole("status").some((status) => status.textContent?.includes("Desktop host required"))).toBe(true);
   });
 

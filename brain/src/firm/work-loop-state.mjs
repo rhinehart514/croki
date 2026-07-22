@@ -5,32 +5,32 @@
 
 import { getVentureDoc, setVentureDoc, now } from "./venture-store.mjs";
 
-function workKey(teammateRef) {
-  return `work:${teammateRef}`;
+function workKey(teammateRef, workScopeRef = null) {
+  return workScopeRef ? `work-scope:${String(workScopeRef).replace(/^work-scope:/, "")}` : `work:${teammateRef}`;
 }
 
 export function blankWork() {
   return { runtimeSessionId: null, stepCount: 0, spentUsd: 0, pausedFor: null };
 }
 
-export function loadWork({ ventureId, teammateRef, betId, options }) {
+export function loadWork({ ventureId, teammateRef, betId, workScopeRef = null, options }) {
   if (betId) {
     const bet = getVentureDoc(ventureId, "bets", betId, options);
     if (!bet) throw new Error(`No such bet: ${betId}`);
     return { bet, work: bet.work ?? blankWork() };
   }
-  const doc = getVentureDoc(ventureId, "crew", workKey(teammateRef), options);
+  const doc = getVentureDoc(ventureId, "crew", workKey(teammateRef, workScopeRef), options);
   return { bet: null, work: doc?.work ?? blankWork() };
 }
 
-export function saveWork({ ventureId, teammateRef, betId, bet, work, options }) {
+export function saveWork({ ventureId, teammateRef, betId, workScopeRef = null, bet, work, options }) {
   const targetId = betId ?? bet?.id;
   if (targetId) {
     const target = getVentureDoc(ventureId, "bets", targetId, options);
     setVentureDoc(ventureId, "bets", targetId, { ...target, work, updatedAt: now() }, options);
     return work;
   }
-  setVentureDoc(ventureId, "crew", workKey(teammateRef), { work, updatedAt: now() }, options);
+  setVentureDoc(ventureId, "crew", workKey(teammateRef, workScopeRef), { work, updatedAt: now() }, options);
   return work;
 }
 

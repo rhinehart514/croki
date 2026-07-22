@@ -3,30 +3,101 @@
 
 import { now } from "./store-fs.mjs";
 import { persistence } from "./persistence.mjs";
+import { credentialProtection } from "./credential-protection.mjs";
 
 const COLLECTION = "credentials";
 const KEY = "founder";
+const SCHEMA_VERSION = 2;
+const SECRET_VERSION = 1;
+const SECRET_FIELDS = ["token", "clientId", "clientSecret", "refreshToken"];
 
 export function normalizeProvider(provider) {
   return String(provider || "").trim().toLowerCase();
 }
 
 function emptyStore() {
-  return { schemaVersion: 1, credentials: {}, updatedAt: now() };
+  return { schemaVersion: SCHEMA_VERSION, credentials: {}, updatedAt: now() };
+}
+
+function hasLegacySecret(credential) {
+  return SECRET_FIELDS.some((field) => typeof credential?.[field] === "string" && credential[field]);
+}
+
+function sealCredential(credential, protection) {
+  const secrets = { provider: credential.provider };
+  for (const field of SECRET_FIELDS) {
+    if (typeof credential[field] === "string" && credential[field]) secrets[field] = credential[field];
+  }
+  const metadata = { ...credential };
+  for (const field of SECRET_FIELDS) delete metadata[field];
+  return {
+    ...metadata,
+    sealed: {
+      version: SECRET_VERSION,
+      protector: protection.id,
+      ciphertext: protection.encrypt(JSON.stringify(secrets)),
+    },
+  };
+}
+
+function unsealCredential(credential, protection) {
+  if (hasLegacySecret(credential)) {
+    if (protection.available === false) protection.decrypt("");
+    return credential;
+  }
+  const envelope = credential?.sealed;
+  if (!envelope) return credential ?? null;
+  if (envelope.version !== SECRET_VERSION) {
+    throw new Error(`Unsupported credential secret version: ${envelope.version}.`);
+  }
+  if (envelope.protector !== protection.id) {
+    const error = new Error(`Credential protection ${envelope.protector} is unavailable in this host.`);
+    error.code = "CREDENTIAL_PROTECTION_MISMATCH";
+    throw error;
+  }
+  let secrets;
+  try {
+    secrets = JSON.parse(protection.decrypt(envelope.ciphertext));
+  } catch (cause) {
+    if (cause?.code) throw cause;
+    const error = new Error(`Could not decrypt the ${credential.provider} credential.`, { cause });
+    error.code = "CREDENTIAL_DECRYPT_FAILED";
+    throw error;
+  }
+  if (!secrets || secrets.provider !== credential.provider) {
+    throw new Error(`The protected credential does not belong to ${credential.provider}.`);
+  }
+  const { sealed: _sealed, ...metadata } = credential;
+  return { ...metadata, ...secrets };
 }
 
 function loadStore(options = {}) {
   const stored = persistence(options).get(COLLECTION, KEY);
-  return stored ? {
+  const store = stored ? {
     ...emptyStore(),
     ...stored,
-    schemaVersion: 1,
+    schemaVersion: Number(stored.schemaVersion) || 1,
     credentials: stored.credentials && typeof stored.credentials === "object" ? stored.credentials : {},
   } : emptyStore();
+  const legacy = Object.values(store.credentials).some(hasLegacySecret);
+  if (!legacy) return { ...store, schemaVersion: SCHEMA_VERSION };
+
+  const protection = credentialProtection(options);
+  if (protection.available === false) return store;
+  const credentials = Object.fromEntries(Object.entries(store.credentials).map(([provider, credential]) => [
+    provider,
+    hasLegacySecret(credential) ? sealCredential(credential, protection) : credential,
+  ]));
+  return saveStore({ ...store, credentials }, options);
 }
 
 function saveStore(store, options = {}) {
-  const durable = { ...store, schemaVersion: 1, updatedAt: now() };
+  for (const credential of Object.values(store.credentials ?? {})) {
+    if (hasLegacySecret(credential)) {
+      throw new Error("Refusing to persist a plaintext credential.");
+    }
+  }
+  const durable = { ...store, schemaVersion: SCHEMA_VERSION, updatedAt: now() };
   persistence(options).set(COLLECTION, KEY, durable);
   return durable;
 }
@@ -38,7 +109,7 @@ export function redactCredential(credential) {
     label: credential.label ?? null,
     ...(credential.accountAddress ? { accountAddress: credential.accountAddress } : {}),
     savedAt: credential.savedAt,
-    hasToken: Boolean(credential.token || credential.refreshToken),
+    hasToken: Boolean(credential.sealed || credential.token || credential.refreshToken),
     authType: credential.authType ?? "token",
   };
 }
@@ -50,12 +121,12 @@ export function setCredential(input = {}, options = {}) {
   if (!token) throw new Error("A credential token is required.");
   const store = loadStore(options);
   const existing = store.credentials[provider];
-  const credential = {
+  const credential = sealCredential({
     provider,
     token,
     label: input.label != null ? String(input.label).slice(0, 80) : (existing?.label ?? null),
     savedAt: existing?.savedAt || now(),
-  };
+  }, credentialProtection(options));
   const saved = saveStore({ ...store, credentials: { ...store.credentials, [provider]: credential } }, options);
   return redactCredential(saved.credentials[provider]);
 }
@@ -71,7 +142,7 @@ export function setOAuthCredential(input = {}, options = {}) {
   const store = loadStore(options);
   const existing = store.credentials[provider];
   const accountAddress = String(input.accountAddress ?? "").trim().toLowerCase();
-  const credential = {
+  const credential = sealCredential({
     provider,
     authType: "oauth",
     clientId,
@@ -80,13 +151,14 @@ export function setOAuthCredential(input = {}, options = {}) {
     label: input.label != null ? String(input.label).slice(0, 80) : (existing?.label ?? "Gmail (OAuth)"),
     ...(accountAddress ? { accountAddress } : {}),
     savedAt: existing?.savedAt || now(),
-  };
+  }, credentialProtection(options));
   const saved = saveStore({ ...store, credentials: { ...store.credentials, [provider]: credential } }, options);
   return redactCredential(saved.credentials[provider]);
 }
 
 export function getCredential(provider, options = {}) {
-  return loadStore(options).credentials[normalizeProvider(provider)] ?? null;
+  const credential = loadStore(options).credentials[normalizeProvider(provider)] ?? null;
+  return credential ? unsealCredential(credential, credentialProtection(options)) : null;
 }
 
 export function listCredentials(options = {}) {

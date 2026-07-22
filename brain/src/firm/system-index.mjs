@@ -84,6 +84,7 @@ export function projectSystemIndex(model, { scope = "system", query = "", outcom
   const attention = attentionFor(model);
   const threadsByObject = new Map();
   for (const thread of list(model.threads)) {
+    if (thread.deletedAt) continue;
     for (const ref of list(thread.subjectRefs)) {
       const id = objectId(ref);
       if (!id) continue;

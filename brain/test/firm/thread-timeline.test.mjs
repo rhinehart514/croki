@@ -11,7 +11,7 @@ process.env.GTM_IDE_PERSISTENCE = "json";
 const { createVenture, setVentureDoc } = await import("../../src/firm/venture-store.mjs");
 const { createBet } = await import("../../src/firm/bet.mjs");
 const { appendConversationMessage } = await import("../../src/firm/conversation.mjs");
-const { ensureDirectionThread, recordRun } = await import("../../src/firm/semantic-model-store.mjs");
+const { ensureDirectionThread, getSemanticModel, recordRun } = await import("../../src/firm/semantic-model-store.mjs");
 const { buildThreadTimeline } = await import("../../src/firm/thread-timeline.mjs");
 const { buildWorkIndex } = await import("../../src/firm/work-index.mjs");
 const { applyFirmConfiguration, getFirmConfiguration } = await import("../../src/firm/configuration.mjs");
@@ -42,6 +42,15 @@ function fixture() {
 }
 
 describe("thread timeline projection", () => {
+  it("projects an empty venture root without creating durable thread state", () => {
+    const venture = createVenture({ name: "empty timeline" }, options);
+    const timeline = buildThreadTimeline(venture.id, "venture-root", options);
+
+    assert.equal(timeline.thread.threadRef, "thread:venture-root");
+    assert.equal(timeline.items.find((item) => item.kind === "return-summary").counts.total, 0);
+    assert.equal(getSemanticModel(venture.id, options).threads.length, 0);
+  });
+
   it("joins legacy bet messages, structured work, evidence, activity, and map without another store", () => {
     const fx = fixture();
     const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
@@ -51,6 +60,22 @@ describe("thread timeline projection", () => {
     assert.ok(timeline.items.some((item) => item.kind === "evidence"));
     assert.ok(timeline.visuals.some((item) => item.kind === "flow" && item.ref === `work:${fx.staged.id}`));
     assert.ok(timeline.visuals.some((item) => item.kind === "map"));
+  });
+
+  it("projects exact durable changes on a work handoff", () => {
+    const fx = fixture();
+    const changes = { openedBetIds: [fx.bet.id], stagedBetIds: [fx.bet.id], wallBetIds: [] };
+    const handoff = appendConversationMessage({
+      ventureId: fx.venture.id,
+      role: "system",
+      kind: "handoff",
+      content: "Work landed on the canvas.",
+      betId: fx.bet.id,
+      changes,
+    }, options);
+
+    const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
+    assert.deepEqual(timeline.items.find((item) => item.ref === `conversation:${handoff.id}`).changes, changes);
   });
 
   it("keeps artifact identity stable across a content revision and searches inside its body", () => {
@@ -91,5 +116,32 @@ describe("thread timeline projection", () => {
       drive.finish();
       __resetActiveDrives();
     }
+  });
+
+  it("compares coding attempts with the facts needed for founder judgment", () => {
+    const fx = fixture();
+    const base = {
+      kind: "native-code", ventureId: fx.venture.id, threadRef: fx.thread.threadRef, betId: fx.bet.id,
+      repository: "/repo", sourceHead: "abc", worktree: null, runRefs: [], checkpoints: [], commands: [], changedFiles: [],
+      diff: "", patchHash: "hash", currentActivity: null, consequence: null, createdAt: "2026-07-19T10:03:00.000Z", updatedAt: "2026-07-19T10:03:00.000Z",
+    };
+    setVentureDoc(fx.venture.id, "codeWorkspaces", "reviewable", {
+      ...base, id: "reviewable", goal: "Reviewable approach", branch: "drover/reviewable", participantRefs: ["codex"], providerSessions: [],
+      verification: [{ command: "npm test", status: "passed" }], changedFiles: [{ status: "M", path: "product.ts" }], diffStat: "1 file changed", status: "reviewable",
+    }, options);
+    setVentureDoc(fx.venture.id, "codeWorkspaces", "interrupted", {
+      ...base, id: "interrupted", goal: "Interrupted approach", branch: "drover/interrupted", participantRefs: ["codex"], providerSessions: [],
+      verification: [], diffStat: "", status: "interrupted", interruption: { message: "Provider stopped", recovery: "Resume from the retained worktree", at: "2026-07-19T10:04:00.000Z" },
+    }, options);
+
+    const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
+    const comparison = timeline.items.find((item) => item.ref === `${fx.thread.threadRef}#code-attempts`);
+    const reviewable = comparison.alternatives.find((alternative) => alternative.id === "reviewable");
+    const interrupted = comparison.alternatives.find((alternative) => alternative.id === "interrupted");
+
+    assert.deepEqual(reviewable.items.map((item) => item.label), ["Status", "Changes", "Verification", "Branch", "Agent"]);
+    assert.equal(reviewable.items.find((item) => item.label === "Verification").detail, "1 passed");
+    assert.equal(interrupted.items.find((item) => item.label === "Verification").detail, "No verification receipts");
+    assert.equal(interrupted.items.find((item) => item.label === "Recovery").detail, "Resume from the retained worktree");
   });
 });

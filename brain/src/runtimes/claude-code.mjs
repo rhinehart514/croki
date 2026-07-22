@@ -15,10 +15,6 @@
 // `claude` binary. It can use an existing Claude Code login or ANTHROPIC_API_KEY.
 // GTM_IDE_CLAUDE_CODE_PATH remains available for an explicit binary override.
 
-import { spawnSync } from "node:child_process";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import {
   createSdkMcpServer,
   query as agentQuery,
@@ -26,6 +22,20 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { runClaudeQuery } from "../model-query.mjs";
 import { z } from "zod";
+import {
+  authModeLabel,
+  detectClaudeAuth,
+  findClaudeBinary,
+  hasStoredClaudeLogin,
+} from "./claude-code-auth.mjs";
+import { sdkImagePrompt } from "./image-input.mjs";
+
+export {
+  authModeLabel,
+  detectClaudeAuth,
+  findClaudeBinary,
+  hasStoredClaudeLogin,
+} from "./claude-code-auth.mjs";
 
 const BRIDGE_SERVER = "drover-firm";
 
@@ -138,63 +148,6 @@ export function parseStreamLine(line) {
 function stripServer(toolName) {
   const match = /^mcp__[^_]+(?:_[^_]+)*__(.+)$/.exec(toolName || "");
   return match ? match[1] : toolName;
-}
-
-// Locate the `claude` binary. Honors an explicit override, otherwise resolves on
-// PATH. Cheap and synchronous — only runs during runtime selection.
-export function findClaudeBinary(env = process.env) {
-  const override = env.GTM_IDE_CLAUDE_CODE_PATH;
-  if (override) {
-    return fs.existsSync(override) ? { ok: true, path: override } : { ok: false, reason: `GTM_IDE_CLAUDE_CODE_PATH does not exist: ${override}` };
-  }
-  const lookup = process.platform === "win32" ? "where" : "which";
-  const found = spawnSync(lookup, ["claude"], { encoding: "utf8" });
-  const resolved = found.status === 0 ? found.stdout.split("\n")[0].trim() : "";
-  if (resolved) return { ok: true, path: resolved };
-  return { ok: false, reason: "The `claude` CLI was not found on PATH." };
-}
-
-// True when a Claude Code subscription login is stored locally: the macOS
-// keychain item the CLI writes on `claude` login, or the credentials file it
-// writes on other platforms. This is the signal that the founder is on their
-// subscription with no raw key — the preferred auth for this product.
-export function hasStoredClaudeLogin(env = process.env) {
-  if (process.platform === "darwin") {
-    const found = spawnSync(
-      "security",
-      ["find-generic-password", "-s", "Claude Code-credentials"],
-      { encoding: "utf8" },
-    );
-    if (found.status === 0) return true;
-  }
-  const home = env.HOME || os.homedir();
-  if (home && fs.existsSync(path.join(home, ".claude", ".credentials.json"))) return true;
-  return false;
-}
-
-// Decide how the bundled Claude Code subprocess will authenticate, in
-// OAuth-first order. A stored subscription login or an explicit
-// CLAUDE_CODE_OAUTH_TOKEN both run on the founder's subscription with no raw
-// key; a bare ANTHROPIC_API_KEY is the last-resort keyed fallback. Returns
-// { mode } where mode is "oauth-token" | "oauth-login" | "api-key" | "none".
-// `probe` is injectable so availability is testable without touching the real
-// keychain.
-export function detectClaudeAuth(env = process.env, probe = hasStoredClaudeLogin) {
-  if (env.CLAUDE_CODE_OAUTH_TOKEN) return { mode: "oauth-token" };
-  if (probe(env)) return { mode: "oauth-login" };
-  if (env.ANTHROPIC_API_KEY) return { mode: "api-key" };
-  return { mode: "none" };
-}
-
-// Human label for an auth mode, shown in teammate events. null for "none" and
-// the test client — nothing useful to display.
-export function authModeLabel(mode) {
-  switch (mode) {
-    case "oauth-token": return "Claude subscription (OAuth token)";
-    case "oauth-login": return "Claude subscription";
-    case "api-key": return "Anthropic API key";
-    default: return null;
-  }
 }
 
 // Every status that must HALT the subprocess drive. The adapter polls ctx.currentStatus()
@@ -359,9 +312,10 @@ export const claudeCodeRuntime = {
       let terminalResult = null;
       let captured = false;
       const pendingCommands = new Map();
-      const prompt = resumeId
+      const promptText = resumeId
         ? (ctx.resumePrompt || "Continue from where you left off.")
         : ctx.goal;
+      const prompt = sdkImagePrompt(promptText, ctx.attachments ?? []);
 
       try {
         const stream = runQuery({
@@ -370,6 +324,10 @@ export const claudeCodeRuntime = {
             abortController,
             cwd: ctx.cwd || process.cwd(),
             ...(ctx.model ? { model: ctx.model } : {}),
+            // Founder-selected reasoning effort. The Claude Agent SDK takes it as a top-level query option
+            // (low/medium/high, default high); omitting it leaves the SDK on its own default, so an unset
+            // choice is byte-identical to the prior behavior.
+            ...(ctx.effort ? { effort: ctx.effort } : {}),
             // SEVERED from the teammate step budget (Wave 6). maxTurns is the MODEL's turns inside ONE
             // drive; it used to be `maxSteps - stepCount`, so late in a session the model got 1-2 turns
             // and hit "max turns (2)" before it could think — the leak the audit named. The teammate's

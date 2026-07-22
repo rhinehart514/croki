@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { applyArchitectureMutations, getArchitecture, writeArchitectureCompatibilityState } from "../../src/firm/architecture.mjs";
-import { emptySemanticModel, validateSemanticModel } from "../../src/firm/semantic-model.mjs";
+import { emptySemanticModel, SEMANTIC_MODEL_SCHEMA_VERSION, validateSemanticModel } from "../../src/firm/semantic-model.mjs";
 import { applySemanticModelMutations } from "../../src/firm/semantic-model-mutations.mjs";
 import {
   getSemanticModel,
@@ -87,7 +87,7 @@ describe("canonical semantic model", () => {
     }, fx.options);
 
     const stored = getVentureDoc(fx.venture.id, "architecture", "atlas", fx.options);
-    assert.equal(stored.schemaVersion, 2);
+    assert.equal(stored.schemaVersion, SEMANTIC_MODEL_SCHEMA_VERSION);
     assert.equal(stored.revision, 6);
     assert.equal(stored.current, undefined);
     assert.deepEqual(stored.objects.map((entry) => entry.id).sort(), ["legacy-one", "legacy-two"]);
@@ -214,7 +214,7 @@ describe("canonical semantic model", () => {
       proposals: [{ id: "proposal-only", status: "pending" }],
     }, fx.options);
     const stored = getVentureDoc(fx.venture.id, "architecture", "atlas", fx.options);
-    assert.equal(stored.schemaVersion, 2);
+    assert.equal(stored.schemaVersion, SEMANTIC_MODEL_SCHEMA_VERSION);
     assert.equal(stored.revision, 1);
     assert.equal(stored.compatibility.architecture.proposals[0].id, "proposal-only");
     assert.equal(stored.current, undefined);

@@ -190,6 +190,7 @@
   --n-hover: rgb(255 255 255 / 4%);
   --n-selected: rgb(255 255 255 / 7%);
   --n-line: rgb(255 255 255 / 6%);
+  --n-line-1: var(--n-line);
   --n-line-2: rgb(255 255 255 / 10%);
   --n-ink: #f5f5f5;
   --n-ink-2: #d4d4d4;
@@ -197,7 +198,9 @@
   --n-ink-4: #737373;
   --r-tool: 8px;
   --n-shadow: var(--shadow-card);
+  --n-shadow-sm: var(--shadow-sm);
   --n-shadow-pop: var(--shadow-pop);
+  --danger-line: rgb(248 113 113 / 28%);
 }
 
 @theme inline {
@@ -238,7 +241,7 @@ body,
 
 body {
   margin: 0;
-  min-width: 960px;
+  min-width: 0;
   min-height: 100vh;
   overflow: hidden;
   background-color: var(--room);

@@ -332,6 +332,27 @@
 .firm-app-repository-choice[aria-pressed="true"] em { color: var(--ink); }
 .firm-app-repository-choice em svg { width: var(--space-3); height: var(--space-3); }
 
+.firm-app-venture-name { padding: 0 var(--space-1); }
+.firm-app-venture-name summary { color: var(--muted); font-size: var(--text-xs); cursor: pointer; }
+.firm-app-venture-name input { width: 100%; margin-top: var(--space-2); }
+.firm-app-direction { display: grid; gap: var(--space-2); }
+.firm-app-direction > span { color: var(--ink); font-size: var(--text-sm); font-weight: 650; }
+.firm-app-direction textarea {
+  width: 100%; min-height: 88px; resize: vertical; padding: var(--space-3);
+  border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--canvas);
+  color: var(--ink); font: 500 var(--text-sm)/var(--leading-normal) var(--font-sans);
+}
+.firm-app-direction textarea:focus { border-color: var(--link); outline: 2px solid color-mix(in oklch,var(--link) 18%,transparent); }
+.firm-app-direction textarea::placeholder { color: var(--muted); }
+.firm-app-runtime-status { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.firm-app-runtime-status > span { color: var(--muted); font-size: var(--text-xs); }
+.firm-app-runtime-status button { display: grid; grid-template-columns: 8px auto; gap: 1px var(--space-2); align-items:center; min-width: 150px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--surface); color: var(--ink-2); text-align:left; }
+.firm-app-runtime-status button i { grid-row: 1 / 3; width: 7px; height: 7px; border-radius:50%; background:var(--danger); }
+.firm-app-runtime-status button[data-connected=true] i { background:#5b8cff; }
+.firm-app-runtime-status button[aria-pressed=true] { border-color:var(--link); background:color-mix(in oklch,var(--link) 8%,var(--surface)); }
+.firm-app-runtime-status strong { font-size:var(--text-xs); }
+.firm-app-runtime-status small { color:var(--muted); font-size:10px; }
+
 @media (prefers-reduced-motion: reduce) {
   .firm-app-picker-list button,
   .firm-app-picker-list button em svg,

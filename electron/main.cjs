@@ -1,34 +1,23 @@
-// Drover desktop shell (code identifier: gtm-ide).
-//
-// The product is a thin host: a Node "brain" (brain/src/server.mjs) that serves the API and the
-// built React client on a loopback port, plus the operator runtime that shells out to the founder's
-// `claude` subscription. This file does the smallest possible thing to put that behind a window the
-// founder double-clicks instead of a terminal:
-//   1. repair PATH, because Finder-launched apps inherit a stripped PATH and the operator must be
-//      able to find `claude` and `git`;
-//   2. boot the existing brain unchanged as a child Node process on a free loopback port;
-//   3. wait for its health endpoint, then load that URL in a BrowserWindow.
-// No brain code changes — the desktop app talks to the same local API the dev server already serves.
+// Drover desktop shell (code identifier: gtm-ide). The renderer is a local application asset and
+// the Brain runs in this desktop process. Renderer requests cross Electron's isolated IPC bridge;
+// normal and packaged app launches never bind a web port.
 
-const { app, BrowserWindow, WebContentsView, shell, utilityProcess, dialog, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, WebContentsView, shell, dialog, ipcMain, safeStorage, screen } = require("electron");
 const path = require("node:path");
-const fs = require("node:fs");
-const os = require("node:os");
-const http = require("node:http");
-const net = require("node:net");
 const crypto = require("node:crypto");
-const { execSync } = require("node:child_process");
+const { execFileSync } = require("node:child_process");
 const pty = require("node-pty");
 const windowState = require("./window-state.cjs");
 const { createTerminalRuntime } = require("./terminal-runtime.cjs");
 const { createPreviewRuntime } = require("./preview-runtime.cjs");
+const { externalHttpUrl, resolveLoginShell } = require("./security.cjs");
 
-const HOST = "127.0.0.1";
+app.setName("Drover");
 
-let brainProcess = null;
 let mainWindow = null;
-let brainPort = 0;
 let founderCapability = null;
+let brainRuntime = null;
+const ventureSubscriptions = new Map();
 
 function rendererWindow(ownerId) {
   return mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents.id === ownerId ? mainWindow : null;
@@ -39,9 +28,7 @@ function sendToRenderer(ownerId, channel, payload) {
   if (window && !window.webContents.isDestroyed()) window.webContents.send(`drover:${channel}`, payload);
 }
 
-function signFounderRequest(method, rawUrl) {
-  const url = new URL(rawUrl);
-  const requestPath = `${url.pathname}${url.search}`;
+function signFounderRequest(method, requestPath) {
   const issuedAt = Date.now();
   const nonce = crypto.randomBytes(18).toString("base64url");
   const signature = crypto
@@ -51,25 +38,16 @@ function signFounderRequest(method, rawUrl) {
   return `v1.${issuedAt}.${nonce}.${signature}`;
 }
 
-function resolveCodingWorkspace(ventureId, workspaceId) {
-  const url = `http://${HOST}:${brainPort}/api/ventures/${encodeURIComponent(ventureId)}/coding-workspaces/${encodeURIComponent(workspaceId)}`;
-  return new Promise((resolve, reject) => {
-    const request = http.get(url, {
-      headers: { "x-drover-founder-capability": signFounderRequest("GET", url) },
-    }, (response) => {
-      const chunks = [];
-      response.on("data", (chunk) => chunks.push(chunk));
-      response.on("end", () => {
-        try {
-          const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-          if (response.statusCode !== 200) throw new Error(body?.error || `Coding workspace lookup failed (${response.statusCode}).`);
-          resolve(body);
-        } catch (error) { reject(error); }
-      });
-    });
-    request.setTimeout(5000, () => request.destroy(new Error("Coding workspace lookup timed out.")));
-    request.on("error", reject);
+async function resolveCodingWorkspace(ventureId, workspaceId) {
+  const requestPath = `/api/ventures/${encodeURIComponent(ventureId)}/coding-workspaces/${encodeURIComponent(workspaceId)}`;
+  const response = await brainRuntime.invokeBrain({
+    path: requestPath,
+    method: "GET",
+    headers: { "x-drover-founder-capability": signFounderRequest("GET", requestPath) },
   });
+  const body = JSON.parse(response.body || "{}");
+  if (response.status !== 200) throw new Error(body?.error || `Coding workspace lookup failed (${response.status}).`);
+  return body;
 }
 
 const terminalRuntime = createTerminalRuntime({
@@ -100,6 +78,35 @@ ipcMain.handle("drover:preview-navigate", (event, url) => previewRuntime.navigat
 ipcMain.handle("drover:preview-reload", (event) => previewRuntime.reload(owner(event)));
 ipcMain.handle("drover:preview-hide", (event) => previewRuntime.hide(owner(event)));
 
+ipcMain.handle("drover:brain-request", async (event, input = {}) => {
+  owner(event);
+  const requestPath = String(input.path ?? "");
+  const method = String(input.method ?? "GET").toUpperCase();
+  if (!requestPath.startsWith("/api/") || requestPath.length > 8_192) throw new Error("Invalid Drover request path.");
+  if (!["GET", "POST", "PUT", "DELETE"].includes(method)) throw new Error("Invalid Drover request method.");
+  const headers = { ...(input.headers ?? {}) };
+  headers["x-drover-founder-capability"] = signFounderRequest(method, requestPath);
+  return brainRuntime.invokeBrain({ path: requestPath, method, headers, body: String(input.body ?? "") });
+});
+
+ipcMain.handle("drover:events-subscribe", (event, ventureId) => {
+  const ownerId = owner(event);
+  const exactVentureId = String(ventureId ?? "").trim();
+  if (!exactVentureId) throw new Error("A venture is required for live updates.");
+  ventureSubscriptions.get(ownerId)?.();
+  ventureSubscriptions.set(ownerId, brainRuntime.subscribeToVenture(exactVentureId, (payload) => {
+    sendToRenderer(ownerId, "venture-event", payload);
+  }));
+  return { subscribed: true };
+});
+
+ipcMain.handle("drover:events-unsubscribe", (event) => {
+  const ownerId = owner(event);
+  ventureSubscriptions.get(ownerId)?.();
+  ventureSubscriptions.delete(ownerId);
+  return { subscribed: false };
+});
+
 // Repository binding is a filesystem choice, so the desktop host owns it. The renderer receives
 // only the path the founder explicitly picked plus a human name for the onboarding form.
 ipcMain.handle("drover:select-repository", async () => {
@@ -122,8 +129,8 @@ ipcMain.handle("drover:select-repository", async () => {
 function repairPath() {
   if (process.platform === "win32") return;
   try {
-    const shellBin = process.env.SHELL || "/bin/zsh";
-    const out = execSync(`${shellBin} -ilc 'printf "%s" "$PATH"'`, {
+    const shellBin = resolveLoginShell(process.env.SHELL);
+    const out = execFileSync(shellBin, ["-ilc", 'printf "%s" "$PATH"'], {
       encoding: "utf8",
       timeout: 5000,
     }).trim();
@@ -143,117 +150,12 @@ function repairPath() {
   }
 }
 
-// --- free port --------------------------------------------------------------------------------
-function findFreePort() {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.unref();
-    srv.on("error", reject);
-    srv.listen(0, HOST, () => {
-      const { port } = srv.address();
-      srv.close(() => resolve(port));
-    });
-  });
-}
-
-// --- brain lifecycle --------------------------------------------------------------------------
-function brainEntry() {
-  // dev:      <repo>/electron/main.cjs       -> <repo>/brain/src/server.mjs
-  // packaged: Resources/app/electron/main.cjs -> Resources/app/brain/src/server.mjs
-  return path.join(__dirname, "..", "brain", "src", "server.mjs");
-}
-
-function clearBrainLocation(port) {
-  const root = process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-  const file = path.join(root, ".runtime", "brain.json");
-  try {
-    const runtime = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (runtime?.port === port) fs.rmSync(file, { force: true });
-  } catch (error) {
-    if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) {
-      process.stderr.write(`[desktop] Could not clear Brain location: ${error instanceof Error ? error.message : error}\n`);
-    }
-  }
-}
-
-// Stop the brain and don't leave it orphaned. SIGTERM lets server.mjs drain (it has its own
-// force-exit fail-safe); a short SIGKILL backstop covers a brain that ignores the term. Idempotent:
-// repeated calls (before-quit + quit, or an error path) are safe.
-function stopBrain() {
-  const child = brainProcess;
-  if (!child) return;
-  brainProcess = null;
-  clearBrainLocation(brainPort);
-  try {
-    child.kill(); // SIGTERM → graceful shutdown in server.mjs
-  } catch {
-    return; // already gone
-  }
-  // Backstop: if the utility process is still alive shortly after, force it down so quitting the app
-  // never leaves an orphaned engine holding the loopback port.
-  const backstop = setTimeout(() => {
-    try {
-      child.kill("SIGKILL");
-    } catch {
-      /* already exited */
-    }
-  }, 2000);
-  backstop.unref?.();
-}
-
-function startBrain(port, capability) {
-  const entry = brainEntry();
-  const child = utilityProcess.fork(entry, [], {
-    stdio: "pipe",
-    env: {
-      ...process.env,
-      PORT: String(port),
-      GTM_IDE_DESKTOP: "1",
-      GTM_IDE_FOUNDER_CAPABILITY: capability,
-    },
-  });
-  child.stdout?.on("data", (d) => process.stdout.write(`[brain] ${d}`));
-  child.stderr?.on("data", (d) => process.stderr.write(`[brain] ${d}`));
-  child.on("exit", (code) => {
-    brainProcess = null;
-    // If the brain dies while the app is up (and we're not already quitting), surface it rather
-    // than leaving a blank window.
-    if (!app.isQuiting && mainWindow) {
-      dialog.showErrorBox(
-        "Drover stopped",
-        `The local engine exited (code ${code}). Quit and relaunch the app.`
-      );
-    }
-  });
-  return child;
-}
-
-function waitForHealth(port, { timeoutMs = 30000, intervalMs = 250 } = {}) {
-  const url = `http://${HOST}:${port}/api/health`;
-  const deadline = Date.now() + timeoutMs;
-  return new Promise((resolve, reject) => {
-    const tick = () => {
-      const req = http.get(url, (res) => {
-        res.resume();
-        if (res.statusCode === 200) return resolve();
-        retry();
-      });
-      req.on("error", retry);
-      req.setTimeout(2000, () => req.destroy());
-    };
-    const retry = () => {
-      if (Date.now() > deadline) return reject(new Error("brain did not become healthy in time"));
-      setTimeout(tick, intervalMs);
-    };
-    tick();
-  });
-}
-
-async function createWindow(port) {
+async function createWindow() {
   // Restore the founder's last window placement (contract §2.8). Falls back to 1440x900, and only
   // uses saved coordinates that still land on a connected display.
   const initial = windowState.resolveInitialBounds({ app, screen });
   mainWindow = new BrowserWindow({
+    title: "Drover",
     width: initial.width,
     height: initial.height,
     ...(Number.isFinite(initial.x) && Number.isFinite(initial.y)
@@ -287,32 +189,18 @@ async function createWindow(port) {
     process.stderr.write(`[desktop] Renderer exited: ${details.reason} (${details.exitCode})\n`);
   });
 
-  // Founder authority stays below the renderer. Electron signs a fresh method + path claim for each
-  // request returning to this exact brain process. The page cannot read, persist, or mint the root
-  // capability; a copied claim expires quickly and the brain accepts its nonce only once.
-  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
-    { urls: [`http://${HOST}:${port}/api/*`] },
-    (details, callback) => {
-      const requestHeaders = { ...details.requestHeaders };
-      requestHeaders["x-drover-founder-capability"] = signFounderRequest(details.method, details.url);
-      callback({ requestHeaders });
-    },
-  );
-
   // External links open in the real browser, not inside the app shell.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      const internal = url.startsWith(`http://${HOST}:${port}`);
-      if (!internal) {
-        shell.openExternal(url);
-        return { action: "deny" };
-      }
+    try {
+      void shell.openExternal(externalHttpUrl(url)).catch(() => undefined);
+    } catch {
+      // Unexpected schemes and malformed destinations remain closed.
     }
-    return { action: "allow" };
+    return { action: "deny" };
   });
 
   const ownerId = mainWindow.webContents.id;
-  await mainWindow.loadURL(`http://${HOST}:${port}/`);
+  await mainWindow.loadFile(path.join(__dirname, "..", "ui", "dist", "index.html"));
   // `ready-to-show` can be missed or withheld by a renderer that paints before this listener's
   // platform notification. A successful load is enough to reveal the founder surface; never leave
   // a healthy Brain behind an indefinitely hidden desktop window.
@@ -320,6 +208,9 @@ async function createWindow(port) {
   mainWindow.on("closed", () => {
     terminalRuntime.stopOwner(ownerId);
     previewRuntime.stopOwner(ownerId);
+    const unsubscribe = ventureSubscriptions.get(ownerId);
+    unsubscribe?.();
+    ventureSubscriptions.delete(ownerId);
     mainWindow = null;
   });
 }
@@ -327,15 +218,20 @@ async function createWindow(port) {
 async function boot() {
   repairPath();
   try {
-    brainPort = await findFreePort();
     founderCapability = crypto.randomBytes(32).toString("base64url");
-    brainProcess = startBrain(brainPort, founderCapability);
-    await waitForHealth(brainPort);
-    await createWindow(brainPort);
+    process.env.GTM_IDE_FOUNDER_CAPABILITY = founderCapability;
+    const protectionModule = await import(path.join(__dirname, "..", "brain", "src", "credential-protection.mjs"));
+    protectionModule.configureCredentialProtection(
+      protectionModule.createElectronSafeStorageProtection(safeStorage),
+    );
+    brainRuntime = await import(path.join(__dirname, "..", "brain", "src", "desktop-runtime.mjs"));
+    await brainRuntime.recoverDesktopWork();
+    await createWindow();
   } catch (err) {
+    process.stderr.write(`[desktop] Startup failed: ${err?.stack || err?.message || err}\n`);
     dialog.showErrorBox(
       "Drover failed to start",
-      `Could not start the local engine.\n\n${err?.stack || err?.message || err}`
+      `Could not start the desktop engine.\n\n${err?.stack || err?.message || err}`
     );
     app.quit();
   }
@@ -355,15 +251,10 @@ if (!gotLock) {
 
   app.whenReady().then(boot);
 
-  // Route OS termination signals through the app-quit lifecycle so the brain is always torn down.
-  // `npm run app` runs Electron in the foreground, so a dev's Ctrl-C sends SIGINT to the whole group;
-  // a `kill` sends SIGTERM. Neither runs before-quit on its own — without this, the utility-process
-  // brain orphans and keeps the loopback port. app.quit() drives before-quit → stopBrain; the guard
-  // makes a repeated/again signal a hard exit so a wedged shutdown can't pin the terminal.
+  // Route terminal signals through Electron's ordinary quit lifecycle.
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
     process.on(signal, () => {
       if (app.isQuiting) {
-        stopBrain();
         process.exit(0);
         return;
       }
@@ -372,27 +263,18 @@ if (!gotLock) {
   }
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0 && brainPort) void createWindow(brainPort);
+    if (BrowserWindow.getAllWindows().length === 0 && brainRuntime) void createWindow();
   });
 
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });
 
-  // Begin brain teardown as soon as a quit is requested (before the window tears down), so the engine
-  // has the drain window while Electron closes the UI. isQuiting suppresses the "Drover stopped" alert
-  // for this expected exit.
   app.on("before-quit", () => {
     app.isQuiting = true;
     terminalRuntime.stopAll();
     previewRuntime.stopAll();
-    stopBrain();
-  });
-
-  // Final backstop: quit fires even on paths that skip before-quit; stopBrain is idempotent.
-  app.on("quit", () => {
-    terminalRuntime.stopAll();
-    previewRuntime.stopAll();
-    stopBrain();
+    for (const unsubscribe of ventureSubscriptions.values()) unsubscribe();
+    ventureSubscriptions.clear();
   });
 }

@@ -37,12 +37,12 @@ export function MachineCanvas() {
           </span>
           <span>
             Buffalo Projects
-            <small>one canonical venture</small>
+            <small>living Product + GTM</small>
           </span>
         </div>
         <div className="machine-mode">
-          <span className="machine-mode-active">Product</span>
-          <span>Go-to-market</span>
+          <span>Work</span>
+          <span className="machine-mode-active">Product / GTM</span>
         </div>
         <span className="machine-status">
           <span /> illustrative scenario
@@ -95,10 +95,10 @@ export function MachineCanvas() {
         <article className="machine-node crew-node">
           <div className="crew-node-head">
             <span>
-              <small>Selected relationship</small>
-              <strong>Promise → Product capability</strong>
+                <small>Provisional Product alternative</small>
+              <strong>Promise → Product experience</strong>
             </span>
-            <span className="run-state">Directed</span>
+            <span className="run-state">Moving</span>
           </div>
           <div className="crew-list">
             <RunLine runtime="Claude Code" task="implemented the Product change" />
@@ -154,9 +154,9 @@ export function MachineCanvas() {
       </div>
 
       <div className="machine-caption">
-        <span>One model.</span>
-        <span>Evidence stays evidence.</span>
-        <span>Authority stays yours.</span>
+        <span>Several approaches.</span>
+        <span>Reality changes the Product.</span>
+        <span>The next move gets faster.</span>
       </div>
     </div>
   );

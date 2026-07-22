@@ -2,6 +2,8 @@ import path from "node:path";
 
 import { createBet } from "../../brain/src/firm/bet.mjs";
 import { summon } from "../../brain/src/firm/crew.mjs";
+import { createModelBranch, proposeModelChange } from "../../brain/src/firm/model-branches.mjs";
+import { prepareOutwardAction } from "../../brain/src/firm/outward-actions.mjs";
 import { ensureDirectionThread, getSemanticModel, mutateSemanticModel } from "../../brain/src/firm/semantic-model-store.mjs";
 import { createVenture, setVentureDoc } from "../../brain/src/firm/venture-store.mjs";
 
@@ -743,6 +745,39 @@ export function createGeneratedMapsFixture({ root, repository } = {}) {
       },
     }],
     actor: { authority: "founder", id: "jacob" },
+  }, options);
+  const branch = createModelBranch({
+    ventureId,
+    name: "Concierge-first Product",
+    question: "Should bespoke onboarding become the Product before self-serve scales?",
+    scopeRefs: ["object:map-experience", "object:map-campaign"],
+    threadRefs: [direction.threadRef],
+    sourceRefs: ["outcome:buffalo-outcome-project-drop"],
+    createdBy: { authority: "agent", id: "codex" },
+  }, options);
+  const change = proposeModelChange({
+    ventureId,
+    branchId: branch.id,
+    targetFamily: "objects",
+    targetRef: "object:map-experience",
+    operation: "update",
+    patch: { statement: "A founder manually shapes the first useful project before the self-serve path hardens." },
+    rationale: "The returned builder language supports doing the unscalable work before automating it.",
+    sourceRefs: ["outcome:buffalo-outcome-project-drop"],
+    proposedBy: { authority: "agent", id: "codex" },
+  }, options);
+  prepareOutwardAction({
+    ventureId,
+    kind: "founder-interview",
+    subjectRefs: ["object:map-experience", "object:map-campaign"],
+    branchRefs: [`model-branch:${branch.id}`],
+    motionRefs: ["object:map-campaign"],
+    productDeltaRefs: [`model-change:${change.id}`],
+    workRefs: ["work:buffalo-work-project-drop-v2"],
+    decisionRef: "decision:buffalo-bet-project-first-pending-wall",
+    preparedMaterial: { question: "Walk me through the moment you described the project." },
+    expectedReturn: { observation: "Whether manual shaping reveals a better first Product experience." },
+    actor: { authority: "agent", id: "codex" },
   }, options);
   return {
     ...fixture,

@@ -1,94 +1,55 @@
 #!/usr/bin/env node
 
-// Dense acceptance for the operating graph. Legacy operating records remain durable, but they are not promoted
-// into graph truth without canonical Product/GTM objects and relationships. The graph therefore stays honestly
-// empty and contained at the supported desktop size and at 125% browser zoom.
-
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createDenseGeneratedMapsFixture } from "../fixtures/atlas-fixtures.mjs";
+import { assertNoUnhandledRejections, bootFixture, openFixtureVenture, waitForDom } from "./fixtures/browser-harness.mjs";
 
-import { createDenseVentureFixture } from "../fixtures/firm-fixtures.mjs";
-import {
-  assertBasicAccessibility,
-  assertNoUnhandledRejections,
-  bootFixture,
-  openFixtureVenture,
-  summonMap,
-  waitForDom,
-} from "./fixtures/browser-harness.mjs";
-
-async function pickView(client, label, heading) {
-  const clicked = await client.evaluate(`(() => {
-    const tab = [...document.querySelectorAll('.product-rail-body nav button')]
-      .find((entry) => entry.textContent.trim() === ${JSON.stringify(label)});
-    tab?.click();
-    return Boolean(tab);
-  })()`);
-  assert.equal(clicked, true, `${label} map tab was unavailable`);
-  await waitForDom(client, `document.querySelector('.system-workspace-title h1')?.textContent?.trim() === ${JSON.stringify(heading)}`, `${heading} did not render`);
-}
-
-test("dense venture: generated maps stay honest and contained without canonical map truth", async () => {
-  const drover = await bootFixture(createDenseVentureFixture);
+test("dense Product/GTM remains causal, contained, and reachable under semantic zoom", async () => {
+  const drover = await bootFixture(createDenseGeneratedMapsFixture);
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1440, height: 900 } });
   try {
     const { client } = chrome;
-    const ventureId = drover.fixture.venture.id;
-
-    const durable = await client.evaluate(`Promise.all([
-      fetch('/api/ventures/${ventureId}/lens').then((response) => response.json()),
-      fetch('/api/ventures/${ventureId}/wall').then((response) => response.json()),
-      fetch('/api/ventures/${ventureId}/work-index').then((response) => response.json()),
-    ]).then(([lensResponse, wall, indexResponse]) => ({
-      bets: lensResponse.lens.bets.length,
-      outcomes: lensResponse.lens.bets.filter((bet) => bet.latestOutcome).length,
-      wall: wall.queue.length,
-      mapObjects: indexResponse.workIndex.outline.objects.length,
-    }))`);
-    assert.deepEqual(durable, {
-      bets: drover.fixture.expected.bets,
-      outcomes: drover.fixture.expected.outcomes,
-      wall: drover.fixture.expected.wallItems,
-      mapObjects: 0,
-    });
-
-    assert.ok(await client.evaluate(`!!document.querySelector('.thread-conversation [role="log"]') && !document.querySelector('.venture-maps')`), "dense venture did not rest in chat");
-    await summonMap(client);
-    await waitForDom(client, `(document.querySelector('.venture-map-empty')?.textContent || '').includes('No connected Product / GTM context yet')`, "empty whole-venture graph overstated legacy records as map truth");
-
-    await pickView(client, "Go-to-market", "Go-to-market");
-    await waitForDom(client, `(document.querySelector('.venture-map-empty')?.textContent || '').includes('No connected Product / GTM context yet')`, "empty GTM graph was not honest");
-    await pickView(client, "Product", "Product");
-    await waitForDom(client, `(document.querySelector('.venture-map-empty')?.textContent || '').includes('No connected Product / GTM context yet')`, "empty Product graph was not honest");
-
-    const contained = await client.evaluate(`(() => {
-      const map = document.querySelector('.venture-maps')?.getBoundingClientRect();
-      const center = document.querySelector('.system-workspace')?.getBoundingClientRect();
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.workspace-mode-nav button')].find((entry) => entry.textContent.includes('Product / GTM')); button?.click(); return Boolean(button); })()`), true);
+    await waitForDom(client, `document.querySelectorAll('.product-gtm-node').length >= 126`, "the broad Product/GTM portfolio was truncated");
+    const normal = await client.evaluate(`(() => {
+      const surface = document.querySelector('.product-gtm-surface')?.getBoundingClientRect();
+      const flow = document.querySelector('.product-gtm-surface .react-flow')?.getBoundingClientRect();
       return {
+        nodes: document.querySelectorAll('.product-gtm-node').length,
         pageOverflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
-        mapWithinCenter: Boolean(map && center && map.left >= center.left - 1 && map.right <= center.right + 1),
-        mapRect: map ? { left: map.left, right: map.right, width: map.width } : null,
-        centerRect: center ? { left: center.left, right: center.right, width: center.width } : null,
-        editableCanvas: Boolean(document.querySelector('.venture-canvas-flow')),
+        contained: Boolean(surface && flow && flow.left >= surface.left - 1 && flow.right <= surface.right + 1),
+        minimap: Boolean(document.querySelector('.product-gtm-surface .react-flow__minimap')),
+        controls: Boolean(document.querySelector('.product-gtm-surface .react-flow__controls')),
       };
     })()`);
-    assert.ok(contained.pageOverflow <= 1, `dense generated maps introduced ${contained.pageOverflow}px page overflow`);
-    assert.equal(contained.mapWithinCenter, true, `generated maps escaped Product / GTM: ${JSON.stringify(contained)}`);
-    assert.equal(contained.editableCanvas, false, "dense operating graph mounted the retired free canvas");
+    assert.ok(normal.nodes >= 126, JSON.stringify(normal));
+    assert.ok(normal.pageOverflow <= 1, `dense Product/GTM introduced ${normal.pageOverflow}px page overflow`);
+    assert.equal(normal.contained, true, JSON.stringify(normal));
+    assert.equal(normal.minimap && normal.controls, true, "dense navigation lost minimap or direct zoom controls");
 
-    await client.send("Emulation.setDeviceMetricsOverride", { width: 1152, height: 720, deviceScaleFactor: 1.25, mobile: false });
+    await client.send("Emulation.setDeviceMetricsOverride", { width: 720, height: 450, deviceScaleFactor: 2, mobile: false });
     await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
-    const zoomed = await client.evaluate(`(() => ({
-      overflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
-      map: Boolean(document.querySelector('.venture-maps')),
-      composer: Boolean(document.querySelector('.thread-composer .now-composer textarea')),
-      ask: Boolean(document.querySelector('.workspace-fab button')),
-      index: Boolean(document.querySelector('.thread-rail')),
-    }))()`);
-    assert.ok(zoomed.overflow <= 1, `125% browser zoom introduced ${zoomed.overflow}px horizontal overflow`);
-    assert.deepEqual({ map: zoomed.map, composer: zoomed.composer, ask: zoomed.ask, index: zoomed.index }, { map: true, composer: false, ask: true, index: true });
-
-    await assertBasicAccessibility(client);
+    await waitForDom(client, `document.querySelectorAll('.product-gtm-node').length >= 126 && Boolean(document.querySelector('.product-gtm-surface .react-flow'))`, "the complete model did not return after 200% zoom remounted the responsive surface");
+    const zoomed = await client.evaluate(`Promise.all([
+      fetch('/api/ventures/${drover.fixture.venture.id}/model').then((response) => response.json()),
+      fetch('/api/ventures/${drover.fixture.venture.id}/market-movement').then((response) => response.json()),
+    ]).then(([model, movement]) => ({
+      pageOverflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
+      surface: Boolean(document.querySelector('.product-gtm-surface .react-flow')),
+      current: Boolean(document.querySelector('.product-gtm-node[data-kind="truth"]')),
+      canvasLabel: document.querySelector('.product-gtm-surface .react-flow')?.getAttribute('aria-label') || '',
+      minimap: Boolean(document.querySelector('.product-gtm-surface .react-flow__minimap')),
+      objects: model.model.objects.length,
+      branches: model.model.modelBranches.filter((branch) => !branch.closedAt).length,
+      actions: movement.marketMovement.actions.length,
+      modes: document.querySelectorAll('.workspace-mode-nav button').length,
+    }))`);
+    assert.ok(zoomed.pageOverflow <= 1, `200% zoom introduced ${zoomed.pageOverflow}px horizontal overflow`);
+    assert.deepEqual({ surface: zoomed.surface, current: zoomed.current, modes: zoomed.modes }, { surface: true, current: true, modes: 2 });
+    assert.match(zoomed.canvasLabel, /Living Product and go-to-market model/);
+    assert.equal(zoomed.minimap, true, "semantic zoom lost direct portfolio navigation");
+    assert.ok(zoomed.objects >= 126 && zoomed.branches >= 1 && zoomed.actions >= 1, `semantic zoom lost venture breadth: ${JSON.stringify(zoomed)}`);
     await assertNoUnhandledRejections(client);
   } finally {
     await chrome.close();

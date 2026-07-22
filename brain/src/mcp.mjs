@@ -2,38 +2,31 @@
 /**
  * Drover MCP server — firm + surviving product-work stdio transport.
  *
- * Every tool delegates to the live venture, bet, wall, and product-change routes.
+ * Every tool delegates directly to the venture, wall, and product-change routes in this stdio
+ * process. MCP does not require the desktop app and does not discover or call a web server.
  */
 
 import { fileURLToPath } from "node:url";
-import { resolveBrainEndpoint } from "./brain-runtime-location.mjs";
+import { invokeBrain } from "./desktop-runtime.mjs";
 import { createFirmTools } from "./firm/mcp-tools.mjs";
 
 async function brainGet(routePath) {
-  const endpoint = resolveBrainEndpoint();
-  const response = await fetch(endpoint.baseUrl + routePath);
-  if (endpoint.instanceId && response.headers.get("x-drover-server-instance") !== endpoint.instanceId) {
-    throw new Error("Drover's recorded desktop Brain is no longer current. Reopen the Electron app.");
-  }
-  if (!response.ok) throw new Error("Brain " + routePath + " → HTTP " + response.status);
-  return response.json();
+  const response = await invokeBrain({ path: routePath, method: "GET", headers: { "x-gtm-actor": "agent" } });
+  if (response.status < 200 || response.status >= 300) throw new Error("Brain " + routePath + " → " + response.status);
+  return JSON.parse(response.body || "{}");
 }
 
 async function brainPost(routePath, body) {
-  const endpoint = resolveBrainEndpoint();
-  const response = await fetch(endpoint.baseUrl + routePath, {
+  const response = await invokeBrain({
+    path: routePath,
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-gtm-actor": "agent" },
+    headers: { "content-type": "application/json", "x-gtm-actor": "agent" },
     body: JSON.stringify(body),
   });
-  if (endpoint.instanceId && response.headers.get("x-drover-server-instance") !== endpoint.instanceId) {
-    throw new Error("Drover's recorded desktop Brain is no longer current. Reopen the Electron app.");
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error("Brain " + routePath + " → " + response.status + ": " + response.body);
   }
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error("Brain " + routePath + " → HTTP " + response.status + ": " + detail);
-  }
-  return response.json();
+  return JSON.parse(response.body || "{}");
 }
 
 const FIRM_TOOLS = createFirmTools({ brainGet, brainPost });
@@ -129,11 +122,8 @@ async function dispatch(message) {
       });
     } catch (error) {
       const messageText = String(error?.message ?? error);
-      const text = /fetch failed|ECONNREFUSED/.test(messageText)
-        ? "Drover Brain is unavailable. Open the Electron app, or start the development server with npm start."
-        : messageText;
       respond(id, {
-        content: [{ type: "text", text }],
+        content: [{ type: "text", text: messageText }],
         isError: true,
       });
     }

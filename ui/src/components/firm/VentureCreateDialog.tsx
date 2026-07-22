@@ -15,7 +15,7 @@ export function VentureCreateDialog({
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    dialogRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    dialogRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
   }, []);
 
   return (
@@ -35,9 +35,9 @@ export function VentureCreateDialog({
       >
         <header>
           <div>
-            <span>New venture</span>
-            <h2 id="venture-create-title">Connect a product</h2>
-            <p>Its repository, work, evidence, and decisions stay isolated from every other venture.</p>
+            <span>New product</span>
+            <h2 id="venture-create-title">Add a codebase</h2>
+            <p>Choose its folder. Drover reads it locally and opens a clean Work space for it.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close new venture">
             <X aria-hidden="true" />

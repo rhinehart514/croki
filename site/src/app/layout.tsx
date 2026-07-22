@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://scaffoldweb.com"),
-  title: "Drover | The founder-controlled Product and GTM system",
+  title: "Drover | Move faster across Product and GTM",
   description:
     "Drover is building one founder-controlled venture canvas for understanding, manipulating, and executing the full Product and go-to-market system, with exact authority at the world boundary.",
   applicationName: "Drover",
@@ -25,13 +25,13 @@ export const metadata: Metadata = {
     type: "website",
     url: "/",
     siteName: "Drover",
-    title: "Drover | The founder-controlled Product and GTM system",
+    title: "Drover | Move faster across Product and GTM",
     description:
       "Drover is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Drover | The founder-controlled Product and GTM system",
+    title: "Drover | Move faster across Product and GTM",
     description:
       "Drover is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
   },

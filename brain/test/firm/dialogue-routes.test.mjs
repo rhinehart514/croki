@@ -78,6 +78,28 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.ok(listConversation(venture.id, options).some((m) => m.role === "founder" && /tighten the opening/.test(m.content)));
   });
 
+  it("persists multiple images on the founder turn and gives their real paths to the selected SDK", async () => {
+    const { venture, bet, threadRef } = configuredThread("visual reply");
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]);
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 1]);
+    let driveInput;
+    const response = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "Compare these two screens", betId: bet.id, threadRef, mode: "work", runtime: "codex",
+      images: [
+        { name: "current.png", mediaType: "image/png", data: png.toString("base64") },
+        { name: "target.jpg", mediaType: "image/jpeg", data: jpeg.toString("base64") },
+      ],
+    }, { deps: { driveTeammate: (input) => { driveInput = input; return { outcome: { kind: "completed" } }; } } });
+    assert.equal(response.status, 202);
+    assert.equal(driveInput.attachments.length, 2);
+    assert.ok(driveInput.attachments.every((attachment) => fs.existsSync(attachment.path)));
+    const founderTurn = listConversation(venture.id, options).find((message) => message.content === "Compare these two screens");
+    assert.deepEqual(founderTurn.attachments.map((attachment) => attachment.name), ["current.png", "target.jpg"]);
+    const image = await call("GET", `/api/ventures/${venture.id}/attachments/${founderTurn.attachments[0].id}/data`);
+    assert.equal(image.status, 200);
+    assert.equal(image.body.dataUrl, `data:image/png;base64,${png.toString("base64")}`);
+  });
+
   it("'close it' ends the effort (founder-only) and it recedes; no button is added", async () => {
     const { venture, bet } = ventureWithEffort("reply close");
     const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
@@ -138,17 +160,56 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.deepEqual(driven.target, { threadRef: res.body.threadRef });
   });
 
+  it("routes an explicitly included agent by exact ref and preserves the participation target", async () => {
+    const { venture } = configuredThread("mentioned contextual agent");
+    let driven = null;
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "new idea: @Codex investigate the onboarding proof",
+      mode: "context",
+      teammateRefs: ["codex"],
+    }, { deps: { driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; } } });
+    assert.equal(res.status, 202);
+    assert.equal(res.body.teammateRef, "codex");
+    assert.deepEqual(driven.target.teammateRefs, ["codex"]);
+    const founderTurn = listConversation(venture.id, options).find((message) => message.id === res.body.fromMessageId);
+    assert.deepEqual(founderTurn.target.teammateRefs, ["codex"]);
+  });
+
+  it("refuses an included agent ref that is not configured for the venture", async () => {
+    const { venture } = configuredThread("unknown contextual agent");
+    let driven = false;
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "new idea: @Ghost investigate the onboarding proof",
+      mode: "context",
+      teammateRefs: ["ghost"],
+    }, { deps: { driveTeammate: async () => { driven = true; return { outcome: { kind: "completed" } }; } } });
+    assert.equal(res.status, 409);
+    assert.match(res.body.error, /not configured/);
+    assert.equal(driven, false);
+  });
+
   it("starts a Work coding turn nonblocking with the founder's selected model", async () => {
     const venture = createVenture({ name: "reply selected model" }, options);
     let driven = null;
+    let routed = false;
     const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
       message: "implement the compact work composer", mode: "work", runtime: "codex", model: "gpt-5.4",
     }, { deps: {
       driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; },
+      routingDeps: { classify: async () => { routed = true; return null; } },
     } });
     assert.equal(res.status, 202);
+    assert.equal(res.body.teammateRef, "codex");
+    assert.equal(routed, false, "Work talks directly to the selected SDK model");
     assert.equal(driven.runtime, "codex");
     assert.equal(driven.model, "gpt-5.4");
+    assert.equal(driven.directSdk, true);
+    assert.equal(driven.target.threadRef, res.body.threadRef);
+    assert.equal(res.body.why, undefined, "the selected SDK does not narrate its own continuation");
+    const thread = getSemanticModel(venture.id).threads.find((entry) => `thread:${entry.id}` === res.body.threadRef);
+    assert.ok(thread?.messageRefs.includes(`conversation:${res.body.fromMessageId}`));
+    assert.equal(listConversation(venture.id, options).some((message) => /^Continuing with /.test(message.content)), false,
+      "Work waits for the SDK's real response instead of inserting a provider acknowledgement");
   });
 
   it("routes Product / GTM graph corrections to the exact staged work in the same bet", async () => {

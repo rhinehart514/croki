@@ -116,18 +116,6 @@ async function bootDrover() {
   }
 }
 
-function setControl(selector, value) {
-  return `(() => {
-    const element = document.querySelector(${JSON.stringify(selector)});
-    if (!element) return false;
-    const prototype = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
-    Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, ${JSON.stringify(value)});
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  })()`;
-}
-
 test("cutover: opening a venture lands the two-surface founder workspace", async () => {
   const drover = await bootDrover();
   const chrome = await launchChrome({
@@ -138,31 +126,32 @@ test("cutover: opening a venture lands the two-surface founder workspace", async
   try {
     const { client } = chrome;
     await client.send("Emulation.setDeviceMetricsOverride", { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
-    await waitForDom(client, `/Start your first venture/i.test(document.body.textContent)`, "venture picker did not render");
-    assert.equal(await client.evaluate(setControl('[aria-label="New venture name"]', "Workspace firm")), true);
+    await waitForDom(client, `/Move from the real Product/i.test(document.body.textContent)`, "direct codebase-first path did not render");
     await waitForDom(
       client,
-      `(() => { const button = [...document.querySelectorAll('button')].find((entry) => /start venture/i.test(entry.textContent)); return Boolean(button && !button.disabled); })()`,
-      "the new-venture form did not become ready to submit",
+      `(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.getAttribute('aria-label') === 'Add acme-saas codebase'); return Boolean(button && !button.disabled); })()`,
+      "the current repository did not become available to connect",
     );
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => /start venture/i.test(entry.textContent)); button?.click(); return Boolean(button && !button.disabled); })()`), true);
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.getAttribute('aria-label') === 'Add acme-saas codebase'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
 
     await waitForDom(client, `!!document.querySelector('.workspace-shell .thread-rail')`, "the workspace rail did not mount");
     await waitForDom(client, `!!document.querySelector('.workspace-shell .thread-conversation [role="log"]')`, "the mounted conversation did not render");
-    await waitForDom(client, `/What do you want to work on/i.test(document.querySelector('.thread-conversation')?.textContent ?? '')`, "the venture conversation home did not render");
-    assert.equal(await client.evaluate(`document.querySelector('.thread-rail')?.getBoundingClientRect().width`), 240, "the default thread rail is not 240px");
-    assert.equal(await client.evaluate(`document.querySelector('.work-surface')?.getBoundingClientRect().width`), 1680, "the Work ADE does not own the remaining desktop width");
+    await waitForDom(client, `document.querySelector('.thread-composer textarea')?.placeholder === 'Describe what you want to build…'`, "the connected codebase did not open the direct Work composer");
+    assert.equal(await client.evaluate(`document.querySelector('.thread-rail')?.getBoundingClientRect().width`), 272, "the default thread rail is not 272px");
+    assert.equal(await client.evaluate(`document.querySelector('.work-surface')?.getBoundingClientRect().width`), 1648, "the Work ADE does not own the remaining desktop width");
     assert.equal(await client.evaluate(`document.querySelector('.thread-conversation')?.getBoundingClientRect().width > 1500 && !document.querySelector('.work-workbench')`), true, "a fresh venture did not give conversation the available Work surface until repository work exists");
     assert.equal(await client.evaluate(`!document.querySelector('.visual-stage')`), true, "a visual mounted before the founder opened one");
     assert.equal(await client.evaluate(`!document.querySelector('[data-testid="venture-workbench"]')`), true, "the retired workbench leaked into the default shell");
     assert.equal(await client.evaluate(`['Work', 'Product / GTM'].every((label) => [...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes(label))) && ![...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes('Releases'))`), true, "the two founder surfaces did not mount cleanly");
     assert.equal(await client.evaluate(`document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Work')`), true, "Work was not the initial mode");
-    assert.equal(await client.evaluate(`(() => { const bar = document.querySelector('.work-composer-bar'); const model = bar?.querySelector('select[aria-label="SDK model"]'); const text = bar?.textContent || ''; return Boolean(model && text.includes('acme-saas') && text.includes('Worktree') && text.includes('Guarded')); })()`), true, "Work did not expose repository, worktree, founder guard, and model context");
+    assert.equal(await client.evaluate(`(() => { const bar = document.querySelector('.work-composer-bar'); const model = bar?.querySelector('[aria-label="SDK model"]'); const text = bar?.textContent || ''; return Boolean(model && text.includes('acme-saas') && text.includes('Worktree') && text.includes('Guarded')); })()`), true, "Work did not expose repository, worktree, founder guard, and model context");
 
     // A fresh thread stays local until the founder sends its first direction.
+    const durableThreadsBeforeDraft = await client.evaluate(`document.querySelectorAll('.thread-rail-row').length`);
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.thread-rail button')].find((entry) => /new thread/i.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
     await waitForDom(client, `document.querySelector('.thread-composer textarea')?.placeholder === 'Describe what you want to build…'`, "the local draft did not use the coding composer");
-    assert.equal(await client.evaluate(`document.querySelectorAll('.thread-rail-row').length`), 0, "an empty durable thread was created before first send");
+    assert.equal(await client.evaluate(`document.querySelectorAll('.thread-log .thread-message').length`), 0, "the previous Thread leaked into the new local draft");
+    assert.equal(await client.evaluate(`document.querySelectorAll('.thread-rail-row').length`), durableThreadsBeforeDraft, "an empty durable thread was created before first send");
 
     // No legacy triptych presentation ships in the default DOM.
     assert.equal(await client.evaluate(`!document.querySelector('.firm-app-rail')`), true, "a retired conversation rail leaked into the default DOM");

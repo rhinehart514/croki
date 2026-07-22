@@ -13,6 +13,8 @@ import {
   ROOT_THREAD_ID,
   createRootThread,
   createThread,
+  withThreadName,
+  withThreadDeletedAt,
   withThreadPinnedAt,
   withThreadLifecycle,
   withThreadReferences,
@@ -34,6 +36,8 @@ function externalRefResolver(ventureId, options) {
     for (const event of list(bet.events)) if (event?.id) refs.add(`event:${event.id}`);
   }
   for (const outcome of listVentureDocs(ventureId, "outcomes", options)) refs.add(`outcome:${outcome.id}`);
+  for (const observation of listVentureDocs(ventureId, "observationContracts", options)) refs.add(`observation:${observation.id}`);
+  for (const receipt of listVentureDocs(ventureId, "receipts", options)) refs.add(`receipt:${receipt.id}`);
   for (const work of listVentureDocs(ventureId, "codeWorkspaces", options)) refs.add(`work:${work.id}`);
   for (const decision of listVentureDocs(ventureId, "decisions", options)) {
     refs.add(`wall-item:${decision.id}`);
@@ -141,10 +145,13 @@ export function ensureDirectionThread(ventureId, {
   if (exactId && (!existing || existing.id === ROOT_THREAD_ID)) {
     throw Object.assign(new Error(`No such direction thread: ${exactId}`), { code: "semantic_model_missing_ref", status: 404 });
   }
+  if (existing?.deletedAt) {
+    throw Object.assign(new Error("That chat was deleted. Start a new chat to continue."), { code: "thread_deleted", status: 409 });
+  }
   if (!existing) {
     const betRefs = subjects.filter((ref) => ref.startsWith("bet:"));
     existing = model.threads
-      .filter((thread) => thread.id !== ROOT_THREAD_ID && (thread.lifecycle ?? "open") === "open")
+      .filter((thread) => thread.id !== ROOT_THREAD_ID && !thread.deletedAt && (thread.lifecycle ?? "open") === "open")
       .filter((thread) => betRefs.some((ref) => list(thread.subjectRefs).includes(ref)))
       .sort((a, b) => String(b.updatedAt ?? b.createdAt ?? "").localeCompare(String(a.updatedAt ?? a.createdAt ?? "")))[0] ?? null;
   }
@@ -161,6 +168,9 @@ export function ensureDirectionThread(ventureId, {
   const id = directionThreadId(origin ?? identityKey ?? `${ventureId}:${name ?? "direction"}`);
   const collision = model.threads.find((thread) => thread.id === id);
   if (collision) {
+    if (collision.deletedAt) {
+      throw Object.assign(new Error("That chat was deleted. Start a new chat to continue."), { code: "thread_deleted", status: 409 });
+    }
     const updated = withThreadReferences(collision, {
       messageRefs: origin ? [origin] : [],
       subjectRefs: subjects,
@@ -211,12 +221,36 @@ export function setDirectionThreadPinned(ventureId, threadRef, pinned, { actor =
   return structuredClone(updated);
 }
 
+export function setDirectionThreadName(ventureId, threadRef, name, { actor = SYSTEM_ACTOR, at } = {}, options = {}) {
+  const id = normalizeRef(threadRef, "thread:")?.slice("thread:".length);
+  const existing = getSemanticModelState(ventureId, options).model.threads.find((thread) => thread.id === id);
+  if (!existing || existing.id === ROOT_THREAD_ID) throw Object.assign(new Error(`No such direction thread: ${id}`), { code: "semantic_model_missing_ref", status: 404 });
+  const changedAt = at ?? now();
+  const updated = withThreadName(existing, name, { at: changedAt });
+  applyOne(ventureId, updated, "threads", { actor, at: changedAt }, options, "update-record");
+  return structuredClone(updated);
+}
+
 export function setDirectionThreadLifecycle(ventureId, threadRef, lifecycle, { actor = SYSTEM_ACTOR, at } = {}, options = {}) {
   const id = normalizeRef(threadRef, "thread:")?.slice("thread:".length);
   const existing = getSemanticModelState(ventureId, options).model.threads.find((thread) => thread.id === id);
   if (!existing || existing.id === ROOT_THREAD_ID) throw Object.assign(new Error(`No such direction thread: ${id}`), { code: "semantic_model_missing_ref", status: 404 });
   const changedAt = at ?? now();
   const updated = withThreadLifecycle(existing, lifecycle, { at: changedAt });
+  applyOne(ventureId, updated, "threads", { actor, at: changedAt }, options, "update-record");
+  return structuredClone(updated);
+}
+
+export function deleteDirectionThread(ventureId, threadRef, { actor = SYSTEM_ACTOR, at } = {}, options = {}) {
+  if (actor?.authority !== "founder") {
+    throw Object.assign(new Error("Only the founder can delete a chat."), { code: "thread_delete_forbidden", status: 403 });
+  }
+  const id = normalizeRef(threadRef, "thread:")?.slice("thread:".length);
+  const existing = getSemanticModelState(ventureId, options).model.threads.find((thread) => thread.id === id);
+  if (!existing || existing.id === ROOT_THREAD_ID) throw Object.assign(new Error(`No such direction thread: ${id}`), { code: "semantic_model_missing_ref", status: 404 });
+  if (existing.deletedAt) return structuredClone(existing);
+  const changedAt = at ?? now();
+  const updated = withThreadDeletedAt(existing, changedAt, { at: changedAt });
   applyOne(ventureId, updated, "threads", { actor, at: changedAt }, options, "update-record");
   return structuredClone(updated);
 }

@@ -5,13 +5,14 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { completeUncommittedPatch, patchDigest } from "../git-patch.mjs";
 import { captureCheckpoint, diffCheckpoints, restoreCheckpoint, snapshotTree } from "../native-code/t3-checkpoint-store.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
 import { listVentures, getVentureDoc, listVentureDocs, now, setVentureDoc } from "./venture-store.mjs";
 import { recordCodingProductConsequence } from "./semantic-model-store.mjs";
 import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
+import { hostProjectCheck } from "./code-workspace-verification.mjs";
 
 export const CODE_WORKSPACE_COLLECTION = "codeWorkspaces";
 const ACTIVE = new Set(["preparing", "running", "interrupted", "reviewable", "needs-verification", "failed-verification"]);
@@ -74,7 +75,7 @@ function linkDependencyTree(source, destination) {
 }
 
 function linkDependencies(repo, worktree) {
-  for (const relative of ["node_modules", "brain/node_modules", "ui/node_modules", "design-system/node_modules"]) {
+  for (const relative of ["node_modules", "brain/node_modules", "ui/node_modules"]) {
     const source = path.join(repo, relative);
     const destination = path.join(worktree, relative);
     if (!fs.existsSync(source) || fs.existsSync(destination)) continue;
@@ -221,24 +222,7 @@ function verificationReadiness(record) {
   };
 }
 
-function hostProjectCheck(worktree) {
-  const packagePath = path.join(worktree, "package.json");
-  if (!fs.existsSync(packagePath)) return null;
-  const manifest = JSON.parse(fs.readFileSync(packagePath, "utf8"));
-  if (!manifest?.scripts?.test) return null;
-  const startedAt = now();
-  const env = { ...process.env };
-  for (const key of Object.keys(env).filter((entry) => entry.startsWith("GIT_CONFIG_"))) delete env[key];
-  const result = spawnSync("npm", ["test"], { cwd: worktree, env, encoding: "utf8", timeout: 15 * 60_000, maxBuffer: 16 * 1024 * 1024 });
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
-  return {
-    command: "npm test", kind: "host-project", status: result.status === 0 ? "passed" : "failed",
-    exitCode: Number.isInteger(result.status) ? result.status : 1, startedAt, completedAt: now(),
-    output: (result.error?.message ? `${output}\n${result.error.message}` : output).slice(-16_000),
-  };
-}
-
-export function settleCodingWorkspace(ventureId, id, { runRef, outcome, error = null }, options = {}) {
+export async function settleCodingWorkspace(ventureId, id, { runRef, outcome, error = null }, options = {}) {
   const record = getVentureDoc(ventureId, CODE_WORKSPACE_COLLECTION, id, options);
   if (!record) throw new Error(`No such coding workspace: ${id}`);
   const { worktree } = assertCodingWorkspaceIdentity(record);
@@ -255,7 +239,12 @@ export function settleCodingWorkspace(ventureId, id, { runRef, outcome, error = 
   let diffCheck = { command: "git diff --check", kind: "host", status: "passed", exitCode: 0, startedAt: checkStartedAt, completedAt: now(), output: "No whitespace errors." };
   try { git(worktree, ["diff", "--check", baseline.ref, checkpoint.ref, "--"]); }
   catch (checkError) { diffCheck = { ...diffCheck, status: "failed", exitCode: 1, output: checkError.message, completedAt: now() }; }
-  const projectCheck = record.hostVerification !== false && !error && outcome?.kind === "completed" ? hostProjectCheck(worktree) : null;
+  if (record.hostVerification !== false && !error && outcome?.kind === "completed") {
+    save({ ...record, currentActivity: "Running project verification" }, options);
+  }
+  const projectCheck = record.hostVerification !== false && !error && outcome?.kind === "completed"
+    ? await hostProjectCheck(worktree, options.hostProjectCheckDeps)
+    : null;
   const verification = [...(record.verification ?? []), diffCheck, ...(projectCheck ? [projectCheck] : [])];
   const proof = verificationReadiness({ verification });
   const patchHash = patchDigest(diff);
@@ -412,7 +401,7 @@ export function commitCodingWorkspace(ventureId, id, message, options = {}) {
   const subject = String(message ?? "").trim();
   if (!subject) throw new Error("Committing needs an explicit commit message.");
   git(worktree, ["add", "-A", "--", "."]);
-  git(worktree, ["commit", "-m", subject]);
+  git(worktree, ["-c", "core.hooksPath=/dev/null", "commit", "-m", subject]);
   const commit = git(worktree, ["rev-parse", "HEAD"]);
   return save({ ...record, status: "committed", consequence: { ...record.consequence, action: "committed", commit, commitMessage: subject, actedAt: now(), reversible: true } }, options);
 }
@@ -488,12 +477,12 @@ export function discardCodingWorkspace(ventureId, id, options = {}) {
   }, options);
 }
 
-export function recoverInterruptedCodingWorkspaces(options = {}) {
+export async function recoverInterruptedCodingWorkspaces(options = {}) {
   const recovered = [];
   for (const venture of listVentures(options)) {
     for (const record of listVentureDocs(venture.id, CODE_WORKSPACE_COLLECTION, options).filter((entry) => ["preparing", "running"].includes(entry.status))) {
       try {
-        const updated = settleCodingWorkspace(venture.id, record.id, { runRef: record.runRefs.at(-1), outcome: { kind: "failed" }, error: "Drover restarted before the provider turn settled." }, options);
+        const updated = await settleCodingWorkspace(venture.id, record.id, { runRef: record.runRefs.at(-1), outcome: { kind: "failed" }, error: "Drover restarted before the provider turn settled." }, options);
         recovered.push(updated);
       } catch (error) {
         recovered.push(save({ ...record, status: "interrupted", currentActivity: null, interruption: { message: error.message, at: now(), recovery: "Workspace lineage could not be verified; Drover will not resume or modify it automatically." } }, options));

@@ -2,6 +2,7 @@ import { json, readBody } from "./util.mjs";
 import { reportFriction, listFrictionQueue } from "../friction.mjs";
 import { enqueueFeatureRequest } from "../feature-builder.mjs";
 import { runtimeStatuses } from "../runtimes/index.mjs";
+import { capabilityInventory } from "../connected-read-capabilities.mjs";
 import crypto from "node:crypto";
 import { authorizeFounderWriteForRequest, founderAuthorityStatus } from "./founder-authority.mjs";
 
@@ -26,6 +27,11 @@ export default async function handle({ req, res, url }) {
 
   if (url.pathname === "/api/runtimes" && req.method === "GET") {
     json(res, 200, { runtimes: runtimeStatuses() });
+    return true;
+  }
+
+  if (url.pathname === "/api/capabilities" && req.method === "GET") {
+    json(res, 200, { capabilities: capabilityInventory() });
     return true;
   }
 

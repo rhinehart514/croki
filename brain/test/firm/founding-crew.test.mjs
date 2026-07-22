@@ -1,11 +1,11 @@
 // founding-crew.test.mjs — Phase 8 acceptance (ADE build contract §4A.6, Reading A): one crew across
 // ventures. Yara, Mira, Soren, and Kai are the SAME CHARACTERS everywhere — one name, one accumulating lens
 // via the firm-level template — while each venture's instance holds only that venture's own work. This is
-// the FIRM-SPEC-blessed template/instance mechanism (teammate-soul-store) applied at venture creation, not
+// the compatibility template/instance mechanism (teammate-soul-store) applied only through an explicit seed, not
 // literal shared memory (Reading B, which would bleed venture data and is barred without a rail-6 amendment).
 //
 // The four acceptance criteria, each proven below:
-//   1. A newly created venture opens with all four already present, as the same characters, carrying their
+//   1. An explicitly seeded venture opens with all four present, as the same characters, carrying their
 //      graduated lens (inherited from the template, not re-earned).
 //   2. A lesson blessed in one venture reaches the others via the template (cross-venture graduation).
 //   3. No venture's raw work or identifying soul data appears in another (rail 6 isolation holds).
@@ -35,10 +35,16 @@ function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-founding-crew-")) };
 }
 
+function createSeededVenture(input, options) {
+  const venture = createVenture(input, options);
+  seedFoundingCrew(venture.id, options);
+  return venture;
+}
+
 describe("founding crew — the four named characters, firm-level identity", () => {
-  it("a newly created venture opens with Yara, Mira, Soren, and Kai already present", () => {
+  it("an explicitly seeded venture opens with Yara, Mira, Soren, and Kai present", () => {
     const options = freshRoot();
-    const venture = createVenture({ name: "Fresh venture" }, options);
+    const venture = createSeededVenture({ name: "Fresh venture" }, options);
 
     const crew = listCrew(venture.id, options);
     assert.deepEqual(crew.map((c) => c.ref).sort(), [...FOUNDING_CREW_REFS].sort());
@@ -51,7 +57,7 @@ describe("founding crew — the four named characters, firm-level identity", () 
 
   it("the four are the venture's configured participants, so a direction can be routed to any of them", () => {
     const options = freshRoot();
-    const venture = createVenture({ name: "Configured crew" }, options);
+    const venture = createSeededVenture({ name: "Configured crew" }, options);
     // initialConfiguration derives agents from the seeded roster, so the config opens with the four already
     // configured — Phase-4 direction routing can claim a direction for any of them without a formation step.
     const configuration = getFirmConfiguration(venture.id, options);
@@ -73,7 +79,7 @@ describe("founding crew — the four named characters, firm-level identity", () 
     teammateSoulStore.promoteTemplate("yara", key, options);
 
     // A brand-new venture created AFTER the template graduated: Yara opens already carrying that lesson.
-    const venture = createVenture({ name: "Later venture" }, options);
+    const venture = createSeededVenture({ name: "Later venture" }, options);
     const yara = listCrew(venture.id, options).find((c) => c.ref === "yara");
     assert.ok(yara, "Yara is present in the fresh venture");
     const inherited = yara.soul.soul.find((entry) => entry.patternKey === key);
@@ -89,8 +95,8 @@ describe("founding crew — the four named characters, firm-level identity", () 
     const key = patternKeyFor(text);
 
     // Two ventures both open with Mira. The founder corrects the same thing in each and blesses it locally.
-    const ventureA = createVenture({ name: "Venture A" }, options);
-    const ventureB = createVenture({ name: "Venture B" }, options);
+    const ventureA = createSeededVenture({ name: "Venture A" }, options);
+    const ventureB = createSeededVenture({ name: "Venture B" }, options);
     for (const ventureId of [ventureA.id, ventureB.id]) {
       teammateSoulStore.record(ventureId, "mira", { text, taskId: "t1" }, { templateRef: "mira" }, options);
       teammateSoulStore.record(ventureId, "mira", { text, taskId: "t2" }, { templateRef: "mira" }, options);
@@ -105,7 +111,7 @@ describe("founding crew — the four named characters, firm-level identity", () 
     teammateSoulStore.promoteTemplate("mira", key, options);
 
     // A THIRD, later venture now opens with Mira already carrying the lesson — it crossed via the template.
-    const ventureC = createVenture({ name: "Venture C" }, options);
+    const ventureC = createSeededVenture({ name: "Venture C" }, options);
     const miraC = listCrew(ventureC.id, options).find((c) => c.ref === "mira");
     assert.ok(miraC.soul.soul.some((e) => e.patternKey === key), "the blessed lesson reached a new venture");
   });
@@ -114,8 +120,8 @@ describe("founding crew — the four named characters, firm-level identity", () 
 describe("founding crew — rail 6: ventures never bleed", () => {
   it("one venture's raw work and scratch learnings never appear in another", () => {
     const options = freshRoot();
-    const ventureA = createVenture({ name: "Isolation A" }, options);
-    const ventureB = createVenture({ name: "Isolation B" }, options);
+    const ventureA = createSeededVenture({ name: "Isolation A" }, options);
+    const ventureB = createSeededVenture({ name: "Isolation B" }, options);
 
     // Record a venture-specific, UNBLESSED observation on Soren in venture A only.
     const secret = "A-only: the Buffalo lead replied about pricing";
@@ -137,10 +143,10 @@ describe("founding crew — rail 6: ventures never bleed", () => {
     const options = freshRoot();
     // Venture A holds a private observation. Creating venture B seeds its crew — and that seed must not pull
     // any of A's instance data across. B's fresh souls carry only what A's *template* graduated (nothing here).
-    const ventureA = createVenture({ name: "No bleed A" }, options);
+    const ventureA = createSeededVenture({ name: "No bleed A" }, options);
     teammateSoulStore.record(ventureA.id, "kai", { text: "A-only private note", taskId: "a1" }, { templateRef: "kai" }, options);
 
-    const ventureB = createVenture({ name: "No bleed B" }, options);
+    const ventureB = createSeededVenture({ name: "No bleed B" }, options);
     const kaiB = listCrew(ventureB.id, options).find((c) => c.ref === "kai");
     assert.deepEqual(kaiB.soul.learnings, [], "B's Kai is born clean — no scratch learnings from A");
     assert.deepEqual(kaiB.soul.soul, [], "B's Kai inherits nothing until A's lesson is founder-blessed up to the template");
@@ -150,7 +156,7 @@ describe("founding crew — rail 6: ventures never bleed", () => {
 describe("founding crew — the seed itself", () => {
   it("is idempotent: re-seeding an already-seeded venture changes nothing", () => {
     const options = freshRoot();
-    const venture = createVenture({ name: "Idempotent" }, options);
+    const venture = createSeededVenture({ name: "Idempotent" }, options);
     const before = listCrew(venture.id, options);
     seedFoundingCrew(venture.id, options);
     seedFoundingCrew(venture.id, options);
@@ -160,10 +166,10 @@ describe("founding crew — the seed itself", () => {
     assert.deepEqual(after.map((c) => c.ref).sort(), before.map((c) => c.ref).sort());
   });
 
-  it("can be opted out at creation, for tests exercising the empty-start primitives", () => {
-    const options = { ...freshRoot(), seedFoundingCrew: false };
+  it("does not alter the empty creation default until called explicitly", () => {
+    const options = freshRoot();
     const venture = createVenture({ name: "Empty start" }, options);
-    assert.deepEqual(listCrew(venture.id, options), [], "opting out leaves the venture with no seeded crew");
+    assert.deepEqual(listCrew(venture.id, options), [], "venture creation leaves the roster empty");
   });
 
   it("ensureFoundingTemplates births the four templates under the library, idempotently", () => {

@@ -2,14 +2,31 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { ConversationReplyResult, DriveTeammateResult } from "@/api";
 import { targetBet, targetWork } from "@/components/firm/directionTarget";
+import type { FirmConfiguration, FirmConfiguredAgent } from "@/types";
 import { NowComposer } from "./NowComposer";
 
 const driveTeammate = vi.fn<(...args: unknown[]) => Promise<DriveTeammateResult>>();
 const replyInConversation = vi.fn<(...args: unknown[]) => Promise<ConversationReplyResult>>();
+const putFirmConfiguration = vi.fn();
 vi.mock("@/api", () => ({
   driveTeammate: (...args: unknown[]) => driveTeammate(...args),
   replyInConversation: (...args: unknown[]) => replyInConversation(...args),
+  putFirmConfiguration: (...args: unknown[]) => putFirmConfiguration(...args),
 }));
+
+const mara: FirmConfiguredAgent = {
+  ref: "mara", name: "Mara", label: "Specialist", perspective: "Find the sharpest market proof.",
+  activation: "direct", capabilities: { firmTools: true, additional: [] }, context: { scope: "venture", instructions: null },
+  memory: { scope: "venture-soul", instructions: null }, runtime: { provider: "codex", model: null },
+  budget: { maxSteps: null, dailySpendUsd: null }, authority: { outwardEffects: "wall" }, evaluation: { signals: [], instructions: null },
+};
+const configuration: FirmConfiguration = {
+  id: "firm", schemaVersion: 1, revision: 3,
+  presentation: { participant: "specialist", participantLabel: "agent", collectiveLabel: "agents" },
+  defaults: { runtime: null, model: null, maxSteps: 24 }, organization: { shape: "flat", instructions: null, relationships: [] },
+  coordination: { mode: "adaptive", coordinatorRef: null, protocols: [], stopWhen: [] },
+  authority: { outwardEffects: "wall", configurationChanges: "founder" }, agents: [mara],
+};
 
 function result(partial: Partial<DriveTeammateResult>): DriveTeammateResult {
   return {
@@ -36,6 +53,7 @@ describe("NowComposer contextual routing", () => {
     window.sessionStorage.clear();
     driveTeammate.mockReset();
     replyInConversation.mockReset();
+    putFirmConfiguration.mockReset();
   });
 
   it("STEERS an existing direction through the conversation when scoped to a bet — not a fresh /drive", async () => {
@@ -72,6 +90,64 @@ describe("NowComposer contextual routing", () => {
 
     await waitFor(() => expect(driveTeammate).toHaveBeenCalled());
     expect(replyInConversation).not.toHaveBeenCalled();
+  });
+
+  it("attaches, previews, removes, and submits multiple images in one turn", async () => {
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:images" } as ConversationReplyResult);
+    const { container } = render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: null, workRef: null, teammateRefs: [], threadRef: "thread:images" }} scopeLabel="Visual audit" hasWork variant="dock" submissionMode="work" runtimeOverride="codex" />);
+    const png = new File([new Uint8Array([137, 80, 78, 71])], "first.png", { type: "image/png" });
+    const jpeg = new File([new Uint8Array([255, 216, 255])], "second.jpg", { type: "image/jpeg" });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [png, jpeg] } });
+    expect(await screen.findByAltText("first.png")).toBeVisible();
+    expect(screen.getByAltText("second.jpg")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Remove first.png" }));
+    expect(screen.queryByAltText("first.png")).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Compare this with the current UI" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", expect.objectContaining({
+      message: "Compare this with the current UI",
+      images: [expect.objectContaining({ name: "second.jpg", mediaType: "image/jpeg" })],
+      threadRef: "thread:images",
+      mode: "work",
+      runtime: "codex",
+    })));
+  });
+
+  it("accepts an image-only turn with an honest default instruction", async () => {
+    replyInConversation.mockResolvedValue({ act: "answer", accepted: true } as ConversationReplyResult);
+    const { container } = render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork variant="dock" submissionMode="conversation" />);
+    const png = new File([new Uint8Array([137, 80, 78, 71])], "screen.png", { type: "image/png" });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [png] } });
+    expect(await screen.findByAltText("screen.png")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", expect.objectContaining({ message: "Look at this image.", images: [expect.objectContaining({ name: "screen.png" })] })));
+  });
+
+  it("mentions an existing agent with @ and sends its exact ref", async () => {
+    driveTeammate.mockResolvedValue(result({ handoff: handoff({ openedBetIds: ["b-agent"] }) }));
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork variant="dock" configuration={configuration} />);
+    const field = screen.getByLabelText(/Say what you want/);
+    fireEvent.change(field, { target: { value: "@Mar" } });
+    fireEvent.click(screen.getByRole("option", { name: /Mara/ }));
+    expect(field).toHaveValue("@Mara ");
+    fireEvent.change(field, { target: { value: "@Mara audit the onboarding proof" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start work" }));
+    await waitFor(() => expect(driveTeammate).toHaveBeenCalledWith("v1", {
+      goal: "@Mara audit the onboarding proof", teammateRefs: ["mara"],
+    }));
+  });
+
+  it("opens the same creation form from /add-agent and inserts the new mention", async () => {
+    putFirmConfiguration.mockImplementation(async (_ventureId, _revision, next: FirmConfiguration) => ({ configuration: { ...next, revision: 4 } }));
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork variant="dock" configuration={{ ...configuration, agents: [] }} onDriven={() => {}} />);
+    const field = screen.getByLabelText(/Say what you want/);
+    fireEvent.change(field, { target: { value: "/add-agent" } });
+    fireEvent.click(screen.getByRole("option", { name: /Create an agent/ }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Research Lead" } });
+    fireEvent.change(screen.getByLabelText("Purpose"), { target: { value: "Ground decisions in customer evidence." } });
+    fireEvent.click(screen.getByRole("button", { name: "Create agent" }));
+    await waitFor(() => expect(field).toHaveValue("@Research Lead "));
+    expect(putFirmConfiguration).toHaveBeenCalledWith("v1", 3, expect.objectContaining({ agents: [expect.objectContaining({ ref: "research-lead" })] }), "Created Research Lead");
   });
 
   it("targets one selected SDK agent explicitly", async () => {
@@ -157,6 +233,17 @@ describe("NowComposer contextual routing", () => {
     expect(container.querySelector(".now-composer-flight")).toHaveTextContent("Shape the launch evidence loop");
     resolveReply({ act: "answer", accepted: true } as ConversationReplyResult);
     await waitFor(() => expect(replyInConversation).toHaveBeenCalled());
+  });
+
+  it("carries the exact provisional model branch into a correction", async () => {
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:model" } as ConversationReplyResult);
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: "bet-1", workRef: "view-one", teammateRefs: [], threadRef: "thread:model" }} scopeLabel="Ecosystem direction" hasWork variant="dock" submissionMode="work" productGtmView modelBranchRef="model-branch:branch-one" onDriven={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Keep this unresolved until evidence returns" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", {
+      message: "Keep this unresolved until evidence returns", betId: "bet-1", workRef: "view-one", modelBranchRef: "model-branch:branch-one",
+      threadRef: "thread:model", mode: "work", productGtmView: true,
+    }));
   });
 
   it("revises the exact provisional Product / GTM graph in its Work thread", async () => {

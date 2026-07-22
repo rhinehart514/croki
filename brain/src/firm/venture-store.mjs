@@ -20,10 +20,6 @@ import fs from "node:fs";
 import { persistence, storeRoot as persistenceStoreRoot } from "../persistence.mjs";
 import { safeId } from "../store-fs.mjs";
 import { teammateSoulStore } from "../teammate-soul-store.mjs";
-// founding-crew → crew → venture-store forms an ES module cycle; it is safe because seedFoundingCrew is a
-// live binding only *called* at runtime (createVenture), never at module load. crew.mjs likewise only uses
-// venture-store's exports at call time.
-import { seedFoundingCrew } from "./founding-crew.mjs";
 
 export { safeId };
 
@@ -115,14 +111,13 @@ function normalizeManifest(input = {}) {
 // runtime capability and no persistent specialist; the first founder direction forms the first participant
 // explicitly (ensureInitialFirmParticipant / the work-loop first-participant path).
 //
-// The legacy fictional founding crew (Yara/Mira/Soren/Kai as the SAME CHARACTERS across ventures) remains an
-// explicit opt-in seam so existing seeded ventures stay readable and low-level tests can exercise a
-// pre-populated roster. It is NOT the product default. `seedFoundingCrew` defaults to on only for that
-// legacy/test convenience; the shipped product never reaches it.
+// The legacy fictional founding crew (Yara/Mira/Soren/Kai) remains available through the explicit
+// seedFoundingCrew helper so existing seeded ventures stay readable and compatibility tests can exercise a
+// pre-populated roster. Venture creation itself never imports or invokes that helper: an empty roster is the
+// universal default and the store therefore has no crew/venture module cycle.
 export function createVenture(input = {}, options = {}) {
   const manifest = normalizeManifest(input);
   manifestPersistence(options).set(MANIFEST_COLLECTION, safeId(manifest.id), manifest);
-  if (options.seedFoundingCrew !== false) seedFoundingCrew(manifest.id, options);
   return manifest;
 }
 

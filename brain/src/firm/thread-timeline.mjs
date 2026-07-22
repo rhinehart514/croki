@@ -3,7 +3,7 @@
 
 import { listActiveDrives } from "./active-drives.mjs";
 import { getSemanticModel } from "./semantic-model-store.mjs";
-import { ROOT_THREAD_ID } from "./thread.mjs";
+import { createRootThread, ROOT_THREAD_ID } from "./thread.mjs";
 import { listVentureDocs } from "./venture-store.mjs";
 import { buildWorkIndex } from "./work-index.mjs";
 import { getFirmConfiguration } from "./configuration.mjs";
@@ -47,8 +47,37 @@ function visual(kind, ref, threadRef, title, relatedRefs = []) {
   return { kind, ref, threadRef, title, ...(relatedRefs.length ? { relatedRefs } : {}) };
 }
 
+function readableStatus(value) {
+  return String(value ?? "unknown").replaceAll("-", " ");
+}
+
+function codingAttemptItems(workspace, participantLabel) {
+  const verification = list(workspace.verification);
+  const passed = verification.filter((receipt) => receipt.status === "passed").length;
+  const failed = verification.filter((receipt) => receipt.status === "failed").length;
+  const running = verification.filter((receipt) => receipt.status === "running").length;
+  const verificationDetail = verification.length
+    ? [passed ? `${passed} passed` : null, failed ? `${failed} failed` : null, running ? `${running} running` : null].filter(Boolean).join(" · ")
+    : "No verification receipts";
+  const participants = list(workspace.participantRefs).map(participantLabel).filter(Boolean);
+  const providers = list(workspace.providerSessions).map((session) => session.provider).filter(Boolean);
+  const owners = [...new Set([...participants, ...providers])];
+  const changes = workspace.diffStat || (list(workspace.changedFiles).length
+    ? `${list(workspace.changedFiles).length} changed ${list(workspace.changedFiles).length === 1 ? "file" : "files"}`
+    : "No changed files reported");
+  return [
+    { label: "Status", detail: readableStatus(workspace.status) },
+    { label: "Changes", detail: changes },
+    { label: "Verification", detail: verificationDetail },
+    ...(workspace.branch ? [{ label: "Branch", detail: workspace.branch }] : []),
+    ...(owners.length ? [{ label: "Agent", detail: owners.join(", ") }] : []),
+    ...(workspace.interruption?.recovery ? [{ label: "Recovery", detail: workspace.interruption.recovery }] : []),
+  ];
+}
+
 function artifactKind(artifact) {
   const structured = artifact?.content?.kind;
+  if (structured === "model-view") return "model-view";
   if (structured === "flow") return "flow";
   if (structured === "comparison") return "comparison";
   if (artifact?.content?.kind === "diff" || artifact?.type === "diff") return "diff";
@@ -82,6 +111,7 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
   const model = getSemanticModel(ventureId, options);
   const allBets = listVentureDocs(ventureId, "bets", options);
   let thread = list(model.threads).find((entry) => entry.id === threadId);
+  if (!thread && threadId === ROOT_THREAD_ID) thread = createRootThread(ventureId);
   if (!thread && threadId.startsWith("legacy-")) {
     const rootId = threadId.slice("legacy-".length);
     const family = legacyFamily(allBets, rootId);
@@ -89,6 +119,7 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
     if (root) thread = { id: threadId, name: root.intent ?? "Founder direction", subjectRefs: family.map((bet) => `bet:${bet.id}`), messageRefs: [], participantRefs: [], lifecycle: family.every((bet) => bet.endedAt) ? "closed" : "open", properties: { compatibility: "legacy-bet-family" }, createdAt: root.createdAt ?? null, updatedAt: root.updatedAt ?? root.createdAt ?? null };
   }
   if (!thread) throw Object.assign(new Error(`No such thread: ${threadId}`), { code: "semantic_model_missing_ref", status: 404 });
+  if (thread.deletedAt) throw Object.assign(new Error(`No such thread: ${threadId}`), { code: "semantic_model_missing_ref", status: 404 });
   const threadRef = `thread:${thread.id}`;
   const runs = list(model.runs).filter((run) => run.threadRef === threadRef);
   const betIds = new Set([
@@ -103,10 +134,13 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
   const bets = allBets.filter((bet) => betIds.has(bet.id));
   const active = listActiveDrives(ventureId).filter((drive) => betIds.has(drive.betId) || runs.some((run) => run.id === drive.id));
   const isRoot = thread.id === ROOT_THREAD_ID;
+  const deletedMessageRefs = new Set(list(model.threads).filter((entry) => entry.deletedAt).flatMap((entry) => list(entry.messageRefs)));
+  const visibleMessageRefs = new Set(list(model.threads).filter((entry) => !entry.deletedAt).flatMap((entry) => list(entry.messageRefs)));
   const messages = listVentureDocs(ventureId, "conversation", options).filter((message) => {
     if (messageRefs.has(`conversation:${message.id}`)) return true;
     if (message.betId && betIds.has(message.betId)) return true;
-    return isRoot && !message.betId;
+    const ref = `conversation:${message.id}`;
+    return isRoot && !message.betId && (!deletedMessageRefs.has(ref) || visibleMessageRefs.has(ref));
   });
   const items = [];
   const visuals = [];
@@ -116,14 +150,17 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
       kind: "message",
       id: `message:${message.id}`,
       ref: `conversation:${message.id}`,
+      ventureId,
       at: message.createdAt,
       role: message.role,
       participantRef: message.teammateRef ?? null,
       participantLabel: participantLabel(message.teammateRef),
       content: message.content,
       messageKind: message.kind,
+      changes: message.changes ?? null,
       runtime: message.runtime ?? null,
       target: message.target ?? null,
+      attachments: message.attachments ?? [],
     });
   }
 
@@ -224,7 +261,7 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
     items.push({
       kind: "comparison", id: `comparison:${thread.id}:code`, ref: comparisonRef,
       at: at(codeWorkspaces.at(-1), at(thread)), title: "Implementation attempts", variant: "alternatives",
-      alternatives: codeWorkspaces.map((workspace) => ({ id: workspace.id, title: workspace.goal, items: [{ label: workspace.status, detail: workspace.diffStat }], artifactRefs: [`work:${workspace.id}`] })),
+      alternatives: codeWorkspaces.map((workspace) => ({ id: workspace.id, title: workspace.goal, items: codingAttemptItems(workspace, participantLabel), artifactRefs: [`work:${workspace.id}`] })),
       visual: comparisonVisual,
     });
   }

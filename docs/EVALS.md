@@ -1,135 +1,74 @@
 # Drover evals
 
-**Status:** current acceptance contract, revised 2026-07-18.
+## 1. First value
 
-[FIRM-SPEC.md](FIRM-SPEC.md) defines the product. [STATE.md](STATE.md) is the only authority for what the
-current tree proves. These evals define evidence required to advance that state; they do not turn an unrun
-criterion into a completion claim. Superseded repository-change and GTM-engine evals are preserved in
-[history/LEGACY-EVALS.md](history/LEGACY-EVALS.md).
+- A founder selects a real repository with a native folder picker.
+- The name derives automatically and Work opens from that one choice without a second setup form.
+- The only strategic question is “What are you trying to make true?” and it lives in the normal Work composer.
+- Useful Product/GTM work begins without organization, workflow, pipeline, campaign, or ontology setup.
+- Loading, missing auth, partial grounding, and repository failure have humane recovery.
 
-## 1. One product language
+## 2. Native Work
 
-- Founder surfaces use Drover, venture, direction, work, artifact, evidence, map, and exact consequence.
-- Historical identifiers such as `bet`, `fork`, `outcome`, `teammate`, `gtm-ide`, and the legacy `channel`
-  record may remain behind compatibility adapters. They are not required founder vocabulary or product
-  ontology.
-- Facts, evidence, interpretation, work state, and world consequences remain distinct.
-- Runtime/model/configuration details remain inspectable receipts and never displace the work itself.
+- The selected provider/model is the agent the founder talks to.
+- One direction can produce several child Threads and isolated Runs.
+- Runs retain separate sessions, costs, artifacts, worktrees, commands, and verification.
+- The founder can continue, compare, steer, stop, and promote an exact Product consequence.
+- Deleting a chat stops every attached live Run, revokes its continuing work, removes the chat from Work, and
+  preserves exact Product truth, artifacts, and receipts.
+- Drover adds no mandatory persona, router, or plan that reduces SDK capability.
 
-## 2. Venture truth and isolation
+## 3. Product/GTM breadth
 
-- A founder can create or reopen a venture bound to one real product repository.
-- One canonical venture model backs workbench, conversation, map, views, work, and history.
-- Product claims cite repository evidence or identify inference.
-- Cross-venture reads, writes, founder-wall decisions, and returned evidence fail closed.
-- Durable venture records remain local, readable, exportable, and honest about machine-local paths.
+- One venture simultaneously holds PLG, outbound, several inbound approaches, partnerships, and bespoke founder work.
+- The canvas remains legible without fixed lanes or a branch limit.
+- Current truth and provisional Product alternatives cannot be confused.
+- Motion detail renders only real objects and relationships, never empty stages.
+- Unscalable work remains visible and legitimate.
 
-## 3. Workbench-first founder workspace
+## 4. Model integrity
 
-- Opening a venture lands on the permanent adaptive workbench, not the node map. With no selection,
-  `VentureHome` shows where directions stand and what needs judgment.
-- Selecting a direction, run, artifact, or decision opens the best registered representation for that work in
-  the same center. The workbench is not a temporary overlay over a dimmed canvas.
-- The spatial graph appears only after the founder explicitly summons Map.
-- Selection and composer scope survive work-to-map and map-to-work transitions.
-- Double-click or Enter on a selected map object returns to that work in the workbench.
-- Escape broadens predictably: map to work, then selection or representation depth to `VentureHome`.
-- The workspace index, conversation, workbench, map, and founder gate project the same venture-scoped
-  identities rather than creating parallel navigation or truth stores.
+- Agent changes remain source-bearing and provisional.
+- Contradictory Product models remain durable and comparable.
+- Current-model drift creates explicit digest conflicts.
+- Selective merge applies only selected changes and records a founder receipt.
+- Agents cannot merge, delete current truth, forge founder provenance, or hide conflicts.
+- Export/import and migration preserve identity, provenance, branches, receipts, and history.
 
-## 4. Directing the venture
+## 5. Continuing work
 
-- One persistent conversation sits beside the adaptive workbench and summoned map.
-- The composer is the action spine. With nothing selected, it directs the venture through `/drive`.
-- With selected direction work, it continues the durable scoped conversation through
-  `replyInConversation`; it does not silently start unrelated work.
-- One exact scope is visible and survives mode changes. A presented scope must match the payload actually
-  sent to the Brain.
-- Every command names its target and exact next consequence. Runtime/model/cost remain quiet provenance.
-- Missing runtime access produces a truthful, recoverable state.
+- A broad direction creates a visible, revocable WorkScope without a setup form.
+- Exact interrupted work survives restart and resumes only within scope.
+- Related evidence may wake owning work; unrelated evidence starts nothing.
+- Spend, provider, auth, and machine limits pause honestly.
+- Revocation prevents future work.
 
-## 5. Summoned venture map
+## 6. Outward action and evidence
 
-- The map projects venture intent, Product value, go-to-market reach, active work, founder-held consequence,
-  and returned reality before participant machinery.
-- Open concepts, connections, and groups may remain descriptive. Operational roles are earned only when they
-  unlock real execution, attribution, evidence, or reuse.
-- Pan, zoom, authored placement, camera history, semantic focus, outline parity, dense omission, and
-  empty/offline states remain usable at supported desktop viewports and browser zoom.
-- Founder edits use compare-and-set revisions and restorable receipts. Models and MCP clients may read
-  qualified context and propose changes, but cannot apply or promote canonical truth without the required
-  founder act.
-- Deleting placement loses no semantic venture truth or consequential record.
+- Releases, deploys, messages, publications, interviews, demos, onboarding, bespoke delivery, partner acts, and
+  spend keep their real identity.
+- Prepared material, decision, execution receipt, expected return, observation authority, evidence, and raised
+  consequence remain joined.
+- Nothing crosses into the world without the founder's exact action.
+- A founder interview works without becoming a campaign or release.
+- Silence, execution failure, stale observation, and returned evidence are distinct.
 
-## 6. Work, alternatives, and product change
+## 7. Return and coherence
 
-- Configured participants may answer, form genuinely different alternatives, consult another configured
-  participant, stage artifacts, and ask the founder through the direct work loop.
-- An implementation Run uses an isolated git worktree, records provider-session and checkpoint lineage,
-  retains exact files, diff, commands, and verification, and survives restart without false completion.
-- Separate attempts remain inspectable and comparable in one Thread. Apply, reverse apply, commit, branch/PR
-  preparation, restore, and discard require an exact founder consequence and fail closed on lineage drift.
-- A completed implementation projects its Product consequence and release or distribution question. Deploy
-  keeps a second explicit authorization.
-- Only the founder ends active work. Runtime completion never silently becomes founder-ended work.
-- Work awaiting a founder decision remains inspectable and discussable without mutating the exact staged
-  consequence.
+- Return restores the exact owning Thread/canvas path and shows changed, moving, failed/stale, returned, and
+  founder-only judgment state without becoming a dashboard.
+- Every primary screen has one clear center and next action.
+- Founder-facing copy uses pipeline only for a literal throughput pipeline and exposes no compatibility nouns.
+- No raw transport error is primary UI.
 
-## 7. Founder wall
+## 8. Visual and accessibility
 
-- One non-forgeable boundary holds every world-touching consequence.
-- Each item presents only decisions valid for its purpose and leaves a durable receipt.
-- Away holds every outward act while inward work may continue.
-- Unstamped browser, API, MCP, model/runtime, stored content, configuration, stale, replayed, forged,
-  cross-origin, and prior-process claims fail closed.
-- Batch review, a standing grant, or a model-authored instruction never becomes delegated release authority.
-- Transport failure remains visible and retryable; it is never recorded as success.
+- The signature direction → work → branch → amber gate → evidence → delta loop reads silently in under 30 seconds.
+- Verify 1440×900, 1280×800, dense data, offline/restart, 200% zoom, and reduced motion.
+- Meaning never depends on color, logo, acronym, or motion alone.
+- Keyboard search, selection, minimap, branch review, conflict resolution, and return-to-context work.
 
-## 8. Configuration, evidence, and continuation
+## 9. Readiness
 
-- Venture configuration is readable, versioned, attributable, reversible, and incapable of expanding host
-  authority.
-- Closed choices exist only for finite adapter and safety mechanics. They do not become role, workflow, or
-  market taxonomies.
-- Evidence retains source, language, attribution strength, and uncertainty. Unsupported joins remain visible.
-- Positive, negative, and zero returns may change later judgment without becoming sentiment scores or a
-  founder-facing activity scoreboard.
-
-## 9. Portfolio and transfer
-
-- A portfolio founder boundary may show exact decisions from isolated ventures while conversation,
-  configuration, map, work, spend, and evidence stay scoped to the selected venture.
-- Export/import preserves readable durable identity and history while stripping machine-local bindings.
-- Imported product work does not resume until the founder explicitly binds a valid destination repository.
-
-## 10. Desktop experience
-
-- Electron desktop is the production product. The browser is a deterministic development and test harness,
-  not a second production surface.
-- Verify the founder journey at 1440×900 and 1280×800 and through 200% browser zoom; phone and tablet layouts
-  are not acceptance criteria.
-- Keyboard focus, selection, map navigation, workbench descent, founder decisions, and composer use remain
-  complete. Visible focus, semantic names, contrast, and reduced motion meet the WCAG 2.2 AA target.
-- Work, map, selected scope, errors, loading, empty, dense, stale, offline, and founder-held states stay
-  understandable without relying on color alone or clipping primary controls.
-
-## Deterministic release gate
-
-```sh
-npm run test:acceptance
-```
-
-The command must pass Brain tests, UI unit tests, lint, production build, design-token parity, the preserved
-firm browser journeys including native coding, the Atlas browser journeys, and the real Electron native-coding
-receipt. Run `npm run test:atlas:fixtures` separately as a supporting fixture receipt. Record exact counts in
-`STATE.md` only after rerunning them on the current tree.
-
-The same complete gate runs on pushes to `main` and pull requests through the macOS GitHub Actions workflow.
-The browser remains a deterministic harness. A green run does not prove live provider behavior,
-world-touching effects, outside-founder comprehension, or market value; those require separate receipts.
-
-## Alpha proof gate
-
-The company direction remains unproven until an outside founder binds a real product, directs useful work,
-releases an exact outward act, receives attributable positive, negative, or zero evidence, and chooses the
-next move without intervention. Deterministic fixtures cannot satisfy this gate.
+Run every command in root `README.md`, then complete one real dogfood loop from repository connection through
+selective merge and the faster next move. Mechanical success alone cannot advance `STATE.md` to coherent.

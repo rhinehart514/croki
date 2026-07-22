@@ -26,16 +26,19 @@ function sourceBearing(record) {
 function authorize(actor, operation, current, record) {
   const authority = text(actor?.authority);
   if (!new Set(["founder", "agent", "host"]).has(authority)) fail("Semantic mutation needs a resolved actor.", "semantic_model_authority_denied", 403);
-  if (current && compatibilityOwned(current)) fail("Compatibility-owned semantic records change only through their source adapter.", "semantic_model_compatibility_owned", 409);
   if (authority === "founder") return;
+  if (current && compatibilityOwned(current)) fail("Compatibility-owned semantic records change only through their source adapter.", "semantic_model_compatibility_owned", 409);
   if (operation.op === "remove-record") fail("Only the founder can remove canonical semantic truth.", "semantic_model_authority_denied", 403);
-  if (authority === "agent" && !new Set(["objects", "relationships", "insights"]).has(operation.family)) {
-    fail("Agents may add tentative interpretation, not execution or organization authority.", "semantic_model_authority_denied", 403);
+  if (authority === "agent" && !new Set(["objects", "relationships", "insights", "modelBranches", "modelChanges", "outwardActions"]).has(operation.family)) {
+    fail("Agents may create source-bearing provisional models and prepare outward work, not change adopted truth or authority.", "semantic_model_authority_denied", 403);
   }
   if (new Set(["objects", "relationships", "insights"]).has(operation.family)) {
     if (record.assertion !== "tentative" || !sourceBearing(record)) fail("Non-founder semantic claims must remain tentative and source-bearing.", "semantic_model_authority_denied", 403);
     if (record.proposedBy?.authority === "founder") fail("A non-founder cannot stamp founder provenance.", "semantic_model_authority_denied", 403);
   }
+  if (operation.family === "modelBranches" && record.createdBy?.authority !== authority) fail("A model branch must carry its real creator.", "semantic_model_authority_denied", 403);
+  if (operation.family === "modelChanges" && (record.proposedBy?.authority !== authority || !(record.sourceRefs ?? []).length)) fail("An agent model change must be source-bearing and carry its real proposer.", "semantic_model_authority_denied", 403);
+  if (authority === "agent" && operation.family === "outwardActions" && (record.executedAt != null || record.executorReceipt != null || record.executionLease != null)) fail("Agents may prepare outward work but cannot claim it executed.", "semantic_model_authority_denied", 403);
 }
 
 export function applySemanticModelMutations(model, { baseRevision, operations, actor, at = new Date().toISOString(), externalRefExists = null } = {}) {

@@ -1,13 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, FolderOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FolderOpen } from "lucide-react";
 import {
   createVenture,
   listRepositoryChoices,
   type FirmVenture,
   type RepositoryChoice,
 } from "@/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 export function VentureCreateForm({
   ventures,
@@ -19,11 +17,8 @@ export function VentureCreateForm({
   onCreated: (venture: FirmVenture) => void;
 }) {
   const [repositoryChoices, setRepositoryChoices] = useState<RepositoryChoice[] | null>(null);
-  const [name, setName] = useState("");
-  const [repository, setRepository] = useState("");
-  const nameWasEdited = useRef(false);
   const [choosingRepository, setChoosingRepository] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busyPath, setBusyPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const desktop = window.droverDesktop;
 
@@ -31,42 +26,43 @@ export function VentureCreateForm({
     if (desktop) return;
     let live = true;
     listRepositoryChoices()
-      .then((res) => {
-        if (!live) return;
-        setRepositoryChoices(res.repositories);
-        const connected = new Set(ventures.map((venture) => venture.repository));
-        const available = res.repositories.filter((choice) => !connected.has(choice.path));
-        const firstChoice = available.find((choice) => choice.source === "workspace") ?? available[0];
-        setRepository((current) => available.some((choice) => choice.path === current) ? current : (firstChoice?.path ?? ""));
-        if (!nameWasEdited.current) setName(firstChoice?.name ?? "");
-      })
-      .catch((cause) => {
+      .then((response) => { if (live) setRepositoryChoices(response.repositories); })
+      .catch(() => {
         if (!live) return;
         setRepositoryChoices([]);
-        setError(cause instanceof Error ? cause.message : "Could not load local product folders.");
+        setError("Drover could not read local codebases from this window. Use the desktop app or reopen Drover from the folder you want to add.");
       });
     return () => { live = false; };
-  }, [desktop, ventures]);
+  }, [desktop]);
 
   const connectedRepositories = new Set(ventures.map((venture) => venture.repository));
   const availableRepositoryChoices = repositoryChoices?.filter((choice) => !connectedRepositories.has(choice.path)) ?? null;
 
-  const selectRepository = (choice: RepositoryChoice) => {
-    const previousChoice = repositoryChoices?.find((candidate) => candidate.path === repository);
-    setRepository(choice.path);
-    setName((current) => !nameWasEdited.current || !current.trim() || current === previousChoice?.name ? choice.name : current);
+  const addRepository = async (selection: { path: string; name: string }) => {
+    if (busyPath) return;
+    const existing = ventures.find((venture) => venture.repository === selection.path);
+    if (existing) {
+      onCreated(existing);
+      return;
+    }
+    setBusyPath(selection.path);
     setError(null);
+    try {
+      const { venture } = await createVenture(selection.name, selection.path);
+      onCreated(venture);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not add that codebase.");
+      setBusyPath(null);
+    }
   };
 
   const chooseRepository = async () => {
-    if (!desktop || choosingRepository) return;
+    if (!desktop || choosingRepository || busyPath) return;
     setChoosingRepository(true);
     setError(null);
     try {
       const selection = await desktop.selectRepository();
-      if (!selection) return;
-      setRepository(selection.path);
-      setName((current) => !nameWasEdited.current || !current.trim() ? selection.name : current);
+      if (selection) await addRepository(selection);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not open the folder chooser.");
     } finally {
@@ -74,82 +70,54 @@ export function VentureCreateForm({
     }
   };
 
-  const submit = async () => {
-    const trimmed = name.trim();
-    const trimmedRepository = repository.trim();
-    if (!trimmed || !trimmedRepository || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const { venture } = await createVenture(trimmed, trimmedRepository);
-      onCreated(venture);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start that venture.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <form id={id} aria-label="Start a venture" className="firm-app-picker-create" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <Input
-        value={name}
-        onChange={(event) => { setName(event.target.value); nameWasEdited.current = true; }}
-        placeholder="Name a new venture"
-        aria-label="New venture name"
-      />
+    <section id={id} aria-label="Add a codebase" className="firm-app-picker-create">
       {desktop ? (
         <button
           type="button"
           className="firm-app-repository-picker"
           onClick={() => { void chooseRepository(); }}
-          disabled={choosingRepository}
+          disabled={choosingRepository || Boolean(busyPath)}
         >
           <FolderOpen aria-hidden="true" />
           <span>
-            <strong>{repository ? "Product folder selected" : "Choose product folder"}</strong>
-            <small>{repository || "Select its repository on this Mac"}</small>
+            <strong>{busyPath ? "Adding codebase…" : choosingRepository ? "Choose a folder" : "Choose a codebase"}</strong>
+            <small>{busyPath ?? "Drover reads it locally, then opens Work"}</small>
           </span>
-          <em>{choosingRepository ? "Opening…" : repository ? "Change" : "Choose"}</em>
+          <em>{busyPath ? "Adding…" : choosingRepository ? "Opening…" : "Choose"}</em>
         </button>
       ) : (
         <fieldset className="firm-app-repository-choices">
-          <legend>Product repository</legend>
+          <legend>Choose a codebase</legend>
           {availableRepositoryChoices === null ? (
-            <p>Finding local product folders…</p>
+            <p>Finding local codebases…</p>
           ) : availableRepositoryChoices.length ? (
             <div className="firm-app-repository-choice-list">
-              {availableRepositoryChoices.map((choice) => {
-                const selected = repository === choice.path;
-                return (
-                  <button
-                    type="button"
-                    key={choice.path}
-                    className="firm-app-repository-choice"
-                    aria-pressed={selected}
-                    aria-label={`${selected ? "Selected" : "Use"} ${choice.name} product folder`}
-                    onClick={() => selectRepository(choice)}
-                  >
-                    <FolderOpen aria-hidden="true" />
-                    <span>
-                      <strong>{choice.name}</strong>
-                      <small>{choice.source === "workspace" ? "Current workspace" : "Connected venture"} · {choice.path}</small>
-                    </span>
-                    <em>{selected ? <><Check aria-hidden="true" /> Selected</> : "Use"}</em>
-                  </button>
-                );
-              })}
+              {availableRepositoryChoices.map((choice) => (
+                <button
+                  type="button"
+                  key={choice.path}
+                  className="firm-app-repository-choice"
+                  aria-label={`Add ${choice.name} codebase`}
+                  disabled={Boolean(busyPath)}
+                  onClick={() => { void addRepository(choice); }}
+                >
+                  <FolderOpen aria-hidden="true" />
+                  <span>
+                    <strong>{choice.name}</strong>
+                    <small>{choice.source === "workspace" ? "Current workspace" : "Connected product"} · {choice.path}</small>
+                  </span>
+                  <em>{busyPath === choice.path ? "Adding…" : "Add"}</em>
+                </button>
+              ))}
             </div>
           ) : (
-            <p className="firm-app-picker-connect-help"><strong>No repository is available yet.</strong> Open Drover from the product folder you want to connect, then return here. It will appear as a repository choice.</p>
+            <p className="firm-app-picker-connect-help"><strong>No codebase is available yet.</strong> Open Drover from the product folder you want to add, then return here.</p>
           )}
-          <small>One venture per product: repository context, parallel work, market returns, and founder decisions stay together.</small>
+          <small>The folder name becomes the product name. You can start directing work as soon as it opens.</small>
         </fieldset>
       )}
-      {desktop || availableRepositoryChoices === null || availableRepositoryChoices.length ? (
-        <Button type="submit" disabled={busy || !name.trim() || !repository.trim()}>{busy ? "Starting…" : "Start venture"}</Button>
-      ) : null}
       {error ? <p role="alert" className="firm-app-picker-error">{error}</p> : null}
-    </form>
+    </section>
   );
 }

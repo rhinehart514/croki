@@ -1,689 +1,241 @@
 # STATE — Drover
 
-**Stage:** alpha. **Updated:** 2026-07-20.
+**Stage:** alpha. **Updated:** 2026-07-21.
 **Authority:** [`FIRM-SPEC.md`](FIRM-SPEC.md) defines durable product/build physics. Root
 [`DESIGN.md`](../DESIGN.md) defines the intended desktop experience.
 
-This file reports current proof. Approved direction describes what Drover must become; it is not evidence
-that the current tree does it.
-
-## Approved direction — normative, not proof
-
-Drover is a Product and GTM Development Environment for founders building with agents. Product and
-go-to-market develop as one evidence-returning system; the thread preserves founder direction, while the
-release is the primary unit of market movement. Every meaningful Product change creates a distribution
-question and every meaningful market return creates a Product or GTM consequence.
-
-The approved product has:
-
-- one canonical open venture model with permanent Product and go-to-market territories;
-- two founder surfaces—Work and Product / GTM—over one shared context, with Releases as a distinct Product / GTM section;
-- a mode-owned rail and contextual, closable conversation outside Work;
-- one continuous venture conversation plus persistent scoped branches;
-- selection-scoped direction and direct manipulation;
-- Understand / Design / Execute / Learn as reversible lenses, never stages;
-- provisional generated structure;
-- facts, evidence, and interpretation kept separate;
-- disposable projections, synchronized saved live views, and immutable snapshots;
-- work started only by explicit founder direction or founder-invoked workflow;
-- direction-scoped autonomy and outcome-contract workflows;
-- visible Claude/Codex provenance and steerable multi-agent work without an AI org chart;
-- exact founder authority over sends, publish, deploy, spend, destructive/irreversible acts, work ending,
-  and ambiguous canonical truth.
-
-### Implemented correction — one continuous venture surface
-
-The shipped shell now has Work and Product / GTM as its two presentation-level surfaces over the canonical
-venture model. Work is a coding-first conversation-and-workbench ADE. Product / GTM owns the node canvas and
-a distinct collapsible Releases section that opens the complete connected release path in the same center
-workspace. Each opens contextual, closable conversation only when needed. Surface changes preserve the
-selected Thread; node and release selection use their existing direct references
-instead of a generalized context router.
-
-`workspace/VentureWorkspace.tsx` remains the stable app boundary; feature-local `WorkspaceShell` now owns
-surface, Product / GTM section, selected Thread/object/release, v6 venture-keyed presentation state, rail width, Product / GTM
-scope/camera, and per-thread conversation scroll. `ThreadShell` is no longer the runtime state owner or
-navigation root. The generalized `resolveWorkspaceContext`, Release subview contract, and persisted drawer/
-visual-stage routing state are removed. The older free canvas remains a tested compatibility seam with no
-normal product entrypoint.
-
-The detailed laws and compatibility boundaries live in `FIRM-SPEC.md`; experience behavior lives in root
-`DESIGN.md`.
-
-On 2026-07-20 the authority was reconciled toward mode-owned space. The causal Work → Product / GTM →
-Releases → Evidence loop is not a navigation sequence; Product / GTM is never founder-facing **System**;
-mode handoff follows existing direct references; founder joins are immediate and undoable while agent joins
-remain provisional; and the canvas's broader semantic-zoom/capacity architecture stays an unadopted
-hypothesis until a real loop runs. The founder shell now implements that mode-owned correction; outside-founder
-comprehension and a live external causal loop remain open rather than being claimed from deterministic shell
-mechanics.
-
-## Verified current behavior — observed on this working tree
-
-### Mechanical baseline
-
-On 2026-07-20, the complete `npm run test:acceptance` receipt passed against this working tree:
-
-- `npm test`: Brain **840/840** and UI **521/521**, with lint and the production build green;
-- design-token parity: **161 tokens** across **29 CSS files** and **34 extensions**;
-- firm browser acceptance: **7/7** at that receipt, including the then-current native-coding and three-mode workspace journeys;
-- Atlas browser journeys: **3/3**;
-- Electron: **13/13**, including PTY worktree isolation and terminal outcomes, native preview security, real-host native-coding
-  restart, and founder-authority receipts;
-- packaged Electron: **1/1**, launching a disposable arm64 `Drover.app`, proving the declared Drover icon,
-  trusted preload, matching dynamic Brain instance, and runtime-location cleanup on shutdown.
-
-The browser journeys exercise mode-owned rail bodies, contextual closable conversation outside Work, and
-visible offline/read-only truth on the owning Product / GTM canvas or Releases section; the coding-first Work composer with repository,
-isolated-worktree, founder-guard, and real Claude/Codex model choice; absence of those coding controls from
-Product / GTM and its Releases section; no reserved empty workbench before coding begins; stable Work
-conversation/workbench split; compact transcript material references; attempt selection; in-surface
-changes/diff/review; node-scoped contextual agent; direct Thread/object/release selection,
-the five-part Release Path, honest missing links, derived in-market state, joined exact gates and evidence,
-founder-granted bounded Gmail observation, honest missing-source/credential states, unsaved contextual release
-drafts, blank-form refusal, end/reopen, generated Whole venture/Product/Go-to-market graphs, a visible
-release-scoped evidence return curve and exact next-Work handoff, keyboard
-reachability, a complete saved-view save/list/reopen/delete lifecycle, 120-node containment, venture
-isolation, zoom, and offline last-coherent reads. The Product / GTM canvas now projects each canonical legacy
-motion as a reusable Pipeline through Signal, Pipeline, Campaign, and Outcome; keeps its exact Product and GTM
-context visible; names missing triggers, campaigns, and returns in place; and attaches exact agent work.
-Selecting one pipeline highlights its complete referenced path while unrelated pipelines quiet.
-The assertion-aware relationship legend remains instead of decorative graph totals, the primary add action
-stays at the header edge, and the returned-evidence next-Work action keeps its intended compact height. A
-1440×900 collaborative preview was inspected at rest and with one motion selected. Browser and native-host
-receipts still prove deterministic behavior rather than comprehension or GTM value.
-
-The same tree produced `release/Drover-0.3.3-arm64.dmg` (**187,141,815 bytes**, SHA-256
-`904a2b168149312fc0f5e2aa4db8807a99d40a47cf5da151ff2dee6f2526fa8b`). `codesign --verify --deep
---strict` passed for the app bundle and `hdiutil verify` passed for the DMG. This proves the local ad-hoc
-arm64 package, not Developer ID signing, notarization, public hosting, clean-machine installation, upgrade,
-or rollback.
-
-The macOS GitHub Actions workflow runs the same complete gate on pull requests and pushes to `main`; its first
-remote execution remains unobserved until this working tree is committed and pushed. The browser remains a
-deterministic harness, not a production surface. The Electron receipt launches the actual desktop host,
-exercises its preload and signed founder mutation, restarts the full application, and verifies recovered
-coding work. The deterministic checks do not prove outside-founder comprehension, market value, or an
-external consequence.
-
-A manual Electron dogfood pass used the real configured Codex runtime to implement the CI acceptance wiring
-without another coding environment. One durable Thread created a Run, persisted provider session
-`019f7c6b-d844-78b0-afab-7b4a750a82ed`, worked on branch
-`drover/code-7ed97f3d-ebd5-405f-b916-4bec7ef9e84a` in an isolated worktree, and returned exact changes to
-`.github/workflows/ci.yml` and `package.json`. Provider and host `npm test` receipts passed; the founder opened
-the diff beside the still-mounted conversation, approved the exact checkpoint, and applied it through the
-real Electron host. Earlier interrupted attempts remained recoverable and separate rather than disappearing.
-This proves the live local coding loop and source apply, not a remote CI run or external market return.
-
-### Unified founder workspace — the default founder surface
-
-`FirmApp.tsx` resolves the launch boundary before rendering a founder surface: an existing installation
-reopens the last active venture (or the newest connected venture when no return preference exists), while a
-first installation with no venture reaches `VenturePicker`. There are **no `?shell=` flags, no competing
-shell roots, and no query-parameter product switching** — the venture workspace is the only returning
-founder surface. The prior immersive/Now/legacy shells were deleted from the tree (see "Removed surfaces").
-
-The workspace opens on `WorkspaceShell`: a resizable 272px rail with Work and Product / GTM below the venture
-switcher. Its body belongs to the current surface: Work shows compact Thread groups and search; Product / GTM
-shows its advanced conditional-logic workflow canvas, draggable agents, connected capabilities, and one
-collapsible Releases section. That section shows Needs you, Preparing, In market, Recent, and release
-preparation only when exact Work or Product / GTM context can seed it; selecting it replaces the center canvas
-with the complete release workspace without changing top-level surface. New Threads become durable
-only on first send.
-
-Work opens as one persistent conversation and gives it the available surface until repository work exists. Its
-composer now switches in place between **Code** and **Product / GTM** without changing the Thread or losing the
-draft. Code exposes the repository, isolated-worktree promise, founder guard, and available Claude/Codex model
-choice; a direction starts a nonblocking coding turn with that exact runtime/model. Product / GTM hides the SDK
-picker, names Drover agents, and sends the turn through contextual dialogue with workflow sketching enabled. Its
-composer edge and agent marks carry a slow spectrum animation while agent replies expose their participant name;
-Code remains visually neutral, and reduced-motion preferences receive the same distinction without movement. The
-participant control now slides one selection indicator between modes, newly active controls enter directionally,
-and submission keeps the exact prompt visible for a short upward handoff before it appears immediately as a pending
-founder turn in the same Thread. The durable timeline message replaces that optimistic turn without duplication;
-failure removes it and restores the exact draft.
-Conversation holds intent, progress, and compact material references rather than rendering full artifacts or
-gates inline. Work now uses the native coding-client conversation geometry proven in the browser journey:
-founder turns are compact and right-aligned, agent output is unboxed, transcript rows and composer share a
-centered `48rem` measure, and one stable transcript scroller preserves per-Thread position without jumping on
-ordinary shell updates. Once coding begins, native attempts are selectable without an overlay; the adjacent workbench
-exposes Changes (file navigation plus the exact selected diff), Preview, a collapsible Terminal,
-command/verification receipts, checkpoints, and the existing
-approve/reject/apply/reverse/commit/prepare/restore/discard controls. Electron
-uses `node-pty` only after resolving `ventureId + workspaceId` to the canonical isolated worktree and owns one
-sandboxed HTTP(S)-only `WebContentsView` preview. The browser harness shows honest desktop-required states.
-
-Verified coding work now produces an editable Product consequence and distribution question on the exact
-workspace. It remains provisional through revisions and rejection; settlement no longer writes semantic
-truth. Founder adoption is a separate desktop-authorized action that requires the exact checkpoint and
-successful attributed verification, records a source-bearing `capability` as founder-asserted Product truth,
-and directly links it back to the owning Thread. The native-coding browser journey edits and adopts the card,
-switches to Product / GTM, observes the exact selected capability and its visible missing connection, returns
-to the same Work context, then completes the separate repository review and isolated commit.
-
-Product / GTM controls `VentureMaps` as one advanced conditional-logic node canvas. Existing pipelines render
-trigger, agent work, founder gate, market action, and evidence return while supporting Product and market truth
-remain canonically joined. The rail supplies configured agents and connected capabilities as drag sources.
-Workflow creation is explicit in empty and pre-pipeline states; expanded nodes expose exact agent/capability
-assignments and their direct reversal. Selecting a node scopes the contextual agent and derives working, needs
-review, failed, or completed state from linked `WorkIndex` Threads. A load-order-safe direct-reference handoff
-opens the canonical linked Thread as soon as its shared index is current. The contextual composer stays free of
-repository/worktree/model controls. Canvas selection and composition remain presentation over canonical truth;
-the graph never becomes another authority.
-
-On 2026-07-20 the natural-language workflow path became mechanically complete. Product / GTM contextual turns
-identify substantive workflow direction and route it to an exact Work Thread. The agent contract stages one
-typed conditional `flow` artifact; `ThreadConversation` projects its latest revision through `WorkGraphSketch`
-directly above the Work composer. Corrections carry the exact staged work reference and revise it in place.
-Founder adoption creates or updates one canonical pipeline with source Work version and Thread lineage, then
-opens `VentureConditionalWorkflow` on the full Product / GTM canvas. A newer staged revision remains visibly
-unadopted until the founder adopts changes. The backend suite passes 845 tests; the complete UI suite passes
-526 tests; UI lint and production build pass; and the deterministic founder browser journey passes against the
-two-surface shell. The shared preview opened the rebuilt local product, but its automation channel timed out on
-snapshot and DOM inspection, so no separate preview screenshot is claimed.
-
-A release-scoped outcome now projects into Product / GTM as a temporary returned-evidence node. It follows
-only the release's existing canonical relationships back to affected objects, renders restrained tentative
-return curves, and separates the exact outcome from the explicitly unresolved interpretation. The evidence
-inspector cannot edit projection-only evidence as Product truth. **Start next work** switches to Work with the
-exact `outcomeRef` plus every directly affected `objectRef`; the first message forms the durable Thread under
-those subjects.
-
-The prior Product / GTM rail saved-view controls are no longer reachable after the rail became an agent and
-capability palette. The underlying saved-view lifecycle remains implemented, but it needs a canvas-native home
-before the current founder surface can claim save, reopen, snapshot, or delete access again.
-
-The mode-owned headerless canvas also has an explicit height contract after visual inspection
-found that its graph could render into a two-pixel grid row while DOM nodes remained test-visible.
-
-Releases are canonical semantic objects, not another collection. The current workspace derives
-draft/in-market/ended and needs-you state from exact references and presents Product delta → Customer
-consequence → Distribution → Outward action → Evidence as a release-scoped spatial canvas. Missing nodes remain
-explicit; the selected node opens exact joins and its next agent action in a contextual inspector; exact gates
-stay attached to Outward action; bounded observation stays attached to Evidence; joined activity opens as Trace;
-rename/end/reopen remain in Details. The Evidence edge visibly returns to Product so the founder can read what is
-moving, what reality returned, and what needs founder judgment before configuration or record detail.
-Its contextual agent likewise remains distinct from the Work coding composer. Starting without exact source
-context produces a visible missing-link explanation rather than a blank release form.
-
-An adopted coding consequence now seeds release preparation with its exact capability name, distribution
-question, canonical `objectRef`, and owning `threadRef`. The founder reviews populated context instead of
-re-entering a blank release; one explicit **Prepare release** creates the canonical release and both joins in
-the same semantic-model revision. The resulting path shows the Product capability and exact Work while
-customer consequence, distribution, outward action, and evidence remain visibly open. Brain coverage proves
-the atomic dual-reference seed; the native-coding browser journey proves the populated founder surface and
-the resulting causal path.
-
-Conversation remains primary in Work. Product / GTM and its Releases section open it only through **Ask about this** as a
-compact closable composer over the owning surface. Closing and reopening preserves the exact Thread, subject-scoped
-draft, last coherent timeline, and scroll; a missing linked Thread remains a local draft until first send. The
-v6 session restores surface, Product / GTM section, selected Thread/object/release, contextual-chat state, rail width, Product / GTM
-scope/camera, and conversation scroll. v4/v3 migration retains that founder context while clearing only the
-obsolete map camera for the new composition; older useful selections still map forward while retired
-resolver, Release-subview, and visual-stage fields remain ignored.
-
-The former free-canvas implementation remains in `ui/src/components/canvas/` as compatibility code and is
-still covered by unit tests, but it has no founder product entrypoint. This proves the local projection and
-interaction contract, not outside-founder comprehension or live market state.
-
-### Removed surfaces
-
-The three-shell era is deleted from the tree, not flag-hidden. Confirmed absent:
-
-- the entire `ui/src/components/immersive/` tree;
-- `ui/src/components/now/NowShell.tsx`, `now/NowStream.tsx`, `now/WorkbenchView.tsx` (the `now/` directory
-  survives only as reusable leaf components composed inside the workspace, e.g. `NowRail`, `NowComposer`);
-- the legacy triptych, `firm/TeammateRail.tsx`, `firm/FirmWorkbenchCanvas.tsx`, `firm/InspectorEffort.tsx`;
-- `test/browser/immersive-shell-journey.mjs`.
-
-(`styles/firm-app.css` remains — `FirmApp.tsx` still imports it for shared picker, settings, and
-conversation-leaf styles, so it is a live compatibility dependency, not dead code.)
-
-### Durable local substrate
-
-The current tree implements:
-
-- venture manifests bound to real product repositories;
-- venture-scoped readable JSON collections under the local product home;
-- atomic writes, compare-and-set revisions, export/import, and cross-venture fail-closed access;
-- durable configuration, conversation, bets, outcomes, decisions, product-change history, architecture,
-  native-code workspaces, grants, placement, and settings;
-- repository truth reading and isolated product-change worktrees;
-- Run-linked native coding worktrees, provider sessions, checkpoints, commands, verification, diffs, and
-  Product/release consequences;
-- stable attached-work identity and work references through wall items and returned outcomes;
-- founder-authorized, CAS-guarded system and release APIs with cross-venture and forged-write refusal;
-- canonical release lifecycle, attention, object/work/action joins, unassigned actions, and contextual
-  first-message subject references;
-- runtime/model/authentication/configuration receipts in conversation records.
-
-The atlas singleton now has a schema-v2 canonical semantic model with open Object, Relationship, Thread,
-Run, View, WorkflowContract, and Insight record families. It remains one readable venture-scoped JSON file
-under the existing CAS and transfer boundary. Records join conversation, bets/work, decisions, outcomes,
-and placement by same-venture reference rather than copying those authorities.
-
-The Thread and Run schema is corrected to the operating physics rather than a one-bet-per-drive assumption.
-A Thread carries durable identity, name, lifecycle, reviewed-through cursor,
-message/subject/participant references, and optional `parentThreadRef`/`originMessageRef`, and can only
-reference conversation messages — never copy their bodies. A Run requires a `threadRef`; it accepts zero,
-one, or many `betRefs` (betless, multi-bet, and
-nested drives via `parentRunRef` are all first-class), keeps the single `betRef` only as a legacy
-compatibility seam, and never persists running state or copies bet/event/work/decision/outcome records.
-Reference resolution fails closed: a `repository:` citation is accepted only when it structurally carries a
-path, an ordered line range, and a source digest — a bare `repository:` prefix no longer resolves, in the
-model store and in venture transfer alike. Pure `thread.mjs`/`run.mjs` constructors (no persistence, UI, or
-infrastructure imports) plus the atlas CAS adapter form the venture's deterministic root organization and
-child direction threads only when a real drive needs them. Each new founder-authorized direction now mints
-a child Thread; later work on the same bet resumes that stable thread; every Run joins the child rather than
-the root. Terminal settlement enriches that child with returned conversation and newly revealed bet refs.
-The records round-trip through the existing export/import boundary. New founder ventures created through the product route no longer seed a
-fictional founding crew; the first founder direction forms the first participant explicitly. A founder
-direction routed through `conversation/reply` is recorded exactly once (the work loop no longer re-appends
-it).
-
-### Native coding architecture decision
-
-The implemented path strengthens Drover's existing substrate. `conversation`, Thread, Run, participant,
-venture store, provider runtimes, exact work, semantic model, visual-stage registry, and Electron founder
-authority remain the only product authorities. A coding workspace is one feature-local record attached to a
-Run; provider events are translated into its commands, verification, session, and checkpoint receipts.
-
-Direct inspection of T3 Code showed stronger checkpoint, provider-event, git, terminal, restart, transcript,
-composer, diff, and status machinery, but those capabilities are coupled to T3's project, session, and event
-projections. Replatforming or importing that persistence would create competing project/thread/event truth and
-would make Product/release/evidence joins adapters around another system. Drover therefore adapted T3's
-temporary-index checkpoint mechanism behind `brain/src/native-code/t3-checkpoint-store.mjs` and ported the
-interaction geometry of the shipped `MessagesTimeline`, `ChatComposer`, `DiffPanel`,
-`ThreadTerminalDrawer`, and status/checkpoint components onto Drover contracts. The inspected installed build
-was T3 Code **0.0.28** at commit `fda6486233e0`; the upstream boundary and MIT notice live in
-`licenses/t3code-MIT.txt`. No T3 project, session, Thread, event, draft, terminal, or checkpoint store became
-a Drover authority.
-
-`GET /api/ventures/:id/work-index` now projects one production read model from Threads, Runs, process-local
-active drives, immutable settlement receipts, and pending founder decisions. Lifecycle, activity,
-attention, terminal, and unread remain independent facets; missing settlement becomes `interrupted`, not a
-false completion. It now supports cross-body search, explicit pin/unpin through the semantic-model CAS
-boundary, participant facets, and a match count. A founder-only reviewed-through write advances the exact
-latest consequence cursor and rejects stale writes. Pre-contract ventures are projected as virtual
-bet-family threads without destructive backfill.
-
-`GET /api/ventures/:id/threads/:threadId/timeline` joins canonical message references, Runs, active drives,
-staged artifacts, decisions, outcomes, receipts, and legacy bet joins into an ordered open union. Stable
-visual references open previews, diffs, flows, comparisons, evidence, consequences, and the venture map.
-Structured flow/comparison payloads are supported while arbitrary legacy artifact content stays valid.
-
-Legacy schema-v1 atlas documents read without rewriting. Their first successful semantic or architecture
-mutation lazily writes v2 while preserving architecture IDs, public architecture revision receipts,
-proposal decisions, campaign contracts, groups, evidence annotations, and working-theory supersession.
-Existing architecture routes and the Atlas UI still receive the five-role schema-v1 compatibility
-projection. This proves the canonical storage/domain substrate and migration seam, not the complete open
-canvas product.
-
-### No ambient work (Phase 2)
-
-Work now begins or continues only through an explicit founder path. The always-on heat scheduler is gone at
-its only boot site: `brain/src/server.mjs` no longer imports or arms `startHeatScheduler`, and
-`brain/src/firm/heat.mjs` deleted the `setInterval`-over-every-venture scheduler and its
-`GTM_IDE_DISABLE_HEAT`/`GTM_IDE_HEAT_TICK_MS` switches. No code path re-enables an ambient loop. The founder
-heat dial, spend rail, durable spend ledger, and a founder-invokable `runHeatTick` batch pass survive, but
-nothing calls the tick on a timer. The MCP/agent fresh-drive gap is closed: an agent-stamped `POST /drive`
-carrying only a goal (no `betId`, no `branchFrom`) is refused 403 — an agent may resume or branch existing
-founder-authored work, but only the founder starts fresh work. Proven by `heat.test.mjs` (loop gone) and the
-new `agent-drive-initiation.test.mjs` (agent fresh refused; agent resume/branch allowed; founder fresh
-allowed). Verified green in the full `npm test` on 2026-07-17.
-
-Reply capture now has an explicit founder-granted production home. A release with a real Gmail message
-identity can persist one exact, revocable observation contract carrying its source, purpose, start/end,
-return conditions, decision references, and message identities. The Releases UI exposes grant, check,
-revoke, unavailable-source, expiry, and reconnect truth. A conversation request or founder-invoked heat pass
-enumerates only active contracts; neither can call the broad provider reader without one. The contract can
-read Gmail threads and record attributable evidence, but explicitly denies send, publish, deploy, spend, and
-canonical-interpretation authority. Nothing polls on a timer.
-
-`release-observation.test.mjs` proves founder-only grant/revoke, valid windows, release and message scoping,
-source mismatch failure, expiry/revocation failure, and the absence of outward or semantic authority. The
-then-current three-mode browser journey grants a contract against one exact released Gmail identity, reloads it from the
-canonical release projection, and proves a missing credential returns honestly without reading another
-source. It then selects an attributable fixture outcome in Product / GTM, proves the tentative backward return
-edge and unresolved interpretation, and starts exact next Work from the outcome and affected Product/GTM refs.
-`ReleaseObservation.test.tsx` proves the control is visibly unavailable before a real send. Brain projection
-coverage proves this read path does not add or change canonical objects.
-
-### Product/GTM territory + traceability substrate (Phase 6, brain-side)
-
-The canonical model now carries an optional, founder/earned **territory** facet (`product`/`gtm`) on an
-object's open properties — never a sixth architecture role, and it does not appear in the architecture
-compatibility projection. A pure `venture-traceability.mjs` derivation reads the model and returns
-cross-boundary trace links (positioning→promise, promise→capability, audience-need→experience,
-release→campaign, campaign-asset→product-claim, plus response/revenue/telemetry insight crossings) and
-gaps (unsupported claim, unsupported link, unexpressed capability, disconnected evidence). It is pure: it
-never mutates the model and never fabricates evidence. Facts, evidence, and interpretation stay separate
-(Product Law 10) — a tentative interpretation cannot discharge a claim's evidence gap, only a supporting
-stance backed by resolving evidence can, and with no evidence resolver wired a claim stays a *visible* gap
-(fail toward visibility, FIRM-SPEC section 7). The active Product / GTM graph now projects those exact
-relationships and gaps, release-scoped evidence, tentative return curves, and the affected next-Work
-handoff. It does not promote tentative interpretation to canonical truth.
-
-### Founder authority mechanics
-
-The current tree mechanically implements:
-
-- Electron-owned per-boot founder secret;
-- signed short-lived single-use method-and-path claims below the renderer;
-- refusal of unstamped, model/MCP-stamped, cross-origin, stale, replayed, forged, and prior-process claims;
-- volatile founder presence and away-state outward holds;
-- purpose-specific wall decisions;
-- second explicit deploy authorization semantics;
-- cross-venture failure;
-- module-private wall release capability checks in effect executors.
-
-Electron and MCP now share the same Brain process. The desktop Brain atomically publishes its dynamic
-loopback port plus per-boot instance identity in a private runtime file; MCP resolves that record on each
-call and rejects an instance mismatch. Electron and Brain both clear only the matching record on shutdown,
-while `npm start` remains the explicit `127.0.0.1:4317` development fallback. The Electron journey invokes
-the MCP client against the published dynamic port, verifies the matching health identity, then proves stale
-location cleanup and a distinct identity after relaunch.
-
-The founder UI exposes working exact apply, Gmail send, and repository deploy consequences. Missing
-credentials or deploy contracts are visibly unavailable with the reason. Publish, spend, and other outward
-capabilities have no active control rather than a decorative or dead one.
-
-### Founder-directed work mechanics
-
-The current tree can:
-
-- accept a founder or agent-stamped inward direction through `/drive`;
-- scope work to configured participants, a bet, exact work, architecture, or provisional theory;
-- deterministically create an isolated alternative through `branchFrom`;
-- run Claude Code or Codex through the provider-neutral runtime seam;
-- persist founder directions, teammate/model responses, handoffs, provider sessions, runtime receipts,
-  isolated coding work, and completion records;
-- expose process-local active drives and founder-authorized abort;
-- enqueue steering text for a later work-loop step;
-- allow one configured participant to involve another under protocol, cycle, pass, capability, authority,
-  and spend checks;
-- keep the founder as the only actor allowed to end active work.
-
-The desktop composer sends every root, draft, and existing-thread turn through `conversation/reply` with
-the exact selected `threadRef` when one exists. New directions are accepted with `202` before provider
-completion, so the composer remains usable while the run continues. Active beats expose meaningful work and
-elapsed time. Approaches opened during a run join the same Thread immediately rather than flashing as a
-separate legacy row. Configured participant names project into messages, live status, artifacts, and stop
-receipts instead of exposing internal refs.
-
-Implementation intent now opens or resumes a protected per-attempt worktree before the provider runs. The
-Run links to `work:<codeWorkspace>` and records provider, repository, branch, and workspace lineage. Codex and
-Claude command events are normalized into meaningful activity and separate command/verification receipts;
-the conversation does not stream raw tool noise. Startup settles an unfinished provider turn as interrupted,
-retains the workspace, and presents an explicit recovery path. A correction resumes the same exact work;
-another approach creates a distinct attempt in the same Thread.
-
-Runtime completion currently does not equal founder-ended work. The composer is **operational, not a
-one-verb `/drive` box**: every scoped turn carries the exact `threadRef` and compatibility `betId` through
-`replyInConversation`. Deterministic dialogue handles steer, participant-specific stop, participant
-involvement, critique of returned work, same-thread independent attempts, approval surfacing, and explicit
-thread close. Ambiguous participants or targets produce a founder question instead of starting or stopping
-the wrong Run. Approval dialogue never executes an outward consequence; exact release/apply/deploy controls
-remain inside the founder gate in the visual stage.
-
-### Product-change and market-return mechanics
-
-The current tree mechanically supports:
-
-- isolated product-change worktrees;
-- exact diff retention;
-- a separate founder product-review approval before apply;
-- wall-gated apply;
-- native-code checkpoint review, apply/reverse apply, isolated commit, branch/PR preparation, restore, and
-  discard, with exact source/checkpoint lineage and fail-closed drift checks;
-- retained Product capability and release/distribution consequences for completed implementation;
-- Gmail connection and wall-gated send plumbing;
-- durable provider-event outcomes and honest unattributed outcomes;
-- work and configuration lineage through outward acts and returns.
-
-No live receipt in this document proves a real released email, returned reply, production deploy, paid spend,
-destructive act, or attributable market result on the current tree.
-
-### Current UI mechanics
-
-The tree contains **one returning founder surface**: `FirmApp.tsx` reopens the last active
-`VentureWorkspace`; `VenturePicker` is the first-venture/recovery connector, not a launch dashboard. The
-earlier three-shell split (Now, immersive `?shell=world`, legacy `?shell=legacy`) is gone. Reusable mechanics
-now composed inside the single workspace include:
-
-- an in-workspace venture switcher with venture creation behind an explicit connector dialog;
-- a continuous conversation feed and selection-scoped conversation projection;
-- a mode-aware rail with return-value Work groups, Product / GTM agent/capability materials, and Release lifecycle groups;
-- live artifact, before/after, flow, alternatives, evidence, and consequence chat projections;
-- native coding attempt cards with participant, status, changed files, check summary, and same-Thread compare;
-- the React Flow venture canvas with deterministic layout, founder placement, semantic zoom, operating
-  lenses, dense clustering, focus traces, camera restoration, outline, and reduced-motion behavior;
-- contextual product-change and native-code review with purpose-specific founder controls;
-- return summaries, active-work receipts, runtime provenance, and exact work focus.
-
-The Work rail exposes Threads only. Every Work composer defaults to Code, where connected Claude and Codex
-models remain directly selectable and the selected SDK model receives the turn with exact repository and
-isolated-worktree context. The founder can switch that same composer to Product / GTM agent ideation; the draft,
-Thread, and transcript remain stable while model controls are replaced by explicit Drover-agent context. Focused
-component and workspace tests prove the participant switch, draft preservation, persisted preference, hidden SDK
-picker, conversation-level mode projection, agent identity, contextual request mode, and `workflowSketch` contract.
-Browser inspection proves the active spectrum drift and rotating agent mark. Canvas-owned contextual conversation omits duplicate Thread
-chrome and empty transcript space; exact history expands only when present, and a reply classified as a new
-direction opens the returned Thread in Work while a clear contextual question stays for its SDK answer. A live
-Work status now exposes a collapsed factual activity log from durable safe tool receipts, including measured
-durations, while excluding raw model text; focused UI and timeline projection tests cover both the disclosure and
-the privacy boundary. The exact-material workspace now shares a coherent visual hierarchy across artifact, comparison,
-evidence, and consequence projections. Existing non-HTML memo output becomes a designed artifact with a hero, metadata,
-section bands, list tiles, and action treatment at render time; founder questions remain visible above their decision
-controls. Those visual memo sections are now direct steering targets: selecting one focuses the mounted Thread composer,
-keeps the exact durable artifact and Thread attached, and sends structured section context beside—not inside—the
-founder's recorded words. The server routes this as an in-place work correction even when general dialogue
-classification would have called it a steer. Focused UI tests, the full 846-test Brain suite, a production build, and
-live browser inspection against the long Buffalo sourcing memo and its pending consequence verify the visual
-split-workspace behavior and section-targeting path; a live provider-authored section revision remains unproven. The
-Product / GTM canvas now projects each legacy motion record as one reusable **Pipeline** through four
-operating bands: **Signal → Pipeline → Campaign → Outcome**. Existing entry conditions supply the trigger;
-campaign and release joins show bounded activation; response, revenue, insight, and returned-evidence joins
-show reality coming back. Audience, offer, channel, Product proof, release, agent work, and evidence remain
-connected objects rather than additional stages. This is a truthful projection over current canonical data,
-not a fixed-node executor; outward actions still stop at the founder gate.
-
-These are now composed into one surface with **one shared venture context across three founder jobs**. The
-React Flow projection is primary in Product / GTM and remains available as thread material in Work; neither
-form replaces canonical venture truth.
-
-## Mechanically exercised — deterministic regression coverage
-
-The repository contains deterministic tests and fixtures for:
-
-- venture isolation, transfer, storage, configuration, conversation, bets, outcomes, architecture, and
-  product-change records;
-- canonical-model absent/v1/v2 reads, lazy migration, readable single-file storage, two-writer CAS,
-  seven-family export/import, cross-venture and dangling-reference refusal, authoritative-record
-  separation, workflow/run state refusal, working-theory insight lineage, and architecture compatibility;
-- founder-authority signatures, origin/method/path/expiry/replay/process rotation, presence, deploy
-  authorization, and actor-stamped refusal;
-- participant collaboration primitives, pass/cycle limits, runtime selection, spend accounting, steering,
-  and abort;
-- product-change and native-code worktree isolation, tracked/untracked checkpoints, restart recovery,
-  distinct attempts, exact apply/reverse, commit guards, nested test-repository support, restore, and discard;
-- Gmail connection/send failure paths and outcome joins;
-- Atlas projection, layout, density, outline, accessibility, camera, wall, return, and Workyard fixtures;
-- Now component rendering, representation availability, composer receipts, and local callbacks;
-- browser native coding with two attempts, failure/recovery, diff/check inspection, commit, and refresh;
-  real Electron preload, PTY canonical-worktree resolution, preview scheme/isolation guards, signed review,
-  full relaunch, and durable coding recovery.
-
-Deterministic browser and fixture coverage proves rendering and interaction mechanics only. It does not
-establish outside-founder comprehension, usefulness, real-world effects, causality, or market value.
-
-The exact current command receipts are recorded once in **Mechanical baseline** above. The CI workflow now
-declares the same complete gate; remote enforcement remains unproven until GitHub runs it on a pushed change.
-
-## Known broken or incomplete paths
-
-### Product composition
-
-- The two presentation surfaces share one context; Releases is now a distinct collapsible Product / GTM
-  section rather than a third destination. Whether the hierarchy is immediately obvious to an outside founder
-  remains a validation deferral, not a hidden implementation gap.
-- Surface-owned rail bodies and contextual conversation are implemented across desktop and narrow-width
-  layouts. `Cmd/Ctrl+K` searches the current surface. Global cross-surface search remains a Phase C
-  hypothesis until the direct loop is used live; no generalized resolver or focus stack is exposed.
-- Product / GTM graph camera, selection, release section, and scope restore through the v6 venture session. Its rail now
-  exposes save, list, reopen, and confirmed delete for live views and snapshots.
-- Exact thread targeting is carried through conversation replies and new Runs. Legacy bet-focused work
-  remains reachable through non-destructive virtual threads. Backfilling exact Thread identity into every
-  hidden legacy selection path is deferred; the active Work and cross-mode paths use exact references.
-
-### Canvas and model
-
-- The canonical storage model is open. One hidden architecture compatibility projection still requires the
-  legacy five roles; migration or removal is explicitly deferred because the active founder map neither
-  exposes those roles nor needs a sixth role control.
-- The active map surface is a generated operating graph with direct founder creation and editing through
-  venture-scoped mutation adapters. Whole venture is the default; Product and Go-to-market are focused views
-  that preserve their real cross-boundary support. Canonical relationships and existing structured
-  references supply every connector. Release-scoped outcomes add projection-only tentative return curves to
-  directly connected objects and cannot establish an interpretation. There is no separate diagram store,
-  free placement, or invented connector data in this surface. Each canonical legacy motion is projected as a
-  reusable Pipeline through presentation-only Signal, Pipeline, Campaign, and Outcome bands, with connected
-  audiences, offers, channels, releases, Product proof, agents, tools, and evidence remaining exact objects.
-  These are not fixed execution nodes or a generalized workflow ontology.
-- The older full canvas remains compatibility code with no normal founder entry. Its removal is deferred
-  until retained compatibility journeys can be retired without losing migration evidence.
-- **Saved views/snapshots have a reachable founder lifecycle.** The Product / GTM rail saves the selected
-  canonical path, lists live views and snapshots, reopens their exact references, and uses a confirmed second
-  act before delete. Read-only mode keeps reopen available while visibly disabling mutation.
-- Drag/placement belongs only to the hidden compatibility canvas. The active operating graph never writes
-  placement and exposes no control that implies it does.
-- The **generated-answer "Related context" trace is deterministic and promotes nothing to durable truth.**
-  A prior version wrote the founder's *question* back as a "finding" — recording a question as a fact, a
-  truth-model violation. That truth-promotion path is removed; the surface only rearranges to highlight
-  existing relationships.
-- **The compatibility canvas coordinator is split by stable responsibility.** `VentureCanvasStage` is 282
-  lines and composes feature-local hooks for drag interpretation, revision application, dense-node
-  presentation, and selection/keyboard behavior. The generated-map unit suite and all three Atlas browser
-  journeys prove the split preserved the existing surface.
-
-### Conversation and runs
-
-- New founder-authorized drives now have a durable venture root plus persistent child direction Threads;
-  legacy root-joined Runs are intentionally not backfilled. The venture-outline path carries a selected
-  betless child `threadRef` end to end; other legacy selection paths may still lack exact Thread identity.
-- The dialogue reply route is the desktop composer's sole submission path. It handles new direction,
-  steer, observe, participant-specific stop/involvement, critique, parallel attempts, approval surfacing,
-  and explicit close without switching product modes.
-- **Compatibility-canvas undo/redo is not durable venture history.** It remains session-scoped and
-  nontransactional, but has no shipped founder control. The active graph uses direct founder mutation and
-  explicit removal; transactional compatibility history is deferred unless that canvas returns.
-- The agent/MCP `/drive` fresh-start gap is **closed (Phase 2)**: an agent-stamped drive with no bet lineage
-  is refused; only a founder starts fresh work.
-- Participant composition is directed in chat; all active participants in the selected Thread are visible
-  in the header and their latest inline activity.
-- Brain Run receipts, provider sessions, coding-workspace settlement, the Electron PTY bridge, and Work's
-  terminal header now share `completed`, `failed`, and `cancelled`; agent-only terminals retain `paused`,
-  `budget-exhausted`, and `interrupted`. Raw exit codes and signals remain receipts. Older retained `stopped`
-  UI values render as `cancelled` without rewriting founder data. Founder-ended work, outward execution, and
-  returned evidence remain distinct consequences rather than being flattened into Run terminals.
-- Outcome-contract workflows are not implemented and no control claims they are. A generalized workflow or
-  scheduler remains deliberately deferred until repeated use of the direct release loop proves a need.
-- Selected-thread timelines and relevant index facets revalidate from the venture SSE stream. A slower
-  reconnect/offline poll preserves the last coherent read; it is not the normal five-request 1.2-second
-  path.
-
-### Consequences
-
-Repaired brain-side in Phase 3 (verified: 710 brain + 49 security-matrix green):
-
-- Product-change release now refuses a revision that was not separately founder-reviewed+approved
-  (`product_change_not_approved` thrown before any status flip); a failed apply no longer self-approves.
-- Deploy has a shipped provider-agnostic executor. At park time Drover resolves the named or conventional
-  `package.json` deploy script from the bound venture repository and host-stamps its exact command,
-  definition, destination, and digest. After the unchanged two founder acts, execution re-verifies that
-  contract and runs it in the exact repository; missing or changed contracts fail closed and stay queued.
-- A failed message/deploy transport is persisted on the still-queued wall item
-  (`lastExecutionError`/`needsReconnect`/`lastAttemptAt`) and thrown as `wall_release_execution_failed` (502);
-  a genuine later success clears those markers and stamps `releasedAt` exactly once.
-- The shipped Work and Releases gates render the consequence-specific failure as **Nothing was sent**,
-  **Nothing was deployed**, or **Nothing was applied**, preserve the exact transport error, and keep the
-  matching retry on the same undecided action. `needsReconnect` adds a
-  working **Reconnect Gmail** affordance that opens the existing OAuth replacement form; successful OAuth
-  replacement leaves the action for a fresh explicit founder retry rather than sending automatically.
-- A standing grant no longer claims "Sending" without sending: it skips the *wait*, not the *release* — the
-  act parks honestly (`sent:false`) and the founder still performs the release. The wall release capability
-  is minted only inside `wall.decide()`.
-
-Closed consequence follow-ups:
-
-- `executeProductChange` now returns `{ok:false}` through the persist-failure path instead of throwing past
-  it, preserving the exact error on the queued item.
-- Startup recovery returns an interrupted product-change revision from `applying` to its approved retryable
-  state rather than leaving it permanently stuck.
-- `preAuthorizedGrantId` is stripped from parker-controlled effect content and stamped only by the host.
-- Venture work-loop serialization occurs before the allowance read, so concurrent drives cannot oversubscribe
-  the remaining daily budget.
-
-Explicit authority deferral:
-
-- **Grant true auto-send is a deliberate product/authority decision, not a bug.** A background drive holds no
-  live founder request and cannot obtain the founder capability, so a grant cannot ship a real send in-spec.
-  If auto-send is actually wanted, it needs a new host-authority path — surfaced for Jacob, not smuggled in.
-
-### Engineering
-
-- The anti-cage file-count threshold remains coarse technical debt. Tightening it is deferred until the next
-  measured architecture boundary so an arbitrary threshold does not force churn.
-- The production vendor bundle exceeds the current warning threshold. Optimization is deferred until runtime
-  profiling identifies a founder-visible load or memory cost.
-- The current arm64 app bundle and DMG are locally built, launched, integrity-checked, and covered by the
-  acceptance gate. Developer ID signing, notarization, public hosting, clean-machine installation, upgrade,
-  and rollback remain external distribution work requiring founder-owned credentials and decisions.
-- The packaged app and browser harness now share Drover's own restrained application mark; packaged
-  acceptance verifies the declared `icon.icns` and its bundled resource. The local alpha bundle deliberately
-  remains inspectable (`asar: false`); a hardened archive/signing posture is deferred to public distribution.
-
-## Unproven
-
-Mechanically closed in the current tree: the canonical model joins Product / GTM, conversation, Runs, exact
-work, decisions, release evidence, and saved views; venture conversation has a durable root and persistent
-child Threads; and work-loop serialization makes concurrent budget enforcement hard rather than advisory.
-
-The following still lack sufficient live or human receipts:
-
-- semantic zoom over exact work, evidence, and provenance is explicitly deferred until a real release returns
-  attributable evidence into next Work; the current structure zoom remains implemented evidence, not an
-  adopted capacity-layer direction;
-- a real provider pass that independently selects and completes a second participant contribution;
-- a real released send and returned reply;
-- a live attributable market result changing founder-adopted venture understanding and next work (the
-  deterministic outcome projection and exact Work handoff are proven; no live Gmail return was performed);
-- cross-machine import with destination repository rebind (export/import and same-machine rebind mechanics
-  are proven; a second physical machine is not);
-- an outside founder completing the Product/go-to-market loop without a walkthrough;
-- repeated use proving the canvas stays legible without manual grooming;
-- a Developer ID-signed, notarized, publicly hosted package and its clean-machine install, upgrade, and
-  rollback receipts.
-
-## Legacy or conflicting behavior — scheduled for migration or removal
-
-The following exists in code or prior documentation but is not approved product physics:
-
-- the three-shell surface split (Now/direction-workspace primacy, `?shell=world` immersive, `?shell=legacy`
-  triptych), the immersive tree, and the retired shell browser journey — **removed from the tree** (see
-  "Removed surfaces"), retained here only so their absence is on record;
-- one conversation per direction;
-- permanent AI staff, automatic founding crew, teammate roster as product ontology, and AI-org-chart
-  relationships (new founder ventures no longer auto-seed fictional crew — Phase 1);
-- ambient scheduling, heat-controlled autonomy, automatic activation, and around-the-clock inward work
-  (the always-on heat scheduler is removed — Phase 2; the founder-invokable dial/tick remains);
-- fixed diverge/prepare/wall/observe loops presented as the venture lifecycle;
-- closed Concept/Product-loop/System/Motion/Campaign architecture roles as the canonical model;
-- workflow prohibition instead of founder-invoked outcome contracts;
-- **canvas/workbench primacy** — **migrated.** The tree opens on the restored founder mode. Work uses
-  conversation plus deliberate visuals; Product / GTM uses the canonical graph projection; Releases uses
-  its joined release read model. None is a second authority or competing navigation root.
-
-Remaining behaviors may persist temporarily as compatibility seams while the approved migration preserves
-current user data and capability parity. They must not be promoted in current product copy or future
-implementation.
+This file reports what the current tree proves. Direction is not proof.
+
+## Current product shape
+
+The founder shell has two presentation surfaces over one venture: Work and Product / GTM. There is no current
+Releases destination or founder-facing System mode. The rail is surface-owned: Work shows Threads; Product / GTM
+shows local search, agents, and connected capabilities.
+
+The capability rail now consumes a host-owned runtime inventory rather than assuming a saved label is callable.
+At rest it shows at most three useful capabilities; exact Product/GTM selection may surface up to five relevant
+ones. Unavailable or reconnecting capabilities are named honestly and cannot be dragged. Gmail observation is a
+`Source · Read`; Gmail send is a separate `Action · Approval`.
+
+First run now chooses a real Product codebase, derives its name, performs the bounded local read-back, and opens
+Work in that single choice. **What are you trying to make true?** and Claude/Codex selection live in the ordinary
+Work composer rather than blocking repository connection. Missing authentication never blocks adding the
+codebase.
+
+Work remains the direct coding-agent surface with exact provider/model choice, isolated coding attempts,
+conversation, files, diff, preview, terminal, verification, checkpoints, and founder-controlled source apply.
+The founder can delete any non-root chat from its existing action menu. One inline confirmation makes clear that
+live work will stop; the founder-only delete tombstones the Thread, refuses future continuation, requests
+cancellation for every attached live Run, revokes restartable WorkScopes rooted there, and removes the chat from
+Work while preserving Product truth, artifacts, and receipts.
+Product/GTM participation in a Work Thread now stages a branch-backed provisional local model view above the
+composer. The view can mix current truth, proposals, alternatives, unknowns, evidence, actions, gates, and
+outcomes; it does not require workflow order. Corrections preserve the same durable work and `ModelBranch`, and
+review opens the existing selective `ModelChange` merge surface. Legacy workflow artifacts remain readable.
+
+Product / GTM now renders a single living-v3 canvas rather than the former fixed-lane map. It projects current
+semantic objects and relationships, durable provisional model branches, live WorkIndex state, generic outward
+actions, and evidence returns. Current truth, provisional alternatives, live work, founder gates, and evidence
+use distinct visual states. Product, shared Product/GTM truth, and GTM occupy distinct territories inside one
+strictly left-to-right causal graph; curved spectrum edges identify real territory crossings. Its default opening
+frame now composes the first useful causal chapter instead of fitting the entire portfolio: a shared trunk,
+territory-weighted neighborhoods, attached work and decisions, compressed secondary features, and state-derived
+emphasis make the route legible without another setting or mode. Node selection expands exact detail or branch
+review in place and reflows only the local neighborhood. Founder drag placement persists as presentation, and
+rail agents, tools, and sources open exact scoped work only when dropped on a supported subject.
+
+The opening chapter now ranks Product-to-market-to-evidence consequence above mere path length and frames no
+more than five relevant nodes at a `0.82` readability floor. Old overview cameras cannot override that default.
+Remote context remains as concise semantic markers rather than near-invisible node text; the Product, Shared,
+and GTM territories use explicit words and distinct symbols. Bundled relationships fan visibly, adopted GTM
+workflows receive a one-click shortcut and compact ordered geometry, and a conditional **Return to current**
+control appears after meaningful pan or zoom.
+
+The old `maps`, `release-mode`, and `system-mode` production component trees and their pipeline/release workspace
+tests were deleted. Workspace presentation memory migrated to v12 and retains only Work/Product-GTM mode, Thread,
+object selection, canvas camera, conversation state, rail width, and scroll memory. Legacy memories map forward
+without retaining release navigation state.
+
+## Semantic model v3
+
+The canonical semantic store is schema v3. Alongside open semantic objects and relationships, it holds:
+
+- `modelBranches` — durable provisional Product/GTM alternatives;
+- `modelChanges` — source-bearing object or relationship creates, updates, and removals;
+- `modelMergeReceipts` — transactional selective founder promotion;
+- `workScopes` — durable, revocable continuing inward authority;
+- `outwardActions` — generic world-crossing preparation and return joins.
+
+Legacy schema records migrate lazily and idempotently to empty v3 families. Architecture compatibility records
+still project into open objects for old reads, but current UI APIs no longer expose `ArchitectureRole`, closed
+architecture proposal unions, release-only market indexes, or release write routes.
+
+Branch work overlays current truth without copying the full model. Current target digests expose drift conflicts.
+Independent agent writes retry after unrelated CAS contention. Selective merge is founder-only, applies only the
+selected changes transactionally, records previous/resulting model revisions, and does not close the branch.
+
+## Work authority and execution
+
+WorkScopes are founder-created, venture-scoped, origin-bearing, revocable, and discoverable on restart. Agent
+drive requests with a `workScopeId` must remain within that scope and resume its exact origin Thread. Unrelated
+fresh work is refused. Scope discovery reports whether an exact spend policy exists; scopes without one remain
+paused rather than spending on boot.
+
+Drive leases now key exact Run/resume identity instead of serializing every request by participant. Daily spend
+reservations use a revisioned CAS ledger. Provider sessions and coding worktrees remain isolated by Run.
+
+This proves independent lease and spend primitives; it does not yet prove a broad real 10–15-approach dogfood
+portfolio or automatic provider resumption after restart.
+
+## Agent-facing surface
+
+The advertised MCP surface is provider-neutral:
+
+- `read_current_model`
+- `create_model_branch`
+- `read_model_branch`
+- `propose_model_change`
+- `compare_model_branches`
+- `start_scoped_work`
+- `prepare_outward_action`
+- `watch_for_return`
+
+It also exposes read-only venture discovery. Former architecture, campaign, bet, fork, wall, and generic drive
+tools are no longer advertised. Compatibility HTTP reads remain while migration is incomplete. The former Heat
+HTTP/UI/runtime model was removed.
+
+Agents cannot merge current truth, widen a WorkScope, execute an outward action, grant observation, grant
+capabilities, or end founder-owned work. Generic outward actions can be prepared and projected. The current
+tree now ships one current world-crossing slice: host-stamped `deploy` preparation runs an exact re-verified
+repository `package.json` command only from the founder gate, and a separately founder-granted HTTP observer
+may read one exact HTTPS target for a bounded window. Other action kinds remain preparation-only.
+
+## Connected read capabilities and credentials
+
+Both Claude and Codex receive the same screened Drover work-loop tools. When a supported local Chromium browser
+exists, `read_browser_page` opens one public HTTP(S) page in a fresh in-memory context, returns rendered text and
+links, and closes it. It has no click, typing, upload, download, persisted cookies, or access to the founder's
+browser session. When an Exa key is connected, `search_web_with_exa` and `read_web_with_exa` provide attributable
+public-web reads; the key stays in the host request header and never enters a prompt, subprocess argument, or tool
+result. Existing Gmail OAuth remains the structured mail connector and its send path remains founder-gated.
+
+Founder credentials now persist as schema-v2 encrypted envelopes. Electron configures operating-system
+`safeStorage` below the renderer boundary; Linux `basic_text` is rejected. Existing plaintext credentials migrate
+atomically on first protected desktop access, failed migration preserves the original record, and non-Electron
+production writes fail closed. Public APIs continue to expose only redacted connection metadata.
+
+Deploy execution acquires a durable CAS lease before the adapter runs, so concurrent founder requests cannot
+execute twice. A completed receipt settles the lease; adapter failure stays retryable. A process interruption
+after execution begins leaves an explicit verification-required state and refuses blind retry. HTTP returns
+record exact response facts and either a matched return or uninterpreted silence. Observation failure grants no
+new authority and remains retryable inside its existing window.
+
+## HTTP surface
+
+Implemented current routes:
+
+- `GET /api/capabilities`
+- `GET|POST /api/credentials`
+- `POST /api/credentials/gmail/connect`
+- `DELETE /api/credentials/:provider`
+
+- `GET /api/ventures/:ventureId/model`
+- `GET|POST /api/ventures/:ventureId/model/branches`
+- `GET /api/ventures/:ventureId/model/branches/:branchId`
+- `POST /api/ventures/:ventureId/model/branches/:branchId/changes`
+- `GET /api/ventures/:ventureId/model/branches/:branchId/compare`
+- `POST /api/ventures/:ventureId/model/branches/:branchId/merge`
+- `POST /api/ventures/:ventureId/model/branches/:branchId/close`
+- `GET|POST /api/ventures/:ventureId/work-scopes`
+- `POST /api/ventures/:ventureId/work-scopes/:scopeId/revoke`
+- `GET /api/ventures/:ventureId/market-movement`
+- `POST /api/ventures/:ventureId/outward-actions`
+- `POST /api/ventures/:ventureId/outward-actions/:actionId/execute`
+- `POST /api/ventures/:ventureId/outward-actions/:actionId/observations`
+- `POST /api/ventures/:ventureId/outward-actions/:actionId/observations/:observationId/check`
+- `POST /api/ventures/:ventureId/outward-actions/:actionId/observations/:observationId/revoke`
+
+## Visual implementation
+
+The current Product / GTM implementation lives under `ui/src/components/product-gtm/`. It uses a near-black
+neutral room, DM Sans operating text, mono exact material, blue focus, amber authority, restrained provisional
+texture, distinct meaning-bearing node silhouettes and ports, solid causal arrows, curved dashed dependencies,
+source-bearing return edges, Product/GTM crossing spectra, semantic zoom, keyboard controls, minimap, inline node
+expansion, persisted drag placement, exact rail-to-node drop handling, and reduced-motion rules. It now composes a
+bounded contextual causal chapter around exact selection, founder gates, unread evidence, review work, stale
+branches, or active work; unrelated material remains present but quiet, and `Whole venture` returns directly to
+the broad causal trunk. A compact top-right map key distinguishes Product, shared truth, and GTM. Its GTM workflow
+disclosure puts adopted workflows first and unfolds their exact operational steps on the same canvas; motions
+without established mechanics remain visibly unmapped rather than becoming fabricated flows. Exact Work items
+keep separate canvas identities even when they share one Thread.
+
+The workflow key now exposes its primary adopted workflow without opening a menu. Whole-venture and focused
+camera composition preserve a readable active chapter; below semantic-detail zoom the remaining portfolio uses
+meaningful overview markers rather than tiny full labels.
+
+The deterministic browser harness remains a development/test surface. Electron remains the shipped product.
+Visual verification must confirm that the BrowserWindow loaded and became visible; a healthy Brain alone is not
+proof.
+
+## Verification status
+
+Validated during this realignment:
+
+- semantic model and branch unit tests pass;
+- selective merge, drift conflict, and agent merge refusal pass;
+- WorkScope lease/concurrency and atomic spend tests pass;
+- the provider-neutral MCP surface and authority matrix pass;
+- the complete Brain suite passes; the UI suite passes 48 files and 226 tests;
+- focused canvas tests pass 28/28; focused credential/connector tests pass 31/31;
+- UI lint, the production build, and service/component size checks pass;
+- runtime reachability, dead-code, and UI bundle checks pass;
+- the live browser-read adapter opened `https://example.com`, returned rendered text and one link, and closed its
+  isolated context;
+- the deterministic `1440×900` Product/GTM browser journey proves the `0.82` opening floor and one-click adopted
+  workflow disclosure;
+- deterministic browser acceptance passes for first run, return/offline recovery, founder consequences, native
+  coding, dense Product/GTM, selective merge, and the two-surface boundary;
+- the July 21 Product/GTM coherence correction passes focused left-to-right causal-path, territory-crossing,
+  opening-frame, feature-compression, local-reflow, exact-Work separation, dense-data, and 200%-zoom browser receipts;
+- the current deploy/return slice passes founder-only execution, durable failure, double-execution exclusion,
+  exact-target observation, silence, returned-evidence, observation-failure, UI-state, production-build, and
+  real-browser repository-command/observation-grant receipts;
+- the provisional local-model browser receipt passes at `1440×900`: mixed-semantic material stays contained above
+  the composer without workflow language, and review opens the exact branch with its source-bearing change selected;
+- dense Product/GTM remains contained at 1440×900 and at a simulated 200% zoom without truncating canonical
+  objects, model alternatives, or outward actions;
+- the Electron suite confirms a visible local-asset BrowserWindow, in-process Brain, restart recovery, trusted
+  founder bridge, and no production HTTP listener;
+- the packaged macOS app builds, opens a visible renderer, reaches its in-process Brain, and includes the native
+  Claude/Codex runtime dependencies;
+- deleting the retired UI bundles reduced the production graph and bundle while keeping size budgets green.
+
+The complete pre-enhancement `npm run test:acceptance` receipt passed on July 21, 2026. It is not a current
+post-enhancement receipt: `npm run check:architecture` now reports 136 Brain modules against the rewrite's new
+131-module ceiling. The surrounding uncommitted rewrite accounts for 134 before the two feature modules in this
+slice. `npm run verify:tokens` also reports four pre-existing infinite loading animations in `now.css` and
+`thread-shell.css`. Neither gate was weakened; current readiness remains red until that broader cleanup is
+reconciled.
+
+The deterministic complete founder loop is proven through selective Product-model merge. One real external
+dogfood loop remains required before release readiness because it would invoke provider credits and world-
+crossing actions that this implementation run did not have authority to spend or execute.
+
+## Known open work
+
+- Remove remaining Brain-side architecture/release/bet/fork/crew read adapters only after export/import migration
+  coverage proves old ventures survive without them.
+- Finish Product/GTM authoring gestures for branch creation and model-change proposal from contextual work.
+- Add outward executor/observation adapters for real kinds beyond the current deploy + bounded HTTP slice and
+  compatibility release/Gmail seams; do not turn this into a generalized send/publish engine before repeated
+  venture use earns one.
+- Resume interrupted scoped provider work automatically only when exact participant, provider, spend, and machine
+  constraints are all satisfied.
+- Complete reduced-motion, auth, budget, provider-backpressure, outward failure, silence, and merge-conflict visual
+  screenshot QA beyond the deterministic state assertions already present.
+- Reconcile the surrounding Brain rewrite to the 131-module ceiling without weakening the check. The current tree
+  is five modules over; this connector/security slice adds two of them.
+- Exercise Exa and Gmail against founder-connected accounts only with explicit authority for API use and any
+  world-crossing send. This implementation used no founder account, message, or paid API credit.
+- Complete a real dogfood loop from repository connection through outward action, evidence return, selective
+  Product-model merge, and the faster next move.

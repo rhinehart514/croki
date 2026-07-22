@@ -32,51 +32,16 @@ import { withParticipantDriveLease } from "./work-loop-drive-lease.mjs";
 import { codingWorkspaceEnvironment, updateCodingSession } from "./code-workspace.mjs";
 import { isCodingDirection } from "./code-intent.mjs";
 import { executeProviderTurn, startCodingRun } from "./work-loop-coding.mjs";
+import { directSdkConfiguration } from "./work-loop-direct-sdk.mjs";
+import { buildRuntimeReceipt, normalizeEffort } from "./work-loop-runtime.mjs";
 import {
   reserveAgentDailySpend,
   settleAgentDailySpend,
   UNMEASURED_DRIVE_ESTIMATE_USD,
 } from "./work-loop-budget.mjs";
-
+import { publicImageAttachments } from "./image-attachments.mjs";
 export { getAgentDailySpend } from "./work-loop-budget.mjs";
-
 const DEFAULT_MAX_STEPS = 24;
-
-function directSdkConfiguration(persisted, teammateRef, runtime, model) {
-  const name = runtime === "codex" ? "Codex" : runtime === "claude-code" ? "Claude Code" : teammateRef;
-  const agent = {
-    ref: teammateRef,
-    name,
-    label: "SDK model",
-    perspective: null,
-    temperament: [],
-    contributes: [],
-    boundaries: [],
-    activation: "direct",
-    capabilities: { firmTools: true, additional: [] },
-    context: { scope: "venture", instructions: null },
-    memory: { scope: "none", instructions: null },
-    runtime: { provider: runtime, model },
-    budget: { maxSteps: null, dailySpendUsd: null },
-    authority: { outwardEffects: "blocked" },
-    evaluation: { signals: [], instructions: null },
-  };
-  return {
-    ...persisted,
-    presentation: { ...persisted.presentation, participant: "named", participantLabel: "SDK model", collectiveLabel: "Work" },
-    organization: { ...persisted.organization, instructions: null, relationships: [] },
-    coordination: { ...persisted.coordination, mode: "direct", coordinatorRef: null, maxPasses: 1, protocols: [], stopWhen: [] },
-    agents: [agent],
-  };
-}
-
-// The whole wall-item collection at a moment in time — the run's decision-join diff (work-loop-run.mjs)
-// needs every item, decided or not, so an item DECIDED by the founder during the drive is still attributed
-// to the run. A pending-only snapshot would drop it from both the before and after view.
-function allWallItems(ventureStore, ventureId, options) {
-  return ventureStore.listVentureDocs(ventureId, "decisions", options);
-}
-
 // driveTeammate — the whole loop, one call. Builds the retained runtime callback seam
 // already proves, selects the runtime, and drives
 // to the next pause. `deps` lets callers (and tests) inject `park`, `client`/`query`/`runtime`
@@ -91,12 +56,12 @@ export async function driveTeammate(input = {}) {
     ventureId,
     teammateRef,
     betId,
+    workScopeRef: input.target?.workScopeRef ?? null,
     explicitContinuation: initiatedBy === "founder" || initiatedBy === "agent",
     options,
     deps,
   }, (lease) => driveTeammateLeased(input, lease));
 }
-
 async function driveTeammateLeased({
   ventureId,
   teammateRef,
@@ -104,12 +69,14 @@ async function driveTeammateLeased({
   betId = null,
   runtime = null,
   model = null,
+  effort = null,
   directSdk = false,
   initiatedBy = null,
   coordination = null,
   target = null,
   recordInitiation = true,
   originMessageRef = null,
+  attachments = [],
   options = {},
   deps = {},
 } = {}, lease) {
@@ -132,12 +99,13 @@ async function driveTeammateLeased({
     error.code = "participant_not_configured";
     throw error;
   }
-  const loaded = loadWork({ ventureId, teammateRef, betId, options });
+  const workScopeRef = target?.workScopeRef ?? null;
+  const loaded = loadWork({ ventureId, teammateRef, betId, workScopeRef, options });
   const bet = loaded.bet;
   let work = loaded.work;
   if (lease.recoveredLeaseIds.length) {
     work = { ...work, pausedFor: "Previous provider work was interrupted. Durable progress was kept." };
-    saveWork({ ventureId, teammateRef, betId, bet, work, options });
+    saveWork({ ventureId, teammateRef, betId, workScopeRef, bet, work, options });
   }
 
   const taste = deps.taste ?? deps.memory ?? await import("./taste.mjs");
@@ -145,8 +113,8 @@ async function driveTeammateLeased({
   const venture = ventureStore.openVenture(ventureId, options);
   if (!venture) throw new Error(`No such venture: ${ventureId}`);
   const beforeBets = ventureStore.listVentureDocs(ventureId, "bets", options);
-  const beforeWallItems = allWallItems(ventureStore, ventureId, options);
-  const workingTheoryDrive = !isCodingDirection(goal, target) && !betId && !target?.architectureId && !target?.workflowSketch && !coordination?.request;
+  const beforeWallItems = ventureStore.listVentureDocs(ventureId, "decisions", options);
+  const workingTheoryDrive = !isCodingDirection(goal, target) && !betId && !target?.architectureId && !target?.productGtmView && !target?.workflowSketch && !coordination?.request;
   const theoryBaseline = captureWorkingTheoryBaseline(ventureId, options);
   const architectureContext = target?.architectureId
     ? buildArchitectureContext(ventureId, {
@@ -177,6 +145,7 @@ async function driveTeammateLeased({
       teammateRef,
       betId,
       target,
+      attachments: publicImageAttachments(attachments),
     }, options);
     initiatingMessageId = initiation?.id ?? initiatingMessageId;
   }
@@ -206,6 +175,10 @@ async function driveTeammateLeased({
     effectiveRuntime = effectiveModel;
     effectiveModel = null;
   }
+  // Founder-selected reasoning effort. Normalized to the real SDK union (low/medium/high/xhigh/max); null
+  // means "no explicit choice" and each adapter falls back to its own default so behavior is unchanged when
+  // the founder never touches the control. Adapters clamp to the tiers their runtime supports.
+  const effectiveEffort = normalizeEffort(effort);
 
   const selection = (deps.selectRuntime ?? selectRuntime)({
     client: deps.client,
@@ -249,7 +222,7 @@ async function driveTeammateLeased({
   let { currentWork, resumePrompt, runtimeSessionId } = prepareRuntimeResume({
     work, goal, steerBrief, architectureContext, adapterId: selection.adapter.id,
   });
-  const checkpointWork = () => saveWork({ ventureId, teammateRef, betId, bet, work: currentWork, options });
+  const checkpointWork = () => saveWork({ ventureId, teammateRef, betId, workScopeRef, bet, work: currentWork, options });
   const narration = [];
 
   const activeDrive = beginActiveDrive({
@@ -320,7 +293,9 @@ async function driveTeammateLeased({
 
   const ctx = {
     goal,
+    attachments,
     model: effectiveModel,
+    effort: effectiveEffort,
     cwd: workspaceCwd,
     system: buildWorkLoopSystem({
       ventureId,
@@ -438,15 +413,9 @@ async function driveTeammateLeased({
     ...currentWork,
     pausedFor: outcome.kind === "paused" ? (currentWork.pausedFor ?? outcome.summary ?? "Paused.") : null,
   };
-  saveWork({ ventureId, teammateRef, betId, bet, work: currentWork, options });
+  saveWork({ ventureId, teammateRef, betId, workScopeRef, bet, work: currentWork, options });
 
-  const runtimeReceipt = {
-    id: selection.adapter.id,
-    label: selection.adapter.label,
-    auth: selection.auth ?? null,
-    model: effectiveModel,
-    configurationRevision: configuration.revision,
-  };
+  const runtimeReceipt = buildRuntimeReceipt(selection, effectiveModel, configuration.revision);
   let newTeammateMessages = listConversation(ventureId, options)
     .filter((message) => (
       message.role === "teammate"
@@ -477,7 +446,7 @@ async function driveTeammateLeased({
     coordination?.request ?? null,
   );
 
-  const afterWallItems = allWallItems(ventureStore, ventureId, options);
+  const afterWallItems = ventureStore.listVentureDocs(ventureId, "decisions", options);
   const handoffDraft = buildWorkHandoff({
     beforeBets,
     afterBets: ventureStore.listVentureDocs(ventureId, "bets", options),
@@ -495,7 +464,6 @@ async function driveTeammateLeased({
     changes: handoffDraft.changes,
   }, options) : null;
   const completion = checkWorkingTheoryCompletion({ ventureId, baseline: theoryBaseline, outcome, target, required: workingTheoryDrive }, options);
-
   // Terminal Run completion: add the durable decision joins parked during this drive and mint an immutable
   // WorkflowExecutionReceipt for EVERY founder-authorized terminal — bet-scoped OR betless (betRef null).
   // A drive that reached here completed OR cancelled (a cancelled outcome returned by adapter.drive still

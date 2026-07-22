@@ -10,6 +10,11 @@ import { test } from "node:test";
 import { freePort, ROOT, waitForDom } from "./fixtures/browser-harness.mjs";
 import { launchPackagedDroverElectron } from "./lib/electron-app.mjs";
 
+function listeningTcpPorts(pid) {
+  const output = execFileSync("/usr/sbin/lsof", ["-nP", "-a", "-p", String(pid), "-iTCP", "-sTCP:LISTEN", "-Fn"], { encoding: "utf8" });
+  return [...output.matchAll(/:(\d+)$/gm)].map((match) => Number(match[1]));
+}
+
 test("the packaged Drover app boots its Brain and trusted founder bridge", async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "drover-package-acceptance-"));
   const output = path.join(temp, "release");
@@ -29,15 +34,19 @@ test("the packaged Drover app boots its Brain and trusted founder bridge", async
   fs.mkdirSync(home, { recursive: true });
   let app = null;
   try {
-    app = await launchPackagedDroverElectron({ executable, home, port: await freePort() });
+    const debugPort = await freePort();
+    app = await launchPackagedDroverElectron({ executable, home, port: debugPort });
     await waitForDom(app.client, `document.title === "Drover"`, "the package did not open the Drover renderer");
     await waitForDom(app.client, `typeof window.droverDesktop?.selectRepository === "function"`, "the package did not expose the trusted desktop bridge");
-    const runtime = JSON.parse(fs.readFileSync(path.join(home, ".runtime", "brain.json"), "utf8"));
-    const health = await fetch(`http://127.0.0.1:${runtime.port}/api/health`).then((response) => response.json());
-    assert.equal(health.instanceId, runtime.instanceId, "the packaged renderer and Brain did not share one instance");
+    assert.equal(await app.client.evaluate(`location.protocol`), "file:", "the package did not load a local renderer asset");
+    assert.equal(await app.client.evaluate(`document.visibilityState`), "visible", "the package did not make its BrowserWindow visible");
+    assert.deepEqual([...new Set(listeningTcpPorts(app.child.pid))], [debugPort], "the package opened a TCP listener beyond the test-only DevTools port");
+    const health = await app.client.evaluate(`window.droverDesktop.api.request({ path: "/api/health", method: "GET", headers: {}, body: "" }).then((response) => JSON.parse(response.body))`);
+    assert.equal(health.ok, true, "the packaged renderer could not reach its in-process Brain");
+    assert.equal(fs.existsSync(path.join(home, ".runtime", "brain.json")), false, "the package published a web-server runtime record");
   } finally {
     await app?.close().catch(() => {});
-    assert.equal(fs.existsSync(path.join(home, ".runtime", "brain.json")), false, "the package left a stale Brain location");
+    assert.equal(fs.existsSync(path.join(home, ".runtime", "brain.json")), false, "the package wrote a Brain web-server location");
     fs.rmSync(temp, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
   }
 });

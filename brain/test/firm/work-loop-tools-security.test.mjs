@@ -176,6 +176,40 @@ describe("staged work — stable identity and participant attribution", () => {
   });
 });
 
+describe("Product / GTM local-model work tools", () => {
+  it("creates a source-bearing provisional branch and exact change without changing current truth", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Local model view" }, options);
+    const thread = ensureDirectionThread(venture.id, { name: "Distribution question", identityKey: "founder-message" }, options);
+    const taste = await import("../../src/firm/taste.mjs");
+    const ventureStore = await import("../../src/firm/venture-store.mjs");
+    const { tools } = buildToolSet({ ventureId: venture.id, teammateRef: "strategist", options, taste, ventureStore, deps: {}, target: { threadRef: thread.threadRef } });
+    const readCurrent = tools.find((tool) => tool.name === "read_current_model");
+    const createBranch = tools.find((tool) => tool.name === "create_model_branch");
+    const proposeChange = tools.find((tool) => tool.name === "propose_model_change");
+    const readBranch = tools.find((tool) => tool.name === "read_model_branch");
+
+    assert.ok(readCurrent && createBranch && proposeChange && readBranch);
+    const branch = await createBranch.run({ question: "When should ecosystem distribution begin?" });
+    const change = await proposeChange.run({
+      branchId: `model-branch:${branch.id}`, targetFamily: "objects", operation: "create",
+      proposedRecord: { id: "ecosystem-motion", type: "motion", name: "Ecosystem distribution", statement: "Distribution begins only after external proof.", properties: { territory: "gtm" } },
+      rationale: "The direction depends on earned proof rather than a calendar date.",
+    });
+
+    const current = await readCurrent.run({});
+    const projected = await readBranch.run({ branchId: `model-branch:${branch.id}` });
+    assert.equal(current.objects.some((object) => object.id === "ecosystem-motion"), false);
+    assert.equal(projected.proposed.objects.some((object) => object.id === "ecosystem-motion"), true);
+    assert.deepEqual(branch.threadRefs, [thread.threadRef]);
+    assert.ok(change.sourceRefs.includes(thread.threadRef));
+
+    const legacy = buildToolSet({ ventureId: venture.id, teammateRef: "strategist", options, taste, ventureStore, deps: {}, target: { threadRef: "thread:legacy-direction" } });
+    const legacyBranch = await legacy.tools.find((tool) => tool.name === "create_model_branch").run({ question: "Can an imported Thread explore this model?" });
+    assert.deepEqual(legacyBranch.threadRefs, []);
+  });
+});
+
 describe("stage_outward — the exact bypass call now parks and leaves a trace", () => {
   it("an outward-shaped effect (to/channel/body) with NO effects.external declared still forces the wall", async () => {
     const options = freshRoot();

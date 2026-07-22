@@ -30,23 +30,38 @@ describe("venture return session", () => {
   it("migrates v2 thread state into Work without carrying the old visual stage", () => {
     const work = { threadRef: "thread:direction-2", stage: { kind: "preview" as const, ref: "work:one", threadRef: "thread:direction-2", title: "Preview" }, railWidth: 272, chatScrollByThread: { "thread:direction-2": 91 } };
     rememberThreadSession("venture-2", work);
-    expect(readWorkspaceSession("venture-2")).toMatchObject({ mode: "work", productSection: "canvas", railWidth: 272, selectedThreadRef: "thread:direction-2", chatScrollByThread: work.chatScrollByThread });
+    expect(readWorkspaceSession("venture-2")).toMatchObject({ mode: "work", railWidth: 272, selectedThreadRef: "thread:direction-2", chatScrollByThread: work.chatScrollByThread });
   });
 
   it("restores the current mode, direct selections, and camera", () => {
-    const session = { mode: "system" as const, productSection: "releases" as const, railWidth: 280, contextualChatOpen: true, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", selectedReleaseId: "release-one", systemScope: "product" as const, systemCamera: { x: 1, y: 2, zoom: 0.8 }, chatScrollByThread: { "thread:one": 44 } };
+    const session = { mode: "product-gtm" as const, railWidth: 280, contextualChatOpen: true, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", systemCamera: { x: 1, y: 2, zoom: 0.8 }, chatScrollByThread: { "thread:one": 44 } };
     rememberWorkspaceSession("venture-2", session);
     expect(readWorkspaceSession("venture-2")).toEqual(session);
   });
 
+  it("preserves v7 context while resetting the superseded Product/GTM layout camera", () => {
+    window.localStorage.setItem("drover:workspace-session:v7:venture-2", JSON.stringify({ mode: "product-gtm", railWidth: 280, contextualChatOpen: true, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", systemCamera: { x: 900, y: -400, zoom: 1.2 }, chatScrollByThread: { "thread:one": 44 } }));
+    expect(readWorkspaceSession("venture-2")).toEqual({ mode: "product-gtm", railWidth: 280, contextualChatOpen: true, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", systemCamera: null, chatScrollByThread: { "thread:one": 44 } });
+  });
+
+  it("preserves v10 context while resetting the former canvas camera", () => {
+    window.localStorage.setItem("drover:workspace-session:v10:venture-2", JSON.stringify({ mode: "product-gtm", railWidth: 300, contextualChatOpen: false, selectedThreadRef: "thread:one", selectedObjectRef: "object:feature-one", systemCamera: { x: 400, y: -80, zoom: 0.44 }, chatScrollByThread: {} }));
+    expect(readWorkspaceSession("venture-2")).toEqual({ mode: "product-gtm", railWidth: 300, contextualChatOpen: false, selectedThreadRef: "thread:one", selectedObjectRef: "object:feature-one", systemCamera: null, chatScrollByThread: {} });
+  });
+
+  it("preserves v11 context while resetting the superseded automatic composition", () => {
+    window.localStorage.setItem("drover:workspace-session:v11:venture-2", JSON.stringify({ mode: "product-gtm", railWidth: 300, contextualChatOpen: false, selectedThreadRef: "thread:one", selectedObjectRef: "object:feature-one", systemCamera: { x: 400, y: -80, zoom: 0.44 }, chatScrollByThread: {} }));
+    expect(readWorkspaceSession("venture-2")).toEqual({ mode: "product-gtm", railWidth: 300, contextualChatOpen: false, selectedThreadRef: "thread:one", selectedObjectRef: "object:feature-one", systemCamera: null, chatScrollByThread: {} });
+  });
+
   it("preserves v4 continuity while discarding the obsolete graph camera", () => {
     window.localStorage.setItem("drover:workspace-session:v4:venture-2", JSON.stringify({ mode: "system", railWidth: 280, contextualChatOpen: true, selectedThreadRef: "thread:one", selectedObjectRef: "object:motion-one", selectedReleaseId: "release-one", systemScope: "gtm", systemCamera: { x: 900, y: -400, zoom: 1.2 }, chatScrollByThread: { "thread:one": 44 } }));
-    expect(readWorkspaceSession("venture-2")).toEqual({ mode: "system", productSection: "canvas", railWidth: 280, contextualChatOpen: true, selectedThreadRef: "thread:one", selectedObjectRef: "object:motion-one", selectedReleaseId: "release-one", systemScope: "gtm", systemCamera: null, chatScrollByThread: { "thread:one": 44 } });
+    expect(readWorkspaceSession("venture-2")).toEqual({ mode: "product-gtm", railWidth: 280, contextualChatOpen: true, selectedThreadRef: "thread:one", selectedObjectRef: "object:motion-one", systemCamera: null, chatScrollByThread: { "thread:one": 44 } });
   });
 
   it("migrates v3 while discarding resolver, drawer, subview, and visual-stage state", () => {
     window.localStorage.setItem("drover:workspace-session:v3:venture-2", JSON.stringify({ mode: "releases", railWidth: 280, context: { kind: "release", ref: "object:release-one" }, work: { threadRef: "thread:one", stage: { kind: "preview" }, railWidth: 280, chatScrollByThread: { "thread:one": 44 } }, system: { scope: "product", selection: "object:product-one", camera: { x: 1, y: 2, zoom: 0.8 } }, releases: { selection: "release-one", subview: "activity" }, chatDrawerOpen: true }));
-    expect(readWorkspaceSession("venture-2")).toEqual({ mode: "system", productSection: "releases", railWidth: 280, contextualChatOpen: false, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", selectedReleaseId: "release-one", systemScope: "product", systemCamera: null, chatScrollByThread: { "thread:one": 44 } });
+    expect(readWorkspaceSession("venture-2")).toEqual({ mode: "product-gtm", railWidth: 280, contextualChatOpen: false, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", systemCamera: null, chatScrollByThread: { "thread:one": 44 } });
   });
 
   it("ignores malformed presentation state", () => {

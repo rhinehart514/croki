@@ -13,7 +13,7 @@ function MaterialReference({ item, onOpenVisual, kind, materialKind, title, deta
   item: ThreadTimelineItem;
   onOpenVisual: OpenVisual;
   kind: string;
-  materialKind: "artifact" | "native-code" | "flow" | "comparison" | "evidence" | "consequence";
+  materialKind: "artifact" | "native-code" | "flow" | "model-view" | "comparison" | "evidence" | "consequence";
   title: string;
   detail?: string | null;
   action?: string;
@@ -39,6 +39,7 @@ function MaterialReference({ item, onOpenVisual, kind, materialKind, title, deta
 export function ArtifactMessage({ item, onOpenVisual }: { item: ThreadTimelineItem; onOpenVisual: OpenVisual }) {
   const artifact = item.artifact as Record<string, unknown> | undefined;
   const structured = artifact?.content as Record<string, unknown> | undefined;
+  const modelView = structured?.kind === "model-view" ? records(structured.nodes) : [];
   const flow = structured?.kind === "flow" ? records(structured.steps) : [];
   const owners = Array.isArray(item.ownerLabels) ? item.ownerLabels.filter((value): value is string => typeof value === "string") : [];
   const contributors = Array.isArray(item.contributorLabels) ? item.contributorLabels.filter((value): value is string => typeof value === "string") : [];
@@ -51,8 +52,8 @@ export function ArtifactMessage({ item, onOpenVisual }: { item: ThreadTimelineIt
     nativeCode ? text(artifact?.status, "unknown").replaceAll("-", " ") : artifact?.verifiedAt ? "Verified" : null,
     nativeCode && passedChecks ? `${passedChecks} ${passedChecks === 1 ? "check" : "checks"} passed` : null,
   ].filter(Boolean).join(" · ");
-  const action = nativeCode ? "Show changes" : flow.length ? "Open flow" : "Open";
-  return <MaterialReference item={item} onOpenVisual={onOpenVisual} kind={nativeCode ? "Code" : flow.length ? "Flow" : "Artifact"} materialKind={nativeCode ? "native-code" : flow.length ? "flow" : "artifact"} title={text(item.title, "Visual work")} detail={receipt || (flow.length ? `${flow.length} ${flow.length === 1 ? "step" : "steps"}` : null)} action={action} />;
+  const action = nativeCode ? "Show changes" : modelView.length ? "Open view" : flow.length ? "Open flow" : "Open";
+  return <MaterialReference item={item} onOpenVisual={onOpenVisual} kind={nativeCode ? "Code" : modelView.length ? "Product / GTM" : flow.length ? "Flow" : "Artifact"} materialKind={nativeCode ? "native-code" : modelView.length ? "model-view" : flow.length ? "flow" : "artifact"} title={text(item.title, "Visual work")} detail={receipt || (modelView.length ? `${modelView.length} connected ${modelView.length === 1 ? "item" : "items"}` : flow.length ? `${flow.length} ${flow.length === 1 ? "step" : "steps"}` : null)} action={action} />;
 }
 
 export function ComparisonMessage({ item, onOpenVisual }: { item: ThreadTimelineItem; onOpenVisual: OpenVisual }) {

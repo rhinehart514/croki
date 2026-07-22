@@ -394,7 +394,7 @@ export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts
     runsByThread.get(run.threadRef).push(run);
   }
   const canonicalItems = list(model.threads)
-    .filter((thread) => thread.id !== ROOT_THREAD_ID)
+    .filter((thread) => thread.id !== ROOT_THREAD_ID && !thread.deletedAt)
     .map((thread) => itemFor({
       ventureId,
       thread,

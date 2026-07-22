@@ -13,6 +13,10 @@ import {
   setCredential,
   setOAuthCredential,
 } from "../src/credential-store.mjs";
+import {
+  createEphemeralCredentialProtection,
+  createUnavailableCredentialProtection,
+} from "../src/credential-protection.mjs";
 
 describe("credential store", () => {
   let parent;
@@ -32,6 +36,77 @@ describe("credential store", () => {
     assert.equal(cred.token, "clay-secret");
     assert.equal(cred.label, "My Clay");
     assert.ok(cred.savedAt);
+  });
+
+  it("stores only an authenticated opaque envelope, never plaintext secret fields", () => {
+    setOAuthCredential({
+      provider: "gmail",
+      clientId: "client-sensitive",
+      clientSecret: "secret-sensitive",
+      refreshToken: "refresh-sensitive",
+    }, options);
+    const raw = fs.readFileSync(path.join(parent, "credentials", "founder.json"), "utf8");
+    assert.equal(raw.includes("client-sensitive"), false);
+    assert.equal(raw.includes("secret-sensitive"), false);
+    assert.equal(raw.includes("refresh-sensitive"), false);
+    const stored = JSON.parse(raw);
+    assert.equal(stored.schemaVersion, 2);
+    assert.equal(stored.credentials.gmail.sealed.version, 1);
+    assert.equal(typeof stored.credentials.gmail.sealed.ciphertext, "string");
+    assert.equal("clientSecret" in stored.credentials.gmail, false);
+  });
+
+  it("fails closed outside a protected host and never creates credential JSON", () => {
+    const unavailable = createUnavailableCredentialProtection("No protected host in this test.");
+    assert.throws(
+      () => setCredential({ provider: "exa", token: "must-not-land" }, { ...options, secretProtection: unavailable }),
+      /No protected host/,
+    );
+    assert.equal(fs.existsSync(path.join(parent, "credentials", "founder.json")), false);
+  });
+
+  it("migrates a legacy plaintext store atomically on its first protected read", () => {
+    const directory = path.join(parent, "credentials");
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, "founder.json"), JSON.stringify({
+      schemaVersion: 1,
+      credentials: {
+        gmail: {
+          provider: "gmail",
+          authType: "oauth",
+          clientId: "legacy-client",
+          clientSecret: "legacy-secret",
+          refreshToken: "legacy-refresh",
+          label: "Gmail (OAuth)",
+          savedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    }));
+    const protection = createEphemeralCredentialProtection();
+    const migrated = getCredential("gmail", { ...options, secretProtection: protection });
+    assert.equal(migrated.refreshToken, "legacy-refresh");
+    const raw = fs.readFileSync(path.join(directory, "founder.json"), "utf8");
+    assert.equal(raw.includes("legacy-refresh"), false);
+    assert.equal(JSON.parse(raw).schemaVersion, 2);
+  });
+
+  it("does not destroy legacy plaintext when protected migration cannot encrypt", () => {
+    const directory = path.join(parent, "credentials");
+    const file = path.join(directory, "founder.json");
+    fs.mkdirSync(directory, { recursive: true });
+    const original = JSON.stringify({
+      schemaVersion: 1,
+      credentials: { exa: { provider: "exa", token: "legacy-exa", savedAt: "then" } },
+    });
+    fs.writeFileSync(file, original);
+    const broken = {
+      id: "broken-host",
+      available: true,
+      encrypt() { throw new Error("keychain locked"); },
+      decrypt() { throw new Error("not reached"); },
+    };
+    assert.throws(() => getCredential("exa", { ...options, secretProtection: broken }), /keychain locked/);
+    assert.equal(fs.readFileSync(file, "utf8"), original);
   });
 
   it("normalizes the provider so casing and whitespace address the same credential", () => {

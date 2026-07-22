@@ -28,6 +28,15 @@ type DroverPreviewState = {
 };
 
 type DroverDesktopBridge = {
+  platform: "darwin" | "win32" | "linux";
+  api: {
+    request: (input: { path: string; method: string; headers: Record<string, string>; body: string }) => Promise<{
+      status: number;
+      headers: Record<string, string>;
+      body: string;
+    }>;
+    subscribe: (ventureId: string, listener: (event: import("@/api").FirmStreamEvent) => void) => Promise<() => void>;
+  };
   selectRepository: () => Promise<DroverRepositorySelection | null>;
   terminal: {
     open: (target: DroverTerminalTarget) => Promise<DroverTerminalOpen>;

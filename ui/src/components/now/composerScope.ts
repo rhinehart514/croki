@@ -27,6 +27,24 @@ export function composerScopeKey(ventureId: string, selection: CanvasSelection):
   ].join(":");
 }
 
+export function scopedBody(goal: string, selection: CanvasSelection) {
+  if (!selection) return { goal };
+  return {
+    goal,
+    ...(selection.betId ? { betId: selection.betId } : {}),
+    ...(selection.workRef ? { workRef: selection.workRef } : {}),
+    ...(selection.threadRef ? { threadRef: selection.threadRef } : {}),
+    ...(selection.teammateRefs.length === 1 ? { teammateRef: selection.teammateRefs[0] } : {}),
+    ...(selection.teammateRefs.length > 1 ? { teammateRefs: selection.teammateRefs } : {}),
+    ...(selection.architectureId && selection.architectureRevision != null
+      ? { architectureTarget: { id: selection.architectureId, stepId: selection.architectureStepId ?? null, revision: selection.architectureRevision } }
+      : {}),
+    ...(selection.theoryId && selection.theorySubjectId
+      ? { theoryTarget: { theoryId: selection.theoryId, subjectId: selection.theorySubjectId } }
+      : {}),
+  };
+}
+
 export function composerScopeLabel(selection: CanvasSelection, lens: FirmLens | null, architectureLabel: string | null = null): string | null {
   if (!selection) return null;
   if (selection.betId && lens) {

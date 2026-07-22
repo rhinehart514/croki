@@ -253,7 +253,7 @@ export async function summonMap(client) {
   assert.equal(clicked, true, "the Map affordance was not present to summon venture maps");
   await waitForDom(
     client,
-    `!!document.querySelector('.workspace-shell[data-mode="system"] .system-workspace > .venture-maps[data-view] :is(.venture-system-graph, .venture-map-empty)') && !!document.querySelector('.workspace-fab button')`,
+    `!!document.querySelector('.workspace-shell[data-mode="system"] .system-workspace > .venture-maps[data-view] :is(.venture-system-graph, .venture-map-empty-canvas)') && !!document.querySelector('.workspace-fab button')`,
     "the generated map did not open as the dominant Product / GTM surface",
   );
   await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");

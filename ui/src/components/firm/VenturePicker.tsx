@@ -26,13 +26,13 @@ export function VenturePicker({ onOpen }: {
     <div className={`firm-app-picker${hasVentures ? " firm-app-picker-returning" : ""}`}>
       {!hasVentures ? (
         <div className="firm-app-picker-head">
-          <span>One-person holding company</span>
+          <span>Product + GTM development environment</span>
           <h1>Drover</h1>
-          <p>Direct every venture, see what moved, and review consequential changes before they leave.</p>
+          <p>Change the Product and every path to market. Let agents pursue the work while you keep current truth and outward action exact.</p>
           <div className="firm-app-picker-orbit" aria-hidden="true">
             <i /><i /><i />
             <strong>{ventures === null ? "Opening the firm" : "No ventures yet"}</strong>
-            <small>one venture</small>
+            <small>connect a real Product</small>
           </div>
         </div>
       ) : null}
@@ -43,8 +43,8 @@ export function VenturePicker({ onOpen }: {
         ) : ventures.length === 0 ? (
           <section className="firm-app-picker-section" aria-labelledby="start-first-venture">
             <div className="firm-app-picker-section-head">
-              <h2 id="start-first-venture">Start your first venture</h2>
-              <p>Connect the product repository Drover should work inside.</p>
+              <h2 id="start-first-venture">Move from the real Product</h2>
+              <p>Choose its codebase. Drover reads it locally and opens Work.</p>
             </div>
             <VentureCreateForm ventures={ventures} onCreated={onOpen} />
           </section>
@@ -81,8 +81,8 @@ export function VenturePicker({ onOpen }: {
             >
               <Plus aria-hidden="true" />
               <span>
-                <strong id="start-another-venture">Start another venture</strong>
-                <small>Connect a different product repository as a separate venture.</small>
+                <strong id="start-another-venture">Add another codebase</strong>
+                <small>Each product keeps its work, evidence, and decisions separate.</small>
               </span>
               <ChevronDown aria-hidden="true" />
             </button>

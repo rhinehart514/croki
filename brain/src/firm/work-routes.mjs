@@ -26,6 +26,8 @@ import { routeDirection } from "./direction-routing.mjs";
 import { appendConversationMessage } from "./conversation.mjs";
 import { fork } from "./bet.mjs";
 import { getSemanticModel } from "./semantic-model-store.mjs";
+import { requireActiveWorkScope } from "./work-scopes.mjs";
+import { persistImageAttachments } from "./image-attachments.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -100,7 +102,10 @@ export default async function handle({ req, res, url, deps = {} }) {
   try {
     const initiatedByAgent = String(req.headers?.["x-gtm-actor"] ?? "").trim().toLowerCase() === "agent";
     if (!initiatedByAgent) authorizeFounderWriteForRequest(req, "Giving the firm direction");
-    const body = await readBody(req);
+    const body = await readBody(req, { maxBytes: 28 * 1024 * 1024 });
+    const attachments = persistImageAttachments(ventureId, body?.images, deps.appendOptions);
+    const workScopeId = trimOrNull(body?.workScopeId);
+    const workScope = workScopeId ? requireActiveWorkScope(ventureId, workScopeId) : null;
     // The agent/MCP door may CONTINUE or steer existing founder-authored work, but it may never
     // INITIATE fresh work with no founder lineage (FIRM-SPEC rail #1; STATE.md initiation law). A
     // founder-created bet is the lineage anchor: only a founder can create the first bet (a fresh agent
@@ -114,9 +119,9 @@ export default async function handle({ req, res, url, deps = {} }) {
       const agentBetId = trimOrNull(body?.betId);
       const agentBranchFrom = trimOrNull(body?.branchFrom)
         ?? (String(body?.intent ?? "").trim().toLowerCase() === "branch" ? trimOrNull(body?.betId) : null);
-      if (!agentBetId && !agentBranchFrom) {
+      if (!agentBetId && !agentBranchFrom && !workScope) {
         const error = new Error(
-          "An agent-initiated drive must continue existing founder-authorized work: pass betId to resume a bet, or branchFrom to diverge from one. Only the founder can start fresh work.",
+          "Agent work must continue an exact founder-authorized scope. Only the founder can start fresh or unrelated work.",
         );
         error.status = 403;
         throw error;
@@ -208,6 +213,11 @@ export default async function handle({ req, res, url, deps = {} }) {
     const workRef = branchedBetId ? null : trimOrNull(body?.workRef);
     const threadRef = branchedBetId ? null : trimOrNull(body?.threadRef);
     const subjectRefs = [...new Set((Array.isArray(body?.subjectRefs) ? body.subjectRefs : []).map(trimOrNull).filter(Boolean))];
+    if (workScope && subjectRefs.some((ref) => !workScope.subjectRefs.includes(ref))) {
+      const error = new Error("This work names a subject outside its founder-authorized scope.");
+      error.status = 403;
+      throw error;
+    }
     const architectureId = trimOrNull(body?.architectureTarget?.id ?? body?.architectureId);
     const architectureStepId = trimOrNull(body?.architectureTarget?.stepId ?? body?.architectureStepId);
     const requestedArchitectureRevision = Number.isInteger(body?.architectureTarget?.revision)
@@ -268,14 +278,16 @@ export default async function handle({ req, res, url, deps = {} }) {
       ventureId,
       teammateRef,
       goal: body?.goal,
+      attachments,
       betId,
       runtime: body?.runtime ?? null,
       model: body?.model ?? null,
+      effort: body?.effort ?? null,
       initiatedBy: initiatedByAgent ? "agent" : "founder",
       target: {
         betId,
         workRef,
-        threadRef,
+        threadRef: workScope?.originThreadRef ?? threadRef,
         architectureId,
         architectureStepId,
         architectureRevision: architectureContext?.architectureRevision ?? null,
@@ -283,6 +295,7 @@ export default async function handle({ req, res, url, deps = {} }) {
         theorySubjectId: theoryContext?.selectionKind === "subject" ? theoryContext.selected.id : null,
         theoryRelationshipId: theoryContext?.selectionKind === "relationship" ? theoryContext.selected.id : null,
         ...(subjectRefs.length ? { subjectRefs } : {}),
+        ...(workScope ? { workScopeRef: `work-scope:${workScope.id}`, branchRefs: workScope.branchRefs } : {}),
         teammateRefs: targetedTeammateRefs,
       },
       deps,

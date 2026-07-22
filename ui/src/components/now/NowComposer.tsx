@@ -1,18 +1,19 @@
-// The direction composer — the primary object in the product. One plain-words ask starts real work.
-// Scope is an attachment (the selected direction), not a mode; model/tools/agents are inferred and
-// shown only as quiet provenance. Voice is equal to typing where the browser supports it. Two states:
-// a centred `hero` when no direction is open, and a persistent `dock` anchored to the bottom of the
-// active workspace. Freshness lives at the workspace level, never inside the field.
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+// One plain-words ask starts real work; scope is an attachment rather than another mode.
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowRight, ArrowUp, LoaderCircle, Mic, PencilLine, X } from "lucide-react";
 import { driveTeammate, replyInConversation, type DriveTeammateResult } from "@/api";
+import { useDirections } from "./useDirections";
+import { DirectionsTray } from "./DirectionsTray";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
-import { composerRoute, composerScopeKey } from "./composerScope";
+import { composerRoute, composerScopeKey, scopedBody } from "./composerScope";
 import { readDriveReceipt, readReplyReceipt, type DriveReceipt } from "./driveReceipt";
 import { useScopedDraft } from "./useScopedDraft";
 import { useSpeechInput } from "./useSpeechInput";
 import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
-
+import { ComposerImageInput } from "./ComposerImages";
+import { prepareComposerImages, type PendingComposerImage } from "./composerImageFiles";
+import { useAgentComposer } from "./useAgentComposer";
+import type { FirmConfiguration } from "@/types";
 const EMPTY_SUGGESTIONS = [
   "Find the strongest next move",
   "Find the first 20 customers",
@@ -20,70 +21,22 @@ const EMPTY_SUGGESTIONS = [
   "Audit the first-run experience",
 ];
 
-function scopedBody(goal: string, selection: CanvasSelection) {
-  if (!selection) return { goal };
-  return {
-    goal,
-    ...(selection.betId ? { betId: selection.betId } : {}),
-    ...(selection.workRef ? { workRef: selection.workRef } : {}),
-    ...(selection.threadRef ? { threadRef: selection.threadRef } : {}),
-    ...(selection.teammateRefs.length === 1 ? { teammateRef: selection.teammateRefs[0] } : {}),
-    ...(selection.teammateRefs.length > 1 ? { teammateRefs: selection.teammateRefs } : {}),
-    ...(selection.architectureId && selection.architectureRevision != null
-      ? { architectureTarget: { id: selection.architectureId, stepId: selection.architectureStepId ?? null, revision: selection.architectureRevision } }
-      : {}),
-    ...(selection.theoryId && selection.theorySubjectId
-      ? { theoryTarget: { theoryId: selection.theoryId, subjectId: selection.theorySubjectId } }
-      : {}),
-  };
-}
-
 export function NowComposer({
-  ventureId,
-  ventureName,
-  selection,
-  scopeLabel,
-  hasWork,
-  variant = "hero",
-  readOnly = false,
-  readOnlyReason,
-  autoFocus = false,
-  focusRequest = 0,
-  placeholder: placeholderOverride,
-  submissionMode = "auto",
-  onClearScope,
-  onSubmitStart,
-  onSubmitFailed,
-  onDriven,
-  onWorkRouted,
-  onOpenResult,
-  subjectRefs = [],
-  runtimeOverride = null,
-  modelOverride = null,
-  composerControls = null,
-  workflowSketch = false,
-  artifactSection = null,
-  onClearArtifactSection,
+  ventureId, ventureName, selection, scopeLabel, hasWork,
+  variant = "hero", readOnly = false, readOnlyReason, autoFocus = false, focusRequest = 0,
+  placeholder: placeholderOverride, submissionMode = "auto", onClearScope, onSubmitStart, onSubmitFailed,
+  onDriven, onWorkRouted, onOpenResult, subjectRefs = [], runtimeOverride = null, modelOverride = null,
+  effortOverride = null, composerControls = null, configuration = null, productGtmView = false, workflowSketch = false,
+  modelBranchRef = null, artifactSection = null, onClearArtifactSection,
 }: {
-  ventureId: string;
-  ventureName: string;
-  selection: CanvasSelection;
-  scopeLabel: string | null;
-  hasWork: boolean;
-  variant?: "hero" | "dock";
-  readOnly?: boolean;
+  ventureId: string; ventureName: string; selection: CanvasSelection; scopeLabel: string | null; hasWork: boolean;
+  variant?: "hero" | "dock"; readOnly?: boolean;
   // Why the composer is held (stale/offline). Shown as a quiet honest line under the disabled field so a
   // founder never faces a dead input with no explanation (DESIGN.md: precise reason when blocked/stale).
-  readOnlyReason?: string | null;
-  autoFocus?: boolean;
-  focusRequest?: number;
-  // Optional placeholder override. The default (below) is unchanged, so every existing mount is
-  // byte-identical; the venture canvas passes the spec's "Direct the venture".
-  placeholder?: string;
-  submissionMode?: "auto" | "conversation" | "work" | "product-gtm";
-  onClearScope?: () => void;
-  onSubmitStart?: (message: string) => void;
-  onSubmitFailed?: (message: string) => void;
+  readOnlyReason?: string | null; autoFocus?: boolean; focusRequest?: number;
+  // Optional placeholder override; the venture canvas passes the spec's "Direct the venture".
+  placeholder?: string; submissionMode?: "auto" | "conversation" | "work" | "product-gtm";
+  onClearScope?: () => void; onSubmitStart?: (message: string) => void; onSubmitFailed?: (message: string) => void;
   // Called after a turn lands so the frame re-polls. The result is present for a /drive (start work) and
   // omitted for a scoped conversation reply (steer/answer/approve), which returns no DriveTeammateResult.
   onDriven?: (result?: DriveTeammateResult) => void;
@@ -91,14 +44,11 @@ export function NowComposer({
   // the exact durable Thread; the owning surface decides how to reveal it.
   onWorkRouted?: (threadRef: string) => void;
   // When provided (the home composer), the receipt offers a way into the direction the drive produced.
-  onOpenResult?: (targetBetId: string | null) => void;
-  subjectRefs?: string[];
-  runtimeOverride?: string | null;
-  modelOverride?: string | null;
-  composerControls?: ReactNode;
-  workflowSketch?: boolean;
-  artifactSection?: ArtifactSectionFocus | null;
-  onClearArtifactSection?: () => void;
+  onOpenResult?: (targetBetId: string | null) => void; subjectRefs?: string[];
+  runtimeOverride?: string | null; modelOverride?: string | null; effortOverride?: string | null; composerControls?: ReactNode;
+  configuration?: FirmConfiguration | null;
+  productGtmView?: boolean; workflowSketch?: boolean; modelBranchRef?: string | null;
+  artifactSection?: ArtifactSectionFocus | null; onClearArtifactSection?: () => void;
 }) {
   const route = composerRoute(selection);
   const contextualDraftRef = !selection && subjectRefs.length ? `:subjects:${[...subjectRefs].sort().join("|")}` : "";
@@ -108,13 +58,17 @@ export function NowComposer({
   const [receipt, setReceipt] = useState<DriveReceipt | null>(null);
   const [departingPrompt, setDepartingPrompt] = useState<{ id: number; text: string } | null>(null);
   const [sentArtifactSectionKey, setSentArtifactSectionKey] = useState<string | null>(null);
+  const [images, setImages] = useState<PendingComposerImage[]>([]);
+  const [draggingImages, setDraggingImages] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
+  const agentComposer = useAgentComposer({ ventureId, draft, setDraft, textareaRef, configuration, readOnlyReason, onConfigurationChanged: () => onDriven?.() });
+  // Intent options the founder deliberately summons: candidate directions grounded in venture truth + open
+  // work. Picking one loads it into the composer; the actual turn still goes to the chosen SDK model.
+  const directions = useDirections({ ventureId, mode: submissionMode, threadRef: selection?.threadRef ?? null });
   const speech = useSpeechInput((text) => {
     setDraft((current) => (current ? `${current} ${text}` : text));
     textareaRef.current?.focus();
   });
-
   useEffect(() => { if (autoFocus || focusRequest > 0) textareaRef.current?.focus(); }, [autoFocus, focusRequest]);
   useEffect(() => {
     const node = textareaRef.current;
@@ -129,7 +83,6 @@ export function NowComposer({
   }, [departingPrompt]);
   const artifactSectionKey = artifactSection ? `${artifactSection.artifactRef}\u0000${artifactSection.sectionId}\u0000${artifactSection.artifactAt ?? ""}` : null;
   const artifactRevisionSent = Boolean(artifactSectionKey && sentArtifactSectionKey === artifactSectionKey);
-
   const placeholder = placeholderOverride
     ?? (route === "correct"
       ? "Describe the correction to this exact work…"
@@ -145,24 +98,31 @@ export function NowComposer({
   //   • Unscoped, or scoped to a non-bet target (architecture/theory) → the turn DIRECTS the venture: /drive
   //     starts (or branches) work. /drive is only for starting or branching, never for steering.
   const submit = async (value: string) => {
-    const goal = value.trim();
+    const goal = value.trim() || (images.length === 1 ? "Look at this image." : images.length ? "Look at these images." : "");
     if (!goal || busy || readOnly) return;
+    const submittedImages = images;
+    const imageBody = submittedImages.map(({ name, mediaType, data }) => ({ name, mediaType, data }));
+    const teammateRefs = [...new Set([...(selection?.teammateRefs ?? []), ...agentComposer.mentionedAgentRefs])];
     onSubmitStart?.(goal);
     setDepartingPrompt({ id: Date.now(), text: goal });
-    setBusy(true); setError(null); setReceipt(null); setDraft("");
+    setBusy(true); setError(null); setReceipt(null); setDraft(""); setImages([]); directions.clear();
     try {
       if (submissionMode === "conversation" || submissionMode === "work" || submissionMode === "product-gtm" || route === "steer") {
         const reply = await replyInConversation(ventureId, {
           message: goal,
+          ...(imageBody.length ? { images: imageBody } : {}),
           ...(selection?.betId ? { betId: selection.betId } : {}),
           ...(selection?.workRef ? { workRef: selection.workRef } : {}),
+          ...(modelBranchRef ? { modelBranchRef } : {}),
           ...(selection?.threadRef ? { threadRef: selection.threadRef } : {}),
           ...(!selection?.threadRef && subjectRefs.length ? { subjectRefs } : {}),
+          ...(agentComposer.mentionedAgentRefs.length ? { teammateRefs } : {}),
           ...(submissionMode === "work" ? { mode: "work" as const } : {}),
           ...(submissionMode === "conversation" || submissionMode === "product-gtm" ? { mode: "context" as const } : {}),
           ...(submissionMode === "work" && runtimeOverride ? { runtime: runtimeOverride } : {}),
           ...(submissionMode === "work" && modelOverride ? { model: modelOverride } : {}),
-          ...(workflowSketch ? { workflowSketch: true } : {}),
+          ...(submissionMode === "work" && effortOverride ? { effort: effortOverride } : {}),
+          ...(productGtmView ? { productGtmView: true } : workflowSketch ? { workflowSketch: true } : {}),
           ...(artifactSection ? { artifactSection: { title: artifactSection.sectionTitle, index: artifactSection.sectionIndex } } : {}),
         });
         if (artifactSectionKey) setSentArtifactSectionKey(artifactSectionKey);
@@ -172,21 +132,47 @@ export function NowComposer({
       } else {
         const response = await driveTeammate(ventureId, {
           ...scopedBody(goal, selection),
+          ...(agentComposer.mentionedAgentRefs.length ? { teammateRefs } : {}),
+          ...(imageBody.length ? { images: imageBody } : {}),
           ...(runtimeOverride ? { runtime: runtimeOverride } : {}),
           ...(modelOverride ? { model: modelOverride } : {}),
+          ...(effortOverride ? { effort: effortOverride } : {}),
         });
         setReceipt(readDriveReceipt(response));
         onDriven?.(response);
       }
+      agentComposer.clearMentions();
     } catch (cause) {
       onSubmitFailed?.(goal);
       setSentArtifactSectionKey(null);
       setDraft(goal);
+      setImages(submittedImages);
       setError(cause instanceof Error ? cause.message : "Drover could not take that direction.");
     } finally { setBusy(false); }
   };
 
+  const addImages = async (files: File[]) => {
+    try { setImages(await prepareComposerImages(files, images)); setError(null); setReceipt(null); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Drover could not attach those images."); }
+  };
+
+  const pastedImages = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = [...event.clipboardData.files].filter((file) => file.type.startsWith("image/"));
+    if (files.length) void addImages(files);
+  };
+
+  const droppedImages = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault(); setDraggingImages(false);
+    const files = [...event.dataTransfer.files].filter((file) => file.type.startsWith("image/"));
+    if (files.length) void addImages(files);
+  };
+
+  const pickDirection = (direction: string) => {
+    setDraft(direction); directions.clear(); textareaRef.current?.focus();
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (agentComposer.onKeyDown(event)) return;
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       void submit(draft);
@@ -200,7 +186,7 @@ export function NowComposer({
   const showChips = !hasWork && !busy && !scopeLabel && !readOnly;
 
   return (
-    <section className="now-composer" data-variant={variant} data-busy={busy ? "true" : "false"} data-launching={departingPrompt ? "true" : undefined} data-submission-mode={submissionMode} aria-label="Direct this venture">
+    <section className="now-composer" data-variant={variant} data-busy={busy ? "true" : "false"} data-dragging-images={draggingImages ? "true" : undefined} data-launching={departingPrompt ? "true" : undefined} data-intent={directions.loading ? "loading" : undefined} data-submission-mode={submissionMode} aria-label="Direct this venture" onDragOver={(event) => { if ([...event.dataTransfer.items].some((item) => item.type.startsWith("image/"))) { event.preventDefault(); setDraggingImages(true); } }} onDragLeave={() => setDraggingImages(false)} onDrop={droppedImages}>
       <div className="now-composer-shell">
         {departingPrompt ? <span key={departingPrompt.id} className="now-composer-flight" aria-hidden="true">{departingPrompt.text}</span> : null}
         {scopeLabel ? (
@@ -220,18 +206,29 @@ export function NowComposer({
             {onClearArtifactSection ? <button type="button" aria-label="Clear artifact section" onClick={onClearArtifactSection}><X aria-hidden="true" /></button> : null}
           </div>
         ) : null}
+        {images.length ? <div className="now-composer-image-tray"><ComposerImageInput images={images} disabled={readOnly || busy} onChoose={(files) => void addImages(files)} onRemove={(id) => setImages((current) => current.filter((image) => image.id !== id))} /></div> : null}
         <form className="now-composer-field" onSubmit={(event) => { event.preventDefault(); void submit(draft); }}>
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={draft}
-            onChange={(event) => { setDraft(event.target.value); setError(null); setReceipt(null); }}
-            onKeyDown={onKeyDown}
-            placeholder={placeholder}
-            aria-label="Say what you want for this venture"
-            disabled={readOnly}
-          />
+          <div className="now-composer-input">
+            {agentComposer.menu}
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={draft}
+              onChange={(event) => { agentComposer.onDraftChange(event.target.value, event.target.selectionStart); setError(null); setReceipt(null); }}
+              onClick={(event) => agentComposer.onCaretChange(event.currentTarget.selectionStart)}
+              onKeyUp={(event) => agentComposer.onCaretChange(event.currentTarget.selectionStart)}
+              onKeyDown={onKeyDown}
+              onPaste={pastedImages}
+              placeholder={placeholder}
+              aria-label="Say what you want for this venture"
+              {...agentComposer.inputAria}
+              disabled={readOnly}
+            />
+          </div>
           <div className="now-composer-tools">
+            {!images.length ? <ComposerImageInput images={images} disabled={readOnly || busy} onChoose={(files) => void addImages(files)} onRemove={() => undefined} /> : null}
+            <button type="button" className="now-intent-orb" aria-label="Read my intent — suggest directions"
+              onClick={() => directions.summon(draft)} disabled={readOnly || busy || directions.loading} />
             {speech.supported ? (
               <button
                 type="button"
@@ -249,12 +246,13 @@ export function NowComposer({
               type="submit"
               className="now-composer-send"
               aria-label={busy ? "Working" : submissionMode === "conversation" || submissionMode === "work" || submissionMode === "product-gtm" ? "Send to this thread" : route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
-              disabled={busy || readOnly || !draft.trim()}
+              disabled={busy || readOnly || (!draft.trim() && !images.length)}
             >
               {busy ? <LoaderCircle className="now-composer-spinner" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
             </button>
           </div>
         </form>
+        <DirectionsTray options={directions.options} loading={directions.loading} onPick={pickDirection} />
         {composerControls}
       </div>
 
@@ -295,6 +293,7 @@ export function NowComposer({
           ) : null}
         </div>
       ) : null}
+      {agentComposer.dialog}
     </section>
   );
 }

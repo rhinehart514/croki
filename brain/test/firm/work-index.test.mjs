@@ -154,8 +154,12 @@ process.env.GTM_IDE_HOME = routeRoot;
 process.env.GTM_IDE_PERSISTENCE = "json";
 
 const { default: workIndexRoutes } = await import("../../src/firm/work-index-routes.mjs");
+const { beginActiveDrive, listActiveDrives } = await import("../../src/firm/active-drives.mjs");
+const { appendConversationMessage } = await import("../../src/firm/conversation.mjs");
 const { driveTeammate } = await import("../../src/firm/work-loop.mjs");
+const { ensureDirectionThread, getSemanticModel, recordRun } = await import("../../src/firm/semantic-model-store.mjs");
 const { createVenture } = await import("../../src/firm/venture-store.mjs");
+const { createWorkScope, listWorkScopes } = await import("../../src/firm/work-scopes.mjs");
 
 async function call(method, pathname, body = {}, headers = {}) {
   const req = Readable.from([JSON.stringify(body)]);
@@ -228,4 +232,58 @@ test("pin and unpin persist through the semantic-model boundary and stay venture
   const unpinned = await call("PUT", `/api/ventures/${venture.id}/threads/${threadId}/pin`, { pinned: false });
   assert.equal(unpinned.status, 200);
   assert.equal(unpinned.body.item.pinnedAt, null);
+});
+
+test("rename changes the thread label without rewriting the founder message", async () => {
+  const options = { root: routeRoot, seedFoundingCrew: false };
+  const venture = createVenture({ name: "Rename direction" }, options);
+  await driveTeammate({
+    ventureId: venture.id, teammateRef: "founding-teammate", goal: "I want us to focus on prodct development", initiatedBy: "founder", options,
+    deps: { runtime: { id: "rename-runtime", label: "Rename runtime", async drive() { return { kind: "completed", summary: "Ready" }; } } },
+  });
+  const before = await call("GET", `/api/ventures/${venture.id}/work-index`);
+  const item = before.body.workIndex.items[0];
+  const threadId = item.threadRef.replace(/^thread:/, "");
+  const renamed = await call("PUT", `/api/ventures/${venture.id}/threads/${threadId}/name`, { name: "Product development" });
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.body.item.founderIntent, "Product development");
+  const timeline = await call("GET", `/api/ventures/${venture.id}/threads/${threadId}/timeline`);
+  assert.ok(timeline.body.timeline.items.some((entry) => entry.kind === "message" && entry.content === "I want us to focus on prodct development"));
+  const empty = await call("PUT", `/api/ventures/${venture.id}/threads/${threadId}/name`, { name: " " });
+  assert.equal(empty.status, 400);
+});
+
+test("deleting a chat stops its live runs, revokes continuing work, and removes the chat from Work", async () => {
+  const venture = createVenture({ name: "Delete active chat" });
+  const message = appendConversationMessage({ ventureId: venture.id, role: "founder", content: "Keep improving activation" });
+  const direction = ensureDirectionThread(venture.id, {
+    name: "Improve activation",
+    originMessageRef: `conversation:${message.id}`,
+    identityKey: message.id,
+  });
+  const drive = beginActiveDrive({ ventureId: venture.id, teammateRef: "codex", runtime: "codex", abortSupported: true });
+  recordRun(venture.id, { id: drive.id, threadRef: direction.threadRef, originMessageRef: `conversation:${message.id}` });
+  const scope = createWorkScope({
+    ventureId: venture.id,
+    originThreadRef: direction.threadRef,
+    originMessageRef: `conversation:${message.id}`,
+    objective: "Keep improving activation",
+    resumeOnRestart: true,
+    actor: { authority: "founder", id: "founder" },
+  });
+
+  const threadId = direction.threadRef.replace(/^thread:/, "");
+  const deleted = await call("DELETE", `/api/ventures/${venture.id}/threads/${threadId}`);
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.body.deleted, true);
+  assert.deepEqual(deleted.body.stoppedRunRefs, [`run:${drive.id}`]);
+  assert.deepEqual(deleted.body.revokedWorkScopeRefs, [`work-scope:${scope.id}`]);
+  assert.equal(deleted.body.workIndex.items.some((item) => item.threadRef === direction.threadRef), false);
+  assert.ok(listActiveDrives(venture.id).find((entry) => entry.id === drive.id)?.abortRequestedAt);
+  assert.ok(listWorkScopes(venture.id).find((entry) => entry.id === scope.id)?.revokedAt);
+  assert.ok(getSemanticModel(venture.id).threads.find((entry) => `thread:${entry.id}` === direction.threadRef)?.deletedAt);
+
+  const timeline = await call("GET", `/api/ventures/${venture.id}/threads/${threadId}/timeline`);
+  assert.equal(timeline.status, 404);
+  drive.finish();
 });

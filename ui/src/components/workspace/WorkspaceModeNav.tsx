@@ -4,7 +4,7 @@ import type { WorkspaceMode } from "@/lib/venture-session";
 
 const modes = [
   { id: "work", label: "Work", shortcut: "⌘1", Icon: MessageSquare },
-  { id: "system", label: "Product / GTM", shortcut: "⌘2", Icon: Boxes },
+  { id: "product-gtm", label: "Product / GTM", shortcut: "⌘2", Icon: Boxes },
 ] as const;
 export function WorkspaceModeNav({ mode, animate, onMode }: { mode: WorkspaceMode; animate: boolean; onMode: (mode: WorkspaceMode, opener?: HTMLElement, animate?: boolean) => void }) {
   const reducedMotion = useReducedMotion();

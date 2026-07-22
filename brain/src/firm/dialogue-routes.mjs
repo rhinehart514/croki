@@ -27,6 +27,7 @@
 import { json, readBody } from "../routes/util.mjs";
 import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { getFirmConfiguration } from "./configuration.mjs";
+import { suggestDirections } from "./composer-predict.mjs";
 import { getVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { appendConversationMessage } from "./conversation.mjs";
 import { classifyDialogueAct } from "./dialogue-act.mjs";
@@ -40,41 +41,36 @@ import { driveTeammate } from "./work-loop.mjs";
 import { abortActiveDrive, listActiveDrives } from "./active-drives.mjs";
 import { ensureDirectionThread, extendDirectionThread, getSemanticModel, setDirectionThreadLifecycle } from "./semantic-model-store.mjs";
 import { checkAuthorizedObservations } from "./release-observation.mjs";
-
+import { persistImageAttachments, publicImageAttachments } from "./image-attachments.mjs";
+import imageAttachmentRoutes from "./image-attachment-routes.mjs";
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
   return text || null;
 }
-
 function statusFor(err) {
   if (err?.code === "venture_not_found") return 404;
   if (err?.code === "founder_decision_forbidden") return 403;
   return Number.isInteger(err?.status) ? err.status : 400;
 }
-
 function participantAliases(configuration) {
   return new Map((configuration.agents ?? []).flatMap((agent) => [agent.ref, agent.name, agent.label]
     .filter(Boolean).map((alias) => [String(alias).toLocaleLowerCase(), agent.ref])));
 }
-
 function participantName(configuration, ref) {
   const participant = (configuration.agents ?? []).find((agent) => agent.ref === ref);
   return participant?.name ?? participant?.label ?? ref;
 }
-
 function mentionedParticipants(message, configuration) {
   const lower = String(message).toLocaleLowerCase();
   return [...new Set([...participantAliases(configuration)]
     .filter(([alias]) => new RegExp(`(^|\\W)${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\W|$)`, "i").test(lower))
     .map(([, ref]) => ref))];
 }
-
 function appendThreadReply({ ventureId, threadRef, betId, teammateRef = null, content, options }) {
   const reply = appendConversationMessage({ ventureId, role: "teammate", teammateRef, betId, content, ...(threadRef ? { target: { threadRef } } : {}) }, options);
   if (threadRef) extendDirectionThread(ventureId, threadRef, { messageRefs: [`conversation:${reply.id}`] }, options);
   return reply;
 }
-
 function launchDrive({ drive, input, ventureId, threadRef, betId, teammateRef, options }) {
   let task;
   try {
@@ -106,7 +102,7 @@ function latestArtifactRef(ventureId, betId) {
   return artifact ? `work:${artifact.id}` : null;
 }
 
-async function dispatchParticipantCommand({ ventureId, configuration, message, betId, threadRef, founderMessageId, res, deps }) {
+async function dispatchParticipantCommand({ ventureId, configuration, message, betId, threadRef, founderMessageId, attachments, res, deps }) {
   const critique = /\bcritique\b/i.test(message);
   const parallel = /\b(independently|side[ -]by[ -]side|separate (?:approaches|attempts)|both try)\b/i.test(message);
   const involve = /^\s*(?:have|ask|let)\b/i.test(message) && /\b(join|help|inspect|explore|work|try|critique|review)\b/i.test(message);
@@ -143,7 +139,7 @@ async function dispatchParticipantCommand({ ventureId, configuration, message, b
       input: {
         ventureId, teammateRef: attempt.teammateRef, betId: attempt.id, goal: message, initiatedBy: "founder",
         recordInitiation: false, originMessageRef: founderMessageId, target: { threadRef, betId: attempt.id },
-        options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
+        attachments, options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
       },
       ventureId, threadRef, betId: attempt.id, teammateRef: attempt.teammateRef, options: deps.appendOptions,
     });
@@ -165,7 +161,7 @@ async function dispatchParticipantCommand({ ventureId, configuration, message, b
     input: {
       ventureId, teammateRef, betId, goal: message, initiatedBy: "founder", recordInitiation: false,
       originMessageRef: founderMessageId, target: { threadRef, betId, ...(workRef ? { workRef } : {}) },
-      options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
+      attachments, options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
     },
     ventureId, threadRef, betId, teammateRef, options: deps.appendOptions,
   });
@@ -192,16 +188,20 @@ function effortSummary(ventureId, betId) {
 async function handleReply(ventureId, req, res, deps) {
   authorizeFounderWriteForRequest(req, "Replying in the conversation");
   const configuration = getFirmConfiguration(ventureId); // fail-closed venture existence
-  const body = await readBody(req);
-  const message = trimOrNull(body?.message);
+  const body = await readBody(req, { maxBytes: 28 * 1024 * 1024 });
+  const attachments = persistImageAttachments(ventureId, body?.images, deps.appendOptions);
+  const message = trimOrNull(body?.message) ?? (attachments.length === 1 ? "Look at this image." : attachments.length ? "Look at these images." : null);
   const betId = trimOrNull(body?.betId);
   const threadRef = trimOrNull(body?.threadRef);
   const workTurn = body?.mode === "work";
   const contextTurn = body?.mode === "context";
   const runtime = workTurn ? trimOrNull(body?.runtime) : null;
   const model = workTurn ? trimOrNull(body?.model) : null;
+  const effort = workTurn ? trimOrNull(body?.effort) : null;
   const workRef = trimOrNull(body?.workRef);
+  const productGtmView = body?.productGtmView === true;
   const workflowSketch = body?.workflowSketch === true;
+  const modelBranchRef = trimOrNull(body?.modelBranchRef);
   const artifactSectionTitle = trimOrNull(body?.artifactSection?.title);
   const artifactSectionIndex = Number.isInteger(body?.artifactSection?.index) && body.artifactSection.index >= 0
     ? body.artifactSection.index
@@ -211,6 +211,9 @@ async function handleReply(ventureId, req, res, deps) {
     : null;
   const subjectRefs = Array.isArray(body?.subjectRefs)
     ? [...new Set(body.subjectRefs.map(trimOrNull).filter(Boolean))]
+    : [];
+  const teammateRefs = Array.isArray(body?.teammateRefs)
+    ? [...new Set(body.teammateRefs.map(trimOrNull).filter(Boolean))]
     : [];
   if (!message) {
     const error = new Error("A conversation reply needs a message.");
@@ -224,7 +227,11 @@ async function handleReply(ventureId, req, res, deps) {
     error.status = 404;
     throw error;
   }
-
+  const configuredRefs = new Set(configuration.agents.map((agent) => agent.ref));
+  const unknownTeammateRefs = teammateRefs.filter((ref) => !configuredRefs.has(ref));
+  if (unknownTeammateRefs.length) {
+    throw Object.assign(new Error(`These participants are not configured for this venture: ${unknownTeammateRefs.join(", ")}.`), { status: 409 });
+  }
   if (threadRef) {
     if (subjectRefs.length) throw Object.assign(new Error("subjectRefs are only accepted when forming a new contextual thread."), { status: 400 });
     const threadId = threadRef.replace(/^thread:/, "");
@@ -236,7 +243,7 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   // The founder's own message is recorded first — it is the authority every dispatch below rests on.
-  const founderMessage = appendConversationMessage({ ventureId, role: "founder", content: message, betId, ...(threadRef ? { target: { threadRef } } : {}) }, deps.appendOptions);
+  const founderMessage = appendConversationMessage({ ventureId, role: "founder", content: message, betId, attachments: publicImageAttachments(attachments), ...((threadRef || teammateRefs.length) ? { target: { threadRef, teammateRefs } } : {}) }, deps.appendOptions);
   if (threadRef) extendDirectionThread(ventureId, threadRef, { messageRefs: [`conversation:${founderMessage.id}`], actor: { authority: "founder", id: "founder" } }, deps.appendOptions);
 
   // Observation is founder-invoked work, too. Keep reply capture on the conversation surface instead
@@ -277,21 +284,20 @@ async function handleReply(ventureId, req, res, deps) {
     return;
   }
 
-  if (await dispatchParticipantCommand({ ventureId, configuration, message, betId, threadRef, founderMessageId: founderMessage.id, res, deps })) return;
+  if (await dispatchParticipantCommand({ ventureId, configuration, message, betId, threadRef, founderMessageId: founderMessage.id, attachments, res, deps })) return;
 
   const { act, steerText } = await classifyDialogueAct({ message, effortSummary: summary }, deps.dialogueDeps ?? {});
 
   // A section selected in the artifact is already an exact work correction. Preserve the founder's
   // words in the transcript, but do not make a general dialogue classifier rediscover that scope.
   if (artifactSection) {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, "new-direction", { betId, workRef, workflowSketch, artifactSection });
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
   }
-
   if (act === "steer") {
-    if (workTurn) return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, "new-direction", { betId, workRef, workflowSketch, artifactSection });
+    if (workTurn) return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
     if (!betId) {
       // A steer with no effort to steer is just a new direction — route it.
-      return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs);
+      return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, null, null, null, "new-direction", { attachments, teammateRefs });
     }
     enqueueSteer({ ventureId, betId, text: steerText ?? message, fromMessageId: founderMessage.id });
     json(res, 200, { act: "steer", betId, applied: "next-step", messageId: founderMessage.id });
@@ -299,9 +305,8 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   if (act === "answer") {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, contextTurn ? "answer" : "new-direction", { betId, workRef, workflowSketch, artifactSection });
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, contextTurn ? "answer" : "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
   }
-
   if (act === "close") {
     if (!betId) {
       const error = new Error("Closing needs the effort being closed.");
@@ -342,13 +347,13 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   if (act === "new-direction") {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, "new-direction", { betId, workRef, workflowSketch, artifactSection });
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
   }
 
   json(res, 200, { act, betId, messageId: founderMessage.id });
 }
 
-async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null, subjectRefs = [], runtime = null, model = null, responseAct = "new-direction", material = {}) {
+async function dispatchNewDirection(ventureId, configuration, direction, res, deps, fromMessageId, threadRef = null, subjectRefs = [], runtime = null, model = null, effort = null, responseAct = "new-direction", material = {}) {
   // Form the founder's exact Work address before any provider or routing work can fail. A failed
   // dispatch must remain a visible, resumable Thread rather than an orphaned conversation message.
   const exactThreadRef = threadRef ?? ensureDirectionThread(ventureId, {
@@ -360,8 +365,8 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
   }, deps.appendOptions).threadRef;
   const directSdk = Boolean(runtime);
   const routed = directSdk
-    ? { teammateRef: runtime, why: `Continuing with ${runtime === "codex" ? "Codex" : runtime === "claude-code" ? "Claude Code" : runtime}.` }
-    : await routeDirection({ direction, configuration }, deps.routingDeps ?? {});
+    ? { teammateRef: runtime }
+    : await routeDirection({ direction, configuration, targetedRefs: material.teammateRefs ?? [] }, deps.routingDeps ?? {});
   // A fresh, never-configured firm forms its first participant on the first direction — the same
   // founding-teammate fallback work-routes.mjs uses. Otherwise a firm with no claimable participant
   // refuses rather than inventing an activation path.
@@ -372,9 +377,11 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
     error.status = 409;
     throw error;
   }
-  const why = routed.why ?? "Taking this one.";
-  // The claim is visible in the thread with a one-line why, BEFORE work begins (§4A.1).
-  appendThreadReply({ ventureId, threadRef: exactThreadRef, betId: null, teammateRef, content: why, options: deps.appendOptions });
+  const why = directSdk ? null : routed.why ?? "Taking this one.";
+  // Product / GTM routing names the participant and reason before work begins (§4A.1). In Work,
+  // the founder already chose the SDK model in the composer, so another provider acknowledgement is
+  // duplicate transcript chrome between the founder turn and the model's real response.
+  if (why) appendThreadReply({ ventureId, threadRef: exactThreadRef, betId: null, teammateRef, content: why, options: deps.appendOptions });
   const drive = deps.driveTeammate ?? driveTeammate;
   launchDrive({
     drive,
@@ -390,12 +397,17 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
         ...(subjectRefs.length ? { subjectRefs } : {}),
         ...(material.betId ? { betId: material.betId } : {}),
         ...(material.workRef ? { workRef: material.workRef } : {}),
+        ...(material.productGtmView ? { productGtmView: true } : {}),
         ...(material.workflowSketch ? { workflowSketch: true } : {}),
+        ...(material.modelBranchRef ? { modelBranchRef: material.modelBranchRef } : {}),
         ...(material.artifactSection ? { artifactSection: material.artifactSection } : {}),
+        ...(material.teammateRefs?.length ? { teammateRefs: material.teammateRefs } : {}),
       },
       ...(runtime ? { runtime } : {}),
       ...(model ? { model } : {}),
+      ...(effort ? { effort } : {}),
       ...(directSdk ? { directSdk: true } : {}),
+      attachments: material.attachments ?? [],
       options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
     },
     ventureId, threadRef: exactThreadRef, betId: null, teammateRef, options: deps.appendOptions,
@@ -404,7 +416,7 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
     act: responseAct,
     accepted: true,
     teammateRef,
-    why,
+    ...(why ? { why } : {}),
     threadRef: exactThreadRef,
     fromMessageId,
   });
@@ -440,6 +452,7 @@ function handleEventStream(ventureId, req, res) {
 }
 
 export default async function handle({ req, res, url, deps = {} }) {
+  if (imageAttachmentRoutes({ req, res, url, options: deps.appendOptions })) return true;
   const replyMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/conversation\/reply$/);
   if (req.method === "POST" && replyMatch) {
     const ventureId = decodeURIComponent(replyMatch[1]);
@@ -447,6 +460,26 @@ export default async function handle({ req, res, url, deps = {} }) {
       await handleReply(ventureId, req, res, deps);
     } catch (err) {
       json(res, statusFor(err), { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Deliberate intent-options assist: the founder asks the composer for candidate directions. Read-only (no
+  // founder-write authority), and it fails open at 200 with an empty option set so the summon never surfaces
+  // an error. Clicking an option only fills the composer; the real turn still goes to the chosen SDK model.
+  const directionsMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/composer\/directions$/);
+  if (req.method === "POST" && directionsMatch) {
+    try {
+      const ventureId = decodeURIComponent(directionsMatch[1]);
+      const body = await readBody(req);
+      json(res, 200, await suggestDirections({
+        ventureId,
+        draft: typeof body?.draft === "string" ? body.draft : "",
+        mode: typeof body?.mode === "string" ? body.mode : "auto",
+        threadRef: typeof body?.threadRef === "string" ? body.threadRef : null,
+      }));
+    } catch {
+      json(res, 200, { options: [] });
     }
     return true;
   }

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 
-import { ROOT_THREAD_ID, createRootThread, createThread, withThreadMessage } from "../../src/firm/thread.mjs";
+import { ROOT_THREAD_ID, createRootThread, createThread, withThreadMessage, withThreadName } from "../../src/firm/thread.mjs";
 import { completeRun, createRun } from "../../src/firm/run.mjs";
 import { ensureRootThread, getSemanticModel, recordRun } from "../../src/firm/semantic-model-store.mjs";
 import { createVenture, setVentureDoc } from "../../src/firm/venture-store.mjs";
@@ -41,6 +41,15 @@ describe("pure thread constructors", () => {
     const next = withThreadMessage(thread, "conversation:message-one");
     assert.deepEqual(thread.messageRefs, []);
     assert.deepEqual(next.messageRefs, ["conversation:message-one"]);
+  });
+
+  it("renames navigation without changing the initiating message", () => {
+    const thread = createThread({ id: "t", name: "I want prodct development", messageRefs: ["conversation:message-one"] });
+    const next = withThreadName(thread, "Product development");
+    assert.equal(thread.name, "I want prodct development");
+    assert.equal(next.name, "Product development");
+    assert.deepEqual(next.messageRefs, ["conversation:message-one"]);
+    assert.throws(() => withThreadName(thread, "  "), (error) => error.code === "thread_invalid");
   });
 });
 

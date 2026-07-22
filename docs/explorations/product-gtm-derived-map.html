@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product / GTM — the derived map</title>
+<style>
+  :root{
+    --bg:#0c0c0d; --panel:#121215; --ink:#e8e6e1; --dim:#8a8894; --faint:#5a5a64;
+    --line:#1c1c21; --border:#2a2a30; --accent:#4f86f7; --amber:#c9924a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#08080a; color:var(--ink);
+    font-family:"DM Sans","Helvetica Neue",-apple-system,Segoe UI,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:64px 32px 96px; display:flex; flex-direction:column; align-items:center;
+  }
+  .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);width:1120px;margin:0 auto 10px}
+  h1{font-size:22px;font-weight:600;letter-spacing:-.01em;width:1120px;margin:0 auto 8px}
+  .sub{width:1120px;margin:0 auto 28px;color:var(--dim);font-size:14.5px;max-width:none}
+  .sub b{color:var(--ink)}
+  .frame-label{width:1120px;margin:44px auto 10px;font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+
+  .screen{
+    position:relative; width:1120px; height:560px; flex:none;
+    background:var(--bg); border:1px solid var(--line); border-radius:6px; overflow:hidden;
+  }
+  svg.edges{position:absolute; inset:0; pointer-events:none}
+  .e{stroke:#3a3a40; stroke-width:1; fill:none}
+  .e-ret{stroke:var(--accent); stroke-width:1; fill:none; stroke-dasharray:2 4; opacity:.6}
+  .e-gap{stroke:var(--amber); stroke-width:1; fill:none; stroke-dasharray:3 4; opacity:.75}
+  .e-stage{stroke:#6a86b8; stroke-width:1; fill:none; stroke-dasharray:3 4; opacity:.8}
+
+  .card{
+    position:absolute; background:var(--panel);
+    border:1px solid var(--border); border-radius:4px; padding:9px 12px 8px; width:196px;
+  }
+  .card .k{font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); margin-bottom:4px}
+  .card .t{font-size:13.5px; font-weight:500; line-height:1.3}
+  .card .src{margin-top:7px; font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:10.5px; color:var(--faint)}
+  .card .live{margin-top:7px; font-size:11px; color:var(--dim); display:flex; align-items:center; gap:6px}
+  .card .live::before{content:""; width:5px; height:5px; border-radius:50%; background:var(--accent)}
+  .card.pos{width:224px; border-color:#3a3a42}
+  .card.stage{border-style:dashed; background:transparent}
+  .card.stage .t{color:#c9c7c1}
+  .card.evid{border-left:2px solid var(--accent)}
+  .gap-note{
+    position:absolute; font-size:11.5px; color:var(--amber); max-width:170px; line-height:1.4;
+  }
+  .q{margin-top:7px; font-size:12px; color:var(--amber); line-height:1.35}
+
+  .composer{
+    position:absolute; left:50%; transform:translateX(-50%); bottom:16px; width:704px;
+    background:var(--panel); border:1px solid var(--border); border-radius:6px;
+    display:flex; align-items:center; gap:10px; padding:11px 14px;
+  }
+  .composer .txt{font-size:13.5px; color:var(--ink)}
+  .composer .ph{font-size:13.5px; color:var(--faint)}
+  .actions{
+    position:absolute; display:flex; gap:8px; font-size:11.5px;
+  }
+  .actions span{border:1px solid var(--border); border-radius:3px; padding:3px 10px; color:var(--dim)}
+  .actions span.go{border-color:var(--accent); color:var(--accent)}
+
+  .spec{width:1120px; margin:36px auto 0; columns:2; column-gap:56px}
+  .spec div{break-inside:avoid; display:flex; gap:12px; margin-bottom:16px}
+  .spec b{
+    flex:none; width:16px; height:16px; border-radius:50%; background:var(--accent);
+    color:#0c0c0d; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top:2px;
+  }
+  .spec p{font-size:13.5px; color:var(--dim); line-height:1.5; max-width:30em}
+  .spec p strong{color:var(--ink); font-weight:600}
+  .m{
+    position:absolute; width:16px; height:16px; border-radius:50%;
+    background:var(--accent); color:#0c0c0d; font-size:10px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; z-index:3;
+  }
+</style>
+</head>
+<body>
+
+<div class="kicker">Drover · Product / GTM · derived map — RodentRadar</div>
+<h1>The map is the venture as it is. Ideas are diffs against it.</h1>
+<p class="sub">Nothing here was placed or filed. Layout is computed from real joins — <b>positioning grounds promises, promises are backed by
+capabilities and sold through channels, releases return evidence</b>. Solid ink is cited truth. Amber is what reality is owed. Dashed is talk.</p>
+
+<div class="frame-label">A · At rest — what opens every day</div>
+<div class="screen">
+  <svg class="edges" width="1120" height="560">
+    <!-- positioning -> promise -->
+    <path class="e" d="M 268 120 C 320 120, 340 120, 380 120"/>
+    <!-- promise -> capabilities (backed by) -->
+    <path class="e" d="M 600 104 C 660 80, 690 62, 730 56"/>
+    <path class="e" d="M 600 120 C 660 130, 690 140, 730 146"/>
+    <path class="e" d="M 600 136 C 660 190, 690 220, 730 238"/>
+    <!-- promise -> channel (sold through) -->
+    <path class="e" d="M 488 168 C 488 240, 488 280, 488 330"/>
+    <!-- channel -> release -->
+    <path class="e" d="M 592 372 C 650 372, 670 372, 716 372"/>
+    <!-- release -> evidence -->
+    <path class="e" d="M 924 372 C 950 372, 950 372, 962 372"/>
+    <!-- evidence returns to the promise it tests -->
+    <path class="e-ret" d="M 1020 350 C 1000 240, 760 140, 604 120"/>
+    <!-- gap: reports capability unsold -->
+    <path class="e-gap" d="M 834 176 C 834 210, 834 230, 834 258"/>
+    <!-- gap: claim unsupported -->
+    <path class="e-gap" d="M 380 104 C 340 60, 320 44, 296 40"/>
+  </svg>
+
+  <div class="card pos" style="left:44px; top:88px">
+    <div class="k">Positioning</div>
+    <div class="t">Continuous rodent monitoring for commercial food accounts</div>
+    <div class="src">founder · adopted</div>
+  </div>
+
+  <div class="card" style="left:382px; top:88px">
+    <div class="k">Promise</div>
+    <div class="t">Per-site activity intelligence, no manual checks</div>
+    <div class="src">claim · cites 2 capabilities</div>
+  </div>
+
+  <div class="card" style="left:732px; top:24px">
+    <div class="k">Capability</div>
+    <div class="t">Snapshot ingestion</div>
+    <div class="src">repo · ingest/pipeline.mjs ✓</div>
+  </div>
+  <div class="card" style="left:732px; top:114px">
+    <div class="k">Capability</div>
+    <div class="t">Station intelligence reports</div>
+    <div class="src">thread · rr-reports</div>
+    <div class="live">Claude · working · 12m</div>
+  </div>
+  <div class="card" style="left:732px; top:206px">
+    <div class="k">Capability</div>
+    <div class="t">Per-site pricing</div>
+    <div class="src">repo · brain/src/pricing.mjs ✓</div>
+  </div>
+
+  <div class="card" style="left:388px; top:330px">
+    <div class="k">Channel</div>
+    <div class="t">PCO pilot outreach</div>
+    <div class="src">workflow · founder-gated</div>
+  </div>
+  <div class="card" style="left:718px; top:336px">
+    <div class="k">Release</div>
+    <div class="t">Pilot offer · 6 sent</div>
+    <div class="src">in market · jul 14</div>
+  </div>
+  <div class="card evid" style="left:964px; top:336px">
+    <div class="k">Evidence</div>
+    <div class="t">2 replies · 1 call booked</div>
+    <div class="src">gmail · attributed ✓</div>
+  </div>
+
+  <div class="gap-note" style="left:766px; top:262px">no promise sells this yet</div>
+  <div class="gap-note" style="left:190px; top:26px">“no manual checks” — no evidence yet</div>
+
+  <div class="composer"><span class="ph">Ask about this venture, or riff on what it could be</span></div>
+
+  <div class="m" style="left:20px; top:20px">1</div>
+  <div class="m" style="left:940px; top:130px">2</div>
+  <div class="m" style="left:700px; top:262px">3</div>
+  <div class="m" style="left:1088px; top:316px">4</div>
+</div>
+
+<div class="frame-label">B · Mid-riff — a diff staged against the map</div>
+<div class="screen">
+  <svg class="edges" width="1120" height="560">
+    <path class="e" d="M 600 104 C 660 80, 690 62, 730 56" opacity=".35"/>
+    <path class="e" d="M 600 120 C 660 130, 690 140, 730 146" opacity=".35"/>
+    <path class="e" d="M 268 120 C 320 120, 340 120, 380 120" opacity=".35"/>
+    <!-- staged: export hangs off reports -->
+    <path class="e-stage" d="M 936 146 C 980 150, 990 160, 1000 176"/>
+    <!-- staged: channel hangs off export -->
+    <path class="e-stage" d="M 1000 244 C 980 290, 940 330, 900 352"/>
+  </svg>
+
+  <div class="card pos" style="left:44px; top:88px; opacity:.4">
+    <div class="k">Positioning</div>
+    <div class="t">Continuous rodent monitoring for commercial food accounts</div>
+  </div>
+  <div class="card" style="left:382px; top:88px; opacity:.4">
+    <div class="k">Promise</div>
+    <div class="t">Per-site activity intelligence, no manual checks</div>
+  </div>
+  <div class="card" style="left:732px; top:24px; opacity:.4">
+    <div class="k">Capability</div>
+    <div class="t">Snapshot ingestion</div>
+  </div>
+
+  <!-- the anchor node stays full strength -->
+  <div class="card" style="left:732px; top:114px">
+    <div class="k">Capability</div>
+    <div class="t">Station intelligence reports</div>
+    <div class="src">thread · rr-reports</div>
+  </div>
+
+  <!-- staged diff -->
+  <div class="card stage" style="left:906px; top:176px">
+    <div class="k">Capability · staged</div>
+    <div class="t">Inspector evidence export</div>
+    <div class="src">inference · extends reports</div>
+    <div class="q">→ who pays for this first?</div>
+  </div>
+  <div class="card stage" style="left:800px; top:352px">
+    <div class="k">Channel · staged</div>
+    <div class="t">Home inspector channel</div>
+    <div class="src">inference · drafted by agent</div>
+  </div>
+
+  <div class="actions" style="left:912px; top:308px">
+    <span class="go">Build it</span><span>Drop it</span>
+  </div>
+
+  <div class="composer"><span class="txt">what if inspectors could pull a station history report for their own audits</span></div>
+
+  <div class="m" style="left:876px; top:160px">5</div>
+  <div class="m" style="left:1046px; top:296px">6</div>
+</div>
+
+<div class="spec">
+  <div><b>1</b><p><strong>Derived, never drawn.</strong> Every node and edge is a projection of an existing join — repo citation, claim reference, release lineage, evidence attribution. There is no palette and no drag. Opening a mechanism node (the channel) lands on the existing conditional canvas, scoped to it.</p></div>
+  <div><b>2</b><p><strong>State is ink, not position.</strong> Solid with a citation is real. The blue dot is a live Thread, derived from WorkIndex. There is no committed / building / planned column anywhere — a thing is true, in flight, spoken, or owed.</p></div>
+  <div><b>3</b><p><strong>The push is amber and factual.</strong> A capability no promise sells; a claim no evidence supports. Gaps are concrete sentences at the exact join they belong to — never a score, never a nag.</p></div>
+  <div><b>4</b><p><strong>Evidence is the right edge of reality, not a column.</strong> It arrives attributed, curves back only along real joins, and its interpretation stays unresolved until adopted.</p></div>
+  <div><b>5</b><p><strong>A riff is a staged diff.</strong> The map dims to context; the anchor node holds full strength; dashed nodes attach to the truth they would change. Corrections in the composer revise the same staged ink. Nothing dashed is ever venture truth.</p></div>
+  <div><b>6</b><p><strong>Two exits, no ceremony.</strong> Build it opens the exact Work Thread and the dashed ink starts hardening as cited work ships. Drop it prunes — and Drover remembers what was pruned and why, so the same dead idea never comes back dressed as new.</p></div>
+</div>
+
+</body>
+</html>

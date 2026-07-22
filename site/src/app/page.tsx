@@ -2,17 +2,9 @@ import {
   ArrowRight,
   ArrowUpRight,
   Check,
-  CheckCircle2,
   CircleStop,
   Code2,
-  FileCheck2,
-  GitFork,
   LockKeyhole,
-  MousePointer2,
-  Plug,
-  ScanSearch,
-  ShieldCheck,
-  Sparkles,
   TerminalSquare,
 } from "lucide-react";
 import { AnimatedGroup } from "@/components/motion-primitives/animated-group";
@@ -20,129 +12,13 @@ import { InView } from "@/components/motion-primitives/in-view";
 import { MachineCanvas } from "@/components/machine-canvas";
 import { DroverWordmark } from "@/components/drover-wordmark";
 import { SiteHeader } from "@/components/site-header";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
-const githubUrl = "https://github.com/rhinehart514/drover";
-const defaultFaqValue = ["item-0"];
+import { githubUrl, loopSteps, principles } from "@/content/home";
+import { ClosingSections } from "@/components/closing-sections";
 
-const loopSteps = [
-  {
-    number: "01",
-    icon: ScanSearch,
-    title: "See the whole venture",
-    body: "Drover is being built to keep Product and go-to-market visible as distinct territories in one canonical model, with unsupported claims and missing links exposed.",
-    detail: "One model",
-  },
-  {
-    number: "02",
-    icon: MousePointer2,
-    title: "Point at what should change",
-    body: "The current alpha can focus available canvas objects and related work. One durable conversation with persistent scoped branches is still being unified.",
-    detail: "Context stays intact",
-  },
-  {
-    number: "03",
-    icon: Sparkles,
-    title: "Expand what you can accomplish",
-    body: "Claude and Codex research, build, compare, and verify inside the founder's direction. Their work stays inspectable instead of becoming an org chart.",
-    detail: "Bounded execution",
-  },
-  {
-    number: "04",
-    icon: LockKeyhole,
-    title: "Hold the exact consequence",
-    body: "Sending, publishing, deploying, spending, destructive change, and ambiguous canonical truth remain under the founder's explicit hand.",
-    detail: "Authority stays yours",
-  },
-  {
-    number: "05",
-    icon: CheckCircle2,
-    title: "Let evidence change understanding",
-    body: "Returned outcomes keep their source and attribution. Founder-applied evidence can support or challenge the relevant understanding without claiming causation.",
-    detail: "Learning stays visible",
-  },
-];
-
-const principles = [
-  {
-    number: "I",
-    icon: FileCheck2,
-    title: "Facts, evidence, and interpretation stay separate.",
-    body: "Repository truth remains cited, measured returns keep their source, and Claude or Codex interpretations stay visibly provisional.",
-  },
-  {
-    number: "II",
-    icon: ShieldCheck,
-    title: "Founder direction must begin every run.",
-    body: "That is the governing requirement. Direct founder-driven work exists today; legacy founder-enabled heat can still wake work unattended, and outcome-contract workflows are not yet implemented.",
-  },
-  {
-    number: "III",
-    icon: Sparkles,
-    title: "Every consequence stays under your hand.",
-    body: "Safe inward work can move quickly, but exact world-boundary actions and ambiguous canonical changes remain yours.",
-  },
-];
-
-const pricingLines = [
-  {
-    number: "01",
-    icon: Code2,
-    title: "The software",
-    body: "Clone the source and run the current alpha. There is no Drover license or seat fee today.",
-    detail: "$0 to Drover",
-  },
-  {
-    number: "02",
-    icon: TerminalSquare,
-    title: "Your machine",
-    body: "Drover runs on your own macOS or Linux box with Node.js and Git. Your product and working state stay local.",
-    detail: "You host it",
-  },
-  {
-    number: "03",
-    icon: Plug,
-    title: "Your model",
-    body: "Connect the Codex or Claude Code subscription you already pay for. The deterministic scan still runs without one.",
-    detail: "Optional",
-  },
-];
-
-const faqs = [
-  {
-    question: "What is Drover, exactly?",
-    answer:
-      "Drover is building the founder-controlled Product and go-to-market system: one venture canvas for understanding, manipulating, and executing the whole system, directed through one continuous conversation. The current alpha proves the local runtime and authority substrate while the unified canvas is still being completed.",
-  },
-  {
-    question: "Do I need Claude or Codex to start?",
-    answer:
-      "Drover's durable venture model and repository truth are local. Connect Codex or Claude Code when you want founder-directed research, design, implementation, comparison, or verification.",
-  },
-  {
-    question: "What does local-first mean here?",
-    answer:
-      "Drover runs on your machine and keeps canonical venture state there. It binds to your local product repository and uses the model subscription you already have.",
-  },
-  {
-    question: "Can Drover work or act by itself?",
-    answer:
-      "Founder direction beginning every run is the governing requirement. Direct work is available today; legacy founder-enabled heat can still wake work unattended, and outcome-contract workflows are not yet implemented. Exact sends, publish, deploy, spend, destructive actions, and ambiguous canonical changes remain founder-held.",
-  },
-  {
-    question: "Is this a hosted product?",
-    answer:
-      "Not yet. Drover is a source-available alpha whose shipped founder product is Electron desktop. The honest next proof is an outside founder completing a real Product and go-to-market loop with it.",
-  },
-];
 
 export default function Home() {
   return (
@@ -160,11 +36,10 @@ export default function Home() {
                 <span className="live-dot" aria-hidden="true" />
                 Local-first alpha
               </Badge>
-              <h1 id="hero-title">See and shape the whole venture.</h1>
+              <h1 id="hero-title">Move faster than the market can react.</h1>
               <p className="hero-lede">
-                Drover is building one living canvas for the full Product and
-                go-to-market system. Conversation directs it. Claude and Codex expand
-                what one founder can accomplish. Every consequence stays under your hand.
+                Change the Product and every path to market while Claude and Codex
+                pursue several approaches, learn from reality, and make your next move faster.
               </p>
               <div className="hero-actions">
                 <Button
@@ -181,12 +56,12 @@ export default function Home() {
                   size="lg"
                   render={<a href="#machine" />}
                 >
-                  See the system
+                  See the loop
                 </Button>
               </div>
               <p className="hero-note">
-                Current alpha: local venture state, repository-grounded work, and founder-gated authority.
-                The unified Product/GTM canvas is in active development.
+                Local desktop alpha. Native Claude/Codex work, durable Product alternatives,
+                and exact founder authority over current truth and the outside world.
               </p>
             </AnimatedGroup>
 
@@ -200,15 +75,15 @@ export default function Home() {
               <span className="proof-mark" aria-hidden="true">
                 D
               </span>
-              <strong>One founder-controlled system around connected intelligence.</strong>
+              <strong>One founder. Many approaches. One coherent changing venture.</strong>
             </div>
             <div className="proof-item">
               <Code2 />
-              <span>Product truth stays cited</span>
+              <span>Product models can change</span>
             </div>
             <div className="proof-item">
               <CircleStop />
-              <span>Outward work stops for you</span>
+              <span>Unscalable work is first-class</span>
             </div>
             <div className="proof-item">
               <TerminalSquare />
@@ -220,11 +95,10 @@ export default function Home() {
             <div className="loop-heading">
               <InView>
                 <p className="section-index">The product being built</p>
-                <h2 id="loop-title">One model. Product and go-to-market together.</h2>
+                <h2 id="loop-title">Every useful cycle improves the next move.</h2>
                 <p>
-                  Drover is being built to keep Product truth, market understanding,
-                  work, exact consequences, and returned evidence in one manipulable
-                  system—so different lenses remain views of the same venture.
+                  Direct exact work, let several Product and market alternatives develop,
+                  cross into the world under your hand, and bring reality back to the claims it can change.
                 </p>
               </InView>
             </div>
@@ -393,79 +267,7 @@ export default function Home() {
             </InView>
           </section>
 
-          <section
-            className="loop-section"
-            id="pricing"
-            aria-labelledby="pricing-title"
-          >
-            <div className="loop-heading">
-              <InView>
-                <p className="section-index">Pricing</p>
-                <h2 id="pricing-title">You already own what it costs.</h2>
-                <p>
-                  Drover is a source-available alpha you run yourself. No usage
-                  bill, no seat, and no hosted plan yet — you bring the machine
-                  and the model subscription you already have.
-                </p>
-              </InView>
-            </div>
-
-            <div className="loop-list">
-              {pricingLines.map((line) => {
-                const Icon = line.icon;
-                return (
-                  <InView className="loop-row" key={line.number}>
-                    <span className="loop-number">{line.number}</span>
-                    <span className="loop-icon" aria-hidden="true">
-                      <Icon />
-                    </span>
-                    <div className="loop-copy">
-                      <h3>{line.title}</h3>
-                      <p>{line.body}</p>
-                    </div>
-                    <span className="loop-detail">{line.detail}</span>
-                  </InView>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="faq-section" aria-labelledby="faq-title">
-            <div className="faq-heading">
-              <p>Before you clone it</p>
-              <h2 id="faq-title">Straight answers about the alpha.</h2>
-            </div>
-            <Accordion className="faq-list" defaultValue={defaultFaqValue}>
-              {faqs.map((faq, index) => (
-                <AccordionItem key={faq.question} value={`item-${index}`}>
-                  <AccordionTrigger>{faq.question}</AccordionTrigger>
-                  <AccordionContent>
-                    <p>{faq.answer}</p>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </section>
-
-          <section className="final-cta" aria-labelledby="final-title">
-            <InView>
-              <DroverWordmark />
-              <h2 id="final-title">Give the whole venture one place to live.</h2>
-              <p>
-                See Product and go-to-market together. Direct the right context.
-                Keep every consequence yours.
-              </p>
-              <Button
-                className="final-button"
-                size="lg"
-                render={<a href={`${githubUrl}#run-locally`} />}
-              >
-                <GitFork data-icon="inline-start" />
-                Run from source
-                <ArrowRight data-icon="inline-end" />
-              </Button>
-            </InView>
-          </section>
+          <ClosingSections />
         </main>
 
         <footer className="site-footer">

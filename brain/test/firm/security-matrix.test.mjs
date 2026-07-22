@@ -25,7 +25,6 @@ process.env.GTM_IDE_PERSISTENCE = "json";
 const { createVenture, setVentureDoc, getVentureDoc } = await import("../../src/firm/venture-store.mjs");
 const { createBet, end: endBet } = await import("../../src/firm/bet.mjs");
 const { park, decide, hasWallRelease, queue } = await import("../../src/firm/wall.mjs");
-const { getHeatSettings, setHeatSettings } = await import("../../src/firm/heat.mjs");
 const { buildLens, putPlacement } = await import("../../src/firm/lens.mjs");
 const { forkProductBet, stageProductBetForReview, getWorkspace } = await import("../../src/firm/product-change.mjs");
 const { reviewProductBetChange, applyProductBetChange, revertProductBetChange, discardProductBetChange } = await import("../../src/firm/product-change-decide.mjs");
@@ -33,7 +32,6 @@ const { createEffectExecutor } = await import("../../src/firm/effect-executors.m
 const { recordGrant, grantSkipsWait } = await import("../../src/firm/grants.mjs");
 
 const { default: wallRoutes } = await import("../../src/firm/routes.mjs");
-const { default: heatRoutes } = await import("../../src/firm/heat-routes.mjs");
 const { default: productRoutes } = await import("../../src/firm/product-routes.mjs");
 const { default: lensRoutes } = await import("../../src/firm/lens-routes.mjs");
 const { default: ventureRoutes } = await import("../../src/firm/venture-routes.mjs");
@@ -155,16 +153,6 @@ describe("SELF-APPROVAL — a hand-crafted actor object shaped to LOOK like a fo
     assert.equal(forged.endedBy, "attacker-claiming-founder", "bet.end()'s OWN authority check is a label match, not a session — it trusts whoever already got past wall.decide()'s real gate to call it honestly");
   });
 
-  it("heat.setHeatSettings(): a caller-supplied actor-shaped object in the auth bag does not bypass authorizeFounderWriteForRequest", () => {
-    assert.throws(
-      () => setHeatSettings({ ventureId: "irrelevant", heat: "full", dailySpendUsd: 1 }, { actor: { kind: "founder" } }, options),
-      /local Drover page/i,
-    );
-    assert.throws(
-      () => setHeatSettings({ ventureId: "irrelevant", heat: "full", dailySpendUsd: 1 }, { actor: { kind: "founder" }, req: { headers: AGENT_HEADERS } }, options),
-      /founder-only|model or MCP session/i,
-    );
-  });
 });
 
 // ── 2. CAPABILITY FORGERY ────────────────────────────────────────────────────────────────────────
@@ -452,15 +440,6 @@ describe("CROSS-VENTURE — every read/decide surface fails closed as 404 across
     assert.match(res.body.error, /not found on this bet/i);
   });
 
-  it("heat: reading/writing venture B's heat is independent of venture A's — no cross-read, and both routes 200 on their own venture (heat.mjs has NO venture-existence check at all — see finding below)", async () => {
-    const { venture: a } = freshVenture("Cross-venture heat A");
-    const b = createVenture({ name: "Cross-venture heat B" }, options);
-    await call(heatRoutes, "POST", `/api/ventures/${a.id}/heat`, { heat: "full", dailySpendUsd: 50 });
-    const heatA = await call(heatRoutes, "GET", `/api/ventures/${a.id}/heat`);
-    const heatB = await call(heatRoutes, "GET", `/api/ventures/${b.id}/heat`);
-    assert.equal(heatA.body.heat, "full");
-    assert.equal(heatB.body.heat, "off", "venture B never inherits venture A's heat setting");
-  });
 });
 
 // ── 5. AWAY-HOLD ─────────────────────────────────────────────────────────────────────────────────

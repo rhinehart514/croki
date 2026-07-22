@@ -58,12 +58,15 @@ export type FirmConfiguration = {
   [key: string]: unknown;
 };
 
+export type FirmImageAttachment = { id: string; name: string; mediaType: string; size: number };
+
 export type FirmConversationMessage = {
   id: string;
   ventureId: string;
   role: "founder" | "teammate" | "agent" | "system";
   kind?: "message" | "handoff" | "configuration-proposal" | "configuration-receipt" | "proposal-assembly";
   content: string;
+  attachments?: FirmImageAttachment[];
   teammateRef: string | null;
   betId: string | null;
   target?: {
@@ -121,138 +124,181 @@ export type FirmConversationMessage = {
   createdAt: string;
 };
 
-export type ArchitectureRole = "concept" | "product-loop" | "system" | "motion" | "campaign";
+export type FirmActorRef = { authority: "founder" | "agent" | "host"; id: string; [key: string]: unknown };
 
-export type FirmArchitectureProvenance = {
-  kind: "founder-authored" | "repository-grounded" | "conversation-derived" | "teammate-proposed";
-  createdAt?: string | null;
-  sourceRefs?: string[];
-};
-
-export type FirmArchitectureElement = {
+export type FirmSemanticObject = {
   id: string;
-  role: ArchitectureRole;
+  type: string;
   name: string;
-  statement?: string | null;
-  provenance?: FirmArchitectureProvenance;
-  // Additive optional facet the brain bridge now supplies (architecture-projection.mjs): the real
-  // product/gtm territory of this object, or null when unset. Invisible before Slice 3; read by the
-  // epistemic derivation's traceability alignment. Never written back onto a record.
-  territory?: "product" | "gtm" | null;
-  actor?: string | null;
-  entry?: string | null;
-  value?: string | null;
-  intendedChange?: string | null;
-  does?: string | null;
-  repeatabilityClaim?: string | null;
-  steps?: Array<{ id: string; label: string; conceptRefs?: string[] }>;
-  systemIds?: string[];
-  productRefs?: string[];
-  supportsProductRefs?: string[];
-  repositoryRefs?: string[];
-  audience?: string | null;
-  objective?: string | null;
-  primaryMotionId?: string | null;
-  motionIds?: string[];
-  governingBetId?: string | null;
-  governingBetSeed?: string | null;
-  supportingBetIds?: string[];
-  measurement?: { observation?: string | null; window?: string | null } | null;
-  bounds?: { startsAt?: string | null; endsAt?: string | null } | null;
-  live?: Record<string, unknown> | null;
+  statement: string;
+  properties: Record<string, unknown>;
+  assertion: "tentative" | "founder-asserted";
+  provenance?: Record<string, unknown>;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 };
 
-export type FirmArchitectureConnection = {
+export type FirmSemanticRelationship = {
   id: string;
   fromRef: string;
   toRef: string;
   label: string;
+  type: string;
+  properties: Record<string, unknown>;
   assertion: "tentative" | "founder-asserted";
-  source?: { kind?: string | null };
-};
-
-export type FirmArchitectureGroup = {
-  id: string;
-  name: string;
-  statement?: string | null;
-  memberRefs: string[];
-};
-
-export type FirmArchitecturePressure = {
-  subjectRef?: string | null;
-  subjectId?: string | null;
-  reason: "held-release" | "challenged-claim" | "shared-system-contention" | "missing-product-capability" | "missing-evidence" | "founder-assertion-conflict" | "stale-source" | "blocked-work" | "unattributed-return";
-  detail?: string | null;
-};
-
-export type FirmArchitectureJoin = {
-  id?: string;
-  architectureId?: string | null;
-  campaignId?: string | null;
-  motionId?: string | null;
-  betId?: string | null;
-  workRef?: string | null;
-  wallItemId?: string | null;
-  outcomeId?: string | null;
-  basis?: "exact" | "contextual" | "founder-applied" | "inferred" | "unattributed" | string;
-  causal?: false;
-  motionIds?: string[];
-  campaignIds?: string[];
-  join?: { level?: string; basis?: string; causal?: false; [key: string]: unknown };
-  title?: string | null;
-  kind?: string | null;
-  exact?: boolean;
-  [key: string]: unknown;
-};
-
-export type FirmArchitectureDocument = {
-  schemaVersion: number;
-  ventureId: string;
-  revision: number;
-  intent: { statement: string; constraints?: string[] };
-  elements: FirmArchitectureElement[];
-  connections: FirmArchitectureConnection[];
-  groups: FirmArchitectureGroup[];
-  evidenceAnnotations: Array<{
-    id: string;
-    subjectRef: string;
-    evidenceRef: string;
-    stance: "supports" | "challenges";
-    basis: "repository-citation" | "captured-join" | "founder-confirmed";
-    note: string;
-  }>;
+  sourceRefs: string[];
+  createdAt?: string | null;
   updatedAt?: string | null;
 };
 
-export type FirmArchitectureProjection = {
+export type FirmModelBranch = {
+  id: string;
   ventureId: string;
-  document: FirmArchitectureDocument;
+  name: string;
+  question: string;
+  baseModelRevision: number;
+  parentBranchRef: string | null;
+  scopeRefs: string[];
+  threadRefs: string[];
+  sourceRefs: string[];
+  createdBy: FirmActorRef;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+  closedBy: FirmActorRef | null;
+};
+
+export type FirmModelChange = {
+  id: string;
+  branchRef: string;
+  targetFamily: "objects" | "relationships";
+  targetRef: string | null;
+  operation: "create" | "update" | "remove";
+  baseDigest: string | null;
+  proposedRecord?: FirmSemanticObject | FirmSemanticRelationship;
+  patch?: Record<string, unknown>;
+  rationale: string;
+  sourceRefs: string[];
+  supersedesRef: string | null;
+  proposedBy: FirmActorRef;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FirmModelMergeReceipt = {
+  id: string;
+  branchRef: string;
+  selectedChangeRefs: string[];
+  resolvedConflicts: Record<string, unknown>[];
+  previousModelRevision: number;
+  resultingModelRevision: number;
+  actor: FirmActorRef & { authority: "founder" };
+  reason: string;
+  createdAt: string;
+};
+
+export type FirmWorkScope = {
+  id: string;
+  ventureId: string;
+  originThreadRef: string;
+  originMessageRef: string;
+  objective: string;
+  subjectRefs: string[];
+  branchRefs: string[];
+  allowedInwardEffects: string[];
+  wakeOnEvidenceRefs: string[];
+  resumeOnRestart: boolean;
+  spendPolicyRef: string | null;
+  stopConditions: string[];
+  createdAt: string;
+  revokedAt: string | null;
+  revokedBy: FirmActorRef | null;
+};
+
+export type OutwardActionReceipt = {
+  id: string;
+  ventureId: string;
+  kind: string;
+  subjectRefs: string[];
+  branchRefs: string[];
+  motionRefs: string[];
+  productDeltaRefs: string[];
+  workRefs: string[];
+  decisionRef: string;
+  executedAt: string | null;
+  executorReceipt: Record<string, unknown> | null;
+  executionLease?: { id: string; startedAt: string; startedBy: string } | null;
+  executionAttempts: Array<{ id: string; attemptedAt: string; ok: boolean; adapter: string | null; error: string | null; needsReconnect: boolean }>;
+  lastExecutionError: string | null;
+  needsReconnect: boolean;
+  observationRefs: string[];
+  outcomeRefs: string[];
+  preparedMaterial: Record<string, unknown> | null;
+  expectedReturn: Record<string, unknown> | null;
+};
+
+export type OutwardObservation = {
+  id: string;
+  actionRef: string;
+  source: "http";
+  target: { url: string };
+  purpose: string;
+  startsAt: string;
+  endsAt: string;
+  returnConditions: Array<Record<string, unknown>>;
+  grantedAt: string;
+  revokedAt: string | null;
+  lastCheckedAt: string | null;
+  lastResult: { state: "returned" | "silence" | "failed"; error?: string; checkedAt: string; facts?: Record<string, unknown> | null } | null;
+};
+
+export type OutwardReturnEvidence = {
+  id: string;
+  actionRef: string;
+  observationContractRef: string;
+  state: "returned" | "silence";
+  source: string;
+  target: { url: string };
+  facts: Record<string, unknown>;
+  observedAt: string;
+};
+
+export type FirmSemanticModel = {
+  schemaVersion: 3;
+  ventureId: string;
   revision: number;
-  elements: FirmArchitectureElement[];
-  connections: FirmArchitectureConnection[];
-  groups: FirmArchitectureGroup[];
-  evidenceAnnotations: FirmArchitectureDocument["evidenceAnnotations"];
-  pressure: FirmArchitecturePressure[];
-  joins: {
-    bets: FirmArchitectureJoin[];
-    work: FirmArchitectureJoin[];
-    wall: FirmArchitectureJoin[];
-    outcomes: FirmArchitectureJoin[];
-  };
-  outline?: unknown[];
-  omissions?: string[] | {
-    historicalRevisions?: number | boolean;
-    machinery?: boolean;
-    unassignedBets?: number;
-    [key: string]: unknown;
-  };
-  workingTheory?: FirmWorkingTheory | null;
-  // Additive venture-level cross-boundary traceability the brain bridge now supplies verbatim
-  // (venture-traceability.mjs deriveVentureTraceability). The gap list is LAW: the UI epistemic table
-  // consumes these gaps for the Unsupported state rather than re-deriving it, so a tentative
-  // connection WITH resolved evidence never wrongly reads unsupported. Gaps live INSIDE traceability,
-  // never as a top-level projection.gaps.
-  traceability?: FirmVentureTraceability | null;
+  objects: FirmSemanticObject[];
+  relationships: FirmSemanticRelationship[];
+  modelBranches: FirmModelBranch[];
+  modelChanges: FirmModelChange[];
+  modelMergeReceipts: FirmModelMergeReceipt[];
+  workScopes: FirmWorkScope[];
+  outwardActions: OutwardActionReceipt[];
+  [key: string]: unknown;
+};
+
+export type FirmModelBranchProjection = {
+  ventureId: string;
+  currentRevision: number;
+  branch: FirmModelBranch;
+  changes: FirmModelChange[];
+  conflicts: Array<{ changeRef: string; targetRef: string | null; expectedDigest: string | null; actualDigest: string | null }>;
+  current: { objects: FirmSemanticObject[]; relationships: FirmSemanticRelationship[] };
+  proposed: { objects: FirmSemanticObject[]; relationships: FirmSemanticRelationship[] };
+};
+
+export type MarketMovementIndex = {
+  ventureId: string;
+  revision: number;
+  actions: Array<OutwardActionReceipt & {
+    state: "needs-founder" | "prepared" | "execution-failed" | "execution-unknown" | "in-world" | "observation-failed" | "silent" | "returned";
+    observations?: OutwardObservation[];
+    latestObservation?: OutwardObservation | null;
+    latestOutcome?: OutwardReturnEvidence | null;
+    compatibility?: Record<string, unknown>;
+  }>;
+  modelBranches: FirmModelBranch[];
+  liveWork: Array<Record<string, unknown>>;
 };
 
 export type FirmTraceabilityGap =
@@ -321,88 +367,10 @@ export type FirmWorkingTheory = {
   proposedBy: { authority: string; id: string };
 };
 
-export type FirmArchitectureIntent = {
-  statement: string;
-  constraints?: string[];
-};
-
-type FirmArchitectureProposalElementBase = {
-  id: string;
-  name: string;
-  statement?: string | null;
-  provenance?: FirmArchitectureProvenance;
-};
-
-export type FirmArchitectureProposalElement =
-  | (FirmArchitectureProposalElementBase & { role: "concept" })
-  | (FirmArchitectureProposalElementBase & {
-      role: "product-loop";
-      actor: string;
-      entry: string;
-      steps: Array<{ id: string; label: string; conceptRefs?: string[] }>;
-      value: string;
-      intendedChange: string;
-    })
-  | (FirmArchitectureProposalElementBase & {
-      role: "system";
-      does: string;
-      supportsProductRefs?: string[];
-      repositoryRefs?: string[];
-    })
-  | (FirmArchitectureProposalElementBase & {
-      role: "motion";
-      actor: string;
-      entry: string;
-      value: string;
-      repeatabilityClaim: string;
-      systemIds: string[];
-      productRefs: string[];
-    })
-  | (FirmArchitectureProposalElementBase & {
-      role: "campaign";
-      audience: string;
-      objective: string;
-      primaryMotionId: string;
-      motionIds: string[];
-      supportingBetIds?: string[];
-      measurement: { observation: string; window: string };
-      bounds?: { startsAt?: string | null; endsAt?: string | null };
-    } & (
-      | { governingBetId: string; governingBetSeed?: never }
-      | { governingBetId?: never; governingBetSeed: string }
-    ));
-
-export type FirmArchitectureEvidenceAnnotation = {
-  id: string;
-  subjectRef: string;
-  evidenceRef: string;
-  stance: "supports" | "challenges";
-  basis: "repository-citation" | "captured-join" | "founder-confirmed";
-  note: string;
-};
-
-export type FirmArchitectureOperation =
-  | { op: "update-intent"; value: FirmArchitectureIntent }
-  | { op: "create-element"; element: FirmArchitectureProposalElement }
-  | { op: "update-element"; elementId: string; value: Partial<Omit<FirmArchitectureElement, "id" | "role">> }
-  | { op: "change-role"; elementId: string; role: ArchitectureRole; fields?: Partial<Omit<FirmArchitectureElement, "id" | "role">> }
-  | { op: "remove-element"; elementId: string }
-  | { op: "create-connection"; connection: FirmArchitectureConnection }
-  | { op: "update-connection"; connectionId: string; value: Partial<Omit<FirmArchitectureConnection, "id">> }
-  | { op: "remove-connection"; connectionId: string }
-  | { op: "create-group"; group: FirmArchitectureGroup }
-  | { op: "update-group"; groupId: string; value: Partial<Omit<FirmArchitectureGroup, "id">> }
-  | { op: "remove-group"; groupId: string }
-  | { op: "apply-evidence"; evidence: FirmArchitectureEvidenceAnnotation }
-  | { op: "remove-evidence"; evidenceId: string };
-
-export type FirmArchitectureProposalStatus = "pending" | "accepted" | "partially-accepted" | "rejected";
-export type FirmArchitectureProposalDecisionKind = "accept" | "partial" | "reject";
-
 export type FirmProposalAssemblyEvent = {
   operationIndex: number;
   op: string;
-  role?: ArchitectureRole;
+  role?: string;
   elementId?: string;
   label: string;
   validated: true;
@@ -415,78 +383,12 @@ export type FirmProposalAssembly = {
   events: FirmProposalAssemblyEvent[];
 };
 
-export type FirmArchitectureProposal = {
-  id: string;
-  ventureId: string;
-  baseRevision: number;
-  intent: string;
-  operations: FirmArchitectureOperation[];
-  affectedExecutionContexts: string[];
-  evidenceRefs: string[];
-  unresolvedAssumptions: string[];
-  expectedExecutionEffect: string | null;
-  proposedBy: { authority: string; id: string };
-  configurationRevision: number | null;
-  status: FirmArchitectureProposalStatus;
-  createdAt: string;
-  decidedAt: string | null;
-  decision: FirmArchitectureProposalDecisionKind | null;
-  assemblyEvents?: FirmProposalAssemblyEvent[];
-  reason?: string | null;
-  decidedBy?: { authority: "founder"; id: string } | null;
-  appliedRevision?: number | null;
-};
-
-export type FirmWorkingTheoryProposalRecord = Omit<FirmWorkingTheory, "status"> & {
-  status: "current" | "superseded";
-};
-
-export type FirmArchitectureProposalRecord = FirmArchitectureProposal | FirmWorkingTheoryProposalRecord;
-
 export type FirmDriveCompletion = {
   state: "complete" | "partial" | "stopped";
   grounding: { satisfied: boolean; sourceRefs: string[] };
   theory: { satisfied: boolean; theoryId: string | null };
   usefulWork: { satisfied: boolean; workRefs: string[] };
   missing: string[];
-};
-
-export type FirmArchitectureProposalDecision =
-  | { decision: "accept"; reason?: string | null }
-  | { decision: "reject"; reason?: string | null }
-  | { decision: "partial"; operations: FirmArchitectureOperation[]; reason?: string | null };
-
-export type FirmArchitectureRevisionReceipt = {
-  id: string;
-  revision: number;
-  baseRevision: number;
-  actor: { authority: "founder"; id: string };
-  source: "proposal-acceptance" | "proposal-partial-acceptance" | "proposal-rejection" | string;
-  proposalId?: string;
-  reason: string | null;
-  operations: FirmArchitectureOperation[];
-  affectedTargets: string[];
-  createdAt: string;
-};
-
-export type FirmArchitectureProposalsResponse = {
-  proposals: FirmArchitectureProposalRecord[];
-  revision: number;
-};
-
-export type FirmArchitectureProposalDecisionResponse = {
-  proposal: FirmArchitectureProposal;
-  architecture: FirmArchitectureDocument;
-  revision: number;
-  receipt: FirmArchitectureRevisionReceipt;
-  affectedContexts?: string[];
-  staleDrives?: unknown[];
-};
-
-export type FirmArchitectureSystemAcceptanceResponse = FirmArchitectureProposalDecisionResponse & {
-  bets: FirmDurableBet[];
-  campaigns: FirmArchitectureElement[];
-  atomicity: "compensated-acceptance";
 };
 
 export type FirmOutcome = {
@@ -589,7 +491,6 @@ export type FirmPlacement = {
 
 export type FirmLens = {
   ventureId: string;
-  architecture?: FirmArchitectureDocument;
   crew: FirmCrewMember[];
   bets: FirmBet[];
   outcomes?: FirmOutcome[];

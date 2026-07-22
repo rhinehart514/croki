@@ -27,18 +27,23 @@ blending them. Design explorations remain evidence until an authority file adopt
   proof. Confirm that the BrowserWindow loaded and became visible; an invisible or transparent renderer
   is a failed launch even when its API is healthy.
 - The shipped shell has two founder surfaces—Work and Product / GTM—over one canonical venture model and
-  shared context. Releases is a distinct, collapsible section within Product / GTM, never a competing
-  top-level mode. The Work → Product / GTM → Releases → Evidence loop is causal venture
-  physics, never a required navigation sequence: a founder may enter anywhere. Conversation is primary in
-  Work and contextual and closable in Product / GTM, where the canvas or release path owns the
+  shared context. Market movement is state on the canonical Product / GTM branch, never a separate founder
+  workspace, mode, or source of truth. The Work → Product / GTM → market action → Evidence loop is causal
+  venture physics, never a required navigation sequence: a founder may enter anywhere. Conversation is primary in
+  Work and contextual and closable in Product / GTM, where the branch canvas owns the
   center. Closing contextual conversation never loses its draft, Thread identity, or last coherent content.
   Do not collapse this back to a thread-only shell, turn modes into lifecycle stages or separate authorities,
   or restore competing navigation roots.
 - The workspace rail is surface-owned beneath one stable venture and surface switch. Work shows Threads;
   Product / GTM supplies agents, connected capabilities, and surface-local search to its conditional-logic
-  canvas. Its collapsible Releases section shows Needs you, Preparing, In market, and Recent beside the
-  selected full release workspace. Do not repeat the canvas title or a raw object count as a rail destination;
-  Product / GTM rail space begins with actionable agents, capabilities, releases, or search results.
+  canvas. When exact joined market movement exists, a compact collapsed **In market** focus may show Needs you,
+  Preparing, Moving, and Evidence returned. Selecting an item focuses its canonical branch in the same canvas;
+  it never swaps in a release workspace. Unjoined or quiet historical receipts earn no rail space. Do not repeat
+  the canvas title or a raw object count as a rail destination; Product / GTM rail space begins with actionable
+  agents, capabilities, market movement, or search results.
+  Render agents and connected resources as compact logo-led pills, never generic cards. Every pill names its
+  human-readable kind (for example Agent, Markdown, Tool, Source, or Action) and its relevant authority
+  (Read, Inward, or Approval) without relying on an acronym, logo, or color alone.
   Never display every list at once. Search stays within the current mode; do not add a global cross-mode
   result router.
 - Work is the full agentic development environment: directing Claude/Codex, coding in isolated workspaces,
@@ -53,13 +58,13 @@ blending them. Design explorations remain evidence until an authority file adopt
   existing Thread, that prompt must become an immediate founder turn in the same transcript while the durable reply
   request is pending; never clear the composer into a visually empty wait or switch Threads to fake continuity. Those
   coding controls do
-  not bleed into Product / GTM or its Releases section. Keep transcript and material separate: conversation carries
+  not bleed into Product / GTM. Keep transcript and material separate: conversation carries
   intent, progress, and compact references; exact artifacts, code, and founder gates open beside it, and no
   empty workbench is reserved before repository work exists. Live status may expand into a compact factual activity
   log of safe tool steps, sources consulted, exact questions, and measured durations. Never expose hidden
   chain-of-thought or raw unshaped model prose as activity. Use native coding-client conversation geometry:
   compact right-aligned founder turns, unboxed agent output, one stable transcript scroll owner, and an
-  anchored composer. Contextual agents in Product / GTM, including Releases, do not inherit that treatment. Work must
+  anchored composer. Contextual agents in Product / GTM do not inherit that treatment. Work must
   compete with a native coding-agent client rather than reducing implementation to workflow status. Outside
   Work, contextual conversation is a compact composer over the owning canvas/path, not a framed mini-Thread;
   clear contextual questions answer there through the SDK, while substantive work follows the exact returned
@@ -78,12 +83,41 @@ blending them. Design explorations remain evidence until an authority file adopt
   Product / GTM conversation: substantive direction opens an exact Work Thread whose provisional graph stays
   pinned above its composer. Corrections revise that same staged graph. Only explicit founder adoption makes
   it canonical and opens it on the full Product / GTM canvas; staged graphs are never parallel truth.
-- Releases uses the same spatial canvas language for one exact release. Product delta, Customer consequence,
+  On both the whole-venture map and an opened mechanism, canvas objects and steps use compact logo-led pills,
+  never generic cards. A pill keeps the object name and human-readable kind visible (including Agent and
+  Markdown rather than unexplained acronyms); descriptions and relationship detail belong in the selection
+  inspector or expanded detail, not in a miniature card body.
+  Canvas negative space is a staging area for SDK-powered work, not decoration. Product, shared Product/GTM
+  truth, and GTM remain distinct territories inside one left-to-right graph; curved edges preserve direction and
+  the restrained spectrum marks only a relationship that crosses territory. Selecting a node expands its exact
+  material in place instead of opening a detached side inspector. Founder drag placement may persist but never
+  becomes semantic truth. Every supported drop must
+  resolve to one concrete product effect: an exact Thread or attempt, a scoped capability grant, a founder gate,
+  a cited provisional relationship, or a source-preserving path merge. Reject unsupported combinations visibly;
+  never persist a decorative edge or imply authority that was not granted. Claude and Codex retain their native
+  intelligence inside the resulting exact Threads.
+  The default Product / GTM strategy canvas uses one shared causal trunk with natural provisional forks, not
+  fixed pipeline lanes. Keep one clear question or Product change central, a small number of named primary
+  assumptions, the evidence that would validate or reject each, collapsible secondary detail, one obvious focal
+  path, and an exact founder decision where branches converge. Focused operational paths may expose ordered
+  mechanics; they must not hard-scope the whole strategy surface. GTM should feel operationally grounded in
+  workflows: the compact canvas key foregrounds adopted GTM workflows, and selecting one unfolds its established
+  trigger, agent/tool work, conditions, founder gates, outward actions, and return path on the same canvas. Motions
+  without established mechanics remain visible as motions, never fabricated workflows. Product stays attached as
+  dependency and consequence rather than being forced into workflow stages.
+  Enhance the default canvas before adding ceiling features. Most founders should receive the benefit through
+  automatic composition, readable hierarchy, coherent edge routing, useful initial framing, and sensible local
+  expansion without configuring, organizing, filtering, or learning another control. An enhancement that mainly
+  adds power for exceptional cases while increasing the resting complexity for everyone else is a regression.
+  Advanced manipulation may remain available, but it must not be required to make the default canvas coherent.
+  Keep the surface area flat: a good enhancement should feel like the canvas was always meant to work that way,
+  not like a setting or mode bolted on. If the enhancement needs explanation, exposes another preference, or adds
+  a new founder-facing concept, treat it as a new feature and justify it against the complexity it introduces.
+- Market state lives directly on the exact Product / GTM branch. Product delta, Customer consequence,
   Distribution, Outward action, returned Evidence, conditional branches, founder gates, and live return paths
-  form a manipulable release graph rather than a stacked record editor. It projects existing relationships,
-  decisions, outcomes, and exact work; missing links remain visible and never become fabricated release content.
-  Treat it as the founder's market-return surface: before chrome or configuration, answer what is moving, what
-  reality returned, and what judgment only the founder must supply.
+  remain one manipulable graph. Preparing, In market, Needs you, and Evidence returned are derived projections
+  of exact joins, actions, outcomes, and receipts—not founder-maintained statuses. Keep the internal release
+  receipt as the bounded authority and attribution record, but never make that record another workspace.
 - Keep mode changes as simple as project/thread navigation in a native coding-agent client. Preserve the focal
   subject and open the nearest exact linked object, Thread, release, or evidence through existing direct
   references. When no destination link exists, retain the source context and show that missing link. Do not
@@ -93,7 +127,8 @@ blending them. Design explorations remain evidence until an authority file adopt
 - Every new abstraction must remove more experience architecture than it adds. Prefer direct reference rules
   and feature-local projections over generalized context, navigation, activity, or workflow frameworks.
 - Drover continuously develops Product and go-to-market as one evidence-returning system. Threads preserve
-  founder direction; releases are the unit of market movement. Every meaningful Product change must raise
+  founder direction; canonical branches are the founder-visible unit of market movement while release receipts
+  preserve exact authority and attribution underneath. Every meaningful Product change must raise
   an editable Product consequence and its distribution question. Other completed work surfaces only the GTM,
   evidence, or operational consequence its truth supports. Every meaningful market return must raise a
   Product or GTM consequence without fabricating an interpretation.
@@ -102,11 +137,11 @@ blending them. Design explorations remain evidence until an authority file adopt
 
 | Intent | Command | Notes |
 |---|---|---|
-| Run desktop product | `npm run app` | Builds the UI, starts the local server, then launches Electron. |
-| Run browser harness | `npm start` | Builds the UI, then serves it from `brain/src/server.mjs`. |
+| Run desktop product | `npm run app` | Builds the UI, loads local renderer assets, then launches Electron with an in-process Brain. |
+| Default start | `npm start` | Alias for the desktop product; it does not start a web server. |
 | Mechanical suite | `npm test` | Brain tests, UI unit tests, lint, then production build. |
 | Complete readiness gate | `npm run test:acceptance` | Runs the local acceptance receipt used for release readiness. |
 | Brain tests | `npm --prefix brain test` | Node test suite with serial execution. |
 | UI unit tests | `npm --prefix ui run test:unit` | Vitest suite. |
 | Browser journey | `npm run test:firm:browser` | Deterministic desktop firm journey. |
-| MCP server | `npm run mcp` | Starts the agent-facing server. |
+| MCP server | `npm run mcp` | Starts the agent-facing stdio transport; it does not bind a web port. |

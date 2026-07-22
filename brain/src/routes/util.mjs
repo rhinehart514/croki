@@ -21,7 +21,7 @@ export function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-function readRawBody(req) {
+function readRawBody(req, maxBytes = 100_000) {
   return new Promise((resolve, reject) => {
     let body = "";
     let receivedBytes = 0;
@@ -30,7 +30,7 @@ function readRawBody(req) {
     req.on("data", (chunk) => {
       if (tooLarge) return;
       receivedBytes += Buffer.byteLength(chunk, "utf8");
-      if (receivedBytes > 100_000) {
+      if (receivedBytes > maxBytes) {
         tooLarge = true;
         body = "";
         reject(new Error("Request body too large."));
@@ -43,8 +43,8 @@ function readRawBody(req) {
   });
 }
 
-export async function readBody(req) {
-  const body = await readRawBody(req);
+export async function readBody(req, { maxBytes = 100_000 } = {}) {
+  const body = await readRawBody(req, maxBytes);
   try {
     return body ? JSON.parse(body) : {};
   } catch {

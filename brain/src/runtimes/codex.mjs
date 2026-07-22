@@ -3,53 +3,28 @@
 // the founder's Codex configuration and receive the current direction's screened Drover tools as one
 // additional process-local MCP server. Product changes remain a narrower isolated-worktree capability.
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import crypto from "node:crypto";
-import fs from "node:fs";
 import http from "node:http";
+import { findCodexBinary, hasCodexLogin } from "./codex-auth.mjs";
 
-export function findCodexBinary(env = process.env) {
-  const override = env.GTM_IDE_CODEX_PATH;
-  if (override) {
-    return fs.existsSync(override)
-      ? { ok: true, path: override }
-      : { ok: false, reason: `GTM_IDE_CODEX_PATH does not exist: ${override}` };
-  }
-  const lookup = process.platform === "win32" ? "where" : "which";
-  const found = spawnSync(lookup, ["codex"], { encoding: "utf8" });
-  const resolved = found.status === 0 ? found.stdout.split("\n")[0].trim() : "";
-  return resolved
-    ? { ok: true, path: resolved }
-    : { ok: false, reason: "The `codex` CLI was not found on PATH." };
-}
+export {
+  codexAuthModeLabel,
+  detectCodexAuth,
+  findCodexBinary,
+  hasCodexLogin,
+} from "./codex-auth.mjs";
 
-// `codex login status` is the authoritative, redacted readiness probe. It
-// exits zero for cached ChatGPT, access-token, or CLI API-key auth without
-// ever printing a credential. `probe` keeps this pure in tests.
-export function hasCodexLogin(env = process.env, probe) {
-  if (typeof probe === "function") return probe(env);
-  const binary = findCodexBinary(env);
-  if (!binary.ok) return false;
-  const result = spawnSync(binary.path, ["login", "status"], {
-    encoding: "utf8",
-    env,
-    timeout: 5_000,
-  });
-  return result.status === 0;
-}
-
-export function detectCodexAuth(env = process.env, probe) {
-  return hasCodexLogin(env, probe) ? { mode: "chatgpt-login" } : { mode: "none" };
-}
-
-export function codexAuthModeLabel(mode) {
-  return mode === "chatgpt-login" ? "ChatGPT subscription" : null;
-}
-
-export function buildCodexDriveArgs({ model, resumeId, mcpUrl, nativeCoding = false } = {}) {
+export function buildCodexDriveArgs({ model, resumeId, mcpUrl, nativeCoding = false, effort = null, images = [] } = {}) {
   const common = [
     "--json",
     "--skip-git-repo-check",
+    // Founder-selected reasoning effort, forwarded verbatim as a Codex config override. Drover stays
+    // model-agnostic here (it forwards the model slug the same way); the composer's model catalog owns
+    // which tier each model actually exposes — GPT-5.6 Sol reaches `max`, Terra/Luna top out at `xhigh` —
+    // so a level Codex would reject never leaves the picker. An unset choice omits the flag so Codex keeps
+    // its own configured default.
+    ...(effort ? ["-c", `model_reasoning_effort=${JSON.stringify(effort)}`] : []),
     ...(nativeCoding ? [
       "-s", "workspace-write",
       "-c", 'approval_policy="never"',
@@ -60,6 +35,7 @@ export function buildCodexDriveArgs({ model, resumeId, mcpUrl, nativeCoding = fa
       "-c", "features.network_proxy.allow_upstream_proxy=false",
     ] : []),
     ...(mcpUrl ? ["-c", `mcp_servers.drover.url=${JSON.stringify(mcpUrl)}`] : []),
+    ...images.flatMap((image) => ["--image", image]),
     ...(model ? ["-m", model] : []),
   ];
   return resumeId
@@ -197,6 +173,7 @@ export async function runCodexDriveTurn({
   prompt,
   cwd,
   model,
+  effort = null,
   resumeId,
   tools = [],
   runTool,
@@ -211,6 +188,7 @@ export async function runCodexDriveTurn({
   isCancelled = () => false,
   signal = null,
   nativeCoding = false,
+  images = [],
   onCommand = null,
   onRuntimeSession = null,
 } = {}) {
@@ -219,7 +197,7 @@ export async function runCodexDriveTurn({
   const bridge = tools.length && typeof runTool === "function"
     ? await startBridge({ tools, runTool, onToolStart, onToolError, onTurn, maxSteps })
     : null;
-  const args = buildCodexDriveArgs({ model, resumeId, mcpUrl: bridge?.url, nativeCoding });
+  const args = buildCodexDriveArgs({ model, resumeId, mcpUrl: bridge?.url, nativeCoding, effort, images });
   const effectiveTimeoutMs = Number(timeoutMs) || Number(env.GTM_IDE_CODEX_TIMEOUT_MS) || (nativeCoding ? 30 * 60_000 : 600_000);
   return new Promise((resolve) => {
     const child = spawnProcess(binary.path, args, {
@@ -470,6 +448,7 @@ export const codexRuntime = {
         prompt,
         cwd: ctx.cwd || process.cwd(),
         model: ctx.model,
+        effort: ctx.effort ?? null,
         resumeId,
         tools: ctx.tools ?? [],
         runTool: ctx.runTool,
@@ -483,6 +462,7 @@ export const codexRuntime = {
         nativeCoding: ctx.nativeCoding === true,
         onCommand: ctx.onCommand,
         onRuntimeSession: ctx.onRuntimeSession,
+        images: (ctx.attachments ?? []).map((attachment) => attachment.path),
       });
       if (turn.error === "cancelled") return { kind: "cancelled" };
       if (turn.error) {

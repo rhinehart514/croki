@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product / GTM — screen mock</title>
+<style>
+  :root{
+    --bg:#0c0c0d; --panel:#121215; --ink:#e8e6e1; --dim:#8a8894; --faint:#5a5a64;
+    --line:#1c1c21; --border:#2a2a30; --accent:#4f86f7; --amber:#c9924a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#08080a; color:var(--ink);
+    font-family:"DM Sans","Helvetica Neue",-apple-system,Segoe UI,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:64px 32px 96px; display:flex; flex-direction:column; align-items:center;
+  }
+  .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);align-self:flex-start;max-width:1120px;width:100%;margin:0 auto 10px}
+  h1{font-size:22px;font-weight:600;letter-spacing:-.01em;max-width:1120px;width:100%;margin:0 auto 28px}
+
+  /* ---------- the screen ---------- */
+  .screen{
+    position:relative; width:1120px; height:640px;
+    background:var(--bg); border:1px solid var(--line); border-radius:6px;
+    overflow:hidden; flex:none;
+  }
+  /* columns */
+  .col-head{
+    position:absolute; top:0; height:36px; display:flex; align-items:center; justify-content:center;
+    font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--faint); width:224px;
+  }
+  .col-line{position:absolute; top:36px; bottom:80px; width:1px; background:var(--line)}
+  /* bands */
+  .band-label{
+    position:absolute; left:14px; font-size:10.5px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--faint); writing-mode:vertical-rl; transform:rotate(180deg);
+  }
+  .band-sep{position:absolute; left:0; right:0; top:330px; height:1px; background:var(--line)}
+
+  /* edges layer */
+  svg.edges{position:absolute; inset:0; pointer-events:none}
+  .e-solid{stroke:#3a3a40; stroke-width:1; fill:none}
+  .e-prov{stroke:var(--amber); stroke-width:1; fill:none; stroke-dasharray:3 4; opacity:.75}
+  .e-evid{stroke:var(--accent); stroke-width:1; fill:none; stroke-dasharray:2 4; opacity:.6}
+
+  /* cards */
+  .card{
+    position:absolute; width:200px; background:var(--panel);
+    border:1px solid var(--border); border-radius:4px; padding:9px 12px 8px;
+  }
+  .card .t{font-size:13.5px; font-weight:500; line-height:1.3}
+  .card .src{
+    margin-top:7px; font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    font-size:10.5px; color:var(--faint);
+  }
+  .card .q{margin-top:7px; font-size:12px; color:var(--amber); line-height:1.35}
+  .card .live{margin-top:7px; font-size:11px; color:var(--dim); display:flex; align-items:center; gap:6px}
+  .card .live::before{content:""; width:5px; height:5px; border-radius:50%; background:var(--accent)}
+  .card.prov{border-style:dashed; background:transparent}
+  .card.prov .t{color:#c9c7c1}
+  .card.sel{box-shadow:0 0 0 1px var(--accent)}
+  .card.evid{border-left:2px solid var(--accent); width:186px}
+  .card.evid .t{font-size:12.5px; font-weight:400; color:#c9c7c1}
+
+  /* composer */
+  .composer{
+    position:absolute; left:50%; transform:translateX(-50%); bottom:16px; width:704px;
+    background:var(--panel); border:1px solid var(--border); border-radius:6px;
+    display:flex; align-items:center; gap:10px; padding:11px 14px;
+  }
+  .chip{
+    flex:none; font-size:11.5px; color:var(--ink); background:#1c1c22;
+    border:1px solid var(--border); border-radius:3px; padding:3px 8px; display:flex; gap:7px; align-items:center;
+  }
+  .chip i{font-style:normal; color:var(--faint)}
+  .placeholder{font-size:13.5px; color:var(--faint)}
+  .new-pill{
+    position:absolute; left:24px; bottom:96px; font-size:11.5px; color:var(--dim);
+    border:1px solid var(--border); border-radius:99px; padding:4px 11px; background:var(--bg);
+  }
+
+  /* annotation markers */
+  .m{
+    position:absolute; width:16px; height:16px; border-radius:50%;
+    background:var(--accent); color:#0c0c0d; font-size:10px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; z-index:3;
+  }
+
+  /* spec list */
+  .spec{max-width:1120px; width:100%; margin:36px auto 0; columns:2; column-gap:56px}
+  .spec div{break-inside:avoid; display:flex; gap:12px; margin-bottom:16px}
+  .spec b{
+    flex:none; width:16px; height:16px; border-radius:50%; background:var(--accent);
+    color:#0c0c0d; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top:2px;
+  }
+  .spec p{font-size:13.5px; color:var(--dim); line-height:1.5; max-width:30em}
+  .spec p strong{color:var(--ink); font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="kicker">Drover · Product / GTM · screen mock — RodentRadar</div>
+<h1>Five columns, two bands, one composer. Position is status; dashed is provisional.</h1>
+
+<div class="screen">
+  <!-- column headers -->
+  <div class="col-head" style="left:32px">Thought</div>
+  <div class="col-head" style="left:256px">Committed</div>
+  <div class="col-head" style="left:480px">Building</div>
+  <div class="col-head" style="left:704px">In market</div>
+  <div class="col-head" style="left:928px">Returned</div>
+  <div class="col-line" style="left:256px"></div>
+  <div class="col-line" style="left:480px"></div>
+  <div class="col-line" style="left:704px"></div>
+  <div class="col-line" style="left:928px"></div>
+
+  <!-- bands -->
+  <div class="band-label" style="top:150px">Product</div>
+  <div class="band-label" style="top:415px">Go-to-market</div>
+  <div class="band-sep"></div>
+
+  <!-- edges -->
+  <svg class="edges" width="1120" height="640">
+    <!-- per-site pricing -> pco pilot outreach (founder-set crossing) -->
+    <path class="e-solid" d="M 384 166 C 420 300, 700 300, 760 388"/>
+    <!-- agent-drafted crossing between the two provisional cards -->
+    <path class="e-prov" d="M 144 196 C 144 280, 144 320, 144 392"/>
+    <!-- evidence return curves -->
+    <path class="e-evid" d="M 952 300 C 900 340, 860 380, 828 396"/>
+    <path class="e-evid" d="M 952 288 C 760 240, 480 140, 396 138"/>
+  </svg>
+
+  <!-- product band cards -->
+  <div class="card prov sel" style="left:44px; top:110px">
+    <div class="t">Inspector evidence export</div>
+    <div class="src">inference · no repo support yet</div>
+    <div class="q">→ who pays for this first?</div>
+  </div>
+  <div class="card" style="left:284px; top:104px">
+    <div class="t">Per-site pricing</div>
+    <div class="src">repo · brain/src/pricing.mjs ✓</div>
+  </div>
+  <div class="card" style="left:508px; top:110px">
+    <div class="t">Station intelligence reports</div>
+    <div class="src">thread · rr-reports</div>
+    <div class="live">Claude · working · 12m</div>
+  </div>
+  <div class="card" style="left:732px; top:104px">
+    <div class="t">Snapshot ingestion</div>
+    <div class="src">repo · ingest/pipeline.mjs ✓</div>
+  </div>
+
+  <!-- gtm band cards -->
+  <div class="card prov" style="left:44px; top:392px">
+    <div class="t">Home inspector channel</div>
+    <div class="src">inference · drafted by agent</div>
+  </div>
+  <div class="card" style="left:732px; top:386px">
+    <div class="t">PCO pilot outreach</div>
+    <div class="src">release · in market · 6 sent</div>
+  </div>
+
+  <!-- evidence -->
+  <div class="card evid" style="left:948px; top:258px">
+    <div class="t">2 replies · 1 call booked</div>
+    <div class="src">gmail · attributed ✓</div>
+  </div>
+
+  <!-- arrival pill -->
+  <div class="new-pill">1 new · Thought</div>
+
+  <!-- composer -->
+  <div class="composer">
+    <span class="chip">Inspector evidence export <i>×</i></span>
+    <span class="placeholder">who pays for this first?</span>
+  </div>
+
+  <!-- markers -->
+  <div class="m" style="left:212px; top:12px">1</div>
+  <div class="m" style="left:6px;  top:322px">2</div>
+  <div class="m" style="left:28px; top:96px">3</div>
+  <div class="m" style="left:150px;top:296px">4</div>
+  <div class="m" style="left:1088px;top:250px">5</div>
+  <div class="m" style="left:196px;bottom:22px">6</div>
+  <div class="m" style="left:8px;  bottom:92px">7</div>
+</div>
+
+<div class="spec">
+  <div><b>1</b><p><strong>Position is status.</strong> The column a card sits in is its state — no chips, badges, or progress UI anywhere. The only thing that can happen to a card is moving right.</p></div>
+  <div><b>2</b><p><strong>Band is territory.</strong> Product above, GTM below, one hairline. A card is Product or GTM by where it sits; crossings are vertical edges between bands.</p></div>
+  <div><b>3</b><p><strong>Dashed is provisional.</strong> Agent-made cards and drafted crossings use dashed strokes with transparent fill; adopted truth is solid with panel fill. Adoption solidifies the stroke in place, 150ms, no ceremony. Selection is the blue ring; the composer gains the scope chip.</p></div>
+  <div><b>4</b><p><strong>The push is incomplete ink.</strong> An open question is one amber line on its card; a missing crossing is a dashed amber edge. Nothing floats, nothing is modal, nothing nags in chat. Selecting the card puts its question in the composer placeholder.</p></div>
+  <div><b>5</b><p><strong>Evidence returns at the right edge</strong> and curves back only along existing joins — to the release it came from and the product truth it touches. Blue, dashed, quiet. Its interpretation stays unresolved until adopted.</p></div>
+  <div><b>6</b><p><strong>The composer is the only input.</strong> No drag, no palette, no node drawing. Click selects and scopes; Enter expands the card in place (citation, linked Thread, adopt / prune); arrow keys walk the graph along edges; Esc clears scope.</p></div>
+  <div><b>7</b><p><strong>The camera never moves on its own.</strong> New cards fade in at their column in 200ms; off-screen arrivals surface as this pill, which pans on click. Work state (the blue dot) is derived from the linked Thread, never stored on the graph.</p></div>
+</div>
+
+</body>
+</html>

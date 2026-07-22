@@ -240,6 +240,26 @@
 .now-composer[data-variant="hero"] .now-composer-shell { box-shadow: var(--n-shadow); }
 .now-composer-shell:focus-within { border-color: var(--n-ink-4); }
 .now-composer[data-busy="true"] .now-composer-shell { border-color: var(--green-2); }
+.now-composer[data-dragging-images="true"] .now-composer-shell { border-color: var(--primary); box-shadow: 0 0 0 3px rgb(79 134 247 / 10%); }
+/* Intent in flight: the composer's border becomes a live spectrum and drifts — the rainbow starts moving
+   while Drover reads the founder's intent. It settles back the instant the options land. */
+.now-composer[data-intent="loading"] .now-composer-shell {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--n-panel), var(--n-panel)) padding-box,
+    linear-gradient(105deg,
+      var(--agent-spectrum-cyan), var(--agent-spectrum-violet) 24%,
+      var(--agent-spectrum-rose) 46%, var(--agent-spectrum-amber) 68%,
+      var(--agent-spectrum-green) 86%, var(--agent-spectrum-cyan)) border-box;
+  background-size: 100% 100%, 240% 100%;
+  box-shadow: var(--n-shadow), 0 0 26px rgb(124 156 255 / 12%);
+  animation: now-intent-drift 2.4s linear infinite;
+}
+@keyframes now-intent-drift {
+  from { background-position: center, 0% 50%; }
+  to { background-position: center, 240% 50%; }
+}
+@keyframes now-intent-turn { to { transform: rotate(1turn); } }
 .now-composer-scope {
   display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
   max-width: min(100%, 640px);
@@ -257,6 +277,15 @@
 .now-composer-artifact-target > button { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 7px; color: var(--n-ink-4); }
 .now-composer-artifact-target > button:hover { background: var(--n-hover); color: var(--n-ink-2); }
 .now-composer-artifact-target > button svg { width: 12px; height: 12px; color: inherit; }
+.now-composer-image-input { display: none; }
+.now-composer-image-tray { display: flex; min-width: 0; align-items: center; gap: 7px; padding-bottom: 8px; border-bottom: 1px solid var(--n-line); }
+.now-composer-image-tray > .now-icon-btn { flex: 0 0 auto; border: 1px dashed var(--n-line-2); }
+.now-composer-images { display: flex; min-width: 0; flex: 1; gap: 7px; overflow-x: auto; scrollbar-width: thin; }
+.now-composer-images figure { position: relative; width: 54px; height: 54px; flex: 0 0 54px; margin: 0; overflow: hidden; border: 1px solid var(--n-line-2); border-radius: 9px; background: var(--n-sunk); }
+.now-composer-images img { width: 100%; height: 100%; object-fit: cover; }
+.now-composer-images figure > button { position: absolute; top: 3px; right: 3px; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgb(255 255 255 / 14%); border-radius: 7px; background: rgb(9 11 14 / 82%); color: #fff; }
+.now-composer-images figure > button:hover { background: #090b0e; }
+.now-composer-images figure > button svg { width: 12px; height: 12px; }
 .now-composer-field { display: flex; align-items: flex-end; gap: var(--space-2); }
 .now-composer-field textarea {
   flex: 1; resize: none; border: none; background: none;
@@ -265,6 +294,70 @@
 }
 .now-composer-field textarea:focus { outline: none; }
 .now-composer-field textarea::placeholder { color: var(--n-ink-4); }
+/* Ghost-text overlay: a mirror positioned exactly over the textarea. The typed portion is transparent so
+   the real text and caret show through it; the suggestion continues in muted ink right after. Metrics here
+   must stay identical to the textarea rule above (font size, line height, padding) or the suffix drifts. */
+.now-composer-input { position: relative; flex: 1; min-width: 0; display: flex; }
+.now-agent-menu {
+  position: absolute; bottom: calc(100% + 9px); left: -8px; z-index: 40;
+  display: grid; width: min(360px, calc(100vw - 40px)); max-height: 310px; padding: 6px; overflow-y: auto;
+  border: 1px solid var(--n-line-2); border-radius: 10px; background: var(--n-panel); box-shadow: var(--n-shadow-pop);
+}
+.now-agent-menu button {
+  display: grid; min-height: 46px; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 9px;
+  padding: 6px 8px; border-radius: 7px; color: var(--n-ink-2); text-align: left;
+}
+.now-agent-menu button:hover, .now-agent-menu button[data-active="true"] { background: var(--n-hover); color: var(--n-ink); }
+.now-agent-menu button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.now-agent-menu button:disabled { cursor: not-allowed; opacity: .45; }
+.now-agent-menu button > .crew-face { border: 0; }
+.now-agent-menu button > i { display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid var(--n-line-2); border-radius: 8px; color: var(--n-ink-3); }
+.now-agent-menu button > i svg { width: 13px; }
+.now-agent-menu button > span { display: grid; min-width: 0; gap: 2px; }
+.now-agent-menu strong { overflow: hidden; font-size: 12px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.now-agent-menu small { overflow: hidden; color: var(--n-ink-4); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.now-directions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-top: 8px;
+}
+.now-directions-pending {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--n-ink-4); font-size: var(--text-sm);
+}
+.now-direction {
+  display: inline-flex; align-items: center; gap: 7px;
+  max-width: 100%; padding: 5px 10px; border-radius: var(--r-tool);
+  border: 1px solid var(--n-line-2); background: var(--n-panel);
+  color: var(--n-ink); font-size: var(--text-sm); text-align: left; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.now-direction span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-direction:hover { background: var(--n-hover); border-color: var(--n-line); }
+/* Rainbow marks — the intent language across the composer: the trigger orb, the pending mark, and each
+   option's dot all read as the same spectrum, no lucide iconography. */
+.now-intent-orb {
+  width: 20px; height: 20px; flex: 0 0 auto; padding: 0;
+  border: 1px solid transparent; border-radius: 50%; cursor: pointer;
+  background:
+    radial-gradient(circle, var(--n-panel) 30%, transparent 34%),
+    conic-gradient(from 25deg,
+      var(--agent-spectrum-cyan), var(--agent-spectrum-blue), var(--agent-spectrum-violet),
+      var(--agent-spectrum-rose), var(--agent-spectrum-amber), var(--agent-spectrum-green),
+      var(--agent-spectrum-cyan)) border-box;
+  box-shadow: 0 0 12px rgb(124 156 255 / 16%);
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.now-intent-orb:hover:not(:disabled) { transform: scale(1.1); box-shadow: 0 0 16px rgb(124 156 255 / 30%); }
+.now-intent-orb:disabled { cursor: default; }
+.now-composer[data-intent="loading"] .now-intent-orb { animation: now-intent-turn 1.3s linear infinite; }
+.now-intent-orb--pending { width: 14px; height: 14px; animation: now-intent-turn 1.3s linear infinite; }
+.now-direction-orb {
+  width: 11px; height: 11px; flex: 0 0 auto; border-radius: 50%;
+  background: conic-gradient(from 25deg,
+    var(--agent-spectrum-cyan), var(--agent-spectrum-violet), var(--agent-spectrum-rose),
+    var(--agent-spectrum-amber), var(--agent-spectrum-green), var(--agent-spectrum-cyan));
+  box-shadow: 0 0 8px rgb(124 156 255 / 14%);
+}
 .now-composer-tools { display: flex; align-items: center; gap: 2px; }
 .now-icon-btn {
   display: inline-flex; align-items: center; justify-content: center;

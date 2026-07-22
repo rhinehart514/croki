@@ -130,9 +130,42 @@ export function withThreadPinnedAt(thread, pinnedAt, { at = null } = {}) {
   return next;
 }
 
+// A Thread name is founder-owned navigation language. Renaming changes only that compact label; the
+// initiating founder message and every later message remain immutable references on the Thread.
+export function withThreadName(thread, name, { at = null } = {}) {
+  if (!thread || typeof thread !== "object") fail("Renaming needs a thread record.");
+  const nextName = text(name);
+  if (!nextName) fail("A thread name cannot be empty.");
+  if (nextName.length > 160) fail("A thread name must be 160 characters or fewer.");
+  return { ...structuredClone(thread), name: nextName, updatedAt: at ?? thread.updatedAt ?? null };
+}
+
 export function withThreadLifecycle(thread, lifecycle, { at = null } = {}) {
   if (!thread || typeof thread !== "object") fail("Changing a lifecycle needs a thread record.");
   const nextLifecycle = text(lifecycle);
   if (!["open", "closed"].includes(nextLifecycle)) fail("A thread lifecycle must be open or closed.");
   return { ...structuredClone(thread), lifecycle: nextLifecycle, updatedAt: at ?? thread.updatedAt ?? null };
+}
+
+// Deleting a chat is a founder-facing removal, not permission to erase Product truth, code receipts,
+// or evidence that other venture records still cite. Keep the canonical Thread as a tombstone so
+// those joins remain valid, while every founder-facing Thread projection omits it. The deletion also
+// closes and unpins the Thread so no navigation state can accidentally resurrect it.
+export function withThreadDeletedAt(thread, deletedAt, { at = null } = {}) {
+  if (!thread || typeof thread !== "object") fail("Deleting needs a thread record.");
+  const stamp = text(deletedAt);
+  if (!stamp) fail("Deleting a thread needs a timestamp.");
+  const next = structuredClone(thread);
+  const properties = next.properties && typeof next.properties === "object" ? next.properties : {};
+  const navigation = properties.navigation && typeof properties.navigation === "object"
+    ? structuredClone(properties.navigation)
+    : {};
+  delete navigation.pinnedAt;
+  if (Object.keys(navigation).length) properties.navigation = navigation;
+  else delete properties.navigation;
+  next.properties = properties;
+  next.lifecycle = "closed";
+  next.deletedAt = stamp;
+  next.updatedAt = at ?? stamp;
+  return next;
 }

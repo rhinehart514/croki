@@ -7,7 +7,6 @@ import { afterEach, describe, it } from "node:test";
 import {
   PersistenceConflictError,
   closePersistence,
-  jsonPersistence,
   persistence,
 } from "../src/persistence.mjs";
 
@@ -61,8 +60,15 @@ for (const backend of ["json"]) {
 
 it("the explicit JSON provider writes readable collection files", () => {
   const root = freshRoot();
-  jsonPersistence({ root }).set("ventures", "one", { id: "one" });
+  persistence({ root }).set("ventures", "one", { id: "one" });
   const file = path.join(root, "ventures", "one.json");
   assert.equal(fs.existsSync(file), true);
   assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), { id: "one" });
+});
+
+it("writes private state directories and JSON documents with restrictive permissions", { skip: process.platform === "win32" }, () => {
+  const root = freshRoot();
+  persistence({ root }).set("credentials", "founder", { token: "secret" });
+  assert.equal(fs.statSync(path.join(root, "credentials")).mode & 0o777, 0o700);
+  assert.equal(fs.statSync(path.join(root, "credentials", "founder.json")).mode & 0o777, 0o600);
 });

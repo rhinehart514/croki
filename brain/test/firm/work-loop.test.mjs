@@ -54,6 +54,35 @@ function text(t) {
 }
 
 describe("driveTeammate — conversation is the real drive, not a parallel authority", () => {
+  it("drives Work through the selected SDK without adding it to the Product / GTM crew", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Direct SDK Work" }, options);
+    const initial = getFirmConfiguration(venture.id, options);
+    applyFirmConfiguration({
+      ventureId: venture.id,
+      expectedRevision: initial.revision,
+      configuration: { ...initial, agents: [{ ref: "product-strategist", name: "Product Strategist", activation: "direct" }] },
+      summary: "Configure the Product / GTM specialist",
+    }, options);
+    let received;
+    const runtime = { id: "codex", label: "Codex", async drive(context) { received = context; return { kind: "completed", summary: "done" }; } };
+
+    await driveTeammate({
+      ventureId: venture.id,
+      teammateRef: "codex",
+      goal: "Repair the Work thread",
+      runtime: "codex",
+      directSdk: true,
+      options,
+      deps: { runtime },
+    });
+
+    assert.match(received.system, /SDK model the founder selected/);
+    assert.doesNotMatch(received.system, /Product Strategist/);
+    assert.deepEqual(getFirmConfiguration(venture.id, options).agents.map((agent) => agent.ref), ["product-strategist"]);
+    assert.equal(listCrew(venture.id, options).some((entry) => entry.ref === "codex"), false);
+  });
+
   it("forms the first participant even when the untouched configuration was read before the first drive", async () => {
     const options = freshRoot();
     const venture = createVenture({ name: "First configured participant" }, options);

@@ -8,7 +8,6 @@ import { buildArchitectureProjection, explainArchitecturePressure } from "./arch
 import { buildArchitectureContext } from "./architecture-context.mjs";
 import { decideArchitectureProposal, proposeArchitectureChange } from "./architecture-proposals.mjs";
 import { markArchitectureContextStale } from "./active-drives.mjs";
-import { startArchitectureCampaign } from "./architecture-campaign.mjs";
 import { acceptSystemProposal } from "./architecture-system-assembly.mjs";
 
 function fail(res, error) {
@@ -23,9 +22,9 @@ function fail(res, error) {
 }
 
 function route(pathname) {
-  const scoped = pathname.match(/^\/api\/ventures\/([^/]+)\/architecture(?:\/(projection|mutations|proposals|revisions|context|pressure|campaigns))?(?:\/([^/]+))?(?:\/(decide|restore|accept-system))?$/);
+  const scoped = pathname.match(/^\/api\/ventures\/([^/]+)\/architecture(?:\/(projection|mutations|proposals|revisions|context|pressure))?(?:\/([^/]+))?(?:\/(decide|restore|accept-system))?$/);
   if (scoped) return { ventureId: decodeURIComponent(scoped[1]), area: scoped[2] ?? "current", id: scoped[3] ? decodeURIComponent(scoped[3]) : null, action: scoped[4] ?? null };
-  const alias = pathname.match(/^\/api\/firm\/architecture(?:\/(projection|mutations|proposals|revisions|context|pressure|campaigns))?(?:\/([^/]+))?(?:\/(decide|restore|accept-system))?$/);
+  const alias = pathname.match(/^\/api\/firm\/architecture(?:\/(projection|mutations|proposals|revisions|context|pressure))?(?:\/([^/]+))?(?:\/(decide|restore|accept-system))?$/);
   if (alias) return { ventureId: null, area: alias[1] ?? "current", id: alias[2] ? decodeURIComponent(alias[2]) : null, action: alias[3] ?? null };
   return null;
 }
@@ -81,20 +80,6 @@ export default async function handle({ req, res, url }) {
     }
     if (req.method === "POST" && matched.area === "mutations") {
       const result = applyArchitectureMutations({ ventureId, baseRevision: body?.baseRevision, operations: body?.operations, reason: body?.reason, actor: founder(req, "Changing venture architecture") });
-      json(res, 200, { ...result, staleDrives: markArchitectureContextStale(ventureId, result.revision) });
-      return true;
-    }
-    if (req.method === "POST" && matched.area === "campaigns" && matched.id === "start") {
-      const result = startArchitectureCampaign({
-        ventureId,
-        baseRevision: body?.baseRevision,
-        motionId: body?.motionId,
-        campaign: body?.campaign,
-        bet: body?.bet,
-        supportingBetIds: body?.supportingBetIds,
-        reason: body?.reason,
-        actor: founder(req, "Starting a campaign"),
-      });
       json(res, 200, { ...result, staleDrives: markArchitectureContextStale(ventureId, result.revision) });
       return true;
     }

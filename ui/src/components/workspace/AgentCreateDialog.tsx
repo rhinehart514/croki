@@ -8,14 +8,15 @@ function agentRef(name: string) {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
 }
 
-export function AgentCreateDialog({ ventureId, configuration, readOnlyReason, onClose, onCreated }: {
+export function AgentCreateDialog({ ventureId, configuration, initialName = "", readOnlyReason, onClose, onCreated }: {
   ventureId: string;
   configuration: FirmConfiguration;
+  initialName?: string;
   readOnlyReason: string | null;
   onClose: () => void;
-  onCreated: (agent: FirmConfiguredAgent) => void;
+  onCreated: (agent: FirmConfiguredAgent, configuration: FirmConfiguration) => void;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialName);
   const [purpose, setPurpose] = useState("");
   const [instructions, setInstructions] = useState("");
   const [provider, setProvider] = useState<"codex" | "claude-code">("codex");
@@ -57,7 +58,7 @@ export function AgentCreateDialog({ ventureId, configuration, readOnlyReason, on
         { ...configuration, agents: [...configuration.agents, agent] },
         `Created ${agent.name}`,
       );
-      onCreated(result.configuration.agents.find((candidate) => candidate.ref === agent.ref) ?? agent);
+      onCreated(result.configuration.agents.find((candidate) => candidate.ref === agent.ref) ?? agent, result.configuration);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The agent could not be created.");
     } finally {

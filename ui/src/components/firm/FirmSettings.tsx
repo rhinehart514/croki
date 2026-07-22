@@ -10,7 +10,7 @@ import {
 } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FirmHeatControl } from "./FirmHeatControl";
+import { ExaConnection } from "./ExaConnection";
 import "@/styles/firm-settings.css";
 
 function ConnectionStatus({ connected, children }: { connected: boolean; children: ReactNode }) {
@@ -47,6 +47,7 @@ export function FirmSettings({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const gmail = credentials.find((credential) => credential.provider === "gmail");
+  const exa = credentials.find((credential) => credential.provider === "exa");
 
   useEffect(() => {
     panelRef.current?.focus();
@@ -157,10 +158,10 @@ export function FirmSettings({
                     {gmail ? "Connected" : loaded ? "Not connected" : "Checking"}
                   </ConnectionStatus>
                 </div>
-                <p>Prepare email for your release, then bring replies back to the work that prompted them.</p>
+                <p>Prepare exact outreach, then bring attributable replies back to the Product and market context that prompted it.</p>
                 <ul aria-label="Gmail capabilities">
                   <li><Check aria-hidden="true" /> Read returned replies</li>
-                  <li><ShieldCheck aria-hidden="true" /> Send only after your release</li>
+                  <li><ShieldCheck aria-hidden="true" /> Send only after your exact decision</li>
                 </ul>
 
                 {connectOpen ? (
@@ -198,19 +199,14 @@ export function FirmSettings({
                 )}
               </div>
             </article>
+            <ExaConnection
+              credential={exa}
+              readOnly={readOnly}
+              onCredentials={setCredentials}
+              onChanged={onCapabilitiesChanged}
+            />
             {readOnly ? <span className="firm-settings-read-only" role="status">{readOnlyReason}</span> : null}
             {error ? <span className="firm-settings-error" role="alert">{error}</span> : null}
-          </section>
-
-          <section className="firm-settings-section" aria-labelledby="continuation-title">
-            <header>
-              <span>
-                <small>Optional behavior</small>
-                <h3 id="continuation-title">Between directions</h3>
-              </span>
-              <p>Keep this off if you want the venture to move only when you direct it.</p>
-            </header>
-            <FirmHeatControl ventureId={venture.id} readOnly={readOnly} readOnlyReason={readOnlyReason} />
           </section>
         </div>
       </aside>

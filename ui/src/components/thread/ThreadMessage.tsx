@@ -8,6 +8,7 @@ import {
 } from "./RichThreadItems";
 import { ThreadAgentUpdate } from "./ThreadAgentUpdate";
 import type { WorkChatMode } from "@/components/work-mode/WorkComposerBar";
+import { ThreadImage } from "./ThreadImage";
 
 type Props = {
   item: ThreadTimelineItem;
@@ -60,13 +61,24 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
   }
 
   const role = text(item.role, "teammate");
+  const participantRef = text(item.participantRef);
   const participant = role === "founder" ? "You" : text(item.participantLabel, text(item.participantRef, "Drover"));
   const content = text(item.content);
+  const attachments = Array.isArray(item.attachments) ? item.attachments.filter((attachment): attachment is { id: string; name: string } => (
+    Boolean(attachment && typeof attachment === "object" && typeof (attachment as Record<string, unknown>).id === "string" && typeof (attachment as Record<string, unknown>).name === "string")
+  )) : [];
   if (surface === "work" && role !== "founder" && content.trim().toLocaleLowerCase() === `${participant.toLocaleLowerCase()} is taking this one.`) return null;
+  // Older direct-SDK turns persisted a provider acknowledgement before every real response. The
+  // selected model and factual activity already carry that state, so keep existing Threads as quiet
+  // as new ones without rewriting their durable conversation records.
+  if (surface === "work" && role !== "founder" && ["codex", "claude-code"].includes(participantRef) && /^continuing with (?:codex|claude code)\.?$/i.test(content.trim())) return null;
   return (
     <article className="thread-message" data-role={role}>
       <header>{participant}</header>
       <div className="thread-message-body">
+        {attachments.length ? <div className="thread-message-images">
+          {attachments.map((attachment) => <ThreadImage key={attachment.id} ventureId={String(item.ventureId ?? "")} imageId={attachment.id} name={attachment.name} />)}
+        </div> : null}
         {role === "founder" ? <p>{content}</p> : <MessageResponse>{content}</MessageResponse>}
       </div>
     </article>
