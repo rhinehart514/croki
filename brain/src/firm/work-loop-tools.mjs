@@ -240,11 +240,11 @@ function makeStageArtifact({ ventureId, teammateRef, configurationRevision, arch
             { type: "object", properties: { kind: { const: "model-view" }, purpose: { const: "product-gtm-local-model" }, question: { type: "string" }, branchRef: { type: "string" }, nodes: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, detail: { type: "string" }, kind: { enum: ["question", "truth", "proposal", "alternative", "unknown", "evidence", "action", "gate", "outcome"] }, state: { enum: ["current", "provisional", "unresolved"] }, sourceRef: { type: "string" } }, required: ["id", "label", "kind", "state"] } }, edges: { type: "array", items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" }, label: { type: "string" }, kind: { enum: ["relationship", "dependency", "alternative", "return"] } }, required: ["from", "to"] } } }, required: ["kind", "purpose", "question", "branchRef", "nodes", "edges"] },
             {
               type: "object", properties: {
-                kind: { const: "flow" },
-                purpose: { enum: ["product-gtm-workflow"] },
-                steps: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, detail: { type: "string" }, type: { enum: ["trigger", "agent-work", "condition", "founder-decision", "founder-gate", "external-action", "observation", "outcome"] } }, required: ["id", "label"] } },
+                kind: { const: "flow" }, purpose: { enum: ["product-gtm-workflow"] },
+                objective: { type: "string" },
+                steps: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, detail: { type: "string" }, type: { enum: ["trigger", "source", "agent-work", "tool", "condition", "wait", "founder-decision", "founder-gate", "external-action", "observation", "outcome"] } }, required: ["id", "label"] } },
                 edges: { type: "array", items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" }, label: { type: "string" } }, required: ["from", "to"] } },
-              }, required: ["kind", "steps", "edges"],
+              }, required: ["kind", "purpose", "objective", "steps", "edges"],
             },
             {
               type: "object", properties: {

@@ -235,6 +235,17 @@ describe("NowComposer contextual routing", () => {
     await waitFor(() => expect(replyInConversation).toHaveBeenCalled());
   });
 
+  it("sends the bounded Product and GTM reasoning effort", async () => {
+    replyInConversation.mockResolvedValue({ act: "answer", accepted: true } as ConversationReplyResult);
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork
+      variant="dock" submissionMode="product-gtm" effortOverride="medium" onDriven={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Find the strategic mismatch" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", {
+      message: "Find the strategic mismatch", mode: "context", effort: "medium",
+    }));
+  });
+
   it("carries the exact provisional model branch into a correction", async () => {
     replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:model" } as ConversationReplyResult);
     render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: "bet-1", workRef: "view-one", teammateRefs: [], threadRef: "thread:model" }} scopeLabel="Ecosystem direction" hasWork variant="dock" submissionMode="work" productGtmView modelBranchRef="model-branch:branch-one" onDriven={() => {}} />);

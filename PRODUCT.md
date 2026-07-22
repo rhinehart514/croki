@@ -21,8 +21,11 @@ or authority over what crosses into the world.
   make true?** Work begins before workflow configuration.
 - Work is the direct Claude/Codex agentic development environment: conversation, isolated attempts,
   code, terminal, preview, tests, artifacts, evidence, and exact review.
-- Product / GTM is the living venture model: current truth, several motions, durable provisional
-  Product alternatives, attached work, outward actions, evidence return, and in-place selective merge.
+- Product / GTM is the founder's intent layer over the living venture model: the product mapped as
+  the pages a user walks through (left to right, connections only the code proves) with click-to-refine
+  that mints exact Work Threads; GTM plays as workflows in drafted and established registers; plus
+  current truth, durable provisional alternatives, attached work, outward actions, evidence return,
+  and in-place selective merge.
 - Return restores exact context and makes changed, moving, failed, stale, returned, and founder-only
   decisions visible through their owning Threads and paths.
 

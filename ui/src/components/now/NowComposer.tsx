@@ -121,7 +121,7 @@ export function NowComposer({
           ...(submissionMode === "conversation" || submissionMode === "product-gtm" ? { mode: "context" as const } : {}),
           ...(submissionMode === "work" && runtimeOverride ? { runtime: runtimeOverride } : {}),
           ...(submissionMode === "work" && modelOverride ? { model: modelOverride } : {}),
-          ...(submissionMode === "work" && effortOverride ? { effort: effortOverride } : {}),
+          ...((submissionMode === "work" || submissionMode === "product-gtm") && effortOverride ? { effort: effortOverride } : {}),
           ...(productGtmView ? { productGtmView: true } : workflowSketch ? { workflowSketch: true } : {}),
           ...(artifactSection ? { artifactSection: { title: artifactSection.sectionTitle, index: artifactSection.sectionIndex } } : {}),
         });

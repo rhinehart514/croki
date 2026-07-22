@@ -26,11 +26,14 @@ export async function completeSignup(formData: FormData) {
   // attribution cookie the landing page set is sitting right there in the
   // request and nobody reads it. So this event can tell us a signup happened
   // and never which campaign, post, or channel earned it.
-  analytics.track("signup_completed", {
+  analytics.track({
     userId: user.id,
-    plan,
-    workspaceId: workspace.id,
-    seats: workspace.seats,
+    event: "signup_completed",
+    properties: {
+      plan,
+      workspaceId: workspace.id,
+      seats: workspace.seats,
+    },
   });
 
   redirect(`/w/${workspace.id}`);

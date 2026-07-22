@@ -241,8 +241,9 @@
 .now-composer-shell:focus-within { border-color: var(--n-ink-4); }
 .now-composer[data-busy="true"] .now-composer-shell { border-color: var(--green-2); }
 .now-composer[data-dragging-images="true"] .now-composer-shell { border-color: var(--primary); box-shadow: 0 0 0 3px rgb(79 134 247 / 10%); }
-/* Intent in flight: the composer's border becomes a live spectrum and drifts — the rainbow starts moving
-   while Drover reads the founder's intent. It settles back the instant the options land. */
+/* Intent in flight: the composer's border becomes a still spectrum while Drover reads the founder's intent.
+   The spinning pending mark in the directions tray carries the working signal; the border settles back to its
+   resting line the instant the options land. */
 .now-composer[data-intent="loading"] .now-composer-shell {
   border-color: transparent;
   background:
@@ -251,13 +252,7 @@
       var(--agent-spectrum-cyan), var(--agent-spectrum-violet) 24%,
       var(--agent-spectrum-rose) 46%, var(--agent-spectrum-amber) 68%,
       var(--agent-spectrum-green) 86%, var(--agent-spectrum-cyan)) border-box;
-  background-size: 100% 100%, 240% 100%;
   box-shadow: var(--n-shadow), 0 0 26px rgb(124 156 255 / 12%);
-  animation: now-intent-drift 2.4s linear infinite;
-}
-@keyframes now-intent-drift {
-  from { background-position: center, 0% 50%; }
-  to { background-position: center, 240% 50%; }
 }
 @keyframes now-intent-turn { to { transform: rotate(1turn); } }
 .now-composer-scope {
@@ -349,8 +344,8 @@
 }
 .now-intent-orb:hover:not(:disabled) { transform: scale(1.1); box-shadow: 0 0 16px rgb(124 156 255 / 30%); }
 .now-intent-orb:disabled { cursor: default; }
-.now-composer[data-intent="loading"] .now-intent-orb { animation: now-intent-turn 1.3s linear infinite; }
-.now-intent-orb--pending { width: 14px; height: 14px; animation: now-intent-turn 1.3s linear infinite; }
+.now-intent-orb--pending { width: 14px; height: 14px; }
+.now-intent-spinner { animation: now-intent-turn 1.3s linear infinite; }
 .now-direction-orb {
   width: 11px; height: 11px; flex: 0 0 auto; border-radius: 50%;
   background: conic-gradient(from 25deg,
@@ -406,6 +401,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .now-composer-spinner { animation: none; }
+  .now-intent-spinner { animation: none; }
 }
 
 /* The post-submit receipt — a composed confirmation of what the drive made concrete, in place of a status

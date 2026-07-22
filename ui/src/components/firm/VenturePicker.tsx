@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, ChevronDown, Plus } from "lucide-react";
 import {
   listVentures,
@@ -12,13 +12,17 @@ export function VenturePicker({ onOpen }: {
   onOpen: (venture: FirmVenture, context?: PortfolioWallContext) => void;
 }) {
   const [ventures, setVentures] = useState<FirmVenture[] | null>(null);
+  const [failed, setFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let live = true;
-    listVentures().then((res) => { if (live) setVentures(res.ventures); }).catch(() => { if (live) setVentures([]); });
+    listVentures()
+      .then((res) => { if (live) { setVentures(res.ventures); setFailed(false); } })
+      .catch(() => { if (live) { setVentures([]); setFailed(true); } });
     return () => { live = false; };
   }, []);
+  useEffect(() => load(), [load]);
 
   const hasVentures = Boolean(ventures?.length);
 
@@ -31,7 +35,7 @@ export function VenturePicker({ onOpen }: {
           <p>Change the Product and every path to market. Let agents pursue the work while you keep current truth and outward action exact.</p>
           <div className="firm-app-picker-orbit" aria-hidden="true">
             <i /><i /><i />
-            <strong>{ventures === null ? "Opening the firm" : "No ventures yet"}</strong>
+            <strong>{failed ? "Couldn’t reach the firm" : ventures === null ? "Opening the firm" : "No ventures yet"}</strong>
             <small>connect a real Product</small>
           </div>
         </div>
@@ -39,7 +43,15 @@ export function VenturePicker({ onOpen }: {
 
       <div className="firm-app-picker-content">
         {ventures === null ? (
-          <p className="firm-app-picker-loading">Loading your ventures…</p>
+          <p className="firm-app-picker-loading" role="status">Loading your ventures…</p>
+        ) : failed ? (
+          <section className="firm-app-picker-section firm-app-picker-failed" role="alert" aria-labelledby="ventures-unavailable">
+            <div className="firm-app-picker-section-head">
+              <h2 id="ventures-unavailable">Couldn’t read your ventures</h2>
+              <p>Drover didn’t answer this local read. Nothing on this machine changed.</p>
+            </div>
+            <button type="button" className="firm-app-picker-retry" onClick={() => { setVentures(null); setFailed(false); load(); }}>Try again</button>
+          </section>
         ) : ventures.length === 0 ? (
           <section className="firm-app-picker-section" aria-labelledby="start-first-venture">
             <div className="firm-app-picker-section-head">

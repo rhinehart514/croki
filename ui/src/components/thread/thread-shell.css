@@ -68,7 +68,7 @@
 .thread-rail-row:hover { background: var(--n-hover); color: var(--n-ink); }
 .thread-rail-row[data-selected="true"] { background: var(--n-selected); color: var(--n-ink); }
 .thread-rail-row svg { width: 13px; color: var(--n-ink-4); }
-.thread-rail-row .thread-state-active { animation: thread-state-spin 800ms linear infinite; }
+.thread-rail-row .thread-state-spinner { animation: thread-state-spin 800ms linear infinite; }
 .thread-rail-row > span:not(.sr-only) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread-rail-row small { min-width: 18px; color: var(--n-ink-4); font: var(--text-xs) var(--mono); text-align: right; }
 .thread-rail-empty { margin: 0 8px; color: var(--n-ink-4); font-size: 12px; }
@@ -169,6 +169,17 @@
 .thread-agent-details li { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 18px; color: var(--n-ink-3); font-size: 11px; line-height: 1.45; }
 .thread-agent-details li small { flex: 0 0 auto; color: var(--n-ink-4); font: 9px var(--mono); }
 .thread-loading, .thread-stale { margin: 10px auto; color: var(--n-ink-4); font-size: 12px; }
+
+/* A restoring Work Thread reads as content on the way back, not an empty pane: the skeleton keeps the
+   real transcript rhythm — a right-aligned founder turn, then unboxed agent lines. */
+.thread-loading:has(.thread-skeleton) { margin: 0; }
+.thread-skeleton { display: grid; gap: 18px; width: min(100%, 768px); margin: 0 auto; padding: 8px 0; }
+.thread-skeleton-turn { display: grid; gap: 8px; }
+.thread-skeleton-turn[data-role="founder"] { justify-items: end; }
+.thread-skeleton-turn span { height: 12px; border-radius: 7px; background: var(--n-line-2); opacity: .55; }
+.thread-skeleton-turn[data-role="agent"] span:nth-child(2) { opacity: .45; }
+.thread-skeleton-turn[data-role="agent"] span:nth-child(3) { opacity: .38; }
+.thread-skeleton-turn[data-role="founder"] span { height: 34px; max-width: 80%; border-radius: var(--r-xl); }
 .thread-home, .thread-home-summary { max-width: 600px; margin: auto; padding: 80px 20px; text-align: center; }
 .thread-home > span, .thread-home-summary > span { color: var(--primary); font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .thread-home h2, .thread-home-summary h2 { margin: 12px 0 8px; color: var(--n-ink); font-size: clamp(24px, 3vw, 38px); font-weight: 580; letter-spacing: -.035em; }
@@ -250,6 +261,7 @@
 .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-agent-update[data-state="stopping"] .thread-agent-mark { animation: thread-agent-spectrum-turn 5.5s linear infinite; }
 .thread-conversation[data-surface="work"] .thread-agent-update p { margin: 0; color: var(--n-ink-2); font-size: 14px; line-height: 1.6; }
 .thread-conversation[data-surface="work"] .thread-agent-state { color: var(--n-ink-4); font: 500 10px/1.4 var(--mono); letter-spacing: 0; text-transform: none; }
+.thread-conversation[data-surface="work"] .thread-agent-wait-note { width: fit-content; margin-top: 4px; color: var(--n-ink-4); font-size: 11px; line-height: 1.45; }
 .thread-conversation[data-surface="work"] .thread-agent-details { margin-top: 5px; }
 .thread-conversation[data-surface="work"] .thread-agent-details summary:hover { color: var(--n-ink-2); }
 .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-agent-details ol { border-left-color: color-mix(in srgb, var(--agent-spectrum-violet) 42%, var(--n-line)); }
@@ -463,7 +475,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .thread-rail { transition: none; }
-  .thread-rail-row .thread-state-active,
+  .thread-rail-row .thread-state-spinner,
   .thread-conversation[data-surface="work"] .thread-agent-update .thread-agent-mark,
   .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-message:not([data-role="founder"]) > header::before,
   .thread-conversation[data-surface="work"] .thread-composer[data-chat-mode="product-gtm"] .now-composer-shell,

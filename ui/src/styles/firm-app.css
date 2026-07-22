@@ -21,6 +21,61 @@
   font-size: var(--text-xs);
 }
 
+/* A failed venture read is not first use. It gets its own retryable surface so a transient local
+   failure never looks like an empty firm. */
+.firm-app-failed {
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+}
+.firm-app-failed > div {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 46ch;
+}
+.firm-app-failed span {
+  color: var(--link);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.firm-app-failed h1 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: 640;
+  letter-spacing: -0.025em;
+  line-height: var(--leading-tight);
+}
+.firm-app-failed p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+.firm-app-failed button,
+.firm-app-picker-retry {
+  justify-self: start;
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 620;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.firm-app-failed button:hover,
+.firm-app-picker-retry:hover { border-color: var(--ghost); background: var(--surface-2); }
+.firm-app-failed button:focus-visible,
+.firm-app-picker-retry:focus-visible { border-color: var(--link); outline: 2px solid color-mix(in oklch, var(--link) 20%, transparent); }
+
+.firm-app-picker-failed .firm-app-picker-section-head h2 { color: var(--danger); }
+
 /* ─── Venture picker ───────────────────────────────────────────────────────── */
 
 .firm-app-picker {

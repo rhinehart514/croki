@@ -169,9 +169,28 @@ disclosure puts adopted workflows first and unfolds their exact operational step
 without established mechanics remain visibly unmapped rather than becoming fabricated flows. Exact Work items
 keep separate canvas identities even when they share one Thread.
 
-The workflow key now exposes its primary adopted workflow without opening a menu. Whole-venture and focused
-camera composition preserve a readable active chapter; below semantic-detail zoom the remaining portfolio uses
-meaningful overview markers rather than tiny full labels.
+The GTM key now presents ambitious plays in two honest registers. A play's register is derived from physics,
+never a self-declared field on its graph: it reads as **drafted** — an intended workflow, visibly marked not yet
+real — until it is both founder-adopted (canonical, not a tentative staged draft) and has actually run, at which
+point it reads as **established**. Because the register is derived, a draft can never present as established
+regardless of what any stored blob once claimed. `deriveWorkflowRegister` is the single source of that truth,
+used by both the canvas projection and the GTM key. Selected plays unfold at full operational length with
+triggers, sources, agents, tools, conditions, waits, founder gates, outward actions, observations, outcomes,
+branches, and return loops; the layout gives every step its own column at a fixed pitch, so a long play scrolls
+end to end with no chapter compression or summarized middle.
+
+An established running play carries per-step running counts derived only from real state — live WorkIndex work,
+outward-action receipts, and evidence returns — placed on the canonical step of each kind: "N need your approval"
+on the founder gate, "N waiting on reply" on the outward action, "N returned" on the observation, and "N in
+progress" on the agent-work step. Each count carries the exact item references behind it, so the people are one
+click behind the number. A step whose kind has no real item shows no count, a drafted play shows no counts at
+all, and nothing is hand-maintained or fabricated. The legacy self-declared workflow `register` blob field was
+retired end to end: adoption no longer writes it, and the flow-artifact authoring tool schema and work-loop
+prompt no longer require or emit it. Legacy records that still carry the old field read forward cleanly as
+drafted until they truly run. The opening camera holds a readable frame on the play and its first steps rather
+than shrinking a long workflow to fit; selecting a later step frames that exact point while preserving the whole
+graph. Whole-venture and focused camera composition preserve a readable active chapter; below semantic-detail
+zoom the remaining portfolio uses meaningful overview markers rather than tiny full labels.
 
 The deterministic browser harness remains a development/test surface. Electron remains the shipped product.
 Visual verification must confirm that the BrowserWindow loaded and became visible; a healthy Brain alone is not
@@ -185,7 +204,12 @@ Validated during this realignment:
 - selective merge, drift conflict, and agent merge refusal pass;
 - WorkScope lease/concurrency and atomic spend tests pass;
 - the provider-neutral MCP surface and authority matrix pass;
-- the complete Brain suite passes; the UI suite passes 48 files and 226 tests;
+- the complete Brain suite passes 878 tests; the UI suite passes 49 files and 246 tests;
+- the GTM two-register receipts pass: a play whose stored blob claims established still projects as drafted
+  without real movement, a not-yet-adopted play that has run stays drafted, only a canonical play that has run
+  reads as established, per-step running counts derive from real state with the exact items behind each count and
+  none on empty steps, a long play lays out at full length with one node per step, and a legacy `channel` workflow
+  record reads forward into the two-register model without trusting its stored register;
 - focused canvas tests pass 28/28; focused credential/connector tests pass 31/31;
 - UI lint, the production build, and service/component size checks pass;
 - runtime reachability, dead-code, and UI bundle checks pass;

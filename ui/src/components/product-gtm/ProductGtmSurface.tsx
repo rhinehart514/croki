@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
   Background, BackgroundVariant, Controls, MiniMap, ReactFlow, useNodesState,
   type EdgeTypes, type NodeTypes, type ReactFlowInstance, type Viewport,
@@ -12,16 +12,16 @@ import { OutwardActionReview } from "./OutwardActionReview";
 import { ProductGtmEdge } from "./ProductGtmEdge";
 import { ProductGtmNavigator } from "./ProductGtmNavigator";
 import { ProductGtmNode } from "./ProductGtmNode";
+import { ProductPagePanel } from "./ProductPagePanel";
+import { useProductGtmDrop } from "./productGtmDrop";
 import { reflowExpandedNeighborhood } from "./productGtmLayout";
 import { projectProductGtm, type ProductGtmNode as ProductGtmFlowNode } from "./productGtmProjection";
-import { PRODUCT_GTM_READABLE_ZOOM, productGtmMotionDuration, productGtmViewportIsAway } from "./productGtmViewport";
+import { PRODUCT_GTM_READABLE_ZOOM, PRODUCT_GTM_WHOLE_ZOOM, productGtmMotionDuration, productGtmViewportIsAway } from "./productGtmViewport";
 import "@xyflow/react/dist/style.css";
 import "./product-gtm.css";
 
 const NODE_TYPES: NodeTypes = { productGtm: ProductGtmNode };
 const EDGE_TYPES: EdgeTypes = { productGtmEdge: ProductGtmEdge };
-const AGENT_MIME = "application/x-drover-agent";
-const CAPABILITY_MIME = "application/x-drover-capability";
 const placementKey = (nodeId: string) => `product-gtm-v2:${nodeId}`;
 
 function fallbackModel(ventureId: string, index: SystemIndex | null): FirmSemanticModel | null {
@@ -42,26 +42,20 @@ function selectedNodeId(ref: string | null): string | null {
   return ref;
 }
 
-function droppedNodeId(target: EventTarget | null) {
-  return target instanceof Element ? target.closest<HTMLElement>(".react-flow__node")?.dataset.id ?? null : null;
-}
-
 export function ProductGtmSurface({
   ventureId, index, workIndex, selectedRef, camera, placement, readOnlyReason,
-  onCameraChange, onFocus, onOpenWork, onAskAgent, onUseAgent, onChanged,
+  organizeRequest = 0, onCameraChange, onFocus, onOpenWork, onAskAgent, onUseAgent, onChanged,
 }: {
   ventureId: string; index: SystemIndex | null; workIndex: WorkIndex | null; selectedRef: string | null; camera: Viewport | null; placement: FirmPlacement; readOnlyReason: string | null;
+  organizeRequest?: number;
   onCameraChange: (camera: Viewport) => void; onFocus: (ref: string | null) => void; onOpenWork: (threadRef: string) => void;
   onAskAgent: (subjectRef?: string, relatedRefs?: string[]) => void; onUseAgent: (agentRef: string, subjectRef?: string) => void; onChanged: () => void;
 }) {
   const [model, setModel] = useState<FirmSemanticModel | null>(() => fallbackModel(ventureId, index));
   const [movement, setMovement] = useState<MarketMovementIndex | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dropNotice, setDropNotice] = useState<string | null>(null);
-  const [dropActive, setDropActive] = useState(false);
   const [wholeVentureFor, setWholeVentureFor] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const dragDepth = useRef(0);
   const flowInstance = useRef<ReactFlowInstance<ProductGtmFlowNode> | null>(null);
   const placementPositions = useRef({ ...placement.positions });
   const placementRevision = useRef(placement.revision);
@@ -80,12 +74,6 @@ export function ProductGtmSurface({
     }).catch((reason) => { if (live) setError(reason instanceof Error ? reason.message : "The living venture model could not load."); });
     return () => { live = false; };
   }, [refreshKey, ventureId]);
-  useEffect(() => {
-    if (!dropNotice) return;
-    const timer = window.setTimeout(() => setDropNotice(null), 3600);
-    return () => window.clearTimeout(timer);
-  }, [dropNotice]);
-
   const visibleModel = model ?? fallbackModel(ventureId, index);
   const selected = selectedNodeId(selectedRef);
   const wholeVenture = wholeVentureFor === ventureId && !selected;
@@ -98,6 +86,7 @@ export function ProductGtmSurface({
     ? projectProductGtm(visibleModel, movement, selected, projectionContext)
     : { nodes: [], edges: [], focusName: "", focusSummary: "", initialFocusIds: [], chapterKind: "whole" as const, chapterAnchorId: null },
   [visibleModel, movement, projectionContext, selected]);
+  const { dropNotice, setDropNotice, dropActive, dropHandlers } = useProductGtmDrop({ targets: graph.nodes, readOnlyReason, onUseAgent, onAskAgent });
   const selectedNode = graph.nodes.find((node) => node.id === selected) ?? null;
   const branchId = selectedNode?.data.kind === "branch" ? selectedNode.data.ref.replace(/^model-branch:/, "") : null;
 
@@ -116,19 +105,20 @@ export function ProductGtmSurface({
     const expanded = node.id === selected;
     const isWork = node.data.kind === "work";
     const isWorkflowStep = node.data.kind === "workflow";
-    const content = expanded
-      ? node.data.kind === "branch" && branchId
+    const content = !expanded ? undefined
+      : node.data.kind === "branch" && branchId
         ? <ModelBranchReview inline ventureId={ventureId} branchId={branchId} readOnly={Boolean(readOnlyReason)} onClose={() => select(null)} onContinue={(ref) => onAskAgent(ref)} onChanged={() => { refresh(); onChanged(); }} />
         : node.data.action
           ? <OutwardActionReview ventureId={ventureId} action={node.data.action} readOnly={Boolean(readOnlyReason)} onChanged={() => { refresh(); onChanged(); }} />
-          : undefined
-      : undefined;
+          : node.data.role === "page" && node.data.page
+            ? <ProductPagePanel ventureId={ventureId} name={node.data.name} summary={node.data.detail} pageRef={node.data.ref} page={node.data.page} readOnly={Boolean(readOnlyReason)} onOpenWork={onOpenWork} />
+            : undefined;
     return {
       ...node,
       zIndex: expanded ? 20 : node.zIndex,
       data: {
         ...node.data, expanded, expandedContent: content,
-        actionLabel: node.data.kind === "branch" || node.data.action ? undefined : isWork ? "Open exact work" : isWorkflowStep ? "Work on this step" : "Work on this",
+        actionLabel: node.data.kind === "branch" || node.data.action || node.data.role === "page" ? undefined : isWork ? "Open exact work" : isWorkflowStep ? "Work on this step" : "Work on this",
         onAction: isWork ? () => onOpenWork(node.data.ref) : () => onAskAgent(node.data.workRef ?? node.data.ref),
         onCollapse: () => select(null),
       },
@@ -168,30 +158,40 @@ export function ProductGtmSurface({
     const workflowFocus = Boolean(currentSelection?.data.workflowGraph) || currentSelection?.data.kind === "workflow";
     const presentIds = new Set(nodes.map((node) => node.id));
     if (workflowFocus && [...focusIds].some((id) => !presentIds.has(id))) return;
-    const framingNodes = workflowFocus
-      ? nodes.filter((node) => focusIds.has(node.id))
-      : currentSelection ? [currentSelection] : nodes.filter((node) => focusIds.has(node.id));
+    // The whole venture frames every node at an overview altitude; a focused chapter frames its
+    // neighborhood at readable size.
+    const wholeVenture = graph.chapterKind === "whole" && !currentSelection;
+    const floor = wholeVenture ? PRODUCT_GTM_WHOLE_ZOOM : PRODUCT_GTM_READABLE_ZOOM;
+    const workflowNodes = nodes.filter((node) => focusIds.has(node.id)).sort((left, right) => left.position.x - right.position.x || left.position.y - right.position.y);
+    const overviewNodes = nodes.filter((node) => focusIds.has(node.id)).slice(0, 5);
+    const framingNodes = wholeVenture
+      ? (overviewNodes.length ? overviewNodes : nodes.slice(0, 5))
+      : currentSelection?.data.kind === "workflow"
+        ? [currentSelection]
+        : workflowFocus
+          ? workflowNodes.slice(0, 4)
+          : currentSelection ? [currentSelection] : nodes.filter((node) => focusIds.has(node.id));
     const targets = framingNodes.length ? framingNodes : nodes.slice(0, 1);
     await instance.fitView({
       nodes: targets,
-      padding: 0.2,
-      minZoom: PRODUCT_GTM_READABLE_ZOOM,
+      padding: wholeVenture ? 0.2 : 0.2,
+      minZoom: floor,
       maxZoom: 0.98,
       duration: productGtmMotionDuration(duration),
     });
     // React Flow can resolve an early fit before its internal measurements have caught up with
     // controlled nodes, leaving a persisted overview camera untouched. Center the exact chapter at
-    // the readability floor so an old session can never defeat the default composition.
-    if (instance.getViewport().zoom < PRODUCT_GTM_READABLE_ZOOM - 0.001) {
+    // the framing floor so an old session can never defeat the default composition.
+    if (instance.getViewport().zoom < floor - 0.001) {
       const bounds = instance.getNodesBounds(targets);
       await instance.setCenter(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, {
-        zoom: PRODUCT_GTM_READABLE_ZOOM,
+        zoom: floor,
         duration: productGtmMotionDuration(duration),
       });
     }
     focalViewport.current = instance.getViewport();
     window.requestAnimationFrame(() => setCameraAway(false));
-  }, [graph.initialFocusIds, nodes, selected]);
+  }, [graph.chapterKind, graph.initialFocusIds, nodes, selected]);
   useEffect(() => {
     if (!flowInstance.current || nodes.length === 0 || framedSignature.current === frameSignature) return;
     const focusIds = new Set(graph.initialFocusIds);
@@ -215,54 +215,52 @@ export function ProductGtmSurface({
       setDropNotice("That position could not be saved. The venture model was not changed.");
       onChanged();
     });
-  }, [onChanged, ventureId]);
+  }, [onChanged, setDropNotice, ventureId]);
 
-  const handleDrop = useCallback((event: DragEvent) => {
-    event.preventDefault();
-    dragDepth.current = 0; setDropActive(false);
-    if (readOnlyReason) { setDropNotice("Drover is not current enough to begin new work."); return; }
-    const target = graph.nodes.find((node) => node.id === droppedNodeId(event.target));
-    const agentRef = event.dataTransfer.getData(AGENT_MIME);
-    if (agentRef) {
-      onUseAgent(agentRef, target?.data.ref);
-      setDropNotice(target ? `Agent directed at ${target.data.name}.` : "Agent directed at the current focus.");
-      return;
-    }
-    const capabilityData = event.dataTransfer.getData(CAPABILITY_MIME);
-    if (capabilityData) {
-      if (!target) { setDropNotice("Drop a tool or source on the exact Product or GTM node it should affect."); return; }
-      try {
-        const capability = JSON.parse(capabilityData) as { id?: string; label?: string };
-        if (!capability.id) throw new Error("missing capability");
-        onAskAgent(target.data.ref, [`capability:${capability.id}`]);
-        setDropNotice(`${capability.label ?? "Capability"} attached to exact work on ${target.data.name}.`);
-      } catch { setDropNotice("Drover could not identify that tool or source. Nothing was attached."); }
-      return;
-    }
-    setDropNotice("That item has no supported Product / GTM effect.");
-  }, [graph.nodes, onAskAgent, onUseAgent, readOnlyReason]);
+  const organizedRequest = useRef(0);
+  useEffect(() => {
+    if (!organizeRequest || organizeRequest === organizedRequest.current || readOnlyReason) return;
+    organizedRequest.current = organizeRequest;
+    const organized = reflowExpandedNeighborhood(interactiveNodes, selected);
+    setNodes(organized);
+    const nextPositions = { ...placementPositions.current };
+    for (const node of organized) delete nextPositions[placementKey(node.id)];
+    placementPositions.current = nextPositions;
+    saveQueue.current = saveQueue.current.then(async () => {
+      const response = await putPlacement(ventureId, { positions: nextPositions, expectedRevision: placementRevision.current });
+      placementRevision.current = response.placement.revision;
+      placementPositions.current = { ...response.placement.positions };
+      setDropNotice("Canvas organized. Product and GTM truth was not changed.");
+      onChanged();
+      window.requestAnimationFrame(() => {
+        const instance = flowInstance.current;
+        if (!instance || !organized.length) return;
+        const focusIds = new Set(graph.initialFocusIds);
+        const targets = organized.filter((node) => focusIds.has(node.id));
+        void instance.fitView({ nodes: targets.length ? targets : organized, padding: .16, minZoom: PRODUCT_GTM_WHOLE_ZOOM, maxZoom: .98, duration: productGtmMotionDuration(220) });
+      });
+    }).catch(() => {
+      setDropNotice("The canvas could not be organized. Its prior placement remains available.");
+      onChanged();
+    });
+  }, [graph.initialFocusIds, interactiveNodes, onChanged, organizeRequest, readOnlyReason, selected, setDropNotice, setNodes, ventureId]);
 
   if (!visibleModel || graph.nodes.length === 0) return <main className="product-gtm-empty"><div><span>Product / GTM</span><h1>What are you trying to make true?</h1><p>State the direction once. Claude or Codex can ground the repository, pursue several approaches, and materialize Product and go-to-market alternatives here.</p><button type="button" onClick={() => onAskAgent()}>Begin real work</button>{error ? <small role="status">Drover could not read the local model yet. Your direction is still available.</small> : null}</div></main>;
   return <main className="product-gtm-surface" data-has-selection={selectedNode ? "true" : undefined} data-has-focus={graph.chapterKind !== "whole" ? "true" : undefined} data-drop-active={dropActive ? "true" : undefined} data-zoom={zoomLevel < 0.78 ? "overview" : "detail"}>
     {readOnlyReason || error ? <div className="product-gtm-state"><span role="status">{readOnlyReason ?? "Showing the last current venture model. Reconnecting locally."}</span>{!readOnlyReason && error ? <button type="button" onClick={refresh}>Try again</button> : null}</div> : null}
     {dropNotice ? <p className="product-gtm-drop-status" role="status">{dropNotice}</p> : null}
     {graph.chapterKind !== "whole" ? <aside className="product-gtm-context" aria-live="polite">
-      <div><strong>{graph.focusName}</strong><span>{graph.focusSummary}</span></div>
+      {graph.chapterKind === "selection" ? null : <div><strong>{graph.focusName}</strong><span>{graph.focusSummary}</span></div>}
       <button type="button" onClick={showWholeVenture}>Whole venture</button>
     </aside> : null}
-    <ProductGtmNavigator model={visibleModel} selectedRef={selectedRef} onFocus={(ref) => {
+    <ProductGtmNavigator model={visibleModel} movement={movement} selectedRef={selectedRef} onDraftPlay={() => onAskAgent()} onFocus={(ref) => {
       setWholeVentureFor(null);
       onFocus(ref);
     }} />
     {cameraAway ? <button className="product-gtm-return-current" type="button" onClick={() => void frameCurrent()}>
       <LocateFixed aria-hidden="true" />Return to current
     </button> : null}
-    <div className="product-gtm-canvas"
-      onDragEnter={(event) => { if (event.dataTransfer.types.includes(AGENT_MIME) || event.dataTransfer.types.includes(CAPABILITY_MIME)) { dragDepth.current += 1; setDropActive(true); } }}
-      onDragLeave={() => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDropActive(false); }}
-      onDragOver={(event) => { if (event.dataTransfer.types.includes(AGENT_MIME) || event.dataTransfer.types.includes(CAPABILITY_MIME)) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
-      onDrop={handleDrop}
-    ><ReactFlow
+    <div className="product-gtm-canvas" {...dropHandlers}><ReactFlow
       nodes={nodes} edges={graph.edges} nodeTypes={NODE_TYPES} edgeTypes={EDGE_TYPES}
       defaultViewport={camera ?? undefined} onInit={(instance) => { flowInstance.current = instance; setFlowReady(true); }}
       minZoom={0.2} maxZoom={1.8} panOnDrag selectionOnDrag={false} nodesConnectable={false} nodesDraggable={!readOnlyReason}

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createDenseGeneratedMapsFixture } from "../fixtures/atlas-fixtures.mjs";
-import { assertNoUnhandledRejections, bootFixture, openFixtureVenture, waitForDom } from "./fixtures/browser-harness.mjs";
+import { assertNoUnhandledRejections, bootFixture, openFixtureVenture, waitForCanvasViewportStable, waitForDom } from "./fixtures/browser-harness.mjs";
 
 test("dense Product/GTM remains causal, contained, and reachable under semantic zoom", async () => {
   const drover = await bootFixture(createDenseGeneratedMapsFixture);
@@ -27,6 +27,20 @@ test("dense Product/GTM remains causal, contained, and reachable under semantic 
     assert.ok(normal.pageOverflow <= 1, `dense Product/GTM introduced ${normal.pageOverflow}px page overflow`);
     assert.equal(normal.contained, true, JSON.stringify(normal));
     assert.equal(normal.minimap && normal.controls, true, "dense navigation lost minimap or direct zoom controls");
+
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.getAttribute('aria-label') === 'Open Category creation launch play'); button?.click(); return Boolean(button); })()`), true, "the ambitious GTM play was not directly openable");
+    await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-role="workflow-step"]').length === 12`, "the complete ambitious play did not unfold");
+    await waitForCanvasViewportStable(client, "the ambitious play camera did not settle");
+    const play = await client.evaluate(`(() => ({
+      steps: document.querySelectorAll('.product-gtm-node[data-role="workflow-step"]').length,
+      drafted: document.querySelectorAll('.product-gtm-node[data-role="workflow-step"][data-workflow-register="drafted"]').length,
+      first: document.querySelector('.product-gtm-node[data-role="workflow-step"] .product-gtm-node-copy small b')?.textContent,
+      width: Math.max(...[...document.querySelectorAll('.product-gtm-node[data-role="workflow-step"]')].map((node) => node.getBoundingClientRect().right)) - Math.min(...[...document.querySelectorAll('.product-gtm-node[data-role="workflow-step"]')].map((node) => node.getBoundingClientRect().left)),
+      zoom: Number((document.querySelector('.react-flow__viewport')?.style.transform.match(/scale\\(([^)]+)\\)/) || [])[1] || 0),
+    }))()`);
+    assert.deepEqual({ steps: play.steps, drafted: play.drafted, first: play.first }, { steps: 12, drafted: 12, first: "Step 1 of 12" });
+    assert.ok(play.width > 1800, `the ambitious play was compressed instead of rendered at full length: ${JSON.stringify(play)}`);
+    assert.ok(play.zoom >= 0.72, `the ambitious play opened below readable scale: ${JSON.stringify(play)}`);
 
     await client.send("Emulation.setDeviceMetricsOverride", { width: 720, height: 450, deviceScaleFactor: 2, mobile: false });
     await client.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");

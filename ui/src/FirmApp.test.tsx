@@ -145,6 +145,22 @@ describe("FirmApp", () => {
     expect(container.querySelector(".firm-app-workbench-bar")).toBeNull();
   });
 
+  it("shows a retryable failure instead of the first-connection picker when the venture read fails", async () => {
+    listVentures.mockReset().mockRejectedValueOnce(new Error("brain unreachable"));
+    render(<FirmApp />);
+
+    // A failed read must not masquerade as a fresh firm.
+    expect(await screen.findByRole("heading", { name: /couldn.t reach your ventures/i })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /move from the real product/i })).toBeNull();
+
+    // Retry recovers into the real venture, not the empty picker.
+    listVentures.mockResolvedValue({
+      ventures: [{ id: "v1", name: "Recovered venture", repository: "/products/rec", createdAt: "now", updatedAt: "now" }],
+    });
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    expect(await screen.findByTestId("venture-canvas-stub")).toHaveAttribute("data-venture-name", "Recovered venture");
+  });
+
   it("starting a new venture creates it and opens it directly", async () => {
     createVenture.mockResolvedValue({ venture: { id: "v2", name: "new", repository: "/products/new", createdAt: "now", updatedAt: "now" } });
     render(<FirmApp />);

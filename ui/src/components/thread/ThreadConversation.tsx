@@ -171,7 +171,16 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
       {hasTranscript ? <Conversation className="thread-log" contextRef={conversation} initial="instant">
         <ConversationContent className="thread-log-content" scrollClassName="thread-log-scroll">
           {draft || (isHome && !timeline) ? <ThreadHome attention={0} active={0} /> : null}
-          {!draft && !timeline && loading ? <div className="thread-loading" role="status">Restoring this thread…</div> : null}
+          {!draft && !timeline && loading ? (
+            <div className="thread-loading" role="status" aria-label="Restoring this thread">
+              <div className="thread-skeleton" aria-hidden="true">
+                <div className="thread-skeleton-turn" data-role="founder"><span style={{ width: "52%" }} /></div>
+                <div className="thread-skeleton-turn" data-role="agent"><span style={{ width: "94%" }} /><span style={{ width: "98%" }} /><span style={{ width: "66%" }} /></div>
+                <div className="thread-skeleton-turn" data-role="founder"><span style={{ width: "38%" }} /></div>
+                <div className="thread-skeleton-turn" data-role="agent"><span style={{ width: "88%" }} /><span style={{ width: "52%" }} /></div>
+              </div>
+            </div>
+          ) : null}
           {!draft && error ? <div className="thread-stale" role="status">{error} The last coherent thread remains unchanged.</div> : null}
           {!draft && timeline?.items.length === 0 ? <ThreadHome attention={0} active={timeline.agents.length} /> : null}
           {timeline?.items.map((timelineItem) => <ThreadMessage key={timelineItem.id} item={timelineItem} surface={surface} chatMode={workChatMode} onOpenVisual={onOpenVisual} onOpenThread={onOpenThread} />)}

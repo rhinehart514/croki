@@ -7,6 +7,14 @@ tree proves. `DESIGN.md` defines the intended desktop experience. `PRODUCT.md` i
 translation and cannot override them. When these sources disagree, surface the conflict rather than
 blending them. Design explorations remain evidence until an authority file adopts them.
 
+## Current phase (2026-07-22)
+
+The active work is a T3 polish pass on the shipped UI and UX: raise the existing Work and Product / GTM
+surfaces to the native coding-client bar audited in `docs/design/experience-intent-architecture.md` (T3
+Code). Polish means subtraction, better defaults, hierarchy, legibility, motion restraint, and honest
+empty/loading/error states on what already exists — not new capability, surfaces, or abstractions. Delete
+this section when the phase ends.
+
 ## Boundaries
 
 - Keep Drover product- and venture-agnostic. A customer or portfolio product may supply examples, but
@@ -73,10 +81,20 @@ blending them. Design explorations remain evidence until an authority file adopt
   visual HTML artifact: project its exact content into a hero, section bands, structured tiles, comparisons, or action
   panels that fit the material. A typeset memo, raw prose wall, or generic nested card is not sufficient. The exact
   question or founder decision remains visible at the point of action rather than hiding behind machinery disclosure.
-- Product / GTM is an advanced spatial node-and-relationship editor. It should feel like operating dense
-  conditional logic: triggers, branches, loops, gates, agents, capabilities, and evidence paths remain
-  directly manipulable and visually causal. It exposes how Product and market work connect and derives linked
-  agent state directly from `WorkIndex`; it is not a second coding shell or static ontology diagram. Do not
+- Product / GTM is the founder's intent layer: its Product territory is the product itself, mapped as the
+  pages a user walks through — a proper left-to-right map in walk order, entry pages at the left, page
+  connections drawn only from links the code proves — derived by agents from the code and corrected by the
+  founder, because seeing the product laid out is how the founder knows what to prompt. At rest the map is clean page names only.
+  Clicking a page shows what it is now, takes a brain-dump refinement that mints an exact Work Thread, and
+  offers one GTM action: join an existing play, or have an agent propose one that lands as an adoptable
+  proposal. Strategy objects attach to the page they are about; they do not float free in Product territory.
+  This supersedes the earlier stance that a product-surface layout is a forbidden repo mirror: the
+  click-to-refine consequence is what keeps the map from becoming a static ontology diagram, and a map
+  without that consequence remains a defect (decisions: docs/FIRM-SPEC.md, 2026-07-22).
+  The canvas remains an advanced spatial node-and-relationship editor. GTM mechanics should feel like
+  operating dense conditional logic: triggers, branches, loops, gates, agents, capabilities, and evidence
+  paths remain directly manipulable and visually causal. It exposes how Product and market work connect and
+  derives linked agent state directly from `WorkIndex`; it is not a second coding shell. Do not
   simplify it into cards, lists, forms, or a passive overview. **System** is not a founder-facing mode or
   navigation noun. Semantic-zoom capacity layers, method-promotion machinery, and reusable-capacity ontology
   still require proof from a real release-and-evidence loop. The primary creation path begins in natural
@@ -100,11 +118,17 @@ blending them. Design explorations remain evidence until an authority file adopt
   fixed pipeline lanes. Keep one clear question or Product change central, a small number of named primary
   assumptions, the evidence that would validate or reject each, collapsible secondary detail, one obvious focal
   path, and an exact founder decision where branches converge. Focused operational paths may expose ordered
-  mechanics; they must not hard-scope the whole strategy surface. GTM should feel operationally grounded in
-  workflows: the compact canvas key foregrounds adopted GTM workflows, and selecting one unfolds its established
-  trigger, agent/tool work, conditions, founder gates, outward actions, and return path on the same canvas. Motions
-  without established mechanics remain visible as motions, never fabricated workflows. Product stays attached as
-  dependency and consequence rather than being forced into workflow stages.
+  mechanics; they must not hard-scope the whole strategy surface. The GTM territory is workflows in two
+  honest registers: drafted plays (intended workflows — sophisticated and ambitious, visibly marked not yet real)
+  and established plays (earned by actually running). A draft is never displayed as established; the register
+  marking supersedes the earlier rule that unproven motions stay vague blobs, because invisible intent is the
+  clouding the canvas exists to remove. Plays are authored talk-first — an agent drafts the full sequence aware
+  of what else is running, then walks the founder through it step by step; corrections land on the exact step and
+  any step can branch or refine later. Long plays render at full length, always: the length is information, never
+  compressed into summary chapters. A running play shows derived counts on its steps ("5 waiting on reply",
+  "2 need your approval") with the actual people one click behind; counts derive from real state and receipts,
+  never hand-maintained. Product stays attached as dependency and consequence rather than being forced into
+  workflow stages (decisions 11–16: docs/FIRM-SPEC.md, 2026-07-22).
   Enhance the default canvas before adding ceiling features. Most founders should receive the benefit through
   automatic composition, readable hierarchy, coherent edge routing, useful initial framing, and sensible local
   expansion without configuring, organizing, filtering, or learning another control. An enhancement that mainly

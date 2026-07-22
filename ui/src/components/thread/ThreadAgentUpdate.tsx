@@ -21,6 +21,11 @@ function elapsedLabel(startedAt: unknown, now: number) {
   return seconds < 3600 ? `${minutes}m ${seconds % 60}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
+function elapsedMilliseconds(startedAt: unknown, now: number) {
+  const started = Date.parse(text(startedAt));
+  return Number.isFinite(started) ? Math.max(0, now - started) : null;
+}
+
 export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code" }: { item: ThreadTimelineItem; surface?: "work" | "context"; chatMode?: WorkChatMode }) {
   const [now, setNow] = useState(() => Date.now());
   const participantRef = text(item.participantRef, "agent");
@@ -32,6 +37,7 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
     return () => window.clearInterval(timer);
   }, [state]);
   const elapsed = elapsedLabel(item.startedAt, now);
+  const elapsedMs = elapsedMilliseconds(item.startedAt, now);
   const summary = text(item.summary, "Working in this thread");
   const activitySteps = Array.isArray(item.activitySteps) ? item.activitySteps.flatMap((entry) => {
     if (!entry || typeof entry !== "object") return [];
@@ -39,7 +45,8 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
     const label = text(step.label).trim();
     return label ? [{ id: text(step.id, label), label, duration: durationLabel(step.durationMs) }] : [];
   }) : [];
-  const stateLabel = `${state.charAt(0).toUpperCase()}${state.slice(1)}${elapsed ? ` · ${elapsed}` : ""}`;
+  const longWait = state === "working" && elapsedMs != null && elapsedMs >= 90_000;
+  const stateLabel = `${longWait ? "Taking longer than usual" : `${state.charAt(0).toUpperCase()}${state.slice(1)}`}${elapsed ? ` · ${elapsed}` : ""}`;
   const showParticipant = surface === "context" || chatMode === "product-gtm";
   const accessibleLabel = showParticipant ? `${participant}: ${summary}. ${stateLabel}` : `${summary}. ${stateLabel}`;
   return (
@@ -51,6 +58,7 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
           <p>{summary}</p>
           <span className="thread-agent-state">{stateLabel}</span>
         </div>
+        {longWait ? <p className="thread-agent-wait-note">The work is still active. You can leave this thread and return when it finishes.</p> : null}
         {activitySteps.length ? <details className="thread-agent-details">
           <summary>Show activity</summary>
           <ol>{activitySteps.map((step) => <li key={step.id}><span>{step.label}</span>{step.duration ? <small>{step.duration}</small> : null}</li>)}</ol>

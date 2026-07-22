@@ -182,30 +182,95 @@ rewrite venture history. Completed implementation raises a provisional Product-m
 
 ### Product / GTM
 
-Product / GTM is a spatial living venture model. It shows adopted truth, audiences, promises, offers,
-motions, durable provisional models, attached work, outward actions, founder gates, evidence return,
-contradictions, and missing links.
+Product / GTM is the founder's intent layer. Tools everywhere else show state — code, dashboards,
+metrics — and hide what the founder is trying to do. This canvas exists so the founder can see the
+product laid out, say what should be different, and have that direction reach the agents exactly.
+Seeing the product is what makes directing it possible: the map improves the prompt.
 
-The canvas uses one shared causal model with natural alternatives. Product, shared Product/GTM truth,
-and GTM remain legible as territories inside that graph rather than becoming separate canvases or fixed
-lanes. Its focal causal path advances left to right; curved edges preserve the reading direction across
-territory changes. A restrained spectrum appears only on a relationship that crosses territory. Semantic
-zoom compresses breadth without erasing it. Current truth and provisional alternatives cannot visually
-collapse into one.
+The Product territory is the product itself, mapped as the pages a user walks through — landing,
+signup, workspace, invite, share, settings, and whatever the real product contains. The map is a
+proper map, left to right in walk order: entry pages at the left, the walk deepening rightward, with
+page-to-page connections drawn only from links and redirects the code proves. Agents derive the
+map from the actual code when a repository connects and keep it true as the code changes; the founder
+corrects names, grouping, and visibility. A page the code cannot support is never fabricated, and
+neither is a connection between pages.
+
+Clicking a page is the refine moment. The node expands in place to what the page is now — an honest
+summary or preview — plus prior founder direction and the thinking attached to it, above a plain
+brain-dump input. Sending that input mints an exact Work Thread scoped to that piece. This
+click-to-refine consequence is what keeps the map from being a static diagram; a product map without
+it is a defect. Refinement is not hard-scoped to one entry point: the founder may direct from the Work
+composer or from any node, and decides what matters for expressing intent.
+
+Every page also carries one GTM action: join an existing market play, or — when none exists — have an
+agent propose a strategy for getting that piece in front of people, which lands on the GTM territory
+as a proposal the founder adopts or discards.
+
+At rest the map is clean: page names only, no badges. Direction, live work, and returned evidence live
+one click deep on the page they belong to. Assumptions, proposals, decisions, and evidence attach to
+the page they are about; whole-product thinking attaches to the product itself. Free-floating strategy
+bubbles do not share the Product territory with the map.
+
+The canvas remains one shared causal model with natural alternatives. Product, shared Product/GTM
+truth, and GTM remain legible as territories inside that graph rather than becoming separate canvases
+or fixed lanes. Its focal causal path advances left to right; curved edges preserve the reading
+direction across territory changes. A restrained spectrum appears only on a relationship that crosses
+territory. Current truth and provisional alternatives cannot visually collapse into one.
 
 Founder placement is presentation, never semantic truth. Nodes are draggable and persist their position.
 Agents, tools, and sources may be dropped only where Drover can resolve an exact subject and consequence;
 unsupported drops refuse visibly and persist nothing. Selecting a node expands its exact detail, work,
 evidence, or founder decision in place instead of opening a detached side inspector.
 
-GTM orientation is workflow-first wherever mechanics have been adopted. A compact canvas key foregrounds those
-workflows; selecting one unfolds its established trigger, agent or tool work, conditions, founder gates, outward
-actions, and evidence return on this same canvas. A motion without those mechanics remains an honest motion, not
-a fabricated workflow. Product remains connected as a dependency and consequence rather than being forced into
-operational stages.
+The GTM territory is workflows, in two honest registers. A **drafted play** is an intended workflow —
+sophisticated and ambitious, never a thin sketch — visibly marked as not yet real. An **established play**
+earned its standing by actually running. A draft is never displayed as established; the register marking
+replaces the old rule that unproven motions stay vague blobs, because invisible intent is the exact
+clouding this canvas exists to remove.
+
+Plays are authored talk-first: the founder brain-dumps the play in conversation (later, also from a
+page's GTM action), an agent drafts the full sequence onto the canvas aware of what else is already
+running, and then walks the founder through it step by step. Corrections land on the exact step; any
+step can branch or be refined later without redrafting the play.
+
+A long play renders at full length, always — thirty steps across weeks lay out left to right and the
+founder scrolls. The length is information: the founder should feel how heavy a play is. Steps are not
+compressed into summary chapters.
+
+A running play keeps the same drawn shape and shows derived counts on its steps — "5 waiting on reply",
+"2 need your approval" — with the actual people one click behind each count. Counts derive from real
+state, receipts, and returns; they are never hand-maintained. Founder gates, outward actions, and
+evidence return unfold on this same canvas. Product remains connected as a dependency and consequence
+rather than being forced into operational stages.
 
 Conversation is contextual and closable here; the canvas or review path owns the center. Substantive
 work follows the exact returned Thread into Work.
+
+#### Intent-layer decisions (founder interview, 2026-07-22)
+
+| # | Decision | Note |
+| --- | --- | --- |
+| 1 | The canvas is the intent layer: the product mapped so the founder knows what to direct | Founder: "product strategy and mapping a product and code allows us to know what to prompt better if we can see it out" |
+| 2 | Product map supersedes the prior no-surfaces stance | Explicit doctrine reversal; the click-to-refine consequence is what distinguishes the map from the rejected repo mirror |
+| 3 | Map pieces are pages the user walks through | Not capabilities, not code structure; machinery-beneath-pages deferred |
+| 4 | Agents read the code and lay out the map; founder corrects | Map must stay true to the repository with no founder upkeep |
+| 5 | Click a page → see what it is now → brain-dump → exact Work Thread | Founder: refine "should not be hardscoped… founder should decide what's important to understand intent more — brain dump" |
+| 6 | Every page carries one GTM action: join an existing play or agent proposes one | Proposal lands on GTM territory for founder adoption |
+| 7 | At rest the map is clean — names only | Direction, work, and evidence are one click deep by founder choice |
+| 8 | Strategy objects attach to their page; no free-floating bubbles in Product territory | Whole-product thinking attaches to the product itself |
+| 9 | This pass scopes the Product territory only | Superseded same day by the GTM pass below (11–16) |
+| 10 | V1 finish line: map a real repo's pages, click, honest summary, brain-dump, Thread starts | GTM button and evidence marks follow after this proves |
+| 11 | GTM territory is workflows in two registers: drafted and established | Register marking replaces the vague-motion blob for idea-stage plays; a draft is never shown as established |
+| 12 | Drafted plays are sophisticated and ambitious, drafted aware of what else is running | Founder: "we're going to make it sophisticated, ambitious plays for this GTM system… we also consider what else is running" |
+| 13 | Authoring is talk-first: agent drafts the full sequence, then walks the founder through it step by step | Founder: "we go through each step together because stuff can be branched off / refined in the future"; corrections land per step |
+| 14 | Long plays render at full length, always | Founder chose length-as-information over collapsible chapters |
+| 15 | Running plays show derived counts on steps; people one click behind | Counts derive from real state, never hand-maintained |
+| 16 | GTM build follows after the product-map v1 proves | Same canvas code; sequential, not parallel |
+
+Unresolved, with owners: visual treatment of the map and of full-length plays (mockup round); how two
+long plays coexist spatially (mockup round); the step-walkthrough interaction detail (build); the
+machinery-beneath-pages layer (deferred until pages prove); how pageless product machinery appears
+(deferred); evidence marks on pages (post-v1); the page GTM action wiring into play drafting (post-v1).
 
 ### First run and return
 

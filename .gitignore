@@ -41,3 +41,9 @@ output/
 .playwright-mcp/
 .tmp-canvas/
 .audit-shots/
+
+# Local dev Brain home (runtime venture state, conversations, receipts)
+.dev-home/
+
+# Next.js build output (sample apps)
+.next/

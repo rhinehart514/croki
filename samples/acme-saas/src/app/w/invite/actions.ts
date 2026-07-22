@@ -10,9 +10,13 @@ export async function inviteTeammate(formData: FormData) {
   const inviteeEmail = String(formData.get("email") ?? "");
   const role = String(formData.get("role") ?? "member");
 
-  analytics.track("invite_sent", {
-    workspaceId,
-    inviteeEmail,
-    role,
+  analytics.track({
+    anonymousId: workspaceId,
+    event: "invite_sent",
+    properties: {
+      workspaceId,
+      inviteeEmail,
+      role,
+    },
   });
 }

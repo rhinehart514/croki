@@ -30,6 +30,9 @@ export async function adoptWorkflowSketch(ventureId: string, index: SystemIndex,
   const properties = {
     trigger, intendedOutcome: outcome, authority, evidence,
     workflowGraph: {
+      // No self-declared register: whether this play reads as drafted or established is derived from real
+      // market movement at projection time (deriveWorkflowRegister), never written onto the blob.
+      objective: sketch.title,
       sourceWorkRef: sketch.workRef,
       sourceUpdatedAt: sketch.item.at,
       threadRef: sketch.item.visual?.threadRef ?? null,

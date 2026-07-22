@@ -44,6 +44,12 @@ describe("thread material grammar", () => {
     expect(screen.getByText(/Working · 1m/)).toBeInTheDocument();
   });
 
+  it("acknowledges a long wait without pretending the work has stalled", () => {
+    render(<ThreadMessage surface="work" item={item("agent-status", { participantRef: "codex", state: "working", summary: "Thinking through the direction", startedAt: new Date(Date.now() - 4 * 60_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.getByText(/Taking longer than usual · 4m/)).toBeInTheDocument();
+    expect(screen.getByText("The work is still active. You can leave this thread and return when it finishes.")).toBeInTheDocument();
+  });
+
   it("keeps Work progress in the response flow without presenting a Drover persona", () => {
     render(<ThreadMessage surface="work" item={item("agent-status", { participantRef: "founding-teammate", participantLabel: "Mara", state: "working", summary: "Reading venture context", startedAt: new Date(Date.now() - 12_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
     expect(screen.getByText("Reading venture context")).toBeInTheDocument();

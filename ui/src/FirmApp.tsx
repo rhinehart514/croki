@@ -15,9 +15,12 @@ import "@/styles/firm-app.css";
 
 export default function FirmApp() {
   const [venture, setVenture] = useState<FirmVenture | null>(null);
-  const [opening, setOpening] = useState(true);
+  const [phase, setPhase] = useState<"opening" | "ready" | "failed">("opening");
 
-  useEffect(() => {
+  // Distinguish a failed venture read from a genuine first run. Both leave `venture` null; only a real
+  // empty list should reach the first-connection picker. A backend hiccup gets its own retryable surface
+  // so a transient failure never masquerades as "no ventures yet".
+  const openLastVenture = useCallback(() => {
     let live = true;
     listVentures()
       .then(({ ventures }) => {
@@ -28,13 +31,15 @@ export default function FirmApp() {
           ?? null;
         if (nextVenture) rememberActiveVenture(nextVenture.id);
         setVenture(nextVenture);
-        setOpening(false);
+        setPhase("ready");
       })
       .catch(() => {
-        if (live) setOpening(false);
+        if (live) setPhase("failed");
       });
     return () => { live = false; };
   }, []);
+
+  useEffect(() => openLastVenture(), [openLastVenture]);
 
   useEffect(() => {
     const heartbeat = () => { void markFounderPresent().catch(() => undefined); };
@@ -56,10 +61,23 @@ export default function FirmApp() {
     setVenture(nextVenture);
   }, []);
 
-  if (opening) {
+  if (phase === "opening") {
     return (
       <div className="firm-app firm-app-opening" aria-busy="true">
         <span role="status">Opening your last venture…</span>
+      </div>
+    );
+  }
+
+  if (phase === "failed") {
+    return (
+      <div className="firm-app firm-app-failed">
+        <div role="alert">
+          <span>Drover</span>
+          <h1>Couldn’t reach your ventures</h1>
+          <p>This is a local read from Drover that didn’t answer. Your products, work, and evidence are unchanged on this machine.</p>
+          <button type="button" onClick={() => { setPhase("opening"); openLastVenture(); }}>Try again</button>
+        </div>
       </div>
     );
   }

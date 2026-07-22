@@ -1,0 +1,224 @@
+:root {
+  color-scheme: light;
+  --page-background: #f5f3ef;
+  --surface: #fffdf9;
+  --text: #20201d;
+  --muted-text: #696860;
+  --border: #dfdcd4;
+  --accent: #667451;
+  --accent-contrast: #ffffff;
+  --focus: #4d6233;
+  --shadow: 0 18px 55px rgb(32 32 29 / 8%);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page-background: #171816;
+  --surface: #22241f;
+  --text: #f3f2ec;
+  --muted-text: #aaa99f;
+  --border: #3a3d35;
+  --accent: #a7b88c;
+  --accent-contrast: #171816;
+  --focus: #bdce9f;
+  --shadow: 0 18px 55px rgb(0 0 0 / 24%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--page-background);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--page-background);
+  color: var(--text);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+.settings-page {
+  width: min(100% - 32px, 720px);
+  margin: 0 auto;
+  padding: 48px 0 80px;
+}
+
+.settings-back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--muted-text);
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.settings-back:hover {
+  color: var(--text);
+}
+
+.settings-back:focus-visible {
+  border-radius: 6px;
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.settings-header {
+  margin: 44px 0 30px;
+}
+
+.settings-eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.settings-header h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 7vw, 4.5rem);
+  font-weight: 760;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+}
+
+.settings-intro {
+  max-width: 42ch;
+  margin: 20px 0 0;
+  color: var(--muted-text);
+  font-size: 1.05rem;
+}
+
+.settings-section {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: var(--shadow);
+}
+
+.settings-section-heading {
+  margin: 0;
+  padding: 18px 22px 12px;
+  color: var(--muted-text);
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.theme-setting {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 22px 22px;
+  cursor: pointer;
+}
+
+.theme-setting-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.theme-setting-title {
+  font-weight: 720;
+}
+
+.theme-setting-description {
+  color: var(--muted-text);
+  font-size: 0.91rem;
+}
+
+.theme-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 28px;
+}
+
+.theme-switch-input {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.theme-switch-track {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--border);
+  transition: background-color 180ms ease-out, border-color 180ms ease-out;
+}
+
+.theme-switch-track::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 20%);
+  content: "";
+  transition: transform 180ms ease-out;
+}
+
+.theme-switch-input:checked + .theme-switch-track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.theme-switch-input:checked + .theme-switch-track::after {
+  transform: translateX(20px);
+}
+
+.theme-switch-input:focus-visible + .theme-switch-track {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 520px) {
+  .settings-page {
+    padding-top: 24px;
+  }
+
+  .settings-header {
+    margin-top: 30px;
+  }
+
+  .theme-setting {
+    gap: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-switch-track,
+  .theme-switch-track::after {
+    transition: none;
+  }
+}

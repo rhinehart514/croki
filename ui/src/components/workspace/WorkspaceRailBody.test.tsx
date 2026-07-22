@@ -33,7 +33,7 @@ describe("WorkspaceRailBody Product / GTM palette", () => {
       onConfigurationChanged={vi.fn()}
     />);
 
-    expect(screen.getByRole("button", { name: "Researcher, Agent" })).toHaveClass("product-palette-pill");
+    expect(screen.getByRole("button", { name: "Researcher, Agent, Inward access" })).toHaveClass("product-palette-pill");
     expect(screen.getByRole("button", { name: "README.md, Markdown, Read access" })).toHaveClass("product-palette-pill");
     expect(screen.getByRole("button", { name: "Browser, Tool, Read access" })).toHaveClass("product-palette-pill");
     expect(screen.getByTestId("agent-logo")).toBeInTheDocument();

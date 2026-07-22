@@ -233,7 +233,7 @@ export type RichArtifactPayload =
         id: string;
         label: string;
         detail?: string;
-        type?: "trigger" | "agent-work" | "condition" | "founder-decision" | "founder-gate" | "external-action" | "observation" | "outcome";
+        type?: "trigger" | "source" | "agent-work" | "tool" | "condition" | "wait" | "founder-decision" | "founder-gate" | "external-action" | "observation" | "outcome";
       }>;
       edges: Array<{ from: string; to: string; label?: string }>;
     }

@@ -17,11 +17,15 @@ export async function createProjectBrief(input: {
     .slice(0, 20);
   const shareUrl = `/brief/${input.projectId}?token=${token}`;
 
-  analytics.track("project_brief_shared", {
-    workspaceId: input.workspaceId,
-    projectId: input.projectId,
-    createdBy: input.createdBy,
-    shareUrl,
+  analytics.track({
+    userId: input.createdBy,
+    event: "project_brief_shared",
+    properties: {
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      createdBy: input.createdBy,
+      shareUrl,
+    },
   });
 
   return { shareUrl, access: "read-only" as const };
@@ -34,8 +38,12 @@ export async function recordProjectBriefViewed(input: {
   projectId: string;
   referrer: string | null;
 }) {
-  analytics.track("project_brief_viewed", {
-    projectId: input.projectId,
-    referrer: input.referrer,
+  analytics.track({
+    anonymousId: `project-brief:${input.projectId}`,
+    event: "project_brief_viewed",
+    properties: {
+      projectId: input.projectId,
+      referrer: input.referrer,
+    },
   });
 }

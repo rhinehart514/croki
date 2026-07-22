@@ -5,6 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { describe, it } from "node:test";
+// This suite injects the process handle (spawnProcess) rather than spawning real processes. The timeout
+// path additionally depends on the two production timers firing, and those timers are unref'd on purpose
+// (a pending host check must never keep the Brain process alive). A real unref'd timer is free never to
+// fire once the awaiting test leaves nothing else on the loop, which hangs the test nondeterministically.
+// So the test owns the clock: it fakes setTimeout and advances it deterministically instead of waiting.
 
 import { hostProjectCheck } from "../../src/firm/code-workspace-verification.mjs";
 
@@ -44,14 +49,21 @@ describe("coding workspace project verification", () => {
     fs.rmSync(directory, { recursive: true, force: true });
   });
 
-  it("terminates and then force-kills a timed-out project check", async () => {
+  it("terminates and then force-kills a timed-out project check", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
     const directory = project();
     const child = childProcess();
-    const receipt = await hostProjectCheck(directory, {
+    const pending = hostProjectCheck(directory, {
       spawnProcess: () => child,
       timeoutMs: 5,
       forceKillDelayMs: 5,
     });
+
+    // Reaching the timeout sends SIGTERM and arms the force-kill delay; reaching that delay sends SIGKILL,
+    // which the fake child answers with a close. Advancing the fake clock drives both, deterministically.
+    t.mock.timers.tick(5);
+    t.mock.timers.tick(5);
+    const receipt = await pending;
 
     assert.equal(receipt.status, "failed");
     assert.deepEqual(child.signals, ["SIGTERM", "SIGKILL"]);

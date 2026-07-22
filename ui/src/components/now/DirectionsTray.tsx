@@ -13,7 +13,7 @@ export function DirectionsTray({ options, loading, onPick }: {
     <div className="now-directions" role="group" aria-label="Suggested directions">
       {loading ? (
         <span className="now-directions-pending" role="status">
-          <i className="now-intent-orb now-intent-orb--pending" aria-hidden="true" />
+          <i className="now-intent-orb now-intent-orb--pending now-intent-spinner" aria-hidden="true" />
           Reading your intent…
         </span>
       ) : (

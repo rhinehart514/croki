@@ -49,8 +49,13 @@ model. In Work, an included specialist does not replace the founder's selected C
 
 ### Product / GTM
 
-Product / GTM is the living venture model. It owns:
+Product / GTM is the founder's intent layer over the living venture model. Tools everywhere else show
+state and hide what the founder is trying to do; this surface exists so the founder can see the product
+laid out, say what should be different, and have that direction reach the agents exactly. It owns:
 
+- the product map: code-proven pages laid out left to right in walk order, with page connections drawn
+  only from links the code proves;
+- drafted and established GTM plays;
 - adopted Product truth;
 - audiences, promises, offers, pricing, experience, capability, and market understanding;
 - broad motions such as PLG, outbound, inbound, and partnerships;
@@ -69,7 +74,8 @@ Substantive Product/GTM conversation stages one provisional local model view abo
 is a focused viewport into the originating `ModelBranch`, not a separate workflow artifact or parallel truth. It
 begins with the founder's question, nearby current truth, supported proposals, real alternatives, evidence, and
 unresolved unknowns. Relationships and causal direction appear only when the material establishes them; ordered
-workflow mechanics are an earned projection for genuinely sequential work, never the default contract. Founder
+workflow mechanics are an earned projection for genuinely sequential work — a deliberately drafted GTM play
+qualifies — never the default contract for ordinary conversation. Founder
 corrections revise the same branch and view in place. Review opens the branch's exact source-bearing delta, where
 the founder may selectively merge changes; the whole visual is never adopted as one opaque mechanism.
 
@@ -133,8 +139,8 @@ cross-mode choreography.
 
 ## The living canvas
 
-The default canvas holds current truth, several motions, provisional alternatives, live work, outward actions,
-and returned evidence in one causal field. It has no fixed lanes and imposes no branch count. Large portfolios
+The default canvas holds the product map, GTM plays in both registers, current truth, several motions,
+provisional alternatives, live work, outward actions, and returned evidence in one causal field. It has no fixed lanes and imposes no branch count. Large portfolios
 remain legible through semantic zoom, hierarchy, compression, search, minimap, keyboard navigation, direct
 selection, and return-to-context.
 
@@ -147,9 +153,12 @@ human-readable kinds remain visible. Selecting a node expands its description, r
 authority, controls, and exact review material in place; a detached side inspector must not compete with the
 graph. Exact deltas, evidence, conflicts, and founder decisions may enlarge the owning node substantially.
 
-Product capabilities and experiences may expand into repository-grounded features. The whole-venture canvas
-shows an exact feature only when it changes the focal causal path, owns live work, or receives market evidence;
-otherwise feature depth stays available through its owning Product object rather than becoming a backlog map.
+The Product territory rests as the product map: code-proven pages as clean name-only pills in walk order,
+entry pages at the left. Clicking a page expands in place what it is now — an honest, source-cited summary —
+with prior founder direction and page-scoped strategy folded beneath, above a plain brain-dump input that
+mints an exact Work Thread scoped to that page. Assumptions, proposals, decisions, and evidence about a page
+live in its expansion, never as free-floating bubbles beside the map. Deeper machinery beneath pages stays
+available through the owning page rather than becoming a backlog map.
 
 The canvas reads left to right across one causal field: Product above, shared Product/GTM truth through the
 center, and GTM below. Curved arrows preserve the causal direction. A restrained cyan-to-violet-to-rose-to-
@@ -167,17 +176,22 @@ not force unrelated nodes to jump. These behaviors are automatic—do not add la
 required cleanup to obtain the coherent default.
 
 A compact top-right map key keeps Product, shared Product/GTM truth, and GTM visually distinct without splitting
-the model. Its primary GTM entry is **GTM workflows**: adopted workflows appear before broad motions, and selecting
-one unfolds its exact trigger, agent or tool work, conditions, founder gates, outward actions, and return path on
-the existing canvas. Motions whose mechanics have not been established remain visibly motions rather than being
-manufactured into flows. Product dependencies and consequences stay connected around the workflow instead of
-becoming stages inside it. This never opens another workspace or filters unrelated venture truth out of the model.
+the model. The GTM territory is plays — workflows in two honest registers. A drafted play is an intended
+workflow, sophisticated and visibly marked not yet real; an established play earned its standing by actually
+running, and a draft never renders as established. Selecting a play unfolds its exact trigger, agent or tool
+work, conditions, founder gates, outward actions, and return path on the existing canvas. Plays lay out at full
+length, always — the length is information, never compressed into summary chapters. A running play shows derived
+counts on its steps ("5 waiting on reply", "2 need your approval") with the actual people one click behind;
+counts derive from real state and receipts, never founder-maintained. Product dependencies and consequences stay
+connected around the play instead of becoming stages inside it. This never opens another workspace or filters
+unrelated venture truth out of the model.
 
 ## Motion detail
 
-Selecting a motion reveals only what exists: audience, problem or trigger, dependent Product experience,
-Product changes it is causing, live Threads and Runs, bounded campaigns or bespoke actions when present,
-pending founder actions, returned evidence, contradictions, and next useful work.
+An intended play renders as a drafted workflow in its own register; a broad route with no drafted play
+remains a motion. Selecting a motion reveals only what exists: audience, problem or trigger, dependent
+Product experience, Product changes it is causing, live Threads and Runs, bounded campaigns or bespoke
+actions when present, pending founder actions, returned evidence, contradictions, and next useful work.
 
 Never render empty stage frames. A motion does not need to be repeatable. A campaign does not require one
 primary motion. Manual or bespoke work does not need to become a campaign.

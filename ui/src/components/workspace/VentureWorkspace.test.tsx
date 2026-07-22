@@ -61,7 +61,7 @@ describe("VentureWorkspace — unified founder shell", () => {
     expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /Product \/ GTM/ })).toHaveAttribute("aria-current", "page");
   });
 
-  it("switches modes into mode-owned space and restores contextual conversation on demand", async () => {
+  it("switches modes into mode-owned space with one persistent canvas dock", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     await screen.findByText("Make setup feel immediate.");
     fireEvent.keyDown(window, { key: "2", metaKey: true });
@@ -71,11 +71,13 @@ describe("VentureWorkspace — unified founder shell", () => {
     expect(screen.queryByRole("navigation", { name: "Product and go-to-market scopes" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Product and go-to-market sections" })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Product and go-to-market agents" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Work with Product / GTM" }));
-    const contextual = screen.getByRole("complementary", { name: "Context conversation" });
+    const contextual = screen.getByRole("complementary", { name: "Product and GTM canvas dock" });
     expect(contextual.querySelector(".thread-conversation")).toHaveAttribute("data-surface", "context");
     expect(contextual.querySelector(".thread-header")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Close conversation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open canvas chat; rework continues in Work" }));
+    expect(contextual).toHaveAttribute("data-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Collapse canvas chat" }));
+    expect(contextual).toHaveAttribute("data-expanded", "false");
     expect(screen.queryByText("Make setup feel immediate.")).not.toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /Product \/ GTM/ })).toHaveAttribute("aria-current", "page");
   });
@@ -85,11 +87,11 @@ describe("VentureWorkspace — unified founder shell", () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     await screen.findByText("Make setup feel immediate.");
     fireEvent.keyDown(window, { key: "2", metaKey: true });
-    fireEvent.click(await screen.findByRole("button", { name: "Work with Product / GTM" }));
+    await screen.findByRole("complementary", { name: "Product and GTM canvas dock" });
     fireEvent.change(screen.getByLabelText("Say what you want for this venture"), { target: { value: "Implement this workflow" } });
     fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
     await waitFor(() => expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /^Work/ })).toHaveAttribute("aria-current", "page"));
-    await waitFor(() => expect(screen.queryByRole("complementary", { name: "Context conversation" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("complementary", { name: "Product and GTM canvas dock" })).not.toBeInTheDocument());
   });
 
   it("puts the existing Work chat into Product and GTM agent mode for visual model work", async () => {

@@ -814,6 +814,45 @@ export function createDenseGeneratedMapsFixture({ root, repository } = {}) {
       },
     };
   });
+  records.push({
+    op: "create-record",
+    family: "objects",
+    record: {
+      id: "map-dense-play-category-launch",
+      type: "mechanism",
+      name: "Category creation launch",
+      statement: "Create demand, qualify the market, and return objections into Product.",
+      properties: { territory: "gtm", workflowGraph: {
+        register: "drafted",
+        objective: "Create qualified demand while learning which promise earns a response",
+        steps: [
+          { id: "signal", label: "Market signal appears", type: "trigger" },
+          { id: "source", label: "Build the account universe", type: "source" },
+          { id: "research", label: "Research each account", type: "agent-work" },
+          { id: "fit", label: "Strong problem fit?", type: "condition" },
+          { id: "proof", label: "Create tailored proof", type: "tool" },
+          { id: "approve", label: "Approve the first cohort", type: "founder-gate" },
+          { id: "reach", label: "Coordinate market touch", type: "external-action" },
+          { id: "wait", label: "Wait for a real response", type: "wait" },
+          { id: "reply", label: "Qualified reply?", type: "condition" },
+          { id: "meeting", label: "Prepare the conversation", type: "agent-work" },
+          { id: "objection", label: "Capture the objection", type: "observation" },
+          { id: "return", label: "Return Product consequence", type: "outcome" },
+        ],
+        edges: [
+          { from: "signal", to: "source" }, { from: "source", to: "research" },
+          { from: "research", to: "fit" }, { from: "fit", to: "proof", label: "yes" },
+          { from: "fit", to: "source", label: "no · keep looking" }, { from: "proof", to: "approve" },
+          { from: "approve", to: "reach" }, { from: "reach", to: "wait" },
+          { from: "wait", to: "reply" }, { from: "reply", to: "meeting", label: "yes" },
+          { from: "reply", to: "proof", label: "silence · revise proof" }, { from: "meeting", to: "objection" },
+          { from: "objection", to: "return" }, { from: "return", to: "research", label: "learning shapes the next cohort" },
+        ],
+      } },
+      assertion: "tentative",
+      provenance: { kind: "founder-authored" },
+    },
+  });
   mutateSemanticModel({
     ventureId,
     baseRevision: model.revision,

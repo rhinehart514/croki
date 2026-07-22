@@ -5,7 +5,7 @@ import type { WorkIndex, WorkIndexItem } from "@/api";
 function ThreadState({ item }: { item: WorkIndexItem }) {
   if (item.attention === "decision") return <><Clock3 aria-hidden="true" /><span className="sr-only">Waiting for founder judgment</span></>;
   if (item.attention === "failure") return <><AlertTriangle aria-hidden="true" /><span className="sr-only">Failed or interrupted</span></>;
-  if (item.activity !== "idle") return <><LoaderCircle className="thread-state-active" aria-hidden="true" /><span className="sr-only">Active</span></>;
+  if (item.activity !== "idle") return <><LoaderCircle className="thread-state-spinner" aria-hidden="true" /><span className="sr-only">Active</span></>;
   if (item.unread) return <><CheckCircle2 aria-hidden="true" /><span className="sr-only">Unread result</span></>;
   return <><Circle aria-hidden="true" /><span className="sr-only">Quiet open thread</span></>;
 }

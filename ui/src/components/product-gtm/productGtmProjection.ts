@@ -4,23 +4,38 @@ import type { FirmSemanticModel, MarketMovementIndex } from "@/types";
 import {
   attachedPoint,
   buildProductGtmLayout,
+  pageWalkOrder,
   productGtmRefId,
   productGtmTerritoryFor,
   workNodeId,
   type ProductGtmTerritory,
 } from "./productGtmLayout";
 import {
+  deriveWorkflowRegisters,
   layoutProductGtmWorkflow,
   parseProductGtmWorkflowNodeId,
+  playRunStates,
   productGtmWorkflowGraph,
   productGtmWorkflowStepLabel,
+  workflowStepCounts,
   type ProductGtmWorkflowGraph,
+  type ProductGtmWorkflowRegister,
   type ProductGtmWorkflowStepType,
 } from "./productGtmWorkflow";
+import {
+  pageAttachments,
+  pageAttachedProductObjectIds,
+  type ProductGtmPageAttachment,
+  type ProductGtmPageData,
+} from "./productGtmPages";
+import { productGtmTypeLabel, relationshipLabel, semanticRole } from "./productGtmLabels";
+
+export { productGtmTypeLabel } from "./productGtmLabels";
 
 export type ProductGtmNodeKind = "truth" | "branch" | "work" | "action" | "evidence" | "workflow";
 export type { ProductGtmTerritory } from "./productGtmLayout";
-export type ProductGtmNodeRole = "direction" | "feature" | "product" | "path" | "market-signal" | "route" | "market-test" | "evidence-gap" | "provisional" | "work" | "branch" | "outward" | "gate" | "evidence" | "workflow-step";
+export type ProductGtmNodeRole = "direction" | "feature" | "product" | "page" | "path" | "market-signal" | "route" | "market-test" | "evidence-gap" | "provisional" | "work" | "branch" | "outward" | "gate" | "evidence" | "workflow-step";
+export type { ProductGtmPageAttachment, ProductGtmPageData };
 export type ProductGtmNodeData = Record<string, unknown> & {
   kind: ProductGtmNodeKind;
   role: ProductGtmNodeRole;
@@ -42,6 +57,12 @@ export type ProductGtmNodeData = Record<string, unknown> & {
   action?: MarketMovementIndex["actions"][number];
   workflowGraph?: ProductGtmWorkflowGraph;
   workflowStepType?: ProductGtmWorkflowStepType;
+  workflowRegister?: ProductGtmWorkflowRegister;
+  workflowPosition?: number;
+  workflowStepCount?: number;
+  runningCountLabel?: string;
+  runningItemRefs?: string[];
+  page?: ProductGtmPageData;
   workRef?: string;
   actionLabel?: string;
   onAction?: () => void;
@@ -78,6 +99,39 @@ const list = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 const strings = (value: unknown): string[] => list(value).map(String);
 const isTentative = (assertion: string | undefined) => assertion === "tentative";
 
+// At rest the map wants clean noun-phrase labels, not a founder's full sentence. A node authored with a
+// sentence-length name (a signal, a branch question, a founder intent) clamps mid-word in the pill and reads
+// as noise. When a name reads as a sentence, shorten the DISPLAYED label to a clean phrase on a word boundary
+// — never an ellipsis, always a genuine label — and carry the untouched sentence into the node's detail so
+// selection loses nothing. Names that are already short page names, direction names, or step labels pass
+// through untouched.
+const NAME_LABEL_MAX = 40;
+const TRAILING_CONNECTIVE = /\s+(?:the|a|an|to|of|in|into|for|and|or|with|is|are|that|this|its|their|your|our|on|at|by|as|from)$/i;
+function restingLabel(rawName: string, rawDetail: string): { name: string; detail: string } {
+  const full = rawName.trim();
+  if (full.length <= NAME_LABEL_MAX) return { name: full || rawName, detail: rawDetail };
+  // A multi-sentence name resolves to its clean opening sentence when that alone is a usable label.
+  const firstSentence = full.split(/(?<=[.?!])\s+/)[0]?.trim() ?? full;
+  let label = firstSentence.length >= 12 && firstSentence.length <= NAME_LABEL_MAX ? firstSentence : full;
+  if (label.length > NAME_LABEL_MAX) {
+    let clamped = "";
+    for (const word of label.split(/\s+/)) {
+      const next = clamped ? `${clamped} ${word}` : word;
+      if (next.length > NAME_LABEL_MAX) break;
+      clamped = next;
+    }
+    label = clamped || label.slice(0, NAME_LABEL_MAX);
+  }
+  label = label.replace(/[\s.,;:–—-]+$/, "");
+  while (TRAILING_CONNECTIVE.test(label)) label = label.replace(TRAILING_CONNECTIVE, "");
+  label = label.trim();
+  if (!label || label.length >= full.length) return { name: full, detail: rawDetail };
+  // Nothing is lost: the untouched sentence lives in detail, deduped against detail it may already echo.
+  const extra = rawDetail?.trim();
+  const detail = !extra ? full : extra.includes(full) ? rawDetail : `${full} — ${rawDetail}`;
+  return { name: label, detail };
+}
+
 function outwardActionName(action: MarketMovementIndex["actions"][number]) {
   const material = action.preparedMaterial && typeof action.preparedMaterial === "object" ? action.preparedMaterial : {};
   const nested = material.effect && typeof material.effect === "object" ? material.effect as Record<string, unknown> : material;
@@ -86,59 +140,12 @@ function outwardActionName(action: MarketMovementIndex["actions"][number]) {
   return destination ? `${kind} · ${destination}` : kind;
 }
 
-const DISPLAY_TYPE: Record<string, string> = {
-  direction: "Current direction",
-  "working-theory": "Provisional read",
-  signal: "Market reality",
-  campaign: "Market test",
-  channel: "Route to market",
-  pipeline: "Product / GTM path",
-  open: "Evidence gap",
-  capability: "Product capability",
-  feature: "Product feature",
-  experience: "Product experience",
-  motion: "Motion",
-  audience: "Audience",
-  offer: "Offer",
-  release: "Product release",
-  evidence: "Evidence",
-};
-
-export function productGtmTypeLabel(type: string) {
-  return DISPLAY_TYPE[type.toLowerCase()] ?? type.replaceAll("-", " ");
-}
-
-function relationshipLabel(label: string) {
-  const concise: Record<string, string> = {
-    "delivers value through": "delivers value",
-    "must return evidence to": "returns evidence",
-    "creates the opportunity for": "creates opportunity",
-    "supplies the first builders for": "supplies builders",
-  };
-  return concise[label.toLowerCase()] ?? label;
-}
-
-function semanticRole(type: string, provisional: boolean): ProductGtmNodeRole {
-  if (provisional) return "provisional";
-  const normalized = type.toLowerCase();
-  if (normalized === "direction") return "direction";
-  if (normalized === "feature") return "feature";
-  if (["capability", "experience", "product", "release"].includes(normalized)) return "product";
-  if (["pipeline", "motion", "mechanism"].includes(normalized)) return "path";
-  if (["signal", "audience"].includes(normalized)) return "market-signal";
-  if (normalized === "channel") return "route";
-  if (normalized === "campaign") return "market-test";
-  if (normalized === "open") return "evidence-gap";
-  if (normalized === "evidence") return "evidence";
-  return "product";
-}
-
 export function productGtmTerritory(type: string, properties: Record<string, unknown> = {}): ProductGtmTerritory {
   return productGtmTerritoryFor(type, properties);
 }
 
 function edge(id: string, source: string, target: string, label: string | undefined, kind: ProductGtmEdgeData["kind"] = "support", focused = false, sourceTerritory: ProductGtmTerritory = "unset", targetTerritory: ProductGtmTerritory = "unset", route: ProductGtmEdgeData["route"] = "forward"): Edge<ProductGtmEdgeData> {
-  const color = kind === "return" ? "#4b8b7f" : kind === "spine" ? "#748397" : kind === "provisional" ? "#60779b" : "#495666";
+  const color = kind === "return" ? "#54c79a" : kind === "spine" ? "#8a99ae" : kind === "provisional" ? "#6d84a8" : "#5d6b80";
   return {
     id, source, target, ...(label ? { label } : {}), type: "productGtmEdge",
     data: { kind, focused, sourceTerritory, targetTerritory, route, crossTerritory: sourceTerritory !== targetTerritory && sourceTerritory !== "unset" && targetTerritory !== "unset" },
@@ -281,9 +288,14 @@ export function projectProductGtm(
     workPositions.set(id, reserveSynthetic(attachedPoint(anchor, nextSlot(`work:${subject ?? "root"}`), "work")));
     if (subject) extraEdges.push([id, subject]);
   });
+  // Register is derived from physics, never from the play's own blob: established only when canonical and
+  // actually run. Run states carry the exact items behind each derived step count.
+  const workflowRegisters = deriveWorkflowRegisters(model, movement);
+  const workflowRuns = playRunStates(movement);
   const workflowOwnerId = workflowSelection?.ownerId ?? chapterAnchorId;
   const workflowOwner = workflowOwnerId ? model.objects.find((object) => object.id === workflowOwnerId) ?? null : null;
   const workflowGraph = workflowOwner ? productGtmWorkflowGraph(workflowOwner.properties) : null;
+  const workflowRegister: ProductGtmWorkflowRegister | null = workflowOwner ? workflowRegisters.get(workflowOwner.id) ?? "drafted" : null;
   const workflowLayout = workflowOwner && workflowGraph
     ? layoutProductGtmWorkflow(workflowOwner.id, workflowGraph, positions.get(workflowOwner.id) ?? { x: 96, y: 468 })
     : null;
@@ -300,25 +312,51 @@ export function projectProductGtm(
     ? new Set([workflowOwner.id, ...workflowGraph.steps.map((step) => workflowLayout.nodeId(step.id))])
     : new Set(layout.initialFocusIds);
 
-  for (const object of model.objects.filter((entry) => truthIds.has(entry.id))) {
+  const suppressed = pageAttachedProductObjectIds(model);
+  for (const object of model.objects.filter((entry) => truthIds.has(entry.id) && !suppressed.has(entry.id))) {
     const position = positions.get(object.id) ?? { x: 100, y: 500 };
     const primaryIndex = spineIndex.get(object.id);
     const primary = primaryIndex !== undefined;
-    const provisional = isTentative(object.assertion);
+    const isPage = object.type.toLowerCase() === "page";
+    // A page reads cleanly at rest — page name and kind only, no provisional texture. The model keeps it
+    // tentative and source-bearing; the correctable framing lives in its expansion.
+    const provisional = isPage ? false : isTentative(object.assertion);
     const territory = territoryById.get(object.id) ?? "unset";
     const featureCount = layout.hiddenFeatureCounts.get(object.id) ?? 0;
-    const role = semanticRole(object.type, provisional);
-    const objectWorkflow = productGtmWorkflowGraph(object.properties);
+    const role = semanticRole(object.type, isTentative(object.assertion));
+    const objectWorkflow = isPage ? null : productGtmWorkflowGraph(object.properties);
+    const objectRegister = objectWorkflow ? workflowRegisters.get(object.id) ?? "drafted" : null;
+    const pageData = isPage ? ((object.properties.page ?? {}) as Record<string, unknown>) : null;
+    const page: ProductGtmPageData | undefined = pageData ? {
+      route: String(pageData.route ?? ""), file: String(pageData.file ?? ""), sourceRef: String(pageData.sourceRef ?? ""),
+      ...pageAttachments(model, object.id, productGtmTypeLabel),
+    } : undefined;
+    // A page name is already a clean page name; other truth names may be sentence-length statements that must
+    // shorten to a resting label while their full statement survives in the expansion.
+    const restingTruth = isPage
+      ? { name: object.name, detail: object.statement }
+      : restingLabel(object.name, objectWorkflow?.objective || object.statement);
     nodes.push({
       id: object.id, type: "productGtm", position,
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-      data: { kind: "truth", role, territory, ref: `object:${object.id}`, name: object.name, detail: object.statement, meta: `${objectWorkflow ? "GTM workflow" : productGtmTypeLabel(object.type)}${featureCount ? ` · ${featureCount} ${featureCount === 1 ? "feature" : "features"}` : ""}`, provisional, primary, hiddenFeatureCount: featureCount, acceptsWork: workSubjectIds.has(object.id), focus: focus.has(object.id), attention: role === "evidence" ? "evidence" : primaryIndex === spine.length - 1 && role === "evidence-gap" ? "decision" : undefined, workflowGraph: objectWorkflow ?? undefined },
+      data: { kind: "truth", role, territory, ref: `object:${object.id}`, name: restingTruth.name, detail: restingTruth.detail, meta: isPage ? "Page" : `${objectWorkflow ? `${objectRegister === "drafted" ? "Drafted" : "Established"} play · ${objectWorkflow.steps.length} ${objectWorkflow.steps.length === 1 ? "step" : "steps"}` : productGtmTypeLabel(object.type)}${featureCount ? ` · ${featureCount} ${featureCount === 1 ? "feature" : "features"}` : ""}`, provisional: objectRegister === "drafted" || provisional, primary, hiddenFeatureCount: featureCount, acceptsWork: workSubjectIds.has(object.id), focus: focus.has(object.id), attention: role === "evidence" ? "evidence" : primaryIndex === spine.length - 1 && role === "evidence-gap" ? "decision" : undefined, workflowGraph: objectWorkflow ?? undefined, workflowRegister: objectRegister ?? undefined, page },
     });
   }
+  const pageIds = new Set(model.objects.filter((object) => object.type.toLowerCase() === "page").map((object) => object.id));
+  const pageWalkIndex = new Map(pageWalkOrder(model).map((id, index) => [id, index]));
   for (const relationship of model.relationships) {
     const source = productGtmRefId(relationship.fromRef); const target = productGtmRefId(relationship.toRef);
-    if (!truthIds.has(source) || !truthIds.has(target)) continue;
+    if (!truthIds.has(source) || !truthIds.has(target) || suppressed.has(source) || suppressed.has(target)) continue;
+    // A proven page-to-page link is a clean forward walk connector — solid and readable even though both
+    // page reads stay model-tentative, mirroring the clean-at-rest page pills. It is drawn only when the
+    // target sits to the right in walk order; a backward or same-column link is not a walk step.
+    if (pageIds.has(source) && pageIds.has(target)) {
+      const sourceWalk = pageWalkIndex.get(source); const targetWalk = pageWalkIndex.get(target);
+      if (sourceWalk === undefined || targetWalk === undefined || targetWalk <= sourceWalk) continue;
+      edges.push(edge(relationship.id, source, target, undefined, "spine", focus.has(source) && focus.has(target), territoryById.get(source) ?? "unset", territoryById.get(target) ?? "unset"));
+      continue;
+    }
     const spineEdge = spineIndex.get(target) === (spineIndex.get(source) ?? -2) + 1;
     const provisional = isTentative(relationship.assertion) || model.objects.some((object) => (object.id === source || object.id === target) && isTentative(object.assertion));
     const bothOnSpine = spineIndex.has(source) && spineIndex.has(target);
@@ -333,15 +371,22 @@ export function projectProductGtm(
   }
 
   if (workflowOwner && workflowGraph && workflowLayout) {
-    for (const step of workflowGraph.steps) {
+    // Counts belong to a play that has actually run; a drafted play has no real state to count.
+    const stepCounts = workflowRegister === "established"
+      ? workflowStepCounts(workflowGraph, workflowRuns.get(workflowOwner.id))
+      : new Map();
+    for (const [stepIndex, step] of workflowGraph.steps.entries()) {
       const nodeId = workflowLayout.nodeId(step.id);
+      const count = stepCounts.get(step.id);
       nodes.push({
         id: nodeId, type: "productGtm", position: workflowLayout.positions.get(step.id) ?? { x: 410, y: 468 },
         sourcePosition: Position.Right, targetPosition: Position.Left, draggable: false,
         data: {
           kind: "workflow", role: "workflow-step", territory: "gtm", ref: nodeId, workRef: `object:${workflowOwner.id}`,
           name: step.label, detail: step.detail ?? "", meta: productGtmWorkflowStepLabel(step.type),
-          primary: true, focus: true, workflowStepType: step.type,
+          primary: true, focus: true, workflowStepType: step.type, workflowRegister: workflowRegister ?? undefined,
+          workflowPosition: stepIndex + 1, workflowStepCount: workflowGraph.steps.length,
+          runningCountLabel: count?.label, runningItemRefs: count?.itemRefs,
         },
       });
     }
@@ -364,7 +409,8 @@ export function projectProductGtm(
     const nodeId = `branch:${branch.id}`;
     const target = changes.map((change) => productGtmRefId(change.targetRef ?? "")).find((id) => truthIds.has(id));
     const territory = target ? territoryById.get(target) ?? "shared" : "shared";
-    nodes.push({ id: nodeId, type: "productGtm", position: branchPositions.get(branch.id) ?? { x: 96, y: 276 }, sourcePosition: Position.Right, targetPosition: Position.Left, data: { kind: "branch", role: "branch", territory, ref: `model-branch:${branch.id}`, name: branch.name, detail: branch.question, meta: `${changes.length} proposed ${changes.length === 1 ? "change" : "changes"}`, provisional: true, focus: focus.has(nodeId) } });
+    const restingBranch = restingLabel(branch.name, branch.question);
+    nodes.push({ id: nodeId, type: "productGtm", position: branchPositions.get(branch.id) ?? { x: 96, y: 276 }, sourcePosition: Position.Right, targetPosition: Position.Left, data: { kind: "branch", role: "branch", territory, ref: `model-branch:${branch.id}`, name: restingBranch.name, detail: restingBranch.detail, meta: `${changes.length} proposed ${changes.length === 1 ? "change" : "changes"}`, provisional: true, focus: focus.has(nodeId) } });
     if (target) edges.push(edge(`branch-edge:${branch.id}:${target}`, target, nodeId, undefined, "provisional", focus.has(target) && focus.has(nodeId), territoryById.get(target), territory));
     if (target && layout.initialFocusIds.has(target)) initialFocusIds.add(nodeId);
   }
@@ -397,7 +443,13 @@ export function projectProductGtm(
     const workPosition = workPositions.get(id) ?? { x: 96, y: 394 };
     const territory = subject ? territoryById.get(subject) ?? "shared" : "shared";
     const workAttention = state === "decision" ? "decision" : ["failure", "review"].includes(state) ? "review" : item.activity === "running" ? "active" : undefined;
-    nodes.push({ id, type: "productGtm", position: workPosition, sourcePosition: Position.Top, targetPosition: Position.Left, data: { kind: "work", role: "work", territory, ref: threadRef, name: String(item.founderIntent ?? item.name ?? "Live work"), detail: String((item.latestMeaningfulEvent as Record<string, unknown> | undefined)?.summary ?? "Agent work is attached to what it is changing."), meta, active: item.activity === "running", attention: workAttention, focus: focus.has(id) } });
+    // Founder intent is often a full directing sentence; it becomes a resting label with the sentence carried
+    // into detail alongside the latest meaningful progress event.
+    const restingWork = restingLabel(
+      String(item.founderIntent ?? item.name ?? "Live work"),
+      String((item.latestMeaningfulEvent as Record<string, unknown> | undefined)?.summary ?? "Agent work is attached to what it is changing."),
+    );
+    nodes.push({ id, type: "productGtm", position: workPosition, sourcePosition: Position.Top, targetPosition: Position.Left, data: { kind: "work", role: "work", territory, ref: threadRef, name: restingWork.name, detail: restingWork.detail, meta, active: item.activity === "running", attention: workAttention, focus: focus.has(id) } });
     if (subject) {
       const workEdge = edge(`work-edge:${id}:${subject}`, id, subject, undefined, "support", focus.has(id) && focus.has(subject), territory, territoryById.get(subject), "vertical");
       workEdge.sourceHandle = "work-source";
@@ -424,7 +476,7 @@ export function projectProductGtm(
   const focusSummary = selectedWorkflowStep
     ? selectedWorkflowStep.detail || `${productGtmWorkflowStepLabel(selectedWorkflowStep.type)} inside the complete workflow.`
     : workflowGraph
-    ? "Following its established trigger, work, conditions, founder gates, outward action, and return path."
+    ? `${workflowRegister === "drafted" ? "Drafted play" : "Established play"} · ${workflowGraph.steps.length} steps${workflowGraph.objective ? ` · ${workflowGraph.objective}` : " across its complete operating path"}.`
     : chapterKind === "decision"
     ? "An exact outward action is waiting for your decision."
     : chapterKind === "return"
