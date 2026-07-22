@@ -24,6 +24,7 @@ release/
 output/
 .design-loop/
 /*.png
+docs/design/_archive/*.png
 /.artifacts/
 /.impeccable/
 /artifacts/

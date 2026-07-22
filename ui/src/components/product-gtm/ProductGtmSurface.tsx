@@ -3,7 +3,7 @@ import {
   Background, BackgroundVariant, Controls, MiniMap, ReactFlow, useNodesState,
   type EdgeTypes, type NodeTypes, type ReactFlowInstance, type Viewport,
 } from "@xyflow/react";
-import { LocateFixed } from "lucide-react";
+import { LocateFixed, Route } from "lucide-react";
 import { getCurrentModel, getMarketMovement, putPlacement } from "@/api";
 import type { SystemIndex, WorkIndex } from "@/api";
 import type { FirmPlacement, FirmSemanticModel, MarketMovementIndex } from "@/types";
@@ -14,7 +14,8 @@ import { ProductGtmNavigator } from "./ProductGtmNavigator";
 import { ProductGtmNode } from "./ProductGtmNode";
 import { ProductPagePanel } from "./ProductPagePanel";
 import { useProductGtmDrop } from "./productGtmDrop";
-import { reflowExpandedNeighborhood } from "./productGtmLayout";
+import { productGtmTerritoryFor, reflowExpandedNeighborhood } from "./productGtmLayout";
+import { productGtmWorkflowGraph } from "./productGtmWorkflow";
 import { projectProductGtm, type ProductGtmNode as ProductGtmFlowNode } from "./productGtmProjection";
 import { PRODUCT_GTM_READABLE_ZOOM, PRODUCT_GTM_WHOLE_ZOOM, productGtmMotionDuration, productGtmViewportIsAway } from "./productGtmViewport";
 import "@xyflow/react/dist/style.css";
@@ -73,8 +74,17 @@ export function ProductGtmSurface({
       setModel(current.model); setMovement(market.marketMovement);
     }).catch((reason) => { if (live) setError(reason instanceof Error ? reason.message : "The living venture model could not load."); });
     return () => { live = false; };
-  }, [refreshKey, ventureId]);
+    // index.revision advances when the shell reloads after live work (SSE-driven). Refetch the model so a
+    // Product / GTM action that runs on the canvas — mapping the product, a landing branch — surfaces here
+    // as it lands, without navigating the founder into Work.
+  }, [refreshKey, ventureId, index?.revision]);
   const visibleModel = model ?? fallbackModel(ventureId, index);
+  // The territory legend advertises a GTM territory; when no play exists yet the GTM band is honestly
+  // empty rather than missing. A play is a workflow graph on a gtm or shared object.
+  const gtmEmpty = useMemo(() => !(visibleModel?.objects ?? []).some((object) =>
+    ["gtm", "shared"].includes(productGtmTerritoryFor(object.type, object.properties))
+    && Boolean(productGtmWorkflowGraph(object.properties))
+  ), [visibleModel]);
   const selected = selectedNodeId(selectedRef);
   const wholeVenture = wholeVentureFor === ventureId && !selected;
   const projectionContext = useMemo(() => ({
@@ -158,14 +168,13 @@ export function ProductGtmSurface({
     const workflowFocus = Boolean(currentSelection?.data.workflowGraph) || currentSelection?.data.kind === "workflow";
     const presentIds = new Set(nodes.map((node) => node.id));
     if (workflowFocus && [...focusIds].some((id) => !presentIds.has(id))) return;
-    // The whole venture frames every node at an overview altitude; a focused chapter frames its
-    // neighborhood at readable size.
+    // The whole venture frames every node so entry lands composed in view — never a subset that leaves
+    // the rest scattered off-screen. A focused chapter frames its neighborhood at readable size.
     const wholeVenture = graph.chapterKind === "whole" && !currentSelection;
     const floor = wholeVenture ? PRODUCT_GTM_WHOLE_ZOOM : PRODUCT_GTM_READABLE_ZOOM;
     const workflowNodes = nodes.filter((node) => focusIds.has(node.id)).sort((left, right) => left.position.x - right.position.x || left.position.y - right.position.y);
-    const overviewNodes = nodes.filter((node) => focusIds.has(node.id)).slice(0, 5);
     const framingNodes = wholeVenture
-      ? (overviewNodes.length ? overviewNodes : nodes.slice(0, 5))
+      ? nodes
       : currentSelection?.data.kind === "workflow"
         ? [currentSelection]
         : workflowFocus
@@ -174,15 +183,19 @@ export function ProductGtmSurface({
     const targets = framingNodes.length ? framingNodes : nodes.slice(0, 1);
     await instance.fitView({
       nodes: targets,
-      padding: wholeVenture ? 0.2 : 0.2,
-      minZoom: floor,
+      padding: 0.2,
+      // A wide venture is allowed below the overview floor so every node fits rather than cropping; a
+      // focused chapter holds the readable floor.
+      minZoom: wholeVenture ? 0.2 : floor,
       maxZoom: 0.98,
       duration: productGtmMotionDuration(duration),
     });
     // React Flow can resolve an early fit before its internal measurements have caught up with
     // controlled nodes, leaving a persisted overview camera untouched. Center the exact chapter at
-    // the framing floor so an old session can never defeat the default composition.
-    if (instance.getViewport().zoom < floor - 0.001) {
+    // the framing floor so an old session can never defeat the default composition. The whole venture
+    // is exempt: fitView already overrides the persisted camera, and forcing the floor there would crop
+    // a wide venture the fit deliberately zoomed out to compose.
+    if (!wholeVenture && instance.getViewport().zoom < floor - 0.001) {
       const bounds = instance.getNodesBounds(targets);
       await instance.setCenter(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, {
         zoom: floor,
@@ -260,6 +273,10 @@ export function ProductGtmSurface({
     {cameraAway ? <button className="product-gtm-return-current" type="button" onClick={() => void frameCurrent()}>
       <LocateFixed aria-hidden="true" />Return to current
     </button> : null}
+    {gtmEmpty ? <p className="product-gtm-empty-gtm" role="note">
+      <Route aria-hidden="true" />
+      No GTM plays yet — a play appears here once you draft or run one.
+    </p> : null}
     <div className="product-gtm-canvas" {...dropHandlers}><ReactFlow
       nodes={nodes} edges={graph.edges} nodeTypes={NODE_TYPES} edgeTypes={EDGE_TYPES}
       defaultViewport={camera ?? undefined} onInit={(instance) => { flowInstance.current = instance; setFlowReady(true); }}

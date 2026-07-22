@@ -54,7 +54,7 @@ export function ProductGtmNavigator({ model, movement, selectedRef, onFocus, onD
     <div className="product-gtm-territory-key" aria-label="Canvas territories">
       <span data-territory="product"><Box aria-hidden="true" />Product</span>
       <span data-territory="shared"><GitMerge aria-hidden="true" />Shared</span>
-      <span data-territory="gtm"><Route aria-hidden="true" />GTM</span>
+      <span data-territory="gtm" data-empty={paths.length ? undefined : "true"} title={paths.length ? undefined : "No GTM plays yet"}><Route aria-hidden="true" />GTM</span>
     </div>
     {primaryWorkflow && !selectedIsPrimary ? <button
       className="product-gtm-workflow-shortcut"

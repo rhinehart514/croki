@@ -32,8 +32,7 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
   const [error, setError] = useState<string | null>(null);
   const cite = citation(page.sourceRef) ?? page.file;
 
-  const start = async () => {
-    const message = intent.trim();
+  const submit = async (message: string, failure: string) => {
     if (!message || pending || readOnly) return;
     setPending(true);
     setError(null);
@@ -48,13 +47,22 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
         onOpenWork(result.threadRef);
         return;
       }
-      setError("That direction did not open a Work Thread. Nothing was changed.");
+      setError(failure);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The direction could not start.");
     } finally {
       setPending(false);
     }
   };
+
+  const start = () => void submit(intent.trim(), "That direction did not open a Work Thread. Nothing was changed.");
+  // The one GTM action a page offers: have an agent draft a go-to-market play about this page. There is no
+  // join target wired here yet, so this mints the intent as an adoptable proposal Thread rather than faking
+  // a joined play (AGENTS.md §Boundaries; docs/FIRM-SPEC.md, 2026-07-22).
+  const proposePlay = () => void submit(
+    `Propose a go-to-market play for the ${name} page. Draft the full sequence as an adoptable proposal I can review.`,
+    "A GTM play could not be proposed. Nothing was changed.",
+  );
 
   return <section className="product-page-panel" aria-label={`${name} page`}>
     <header className="product-page-panel-head">
@@ -90,15 +98,23 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
         id={`page-intent-${pageRef}`}
         value={intent}
         onChange={(event) => setIntent(event.target.value)}
-        onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void start(); }}
+        onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") start(); }}
         placeholder={`Describe the change to ${name}. Claude or Codex takes it from here.`}
         rows={3}
         disabled={pending || readOnly}
       />
       {error ? <p className="product-page-panel-error" role="status">{error}</p> : null}
-      <button type="button" className="product-page-panel-start" onClick={() => void start()} disabled={pending || readOnly || !intent.trim()}>
+      <button type="button" className="product-page-panel-start" onClick={() => start()} disabled={pending || readOnly || !intent.trim()}>
         {pending ? "Starting…" : "Start work on this page"}
       </button>
+    </div>
+
+    <div className="product-page-panel-gtm">
+      <p className="product-page-panel-eyebrow">Take it to market</p>
+      <button type="button" className="product-page-panel-play" onClick={() => proposePlay()} disabled={pending || readOnly}>
+        Propose a GTM play
+      </button>
+      <p className="product-page-panel-gtm-note">An agent drafts a play for this page as an adoptable proposal.</p>
     </div>
   </section>;
 }

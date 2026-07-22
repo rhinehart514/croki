@@ -238,6 +238,9 @@
 .thread-conversation[data-surface="work"] .thread-message { display: flex; width: min(100%, 768px); grid-template-columns: none; gap: 0; margin: 0 auto 8px; }
 .thread-conversation[data-surface="work"] .thread-message > header { display: none; }
 .thread-conversation[data-surface="work"] .thread-message-body { width: 100%; font-size: 14px; line-height: 1.6; }
+/* Cap the agent reading measure so unboxed output stays legible on wide panes; the 768px column,
+   founder turns, and composer keep their width, so the prose stays left-anchored under them. */
+.thread-conversation[data-surface="work"] .thread-message:not([data-role="founder"]) .thread-message-body { max-width: 80ch; }
 .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-message:not([data-role="founder"]) { flex-direction: column; gap: 4px; }
 .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-message:not([data-role="founder"]) > header { display: flex; align-items: center; gap: 7px; padding-top: 0; color: var(--n-ink-3); font-size: 11px; text-align: left; }
 .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-message:not([data-role="founder"]) > header::before { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: conic-gradient(from 20deg, var(--agent-spectrum-cyan), var(--agent-spectrum-violet), var(--agent-spectrum-rose), var(--agent-spectrum-amber), var(--agent-spectrum-green), var(--agent-spectrum-cyan)); box-shadow: 0 0 10px rgb(124 156 255 / 18%); content: ""; }

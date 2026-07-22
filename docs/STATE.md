@@ -1,6 +1,6 @@
 # STATE — Drover
 
-**Stage:** alpha. **Updated:** 2026-07-21.
+**Stage:** alpha. **Updated:** 2026-07-22.
 **Authority:** [`FIRM-SPEC.md`](FIRM-SPEC.md) defines durable product/build physics. Root
 [`DESIGN.md`](../DESIGN.md) defines the intended desktop experience.
 
@@ -192,6 +192,19 @@ than shrinking a long workflow to fit; selecting a later step frames that exact 
 graph. Whole-venture and focused camera composition preserve a readable active chapter; below semantic-detail
 zoom the remaining portfolio uses meaningful overview markers rather than tiny full labels.
 
+The 2026-07-22 T3 polish pass raised legibility and honesty on the existing surfaces without adding capability.
+In Work, non-founder agent output now caps at an 80ch reading measure while the composer keeps its full width, so
+long agent turns no longer run to a ~1167px line. In Product / GTM, the whole-venture canvas now opens fit to all
+nodes rather than a five-node sample, so nothing lands scattered off-screen; provisional read nodes that would
+render edgeless are attached to the page(s) they derive from, or chain into one left-to-right reading trunk when no
+page exists yet, so first-run reads are never orphans; an empty GTM territory shows an honest on-canvas note and
+dims the GTM legend chip instead of promising plays that do not exist; the page-refine panel now offers the
+mandated GTM action — proposing a play that lands as an adoptable Work Thread proposal — alongside starting work;
+and resting node labels were raised for legibility. The projection was split under the 500-line ceiling
+(`productGtmProjection.ts` 468, new co-located `productGtmChapter.ts` 101) with identical behavior. The dead
+`release` member of the thread `contextKind` union was dropped, and the previously undeclared `--n-surface-2`
+token the workspace shell already referenced is now declared in `ui/src/index.css`.
+
 The deterministic browser harness remains a development/test surface. Electron remains the shipped product.
 Visual verification must confirm that the BrowserWindow loaded and became visible; a healthy Brain alone is not
 proof.
@@ -204,7 +217,7 @@ Validated during this realignment:
 - selective merge, drift conflict, and agent merge refusal pass;
 - WorkScope lease/concurrency and atomic spend tests pass;
 - the provider-neutral MCP surface and authority matrix pass;
-- the complete Brain suite passes 878 tests; the UI suite passes 49 files and 246 tests;
+- the complete Brain suite passes 849 tests; the UI suite passes 49 files and 247 tests;
 - the GTM two-register receipts pass: a play whose stored blob claims established still projects as drafted
   without real movement, a not-yet-adopted play that has run stays drafted, only a canonical play that has run
   reads as established, per-step running counts derive from real state with the exact items behind each count and
@@ -235,11 +248,20 @@ Validated during this realignment:
 - deleting the retired UI bundles reduced the production graph and bundle while keeping size budgets green.
 
 The complete pre-enhancement `npm run test:acceptance` receipt passed on July 21, 2026. It is not a current
-post-enhancement receipt: `npm run check:architecture` now reports 136 Brain modules against the rewrite's new
-131-module ceiling. The surrounding uncommitted rewrite accounts for 134 before the two feature modules in this
-slice. `npm run verify:tokens` also reports four pre-existing infinite loading animations in `now.css` and
-`thread-shell.css`. Neither gate was weakened; current readiness remains red until that broader cleanup is
-reconciled.
+post-enhancement receipt. The single remaining red gate is `npm run check:architecture`, which reports 134 Brain
+modules against the 131-module ceiling — three over, down from five. The 2026-07-22 T3 polish pass removed the two
+genuinely dead firm route modules that accounted for the earlier gap (`architecture-routes.mjs`,
+`release-routes.mjs`) and their transport tests; the load-bearing `firmRoutes` wall-decide surface was verified and
+kept. No dead Brain module remains: every module now has at least one importer, and the one-importer families
+(`work-loop-*`, the work-loop guards, the semantic-model compat shim) are LOC-ceiling-compliant feature-local
+splits whose sole importers already sit at the 500-line service ceiling (`work-loop-tools.mjs` 499,
+`semantic-model.mjs` 489). Folding any of them back would trade the module-count violation for an LOC violation, a
+worse outcome. Reconciling to 131 without weakening either check therefore requires a deliberate deeper
+consolidation, not more dead-code removal; the check was not weakened and readiness stays red on it alone.
+`npm run verify:tokens` now passes (171 canonical tokens across 14 CSS files); every remaining infinite animation
+sits on an exempt `spinner`/`data-state="stopping"` work-receipt selector. `npm --prefix brain test` passes 849/849
+and `npm --prefix ui run test:unit` passes 247/247 across 49 files; the UI production build, lint, token, and
+service/component size checks pass.
 
 The deterministic complete founder loop is proven through selective Product-model merge. One real external
 dogfood loop remains required before release readiness because it would invoke provider credits and world-
@@ -257,8 +279,11 @@ crossing actions that this implementation run did not have authority to spend or
   constraints are all satisfied.
 - Complete reduced-motion, auth, budget, provider-backpressure, outward failure, silence, and merge-conflict visual
   screenshot QA beyond the deterministic state assertions already present.
-- Reconcile the surrounding Brain rewrite to the 131-module ceiling without weakening the check. The current tree
-  is five modules over; this connector/security slice adds two of them.
+- Reconcile the Brain tree to the 131-module ceiling without weakening the check. The tree is now three modules
+  over (134), down from five after the dead firm route removal. No dead module remains to reclaim: the overage is
+  now structural, caused by LOC-compliant feature-local splits (`work-loop-*`, work-loop guards, semantic-model
+  compat) whose importers already sit at the 500-line service ceiling. Closing the last three requires a deliberate
+  consolidation call — a genuine conflict between the module-count and LOC ceilings — not more deletion.
 - Exercise Exa and Gmail against founder-connected accounts only with explicit authority for API use and any
   world-crossing send. This implementation used no founder account, message, or paid API credit.
 - Complete a real dogfood loop from repository connection through outward action, evidence return, selective

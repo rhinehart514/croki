@@ -48,6 +48,7 @@ export function WorkspaceProductSurface({
   const [mappingProduct, setMappingProduct] = useState(false);
   const [organizeRequest, setOrganizeRequest] = useState(0);
   const [playError, setPlayError] = useState<string | null>(null);
+  const [mapNotice, setMapNotice] = useState<string | null>(null);
   const askAgent = useCallback((subjectRef?: string, relatedRefs?: string[]) => {
     if (subjectRef) onBeginScopedThread(subjectRef, relatedRefs);
     else onNewThread();
@@ -61,7 +62,7 @@ export function WorkspaceProductSurface({
   }, [selectedRef, systemIndex]);
   const directPlay = useCallback(async () => {
     if (!selectedPlay || playAction || readOnlyReason) return;
-    setPlayAction("run"); setPlayError(null);
+    setPlayAction("run"); setPlayError(null); setMapNotice(null);
     try {
       const message = `Run “${selectedPlay.name}” again from its current canonical definition. Preserve every conditional branch and founder gate, use current venture context, and record the exact outcomes and evidence on this play.`;
       const result = await replyInConversation(ventureId, { message, subjectRefs: [selectedPlay.objectRef], mode: "context", productGtmView: true, workflowSketch: true });
@@ -74,19 +75,22 @@ export function WorkspaceProductSurface({
   }, [onChanged, onOpenWork, playAction, readOnlyReason, selectedPlay, ventureId]);
   const mapProduct = useCallback(async () => {
     if (mappingProduct || readOnlyReason) return;
-    setMappingProduct(true); setPlayError(null);
+    setMappingProduct(true); setPlayError(null); setMapNotice(null);
     try {
       const result = await replyInConversation(ventureId, {
         message: "Map the product from the current codebase as the actual pages a user walks through. Read the routes and source, preserve exact citations, connect the proven page-to-page journey, and return an adoptable Product / GTM view. Do not invent pages or behavior the repository does not prove.",
         mode: "context", productGtmView: true,
       });
       onChanged();
-      if (result.act === "new-direction" && result.threadRef) onOpenWork(result.threadRef);
-      else setPlayError("Product mapping did not open exact work. Nothing on the canvas changed.");
+      // Mapping is a canvas-building action, not a chat: the founder stays on the Product territory and the
+      // page map lands here as a reviewable branch when the drive completes (SSE reload → model refetch).
+      // Navigating into Work would collapse the surface back to a thread.
+      if (result.act === "new-direction" && result.threadRef) setMapNotice("Reading your code to map the product. The page map appears on the canvas as it's ready.");
+      else setPlayError("Product mapping could not start. Nothing on the canvas changed.");
     } catch (cause) {
       setPlayError(cause instanceof Error ? cause.message : "Product mapping could not start.");
     } finally { setMappingProduct(false); }
-  }, [mappingProduct, onChanged, onOpenWork, readOnlyReason, ventureId]);
+  }, [mappingProduct, onChanged, readOnlyReason, ventureId]);
   return <>
     <motion.div className="workspace-primary" {...motionProps}>
       <ResourceNotice resource={systemResource} />
@@ -116,13 +120,14 @@ export function WorkspaceProductSurface({
         {!contextualChatOpen ? <div className="workspace-canvas-dock-actions" aria-label={selectedPlay ? "Selected play and canvas actions" : "Canvas actions"}>
           {selectedPlay ? <button type="button" data-weight="primary" disabled={Boolean(playAction || readOnlyReason)} onClick={() => void directPlay()}>{playAction === "run" ? <LoaderCircle className="is-spinner" aria-hidden="true" /> : <Play aria-hidden="true" />}Run again</button> : null}
           <button type="button" data-weight="quiet" disabled={mappingProduct || Boolean(readOnlyReason)} onClick={() => void mapProduct()}>{mappingProduct ? <LoaderCircle className="is-spinner" aria-hidden="true" /> : <Map aria-hidden="true" />}Map product</button>
-          <button type="button" data-weight="muted" disabled={Boolean(readOnlyReason)} onClick={() => setOrganizeRequest((value) => value + 1)}><LayoutGrid aria-hidden="true" />Organize</button>
+          <button type="button" data-weight="muted" disabled={Boolean(readOnlyReason)} onClick={() => { setMapNotice(null); setOrganizeRequest((value) => value + 1); }}><LayoutGrid aria-hidden="true" />Organize</button>
         </div> : null}
         <button ref={openerRef as RefObject<HTMLButtonElement | null>} type="button" className="workspace-canvas-dock-toggle" aria-expanded={contextualChatOpen} aria-label={contextualChatOpen ? "Collapse canvas chat" : "Open canvas chat; rework continues in Work"} onClick={() => onContextualChatOpen(!contextualChatOpen)}>
           <span><b>{contextualChatOpen ? "Done" : "Ask"}</b>{!contextualChatOpen ? <small>Quick answers · rework opens in Work</small> : null}</span>{contextualChatOpen ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}
         </button>
       </header>
       {playError ? <p className="workspace-canvas-dock-error" role="status">{playError}</p> : null}
+      {mapNotice && !playError ? <p className="workspace-canvas-dock-notice" role="status">{mapNotice}</p> : null}
       <div className="workspace-canvas-dock-conversation">{conversation}</div>
     </aside>
   </>;

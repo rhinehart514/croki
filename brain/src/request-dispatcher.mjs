@@ -6,7 +6,6 @@ import firmRoutes from "./firm/routes.mjs";
 import firmLensRoutes from "./firm/lens-routes.mjs";
 import firmWorkIndexRoutes from "./firm/work-index-routes.mjs";
 import firmSystemIndexRoutes from "./firm/system-routes.mjs";
-import firmReleaseRoutes from "./firm/release-routes.mjs";
 import firmViewRoutes from "./firm/view-routes.mjs";
 import firmProductChangeRoutes from "./firm/product-routes.mjs";
 import firmCodeWorkspaceRoutes from "./firm/code-workspace-routes.mjs";
@@ -14,7 +13,6 @@ import firmWorkRoutes from "./firm/work-routes.mjs";
 import firmDialogueRoutes from "./firm/dialogue-routes.mjs";
 import firmVentureRoutes from "./firm/venture-routes.mjs";
 import firmConfigurationRoutes from "./firm/configuration-routes.mjs";
-import firmArchitectureRoutes from "./firm/architecture-routes.mjs";
 import firmModelRoutes from "./firm/model-routes.mjs";
 
 const ROUTE_GROUPS = [
@@ -25,7 +23,6 @@ const ROUTE_GROUPS = [
   firmLensRoutes,
   firmWorkIndexRoutes,
   firmSystemIndexRoutes,
-  firmReleaseRoutes,
   firmViewRoutes,
   firmProductChangeRoutes,
   firmCodeWorkspaceRoutes,
@@ -33,7 +30,6 @@ const ROUTE_GROUPS = [
   firmDialogueRoutes,
   firmModelRoutes,
   firmConfigurationRoutes,
-  firmArchitectureRoutes,
   firmVentureRoutes,
 ];
 

@@ -29,6 +29,7 @@ import {
   type ProductGtmPageData,
 } from "./productGtmPages";
 import { productGtmTypeLabel, relationshipLabel, semanticRole } from "./productGtmLabels";
+import { automaticChapter, focusNeighborhood, objectFocusFor, readSourceFiles } from "./productGtmChapter";
 
 export { productGtmTypeLabel } from "./productGtmLabels";
 
@@ -155,24 +156,6 @@ function edge(id: string, source: string, target: string, label: string | undefi
   };
 }
 
-function focusNeighborhood(selectedId: string | null, spine: string[], model: FirmSemanticModel, extraEdges: Array<[string, string]>) {
-  if (!selectedId) return new Set(spine);
-  const neighbors = new Map<string, Set<string>>();
-  const join = (a: string, b: string) => {
-    if (!neighbors.has(a)) neighbors.set(a, new Set());
-    if (!neighbors.has(b)) neighbors.set(b, new Set());
-    neighbors.get(a)?.add(b); neighbors.get(b)?.add(a);
-  };
-  for (const relationship of model.relationships) join(productGtmRefId(relationship.fromRef), productGtmRefId(relationship.toRef));
-  for (const [source, target] of extraEdges) join(source, target);
-  const focused = new Set([selectedId]);
-  for (const first of neighbors.get(selectedId) ?? []) {
-    focused.add(first);
-    for (const second of neighbors.get(first) ?? []) focused.add(second);
-  }
-  return focused;
-}
-
 function bundleEdges(edges: Array<Edge<ProductGtmEdgeData>>) {
   const groups = new Map<string, Array<Edge<ProductGtmEdgeData>>>();
   for (const entry of edges) {
@@ -185,54 +168,6 @@ function bundleEdges(edges: Array<Edge<ProductGtmEdgeData>>) {
     const group = groups.get(key) ?? [entry];
     return { ...entry, data: { ...entry.data!, bundleIndex: group.indexOf(entry), bundleCount: group.length } };
   });
-}
-
-function objectFocusFor(
-  selectedId: string | null,
-  model: FirmSemanticModel,
-  movement: MarketMovementIndex | null,
-) {
-  if (!selectedId) return null;
-  if (model.objects.some((object) => object.id === selectedId)) return selectedId;
-  if (selectedId.startsWith("branch:")) {
-    const branchRef = `model-branch:${selectedId.slice("branch:".length)}`;
-    return model.modelChanges
-      .filter((change) => change.branchRef === branchRef)
-      .map((change) => productGtmRefId(change.targetRef ?? ""))
-      .find((id) => model.objects.some((object) => object.id === id)) ?? null;
-  }
-  if (selectedId.startsWith("action:")) {
-    return movement?.actions.find((action) => `action:${action.id}` === selectedId)?.subjectRefs
-      .map(productGtmRefId).find((id) => model.objects.some((object) => object.id === id)) ?? null;
-  }
-  const work = (movement?.liveWork ?? []).find((item, index) => workNodeId(item, index) === selectedId);
-  return strings(work?.subjectRefs).map(productGtmRefId)
-    .find((id) => model.objects.some((object) => object.id === id)) ?? null;
-}
-
-function automaticChapter(movement: MarketMovementIndex | null, context: ProductGtmProjectionContext) {
-  if (context.wholeVenture) return null;
-  const unreadSubjects = new Set((context.unreadSubjectRefs ?? []).map(productGtmRefId));
-  const unreadThreads = new Set(context.unreadThreadRefs ?? []);
-  const actions = movement?.actions ?? [];
-  const decision = actions.find((action) => action.state === "needs-founder");
-  if (decision) return { id: `action:${decision.id}`, kind: "decision" as const };
-  const returned = actions.find((action) => action.state === "returned" && (
-    context.unreadSubjectRefs === undefined
-    || action.subjectRefs.some((ref) => unreadSubjects.has(productGtmRefId(ref)))
-    || action.workRefs.some((ref) => unreadThreads.has(ref))
-  ));
-  if (returned) return { id: `action:${returned.id}`, kind: "return" as const };
-  const reviewIndex = (movement?.liveWork ?? []).findIndex((item) => {
-    const attention = String(item.attention ?? "").toLowerCase();
-    return ["decision", "failure", "review"].includes(attention) && item.unread !== false;
-  });
-  if (reviewIndex >= 0) return { id: workNodeId(movement!.liveWork[reviewIndex], reviewIndex), kind: "review" as const };
-  const staleBranch = movement?.modelBranches?.find((branch) => !branch.closedAt && branch.baseModelRevision < movement.revision);
-  if (staleBranch) return { id: `branch:${staleBranch.id}`, kind: "review" as const };
-  const activeIndex = (movement?.liveWork ?? []).findIndex((item) => item.activity === "running");
-  if (activeIndex >= 0) return { id: workNodeId(movement!.liveWork[activeIndex], activeIndex), kind: "active" as const };
-  return null;
 }
 
 export function projectProductGtm(
@@ -457,6 +392,38 @@ export function projectProductGtm(
       edges.push(workEdge);
     }
     if (item.activity === "running" || id === chapterAnchorId) initialFocusIds.add(id);
+  }
+
+  // No provisional read floats free. A strategy read attaches to what it is about: the page(s) it derives
+  // from (a cross-territory attachment takes the restrained spectrum automatically). When the map has no
+  // page yet — the normal state right after a repository read-back — the reads chain into one provisional
+  // reading trunk instead of scattering as orphans (AGENTS.md §Boundaries; docs/FIRM-SPEC.md, 2026-07-22).
+  const incidentIds = new Set<string>();
+  for (const entry of edges) { incidentIds.add(entry.source); incidentIds.add(entry.target); }
+  const pageNodes = nodes.filter((node) => node.data.role === "page");
+  const trunkAnchor = nodes.find((node) => node.data.kind === "truth" && node.data.role !== "provisional" && spineIndex.has(node.id)) ?? null;
+  const readNodes = nodes
+    .filter((node) => node.data.kind === "truth" && node.data.role === "provisional")
+    .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y);
+  let previousRead: ProductGtmNode | null = trunkAnchor;
+  for (const read of readNodes) {
+    if (incidentIds.has(read.id)) { previousRead = read; continue; }
+    const object = model.objects.find((entry) => entry.id === read.id);
+    const files = object ? readSourceFiles(object) : new Set<string>();
+    const derived = pageNodes.filter((page) => {
+      const file = (page.data.page as ProductGtmPageData | undefined)?.file;
+      return file ? files.has(file) : false;
+    });
+    if (derived.length) {
+      for (const page of derived) {
+        edges.push(edge(`read-derivation:${read.id}:${page.id}`, page.id, read.id, "provisional read", "provisional", focus.has(page.id) && focus.has(read.id), page.data.territory, read.data.territory));
+        incidentIds.add(page.id); incidentIds.add(read.id);
+      }
+    } else if (previousRead) {
+      edges.push(edge(`read-attach:${previousRead.id}:${read.id}`, previousRead.id, read.id, undefined, "provisional", focus.has(previousRead.id) && focus.has(read.id), previousRead.data.territory, read.data.territory));
+      incidentIds.add(previousRead.id); incidentIds.add(read.id);
+    }
+    previousRead = read;
   }
 
   const focal = model.objects.find((object) => object.id === spine[0]);

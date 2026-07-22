@@ -25,3 +25,25 @@
 .product-gtm-node[data-workflow-step="wait"] .product-gtm-node-symbol { color: #9aa5b5; border-color: #404a58; background: #12171e; }
 .product-gtm-navigator nav header .product-gtm-draft-play { min-height: 32px; margin-top: 7px; padding: 0 9px; border: 1px solid #355d55; background: #10201c; color: #a8d3ca; font: 620 10px var(--sans); }
 .product-gtm-navigator nav header .product-gtm-draft-play:hover { border-color: #4d8176; background: #142722; color: #d6eee9; }
+
+/* Resting labels carry the canvas: raise weight and size so a page name reads at 100% zoom instead of
+   sitting as a tiny island in the dark field, and tighten the pill padding to give the label room. */
+.product-gtm-node-summary { padding: 7px 12px; }
+.product-gtm-node-summary strong { font-size: 13px; font-weight: 600; }
+.product-gtm-node[data-role=page] .product-gtm-node-summary strong { font-size: 13.5px; font-weight: 650; letter-spacing: -.01em; color: #eef2f8; }
+.product-gtm-node[data-role=page] .product-gtm-node-summary { padding: 8px 13px; }
+
+/* An empty GTM territory reads as intentionally empty, not missing: the legend key dims its GTM chip and
+   the canvas carries one calm note where a play would land. */
+.product-gtm-territory-key>[data-territory=gtm][data-empty=true] { opacity: .5; }
+.product-gtm-empty-gtm { position: absolute; z-index: 6; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 14px; border: 1px dashed #35544f; border-radius: 999px; background: rgba(13,23,21,.9); color: #8bb3a9; font: 600 11px var(--sans); box-shadow: 0 8px 24px rgba(0,0,0,.28); pointer-events: none; }
+.product-gtm-empty-gtm svg { width: 14px; height: 14px; color: #72ac9f; }
+.product-gtm-surface[data-has-selection=true] .product-gtm-empty-gtm, .product-gtm-surface[data-has-focus=true] .product-gtm-empty-gtm { display: none; }
+
+/* Every opened page offers one GTM action beside the Work handoff. */
+.product-page-panel-gtm { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid #222a34; }
+.product-page-panel-play { justify-self: start; min-height: 34px; padding: 0 13px; border: 1px solid #35584f; border-radius: 9px; background: #122019; color: #a8d3ca; font: 600 12px var(--sans); cursor: pointer; }
+.product-page-panel-play:hover:not(:disabled) { border-color: #4d8176; color: #d6eee9; }
+.product-page-panel-play:disabled { opacity: .5; cursor: default; }
+.product-page-panel-play:focus-visible { outline: 2px solid #5b8cff; outline-offset: 2px; }
+.product-page-panel-gtm-note { margin: 0; color: #748094; font-size: 10px; line-height: 1.4; }

@@ -37,7 +37,7 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
   ventureName: string;
   repository?: string;
   surface?: "work" | "context";
-  contextKind?: "product-gtm" | "release" | null;
+  contextKind?: "product-gtm" | null;
   item: WorkIndexItem | null;
   timeline: ThreadTimeline | null;
   lens: FirmLens | null;
