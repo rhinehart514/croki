@@ -42,15 +42,19 @@ contextBridge.exposeInMainWorld("droverDesktop", {
     },
   },
   preview: {
-    show: (input) => ipcRenderer.invoke("drover:preview-show", input),
-    setBounds: (bounds) => ipcRenderer.invoke("drover:preview-bounds", bounds),
-    navigate: (url) => ipcRenderer.invoke("drover:preview-navigate", url),
-    reload: () => ipcRenderer.invoke("drover:preview-reload"),
-    hide: () => ipcRenderer.invoke("drover:preview-hide"),
-    onState: (listener) => {
+    attach: (workspaceId, webContentsId) => ipcRenderer.invoke("drover:preview-attach", { workspaceId, webContentsId }),
+    detach: (workspaceId) => ipcRenderer.invoke("drover:preview-detach", workspaceId),
+    startPick: (workspaceId) => ipcRenderer.invoke("drover:preview-start-pick", workspaceId),
+    cancelPick: (workspaceId) => ipcRenderer.invoke("drover:preview-cancel-pick", workspaceId),
+    onOpenRequest: (listener) => {
       const handler = (_event, payload) => listener(payload);
-      ipcRenderer.on("drover:preview-state", handler);
-      return () => ipcRenderer.removeListener("drover:preview-state", handler);
+      ipcRenderer.on("drover:preview-open", handler);
+      return () => ipcRenderer.removeListener("drover:preview-open", handler);
+    },
+    onAnnotation: (listener) => {
+      const handler = (_event, payload) => listener(payload);
+      ipcRenderer.on("drover:preview-annotation", handler);
+      return () => ipcRenderer.removeListener("drover:preview-annotation", handler);
     },
   },
 });

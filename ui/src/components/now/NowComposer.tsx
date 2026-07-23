@@ -16,6 +16,7 @@ import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/product
 import { ComposerImageInput } from "./ComposerImages";
 import { useComposerImageIntake } from "./useComposerImages";
 import { useAgentComposer } from "./useAgentComposer";
+import { usePreviewAnnotationIntake } from "./usePreviewAnnotationIntake";
 import type { FirmConfiguration } from "@/types";
 import { NowComposerFooter } from "./NowComposerFooter";
 
@@ -75,6 +76,8 @@ export function NowComposer({
   // Intent options the founder deliberately summons: candidate directions grounded in venture truth + open
   // work. Picking one loads it into the composer; the actual turn still goes to the chosen SDK model.
   const directions = useDirections({ ventureId, mode: submissionMode, threadRef: selection?.threadRef ?? null });
+  // An element picked in this Thread's preview pane arrives here as a context block + screenshot.
+  usePreviewAnnotationIntake({ enabled: submissionMode === "work" && !readOnly, setDraft, setImages, focus: () => textareaRef.current?.focus() });
   const speech = useSpeechInput((text) => {
     setDraft((current) => (current ? `${current} ${text}` : text));
     textareaRef.current?.focus();

@@ -49,7 +49,9 @@ export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspac
       <div className="work-workbench-scroll">
         <section className="work-tab-panel" role="tabpanel" id={`work-panel-${tab}`} aria-labelledby={`work-tab-${tab}`}>
           {tab === "changes" ? <WorkChangesPane workspace={workspace} readOnlyReason={readOnlyReason} onSteered={onChanged} /> : null}
-          {tab === "preview" ? preview : null}
+          {/* The preview stays mounted while other tabs are focused, so the run's own preview tools
+              can keep driving the page (and an agent-opened preview is already live on return). */}
+          <div hidden={tab !== "preview"} style={tab === "preview" ? undefined : { display: "none" }}>{preview}</div>
           {tab === "history" ? <WorkCheckpoints ventureId={ventureId} workspace={workspace} readOnlyReason={readOnlyReason} onChanged={onChanged} /> : null}
         </section>
         <CodeWorkspaceStage ventureId={ventureId} workspace={workspace} readOnlyReason={readOnlyReason} onChanged={onChanged} variant="review" />

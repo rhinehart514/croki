@@ -17,7 +17,11 @@ const failures = [];
 // SDK streaming core (long-lived prompt queue, steering, live run controls, partial deltas, resume
 // cursor). Both parents sit at the 500-line service limit (work-loop.mjs 497, claude-code.mjs 493),
 // so the extraction is forced feature-local splitting, not drift.
-const BRAIN_MODULE_CEILING = 136;
+// 2026-07-23 re-baseline 136 → 138: firm/preview-broker.mjs and firm/preview-work-loop-tools.mjs,
+// the agent-drivable preview. The broker owns the session-pinning invariant (one run pins one preview
+// session, no cross-thread access) and the tools module screens the preview vocabulary into the work
+// loop; work-loop-tools.mjs already sits near the service limit, so both land as feature-local modules.
+const BRAIN_MODULE_CEILING = 138;
 
 function files(directory, pattern) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

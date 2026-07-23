@@ -79,7 +79,8 @@
 .work-preview-toolbar > span { color: var(--muted); text-transform: capitalize; }
 .work-preview-toolbar > span[data-state="failed"] { color: var(--danger); }
 .work-preview-toolbar > span[data-state="ready"] { color: var(--green); }
-.work-preview-viewport { min-height: 220px; background: #fff; }
+.work-preview-viewport { min-height: 220px; background: #fff; display: flex; }
+.work-preview-viewport webview { flex: 1; min-height: 220px; }
 .work-preview-viewport > p {
   display: grid;
   height: 100%;

@@ -12,6 +12,8 @@ import { appendConversationMessage } from "./conversation.mjs";
 import { getFirmConfiguration, proposeFirmConfiguration } from "./configuration.mjs";
 import { buildArchitectureWorkLoopTools } from "./architecture-work-loop-tools.mjs";
 import { buildRepositoryWorkLoopTools } from "./repository-work-loop-tools.mjs";
+import { buildPreviewWorkLoopTools } from "./preview-work-loop-tools.mjs";
+export { releasePreviewPin } from "./preview-broker.mjs";
 import { buildModelWorkLoopTools } from "./model-branches.mjs";
 import { parkOutwardAtWall } from "./grant-stage-outward.mjs";
 import { extendDirectionThread } from "./semantic-model-store.mjs";
@@ -451,6 +453,8 @@ export function buildToolSet({
   coordinationProtocols = [],
   involveParticipant = null,
   target = null,
+  previewWorkspace = null,
+  runId = null,
 }) {
   const consultedNames = new Set();
   const contributingRefs = new Set([teammateRef]);
@@ -459,21 +463,13 @@ export function buildToolSet({
   const definitions = [
     makeReadTruth({ cwd }),
     ...buildRepositoryWorkLoopTools({ cwd, trackCall, capturedSources }),
+    ...buildPreviewWorkLoopTools({ workspace: previewWorkspace, runId, trackCall }),
     ...buildBrowserReadTools({ trackCall }),
     ...buildExaReadTools({ options, trackCall }),
     ...buildModelWorkLoopTools({ ventureId, teammateRef, target, options, trackCall }),
     makeGetFirmConfiguration({ ventureId, options }),
     makeGetTaste({ ventureId, options, taste, ventureStore }),
-    ...buildArchitectureWorkLoopTools({
-      ventureId,
-      teammateRef,
-      configurationRevision,
-      options,
-      trackCall,
-      consultedNames,
-      capturedSources,
-      target,
-    }),
+    ...buildArchitectureWorkLoopTools({ ventureId, teammateRef, configurationRevision, options, trackCall, consultedNames, capturedSources, target }),
     makeForkBet({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall }),
     makeStageArtifact({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, contributingRefs }),
     makeStageOutward({ ventureId, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, deps }),

@@ -14,7 +14,7 @@
 
 import { getVentureDoc } from "./venture-store.mjs";
 import { getRuntime, selectRuntime } from "../runtimes/index.mjs";
-import { appendEvent, buildToolSet } from "./work-loop-tools.mjs";
+import { appendEvent, buildToolSet, releasePreviewPin } from "./work-loop-tools.mjs";
 import { summon } from "./crew.mjs";
 import { appendConversationMessage, listConversation, stampConversationRuntime } from "./conversation.mjs";
 import { CONFIGURATION_KEY, configuredAgent, ensureInitialFirmParticipant } from "./configuration.mjs";
@@ -272,13 +272,13 @@ async function driveTeammateLeased({
     involveParticipant: coordinationSeam.involveParticipant,
     target,
     architectureRevision: architectureContext?.architectureRevision ?? null,
+    previewWorkspace: codingWorkspace ?? null, runId: activeDrive.id,
   });
-  const outwardBlocked = configuration.authority.outwardEffects === "blocked"
-    || agent.authority.outwardEffects === "blocked";
+  const outwardBlocked = configuration.authority.outwardEffects === "blocked" || agent.authority.outwardEffects === "blocked";
   const tools = agent.capabilities.firmTools
     ? built.tools.filter((tool) => !(outwardBlocked && tool.name === "stage_outward"))
     : [];
-  const consultedNames = built.consultedNames;
+  const { consultedNames } = built;
   const toolByName = new Map(tools.map((tool) => [tool.name, tool]));
   const externallyCancelled = deps.isCancelled ?? (() => false);
 
@@ -404,6 +404,7 @@ async function driveTeammateLeased({
     },
   });
   const { outcome } = execution;
+  releasePreviewPin(activeDrive.id); // the finished run frees its preview for the Thread's next run
   codingWorkspace = execution.workspace;
   if (outcome.kind === "cancelled") {
     appendEvent(ventureId, betId ?? bet?.id, { type: "work_stopped", detail: "Stopped by the founder. Staged work was kept." }, options);

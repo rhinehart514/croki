@@ -21,7 +21,7 @@
     "check:bundle": "node scripts/check-ui-bundle.mjs",
     "test:site": "npm --prefix site run test:truth && npm --prefix site run lint && npm --prefix site run build",
     "test": "npm run test --workspace brain && npm run test:unit --workspace ui && npm run lint && npm run build",
-    "test:electron": "npm run prepare:pty && npm run build --workspace ui -- --configLoader runner && node --test --test-concurrency=1 --test-force-exit electron/security.test.cjs electron/window-state.test.cjs electron/terminal-runtime.test.cjs electron/preview-runtime.test.cjs test/browser/native-coding-electron.mjs",
+    "test:electron": "npm run prepare:pty && npm run build --workspace ui -- --configLoader runner && node --test --test-concurrency=1 --test-force-exit electron/security.test.cjs electron/window-state.test.cjs electron/terminal-runtime.test.cjs electron/preview-sessions.test.cjs electron/preview-net.test.cjs electron/preview-keyboard.test.cjs electron/preview-playwright.test.cjs electron/preview-driver.test.cjs test/browser/native-coding-electron.mjs",
     "test:package": "npm run build:desktop && node --test --test-concurrency=1 --test-force-exit test/browser/packaged-electron.mjs",
     "test:firm:browser": "npm run build --workspace ui -- --configLoader runner && node --test test/browser/firm-journey.mjs",
     "test:firm:acceptance-browser": "npm run build --workspace ui -- --configLoader runner && node --test --test-concurrency=1 --test-force-exit test/browser/firm-journey.mjs test/browser/return-journey.mjs test/browser/dense-journey.mjs test/browser/wall-journey.mjs test/browser/native-coding-journey.mjs test/browser/workspace-modes-journey.mjs test/browser/model-view-journey.mjs test/browser/outward-action-journey.mjs",

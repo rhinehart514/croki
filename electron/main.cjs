@@ -2,14 +2,14 @@
 // the Brain runs in this desktop process. Renderer requests cross Electron's isolated IPC bridge;
 // normal and packaged app launches never bind a web port.
 
-const { app, BrowserWindow, WebContentsView, shell, dialog, ipcMain, safeStorage, screen } = require("electron");
+const { app, BrowserWindow, shell, dialog, ipcMain, safeStorage, screen, session, webContents } = require("electron");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const pty = require("node-pty");
 const windowState = require("./window-state.cjs");
 const { createTerminalRuntime } = require("./terminal-runtime.cjs");
-const { createPreviewRuntime } = require("./preview-runtime.cjs");
+const { createPreviewSessions, hardenPreviewWebview } = require("./preview-sessions.cjs");
 const { externalHttpUrl, resolveLoginShell } = require("./security.cjs");
 
 app.setName("Drover");
@@ -55,11 +55,13 @@ const terminalRuntime = createTerminalRuntime({
   resolveWorkspace: resolveCodingWorkspace,
   send: sendToRenderer,
 });
-const previewRuntime = createPreviewRuntime({
-  WebContentsView,
-  getWindow: rendererWindow,
-  shell,
-  send: sendToRenderer,
+const previewSessions = createPreviewSessions({
+  electronSession: session,
+  webContentsById: (id) => webContents.fromId(id),
+  getFocusedWebContents: () => webContents.getFocusedWebContents(),
+  broadcast: (channel, payload) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(`drover:${channel}`, payload);
+  },
 });
 
 function owner(event) {
@@ -72,11 +74,15 @@ ipcMain.handle("drover:terminal-write", (event, sessionId, data) => terminalRunt
 ipcMain.handle("drover:terminal-resize", (event, sessionId, cols, rows) => terminalRuntime.resize(owner(event), sessionId, cols, rows));
 ipcMain.handle("drover:terminal-restart", (event, sessionId) => terminalRuntime.restart(owner(event), sessionId));
 ipcMain.handle("drover:terminal-close", (event, sessionId) => terminalRuntime.close(owner(event), sessionId));
-ipcMain.handle("drover:preview-show", (event, input) => previewRuntime.show(owner(event), input));
-ipcMain.handle("drover:preview-bounds", (event, bounds) => previewRuntime.setBounds(owner(event), bounds));
-ipcMain.handle("drover:preview-navigate", (event, url) => previewRuntime.navigate(owner(event), url));
-ipcMain.handle("drover:preview-reload", (event) => previewRuntime.reload(owner(event)));
-ipcMain.handle("drover:preview-hide", (event) => previewRuntime.hide(owner(event)));
+ipcMain.handle("drover:preview-attach", (event, input) => previewSessions.attach(owner(event), input));
+ipcMain.handle("drover:preview-detach", (event, workspaceId) => previewSessions.detach(owner(event), workspaceId));
+ipcMain.handle("drover:preview-start-pick", (event, workspaceId) => previewSessions.startPick(owner(event), workspaceId));
+ipcMain.handle("drover:preview-cancel-pick", (event, workspaceId) => previewSessions.cancelPick(owner(event), workspaceId));
+// Element picks arrive from preview guests, not the main window; the sessions registry matches the
+// sender against its own guests and drops anything else.
+ipcMain.on("drover-preview:element-picked", (event, annotation, rect) => {
+  void previewSessions.handleElementPicked(event.sender.id, annotation, rect);
+});
 
 ipcMain.handle("drover:brain-request", async (event, input = {}) => {
   owner(event);
@@ -170,7 +176,16 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, "preload.cjs"),
+      // Workspace previews render as <webview> guests; will-attach-webview below is the boundary
+      // that forces every guest into a sandboxed per-workspace preview partition.
+      webviewTag: true,
     },
+  });
+
+  mainWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
+    if (!hardenPreviewWebview(webPreferences, params, path.join(__dirname, "preview-pick-preload.cjs"))) {
+      event.preventDefault();
+    }
   });
 
   // Persist bounds/maximized on move, resize, and close, so the next launch opens where we left off.
@@ -207,7 +222,7 @@ async function createWindow() {
   if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show();
   mainWindow.on("closed", () => {
     terminalRuntime.stopOwner(ownerId);
-    previewRuntime.stopOwner(ownerId);
+    previewSessions.stopAll();
     const unsubscribe = ventureSubscriptions.get(ownerId);
     unsubscribe?.();
     ventureSubscriptions.delete(ownerId);
@@ -225,6 +240,10 @@ async function boot() {
       protectionModule.createElectronSafeStorageProtection(safeStorage),
     );
     brainRuntime = await import(path.join(__dirname, "..", "brain", "src", "desktop-runtime.mjs"));
+    // The brain runs in this process, so the preview broker and this desktop host share one module
+    // instance: work-loop preview tools reach the sessions registry directly, with no port bound.
+    const previewBroker = await import(path.join(__dirname, "..", "brain", "src", "firm", "preview-broker.mjs"));
+    previewBroker.registerPreviewHost((request) => previewSessions.execute(request));
     await brainRuntime.recoverDesktopWork();
     await createWindow();
   } catch (err) {
@@ -273,7 +292,7 @@ if (!gotLock) {
   app.on("before-quit", () => {
     app.isQuiting = true;
     terminalRuntime.stopAll();
-    previewRuntime.stopAll();
+    previewSessions.stopAll();
     for (const unsubscribe of ventureSubscriptions.values()) unsubscribe();
     ventureSubscriptions.clear();
   });

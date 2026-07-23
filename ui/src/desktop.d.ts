@@ -19,12 +19,18 @@ type DroverTerminalExit = {
 };
 type DroverTerminalOpen = { sessionId: string; snapshot: string; exit: DroverTerminalExit | null };
 
-type DroverPreviewBounds = { x: number; y: number; width: number; height: number };
-type DroverPreviewState = {
+type DroverPreviewAnnotationEvent = {
   workspaceId: string;
-  status: "loading" | "ready" | "failed";
-  url: string;
-  error: string | null;
+  annotation: unknown;
+  screenshot: { mimeType: string; data: string; size: number } | null;
+};
+
+// The <webview> tag Electron adds to the renderer; the browser build never renders one.
+// Its JSX intrinsic lives in webview.d.ts (a module, so it augments React instead of replacing it).
+type DroverWebviewElement = HTMLElement & {
+  src: string;
+  getWebContentsId: () => number;
+  reload: () => void;
 };
 
 type DroverDesktopBridge = {
@@ -48,12 +54,12 @@ type DroverDesktopBridge = {
     onExit: (listener: (event: DroverTerminalExit) => void) => () => void;
   };
   preview: {
-    show: (input: { workspaceId: string; url: string; bounds: DroverPreviewBounds }) => Promise<void>;
-    setBounds: (bounds: DroverPreviewBounds) => Promise<void>;
-    navigate: (url: string) => Promise<void>;
-    reload: () => Promise<void>;
-    hide: () => Promise<void>;
-    onState: (listener: (event: DroverPreviewState) => void) => () => void;
+    attach: (workspaceId: string, webContentsId: number) => Promise<{ attached: boolean }>;
+    detach: (workspaceId: string) => Promise<{ detached: boolean }>;
+    startPick: (workspaceId: string) => Promise<{ picking: boolean }>;
+    cancelPick: (workspaceId: string) => Promise<{ picking: boolean }>;
+    onOpenRequest: (listener: (event: { workspaceId: string; url: string }) => void) => () => void;
+    onAnnotation: (listener: (event: DroverPreviewAnnotationEvent) => void) => () => void;
   };
 };
 
