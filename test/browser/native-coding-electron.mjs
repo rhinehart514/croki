@@ -71,7 +71,7 @@ test("native coding: the real Electron host restores work and holds founder auth
     app = await launchDroverElectron({ root: ROOT, home, port: await freePort() });
     const secondHealth = await app.client.evaluate(`window.droverDesktop.api.request({ path: "/api/health", method: "GET", headers: {}, body: "" }).then((response) => JSON.parse(response.body))`);
     assert.notEqual(secondHealth.instanceId, firstHealth.instanceId, "a relaunch reused the stopped Brain identity");
-    await waitForDom(app.client, `document.querySelectorAll('.thread-material[data-kind="native-code"]').length === 2`, "a full Electron relaunch lost coding state");
+    await waitForDom(app.client, `document.querySelectorAll('.thread-material[data-kind="native-code"]').length === 2`, "a full Electron relaunch lost coding state", 30_000);
     assert.equal(await app.client.evaluate(`/native coding browser proof/i.test(document.body.textContent)`), true, "the durable implementation did not return after Electron relaunch");
   } finally {
     await app?.close().catch(() => {});

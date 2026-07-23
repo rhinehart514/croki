@@ -16,24 +16,24 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://scaffoldweb.com"),
-  title: "Croki | Move faster across Product and GTM",
+  title: "Croki | You built it. Now get people using it.",
   description:
-    "Croki is building one founder-controlled venture canvas for understanding, manipulating, and executing the full Product and go-to-market system, with exact authority at the world boundary.",
+    "You can already build. Croki takes the app you shipped to its first real users, works on your real Claude or Codex repo, and brings back what they do so you know what to build next. You approve every send.",
   applicationName: "Croki",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     url: "/",
     siteName: "Croki",
-    title: "Croki | Move faster across Product and GTM",
+    title: "Croki | You built it. Now get people using it.",
     description:
-      "Croki is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
+      "The build tools stop at 'it's live.' Croki starts there: it gets what you shipped in front of real users, and nothing goes out without your say-so.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Croki | Move faster across Product and GTM",
+    title: "Croki | You built it. Now get people using it.",
     description:
-      "Croki is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
+      "The build tools stop at 'it's live.' Croki starts there: it gets what you shipped in front of real users, and nothing goes out without your say-so.",
   },
 };
 

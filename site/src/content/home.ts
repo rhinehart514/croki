@@ -7,37 +7,37 @@ export const loopSteps = [
   {
     number: "01",
     icon: ScanSearch,
-    title: "State what should become true",
-    body: "Connect the real Product repository, pick Claude or Codex, and give one consequential direction. Useful work begins before process setup.",
-    detail: "Immediate work",
+    title: "Bring what you shipped",
+    body: "Point Croki at the real repo you build with Claude or Codex. It reads the actual product you made, not a description of it.",
+    detail: "Real product",
   },
   {
     number: "02",
     icon: MousePointer2,
-    title: "Pursue several approaches",
-    body: "PLG, outbound, inbound, partnerships, bespoke work, and unusual experiments can move together without fixed lanes or a universal container.",
-    detail: "Breadth without drift",
+    title: "Find who it's for",
+    body: "Croki drafts one grounded way to reach real users of this specific product. Outreach, a landing cut, a post. Not a generic growth checklist.",
+    detail: "Grounded, not generic",
   },
   {
     number: "03",
-    icon: Sparkles,
-    title: "Let the Product change",
-    body: "Claude and Codex can build and revise durable provisional Product models when market reality demands more than a messaging adjustment.",
-    detail: "Plural alternatives",
+    icon: LockKeyhole,
+    title: "Nothing leaves without you",
+    body: "Every message, deploy, and publish stops at your hand. You see exactly what goes where, and to whom, before it goes.",
+    detail: "You decide",
   },
   {
     number: "04",
-    icon: LockKeyhole,
-    title: "Cross into the world exactly",
-    body: "A release, interview, message, onboarding, deploy, or bespoke delivery keeps its real identity and stops at the founder's exact hand.",
-    detail: "Exact outward action",
+    icon: Sparkles,
+    title: "See what came back",
+    body: "Replies and real usage return as signal you can act on. Who did what, in their own words, one click away.",
+    detail: "Real signal",
   },
   {
     number: "05",
     icon: CheckCircle2,
-    title: "Make the next move faster",
-    body: "Returned evidence travels to the Product and GTM claims it can change. Selective merge compounds the result into better, faster next work.",
-    detail: "Improving velocity",
+    title: "Ship the next thing",
+    body: "What you learn becomes the next change to the product, and Croki helps you build it, back where you started.",
+    detail: "Back to build",
   },
 ];
 
@@ -45,20 +45,20 @@ export const principles = [
   {
     number: "I",
     icon: FileCheck2,
-    title: "Facts, evidence, and interpretation stay separate.",
-    body: "Repository truth remains cited, measured returns keep their source, and Claude or Codex interpretations stay visibly provisional.",
+    title: "Every claim traces back to something real.",
+    body: "Outreach and posts are grounded in your actual product and what users actually did. A guess is always marked as a guess.",
   },
   {
     number: "II",
     icon: ShieldCheck,
-    title: "Broad direction can keep exact work moving.",
-    body: "A visible, revocable scope can survive restart and attributable evidence without authorizing unrelated work or an outward act.",
+    title: "The agent keeps working. You stay in control.",
+    body: "Give one direction and Croki can keep the safe work moving, even across a restart, without ever sending or spending on its own.",
   },
   {
     number: "III",
     icon: Sparkles,
-    title: "Every consequence stays under your hand.",
-    body: "Safe inward work can move quickly, but exact world-boundary actions and ambiguous canonical changes remain yours.",
+    title: "Nothing reaches the world without your say-so.",
+    body: "Research and drafts move fast. Sending, publishing, deploying, and spending stop and wait for your call, every time.",
   },
 ];
 
@@ -90,22 +90,22 @@ export const faqs = [
   {
     question: "What is Croki, exactly?",
     answer:
-      "Croki is a Product and GTM Development Environment for founders building with agents. Work is the direct Claude/Codex environment; Product / GTM is the living venture model. Product releases are one outward-action kind, not a separate workspace.",
+      "Croki is where the app you already built gets its first real users. It reads your actual repo, drafts grounded ways to reach the people it's for, sends only what you approve, and brings back what they do so you know what to build next. The build tools stop at 'it's live.' Croki starts there.",
   },
   {
-    question: "Do I need Claude or Codex to start?",
+    question: "How is this different from Lovable, Bolt, or Replit?",
     answer:
-      "Croki's durable venture model and repository truth are local. Connect Codex or Claude Code when you want founder-directed research, design, implementation, comparison, or verification.",
+      "Those get you to a live app. Croki assumes you already have one. Your problem was never building it, it's that nobody's using it yet. Croki works on your real Claude or Codex repo and owns the part after launch: reaching users, keeping it trustworthy in front of them, and turning what comes back into your next move.",
   },
   {
     question: "What does local-first mean here?",
     answer:
-      "Croki runs on your machine and keeps canonical venture state there. It binds to your local product repository and uses the model subscription you already have.",
+      "Croki runs on your machine. Your product, your repo, and the people you reach stay with you. It works on your local repository and uses the model subscription you already have.",
   },
   {
-    question: "Can Croki keep work moving?",
+    question: "Does it send things on its own?",
     answer:
-      "A founder direction can grant durable, revocable scope for safe inward work and relevant evidence returns. Exact sends, publishes, deploys, spend, destructive actions, and Product-truth promotion remain founder-held.",
+      "No. One direction lets Croki keep the safe work moving, research, drafting, preparing, even after a restart. Every send, publish, deploy, and dollar spent stops and waits for you. You approve it, or it doesn't happen.",
   },
   {
     question: "Is this a hosted product?",

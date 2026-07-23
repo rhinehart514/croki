@@ -29,7 +29,7 @@ export function MachineCanvas() {
     <div
       className="machine-shell"
       role="img"
-      aria-label="A Croki venture canvas joining Product and go-to-market work, bounded Claude and Codex execution, an exact founder consequence, and returned evidence"
+      aria-label="Croki taking a shipped product to its first users: Claude and Codex draft the outreach, a send waits for the founder's approval, and replies return as real signal"
     >
       <div className="machine-topbar">
         <div className="machine-product">
@@ -38,7 +38,7 @@ export function MachineCanvas() {
           </span>
           <span>
             Buffalo Projects
-            <small>living Product + GTM</small>
+            <small>live · few users yet</small>
           </span>
         </div>
         <div className="machine-mode">
@@ -58,20 +58,20 @@ export function MachineCanvas() {
                 <FileCode2 />
               </span>
               <span>
-                <small>Product · evidence-backed</small>
-                <strong>Project discovery</strong>
+                <small>From your repo</small>
+                <strong>What you shipped</strong>
               </span>
             </div>
             <div className="evidence-line">
               <span>README.md:55</span>
-              <p>The repository proves the current discovery path.</p>
+              <p>Croki read the real product you built, not a description of it.</p>
             </div>
             <div className="evidence-line">
-              <span>Telemetry</span>
-              <p>Builders leave before viewing a complete brief.</p>
+              <span>Usage</span>
+              <p>Visitors leave before they sign up.</p>
             </div>
             <div className="node-foot">
-              <ScanSearch /> cited Product truth
+              <ScanSearch /> read from your code
             </div>
           </article>
 

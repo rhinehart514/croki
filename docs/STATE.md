@@ -289,8 +289,8 @@ Validated during this realignment:
 - selective merge, drift conflict, and agent merge refusal pass;
 - WorkScope lease/concurrency and atomic spend tests pass;
 - the provider-neutral MCP surface and authority matrix pass;
-- the complete Brain suite passes 941 tests; the complete UI suite passes 332 tests, the exact-turn/event
-  focused UI set passes 48 tests, the Electron suite passes 54 tests, and the production UI build succeeds;
+- the complete Brain suite passes 992 tests; the complete UI suite passes 369 tests, the Electron suite passes
+  54 tests, and the production UI build succeeds;
 - the outward message receipts pass: preparation stamps the exact contract with zero network use, agent
   execution is refused, the founder send records Gmail message/thread ids, the CAS lease excludes a concurrent
   double send, interruption leaves verification-required and refuses blind retry, a gmail-thread grant is
@@ -310,16 +310,22 @@ Validated during this realignment:
   record reads forward into the two-register model without trusting its stored register;
 - focused canvas tests pass 28/28; focused credential/connector tests pass 31/31;
 - UI lint, the production build, and service/component size checks pass;
-- focused provider-intervention and Claude runtime boundary receipts pass 41/41, and the structured founder-
-  decision UI passes 9/9; architecture verification passes at the consciously re-baselined 141-module
-  ceiling with the intervention bridge kept in one feature-local module;
+- focused provider-intervention and Claude runtime boundary receipts pass, and the structured founder-decision
+  UI passes; architecture verification passes at the consciously re-baselined 149-module ceiling with the
+  intervention and journey-import boundaries kept in feature-local modules;
 - runtime reachability, dead-code, and UI bundle checks pass;
 - the live browser-read adapter opened `https://example.com`, returned rendered text and one link, and closed its
   isolated context;
 - the deterministic `1440×900` Product/GTM browser journey proves the `0.82` opening floor and one-click adopted
   workflow disclosure;
 - deterministic browser acceptance passes for first run, return/offline recovery, founder consequences, native
-  coding, dense Product/GTM, selective merge, and the two-surface boundary;
+  coding, dense Product/GTM, selective merge, and the two-surface boundary (8/8 journeys);
+- Product/GTM receipts prove the code-proven Product walk as the resting projection, page expansion in place,
+  consequence-before-market gating, full-play local framing, non-draggable automatic placement, Thread continuity
+  across the canvas and Work, and a summoned observed-journey overlay that restores the prior camera and selection;
+- journey-import receipts pass for JSON, JSONL, quoted CSV, UTF-8 and size rejection, sanitized profiling,
+  venture isolation, deterministic preview and aggregation, exact and adopted dynamic route mapping, stale-map
+  refusal, bounded receipts, raw-file cancellation and expiry, and persisted snapshots without raw people or rows;
 - the July 21 Product/GTM coherence correction passes focused left-to-right causal-path, territory-crossing,
   opening-frame, feature-compression, local-reflow, exact-Work separation, dense-data, and 200%-zoom browser receipts;
 - the current deploy/return slice passes founder-only execution, durable failure, double-execution exclusion,
@@ -335,12 +341,13 @@ Validated during this realignment:
   Claude/Codex runtime dependencies;
 - deleting the retired UI bundles reduced the production graph and bundle while keeping size budgets green.
 
-The complete pre-enhancement `npm run test:acceptance` receipt passed on July 21, 2026. It is not a current
-post-enhancement receipt. `npm run check:architecture` passes across the current 141 Brain modules with no cycles
-or retired imports, and the service/component size checks pass. `npm run verify:tokens` passes with 171 canonical
-tokens across 15 CSS files; remaining infinite animations are limited to the gate's explicit work-state
-exemptions. The UI production build and bundle budgets pass, with the entry at or below 350 KB, general chunks
-at or below 600 KB, and listed on-demand grammars at or below 850 KB.
+The complete post-enhancement `npm run test:acceptance` receipt passes on July 23, 2026: the complete mechanical
+suites, token, reachability, architecture, size, bundle, site, eight deterministic browser journeys, 54-test
+visible-Electron suite, and packaged macOS launch receipt. `npm run check:architecture` passes across the current
+149 Brain modules with no cycles or retired imports, and the service/component size checks pass.
+`npm run verify:tokens` passes with 171 canonical tokens across 16 CSS files; remaining infinite animations are
+limited to the gate's explicit work-state exemptions. The UI production build and bundle budgets pass, with the
+entry at or below 350 KB, general chunks at or below 600 KB, and listed on-demand grammars at or below 850 KB.
 
 The deterministic complete founder loop is proven through selective Product-model merge. One real external
 dogfood loop remains required before release readiness because it would invoke provider credits and world-

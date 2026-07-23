@@ -36,10 +36,11 @@ export default function Home() {
                 <span className="live-dot" aria-hidden="true" />
                 Local-first alpha
               </Badge>
-              <h1 id="hero-title">Move faster than the market can react.</h1>
+              <h1 id="hero-title">You built it. Now get people using it.</h1>
               <p className="hero-lede">
-                Change the Product and every path to market while Claude and Codex
-                pursue several approaches, learn from reality, and make your next move faster.
+                You can already build. That was never the problem. Croki takes what you
+                shipped to its first real users, brings back what they do, and turns it
+                into your next move. Nothing goes out without your say-so.
               </p>
               <div className="hero-actions">
                 <Button
@@ -56,12 +57,12 @@ export default function Home() {
                   size="lg"
                   render={<a href="#machine" />}
                 >
-                  See the loop
+                  See how it works
                 </Button>
               </div>
               <p className="hero-note">
-                Local desktop alpha. Native Claude/Codex work, durable Product alternatives,
-                and exact founder authority over current truth and the outside world.
+                Local desktop alpha. Works on the real repo you build with Claude or Codex.
+                You approve every message, deploy, and change before it reaches the world.
               </p>
             </AnimatedGroup>
 
@@ -75,30 +76,31 @@ export default function Home() {
               <span className="proof-mark" aria-hidden="true">
                 <CrokiMark />
               </span>
-              <strong>One founder. Many approaches. One coherent changing venture.</strong>
+              <strong>Building was never your problem. Getting used is.</strong>
             </div>
             <div className="proof-item">
               <Code2 />
-              <span>Product models can change</span>
+              <span>Reaches your first real users</span>
             </div>
             <div className="proof-item">
               <CircleStop />
-              <span>Unscalable work is first-class</span>
+              <span>Nothing sends without your say-so</span>
             </div>
             <div className="proof-item">
               <TerminalSquare />
-              <span>Codex and Claude, locally</span>
+              <span>Runs on Claude and Codex, locally</span>
             </div>
           </section>
 
           <section className="loop-section" id="machine" aria-labelledby="loop-title">
             <div className="loop-heading">
               <InView>
-                <p className="section-index">The product being built</p>
-                <h2 id="loop-title">Every useful cycle improves the next move.</h2>
+                <p className="section-index">How it works</p>
+                <h2 id="loop-title">From shipped to actually used.</h2>
                 <p>
-                  Direct exact work, let several Product and market alternatives develop,
-                  cross into the world under your hand, and bring reality back to the claims it can change.
+                  Croki reads the product you already built, finds a grounded way to reach
+                  the people it's for, sends only what you approve, and brings back what they
+                  do so you know what to build next.
                 </p>
               </InView>
             </div>
@@ -126,17 +128,17 @@ export default function Home() {
           <section className="wall-section" id="wall" aria-labelledby="wall-title">
             <div className="wall-copy">
               <InView>
-                <span className="wall-number">EXACT CONSEQUENCE / NEEDS YOU</span>
+                <span className="wall-number">NEEDS YOU</span>
                 <h2 id="wall-title">
-                  Capability expands. Authority stays yours.
+                  Agents do the reach-out. You approve every send.
                 </h2>
                 <p>
-                  Claude and Codex can research, build, and verify inside your
-                  direction. The moment work would send, publish, deploy, spend,
-                  destroy, or materially rewrite ambiguous venture truth, Croki
-                  presents the exact consequence for your call.
+                  Claude and Codex research who your product is for and draft the
+                  outreach, the post, or the deploy. The moment anything would reach a
+                  real person, go live, or spend a dollar, Croki stops and shows you
+                  exactly what it is, for your call.
                 </p>
-                <p className="wall-maxim">The system prepares. The founder decides.</p>
+                <p className="wall-maxim">The agent prepares. You decide.</p>
               </InView>
             </div>
 
@@ -150,8 +152,8 @@ export default function Home() {
                     <LockKeyhole />
                   </span>
                   <span>
-                    <small>Illustrative scenario · founder consequence</small>
-                    <strong>Publish launch artifact</strong>
+                    <small>Illustrative scenario · needs your call</small>
+                    <strong>Send intro to 8 people</strong>
                   </span>
                   <Badge className="waiting-badge" variant="outline">
                     Waiting
@@ -160,28 +162,28 @@ export default function Home() {
                 <Separator />
                 <dl className="effect-list">
                   <div>
-                    <dt>Destination</dt>
-                    <dd>scaffoldweb.com</dd>
+                    <dt>Who</dt>
+                    <dd>8 people who starred your repo</dd>
                   </div>
                   <div>
-                    <dt>Prepared by</dt>
-                    <dd>Claude Code · verified run</dd>
+                    <dt>Drafted by</dt>
+                    <dd>Claude Code · one message each</dd>
                   </div>
                   <div>
-                    <dt>Changes</dt>
-                    <dd>1 public page, 0 paid actions</dd>
+                    <dt>Effect</dt>
+                    <dd>8 emails, 0 dollars spent</dd>
                   </div>
                 </dl>
                 <div className="approval-receipt">
                   <Check />
                   <p>
-                    Claims linked to cited repository evidence. Preview and
-                    rollback path are ready.
+                    Every message names a real detail from that person. You can read
+                    all 8 before any of them send.
                   </p>
                 </div>
                 <div className="approval-actions" aria-hidden="true">
                   <span>Keep staged</span>
-                  <span className="approve-button">Publish artifact</span>
+                  <span className="approve-button">Send 8</span>
                 </div>
               </article>
             </InView>
@@ -191,7 +193,7 @@ export default function Home() {
             <InView className="principles-heading">
               <p>What stays yours</p>
               <h2 id="principles-title">
-                Better models can arrive. The durable parts should remain.
+                The agents get faster. Who's in charge doesn't change.
               </h2>
             </InView>
 
@@ -217,21 +219,21 @@ export default function Home() {
               <Badge className="source-badge" variant="outline">
                 Source available
               </Badge>
-              <h2 id="local-title">Your machine. Your model. Your state.</h2>
+              <h2 id="local-title">Your machine. Your model. Your users.</h2>
               <p>
-                Run the current alpha on your own machine. Canonical venture state
-                and repository truth stay local. Connect Codex or Claude Code when
-                you direct research, design, implementation, or verification.
+                Run the current alpha on your own machine. Your product, your repo, and
+                everyone you reach stay local to you. Connect the Codex or Claude Code
+                subscription you already pay for and start.
               </p>
               <ul className="local-checks">
                 <li>
-                  <Check /> Local product and working state
+                  <Check /> Your product and contacts stay on your machine
                 </li>
                 <li>
-                  <Check /> Existing model subscription
+                  <Check /> The model subscription you already have
                 </li>
                 <li>
-                  <Check /> Founder-only consequence authority
+                  <Check /> Only you approve what goes out
                 </li>
               </ul>
             </InView>
@@ -274,7 +276,7 @@ export default function Home() {
           <a href="#top" aria-label="Back to top">
             <CrokiWordmark />
           </a>
-          <p>The founder-controlled Product and go-to-market system.</p>
+          <p>You built it. Croki gets it used. You approve everything that ships.</p>
           <div>
             <a href={`${githubUrl}#run-locally`}>Setup</a>
             <a href={githubUrl}>Source</a>

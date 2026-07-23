@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Croki. Vibe code your go-to-market.";
+export const alt = "Croki. You built it. Now get people using it.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -92,10 +92,10 @@ export default function OpenGraphImage() {
                   lineHeight: 0.92,
                 }}
               >
-                Vibe code your go-to-market.
+                You built it. Now get people using it.
               </div>
               <div style={{ marginTop: 26, color: "#4e4b44", fontSize: 23 }}>
-                One living field for the product, the bets, and what came back.
+                Croki takes what you shipped to its first real users. You approve every send.
               </div>
             </div>
             <div

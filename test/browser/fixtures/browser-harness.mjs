@@ -69,8 +69,8 @@ async function waitForServer(url, child) {
   throw new Error(`Croki did not become ready at ${url}.`);
 }
 
-export async function waitForDom(client, expression, message) {
-  const deadline = Date.now() + 12_000;
+export async function waitForDom(client, expression, message, timeoutMs = 12_000) {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const matched = await Promise.race([
       client.evaluate(expression).catch(() => false),

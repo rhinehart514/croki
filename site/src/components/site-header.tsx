@@ -23,7 +23,7 @@ export function SiteHeader() {
       </a>
 
       <nav className="desktop-nav" aria-label="Primary navigation">
-        <a href="#machine">The system</a>
+        <a href="#machine">How it works</a>
         <a href="#wall">Needs you</a>
         <a href="#local">Run locally</a>
         <a href="#pricing">Pricing</a>
@@ -61,11 +61,11 @@ export function SiteHeader() {
               <CrokiWordmark />
             </SheetTitle>
             <SheetDescription>
-              The founder-controlled Product and go-to-market system.
+              You built it. Croki gets it used.
             </SheetDescription>
           </SheetHeader>
           <nav className="mobile-nav" aria-label="Mobile navigation">
-            <SheetClose render={<a href="#machine" />}>The system</SheetClose>
+            <SheetClose render={<a href="#machine" />}>How it works</SheetClose>
             <SheetClose render={<a href="#wall" />}>Needs you</SheetClose>
             <SheetClose render={<a href="#local" />}>Run locally</SheetClose>
             <SheetClose render={<a href="#pricing" />}>Pricing</SheetClose>
