@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-const IGNORED = new Set([".git", ".next", "dist", "node_modules", "release", ".dogfood-worktrees"]);
+const IGNORED = new Set([".git", ".next", "dist", "node_modules", "release", ".dogfood-worktrees", ".drover-worktrees"]);
 const MAX_FILES = 2_000;
 const MAX_SEARCH_RESULTS = 50;
 const MAX_SEARCH_FILE_BYTES = 512_000;

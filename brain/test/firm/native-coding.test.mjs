@@ -203,6 +203,50 @@ describe("Run-linked coding workspace", () => {
     cleanup();
   });
 
+  it("re-derives the product page map when a founder-confirmed apply lands page changes", async () => {
+    const { repo, options, venture, cleanup } = fixture();
+    options.nativeCodingHostVerification = false;
+    const workspace = openCodingWorkspace({
+      ventureId: venture.id, runId: "drive-page-map", threadRef: "thread:direction-page-map",
+      participantRef: "codex", provider: "codex", repository: repo, goal: "Implement the landing page", workRef: null,
+    }, options);
+    fs.mkdirSync(path.join(workspace.worktree, "src", "app"), { recursive: true });
+    fs.writeFileSync(path.join(workspace.worktree, "src", "app", "page.tsx"), "export default function HomePage() {\n  return <h1>Welcome home</h1>;\n}\n");
+    updateCodingSession(venture.id, workspace.id, { runRef: "run:drive-page-map", command: { command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "ok", verification: true } }, options);
+    await settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-page-map", outcome: { kind: "completed" } }, options);
+    reviewCodingWorkspace(venture.id, workspace.id, "approve", "Exact patch reviewed", options);
+    assert.equal(getSemanticModel(venture.id, options).objects.some((object) => object.type === "page"), false, "no page may reach the map before the change lands in source");
+
+    const applied = applyCodingWorkspace(venture.id, workspace.id, options);
+    assert.equal(applied.status, "applied");
+    const page = getSemanticModel(venture.id, options).objects.find((object) => object.id === "page-home");
+    assert.ok(page, "the applied page did not reach the product map");
+    assert.equal(page.properties.page.route, "/");
+    assert.match(page.properties.page.file, /^src\/app\/page\.tsx$/, "the map must cite the founder's source, not an isolated worktree");
+    discardCodingWorkspace(venture.id, workspace.id, options);
+    cleanup();
+  });
+
+  it("reports a page re-map failure without failing the founder's apply", async () => {
+    const { repo, options, venture, cleanup } = fixture();
+    options.nativeCodingHostVerification = false;
+    const workspace = openCodingWorkspace({
+      ventureId: venture.id, runId: "drive-page-map-error", threadRef: "thread:direction-page-map-error",
+      participantRef: "codex", provider: "codex", repository: repo, goal: "Implement resilient apply", workRef: null,
+    }, options);
+    fs.writeFileSync(path.join(workspace.worktree, "product.txt"), "resilient apply\n");
+    updateCodingSession(venture.id, workspace.id, { runRef: "run:drive-page-map-error", command: { command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "ok", verification: true } }, options);
+    await settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-page-map-error", outcome: { kind: "completed" } }, options);
+    reviewCodingWorkspace(venture.id, workspace.id, "approve", "Exact patch reviewed", options);
+
+    options.productPageSync = () => { throw new Error("map derivation exploded"); };
+    const applied = applyCodingWorkspace(venture.id, workspace.id, options);
+    assert.equal(applied.status, "applied", "a map re-sync failure must never fail the apply");
+    assert.equal(fs.readFileSync(path.join(repo, "product.txt"), "utf8"), "resilient apply\n");
+    discardCodingWorkspace(venture.id, workspace.id, options);
+    cleanup();
+  });
+
   it("blocks provider commits while allowing the explicit founder commit action", async () => {
     const { repo, options, venture, cleanup } = fixture();
     const workspace = openCodingWorkspace({

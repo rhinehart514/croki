@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import { createVenture } from "../../src/firm/venture-store.mjs";
 import { readRepositoryTruth, readRepositoryExcerpt } from "../../src/firm/truth.mjs";
 import { deriveProductPages, deriveProductPageLinks, productPageLinkRelationships, productPageObjects, syncProductPages } from "../../src/firm/first-run.mjs";
-import { getSemanticModel } from "../../src/firm/semantic-model-store.mjs";
+import { getSemanticModel, mutateSemanticModel } from "../../src/firm/semantic-model-store.mjs";
 
 function directory(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -97,6 +97,86 @@ describe("product pages: map the pages a user walks through", () => {
       "a re-run duplicated the page objects",
     );
 
+    fs.rmSync(options.root, { recursive: true, force: true });
+  });
+
+  it("writes nothing on a re-run when nothing page-relevant changed", () => {
+    const options = { root: directory("drover-pages-quiet-") };
+    const venture = createVenture({ name: "Acme", repository: ACME }, options);
+
+    syncProductPages({ ventureId: venture.id, repository: ACME }, options);
+    const before = getSemanticModel(venture.id, options);
+    syncProductPages({ ventureId: venture.id, repository: ACME }, options);
+    const after = getSemanticModel(venture.id, options);
+
+    // Zero semantic-store writes: an unchanged page must not bump the model revision or any record's
+    // updatedAt — identical rewrites would make unrelated canvas nodes move.
+    assert.equal(after.revision, before.revision, "an unchanged re-run advanced the model revision");
+    assert.deepEqual(after.objects, before.objects, "an unchanged re-run rewrote page objects");
+    assert.deepEqual(after.relationships, before.relationships, "an unchanged re-run rewrote link relationships");
+
+    fs.rmSync(options.root, { recursive: true, force: true });
+  });
+
+  it("retracts a page the code no longer proves without rewriting the rest of the map", () => {
+    const repository = directory("drover-pages-removal-repo-");
+    fs.mkdirSync(path.join(repository, "src", "app", "pricing"), { recursive: true });
+    fs.writeFileSync(path.join(repository, "src", "app", "page.tsx"), 'export default function HomePage() {\n  return <a href="/pricing">See pricing</a>;\n}\n');
+    fs.writeFileSync(path.join(repository, "src", "app", "pricing", "page.tsx"), "export default function PricingPage() {\n  return <h1>Pricing</h1>;\n}\n");
+    const options = { root: directory("drover-pages-removal-store-") };
+    const venture = createVenture({ name: "Acme", repository }, options);
+
+    syncProductPages({ ventureId: venture.id, repository }, options);
+    const before = getSemanticModel(venture.id, options);
+    assert.ok(before.objects.some((object) => object.id === "page-pricing"));
+    assert.ok(before.relationships.some((relationship) => relationship.id === "page-link-home-pricing"));
+
+    fs.rmSync(path.join(repository, "src", "app", "pricing"), { recursive: true, force: true });
+    syncProductPages({ ventureId: venture.id, repository }, options);
+    const after = getSemanticModel(venture.id, options);
+    assert.equal(after.objects.some((object) => object.id === "page-pricing"), false, "a page the code no longer proves must leave the resting map");
+    assert.equal(after.relationships.some((relationship) => relationship.id === "page-link-home-pricing"), false, "a link to a retracted page must retract with it");
+    // The surviving page is untouched — no revision churn on an unrelated node.
+    assert.deepEqual(after.objects.find((object) => object.id === "page-home"), before.objects.find((object) => object.id === "page-home"), "a removal rewrote an unrelated page");
+
+    fs.rmSync(repository, { recursive: true, force: true });
+    fs.rmSync(options.root, { recursive: true, force: true });
+  });
+
+  it("keeps a no-longer-derived page that founder truth still references, and never rewrites a founder-corrected page", () => {
+    const repository = directory("drover-pages-founder-repo-");
+    fs.mkdirSync(path.join(repository, "src", "app", "pricing"), { recursive: true });
+    fs.writeFileSync(path.join(repository, "src", "app", "page.tsx"), 'export default function HomePage() {\n  return <a href="/pricing">See pricing</a>;\n}\n');
+    fs.writeFileSync(path.join(repository, "src", "app", "pricing", "page.tsx"), "export default function PricingPage() {\n  return <h1>Pricing</h1>;\n}\n");
+    const options = { root: directory("drover-pages-founder-store-") };
+    const venture = createVenture({ name: "Acme", repository }, options);
+
+    syncProductPages({ ventureId: venture.id, repository }, options);
+    // The founder corrects the pricing page and attaches their own thinking to it.
+    const model = getSemanticModel(venture.id, options);
+    mutateSemanticModel({
+      ventureId: venture.id, baseRevision: model.revision, actor: { authority: "founder", id: "founder" },
+      operations: [
+        { op: "update-record", family: "objects", id: "page-pricing", record: { name: "Plans", assertion: "founder-asserted" } },
+        { op: "create-record", family: "objects", record: { id: "note-one", type: "open", name: "Price test", statement: "Try the annual plan first.", properties: {}, assertion: "founder-asserted", provenance: {} } },
+        { op: "create-record", family: "relationships", record: { id: "note-one-about", fromRef: "object:note-one", toRef: "object:page-pricing", label: "is about", type: "founder-connection", properties: {}, assertion: "founder-asserted", sourceRefs: [] } },
+      ],
+    }, options);
+
+    // A re-derivation must not clobber the founder's correction with the code-derived name.
+    syncProductPages({ ventureId: venture.id, repository }, options);
+    assert.equal(getSemanticModel(venture.id, options).objects.find((object) => object.id === "page-pricing").name, "Plans", "a re-derivation overwrote a founder correction");
+
+    // Even when the code stops proving the page, the founder-held object and join survive; only the
+    // adapter's own derived link retracts.
+    fs.rmSync(path.join(repository, "src", "app", "pricing"), { recursive: true, force: true });
+    syncProductPages({ ventureId: venture.id, repository }, options);
+    const after = getSemanticModel(venture.id, options);
+    assert.ok(after.objects.some((object) => object.id === "page-pricing"), "removed a page the founder made their own");
+    assert.ok(after.relationships.some((relationship) => relationship.id === "note-one-about"), "lost the founder's join");
+    assert.equal(after.relationships.some((relationship) => relationship.id === "page-link-home-pricing"), false, "kept a derived link the code no longer proves");
+
+    fs.rmSync(repository, { recursive: true, force: true });
     fs.rmSync(options.root, { recursive: true, force: true });
   });
 

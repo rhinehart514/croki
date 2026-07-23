@@ -181,11 +181,6 @@ function deriveOffers({ productName, description, deps, files }) {
 // or the leading intent comment, bounded well under truth.mjs's excerpt ceiling.
 const PAGE_HEAD_LINES = 48;
 
-function pageText(value) {
-  const normalized = String(value ?? "").trim();
-  return normalized || null;
-}
-
 // A Next.js app-router page: a `page.{js,jsx,ts,tsx}` file somewhere under an `app` directory. The route
 // is the path between `app` and the file, with route groups `(marketing)` removed and dynamic segments
 // `[id]`/`[...slug]` rendered as `:id`/`:slug`. `app/page.tsx` is the root route "/".
@@ -279,7 +274,7 @@ export function deriveProductPages(scan, { readExcerpt } = {}) {
       id,
       route,
       name,
-      file: pageText(source.path) ?? file,
+      file: text(source.path) ?? file,
       statement: summaryFromExcerpt(excerpt, name),
       sourceRef: source.ref,
     });
@@ -383,28 +378,45 @@ export function productPageLinkRelationships(links) {
   }));
 }
 
+// The store operations for one derived family. An unchanged record produces NO write: rewriting an
+// identical page would bump its revision and updatedAt, and new model material must not make unrelated
+// canvas nodes move. A still-tentative record this adapter authored (matching provenance kind) that no
+// longer derives is retracted; a record the founder adopted or re-authored is never rewritten or removed.
+function syncFamilyOperations(existing, derived, family, kind) {
+  const stored = new Map(existing.map((record) => [record.id, record]));
+  const derivedIds = new Set(derived.map((record) => record.id));
+  const ours = (record) => record?.provenance?.kind === kind && record?.assertion === "tentative";
+  const operations = derived.filter((record) => {
+    const current = stored.get(record.id);
+    return !current || (ours(current) && !Object.keys(record).every((key) => JSON.stringify(current[key]) === JSON.stringify(record[key])));
+  }).map((record) => ({ op: stored.has(record.id) ? "update-record" : "create-record", family, record }));
+  for (const record of existing) {
+    if (ours(record) && !derivedIds.has(record.id)) operations.push({ op: "remove-record", family, id: record.id });
+  }
+  return operations;
+}
+
 // Read the product's pages and their proven links back onto the Product territory as correctable "page"
-// objects and "links to" relationships. This adapter binds the pure derivations above to the venture's
-// repository and upserts the result into the canonical semantic model. The records are agent-authored, so
-// they stay tentative and source-bearing. Re-running updates the same page objects and links in place
-// rather than duplicating them, so a founder's later re-bind refreshes the read without discarding the
-// objects their corrections attach to. Returns the derived pages and links (possibly empty).
+// objects and "links to" relationships, reconciled into the canonical semantic model: a re-run (repo
+// re-bind, the founder's Map product action, or a founder-confirmed source apply) refreshes changed pages
+// in place, retracts pages the code no longer proves, and writes nothing when nothing page-relevant
+// changed. A derivation yielding no pages leaves the existing map alone — an unreadable or empty scan
+// must not wipe a previously proven map. Returns the derived pages and links (possibly empty).
 export function syncProductPages({ ventureId, repository }, options = {}) {
   const scan = readRepositoryTruth(repository);
   const readExcerpt = (file, startLine, endLine) => captureSource(repository, file, startLine, endLine);
   const pages = deriveProductPages(scan, { readExcerpt });
   if (!pages.length) return { pages: [], links: [] };
   const links = deriveProductPageLinks(pages, { readExcerpt });
-  const pageRecords = productPageObjects(pages);
-  const linkRecords = productPageLinkRelationships(links);
   const model = getSemanticModel(ventureId, options);
-  const existingObjects = new Set(model.objects.map((object) => object.id));
-  const existingRelationships = new Set(model.relationships.map((relationship) => relationship.id));
-  const operations = [
-    ...pageRecords.map((record) => ({ op: existingObjects.has(record.id) ? "update-record" : "create-record", family: "objects", record })),
-    ...linkRecords.map((record) => ({ op: existingRelationships.has(record.id) ? "update-record" : "create-record", family: "relationships", record })),
-  ];
-  mutateSemanticModel({ ventureId, baseRevision: model.revision, operations, actor: { authority: "agent", id: "page-map" } }, options);
+  const operations = [...syncFamilyOperations(model.objects, productPageObjects(pages), "objects", "repository-page"),
+    ...syncFamilyOperations(model.relationships, productPageLinkRelationships(links), "relationships", "repository-link")];
+  // A no-longer-derived page that other venture truth still references (a founder join, insight, or
+  // work subject) keeps its object — removing it would orphan that truth. Its stale links still retract.
+  const removedIds = new Set(operations.filter((operation) => operation.op === "remove-record").map((operation) => operation.id));
+  const surviving = JSON.stringify({ ...model, relationships: model.relationships.filter((relationship) => !removedIds.has(relationship.id)) });
+  const kept = operations.filter((operation) => operation.op !== "remove-record" || operation.family !== "objects" || !(surviving.includes(`"object:${operation.id}"`) || surviving.includes(`"object:${operation.id}#`)));
+  if (kept.length) mutateSemanticModel({ ventureId, baseRevision: model.revision, operations: kept, actor: { authority: "agent", id: "page-map" } }, options);
   return { pages, links };
 }
 

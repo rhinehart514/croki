@@ -28,7 +28,13 @@ function authorize(actor, operation, current, record) {
   if (!new Set(["founder", "agent", "host"]).has(authority)) fail("Semantic mutation needs a resolved actor.", "semantic_model_authority_denied", 403);
   if (authority === "founder") return;
   if (current && compatibilityOwned(current)) fail("Compatibility-owned semantic records change only through their source adapter.", "semantic_model_compatibility_owned", 409);
-  if (operation.op === "remove-record") fail("Only the founder can remove canonical semantic truth.", "semantic_model_authority_denied", 403);
+  if (operation.op === "remove-record") {
+    // Retraction, not removal authority: a source adapter may withdraw its own still-tentative,
+    // source-bearing read when the source no longer proves it (the page map staying true as the code
+    // changes). Anything adopted, founder-authored, or authored by another actor stays founder-only.
+    if (current?.assertion === "tentative" && sourceBearing(current) && text(current?.provenance?.actor) != null && text(current.provenance.actor) === text(actor?.id)) return;
+    fail("Only the founder can remove canonical semantic truth.", "semantic_model_authority_denied", 403);
+  }
   if (authority === "agent" && !new Set(["objects", "relationships", "insights", "modelBranches", "modelChanges", "outwardActions"]).has(operation.family)) {
     fail("Agents may create source-bearing provisional models and prepare outward work, not change adopted truth or authority.", "semantic_model_authority_denied", 403);
   }

@@ -9,6 +9,7 @@ import { execFileSync } from "node:child_process";
 import { completeUncommittedPatch, patchDigest } from "../git-patch.mjs";
 import { captureCheckpoint, diffCheckpoints, restoreCheckpoint, snapshotTree } from "../native-code/t3-checkpoint-store.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
+import { syncProductPages } from "./first-run.mjs";
 import { listVentures, getVentureDoc, listVentureDocs, now, setVentureDoc } from "./venture-store.mjs";
 import { recordCodingProductConsequence } from "./semantic-model-store.mjs";
 import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
@@ -374,7 +375,12 @@ export function applyCodingWorkspace(ventureId, id, options = {}) {
   git(record.repository, ["apply", "--check", "--whitespace=nowarn", "-"], { input: patch });
   git(record.repository, ["apply", "--whitespace=nowarn", "-"], { input: patch });
   const appliedSource = sourceState(record);
-  return save({ ...record, status: "applied", consequence: { ...record.consequence, action: "applied", actedAt: now(), reversible: true, appliedSourceHead: appliedSource.head, appliedSourcePatchHash: appliedSource.patchHash } }, options);
+  const applied = save({ ...record, status: "applied", consequence: { ...record.consequence, action: "applied", actedAt: now(), reversible: true, appliedSourceHead: appliedSource.head, appliedSourcePatchHash: appliedSource.patchHash } }, options);
+  // The applied source is now what the code proves, so the page map re-derives without founder upkeep
+  // (FIRM-SPEC). The apply is source truth: a map re-sync failure is logged, never a rollback or error.
+  try { (options.productPageSync ?? syncProductPages)({ ventureId, repository: applied.repository }, options); }
+  catch (error) { console.warn(`[firm/code-workspace] product page re-map skipped: ${error?.message ?? error}`); }
+  return applied;
 }
 
 export function revertCodingWorkspaceApply(ventureId, id, options = {}) {
