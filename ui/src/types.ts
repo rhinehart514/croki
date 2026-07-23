@@ -240,8 +240,8 @@ export type OutwardActionReceipt = {
 export type OutwardObservation = {
   id: string;
   actionRef: string;
-  source: "http";
-  target: { url: string };
+  source: "http" | "gmail-thread";
+  target: { url?: string; threadId?: string };
   purpose: string;
   startsAt: string;
   endsAt: string;
@@ -258,7 +258,7 @@ export type OutwardReturnEvidence = {
   observationContractRef: string;
   state: "returned" | "silence";
   source: string;
-  target: { url: string };
+  target: { url?: string; threadId?: string };
   facts: Record<string, unknown>;
   observedAt: string;
 };

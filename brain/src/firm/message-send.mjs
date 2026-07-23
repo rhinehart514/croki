@@ -24,8 +24,10 @@
 // carrying it — without this header the firm's own sends would be miscounted as the recipient's reply.
 
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import { getCredential } from "../credential-store.mjs";
-import { GOOGLE_TOKEN_ENDPOINT } from "../connectors/execute/gmail-oauth.mjs";
+import { GOOGLE_TOKEN_ENDPOINT, getFreshAccessToken } from "../connectors/execute/gmail-oauth.mjs";
+import { createGmailReadTransport, extractEmail } from "../connectors/measure/gmail-thread.mjs";
 
 const GMAIL_SEND_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 export const PROVENANCE_HEADER = "X-GTM-IDE-Provenance";
@@ -124,7 +126,7 @@ export function createSyncGmailTransport({ endpoint = GMAIL_SEND_ENDPOINT, binar
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
-    if (httpCode >= 200 && httpCode < 300) return { ok: true, messageId: payload?.id ?? null };
+    if (httpCode >= 200 && httpCode < 300) return { ok: true, messageId: payload?.id ?? null, threadId: payload?.threadId ?? null };
     const needsReconnect = httpCode === 401 || httpCode === 403;
     return { ok: false, error: payload?.error?.message || `Gmail API returned ${httpCode}.`, ...(needsReconnect ? { needsReconnect: true } : {}) };
   };
@@ -159,9 +161,10 @@ function readMessageFields(effect) {
 // so decide()'s own contract is never touched. `deps.transport` overrides the live send (test injection,
 // mirrors createGmailTransport's fetchImpl seam); `deps.mintToken` overrides the token mint the same way;
 // `deps.token` skips minting entirely when a caller already has one (mirrors market-poll.mjs's own
-// `options.token` convention). Returns { ok, messageId?, provenance, error?, needsReconnect? } — never
-// throws for an expected failure (no recipient, no credential, mint/send refusal).
-export function sendReleasedMessage({ ventureId, effect, betId }, options = {}, deps = {}) {
+// `options.token` convention). `actionRef` rides into provenance when the send belongs to an outward
+// action rather than a legacy bet. Returns { ok, messageId?, threadId?, provenance, error?,
+// needsReconnect? } — never throws for an expected failure (no recipient, no credential, mint/send refusal).
+export function sendReleasedMessage({ ventureId, effect, betId, actionRef = null }, options = {}, deps = {}) {
   const { to, body, subject } = readMessageFields(effect);
   if (!to) {
     return { ok: false, error: "Message effect has no recipient; refusing to send with no To." };
@@ -173,9 +176,112 @@ export function sendReleasedMessage({ ventureId, effect, betId }, options = {}, 
     return { ok: false, error: resolved.reason ?? "No Gmail send access.", ...(resolved.needsReconnect ? { needsReconnect: true } : {}) };
   }
 
-  const provenance = { marker: "gtm-ide-firm", ventureId, betId: betId ?? null, stampedAt: new Date().toISOString() };
+  const provenance = { marker: "gtm-ide-firm", ventureId, betId: betId ?? null, ...(actionRef ? { actionRef } : {}), stampedAt: new Date().toISOString() };
   const transport = deps.transport ?? createSyncGmailTransport();
   const outcome = transport({ to, from: effect.fromAddress ?? effect.from ?? null, subject, body, provenance, token: resolved.token });
   if (!outcome.ok) return { ok: false, error: outcome.error, ...(outcome.needsReconnect ? { needsReconnect: true } : {}) };
-  return { ok: true, messageId: outcome.messageId, provenance };
+  return { ok: true, messageId: outcome.messageId, threadId: outcome.threadId ?? null, provenance };
+}
+
+// ── Outward-action message physics (outward-actions.mjs owns the orchestration; this module owns the
+// Gmail transport shapes exactly as it does for the legacy wall path) ─────────────────────────────────
+
+// Host-stamped preparation contract for kind "message" — the exact analogue of stampDeployContract:
+// pure over the staged effect, NEVER touching network or credentials, because preparation never equals
+// execution. The stamped contract freezes the exact recipient/subject/body the founder will authorize;
+// the digest is what execution sends, not whatever the material later mutates into.
+export function stampMessageContract(input) {
+  const effect = { ...(input ?? {}) };
+  for (const field of ["messageContract", "messageUnavailableReason"]) delete effect[field];
+  if (String(effect.kind ?? "").trim().toLowerCase() !== "message") return effect;
+  const { to, body, subject } = readMessageFields(effect);
+  if (!to) return { ...effect, messageUnavailableReason: "Name the exact recipient before authorizing this message." };
+  if (!String(body ?? "").trim()) return { ...effect, messageUnavailableReason: "Write the exact message body before authorizing this send." };
+  const contract = { to, subject: subject ? sanitizeHeaderValue(subject) : null, body: String(body) };
+  return { ...effect, messageContract: { ...contract, digest: crypto.createHash("sha256").update(JSON.stringify(contract)).digest("hex") } };
+}
+
+// The outward-action executor's send. The stamped contract is the only authority on recipient/subject/
+// body — no alias reading here, preparation already froze the exact material. From is the banked Gmail
+// profile address (the verified sender, same rule the wall path enforces), and provenance carries the
+// outward-action ref so the firm's own send is never miscounted as the recipient's reply.
+export function sendPreparedMessage({ ventureId, contract, actionId }, options = {}, deps = {}) {
+  const credential = getCredential("gmail", options) ?? getCredential("google", options);
+  const from = credential?.accountAddress ?? null;
+  const outcome = sendReleasedMessage({
+    ventureId,
+    effect: { to: contract.to, subject: contract.subject ?? null, body: contract.body, fromAddress: from },
+    betId: null,
+    actionRef: actionId ? `outward-action:${actionId}` : null,
+  }, options, deps);
+  return outcome.ok ? { ...outcome, from } : outcome;
+}
+
+function messageHeader(message, name) {
+  const headers = Array.isArray(message?.payload?.headers) ? message.payload.headers : [];
+  const wanted = String(name).toLowerCase();
+  const found = headers.find((header) => String(header?.name ?? "").toLowerCase() === wanted);
+  const value = String(found?.value ?? "").trim();
+  return value || null;
+}
+
+// Async read-token mint off the SAME banked credential the send used — market-poll.mjs's exact posture.
+// Observation checks are awaited (unlike wall decide), so the async keep-list mint applies here.
+async function resolveReadToken(options = {}, deps = {}) {
+  const credential = getCredential("gmail", options) ?? getCredential("google", options);
+  if (!(credential?.authType === "oauth" && credential.refreshToken && credential.clientId && credential.clientSecret)) {
+    return { token: null, reason: "No connected Gmail account to read the thread from." };
+  }
+  try {
+    const token = await getFreshAccessToken({
+      clientId: credential.clientId,
+      clientSecret: credential.clientSecret,
+      refreshToken: credential.refreshToken,
+      fetchImpl: deps.oauthFetch,
+      tokenEndpoint: deps.oauthTokenEndpoint,
+    });
+    return token ? { token } : { token: null, reason: "Gmail connection returned no access token." };
+  } catch (error) {
+    return { token: null, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// The bounded "gmail-thread" return observer. Reads ONLY the exact thread the send receipt named —
+// never a mailbox search — via the read transport market-poll.mjs already proves. A message in that
+// thread newer than the send, not stamped with our provenance, and not from the sender is an exact
+// return fact (from, date, snippet); nothing new is uninterpreted silence. A failed read grants no
+// authority and returns state "failed" so the check stays retryable inside its granted window.
+export async function observeGmailThreadReturn(contract, options = {}, deps = {}) {
+  const threadId = String(contract?.target?.threadId ?? "").trim();
+  const sentTime = Date.parse(contract?.sentAt ?? "");
+  if (!threadId || !Number.isFinite(sentTime)) {
+    return { state: "failed", error: "The observation contract names no exact thread and send time.", facts: null };
+  }
+  const resolved = deps.token ? { token: deps.token } : await resolveReadToken(options, deps);
+  if (!resolved.token) return { state: "failed", error: resolved.reason ?? "No Gmail read access.", facts: null };
+  const timeoutMs = deps.timeoutMs ?? 15_000;
+  const boundedFetch = deps.fetch ?? ((url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) }));
+  const read = deps.readTransport ?? createGmailReadTransport({ fetchImpl: boundedFetch });
+  let result;
+  try { result = await read.getThread(threadId, resolved.token); }
+  catch (error) { result = { ok: false, error: error instanceof Error ? error.message : String(error) }; }
+  if (!result?.ok) return { state: "failed", error: result?.error ?? "The Gmail thread could not be read.", facts: null };
+  const sender = extractEmail(contract.senderAddress);
+  const messages = Array.isArray(result.payload?.messages) ? result.payload.messages : [];
+  const returns = [];
+  for (const message of messages) {
+    if (messageHeader(message, PROVENANCE_HEADER) != null) continue; // our own outbound in the thread
+    const from = extractEmail(messageHeader(message, "From"));
+    if (!from || (sender && from === sender)) continue;
+    const internal = Number(message?.internalDate);
+    if (!Number.isFinite(internal) || internal <= sentTime) continue;
+    returns.push({
+      messageId: String(message?.id ?? "").trim() || null,
+      from,
+      date: new Date(internal).toISOString(),
+      snippet: String(message?.snippet ?? "").trim() || null,
+    });
+  }
+  const facts = { threadId, messagesObserved: messages.length, returns };
+  return { state: returns.length ? "returned" : "silence", facts };
 }

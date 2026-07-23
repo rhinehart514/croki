@@ -55,6 +55,45 @@ describe("outward action review", () => {
     expect(screen.queryByRole("button", { name: /deploy/i })).not.toBeInTheDocument();
   });
 
+  it("shows the exact recipient and full body of a message at the point of the founder send decision", async () => {
+    const body = "Noticed your team is scaling.\n\nWorth a chat this week?";
+    render(<OutwardActionReview ventureId="venture-one" action={action({
+      kind: "message",
+      preparedMaterial: { messageContract: { to: "ada@acme.com", subject: "Quick question", body } },
+      expectedReturn: { source: "gmail-thread", windowHours: 24 },
+    })} readOnly={false} onChanged={vi.fn()} />);
+    expect(screen.getByText("ada@acme.com")).toBeInTheDocument();
+    expect(screen.getByText("Quick question")).toBeInTheDocument();
+    expect(screen.getByText(/Worth a chat this week\?/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Send this email" }));
+    await waitFor(() => expect(executeOutwardAction).toHaveBeenCalledWith("venture-one", "action-one"));
+  });
+
+  it("offers the gmail-thread watch only once the send receipt names the exact thread", () => {
+    const executed = action({
+      kind: "message", executedAt: "2026-07-22T12:00:00.000Z", state: "in-world",
+      preparedMaterial: { messageContract: { to: "ada@acme.com", subject: null, body: "Hello" } },
+      expectedReturn: { source: "gmail-thread", windowHours: 24 },
+      executorReceipt: { adapter: "gmail-message-send", messageId: "gmsg-1", threadId: "gthread-1" },
+    });
+    render(<OutwardActionReview ventureId="venture-one" action={executed} readOnly={false} onChanged={vi.fn()} />);
+    expect(screen.getByText(/exact Gmail thread/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Watch for 24h" })).toBeInTheDocument();
+    render(<OutwardActionReview ventureId="venture-one" action={{ ...executed, executorReceipt: { adapter: "gmail-message-send", messageId: "gmsg-1", threadId: null } }} readOnly={false} onChanged={vi.fn()} />);
+    expect(screen.getAllByRole("button", { name: "Watch for 24h" })).toHaveLength(1);
+  });
+
+  it("keeps an unsendable message honest instead of implying a missing adapter", () => {
+    render(<OutwardActionReview ventureId="venture-one" action={action({
+      kind: "message",
+      preparedMaterial: { messageUnavailableReason: "Name the exact recipient before authorizing this message." },
+      expectedReturn: { source: "gmail-thread", windowHours: 24 },
+    })} readOnly={false} onChanged={vi.fn()} />);
+    expect(screen.getByRole("status")).toHaveTextContent(/exact recipient/);
+    expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/no executor adapter/i)).not.toBeInTheDocument();
+  });
+
   it("refuses a blind retry after interruption leaves execution uncertain", () => {
     render(<OutwardActionReview ventureId="venture-one" action={action({ state: "execution-unknown", executionLease: { id: "lease-one", startedAt: "2026-07-21T12:00:00.000Z", startedBy: "founder" } })} readOnly={false} onChanged={vi.fn()} />);
     expect(screen.getByText("Deploy needs verification")).toBeInTheDocument();

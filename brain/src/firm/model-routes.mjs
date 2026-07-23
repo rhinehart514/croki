@@ -15,7 +15,7 @@ import {
   executeOutwardAction,
   executePreparedOutwardAction,
   grantOutwardObservation,
-  observeHttpReturn,
+  observeOutwardReturn,
   prepareOutwardAction,
   prepareOutwardMaterial,
   revokeOutwardObservation,
@@ -156,7 +156,7 @@ export default async function handle({ req, res, url, deps = {} }) {
       const ventureId = decodeURIComponent(outwardAction[1]);
       const actionId = decodeURIComponent(outwardAction[2]);
       const observationId = decodeURIComponent(outwardAction[4]);
-      const observe = deps.observeOutwardReturn ?? ((contract) => observeHttpReturn(contract, {}, deps.observationAdapters));
+      const observe = deps.observeOutwardReturn ?? ((contract) => observeOutwardReturn(contract, {}, deps.observationAdapters));
       json(res, 200, await checkOutwardObservation({ ventureId, actionId, observationId }, {}, { observe }));
       return true;
     }

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import { executeNpmDeploy } from "../connectors/execute/npm-deploy.mjs";
 import { stampDeployContract } from "./deploy-contract.mjs";
+import { observeGmailThreadReturn, sendPreparedMessage, stampMessageContract } from "./message-send.mjs";
 import { getSemanticModel, mutateSemanticModel } from "./semantic-model-store.mjs";
 import { getVentureDoc, listVentureDocs, now, setVentureDoc } from "./venture-store.mjs";
 
@@ -139,21 +140,39 @@ export function projectOutwardActions(ventureId, options = {}) {
   return structuredClone(getSemanticModel(ventureId, options).outwardActions);
 }
 
-function deployEffect(material) {
+function materialEffect(material) {
   if (!material || typeof material !== "object") return {};
   return material.effect && typeof material.effect === "object" ? material.effect : material;
 }
 
 export function prepareOutwardMaterial({ ventureId, kind, preparedMaterial } = {}, options = {}) {
-  if (text(kind) !== "deploy") return structuredClone(preparedMaterial);
+  const exactKind = text(kind);
+  if (exactKind !== "deploy" && exactKind !== "message") return structuredClone(preparedMaterial);
   const material = preparedMaterial && typeof preparedMaterial === "object" ? structuredClone(preparedMaterial) : {};
-  const stamped = stampDeployContract(ventureId, { ...deployEffect(material), kind: "deploy" }, options);
+  const stamped = exactKind === "deploy"
+    ? stampDeployContract(ventureId, { ...materialEffect(material), kind: "deploy" }, options)
+    : stampMessageContract({ ...materialEffect(material), kind: "message" });
   return material.effect && typeof material.effect === "object" ? { ...material, effect: stamped } : stamped;
 }
 
+async function executePreparedMessage(action, options, deps) {
+  const effect = materialEffect(action.preparedMaterial);
+  if (effect.messageUnavailableReason) return { ok: false, error: effect.messageUnavailableReason };
+  const contract = effect.messageContract;
+  if (!contract || typeof contract !== "object" || !text(contract.to)) return { ok: false, error: "This message was prepared without a stamped contract. Prepare it again before authorizing the send." };
+  const outcome = await (deps.sendMessage ?? sendPreparedMessage)({ ventureId: action.ventureId, contract, actionId: action.id }, options, deps.messageDeps ?? {});
+  if (!outcome?.ok) return { ok: false, adapter: "gmail-message-send", error: outcome?.error ?? "The Gmail send did not complete.", ...(outcome?.needsReconnect ? { needsReconnect: true } : {}) };
+  return {
+    ok: true,
+    adapter: "gmail-message-send",
+    receipt: { adapter: "gmail-message-send", messageId: text(outcome.messageId), threadId: text(outcome.threadId), to: text(contract.to), subject: text(contract.subject), from: text(outcome.from) },
+  };
+}
+
 export async function executePreparedOutwardAction(action, options = {}, deps = {}) {
+  if (action.kind === "message") return executePreparedMessage(action, options, deps);
   if (action.kind !== "deploy") return { ok: false, error: `No executor is available for outward action kind “${action.kind}”.` };
-  const effect = deployEffect(action.preparedMaterial);
+  const effect = materialEffect(action.preparedMaterial);
   if (effect.deployUnavailableReason) return { ok: false, error: effect.deployUnavailableReason };
   const outcome = await (deps.deploy ?? executeNpmDeploy)({ effect, ventureId: action.ventureId }, options);
   if (!outcome?.ok) return { ok: false, adapter: "verified-npm-deploy", error: outcome?.error ?? "The verified repository deploy did not complete.", ...(outcome?.needsReconnect ? { needsReconnect: true } : {}) };
@@ -216,24 +235,49 @@ export function listOutwardObservations(ventureId, actionId, options = {}) {
   return listVentureDocs(ventureId, OBSERVATION_COLLECTION, options).filter((entry) => entry.actionRef === `outward-action:${actionId}`).sort((left, right) => String(right.grantedAt).localeCompare(String(left.grantedAt)));
 }
 
+// The "gmail-thread" observation scope: the exact thread the send receipt named, never a mailbox. The
+// grant refuses when no send receipt thread exists — observation cannot be minted ahead of the world.
+function gmailThreadScope(action, target, returnConditions) {
+  const threadId = text(action.executorReceipt?.threadId);
+  if (!threadId) fail("This action's send receipt names no Gmail thread, so there is no exact thread to watch.", "outward_observation_source_unavailable", 409);
+  const supplied = text(target?.threadId);
+  if (supplied && supplied !== threadId) fail("Observation cannot widen beyond the exact thread this send created.", "outward_observation_scope_denied", 403);
+  const conditions = list(returnConditions);
+  if (conditions.length && conditions.some((entry) => text(entry?.type) !== "thread-reply")) fail("Gmail thread observation watches only for a reply in the exact thread.");
+  return {
+    target: { threadId },
+    returnConditions: [{ type: "thread-reply" }],
+    reads: ["gmail:exact-thread"],
+    sentAt: action.executedAt,
+    senderAddress: text(action.executorReceipt?.from),
+  };
+}
+
 export function grantOutwardObservation({ ventureId, actionId, source, target, purpose, startsAt, endsAt, windowHours, returnConditions, actor } = {}, options = {}, deps = {}) {
   if (actor?.authority !== "founder") fail("Only the founder can grant observation.", "outward_observation_authority_denied", 403);
   const action = actionFrom(getSemanticModel(ventureId, options), actionId);
   if (!action.executedAt) fail("Execute the exact outward action before watching for a return.", "outward_observation_source_unavailable", 409);
   const expected = expectedPlan(action);
   const resolvedSource = text(source) ?? expected.source;
-  if (resolvedSource !== "http") fail("Only exact HTTP return observation is available for current outward actions.");
-  const conditions = list(returnConditions ?? expected.returnConditions).map(normalizeCondition);
-  if (!conditions.length) fail("Observation needs at least one exact return condition.");
+  if (resolvedSource !== "http" && resolvedSource !== "gmail-thread") fail("Only exact HTTP or Gmail thread return observation is available for current outward actions.");
+  let scope;
+  if (resolvedSource === "gmail-thread") {
+    scope = gmailThreadScope(action, target, returnConditions);
+  } else {
+    const conditions = list(returnConditions ?? expected.returnConditions).map(normalizeCondition);
+    if (!conditions.length) fail("Observation needs at least one exact return condition.");
+    scope = { target: exactTarget(expected.target, target), returnConditions: conditions, reads: ["http:exact-target"] };
+  }
   const grantedAt = deps.now?.() ?? now();
   const window = boundedWindow({ startsAt, endsAt, windowHours: windowHours ?? expected.windowHours }, grantedAt);
   const active = listOutwardObservations(ventureId, actionId, options).find((entry) => !entry.revokedAt && time(entry.endsAt) >= time(grantedAt));
   if (active) fail("This outward action already has an active observation window.", "outward_observation_already_active", 409);
   const contract = {
     id: `outward-observation-${crypto.randomUUID()}`, type: "outward-observation-contract", ventureId, actionRef: `outward-action:${actionId}`,
-    source: resolvedSource, target: exactTarget(expected.target, target), purpose: text(purpose) ?? expected.purpose ?? "Watch for the exact return prepared with this action.",
-    returnConditions: conditions, ...window, grantedAt, grantedBy: text(actor.id) ?? "founder", revokedAt: null, lastCheckedAt: null, lastResult: null,
-    authority: { reads: ["http:exact-target"], writes: ["attributable-evidence"], denies: ["send", "publish", "deploy", "spend", "canonical-interpretation"] },
+    source: resolvedSource, target: scope.target, purpose: text(purpose) ?? expected.purpose ?? "Watch for the exact return prepared with this action.",
+    returnConditions: scope.returnConditions, ...(scope.sentAt ? { sentAt: scope.sentAt, senderAddress: scope.senderAddress ?? null } : {}),
+    ...window, grantedAt, grantedBy: text(actor.id) ?? "founder", revokedAt: null, lastCheckedAt: null, lastResult: null,
+    authority: { reads: scope.reads, writes: ["attributable-evidence"], denies: ["send", "publish", "deploy", "spend", "canonical-interpretation"] },
   };
   setVentureDoc(ventureId, OBSERVATION_COLLECTION, contract.id, contract, options);
   attachOutwardReturn({ ventureId, actionId, observationRefs: [`observation:${contract.id}`], actor: { authority: "host", id: "outward-observation" } }, options);
@@ -300,6 +344,13 @@ async function readBoundedBody(response) {
     if (chunk.length < value.length) { await reader.cancel(); break; }
   }
   return Buffer.concat(chunks);
+}
+
+// One observer per granted source: the contract's own source picks the bounded adapter, so the generic
+// check route never widens a grant beyond what the founder authorized.
+export async function observeOutwardReturn(contract, options = {}, deps = {}) {
+  if (contract?.source === "gmail-thread") return observeGmailThreadReturn(contract, options, deps);
+  return observeHttpReturn(contract, options, deps);
 }
 
 export async function observeHttpReturn(contract, _options = {}, deps = {}) {
