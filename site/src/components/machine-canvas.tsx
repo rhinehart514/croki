@@ -81,44 +81,44 @@ export function MachineCanvas() {
                 <Sparkles />
               </span>
               <span>
-                <small>Go-to-market · inferred</small>
-                <strong>Founder interviews</strong>
+                <small>Who it's for · a guess</small>
+                <strong>People who starred your repo</strong>
               </span>
             </div>
             <p>
-              The current promise may be ahead of the Product experience it asks
-              builders to trust.
+              These 8 already showed interest. A short, personal note might earn
+              the first real conversation.
             </p>
-            <span className="uncertainty">Interpretation · not fact</span>
+            <span className="uncertainty">A guess · not fact</span>
           </article>
         </div>
 
         <article className="machine-node crew-node">
           <div className="crew-node-head">
             <span>
-                <small>Provisional Product alternative</small>
-              <strong>Promise → Product experience</strong>
+                <small>Drafting outreach</small>
+              <strong>8 personal intros</strong>
             </span>
             <span className="run-state">Moving</span>
           </div>
           <div className="crew-list">
-            <RunLine runtime="Claude Code" task="implemented the Product change" />
-            <RunLine runtime="Codex" task="independently verified the claim" />
+            <RunLine runtime="Claude Code" task="drafted a note to each person" />
+            <RunLine runtime="Codex" task="checked every claim is true" />
           </div>
           <div className="artifact-row">
             <span className="artifact-icon">
               <FileCode2 />
             </span>
             <span>
-              <strong>Landing-page and onboarding revision</strong>
-              <small>Exact diff, preview, and evidence ready</small>
+              <strong>8 messages, ready to read</strong>
+              <small>One real detail in each. Nothing sent yet.</small>
             </span>
-            <span className="artifact-count">v4</span>
+            <span className="artifact-count">8</span>
           </div>
         </article>
 
         <div className="founder-wall-line" aria-hidden="true">
-          <span>Founder consequence</span>
+          <span>Needs you</span>
         </div>
 
         <div className="machine-result-column">
@@ -129,13 +129,13 @@ export function MachineCanvas() {
               </span>
               <span>
                 <small>Needs your hand</small>
-                <strong>Publish the revised promise</strong>
+                <strong>Send 8 intros</strong>
               </span>
             </div>
-            <p>Review the exact page, destination, evidence, and rollback path.</p>
+            <p>Read all 8 before any of them send. Nothing goes out until you say so.</p>
             <div className="gate-actions" aria-hidden="true">
               <span>Keep staged</span>
-              <span className="approve-action">Publish artifact</span>
+              <span className="approve-action">Send 8</span>
             </div>
           </article>
 
@@ -145,19 +145,19 @@ export function MachineCanvas() {
                 <Flag />
               </span>
               <span>
-                <small>Illustrative evidence</small>
-                <strong>Example replies challenge the audience claim</strong>
+                <small>What came back</small>
+                <strong>3 replied. 1 wants a call.</strong>
               </span>
             </div>
-            <p>The evidence contests the relationship; it does not claim causality.</p>
+            <p>Real replies, in their own words. This is what to build next.</p>
           </article>
         </div>
       </div>
 
       <div className="machine-caption">
-        <span>Several approaches.</span>
-        <span>Reality changes the Product.</span>
-        <span>The next move gets faster.</span>
+        <span>It reads what you built.</span>
+        <span>You approve who it reaches.</span>
+        <span>What they say is your next move.</span>
       </div>
     </div>
   );
