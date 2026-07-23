@@ -106,4 +106,15 @@ describe("readReplyReceipt", () => {
     expect(receipt.waiting).toBe(true);
     expect(receipt.headline).toMatch(/still needs your release/i);
   });
+
+  it("tells the founder a steer reached the live turn when the brain applied it same-turn", () => {
+    const receipt = readReplyReceipt({ act: "steer", betId: "b1", applied: "same-turn" } as ConversationReplyResult);
+    expect(receipt.headline).toBe("Your message reached the running agent.");
+    expect(receipt.waiting).toBe(false);
+  });
+
+  it("stays honest when a steer only queued for the next step", () => {
+    const receipt = readReplyReceipt({ act: "steer", betId: "b1", applied: "next-step" } as ConversationReplyResult);
+    expect(receipt.headline).toBe("Your steer is in — it adjusts at the next step.");
+  });
 });

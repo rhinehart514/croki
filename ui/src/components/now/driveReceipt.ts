@@ -117,6 +117,12 @@ export function readReplyReceipt(result: ConversationReplyResult): DriveReceipt 
     case "observe":
       headline = "Returned evidence checked.";
       break;
+    case "steer":
+      // The brain reports how the steer landed: "same-turn" means it reached the live SDK turn.
+      headline = result.applied === "same-turn"
+        ? "Your message reached the running agent."
+        : "Your steer is in — it adjusts at the next step.";
+      break;
     default:
       headline = "Your steer is in — Drover is adjusting course.";
   }

@@ -1,5 +1,5 @@
 // One plain-words ask starts real work; scope is an attachment rather than another mode.
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowUp, LoaderCircle, Mic, PencilLine, Square, X } from "lucide-react";
 import { driveTeammate, replyInConversation, stopActiveDrive, type DriveTeammateResult, type FirmActiveDrive } from "@/api";
 import { useDirections } from "./useDirections";
@@ -7,12 +7,14 @@ import { DirectionsTray } from "./DirectionsTray";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
 import { composerRoute, composerScopeKey, scopedBody } from "./composerScope";
 import { readDriveReceipt, readReplyReceipt, type DriveReceipt } from "./driveReceipt";
-import { useScopedDraft } from "./useScopedDraft";
+import { useComposerDraft } from "./useScopedDraft";
 import { useSpeechInput } from "./useSpeechInput";
+import { expandFileMentions } from "./composerFileMentions";
+import { ComposerMentionBackdrop } from "./ComposerMentionBackdrop";
 import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 import { ComposerImageInput } from "./ComposerImages";
-import { prepareComposerImages, type PendingComposerImage } from "./composerImageFiles";
+import { useComposerImageIntake } from "./useComposerImages";
 import { useAgentComposer } from "./useAgentComposer";
 import type { FirmConfiguration } from "@/types";
 import { NowComposerFooter } from "./NowComposerFooter";
@@ -57,17 +59,19 @@ export function NowComposer({
 }) {
   const route = composerRoute(selection);
   const contextualDraftRef = !selection && subjectRefs.length ? `:subjects:${[...subjectRefs].sort().join("|")}` : "";
-  const [draft, setDraft] = useScopedDraft(`${composerScopeKey(ventureId, selection)}${contextualDraftRef}`);
+  // Draft text, attachments, and file chips live in per-scope presentation memory so an unsent thought
+  // survives Thread switches and an app restart.
+  const { draft, setDraft, images, setImages, fileMentions, setFileMentions } = useComposerDraft(`${composerScopeKey(ventureId, selection)}${contextualDraftRef}`);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<DriveReceipt | null>(null);
   const [departingPrompt, setDepartingPrompt] = useState<{ id: number; text: string } | null>(null);
   const [sentArtifactSectionKey, setSentArtifactSectionKey] = useState<string | null>(null);
-  const [images, setImages] = useState<PendingComposerImage[]>([]);
-  const [draggingImages, setDraggingImages] = useState(false);
   const [interrupting, setInterrupting] = useState(false);
+  const imageIntake = useComposerImageIntake({ images, setImages, onSettled: (issue) => { setError(issue); if (!issue) setReceipt(null); } });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const agentComposer = useAgentComposer({ ventureId, draft, setDraft, textareaRef, configuration, readOnlyReason, repositoryFiles, onConfigurationChanged: () => onDriven?.() });
+  const backdropRef = useRef<HTMLDivElement | null>(null);
+  const agentComposer = useAgentComposer({ ventureId, draft, setDraft, textareaRef, configuration, readOnlyReason, repositoryFiles, fileMentions, onFileMentions: setFileMentions, onConfigurationChanged: () => onDriven?.() });
   // Intent options the founder deliberately summons: candidate directions grounded in venture truth + open
   // work. Picking one loads it into the composer; the actual turn still goes to the chosen SDK model.
   const directions = useDirections({ ventureId, mode: submissionMode, threadRef: selection?.threadRef ?? null });
@@ -104,8 +108,11 @@ export function NowComposer({
   //   • Unscoped, or scoped to a non-bet target (architecture/theory) → the turn DIRECTS the venture: /drive
   //     starts (or branches) work. /drive is only for starting or branching, never for steering.
   const submit = async (value: string) => {
-    const goal = value.trim() || (images.length === 1 ? "Look at this image." : images.length ? "Look at these images." : "");
-    if (!goal || busy || readOnly) return;
+    const typed = value.trim() || (images.length === 1 ? "Look at this image." : images.length ? "Look at these images." : "");
+    if (!typed || busy || readOnly) return;
+    // What the agent reads: every file chip expands to its exact repo-relative path. The transcript and
+    // the immediate founder turn carry the same expanded text, so nothing shown differs from what was sent.
+    const goal = expandFileMentions(typed, fileMentions);
     const submittedImages = images;
     const imageBody = submittedImages.map(({ name, mediaType, data }) => ({ name, mediaType, data }));
     const teammateRefs = [...new Set([...(selection?.teammateRefs ?? []), ...agentComposer.mentionedAgentRefs])];
@@ -152,7 +159,8 @@ export function NowComposer({
     } catch (cause) {
       onSubmitFailed?.(goal);
       setSentArtifactSectionKey(null);
-      setDraft(goal);
+      // Restore the founder's own token form (chips intact), not the expanded wire text.
+      setDraft(typed);
       setImages(submittedImages);
       setError(cause instanceof Error ? cause.message : "Drover could not take that direction.");
     } finally { setBusy(false); }
@@ -173,22 +181,6 @@ export function NowComposer({
   const stoppable = Boolean(activeDrive?.abortSupported);
   const stopRequested = Boolean(activeDrive?.abortRequestedAt) || interrupting;
 
-  const addImages = async (files: File[]) => {
-    try { setImages(await prepareComposerImages(files, images)); setError(null); setReceipt(null); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Drover could not attach those images."); }
-  };
-
-  const pastedImages = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = [...event.clipboardData.files].filter((file) => file.type.startsWith("image/"));
-    if (files.length) void addImages(files);
-  };
-
-  const droppedImages = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault(); setDraggingImages(false);
-    const files = [...event.dataTransfer.files].filter((file) => file.type.startsWith("image/"));
-    if (files.length) void addImages(files);
-  };
-
   const pickDirection = (direction: string) => {
     setDraft(direction); directions.clear(); textareaRef.current?.focus();
   };
@@ -208,7 +200,7 @@ export function NowComposer({
   const showChips = !hasWork && !busy && !scopeLabel && !readOnly;
 
   return (
-    <section className="now-composer" data-variant={variant} data-busy={busy ? "true" : "false"} data-dragging-images={draggingImages ? "true" : undefined} data-launching={departingPrompt ? "true" : undefined} data-intent={directions.loading ? "loading" : undefined} data-submission-mode={submissionMode} aria-label="Direct this venture" onDragOver={(event) => { if ([...event.dataTransfer.items].some((item) => item.type.startsWith("image/"))) { event.preventDefault(); setDraggingImages(true); } }} onDragLeave={() => setDraggingImages(false)} onDrop={droppedImages}>
+    <section className="now-composer" data-variant={variant} data-busy={busy ? "true" : "false"} data-dragging-images={imageIntake.dragging ? "true" : undefined} data-launching={departingPrompt ? "true" : undefined} data-intent={directions.loading ? "loading" : undefined} data-submission-mode={submissionMode} aria-label="Direct this venture" onDragOver={imageIntake.onDragOver} onDragLeave={imageIntake.onDragLeave} onDrop={imageIntake.onDrop}>
       <div className="now-composer-shell">
         {departingPrompt ? <span key={departingPrompt.id} className="now-composer-flight" aria-hidden="true">{departingPrompt.text}</span> : null}
         {scopeLabel ? (
@@ -228,10 +220,11 @@ export function NowComposer({
             {onClearArtifactSection ? <button type="button" aria-label="Clear artifact section" onClick={onClearArtifactSection}><X aria-hidden="true" /></button> : null}
           </div>
         ) : null}
-        {images.length ? <div className="now-composer-image-tray"><ComposerImageInput images={images} disabled={readOnly || busy} onChoose={(files) => void addImages(files)} onRemove={(id) => setImages((current) => current.filter((image) => image.id !== id))} /></div> : null}
+        {images.length ? <div className="now-composer-image-tray"><ComposerImageInput images={images} disabled={readOnly || busy} onChoose={(files) => void imageIntake.add(files)} onRemove={(id) => setImages((current) => current.filter((image) => image.id !== id))} /></div> : null}
         <form className="now-composer-field" onSubmit={(event) => { event.preventDefault(); void submit(draft); }}>
           <div className="now-composer-input">
             {agentComposer.menu}
+            <ComposerMentionBackdrop ref={backdropRef} draft={draft} mentions={fileMentions} />
             <textarea
               ref={textareaRef}
               rows={1}
@@ -240,7 +233,8 @@ export function NowComposer({
               onClick={(event) => agentComposer.onCaretChange(event.currentTarget.selectionStart)}
               onKeyUp={(event) => agentComposer.onCaretChange(event.currentTarget.selectionStart)}
               onKeyDown={onKeyDown}
-              onPaste={pastedImages}
+              onPaste={imageIntake.onPaste}
+              onScroll={(event) => { if (backdropRef.current) backdropRef.current.scrollTop = event.currentTarget.scrollTop; }}
               placeholder={placeholder}
               aria-label="Say what you want for this venture"
               {...agentComposer.inputAria}
@@ -248,7 +242,7 @@ export function NowComposer({
             />
           </div>
           <div className="now-composer-tools">
-            {!images.length ? <ComposerImageInput images={images} disabled={readOnly || busy} onChoose={(files) => void addImages(files)} onRemove={() => undefined} /> : null}
+            {!images.length ? <ComposerImageInput images={images} disabled={readOnly || busy} onChoose={(files) => void imageIntake.add(files)} onRemove={() => undefined} /> : null}
             <button type="button" className="now-intent-orb" aria-label="Read my intent — suggest directions"
               onClick={() => directions.summon(draft)} disabled={readOnly || busy || directions.loading} />
             {speech.supported ? (
@@ -288,7 +282,8 @@ export function NowComposer({
       <NowComposerFooter
         showChips={showChips} readOnly={readOnly} readOnlyReason={readOnlyReason} busy={busy} error={error}
         recording={speech.recording} submissionMode={submissionMode} route={route} activeDrive={activeDrive}
-        stopRequested={stopRequested} receipt={receipt} onPickSuggestion={(intent) => void submit(intent)} onOpenResult={onOpenResult}
+        stopRequested={stopRequested} hasDraft={Boolean(draft.trim())} receipt={receipt}
+        onPickSuggestion={(intent) => void submit(intent)} onOpenResult={onOpenResult}
       />
       {agentComposer.dialog}
     </section>

@@ -58,6 +58,7 @@ async function drive(text: string) {
 describe("NowComposer contextual routing", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
+    window.localStorage.clear();
     driveTeammate.mockReset();
     replyInConversation.mockReset();
     putFirmConfiguration.mockReset();
@@ -144,9 +145,9 @@ describe("NowComposer contextual routing", () => {
     }));
   });
 
-  it("scopes with @ to a real repo file and drops the literal path into the prompt", async () => {
-    driveTeammate.mockResolvedValue(result({ handoff: handoff({ openedBetIds: ["b-file"] }) }));
-    render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork variant="dock" submissionMode="work"
+  it("scopes with @ to a real repo file as a chip and sends the exact path", async () => {
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:file" } as ConversationReplyResult);
+    const { container } = render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork variant="dock" submissionMode="work"
       repositoryFiles={["ui/src/components/work-mode/WorkSurface.tsx", "ui/src/components/thread/ThreadMessage.tsx", "brain/src/firm/work-loop.mjs"]} />);
     const field = screen.getByLabelText(/Say what you want/);
     fireEvent.change(field, { target: { value: "fix @WorkSurf" } });
@@ -154,18 +155,52 @@ describe("NowComposer contextual routing", () => {
     const option = screen.getByRole("option", { name: /WorkSurface\.tsx/ });
     expect(option).toHaveTextContent("File");
     fireEvent.click(option);
-    // The literal repo-relative path lands in the prompt — no @, nothing tracked.
-    expect(field).toHaveValue("fix ui/src/components/work-mode/WorkSurface.tsx ");
+    // The founder reads a compact chip token, and the chip layer names the exact file it stands for.
+    expect(field).toHaveValue("fix @WorkSurface.tsx ");
+    expect(container.querySelector('.now-composer-mention-backdrop mark')).toHaveAttribute("title", "ui/src/components/work-mode/WorkSurface.tsx");
+    // At send the chip expands: the agent reads the literal repo-relative path.
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", expect.objectContaining({
+      message: "fix ui/src/components/work-mode/WorkSurface.tsx", mode: "work",
+    })));
+  });
+
+  it("deletes a file chip as one unit on Backspace at its end", async () => {
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork variant="dock" submissionMode="work"
+      repositoryFiles={["ui/src/components/work-mode/WorkSurface.tsx"]} />);
+    const field = screen.getByLabelText<HTMLTextAreaElement>(/Say what you want/);
+    fireEvent.change(field, { target: { value: "fix @WorkSurf" } });
+    fireEvent.click(screen.getByRole("option", { name: /WorkSurface\.tsx/ }));
+    expect(field).toHaveValue("fix @WorkSurface.tsx ");
+    // One Backspace at the token's end removes the whole reference, never a trailing character of it.
+    field.setSelectionRange("fix @WorkSurface.tsx".length, "fix @WorkSurface.tsx".length);
+    fireEvent.keyDown(field, { key: "Backspace" });
+    expect(field).toHaveValue("fix  ");
+  });
+
+  it("keeps a draft and its attachments across a full remount — restart survival", async () => {
+    const { container, unmount } = render(<NowComposer ventureId="v1" ventureName="Acme" selection={targetBet("bet-1")} scopeLabel="First direction" hasWork variant="dock" />);
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Draft that survives a restart" } });
+    const png = new File([new Uint8Array([137, 80, 78, 71])], "kept.png", { type: "image/png" });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [png] } });
+    expect(await screen.findByAltText("kept.png")).toBeVisible();
+    // Unmount flushes presentation memory; a fresh mount (a new app session) reads it back.
+    unmount();
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={targetBet("bet-1")} scopeLabel="First direction" hasWork variant="dock" />);
+    expect(screen.getByLabelText(/Say what you want/)).toHaveValue("Draft that survives a restart");
+    expect(screen.getByAltText("kept.png")).toBeVisible();
   });
 
   it("requests an honest interrupt of the running drive and keeps the draft to steer with", async () => {
     stopActiveDrive.mockResolvedValue({ drive: { ...runningDrive, abortRequestedAt: "2026-01-01T00:01:00Z" } });
     const onDriven = vi.fn();
     render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: "b1", workRef: null, teammateRefs: [] }} scopeLabel={null} hasWork variant="dock" submissionMode="work" activeDrive={runningDrive} onDriven={onDriven} />);
-    const field = screen.getByLabelText(/Say what you want/);
-    fireEvent.change(field, { target: { value: "actually use the other endpoint" } });
     // The live line reflects the drive's real reported activity, not invented prose.
     expect(screen.getByText("Editing WorkSurface.tsx")).toBeInTheDocument();
+    const field = screen.getByLabelText(/Say what you want/);
+    fireEvent.change(field, { target: { value: "actually use the other endpoint" } });
+    // A typed draft during a live run earns the quiet promise of where it will land — never a block.
+    expect(screen.getByText("Your message will reach the running agent.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Stop the current step" }));
     await waitFor(() => expect(stopActiveDrive).toHaveBeenCalledWith("v1", "drive-1"));
     expect(onDriven).toHaveBeenCalled();
@@ -445,7 +480,7 @@ describe("NowComposer contextual routing", () => {
 });
 
 describe("NowComposer post-submit receipt", () => {
-  beforeEach(() => { driveTeammate.mockReset(); replyInConversation.mockReset(); });
+  beforeEach(() => { window.localStorage.clear(); driveTeammate.mockReset(); replyInConversation.mockReset(); });
 
   it("replaces the black box with a composed receipt and a way in", async () => {
     driveTeammate.mockResolvedValue(result({ handoff: handoff({ stagedBetIds: ["b1"] }) }));

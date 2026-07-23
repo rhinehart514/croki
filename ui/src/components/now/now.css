@@ -293,6 +293,21 @@
    the real text and caret show through it; the suggestion continues in muted ink right after. Metrics here
    must stay identical to the textarea rule above (font size, line height, padding) or the suffix drifts. */
 .now-composer-input { position: relative; flex: 1; min-width: 0; display: flex; }
+/* File-mention chip layer: a mirror rendered exactly behind the textarea. All text is transparent —
+   only the pill painted around each tracked @token shows through. Metrics must stay identical to the
+   textarea rule above (font size, line height, padding, wrapping) or pills drift off their tokens. */
+.now-composer-mention-backdrop {
+  position: absolute; inset: 0; z-index: 0; overflow: hidden;
+  color: transparent; font-size: var(--text-base); line-height: var(--leading-normal);
+  overflow-wrap: break-word; white-space: pre-wrap;
+  padding: 3px 0; pointer-events: none;
+}
+.now-composer-mention-backdrop mark {
+  color: transparent; background: rgb(79 134 247 / 12%);
+  border-radius: 5px; box-shadow: 0 0 0 1px rgb(79 134 247 / 22%);
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+}
+.now-composer-input textarea { position: relative; z-index: 1; }
 .now-agent-menu {
   position: absolute; bottom: calc(100% + 9px); left: -8px; z-index: 40;
   display: grid; width: min(360px, calc(100vw - 40px)); max-height: 310px; padding: 6px; overflow-y: auto;
