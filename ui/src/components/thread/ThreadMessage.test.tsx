@@ -37,6 +37,17 @@ describe("thread material grammar", () => {
     expect(screen.getByText(prose.trim())).toBeInTheDocument();
   });
 
+  it("marks a streaming teammate turn as responding, but never a founder turn", () => {
+    const { container, rerender } = render(<ThreadMessage item={item("message", { role: "teammate", participantRef: "codex", content: "Tracing the setup flow", streaming: true })} surface="work" onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.getByText("Tracing the setup flow")).toBeInTheDocument();
+    expect(container.querySelector('.thread-message[data-streaming="true"]')).not.toBeNull();
+    expect(container.querySelector(".thread-message-caret")).not.toBeNull();
+    rerender(<ThreadMessage item={item("message", { role: "teammate", participantRef: "codex", content: "Done." })} surface="work" onOpenVisual={open} onOpenThread={openThread} />);
+    expect(container.querySelector(".thread-message-caret")).toBeNull();
+    rerender(<ThreadMessage item={item("message", { role: "founder", content: "Do it", streaming: true })} surface="work" onOpenVisual={open} onOpenThread={openThread} />);
+    expect(container.querySelector('.thread-message[data-streaming="true"]')).toBeNull();
+  });
+
   it("shows a live participant beat and elapsed work time", () => {
     render(<ThreadMessage item={item("agent-status", { participantRef: "founding-teammate", participantLabel: "Yara", state: "working", summary: "Searching the repository", startedAt: new Date(Date.now() - 65_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
     expect(screen.getByText("Yara")).toBeInTheDocument();

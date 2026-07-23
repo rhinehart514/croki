@@ -22,6 +22,14 @@ Work in that single choice. **What are you trying to make true?** and Claude/Cod
 Work composer rather than blocking repository connection. Missing authentication never blocks adding the
 codebase.
 
+The product map now stays true without founder upkeep: a founder-confirmed source apply re-runs the page
+derivation as a reconciler. An unchanged page produces zero store writes (no revision or timestamp churn, so
+unrelated canvas nodes never move), a page the code no longer proves retracts only while it is still the
+adapter's own tentative read — founder-corrected or adopted records are never rewritten or removed, and a page
+other venture truth still references keeps its object while its derived links retract. A derivation returning
+zero pages leaves the existing map alone, a sync failure never fails the apply, Drover's own isolated worktrees
+are excluded from derivation, and there is no file watcher or polling; manual re-map still works unchanged.
+
 Work remains the direct coding-agent surface with exact provider/model choice, isolated coding attempts,
 conversation, files, diff, preview, terminal, verification, checkpoints, and founder-controlled source apply.
 The founder can delete any non-root chat from its existing action menu. One inline confirmation makes clear that
@@ -106,9 +114,16 @@ HTTP/UI/runtime model was removed.
 
 Agents cannot merge current truth, widen a WorkScope, execute an outward action, grant observation, grant
 capabilities, or end founder-owned work. Generic outward actions can be prepared and projected. The current
-tree now ships one current world-crossing slice: host-stamped `deploy` preparation runs an exact re-verified
+tree now ships two current world-crossing slices. Host-stamped `deploy` preparation runs an exact re-verified
 repository `package.json` command only from the founder gate, and a separately founder-granted HTTP observer
-may read one exact HTTPS target for a bounded window. Other action kinds remain preparation-only.
+may read one exact HTTPS target for a bounded window. Outbound `message` is now a first-class kind on the same
+physics: preparation stamps the exact recipient, subject, and body without touching the network; execution is
+founder-only through the existing Gmail transport under the same durable CAS lease (concurrent sends excluded,
+interruption after execution begins leaves verification-required and refuses blind retry); the executor receipt
+records the Gmail message and thread ids; and a founder-granted `gmail-thread` observer, refused unless the send
+receipt names a thread and unable to widen beyond it, returns a reply's exact facts (from, date, snippet) or
+uninterpreted silence within its bounded window. The legacy wall/bet message seam is unchanged and separate.
+Other action kinds remain preparation-only.
 
 ## Connected read capabilities and credentials
 
@@ -192,6 +207,17 @@ than shrinking a long workflow to fit; selecting a later step frames that exact 
 graph. Whole-venture and focused camera composition preserve a readable active chapter; below semantic-detail
 zoom the remaining portfolio uses meaningful overview markers rather than tiny full labels.
 
+Drafted plays now carry the mandated per-step walkthrough. "Walk through this play" focuses step one on the
+canvas and opens the play-scoped conversation; step focus is canvas selection (`workflow:<playId>:<stepId>`),
+so existing selection framing, reduced-motion collapse, and session persistence apply with no new camera or
+mode machinery. The dock names the focus ("Drafted play · Step N of M" with the step label) above the composer
+with keyboard-reachable previous/next controls that disable honestly at the ends. A message sent while a step
+is focused carries the play's real object ref plus the step's stable id from its own workflow graph — no
+fabricated object identity — and the drive prompt directs the agent to revise that exact step while preserving
+every other step. An established play keeps "Run again" and none of this machinery appears. A prepared
+`message` outward action shows the exact recipient, subject, and full unclamped body at the founder decision
+point, and the gmail-thread watch control appears only when the send receipt names a thread.
+
 The 2026-07-22 T3 polish pass raised legibility and honesty on the existing surfaces without adding capability.
 In Work, non-founder agent output now caps at an 80ch reading measure while the composer keeps its full width, so
 long agent turns no longer run to a ~1167px line. In Product / GTM, the whole-venture canvas now opens fit to all
@@ -217,7 +243,19 @@ Validated during this realignment:
 - selective merge, drift conflict, and agent merge refusal pass;
 - WorkScope lease/concurrency and atomic spend tests pass;
 - the provider-neutral MCP surface and authority matrix pass;
-- the complete Brain suite passes 849 tests; the UI suite passes 49 files and 247 tests;
+- the complete Brain suite passes 883 tests; the UI suite passes 54 files and 278 tests;
+- the outward message receipts pass: preparation stamps the exact contract with zero network use, agent
+  execution is refused, the founder send records Gmail message/thread ids, the CAS lease excludes a concurrent
+  double send, interruption leaves verification-required and refuses blind retry, a gmail-thread grant is
+  refused without a receipt thread id and cannot widen, a matched reply returns exact facts, an empty thread
+  returns silence, a failed read stays retryable, and the legacy wall/bet message path still passes;
+- the map reconciler receipts pass: a no-change re-run produces zero writes and no revision movement, a removed
+  page and its links retract while a founder-corrected page is never clobbered or removed, an apply that lands
+  a new page reaches the map citing the founder's source rather than a worktree, and a throwing sync leaves the
+  apply applied;
+- the walkthrough receipts pass: a drafted play's walkthrough focuses step one and opens the play conversation,
+  advancing updates the named step, a correction carries the exact step reference, and an established play
+  shows "Run again" with no step machinery;
 - the GTM two-register receipts pass: a play whose stored blob claims established still projects as drafted
   without real movement, a not-yet-adopted play that has run stays drafted, only a canonical play that has run
   reads as established, per-step running counts derive from real state with the exact items behind each count and
@@ -248,19 +286,16 @@ Validated during this realignment:
 - deleting the retired UI bundles reduced the production graph and bundle while keeping size budgets green.
 
 The complete pre-enhancement `npm run test:acceptance` receipt passed on July 21, 2026. It is not a current
-post-enhancement receipt. The single remaining red gate is `npm run check:architecture`, which reports 134 Brain
-modules against the 131-module ceiling — three over, down from five. The 2026-07-22 T3 polish pass removed the two
-genuinely dead firm route modules that accounted for the earlier gap (`architecture-routes.mjs`,
-`release-routes.mjs`) and their transport tests; the load-bearing `firmRoutes` wall-decide surface was verified and
-kept. No dead Brain module remains: every module now has at least one importer, and the one-importer families
-(`work-loop-*`, the work-loop guards, the semantic-model compat shim) are LOC-ceiling-compliant feature-local
-splits whose sole importers already sit at the 500-line service ceiling (`work-loop-tools.mjs` 499,
-`semantic-model.mjs` 489). Folding any of them back would trade the module-count violation for an LOC violation, a
-worse outcome. Reconciling to 131 without weakening either check therefore requires a deliberate deeper
-consolidation, not more dead-code removal; the check was not weakened and readiness stays red on it alone.
+post-enhancement receipt. `npm run check:architecture` passes at a consciously re-baselined 134-module ceiling:
+the 2026-07-22 capability pass (outward message, map reconciler, per-step walkthrough) added zero Brain modules,
+and the 134th module — `repository-files.mjs`, the @-file composer reach — was adopted deliberately with its
+route, test, and composer wiring rather than folded into an unrelated module. No dead Brain module remains: every module has at least one importer, and the one-importer
+families (`work-loop-*`, the work-loop guards, the semantic-model compat shim) are LOC-ceiling-compliant
+feature-local splits whose sole importers already sit at the 500-line service ceiling. Folding any of them back
+would trade the module-count violation for an LOC violation, a worse outcome; the check was not weakened.
 `npm run verify:tokens` now passes (171 canonical tokens across 14 CSS files); every remaining infinite animation
-sits on an exempt `spinner`/`data-state="stopping"` work-receipt selector. `npm --prefix brain test` passes 849/849
-and `npm --prefix ui run test:unit` passes 247/247 across 49 files; the UI production build, lint, token, and
+sits on an exempt `spinner`/`data-state="stopping"` work-receipt selector. `npm --prefix brain test` passes 883/883
+and `npm --prefix ui run test:unit` passes 278/278 across 54 files; the UI production build, lint, token, and
 service/component size checks pass.
 
 The deterministic complete founder loop is proven through selective Product-model merge. One real external
@@ -272,18 +307,15 @@ crossing actions that this implementation run did not have authority to spend or
 - Remove remaining Brain-side architecture/release/bet/fork/crew read adapters only after export/import migration
   coverage proves old ventures survive without them.
 - Finish Product/GTM authoring gestures for branch creation and model-change proposal from contextual work.
-- Add outward executor/observation adapters for real kinds beyond the current deploy + bounded HTTP slice and
-  compatibility release/Gmail seams; do not turn this into a generalized send/publish engine before repeated
-  venture use earns one.
+- Add outward executor/observation adapters for real kinds beyond the current deploy + HTTP and message +
+  gmail-thread slices and the compatibility release/Gmail seams; do not turn this into a generalized
+  send/publish engine before repeated venture use earns one.
 - Resume interrupted scoped provider work automatically only when exact participant, provider, spend, and machine
   constraints are all satisfied.
 - Complete reduced-motion, auth, budget, provider-backpressure, outward failure, silence, and merge-conflict visual
   screenshot QA beyond the deterministic state assertions already present.
-- Reconcile the Brain tree to the 131-module ceiling without weakening the check. The tree is now three modules
-  over (134), down from five after the dead firm route removal. No dead module remains to reclaim: the overage is
-  now structural, caused by LOC-compliant feature-local splits (`work-loop-*`, work-loop guards, semantic-model
-  compat) whose importers already sit at the 500-line service ceiling. Closing the last three requires a deliberate
-  consolidation call — a genuine conflict between the module-count and LOC ceilings — not more deletion.
+- The structural conflict between the module-count and LOC ceilings on the one-importer families
+  (`work-loop-*`, work-loop guards, semantic-model compat) remains a deliberate consolidation call, not deletion.
 - Exercise Exa and Gmail against founder-connected accounts only with explicit authority for API use and any
   world-crossing send. This implementation used no founder account, message, or paid API credit.
 - Complete a real dogfood loop from repository connection through outward action, evidence return, selective

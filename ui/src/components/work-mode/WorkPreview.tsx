@@ -12,6 +12,14 @@ export type WorkPreviewProps = {
 
 type PreviewStatus = "idle" | "loading" | "ready" | "failed" | "unavailable";
 
+const PREVIEW_STATUS_LABEL: Record<PreviewStatus, string> = {
+  idle: "Not started",
+  loading: "Loading…",
+  ready: "Live",
+  failed: "Failed",
+  unavailable: "Desktop only",
+};
+
 function bounds(element: HTMLElement) {
   const rect = element.getBoundingClientRect();
   return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -102,7 +110,7 @@ export function WorkPreview({ workspaceId, initialUrl = "", disabledReason = nul
         <label><span className="sr-only">Preview URL</span><input type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="http://localhost:3000" spellCheck={false} /></label>
         <button type="submit" disabled={!url.trim() || Boolean(disabledReason || unavailableReason)}>Open</button>
         <button type="button" onClick={() => void reload()} disabled={!current.shown || Boolean(disabledReason)}>Reload</button>
-        <span data-state={status}>{status === "idle" ? "Not started" : status}</span>
+        <span data-state={status}>{PREVIEW_STATUS_LABEL[status]}</span>
       </form>
       {disabledReason ? <p className="work-runtime-notice">{disabledReason}</p> : null}
       {error ? <p className="work-runtime-notice" role={status === "failed" ? "alert" : "status"}>{error}</p> : null}

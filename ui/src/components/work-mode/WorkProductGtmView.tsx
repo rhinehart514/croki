@@ -56,9 +56,8 @@ export function ProductGtmViewGraph({ view, full = false }: { view: ProductGtmVi
   </div>;
 }
 
-export function WorkProductGtmView({ view, error, onOpen, onReview }: {
+export function WorkProductGtmView({ view, onOpen, onReview }: {
   view: ProductGtmView;
-  error: string | null;
   onOpen: (visual: VisualReference, source: HTMLElement) => void;
   onReview: (branchRef: string) => void;
 }) {
@@ -76,6 +75,5 @@ export function WorkProductGtmView({ view, error, onOpen, onReview }: {
       </div>
     </header>
     {!collapsed ? <ProductGtmViewGraph view={view} /> : null}
-    {error ? <p role="alert">{error}</p> : null}
   </section>;
 }

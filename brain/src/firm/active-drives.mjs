@@ -21,6 +21,10 @@ function publicDrive(entry) {
     currentStageId: entry.currentStageId,
     lastBeatAt: entry.lastBeatAt,
     activity: entry.activity,
+    // The assistant's reply as it forms inside this drive — process-local presence, exactly like
+    // `activity`. The thread-timeline read model surfaces it as a streaming teammate turn; a restart
+    // correctly drops it, and the durable conversation message is the truth once the drive settles.
+    liveText: entry.liveText ?? "",
     // A process-local presence pointer: true when a founder steer arrived for this effort while the
     // drive is running. The durable queue (work-loop-steer.mjs, on the effort's work record) is the
     // truth the resume reads; this only lets a live drive/UI honestly say "a steer will apply next step."
@@ -44,6 +48,7 @@ export function beginActiveDrive({ ventureId, teammateRef, betId = null, runtime
     currentStageId: null,
     lastBeatAt: new Date().toISOString(),
     activity: "Starting work",
+    liveText: "",
     steerPending: false,
     controller,
   };
@@ -67,6 +72,27 @@ export function noteDriveBeat(driveId, { currentStageId, activity, at } = {}) {
   if (activityText) entry.activity = activityText;
   entry.lastBeatAt = String(at ?? "").trim() || new Date().toISOString();
   emitFirmEvent(entry.ventureId, "drive", { betId: entry.betId });
+  return publicDrive(entry);
+}
+
+// Append the newest slice of the assistant's forming reply to a live drive so the founder watches it
+// stream, mirroring `noteDriveBeat`'s process-local presence. The buffer is capped so a very long reply
+// cannot grow without bound, and it always grows on every call so the read model sees the full reply.
+// The refetch ping is throttled here (onText fires many times a second) so the transcript streams smoothly
+// without a refetch storm. The drive's own `finish()` drops the buffer when work settles, at which point
+// the durable conversation message takes over. Best-effort and no-op once the drive is gone.
+export function noteDriveText(driveId, text, { now = Date.now } = {}) {
+  const entry = active.get(driveId);
+  if (!entry) return null;
+  const addition = String(text ?? "");
+  if (!addition) return publicDrive(entry);
+  entry.liveText = (entry.liveText + addition).slice(-8_000);
+  entry.lastBeatAt = new Date().toISOString();
+  const at = now();
+  if (at - (entry.lastTextEmitAt ?? 0) >= 120) {
+    entry.lastTextEmitAt = at;
+    emitFirmEvent(entry.ventureId, "drive", { betId: entry.betId });
+  }
   return publicDrive(entry);
 }
 

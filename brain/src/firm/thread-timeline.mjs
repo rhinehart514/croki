@@ -181,6 +181,24 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
       betRef: drive.betId ? `bet:${drive.betId}` : null,
       activitySteps,
     });
+    // The assistant's reply as it forms — projected as a normal streaming teammate turn so the founder
+    // watches it stream in the transcript, not as a status chip. It carries `at: lastBeatAt` so it sorts
+    // to the live edge, and vanishes when the drive settles and its durable message takes over.
+    const liveText = String(drive.liveText ?? "").trim();
+    if (state === "working" && liveText) {
+      items.push({
+        kind: "message",
+        id: `live:${drive.id}`,
+        ref: `run:${drive.id}`,
+        ventureId,
+        at: drive.lastBeatAt ?? drive.startedAt,
+        role: "teammate",
+        participantRef: drive.teammateRef,
+        participantLabel: participantLabel(drive.teammateRef),
+        content: drive.liveText,
+        streaming: true,
+      });
+    }
   }
 
   for (const bet of bets) {

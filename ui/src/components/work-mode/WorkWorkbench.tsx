@@ -5,11 +5,13 @@ import { CodeWorkspaceStage } from "@/components/visual-stage/CodeWorkspaceStage
 import { WorkChangesPane } from "./WorkChangesPane";
 import { WorkCheckpoints } from "./WorkCheckpoints";
 import { WorkTerminalDrawer } from "./WorkTerminalDrawer";
+import type { WorkTerminalStatus } from "./WorkTerminal";
 import { workStatusLabel } from "./workStatusLabel";
+import { attemptLabel } from "./workspaceProjection";
 
 export type WorkbenchTab = "changes" | "preview" | "history";
 
-export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspaceId, readOnlyReason, canCompare = false, onCompare, preview, terminal, onSelectWorkspace, onChanged }: {
+export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspaceId, readOnlyReason, canCompare = false, onCompare, preview, terminal, terminalStatus = null, onSelectWorkspace, onChanged }: {
   ventureId: string;
   workspace: CodingWorkspace;
   attempts: CodingWorkspace[];
@@ -19,6 +21,7 @@ export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspac
   onCompare?: () => void;
   preview: ReactNode;
   terminal: ReactNode;
+  terminalStatus?: WorkTerminalStatus | null;
   onSelectWorkspace: (id: string) => void;
   onChanged: () => void;
 }) {
@@ -34,7 +37,7 @@ export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspac
         <div className="work-workbench-tools">
           {canCompare && onCompare ? <button type="button" onClick={onCompare}>Compare attempts</button> : null}
           <span className="work-change-stat">{workspace.diffStat || `${workspace.changedFiles.length} ${workspace.changedFiles.length === 1 ? "file" : "files"}`}</span>
-          {attempts.length > 1 ? <label><span className="sr-only">Coding attempt</span><select value={selectedWorkspaceId} onChange={(event) => onSelectWorkspace(event.target.value)}>{attempts.map((attempt, index) => <option key={attempt.id} value={attempt.id}>Attempt {attempts.length - index} · {workStatusLabel(attempt.status)}</option>)}</select></label> : null}
+          {attempts.length > 1 ? <label><span className="sr-only">Coding attempt</span><select value={selectedWorkspaceId} onChange={(event) => onSelectWorkspace(event.target.value)}>{attempts.map((attempt) => <option key={attempt.id} value={attempt.id}>{attemptLabel(attempts, attempt)} · {workStatusLabel(attempt.status)}</option>)}</select></label> : null}
           <strong className="work-status" data-status={workspace.status}>{workStatusLabel(workspace.status)}</strong>
         </div>
       </header>
@@ -45,14 +48,14 @@ export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspac
 
       <div className="work-workbench-scroll">
         <section className="work-tab-panel" role="tabpanel" id={`work-panel-${tab}`} aria-labelledby={`work-tab-${tab}`}>
-          {tab === "changes" ? <WorkChangesPane workspace={workspace} /> : null}
+          {tab === "changes" ? <WorkChangesPane workspace={workspace} readOnlyReason={readOnlyReason} onSteered={onChanged} /> : null}
           {tab === "preview" ? preview : null}
           {tab === "history" ? <WorkCheckpoints ventureId={ventureId} workspace={workspace} readOnlyReason={readOnlyReason} onChanged={onChanged} /> : null}
         </section>
         <CodeWorkspaceStage ventureId={ventureId} workspace={workspace} readOnlyReason={readOnlyReason} onChanged={onChanged} variant="review" />
       </div>
 
-      <WorkTerminalDrawer>{terminal}</WorkTerminalDrawer>
+      <WorkTerminalDrawer status={terminalStatus}>{terminal}</WorkTerminalDrawer>
     </section>
   );
 }

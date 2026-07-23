@@ -19,10 +19,12 @@ export function FilesChanged({
   diff,
   onSelectFile,
   selectedPath,
+  hideSummary = false,
 }: {
   diff: string;
   onSelectFile?: (path: string) => void;
   selectedPath?: string | null;
+  hideSummary?: boolean;
 }) {
   const files = useMemo(() => parseUnifiedDiff(diff), [diff]);
   const stat = useMemo(() => diffStat(files), [files]);
@@ -33,7 +35,7 @@ export function FilesChanged({
 
   return (
     <div className="review-files">
-      <div className="review-files-summary">
+      {hideSummary ? null : <div className="review-files-summary">
         <strong style={{ fontVariantNumeric: "tabular-nums" }}>
           {stat.files} {stat.files === 1 ? "file" : "files"}
         </strong>
@@ -42,7 +44,7 @@ export function FilesChanged({
           <span className={stat.additions ? "review-stat-add" : "review-stat-zero"}>+{stat.additions}</span>
           <span className={stat.deletions ? "review-stat-del" : "review-stat-zero"}>−{stat.deletions}</span>
         </span>
-      </div>
+      </div>}
       <ul className="review-files-list">
         {files.map((file, i) => (
           <li key={`${file.path}-${i}`}>

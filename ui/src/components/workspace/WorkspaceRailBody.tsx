@@ -8,28 +8,8 @@ import type { FirmConfiguration, FirmCrewMember } from "@/types";
 import { AgentCreateDialog } from "./AgentCreateDialog";
 import { AgentPurposeDialog } from "./AgentPurposeDialog";
 import { CapabilityLogo } from "./CapabilityLogo";
-import { relevantWorkflowCapabilities, type WorkflowCapability, type WorkflowCapabilityKind } from "./workflowCapabilities";
-
-const CAPABILITY_KINDS: Record<WorkflowCapabilityKind, string> = {
-  action: "Action",
-  "agent-skill": "Agent skill",
-  markdown: "Markdown",
-  source: "Source",
-  tool: "Tool",
-  workspace: "Workspace",
-};
-
-function authorityLabel(capability: WorkflowCapability) {
-  if (capability.authority === "founder-gate") return "Approval";
-  if (capability.authority === "read") return "Read";
-  return "Inward";
-}
-
-function statusLabel(capability: WorkflowCapability) {
-  if (capability.status === "reconnect") return "Reconnect";
-  if (capability.status === "unavailable") return "Unavailable";
-  return null;
-}
+import { relevantWorkflowCapabilities, type WorkflowCapability } from "./workflowCapabilities";
+import { CAPABILITY_KINDS, authorityLabel, statusLabel } from "./capabilityPresentation";
 
 function agentKind(agent: FirmConfiguration["agents"][number] | undefined) {
   if (agent?.runtime?.provider === "codex") return "Agent · Codex";

@@ -52,7 +52,8 @@ describe("ProductGtmNavigator", () => {
     render(<ProductGtmNavigator model={{ ...model, objects: model.objects.slice(0, 1) }} movement={null} selectedRef={null} onFocus={vi.fn()} />);
 
     fireEvent.click(screen.getByLabelText("Browse GTM plays and motions"));
-    expect(screen.getByText(/No GTM play is current yet/)).toBeInTheDocument();
+    // The empty state points to how a play starts rather than restating the status the canvas note carries.
+    expect(screen.getByText(/an agent drafts the first play/)).toBeInTheDocument();
   });
 
   it("includes a concrete GTM path when its mechanics are mapped", () => {

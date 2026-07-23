@@ -5,6 +5,9 @@ export const PRODUCT_GTM_READABLE_ZOOM = 0.82;
 // zoomed out, so the map is allowed below the focused-chapter readability floor to fit the venture
 // in frame rather than crop it.
 export const PRODUCT_GTM_WHOLE_ZOOM = 0.5;
+// The camera's hard floor. Below this the compact pill face is unreadable dust; a wide venture or a
+// full-length play may fit down to here, never past it.
+export const PRODUCT_GTM_MIN_ZOOM = 0.3;
 
 export function productGtmViewportIsAway(current: Viewport, focal: Viewport) {
   return Math.abs(current.zoom - focal.zoom) > 0.08

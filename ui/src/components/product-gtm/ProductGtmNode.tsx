@@ -28,12 +28,16 @@ function ProductGtmNodeView({ data, selected, sourcePosition, targetPosition }: 
   // badge on every page is redundant noise the map drops.
   const territory = data.role === "page" ? null : data.territory === "gtm" ? "GTM" : data.territory === "product" ? "Product" : data.territory === "shared" ? "Shared" : null;
   const overviewState = data.attention === "decision" ? "Needs you" : data.attention === "evidence" ? "Evidence returned" : data.active ? "Working now" : OVERVIEW_ROLE[data.role];
+  // At rest the map stays clean — a page is name-only, and any node whose subtitle is empty renders no
+  // dead chrome. The kind badge, meta line, and running count only appear when they carry real signal.
+  const badge = data.workflowPosition ? <b>Step {data.workflowPosition} of {data.workflowStepCount}</b> : territory ? <b>{territory}</b> : null;
+  const hasSubtitle = Boolean(badge || data.meta || data.runningCountLabel);
   return <article className="product-gtm-node" data-kind={data.kind} data-role={data.role} data-workflow={data.workflowGraph ? "true" : undefined} data-workflow-register={data.workflowRegister} data-workflow-step={data.workflowStepType} data-territory={data.territory} data-expanded={data.expanded ? "true" : undefined} data-selected={selected ? "true" : undefined} data-provisional={data.provisional ? "true" : undefined} data-primary={data.primary ? "true" : "false"} data-focus={data.focus ? "true" : "false"} data-active={data.active ? "true" : undefined} data-attention={data.attention} data-waiting={data.waiting ? "true" : undefined} data-running={data.runningCountLabel ? "true" : undefined}>
     <Handle type="target" position={targetPosition ?? Position.Left} />
     {data.acceptsWork ? <Handle id="work-target" className="product-gtm-work-port" type="target" position={Position.Bottom} /> : null}
     <div className="product-gtm-node-summary">
       <span className="product-gtm-node-symbol"><Icon aria-hidden="true" /></span>
-      <span className="product-gtm-node-copy"><strong>{data.name}</strong><small>{data.workflowPosition ? <b>Step {data.workflowPosition} of {data.workflowStepCount}</b> : territory ? <b>{territory}</b> : null}<span>{data.meta}</span>{data.runningCountLabel ? <em className="product-gtm-node-running">{data.runningCountLabel}</em> : null}</small></span>
+      <span className="product-gtm-node-copy"><strong>{data.name}</strong>{hasSubtitle ? <small>{badge}{data.meta ? <span>{data.meta}</span> : null}{data.runningCountLabel ? <em className="product-gtm-node-running">{data.runningCountLabel}</em> : null}</small> : null}</span>
       {data.expanded ? <button className="nodrag product-gtm-node-collapse" type="button" aria-label="Collapse node" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); data.onCollapse?.(); }}><ChevronUp aria-hidden="true" /></button> : null}
     </div>
     <div className="product-gtm-node-overview" aria-label={`${data.name}, ${territory ?? "unplaced"}, ${overviewState}`}>

@@ -215,14 +215,38 @@ export function projectProductGtm(
     actionPositions.set(action.id, reserveSynthetic(attachedPoint(anchor, nextSlot(`action:${subject ?? "root"}`), "action")));
     if (subject) extraEdges.push([subject, `action:${action.id}`]);
   });
-  const workPositions = new Map<string, { x: number; y: number }>();
-  (movement?.liveWork ?? []).forEach((item, index) => {
+  // Live work must not shingle the resting map. Running work, the chapter anchor, and the selection are
+  // pinned as individual pills. Everything else de-duplicates: identical threads (same intent, subject,
+  // and state) fold into one pill whose meta carries the derived count, and a QUIET thread with no
+  // resolvable subject earns no resting pill at all — work waiting on a decision, review, or failure is
+  // never dropped, only folded. Ids keep the ORIGINAL liveWork index because automaticChapter derives
+  // the same workNodeId(item, index) ids; the anchor is pinned before folding, so duplicates fold INTO
+  // it rather than hiding it.
+  const liveWorkItems = movement?.liveWork ?? [];
+  const projectedWork: Array<{ item: (typeof liveWorkItems)[number]; index: number; id: string; subject?: string; state: string; foldedCount: number }> = [];
+  const workFolds = new Map<string, (typeof projectedWork)[number]>();
+  for (const [index, item] of liveWorkItems.entries()) {
     const id = workNodeId(item, index);
     const subject = strings(item.subjectRefs).map(productGtmRefId).find((ref) => positions.has(ref));
-    const anchor = subject ? positions.get(subject)! : positions.get(spine[0]) ?? { x: 96, y: 276 };
-    workPositions.set(id, reserveSynthetic(attachedPoint(anchor, nextSlot(`work:${subject ?? "root"}`), "work")));
-    if (subject) extraEdges.push([id, subject]);
-  });
+    const state = String(item.attention ?? item.activity ?? "").toLowerCase();
+    const attentionWorthy = ["decision", "failure", "review"].includes(state);
+    const pinned = item.activity === "running" || id === chapterAnchorId || id === selectedId;
+    const key = `${state} | ${subject ?? ""} | ${String(item.founderIntent ?? item.name ?? "Live work")}`;
+    if (!pinned) {
+      if (!attentionWorthy && !subject) continue;
+      const fold = workFolds.get(key);
+      if (fold) { fold.foldedCount += 1; continue; }
+    }
+    const entry = { item, index, id, ...(subject ? { subject } : {}), state, foldedCount: 1 };
+    if (!workFolds.has(key)) workFolds.set(key, entry);
+    projectedWork.push(entry);
+  }
+  const workPositions = new Map<string, { x: number; y: number }>();
+  for (const entry of projectedWork) {
+    const anchor = entry.subject ? positions.get(entry.subject)! : positions.get(spine[0]) ?? { x: 96, y: 276 };
+    workPositions.set(entry.id, reserveSynthetic(attachedPoint(anchor, nextSlot(`work:${entry.subject ?? "root"}`), "work")));
+    if (entry.subject) extraEdges.push([entry.id, entry.subject]);
+  }
   // Register is derived from physics, never from the play's own blob: established only when canonical and
   // actually run. Run states carry the exact items behind each derived step count.
   const workflowRegisters = deriveWorkflowRegisters(model, movement);
@@ -275,7 +299,7 @@ export function projectProductGtm(
       id: object.id, type: "productGtm", position,
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-      data: { kind: "truth", role, territory, ref: `object:${object.id}`, name: restingTruth.name, detail: restingTruth.detail, meta: isPage ? "Page" : `${objectWorkflow ? `${objectRegister === "drafted" ? "Drafted" : "Established"} play · ${objectWorkflow.steps.length} ${objectWorkflow.steps.length === 1 ? "step" : "steps"}` : productGtmTypeLabel(object.type)}${featureCount ? ` · ${featureCount} ${featureCount === 1 ? "feature" : "features"}` : ""}`, provisional: objectRegister === "drafted" || provisional, primary, hiddenFeatureCount: featureCount, acceptsWork: workSubjectIds.has(object.id), focus: focus.has(object.id), attention: role === "evidence" ? "evidence" : primaryIndex === spine.length - 1 && role === "evidence-gap" ? "decision" : undefined, workflowGraph: objectWorkflow ?? undefined, workflowRegister: objectRegister ?? undefined, page },
+      data: { kind: "truth", role, territory, ref: `object:${object.id}`, name: restingTruth.name, detail: restingTruth.detail, meta: isPage ? "" : `${objectWorkflow ? `${objectRegister === "drafted" ? "Drafted" : "Established"} play · ${objectWorkflow.steps.length} ${objectWorkflow.steps.length === 1 ? "step" : "steps"}` : productGtmTypeLabel(object.type)}${featureCount ? ` · ${featureCount} ${featureCount === 1 ? "feature" : "features"}` : ""}`, provisional: objectRegister === "drafted" || provisional, primary, hiddenFeatureCount: featureCount, acceptsWork: workSubjectIds.has(object.id), focus: focus.has(object.id), attention: role === "evidence" ? "evidence" : primaryIndex === spine.length - 1 && role === "evidence-gap" ? "decision" : undefined, workflowGraph: objectWorkflow ?? undefined, workflowRegister: objectRegister ?? undefined, page },
     });
   }
   const pageIds = new Set(model.objects.filter((object) => object.type.toLowerCase() === "page").map((object) => object.id));
@@ -369,12 +393,10 @@ export function projectProductGtm(
     if (needsFounder || returned || failed) initialFocusIds.add(actionId);
   }
 
-  for (const [index, item] of (movement?.liveWork ?? []).entries()) {
+  for (const { item, index, id, subject, state, foldedCount } of projectedWork) {
     const threadRef = String(item.threadRef ?? item.id ?? `work-${index}`);
-    const id = workNodeId(item, index);
-    const subject = strings(item.subjectRefs).map(productGtmRefId).find((ref) => truthIds.has(ref));
-    const state = String(item.attention ?? item.activity ?? "").toLowerCase();
-    const meta = item.activity === "running" ? "Working now" : state && state !== "none" && state !== "idle" ? state.replaceAll("-", " ") : "Waiting";
+    const baseMeta = item.activity === "running" ? "Working now" : state && state !== "none" && state !== "idle" ? state.replaceAll("-", " ") : "Waiting";
+    const meta = foldedCount > 1 ? `${baseMeta} · ${foldedCount} threads` : baseMeta;
     const workPosition = workPositions.get(id) ?? { x: 96, y: 394 };
     const territory = subject ? territoryById.get(subject) ?? "shared" : "shared";
     const workAttention = state === "decision" ? "decision" : ["failure", "review"].includes(state) ? "review" : item.activity === "running" ? "active" : undefined;

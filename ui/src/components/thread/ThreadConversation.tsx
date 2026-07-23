@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { StickToBottomContext } from "use-stick-to-bottom";
 import type { FirmLens } from "@/types";
-import type { ThreadTimeline, VisualReference, WorkIndexItem } from "@/api";
+import type { FirmActiveDrive, ThreadTimeline, VisualReference, WorkIndexItem } from "@/api";
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { FirmFreshness } from "@/components/FirmFreshness";
 import type { FirmConnectionState } from "@/hooks/use-firm-connection";
@@ -15,6 +15,7 @@ import { WorkProductGtmView } from "@/components/work-mode/WorkProductGtmView";
 import { productGtmViewFromTimeline } from "@/components/work-mode/productGtmView";
 import type { WorkChatMode } from "@/components/work-mode/WorkComposerBar";
 import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
+import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 
 function workHandoffIds(timeline: ThreadTimeline | null): string[] {
   return (timeline?.items ?? []).filter((entry) => {
@@ -32,7 +33,7 @@ function initialWorkChatMode(ventureId: string): WorkChatMode {
   catch { return "code"; }
 }
 
-export function ThreadConversation({ ventureId, ventureName, repository, surface = "context", contextKind = null, item, timeline, lens, connection, loading, error, draft, draftSession, subjectRefs = [], scopeLabel, targetAgentRef = null, artifactFocus = null, artifactFocusRequest = 0, onClearArtifactFocus, adoptedWorkflowVersions, initialScrollTop, onScrollChange, onOpenVisual, onOpenThread, onTogglePin, onRename, onDelete, renameDisabledReason = null, onDriven, onWorkRouted, onAdoptWorkflow, onReviewModelBranch }: {
+export function ThreadConversation({ ventureId, ventureName, repository, surface = "context", contextKind = null, item, timeline, lens, connection, loading, error, draft, draftSession, subjectRefs = [], scopeLabel, targetAgentRef = null, workflowStep = null, artifactFocus = null, artifactFocusRequest = 0, onClearArtifactFocus, adoptedWorkflowVersions, activeDrives = [], initialScrollTop, onScrollChange, onOpenVisual, onOpenThread, onTogglePin, onRename, onDelete, renameDisabledReason = null, onDriven, onWorkRouted, onAdoptWorkflow, onReviewModelBranch }: {
   ventureId: string;
   ventureName: string;
   repository?: string;
@@ -49,10 +50,12 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
   subjectRefs?: string[];
   scopeLabel?: string | null;
   targetAgentRef?: string | null;
+  workflowStep?: ProductGtmWalkthroughStep | null;
   artifactFocus?: ArtifactSectionFocus | null;
   artifactFocusRequest?: number;
   onClearArtifactFocus?: () => void;
   adoptedWorkflowVersions?: ReadonlyMap<string, string | null>;
+  activeDrives?: FirmActiveDrive[];
   initialScrollTop: number | null;
   onScrollChange: (threadRef: string, scrollTop: number) => void;
   onOpenVisual: (visual: VisualReference, origin: HTMLElement) => void;
@@ -202,9 +205,9 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
           <div className="thread-context-answer"><ThreadMessage item={contextAnswer} surface="context" onOpenVisual={onOpenVisual} onOpenThread={onOpenThread} /></div>
         ) : null
       ) : null}
-      {productGtmView ? <WorkProductGtmView view={productGtmView} error={null} onOpen={onOpenVisual} onReview={(branchRef) => onReviewModelBranch?.(branchRef)} /> : null}
+      {productGtmView ? <WorkProductGtmView view={productGtmView} onOpen={onOpenVisual} onReview={(branchRef) => onReviewModelBranch?.(branchRef)} /> : null}
       {workflowSketch ? <WorkGraphSketch sketch={workflowSketch} adoptionState={adoptionState} busy={adopting} error={adoptionError} onOpen={onOpenVisual} onAdopt={() => void adoptWorkflow()} /> : null}
-      <ThreadComposer ventureId={ventureId} ventureName={ventureName} repository={repository} surface={surface} contextKind={contextKind} item={item} lens={lens} draft={draft} isHome={isHome} readOnly={readOnly} readOnlyReason={readOnlyReason} subjectRefs={subjectRefs} scopeLabel={scopeLabel} targetAgentRef={targetAgentRef} workRef={productGtmView?.workId ?? workflowSketch?.workId ?? null} productGtmView={Boolean(productGtmView)} workflowSketch={Boolean(workflowSketch)} modelBranchRef={productGtmView?.branchRef ?? null} artifactFocus={artifactFocus} artifactFocusRequest={artifactFocusRequest} onClearArtifactFocus={onClearArtifactFocus} workChatMode={workChatMode} onWorkChatModeChange={chooseWorkChatMode} onSubmitStart={surface === "work" ? beginFounderTurn : beginContextTurn} onSubmitFailed={surface === "work" ? failFounderTurn : failContextTurn} onDriven={onDriven} onWorkRouted={onWorkRouted} />
+      <ThreadComposer ventureId={ventureId} ventureName={ventureName} repository={repository} surface={surface} contextKind={contextKind} item={item} lens={lens} draft={draft} isHome={isHome} readOnly={readOnly} readOnlyReason={readOnlyReason} subjectRefs={subjectRefs} scopeLabel={scopeLabel} targetAgentRef={targetAgentRef} workflowStep={workflowStep} workRef={productGtmView?.workId ?? workflowSketch?.workId ?? null} productGtmView={Boolean(productGtmView)} workflowSketch={Boolean(workflowSketch)} modelBranchRef={productGtmView?.branchRef ?? null} artifactFocus={artifactFocus} artifactFocusRequest={artifactFocusRequest} onClearArtifactFocus={onClearArtifactFocus} workChatMode={workChatMode} onWorkChatModeChange={chooseWorkChatMode} activeDrives={activeDrives} onSubmitStart={surface === "work" ? beginFounderTurn : beginContextTurn} onSubmitFailed={surface === "work" ? failFounderTurn : failContextTurn} onDriven={onDriven} onWorkRouted={onWorkRouted} />
     </section>
   );
 }

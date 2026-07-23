@@ -144,6 +144,9 @@
 .thread-message-body .firm-app-message-response { padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; font-size: inherit; line-height: inherit; }
 .thread-message-body .firm-app-message-response p { margin: 0 0 12px; }
 .thread-message-body .firm-app-message-response p:last-child { margin-bottom: 0; }
+/* The live caret only renders while the reply is actually streaming; the arriving text is the motion,
+   so the caret itself stays a steady block marking the live edge — no ambient animation. */
+.thread-message-caret { display: inline-block; width: 6px; height: 15px; margin-top: 2px; border-radius: 1px; background: var(--primary); }
 .thread-message-body .firm-app-message-response :is(ul, ol) { margin: 10px 0 14px; padding-left: 22px; }
 .thread-message-body .firm-app-message-response li { margin: 4px 0; padding-left: 3px; }
 .thread-message-body .firm-app-message-response :is(h1, h2, h3, h4) { margin: 22px 0 8px; color: var(--n-ink); font-weight: 620; line-height: 1.3; }
@@ -247,7 +250,6 @@
 .thread-conversation[data-surface="work"] .thread-message[data-role="founder"] { justify-content: flex-end; margin-bottom: 16px; }
 .thread-conversation[data-surface="work"] .thread-message[data-role="founder"] .thread-message-body { width: auto; max-width: 80%; padding: 11px 13px; border: 1px solid var(--n-line-2); border-radius: var(--r-xl); background: var(--n-panel); font-weight: 450; line-height: 1.55; }
 .thread-conversation[data-surface="work"] .thread-message[data-role="founder"] .thread-message-images { grid-template-columns: repeat(2, minmax(100px, 220px)); }
-.thread-conversation[data-surface="work"] .thread-message-pending { animation: thread-founder-turn-arrive 260ms cubic-bezier(.22, 1, .36, 1) both; }
 .thread-conversation[data-surface="work"] .thread-message-pending .thread-message-body { color: var(--n-ink-2); }
 .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-message-pending .thread-message-body { border-color: transparent; background: linear-gradient(var(--n-panel), var(--n-panel)) padding-box, linear-gradient(105deg, var(--agent-spectrum-cyan), var(--agent-spectrum-violet) 42%, var(--agent-spectrum-rose) 72%, var(--agent-spectrum-amber)) border-box; }
 .thread-conversation[data-surface="work"] :is(.thread-agent-update, .thread-material) { width: min(100%, 768px); margin-right: auto; margin-left: auto; }
@@ -283,10 +285,6 @@
   55% { opacity: .76; }
   100% { opacity: 0; filter: blur(3px); transform: translateY(-34px) scale(.985); }
 }
-@keyframes thread-founder-turn-arrive {
-  from { opacity: 0; transform: translateY(12px) scale(.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
 .thread-conversation[data-surface="work"] .thread-material { margin-top: 2px; margin-bottom: 10px; }
 .thread-conversation[data-surface="work"] .thread-home,
 .thread-conversation[data-surface="work"] .thread-home-summary { width: min(100%, 768px); min-height: 100%; margin: auto; padding: 72px 20px; }
@@ -307,7 +305,7 @@
 .work-graph-sketch > header .work-graph-collapse { width: 30px; justify-content: center; padding: 0; }
 .work-graph-sketch-canvas { height: min(27vh, 240px); min-height: 174px; background: var(--n-sunk); }
 .work-graph-sketch .react-flow__node.work-graph-node { display: grid; width: 184px; min-height: 66px; gap: 3px; padding: 9px 11px; border: 1px solid var(--n-line-2); border-radius: 8px; background: var(--n-panel); color: var(--n-ink); box-shadow: 0 5px 16px rgb(0 0 0 / 16%); text-align: left; }
-.work-graph-sketch .react-flow__node.work-graph-node small { color: var(--n-ink-4); font: 600 8px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+.work-graph-sketch .react-flow__node.work-graph-node small { color: var(--n-ink-4); font: 600 9px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
 .work-graph-sketch .react-flow__node.work-graph-node strong { display: block; margin-top: 2px; font-size: 11px; font-weight: 620; }
 .work-graph-sketch .react-flow__node.work-graph-node span { display: -webkit-box; overflow: hidden; margin-top: 3px; color: var(--n-ink-4); font-size: 9px; line-height: 1.35; text-transform: none; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .work-graph-sketch .react-flow__node.work-graph-node:is(.is-founder-gate, .is-founder-decision) { border-color: var(--amber-line); }
@@ -482,8 +480,7 @@
   .thread-conversation[data-surface="work"] .thread-agent-update .thread-agent-mark,
   .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-message:not([data-role="founder"]) > header::before,
   .thread-conversation[data-surface="work"] .thread-composer[data-chat-mode="product-gtm"] .now-composer-shell,
-  .thread-conversation[data-surface="work"] .thread-composer .now-composer-flight,
-  .thread-conversation[data-surface="work"] .thread-message-pending { animation: none; }
+  .thread-conversation[data-surface="work"] .thread-composer .now-composer-flight { animation: none; }
   .thread-agent-details summary::before { transition: none; }
   .visual-stage { will-change: auto; }
 }

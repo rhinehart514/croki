@@ -30,6 +30,14 @@ const founderReturnPriority: Record<CodingWorkspace["status"], number> = {
   discarded: 10,
 };
 
+// Attempts are numbered newest-first (Attempt N is the most recent) so the label stays stable as the
+// founder opens attempts. Both the workbench picker and the compare view read from here so they can
+// never drift out of sync.
+export function attemptLabel(attempts: CodingWorkspace[], workspace: CodingWorkspace): string {
+  const index = attempts.findIndex((entry) => entry.id === workspace.id);
+  return `Attempt ${attempts.length - (index < 0 ? attempts.length - 1 : index)}`;
+}
+
 export function defaultCodingWorkspace(workspaces: CodingWorkspace[]): CodingWorkspace | null {
   return workspaces.reduce<CodingWorkspace | null>((best, workspace) => {
     if (!best) return workspace;

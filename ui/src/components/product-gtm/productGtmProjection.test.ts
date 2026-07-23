@@ -316,7 +316,9 @@ describe("Product/GTM causal projection", () => {
     // model keeps the read tentative and source-bearing.
     expect(node?.data.role).toBe("page");
     expect(node?.data.provisional).toBe(false);
-    expect(node?.data.meta).toBe("Page");
+    // Clean at rest means the page pill is name-only: the file icon and product territory already say
+    // "page", so no kind badge subtitle is minted for it.
+    expect(node?.data.meta).toBe("");
     expect(node?.data.territory).toBe("product");
     expect(node?.data.name).toBe("Signup");
     expect(node?.data.page).toMatchObject({

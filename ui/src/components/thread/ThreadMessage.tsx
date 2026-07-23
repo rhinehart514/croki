@@ -72,14 +72,18 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
   // selected model and factual activity already carry that state, so keep existing Threads as quiet
   // as new ones without rewriting their durable conversation records.
   if (surface === "work" && role !== "founder" && ["codex", "claude-code"].includes(participantRef) && /^continuing with (?:codex|claude code)\.?$/i.test(content.trim())) return null;
+  const streaming = role !== "founder" && Boolean(item.streaming);
   return (
-    <article className="thread-message" data-role={role}>
+    <article className="thread-message" data-role={role} data-streaming={streaming ? "true" : undefined}>
       <header>{participant}</header>
       <div className="thread-message-body">
         {attachments.length ? <div className="thread-message-images">
           {attachments.map((attachment) => <ThreadImage key={attachment.id} ventureId={String(item.ventureId ?? "")} imageId={attachment.id} name={attachment.name} />)}
         </div> : null}
-        {role === "founder" ? <p>{content}</p> : <MessageResponse>{content}</MessageResponse>}
+        {role === "founder"
+          ? <p>{content}</p>
+          : <MessageResponse>{content}</MessageResponse>}
+        {streaming ? <span className="thread-message-caret" aria-label="Responding…" /> : null}
       </div>
     </article>
   );

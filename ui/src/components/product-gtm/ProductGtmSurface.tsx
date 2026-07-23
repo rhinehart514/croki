@@ -17,7 +17,7 @@ import { useProductGtmDrop } from "./productGtmDrop";
 import { productGtmTerritoryFor, reflowExpandedNeighborhood } from "./productGtmLayout";
 import { productGtmWorkflowGraph } from "./productGtmWorkflow";
 import { projectProductGtm, type ProductGtmNode as ProductGtmFlowNode } from "./productGtmProjection";
-import { PRODUCT_GTM_READABLE_ZOOM, PRODUCT_GTM_WHOLE_ZOOM, productGtmMotionDuration, productGtmViewportIsAway } from "./productGtmViewport";
+import { PRODUCT_GTM_MIN_ZOOM, PRODUCT_GTM_READABLE_ZOOM, PRODUCT_GTM_WHOLE_ZOOM, productGtmMotionDuration, productGtmViewportIsAway } from "./productGtmViewport";
 import "@xyflow/react/dist/style.css";
 import "./product-gtm.css";
 
@@ -169,24 +169,25 @@ export function ProductGtmSurface({
     const presentIds = new Set(nodes.map((node) => node.id));
     if (workflowFocus && [...focusIds].some((id) => !presentIds.has(id))) return;
     // The whole venture frames every node so entry lands composed in view — never a subset that leaves
-    // the rest scattered off-screen. A focused chapter frames its neighborhood at readable size.
+    // the rest scattered off-screen. A selected play frames its FULL step chain — the length of a long
+    // play is information, never cropped to its opening steps — so like the whole venture it may drop to
+    // the map floor. A focused chapter neighborhood holds the readable floor.
     const wholeVenture = graph.chapterKind === "whole" && !currentSelection;
-    const floor = wholeVenture ? PRODUCT_GTM_WHOLE_ZOOM : PRODUCT_GTM_READABLE_ZOOM;
+    const playFocus = workflowFocus && currentSelection?.data.kind !== "workflow";
+    const floor = wholeVenture || playFocus ? PRODUCT_GTM_MIN_ZOOM : PRODUCT_GTM_READABLE_ZOOM;
     const workflowNodes = nodes.filter((node) => focusIds.has(node.id)).sort((left, right) => left.position.x - right.position.x || left.position.y - right.position.y);
     const framingNodes = wholeVenture
       ? nodes
       : currentSelection?.data.kind === "workflow"
         ? [currentSelection]
         : workflowFocus
-          ? workflowNodes.slice(0, 4)
+          ? workflowNodes
           : currentSelection ? [currentSelection] : nodes.filter((node) => focusIds.has(node.id));
     const targets = framingNodes.length ? framingNodes : nodes.slice(0, 1);
     await instance.fitView({
       nodes: targets,
       padding: 0.2,
-      // A wide venture is allowed below the overview floor so every node fits rather than cropping; a
-      // focused chapter holds the readable floor.
-      minZoom: wholeVenture ? 0.2 : floor,
+      minZoom: floor,
       maxZoom: 0.98,
       duration: productGtmMotionDuration(duration),
     });
@@ -280,7 +281,7 @@ export function ProductGtmSurface({
     <div className="product-gtm-canvas" {...dropHandlers}><ReactFlow
       nodes={nodes} edges={graph.edges} nodeTypes={NODE_TYPES} edgeTypes={EDGE_TYPES}
       defaultViewport={camera ?? undefined} onInit={(instance) => { flowInstance.current = instance; setFlowReady(true); }}
-      minZoom={0.2} maxZoom={1.8} panOnDrag selectionOnDrag={false} nodesConnectable={false} nodesDraggable={!readOnlyReason}
+      minZoom={PRODUCT_GTM_MIN_ZOOM} maxZoom={1.8} panOnDrag selectionOnDrag={false} nodesConnectable={false} nodesDraggable={!readOnlyReason}
       onNodesChange={onNodesChange} onNodeDragStop={(_event, node) => savePlacement(node)}
       onNodeClick={(_event, node) => select(node.id === selected ? (node.data.kind === "workflow" ? node.data.workRef?.replace(/^object:/, "") ?? null : null) : node.id)} onPaneClick={() => { if (selected) select(null); }}
       onMoveEnd={(event, viewport) => {

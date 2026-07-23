@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { FolderGit2, GitBranch, ShieldCheck } from "lucide-react";
 import { getRuntimeStatuses, type FirmRuntimeStatus } from "@/api";
 import { WorkModelMenu } from "./WorkModelMenu";
+import { WorkCapabilities } from "./WorkCapabilities";
 import {
   clampEffort,
   DEFAULT_EFFORT,
@@ -92,6 +93,7 @@ export function WorkComposerBar({ ventureId, threadKey, repository, disabled, mo
         <span title="Repository work starts in an isolated worktree"><GitBranch aria-hidden="true" />Worktree</span>
         <span title="Applying, sending, and other consequential actions remain founder-held"><ShieldCheck aria-hidden="true" />Guarded</span>
       </div>
+      <WorkCapabilities />
     </> : <div className="work-agent-context" aria-label="Product and go-to-market agent context">
       <span className="work-agent-spectrum" aria-hidden="true" />
       <span><strong>Drover agents</strong><small>Ideate workflows, branches, gates, and evidence loops</small></span>

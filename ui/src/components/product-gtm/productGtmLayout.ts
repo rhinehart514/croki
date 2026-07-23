@@ -303,11 +303,12 @@ export function buildProductGtmLayout(model: FirmSemanticModel, movement: Market
   }
   // Detached reads have no proven relationship to the trunk, so they must never stack in the trunk's own
   // column masquerading as a vertical spine. Give them a left-to-right grid in the staging space to the
-  // right of the trunk (one empty column of separation). The grid width follows the number of detached
-  // reads — never the trunk length — so a short chapter cannot collapse them into a single left column,
-  // and a short chapter's staging space to the right gets used instead of clustering at the far left.
+  // right of the trunk (one empty column of separation). The grid starts after the rightmost column a
+  // node actually occupies — not after spine.length, which counts invisible spine entries and ranked
+  // offsets and opens a dead void between the trunk and the reads.
   const detachedColumns = Math.max(1, Math.min(4, detached.length));
-  const detachedStartColumn = spine.length + 1;
+  const rightmostColumn = occupied.reduce((max, point) => Math.max(max, Math.round((point.x - ORIGIN_X) / STEP_X)), -1);
+  const detachedStartColumn = rightmostColumn + 2;
   detached.forEach((object, index) => {
     const territory = territoryById.get(object.id) ?? "unset";
     const column = detachedStartColumn + (index % detachedColumns);
@@ -352,7 +353,14 @@ export function reflowExpandedNeighborhood<T extends { id: string; position: Can
     }
     return node;
   });
-  const box = (id: string) => id === selectedId ? { width: 436, height: 320 } : { width: NODE_WIDTH, height: NODE_HEIGHT };
+  // Workflow steps are narrower than truth pills (226px in CSS) and sit 272px apart; measuring them at
+  // the truth footprint made adjacent steps read as colliding, cascading each column 82px lower — a
+  // staircase that turned a straight play chain into zigzag edges.
+  const box = (id: string) => id === selectedId
+    ? { width: 436, height: 320 }
+    : id.startsWith("workflow:")
+      ? { width: 230, height: 52 }
+      : { width: NODE_WIDTH, height: NODE_HEIGHT };
   const ordered = [...shifted].sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
   const placed: Array<{ id: string; position: CanvasPoint }> = [];
   const resolved = new Map<string, CanvasPoint>();

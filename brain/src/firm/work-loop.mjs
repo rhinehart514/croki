@@ -19,7 +19,7 @@ import { summon } from "./crew.mjs";
 import { appendConversationMessage, listConversation, stampConversationRuntime } from "./conversation.mjs";
 import { CONFIGURATION_KEY, configuredAgent, ensureInitialFirmParticipant } from "./configuration.mjs";
 import { buildCoordinationSeam } from "./work-loop-coordination.mjs";
-import { beginActiveDrive } from "./active-drives.mjs";
+import { beginActiveDrive, noteDriveText } from "./active-drives.mjs";
 import { buildArchitectureContext, buildWorkingTheoryContext } from "./architecture-context.mjs";
 import { buildWorkLoopSystem } from "./work-loop-prompt.mjs";
 import { createWorkLoopReceipts } from "./work-loop-receipts.mjs";
@@ -349,8 +349,8 @@ async function driveTeammateLeased({
     },
     onText: (text) => {
       receipts.record({ type: "text", detail: text });
-      const line = String(text ?? "").trim();
-      if (line) narration.push(line);
+      noteDriveText(activeDrive.id, text);
+      const line = String(text ?? "").trim(); if (line) narration.push(line);
     },
     onToolStart: (name, detail = null) => {
       receipts.startTool(name);

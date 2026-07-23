@@ -2,6 +2,7 @@ import {
   deleteThread,
   setThreadName,
   setThreadPinned,
+  type FirmActiveDrive,
   type FirmVenture,
   type SystemIndex,
   type SystemIndexObject,
@@ -12,6 +13,7 @@ import {
 import type { FirmLens } from "@/types";
 import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 import { adoptedWorkflowVersions, adoptWorkflowSketch } from "@/components/product-gtm/workflowAdoption";
+import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 import { ThreadConversation } from "@/components/thread/ThreadConversation";
 import type { useThreadTimeline } from "@/components/thread/useThreadTimeline";
 import type { WorkflowSketch } from "@/components/work-mode/workflowSketch";
@@ -20,8 +22,8 @@ import type { WorkspaceMode } from "@/lib/venture-session";
 import { ROOT_THREAD_REF } from "./useWorkspaceConversation";
 
 export function WorkspaceConversation({
-  venture, mode, item, timeline, lens, connection, activeDraft, draftSession,
-  draftSubjectRef, draftRelatedRefs, selectedObject, selectedAgentRef,
+  venture, mode, item, timeline, lens, connection, activeDrives, activeDraft, draftSession,
+  draftSubjectRef, draftRelatedRefs, workflowStep, selectedObject, selectedAgentRef,
   artifactFocus, artifactFocusRequest, systemIndex, resolvedThreadRef, scrolls,
   onArtifactFocus, onScrollChange, onOpenVisual, onOpenThread, onWorkIndex,
   onRefresh, onDriven, onWorkRouted, onWorkflowAdopted,
@@ -33,10 +35,12 @@ export function WorkspaceConversation({
   timeline: ReturnType<typeof useThreadTimeline>;
   lens: FirmLens | null;
   connection: FirmConnectionState;
+  activeDrives: FirmActiveDrive[];
   activeDraft: boolean;
   draftSession: number;
   draftSubjectRef: string | null;
   draftRelatedRefs: string[];
+  workflowStep: ProductGtmWalkthroughStep | null;
   selectedObject: SystemIndexObject | null;
   selectedAgentRef: string | null;
   artifactFocus: ArtifactSectionFocus | null;
@@ -77,12 +81,14 @@ export function WorkspaceConversation({
       draft={activeDraft}
       draftSession={draftSession}
       subjectRefs={activeDraft && draftSubjectRef ? [draftSubjectRef, ...draftRelatedRefs] : []}
+      workflowStep={workflowStep}
       scopeLabel={draftSubjectRef === selectedObject?.objectRef ? selectedObject.name : null}
       targetAgentRef={activeDraft ? selectedAgentRef : null}
       artifactFocus={artifactFocus}
       artifactFocusRequest={artifactFocusRequest}
       onClearArtifactFocus={() => onArtifactFocus(null)}
       adoptedWorkflowVersions={workflowVersions}
+      activeDrives={activeDrives}
       initialScrollTop={resolvedThreadRef ? (scrolls[resolvedThreadRef] ?? null) : null}
       onScrollChange={onScrollChange}
       onOpenVisual={onOpenVisual}

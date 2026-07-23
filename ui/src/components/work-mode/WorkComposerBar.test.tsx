@@ -3,13 +3,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkComposerBar } from "./WorkComposerBar";
 
 const getRuntimeStatuses = vi.fn();
-vi.mock("@/api", () => ({ getRuntimeStatuses: () => getRuntimeStatuses() }));
+const getCapabilityInventory = vi.fn();
+const getCredentials = vi.fn();
+vi.mock("@/api", () => ({
+  getRuntimeStatuses: () => getRuntimeStatuses(),
+  getCapabilityInventory: () => getCapabilityInventory(),
+  getCredentials: () => getCredentials(),
+}));
 
 const props = { ventureId: "venture-one", threadKey: "thread:one", repository: "/projects/drover", disabled: false, mode: "code" as const };
 
 describe("WorkComposerBar", () => {
   beforeEach(() => {
     localStorage.clear();
+    getCapabilityInventory.mockReset().mockResolvedValue({ capabilities: [] });
+    getCredentials.mockReset().mockResolvedValue({ credentials: [] });
     getRuntimeStatuses.mockReset().mockResolvedValue({
       runtimes: [
         { id: "codex", label: "Codex", connected: true, auth: "chatgpt-login", authLabel: "ChatGPT subscription", reason: null },

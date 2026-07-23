@@ -2,17 +2,13 @@ import { useState } from "react";
 import type { CodingWorkspace } from "@/api";
 import { WorkChangesPane } from "./WorkChangesPane";
 import { workStatusLabel } from "./workStatusLabel";
+import { attemptLabel } from "./workspaceProjection";
 
 // Side-by-side comparison of two coding attempts on the same direction (DESIGN.md: "the founder can
 // compare … exact attempts"). Each column reuses WorkChangesPane so the diff primitives stay single-source.
 // Comparison is read-only by design: applying, steering, and continuing an attempt remain the founder-held
 // actions in the single workbench, reached with "Focus this attempt" — this view never duplicates those
 // mutations, it only lets the founder decide which attempt to carry forward.
-function attemptLabel(attempts: CodingWorkspace[], workspace: CodingWorkspace) {
-  const index = attempts.findIndex((entry) => entry.id === workspace.id);
-  return `Attempt ${attempts.length - index}`;
-}
-
 export function WorkAttemptsCompare({ attempts, primaryId, onFocusAttempt, onExit }: {
   attempts: CodingWorkspace[];
   primaryId: string;

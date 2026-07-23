@@ -4,6 +4,7 @@ import {
   type FirmVenture,
 } from "@/api";
 import { directionsFromWorkIndex } from "@/components/workspace/workIndexModel";
+import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 import {
   readWorkspaceSession,
   rememberWorkspaceSession,
@@ -53,8 +54,11 @@ export function WorkspaceShell({
   );
   const [systemCamera, setSystemCamera] = useState(initial.systemCamera);
   const [search, setSearch] = useState("");
+  // The drafted-play step the Product / GTM dock currently focuses. Held here only so the contextual
+  // composer can carry that exact step as the subject of a correction; the surface owns the derivation.
+  const [walkthroughStep, setWalkthroughStep] = useState<ProductGtmWalkthroughStep | null>(null);
   const {
-    lens, workIndex, connection, refresh, setWorkIndex,
+    lens, workIndex, connection, activeDrives, refresh, setWorkIndex,
     systemResource,
     setSystemIndex,
     reloadSystem,
@@ -152,8 +156,9 @@ export function WorkspaceShell({
 
   const conversation = <WorkspaceConversation
     venture={venture} mode={mode} item={selectedItem}
-    timeline={timeline} lens={lens} connection={connection} activeDraft={activeDraft} draftSession={draftSession}
+    timeline={timeline} lens={lens} connection={connection} activeDrives={activeDrives} activeDraft={activeDraft} draftSession={draftSession}
     draftSubjectRef={draftSubjectRef} draftRelatedRefs={draftRelatedRefs}
+    workflowStep={mode === "product-gtm" ? walkthroughStep : null}
     selectedObject={selectedObject}
     selectedAgentRef={selectedAgentRef} artifactFocus={artifactFocus}
     artifactFocusRequest={artifactFocusRequest} systemIndex={systemIndexAll}
@@ -245,6 +250,7 @@ export function WorkspaceShell({
           onNewThread={newThread}
           onChanged={afterMutation}
           onContextualChatOpen={setContextualChatOpen}
+          onWalkthroughStep={setWalkthroughStep}
         />
       )}
       </AnimatePresence>

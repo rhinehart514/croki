@@ -5,6 +5,9 @@ import "@xterm/xterm/css/xterm.css";
 import "./work-runtime.css";
 
 type TerminalState = "connecting" | "ready" | "completed" | "failed" | "cancelled" | "error" | "unavailable";
+type TerminalTone = "idle" | "live" | "warn";
+
+export type WorkTerminalStatus = { label: string; tone: TerminalTone };
 
 export type WorkTerminalProps = {
   ventureId: string;
@@ -12,6 +15,7 @@ export type WorkTerminalProps = {
   disabledReason?: string | null;
   unavailableReason?: string | null;
   className?: string;
+  onStatus?: (status: WorkTerminalStatus) => void;
 };
 
 function message(state: TerminalState, exitCode: number | null, signal: number | null) {
@@ -24,7 +28,13 @@ function message(state: TerminalState, exitCode: number | null, signal: number |
   return "Desktop only";
 }
 
-export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, unavailableReason = null, className = "" }: WorkTerminalProps) {
+function tone(state: TerminalState): TerminalTone {
+  if (state === "ready" || state === "completed") return "live";
+  if (state === "failed" || state === "cancelled" || state === "error") return "warn";
+  return "idle";
+}
+
+export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, unavailableReason = null, className = "", onStatus }: WorkTerminalProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const sessionRef = useRef<string | null>(null);
@@ -127,6 +137,12 @@ export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, un
     };
   }, [ventureId, workspaceId, disabledReason, unavailableReason]);
 
+  // Report status upward so the collapsed terminal drawer can show liveness without keeping the PTY
+  // mounted. The last reported status persists in the parent after this view unmounts on collapse.
+  useEffect(() => {
+    onStatus?.({ label: message(state, exitCode, signal), tone: tone(state) });
+  }, [state, exitCode, signal, onStatus]);
+
   const restart = async () => {
     const bridge = window.droverDesktop?.terminal;
     const terminal = terminalRef.current;
@@ -140,7 +156,6 @@ export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, un
   return (
     <section className={`work-terminal ${className}`.trim()} aria-label="Coding workspace terminal">
       <header className="work-runtime-bar">
-        <strong>Terminal</strong>
         <span data-state={state}>{message(state, exitCode, signal)}</span>
         {(["completed", "failed", "cancelled", "error"] as TerminalState[]).includes(state) && sessionWorkspaceId === workspaceId ? <button type="button" onClick={() => void restart()} disabled={Boolean(disabledReason)}>Restart</button> : null}
       </header>

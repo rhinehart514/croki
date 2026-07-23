@@ -80,7 +80,7 @@ export function ProductGtmNavigator({ model, movement, selectedRef, onFocus, onD
         >
           <strong>{path.name}</strong>
           <small>{pathKind(path.type, path.properties, registers.get(path.id))}</small>
-        </button>) : <p>No GTM play is current yet. Start in conversation and describe the market movement you want to create.</p>}
+        </button>) : <p>Describe the market movement you want in conversation, and an agent drafts the first play here.</p>}
       </nav>
     </details>
   </aside>;
