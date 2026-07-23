@@ -203,30 +203,24 @@ async function handleReply(ventureId, req, res, deps) {
   const workflowSketch = body?.workflowSketch === true;
   const modelBranchRef = trimOrNull(body?.modelBranchRef);
   const artifactSectionTitle = trimOrNull(body?.artifactSection?.title);
-  const artifactSectionIndex = Number.isInteger(body?.artifactSection?.index) && body.artifactSection.index >= 0
-    ? body.artifactSection.index
-    : null;
-  const artifactSection = artifactSectionTitle && artifactSectionIndex != null
-    ? { title: artifactSectionTitle.slice(0, 240), index: artifactSectionIndex }
-    : null;
+  const artifactSectionIndex = Number.isInteger(body?.artifactSection?.index) && body.artifactSection.index >= 0 ? body.artifactSection.index : null;
+  const artifactSection = artifactSectionTitle && artifactSectionIndex != null ? { title: artifactSectionTitle.slice(0, 240), index: artifactSectionIndex } : null;
+  // A walkthrough correction names the exact step it lands on: the step's stable id in the play's own
+  // flow — plays carry no store-level step objects — while the play arrives as the turn's subject or thread.
+  const stepId = trimOrNull(body?.workflowStep?.id);
+  const stepLabel = trimOrNull(body?.workflowStep?.label);
+  const stepPosition = Number.isInteger(body?.workflowStep?.position) && body.workflowStep.position >= 1 ? body.workflowStep.position : null;
+  const workflowStep = stepId && stepLabel && stepPosition != null ? { id: stepId.slice(0, 120), label: stepLabel.slice(0, 240), position: stepPosition } : null;
   const subjectRefs = Array.isArray(body?.subjectRefs)
     ? [...new Set(body.subjectRefs.map(trimOrNull).filter(Boolean))]
     : [];
   const teammateRefs = Array.isArray(body?.teammateRefs)
     ? [...new Set(body.teammateRefs.map(trimOrNull).filter(Boolean))]
     : [];
-  if (!message) {
-    const error = new Error("A conversation reply needs a message.");
-    error.status = 400;
-    throw error;
-  }
+  if (!message) throw Object.assign(new Error("A conversation reply needs a message."), { status: 400 });
 
   const summary = betId ? effortSummary(ventureId, betId) : null;
-  if (betId && !summary) {
-    const error = new Error(`No such effort in this venture: ${betId}`);
-    error.status = 404;
-    throw error;
-  }
+  if (betId && !summary) throw Object.assign(new Error(`No such effort in this venture: ${betId}`), { status: 404 });
   const configuredRefs = new Set(configuration.agents.map((agent) => agent.ref));
   const unknownTeammateRefs = teammateRefs.filter((ref) => !configuredRefs.has(ref));
   if (unknownTeammateRefs.length) {
@@ -288,10 +282,11 @@ async function handleReply(ventureId, req, res, deps) {
 
   const { act, steerText } = await classifyDialogueAct({ message, effortSummary: summary }, deps.dialogueDeps ?? {});
 
-  // A section selected in the artifact is already an exact work correction. Preserve the founder's
-  // words in the transcript, but do not make a general dialogue classifier rediscover that scope.
-  if (artifactSection) {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
+  // A section selected in the artifact — or a play step focused in a walkthrough — is already an
+  // exact work correction. Preserve the founder's words in the transcript, but do not make a general
+  // dialogue classifier rediscover that scope.
+  if (artifactSection || workflowStep) {
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, workflowStep, attachments, teammateRefs });
   }
   if (act === "steer") {
     if (workTurn) return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
@@ -401,6 +396,7 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
         ...(material.workflowSketch ? { workflowSketch: true } : {}),
         ...(material.modelBranchRef ? { modelBranchRef: material.modelBranchRef } : {}),
         ...(material.artifactSection ? { artifactSection: material.artifactSection } : {}),
+        ...(material.workflowStep ? { workflowStep: material.workflowStep } : {}),
         ...(material.teammateRefs?.length ? { teammateRefs: material.teammateRefs } : {}),
       },
       ...(runtime ? { runtime } : {}),

@@ -83,7 +83,7 @@ export type ComposerImageInput = { name: string; mediaType: string; data: string
 
 export const replyInConversation = (
   ventureId: string,
-  body: { message: string; images?: ComposerImageInput[]; threadRef?: string | null; betId?: string | null; workRef?: string | null; modelBranchRef?: string | null; subjectRefs?: string[]; teammateRefs?: string[]; mode?: "work" | "context"; runtime?: string | null; model?: string | null; effort?: string | null; productGtmView?: boolean; workflowSketch?: boolean; artifactSection?: { title: string; index: number } },
+  body: { message: string; images?: ComposerImageInput[]; threadRef?: string | null; betId?: string | null; workRef?: string | null; modelBranchRef?: string | null; subjectRefs?: string[]; teammateRefs?: string[]; mode?: "work" | "context"; runtime?: string | null; model?: string | null; effort?: string | null; productGtmView?: boolean; workflowSketch?: boolean; artifactSection?: { title: string; index: number }; workflowStep?: { id: string; label: string; position: number } },
 ) => guardedPost<ConversationReplyResult>(
   `/api/ventures/${encodeURIComponent(ventureId)}/conversation/reply`,
   body,

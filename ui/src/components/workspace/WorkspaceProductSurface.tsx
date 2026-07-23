@@ -1,10 +1,10 @@
-import { ChevronDown, ChevronUp, LayoutGrid, LoaderCircle, Map, Play } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Footprints, LayoutGrid, LoaderCircle, Map, Play } from "lucide-react";
 import { motion } from "motion/react";
-import { useCallback, useMemo, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
-import { replyInConversation, type SystemIndex, type WorkIndex } from "@/api";
-import type { FirmPlacement } from "@/types";
+import { useCallback, useEffect, useMemo, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
+import { getMarketMovement, replyInConversation, type SystemIndex, type WorkIndex } from "@/api";
+import type { FirmPlacement, MarketMovementIndex } from "@/types";
 import { ProductGtmSurface } from "@/components/product-gtm/ProductGtmSurface";
-import { parseProductGtmWorkflowNodeId, productGtmWorkflowGraph } from "@/components/product-gtm/productGtmWorkflow";
+import { deriveWorkflowRegister, parseProductGtmWorkflowNodeId, playRunStates, productGtmWorkflowGraph, productGtmWorkflowNodeId, walkthroughStepFor, type ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 import type { WorkspaceResource } from "./useWorkspaceResources";
 
 function ResourceNotice({ resource }: { resource: WorkspaceResource<unknown> }) {
@@ -21,7 +21,7 @@ export function WorkspaceProductSurface({
   ventureId, motionProps, conversation, contextualChatOpen, openerRef,
   systemIndex, workIndex, selectedRef, camera, placement, readOnlyReason, systemResource,
   onCameraChange, onFocus, onUseAgent, onOpenWork, onBeginScopedThread, onNewThread,
-  onChanged, onContextualChatOpen,
+  onChanged, onContextualChatOpen, onWalkthroughStep,
 }: {
   ventureId: string;
   motionProps: ComponentProps<typeof motion.div>;
@@ -43,6 +43,7 @@ export function WorkspaceProductSurface({
   onNewThread: () => void;
   onChanged: () => void;
   onContextualChatOpen: (open: boolean) => void;
+  onWalkthroughStep: (step: ProductGtmWalkthroughStep | null) => void;
 }) {
   const [playAction, setPlayAction] = useState<"run" | null>(null);
   const [mappingProduct, setMappingProduct] = useState(false);
@@ -60,6 +61,38 @@ export function WorkspaceProductSurface({
     const object = systemIndex?.objects.find((entry) => entry.id === selectedId) ?? null;
     return object && productGtmWorkflowGraph(object.properties) ? object : null;
   }, [selectedRef, systemIndex]);
+  // The dock's play action must speak the play's real register. Register derives from physics — canonical
+  // AND actually run — so it needs the movement index; while that is unknown the safe register is drafted:
+  // a draft must never present as established, the reverse costs one honest extra step.
+  const [movement, setMovement] = useState<MarketMovementIndex | null>(null);
+  useEffect(() => {
+    let live = true;
+    void getMarketMovement(ventureId)
+      .then((market) => { if (live) setMovement(market.marketMovement); })
+      .catch(() => { if (live) setMovement(null); });
+    return () => { live = false; };
+  }, [ventureId, systemIndex?.revision]);
+  const playRegister = useMemo(() => selectedPlay
+    ? deriveWorkflowRegister(selectedPlay.assertion, playRunStates(movement).get(selectedPlay.id))
+    : null, [movement, selectedPlay]);
+  // The walkthrough is not a mode: focusing a step IS canvas selection, so framing, click-to-jump, and
+  // session persistence are the existing selection physics. The focused step is reported upward so a
+  // correction composed in the play's contextual conversation carries that exact step, never the whole play.
+  const playGraph = useMemo(() => selectedPlay ? productGtmWorkflowGraph(selectedPlay.properties) : null, [selectedPlay]);
+  const walkStep = useMemo(() => walkthroughStepFor(selectedRef, selectedPlay, playRegister), [playRegister, selectedPlay, selectedRef]);
+  useEffect(() => {
+    onWalkthroughStep(walkStep);
+    return () => onWalkthroughStep(null);
+  }, [onWalkthroughStep, walkStep]);
+  const focusStep = useCallback((index: number) => {
+    const step = playGraph?.steps[index];
+    if (selectedPlay && step) onFocus(productGtmWorkflowNodeId(selectedPlay.id, step.id));
+  }, [onFocus, playGraph, selectedPlay]);
+  const walkThroughPlay = useCallback(() => {
+    if (!selectedPlay) return;
+    focusStep(0);
+    askAgent(selectedPlay.objectRef);
+  }, [askAgent, focusStep, selectedPlay]);
   const directPlay = useCallback(async () => {
     if (!selectedPlay || playAction || readOnlyReason) return;
     setPlayAction("run"); setPlayError(null); setMapNotice(null);
@@ -114,11 +147,20 @@ export function WorkspaceProductSurface({
     <aside className="workspace-canvas-dock" data-expanded={contextualChatOpen ? "true" : "false"} aria-label="Product and GTM canvas dock">
       <header className="workspace-canvas-dock-bar">
         <div className="workspace-canvas-dock-scope">
-          <span>{contextualChatOpen ? "Product / GTM chat" : selectedPlay ? "Selected play" : "Product / GTM"}</span>
-          <strong>{contextualChatOpen ? "Quick answers stay here. Rework opens in Work." : selectedPlay?.name ?? "Canvas controls"}</strong>
+          <span>{walkStep ? `Drafted play · Step ${walkStep.position} of ${walkStep.count}` : contextualChatOpen ? "Product / GTM chat" : selectedPlay ? (playRegister === "established" ? "Established play" : "Drafted play") : "Product / GTM"}</span>
+          <strong>{walkStep ? walkStep.label : contextualChatOpen ? "Quick answers stay here. Rework opens in Work." : selectedPlay?.name ?? "Whole venture"}</strong>
         </div>
+        {walkStep ? <div className="workspace-canvas-dock-steps" role="group" aria-label={`Step focus in ${selectedPlay?.name ?? "this play"}`}>
+          <button type="button" aria-label="Previous step" disabled={walkStep.position <= 1} onClick={() => focusStep(walkStep.position - 2)}><ChevronLeft aria-hidden="true" /></button>
+          <button type="button" aria-label="Next step" disabled={walkStep.position >= walkStep.count} onClick={() => focusStep(walkStep.position)}><ChevronRight aria-hidden="true" /></button>
+        </div> : null}
         {!contextualChatOpen ? <div className="workspace-canvas-dock-actions" aria-label={selectedPlay ? "Selected play and canvas actions" : "Canvas actions"}>
-          {selectedPlay ? <button type="button" data-weight="primary" disabled={Boolean(playAction || readOnlyReason)} onClick={() => void directPlay()}>{playAction === "run" ? <LoaderCircle className="is-spinner" aria-hidden="true" /> : <Play aria-hidden="true" />}Run again</button> : null}
+          {selectedPlay && !walkStep ? (playRegister === "established"
+            ? <button type="button" data-weight="primary" disabled={Boolean(playAction || readOnlyReason)} onClick={() => void directPlay()}>{playAction === "run" ? <LoaderCircle className="is-spinner" aria-hidden="true" /> : <Play aria-hidden="true" />}Run again</button>
+            // A drafted play has never moved, so a run verb would be dishonest. Talk-first: the walk-through
+            // focuses the play's first step and opens the play-scoped conversation; the agent steps the
+            // founder through the sequence and corrections land on the focused step.
+            : <button type="button" data-weight="primary" disabled={Boolean(readOnlyReason)} onClick={walkThroughPlay}><Footprints aria-hidden="true" />Walk through this play</button>) : null}
           <button type="button" data-weight="quiet" disabled={mappingProduct || Boolean(readOnlyReason)} onClick={() => void mapProduct()}>{mappingProduct ? <LoaderCircle className="is-spinner" aria-hidden="true" /> : <Map aria-hidden="true" />}Map product</button>
           <button type="button" data-weight="muted" disabled={Boolean(readOnlyReason)} onClick={() => { setMapNotice(null); setOrganizeRequest((value) => value + 1); }}><LayoutGrid aria-hidden="true" />Organize</button>
         </div> : null}

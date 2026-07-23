@@ -51,6 +51,9 @@ export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, con
     target?.artifactSection
       ? `The founder selected section ${target.artifactSection.index + 1}, “${target.artifactSection.title},” inside the targeted artifact. Treat the founder's message as a local correction: revise that section in place and preserve the rest unless the requested change creates a necessary contradiction. Return the revision through the same durable work identity; do not create a sibling artifact.`
       : "",
+    target?.workflowStep
+      ? `The founder is walking through this play step by step and is focused on step ${target.workflowStep.position}, “${target.workflowStep.label}” (step id ${target.workflowStep.id}). Treat the founder's message as a correction to that exact step: revise that step — and only what it forces — in the play's flow, keep every other step and its id intact, and return the revision as the same play rather than a redraft.`
+      : "",
     target?.teammateRefs?.length
       ? `The founder explicitly included these participants: ${target.teammateRefs.join(", ")}. Preserve that attribution; involve a peer only when their contribution is materially useful.`
       : "",

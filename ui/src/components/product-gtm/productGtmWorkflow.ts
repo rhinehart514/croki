@@ -177,6 +177,27 @@ export function layoutProductGtmWorkflow(ownerId: string, graph: ProductGtmWorkf
   return { roots, positions, depth, nodeId, isReturn };
 }
 
+// The focused step of a drafted play's walkthrough, derived from the canvas selection. A workflow step has
+// no store-level object identity, so the honest reference is the play's real object ref plus the step's
+// stable id from its own flow blob — the same `workflow:<ownerId>:<stepId>` node id the canvas selects by.
+// Established plays return null: their register earns "Run again", never walkthrough machinery.
+export type ProductGtmWalkthroughStep = { ref: string; id: string; label: string; position: number; count: number };
+
+export function walkthroughStepFor(
+  selectedRef: string | null,
+  play: { id: string; properties: Record<string, unknown> } | null,
+  register: ProductGtmWorkflowRegister | null,
+): ProductGtmWalkthroughStep | null {
+  if (!play || register !== "drafted") return null;
+  const parsed = parseProductGtmWorkflowNodeId(selectedRef);
+  if (!parsed || parsed.ownerId !== play.id) return null;
+  const graph = productGtmWorkflowGraph(play.properties);
+  const index = graph?.steps.findIndex((step) => step.id === parsed.stepId) ?? -1;
+  if (!graph || index < 0) return null;
+  const step = graph.steps[index];
+  return { ref: productGtmWorkflowNodeId(play.id, step.id), id: step.id, label: step.label, position: index + 1, count: graph.steps.length };
+}
+
 export function productGtmWorkflowStepLabel(type: ProductGtmWorkflowStepType | undefined) {
   const labels: Record<ProductGtmWorkflowStepType, string> = {
     trigger: "Trigger", source: "Source", "agent-work": "Agent work", tool: "Tool", condition: "Condition", wait: "Wait",
