@@ -45,7 +45,7 @@ test("local repository choices are bounded to the workspace and connected ventur
 test("repository choices refuse a non-local peer", async () => {
   const res = await call("/api/repositories", "192.0.2.4");
   assert.equal(res.status, 403);
-  assert.match(res.body.error, /only available from Drover on this Mac/i);
+  assert.match(res.body.error, /only available from Croki on this Mac/i);
 });
 
 test("repository choices refuse a remote browser origin through a local proxy", async () => {

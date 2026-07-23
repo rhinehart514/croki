@@ -49,7 +49,7 @@ export function WorkTerminal({ ventureId, workspaceId, disabledReason = null, un
     const host = hostRef.current;
     if (!bridge || !host || unavailableReason) {
       setState("unavailable");
-      setError(unavailableReason ?? "Terminal is available in the Drover desktop app.");
+      setError(unavailableReason ?? "Terminal is available in the Croki desktop app.");
       return;
     }
 

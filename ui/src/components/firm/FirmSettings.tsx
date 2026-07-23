@@ -158,7 +158,7 @@ export function FirmSettings({
                     {gmail ? "Connected" : loaded ? "Not connected" : "Checking"}
                   </ConnectionStatus>
                 </div>
-                <p>Prepare exact outreach, then bring attributable replies back to the Product and market context that prompted it.</p>
+                <p>Prepare outreach, then bring attributable replies back to the Product and market context that prompted it.</p>
                 <ul aria-label="Gmail capabilities">
                   <li><Check aria-hidden="true" /> Read returned replies</li>
                   <li><ShieldCheck aria-hidden="true" /> Send only after your exact decision</li>
@@ -174,7 +174,7 @@ export function FirmSettings({
                       <span>Google OAuth client secret</span>
                       <Input type="password" autoComplete="new-password" disabled={busy || readOnly} value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} />
                     </label>
-                    <small>Drover opens Google consent and replaces the local Gmail grant only after connection succeeds.</small>
+                    <small>Croki opens Google consent and replaces the local Gmail grant only after connection succeeds.</small>
                     <span>
                       <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConnectOpen(false)}>Cancel</Button>
                       <Button type="button" size="sm" disabled={busy || readOnly || !clientId.trim() || !clientSecret.trim()} onClick={() => void connect()}>

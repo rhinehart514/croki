@@ -28,7 +28,7 @@ import {
   type ProductGtmPageAttachment,
   type ProductGtmPageData,
 } from "./productGtmPages";
-import { productGtmTypeLabel, relationshipLabel, semanticRole } from "./productGtmLabels";
+import { productGtmOutwardActionName, productGtmRestingLabel, productGtmTypeLabel, relationshipLabel, semanticRole } from "./productGtmLabels";
 import { automaticChapter, focusNeighborhood, objectFocusFor, readSourceFiles } from "./productGtmChapter";
 
 export { productGtmTypeLabel } from "./productGtmLabels";
@@ -63,6 +63,7 @@ export type ProductGtmNodeData = Record<string, unknown> & {
   workflowStepCount?: number;
   runningCountLabel?: string;
   runningItemRefs?: string[];
+  journeyCountLabel?: string;
   page?: ProductGtmPageData;
   workRef?: string;
   actionLabel?: string;
@@ -71,12 +72,16 @@ export type ProductGtmNodeData = Record<string, unknown> & {
 };
 export type ProductGtmNode = Node<ProductGtmNodeData>;
 export type ProductGtmEdgeData = Record<string, unknown> & {
-  kind: "spine" | "support" | "shortcut" | "provisional" | "return";
+  kind: "spine" | "support" | "shortcut" | "provisional" | "return" | "observed";
   focused: boolean;
   crossTerritory: boolean;
   sourceTerritory: ProductGtmTerritory;
   targetTerritory: ProductGtmTerritory;
-  route: "forward" | "vertical" | "return";
+  route: "forward" | "vertical" | "return" | "observed";
+  relationshipVerb?: "Links to" | "Then" | "Requires" | "Expected to improve" | "Supports" | "Contradicts" | "Returned after" | "Causes" | "Related to";
+  truthStatus?: "code-proven" | "observed" | "provisional" | "adopted";
+  observedCount?: number;
+  observedOnly?: boolean;
   bundleIndex?: number;
   bundleCount?: number;
 };
@@ -106,41 +111,6 @@ const isTentative = (assertion: string | undefined) => assertion === "tentative"
 // — never an ellipsis, always a genuine label — and carry the untouched sentence into the node's detail so
 // selection loses nothing. Names that are already short page names, direction names, or step labels pass
 // through untouched.
-const NAME_LABEL_MAX = 40;
-const TRAILING_CONNECTIVE = /\s+(?:the|a|an|to|of|in|into|for|and|or|with|is|are|that|this|its|their|your|our|on|at|by|as|from)$/i;
-function restingLabel(rawName: string, rawDetail: string): { name: string; detail: string } {
-  const full = rawName.trim();
-  if (full.length <= NAME_LABEL_MAX) return { name: full || rawName, detail: rawDetail };
-  // A multi-sentence name resolves to its clean opening sentence when that alone is a usable label.
-  const firstSentence = full.split(/(?<=[.?!])\s+/)[0]?.trim() ?? full;
-  let label = firstSentence.length >= 12 && firstSentence.length <= NAME_LABEL_MAX ? firstSentence : full;
-  if (label.length > NAME_LABEL_MAX) {
-    let clamped = "";
-    for (const word of label.split(/\s+/)) {
-      const next = clamped ? `${clamped} ${word}` : word;
-      if (next.length > NAME_LABEL_MAX) break;
-      clamped = next;
-    }
-    label = clamped || label.slice(0, NAME_LABEL_MAX);
-  }
-  label = label.replace(/[\s.,;:–—-]+$/, "");
-  while (TRAILING_CONNECTIVE.test(label)) label = label.replace(TRAILING_CONNECTIVE, "");
-  label = label.trim();
-  if (!label || label.length >= full.length) return { name: full, detail: rawDetail };
-  // Nothing is lost: the untouched sentence lives in detail, deduped against detail it may already echo.
-  const extra = rawDetail?.trim();
-  const detail = !extra ? full : extra.includes(full) ? rawDetail : `${full} — ${rawDetail}`;
-  return { name: label, detail };
-}
-
-function outwardActionName(action: MarketMovementIndex["actions"][number]) {
-  const material = action.preparedMaterial && typeof action.preparedMaterial === "object" ? action.preparedMaterial : {};
-  const nested = material.effect && typeof material.effect === "object" ? material.effect as Record<string, unknown> : material;
-  const destination = String(nested.destination ?? nested.environment ?? "").trim();
-  const kind = action.kind.replaceAll("-", " ");
-  return destination ? `${kind} · ${destination}` : kind;
-}
-
 export function productGtmTerritory(type: string, properties: Record<string, unknown> = {}): ProductGtmTerritory {
   return productGtmTerritoryFor(type, properties);
 }
@@ -272,6 +242,9 @@ export function projectProductGtm(
     : new Set(layout.initialFocusIds);
 
   const suppressed = pageAttachedProductObjectIds(model);
+  // Page-scoped strategy folds into its page at rest, but selecting an exact consequence or assumption
+  // must recompose around that object rather than making its saved address disappear.
+  if (selectedId && model.objects.some((object) => object.id === selectedId)) suppressed.delete(selectedId);
   for (const object of model.objects.filter((entry) => truthIds.has(entry.id) && !suppressed.has(entry.id))) {
     const position = positions.get(object.id) ?? { x: 100, y: 500 };
     const primaryIndex = spineIndex.get(object.id);
@@ -294,7 +267,7 @@ export function projectProductGtm(
     // shorten to a resting label while their full statement survives in the expansion.
     const restingTruth = isPage
       ? { name: object.name, detail: object.statement }
-      : restingLabel(object.name, objectWorkflow?.objective || object.statement);
+      : productGtmRestingLabel(object.name, objectWorkflow?.objective || object.statement);
     nodes.push({
       id: object.id, type: "productGtm", position,
       sourcePosition: Position.Right,
@@ -368,7 +341,7 @@ export function projectProductGtm(
     const nodeId = `branch:${branch.id}`;
     const target = changes.map((change) => productGtmRefId(change.targetRef ?? "")).find((id) => truthIds.has(id));
     const territory = target ? territoryById.get(target) ?? "shared" : "shared";
-    const restingBranch = restingLabel(branch.name, branch.question);
+    const restingBranch = productGtmRestingLabel(branch.name, branch.question);
     nodes.push({ id: nodeId, type: "productGtm", position: branchPositions.get(branch.id) ?? { x: 96, y: 276 }, sourcePosition: Position.Right, targetPosition: Position.Left, data: { kind: "branch", role: "branch", territory, ref: `model-branch:${branch.id}`, name: restingBranch.name, detail: restingBranch.detail, meta: `${changes.length} proposed ${changes.length === 1 ? "change" : "changes"}`, provisional: true, focus: focus.has(nodeId) } });
     if (target) edges.push(edge(`branch-edge:${branch.id}:${target}`, target, nodeId, undefined, "provisional", focus.has(target) && focus.has(nodeId), territoryById.get(target), territory));
     if (target && layout.initialFocusIds.has(target)) initialFocusIds.add(nodeId);
@@ -383,11 +356,11 @@ export function projectProductGtm(
     const failed = action.state === "execution-failed" || action.state === "execution-unknown" || action.state === "observation-failed";
     const detail = action.state === "needs-founder" ? "Exact outward act is waiting for you."
       : action.state === "execution-failed" ? "The exact outward act failed and remains retryable."
-        : action.state === "execution-unknown" ? "Execution began before Drover was interrupted; verify the destination."
+        : action.state === "execution-unknown" ? "Execution began before Croki was interrupted; verify the destination."
         : action.state === "observation-failed" ? "The authorized return source could not be read."
           : action.state === "silent" ? "The exact source returned without the expected condition."
             : action.state === "returned" ? "Reality returned to this exact act." : "Moving in the world.";
-    nodes.push({ id: actionId, type: "productGtm", position: actionPositions.get(action.id) ?? { x: 96, y: 468 }, sourcePosition: Position.Right, targetPosition: Position.Left, data: { kind: returned ? "evidence" : "action", role: returned ? "evidence" : needsFounder ? "gate" : "outward", territory, ref: `outward-action:${action.id}`, name: outwardActionName(action), detail, meta: action.state === "needs-founder" ? "Needs your decision" : action.state.replaceAll("-", " "), waiting: needsFounder, attention: needsFounder ? "decision" : returned ? "evidence" : failed ? "review" : undefined, focus: focus.has(actionId), action } });
+    nodes.push({ id: actionId, type: "productGtm", position: actionPositions.get(action.id) ?? { x: 96, y: 468 }, sourcePosition: Position.Right, targetPosition: Position.Left, data: { kind: returned ? "evidence" : "action", role: returned ? "evidence" : needsFounder ? "gate" : "outward", territory, ref: `outward-action:${action.id}`, name: productGtmOutwardActionName(action), detail, meta: action.state === "needs-founder" ? "Needs your decision" : action.state.replaceAll("-", " "), waiting: needsFounder, attention: needsFounder ? "decision" : returned ? "evidence" : failed ? "review" : undefined, focus: focus.has(actionId), action } });
     if (subject) edges.push(edge(`action-edge:${action.id}:${subject}`, subject, actionId, needsFounder ? "your decision" : "into the world", "support", focus.has(subject) && focus.has(actionId), territoryById.get(subject), territory));
     if (action.outcomeRefs.length && subject) edges.push(edge(`return-edge:${action.id}:${subject}`, actionId, subject, "reality returned", "return", focus.has(subject) && focus.has(actionId), territory, territoryById.get(subject), "return"));
     if (needsFounder || returned || failed) initialFocusIds.add(actionId);
@@ -402,7 +375,7 @@ export function projectProductGtm(
     const workAttention = state === "decision" ? "decision" : ["failure", "review"].includes(state) ? "review" : item.activity === "running" ? "active" : undefined;
     // Founder intent is often a full directing sentence; it becomes a resting label with the sentence carried
     // into detail alongside the latest meaningful progress event.
-    const restingWork = restingLabel(
+    const restingWork = productGtmRestingLabel(
       String(item.founderIntent ?? item.name ?? "Live work"),
       String((item.latestMeaningfulEvent as Record<string, unknown> | undefined)?.summary ?? "Agent work is attached to what it is changing."),
     );

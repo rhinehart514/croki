@@ -241,7 +241,7 @@
 .now-composer-shell:focus-within { border-color: var(--n-ink-4); }
 .now-composer[data-busy="true"] .now-composer-shell { border-color: var(--green-2); }
 .now-composer[data-dragging-images="true"] .now-composer-shell { border-color: var(--primary); box-shadow: 0 0 0 3px rgb(79 134 247 / 10%); }
-/* Intent in flight: the composer's border becomes a still spectrum while Drover reads the founder's intent.
+/* Intent in flight: the composer's border becomes a still spectrum while Croki reads the founder's intent.
    The spinning pending mark in the directions tray carries the working signal; the border settles back to its
    resting line the instant the options land. */
 .now-composer[data-intent="loading"] .now-composer-shell {
@@ -272,7 +272,8 @@
 .now-composer-artifact-target > button { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 7px; color: var(--n-ink-4); }
 .now-composer-artifact-target > button:hover { background: var(--n-hover); color: var(--n-ink-2); }
 .now-composer-artifact-target > button svg { width: 12px; height: 12px; color: inherit; }
-.now-composer-image-input { display: none; }
+.now-composer-image-input,
+.now-composer-journey-input { display: none; }
 .now-composer-image-tray { display: flex; min-width: 0; align-items: center; gap: 7px; padding-bottom: 8px; border-bottom: 1px solid var(--n-line); }
 .now-composer-image-tray > .now-icon-btn { flex: 0 0 auto; border: 1px dashed var(--n-line-2); }
 .now-composer-images { display: flex; min-width: 0; flex: 1; gap: 7px; overflow-x: auto; scrollbar-width: thin; }
@@ -281,6 +282,35 @@
 .now-composer-images figure > button { position: absolute; top: 3px; right: 3px; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgb(255 255 255 / 14%); border-radius: 7px; background: rgb(9 11 14 / 82%); color: #fff; }
 .now-composer-images figure > button:hover { background: #090b0e; }
 .now-composer-images figure > button svg { width: 12px; height: 12px; }
+.now-composer-journey {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border: 1px solid var(--n-line-2);
+  border-radius: 9px;
+  background: var(--n-sunk);
+}
+.now-composer-journey > svg { width: 16px; height: 16px; flex: 0 0 auto; color: var(--primary); }
+.now-composer-journey > span { display: grid; min-width: 0; gap: 1px; }
+.now-composer-journey strong,
+.now-composer-journey small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-composer-journey strong { color: var(--n-ink); font-size: 12px; font-weight: 560; }
+.now-composer-journey small { color: var(--n-ink-4); font-size: 10px; }
+.now-composer-journey > button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--n-ink-4);
+}
+.now-composer-journey > button:hover:not(:disabled) { background: var(--n-hover); color: var(--n-ink); }
+.now-composer-journey > button svg { width: 13px; height: 13px; }
 .now-composer-field { display: flex; align-items: flex-end; gap: var(--space-2); }
 .now-composer-field textarea {
   flex: 1; resize: none; border: none; background: none;
@@ -733,6 +763,15 @@ button.now-approach:hover { background: var(--n-hover); border-color: var(--n-in
   border: 1px solid var(--n-line-2); border-radius: var(--r-tool);
   background: var(--n-app); color: var(--n-ink); font-size: var(--text-sm);
 }
+.now-provider-questions { display: grid; gap: var(--space-4); }
+.now-provider-question { display: grid; gap: var(--space-2); }
+.now-provider-question > span { color: var(--amber-ink); font-size: var(--text-xs); font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.now-provider-question > p { margin: 0; color: var(--n-ink); font-size: var(--text-base); line-height: var(--leading-normal); }
+.now-provider-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-2); }
+.now-provider-option { display: grid; gap: 4px; padding: var(--space-3); text-align: left; border: 1px solid var(--n-line-2); border-radius: var(--r-tool); background: var(--n-panel); color: var(--n-ink); cursor: pointer; }
+.now-provider-option[aria-pressed="true"] { border-color: var(--green); background: color-mix(in oklch, var(--green) 9%, var(--n-panel)); }
+.now-provider-option small { color: var(--n-ink-3); line-height: var(--leading-normal); }
+.now-provider-option pre { max-height: 220px; margin: var(--space-2) 0 0; overflow: auto; white-space: pre-wrap; color: var(--n-ink-2); font: var(--text-xs)/1.5 var(--mono); }
 .now-gate-hint { font-size: var(--text-xs); color: var(--n-ink-3); }
 .now-gate-error { font-size: var(--text-sm); color: var(--danger); }
 .now-gate-execution-failure { display: grid; gap: var(--space-2); padding: var(--space-3); border-left: 2px solid var(--danger); background: color-mix(in oklch, var(--danger) 10%, transparent); color: var(--n-ink-2); font-size: var(--text-sm); }

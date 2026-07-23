@@ -58,9 +58,9 @@ describe("WorkChangeComment", () => {
 
   it("holds behind the read-only reason instead of sending", () => {
     render(
-      <WorkChangeComment workspace={workspace()} path="src/app/WorkSurface.tsx" readOnlyReason="Drover is reconnecting." onSteered={() => {}} />,
+      <WorkChangeComment workspace={workspace()} path="src/app/WorkSurface.tsx" readOnlyReason="Croki is reconnecting." onSteered={() => {}} />,
     );
-    expect(screen.getByText("Drover is reconnecting.")).toBeInTheDocument();
+    expect(screen.getByText("Croki is reconnecting.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Comment on/ })).not.toBeInTheDocument();
   });
 });

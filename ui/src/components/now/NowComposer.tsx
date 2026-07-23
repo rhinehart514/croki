@@ -1,68 +1,38 @@
 // One plain-words ask starts real work; scope is an attachment rather than another mode.
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowUp, LoaderCircle, Mic, PencilLine, Square, X } from "lucide-react";
-import { driveTeammate, replyInConversation, stopActiveDrive, type DriveTeammateResult, type FirmActiveDrive } from "@/api";
+import { driveTeammate, replyInConversation, stopActiveDrive } from "@/api";
 import { useDirections } from "./useDirections";
 import { DirectionsTray } from "./DirectionsTray";
-import type { CanvasSelection } from "@/components/firm/directionTarget";
 import { composerRoute, composerScopeKey, scopedBody } from "./composerScope";
 import { readDriveReceipt, readReplyReceipt, type DriveReceipt } from "./driveReceipt";
 import { useComposerDraft } from "./useScopedDraft";
 import { useSpeechInput } from "./useSpeechInput";
 import { expandFileMentions } from "./composerFileMentions";
 import { ComposerMentionBackdrop } from "./ComposerMentionBackdrop";
-import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
-import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 import { ComposerImageInput } from "./ComposerImages";
 import { useComposerImageIntake } from "./useComposerImages";
 import { useAgentComposer } from "./useAgentComposer";
 import { usePreviewAnnotationIntake } from "./usePreviewAnnotationIntake";
-import type { FirmConfiguration } from "@/types";
 import { NowComposerFooter } from "./NowComposerFooter";
+import { ComposerJourneyInput } from "./ComposerJourneyInput";
+import { useJourneyImportIntake } from "./useJourneyImportIntake";
+import type { NowComposerProps } from "./nowComposerTypes";
 
 export function NowComposer({
   ventureId, ventureName, selection, scopeLabel, hasWork,
   variant = "hero", readOnly = false, readOnlyReason, autoFocus = false, focusRequest = 0,
-  placeholder: placeholderOverride, submissionMode = "auto", onClearScope, onSubmitStart, onSubmitFailed,
+  placeholder: placeholderOverride, submissionMode = "auto", onClearScope, onSubmitStart, onSubmitAccepted, onSubmitFailed,
   onDriven, onWorkRouted, onOpenResult, subjectRefs = [], runtimeOverride = null, modelOverride = null,
   effortOverride = null, composerControls = null, configuration = null, productGtmView = false, workflowSketch = false,
   modelBranchRef = null, artifactSection = null, onClearArtifactSection, workflowStep = null, repositoryFiles = [], activeDrive = null,
-}: {
-  ventureId: string; ventureName: string; selection: CanvasSelection; scopeLabel: string | null; hasWork: boolean;
-  variant?: "hero" | "dock"; readOnly?: boolean;
-  // Why the composer is held (stale/offline). Shown as a quiet honest line under the disabled field so a
-  // founder never faces a dead input with no explanation (DESIGN.md: precise reason when blocked/stale).
-  readOnlyReason?: string | null; autoFocus?: boolean; focusRequest?: number;
-  // Optional placeholder override; the venture canvas passes the spec's "Direct the venture".
-  placeholder?: string; submissionMode?: "auto" | "conversation" | "work" | "product-gtm";
-  onClearScope?: () => void; onSubmitStart?: (message: string) => void; onSubmitFailed?: (message: string) => void;
-  // Called after a turn lands so the frame re-polls. The result is present for a /drive (start work) and
-  // omitted for a scoped conversation reply (steer/answer/approve), which returns no DriveTeammateResult.
-  onDriven?: (result?: DriveTeammateResult) => void;
-  // Contextual conversation may discover that the founder asked for real work. The server returns
-  // the exact durable Thread; the owning surface decides how to reveal it.
-  onWorkRouted?: (threadRef: string) => void;
-  // When provided (the home composer), the receipt offers a way into the direction the drive produced.
-  onOpenResult?: (targetBetId: string | null) => void; subjectRefs?: string[];
-  runtimeOverride?: string | null; modelOverride?: string | null; effortOverride?: string | null; composerControls?: ReactNode;
-  configuration?: FirmConfiguration | null;
-  productGtmView?: boolean; workflowSketch?: boolean; modelBranchRef?: string | null;
-  artifactSection?: ArtifactSectionFocus | null; onClearArtifactSection?: () => void;
-  // The drafted-play step the Product / GTM canvas has focused; a turn sent while it is set is a
-  // correction to that exact step, carried with the play's real ref plus the step's stable graph id.
-  workflowStep?: ProductGtmWalkthroughStep | null;
-  // Repo-relative paths for `@`-file scoping; supplied only in Work code mode.
-  repositoryFiles?: string[];
-  // The drive running on this exact Thread, if any. Its presence turns the composer's send affordance
-  // into a Stop that requests the running step end at its next safe boundary — the honest interrupt the
-  // brain supports, never a fake token-level kill.
-  activeDrive?: FirmActiveDrive | null;
-}) {
+  journeyImportEnabled = false,
+}: NowComposerProps) {
   const route = composerRoute(selection);
   const contextualDraftRef = !selection && subjectRefs.length ? `:subjects:${[...subjectRefs].sort().join("|")}` : "";
   // Draft text, attachments, and file chips live in per-scope presentation memory so an unsent thought
   // survives Thread switches and an app restart.
-  const { draft, setDraft, images, setImages, fileMentions, setFileMentions } = useComposerDraft(`${composerScopeKey(ventureId, selection)}${contextualDraftRef}`);
+  const { draft, setDraft, images, setImages, fileMentions, setFileMentions, journeyImport, setJourneyImport } = useComposerDraft(`${composerScopeKey(ventureId, selection)}${contextualDraftRef}`);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<DriveReceipt | null>(null);
@@ -76,6 +46,11 @@ export function NowComposer({
   // Intent options the founder deliberately summons: candidate directions grounded in venture truth + open
   // work. Picking one loads it into the composer; the actual turn still goes to the chosen SDK model.
   const directions = useDirections({ ventureId, mode: submissionMode, threadRef: selection?.threadRef ?? null });
+  const journeyIntake = useJourneyImportIntake({
+    ventureId, enabled: journeyImportEnabled, readOnly, busy,
+    attachment: journeyImport, setAttachment: setJourneyImport, textareaRef,
+    onIssue: (issue) => { setError(issue); if (!issue) setReceipt(null); },
+  });
   // An element picked in this Thread's preview pane arrives here as a context block + screenshot.
   usePreviewAnnotationIntake({ enabled: submissionMode === "work" && !readOnly, setDraft, setImages, focus: () => textareaRef.current?.focus() });
   const speech = useSpeechInput((text) => {
@@ -98,12 +73,12 @@ export function NowComposer({
   const artifactRevisionSent = Boolean(artifactSectionKey && sentArtifactSectionKey === artifactSectionKey);
   const placeholder = placeholderOverride
     ?? (route === "correct"
-      ? "Describe the correction to this exact work…"
+      ? "Describe the correction to this work…"
       : route === "steer"
         ? "Continue this direction…"
         : scopeLabel
           ? "Direct work from this context…"
-          : `What should Drover accomplish for ${ventureName}?`);
+          : `What should Croki accomplish for ${ventureName}?`);
 
   // Contextual routing (the composer is operational, not a one-verb /drive box):
   //   • Scoped to a direction (a bet is selected) → the turn STEERS/answers/approves/continues that existing
@@ -111,22 +86,24 @@ export function NowComposer({
   //   • Unscoped, or scoped to a non-bet target (architecture/theory) → the turn DIRECTS the venture: /drive
   //     starts (or branches) work. /drive is only for starting or branching, never for steering.
   const submit = async (value: string) => {
-    const typed = value.trim() || (images.length === 1 ? "Look at this image." : images.length ? "Look at these images." : "");
+    const typed = value.trim() || (journeyImport ? "Map this observed journey source to the current Product walk." : images.length === 1 ? "Look at this image." : images.length ? "Look at these images." : "");
     if (!typed || busy || readOnly) return;
     // What the agent reads: every file chip expands to its exact repo-relative path. The transcript and
     // the immediate founder turn carry the same expanded text, so nothing shown differs from what was sent.
     const goal = expandFileMentions(typed, fileMentions);
     const submittedImages = images;
+    const submittedJourneyImport = journeyImport;
     const imageBody = submittedImages.map(({ name, mediaType, data }) => ({ name, mediaType, data }));
     const teammateRefs = [...new Set([...(selection?.teammateRefs ?? []), ...agentComposer.mentionedAgentRefs])];
     onSubmitStart?.(goal);
     setDepartingPrompt({ id: Date.now(), text: goal });
-    setBusy(true); setError(null); setReceipt(null); setDraft(""); setImages([]); directions.clear();
+    setBusy(true); setError(null); setReceipt(null); setDraft(""); setImages([]); setJourneyImport(null); directions.clear();
     try {
       if (submissionMode === "conversation" || submissionMode === "work" || submissionMode === "product-gtm" || route === "steer") {
         const reply = await replyInConversation(ventureId, {
           message: goal,
           ...(imageBody.length ? { images: imageBody } : {}),
+          ...(submittedJourneyImport ? { journeyImportRef: submittedJourneyImport.importRef } : {}),
           ...(selection?.betId ? { betId: selection.betId } : {}),
           ...(selection?.workRef ? { workRef: selection.workRef } : {}),
           ...(modelBranchRef ? { modelBranchRef } : {}),
@@ -142,6 +119,7 @@ export function NowComposer({
           ...(workflowStep ? { workflowSketch: true } : productGtmView ? { productGtmView: true } : workflowSketch ? { workflowSketch: true } : {}),
           ...(artifactSection ? { artifactSection: { title: artifactSection.sectionTitle, index: artifactSection.sectionIndex } } : {}),
         });
+        onSubmitAccepted?.(goal, reply);
         if (artifactSectionKey) setSentArtifactSectionKey(artifactSectionKey);
         setReceipt(readReplyReceipt(reply));
         onDriven?.();
@@ -165,7 +143,8 @@ export function NowComposer({
       // Restore the founder's own token form (chips intact), not the expanded wire text.
       setDraft(typed);
       setImages(submittedImages);
-      setError(cause instanceof Error ? cause.message : "Drover could not take that direction.");
+      setJourneyImport(submittedJourneyImport);
+      setError(cause instanceof Error ? cause.message : "Croki could not take that direction.");
     } finally { setBusy(false); }
   };
 
@@ -178,7 +157,7 @@ export function NowComposer({
       await stopActiveDrive(ventureId, activeDrive.id);
       onDriven?.();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Drover could not stop the current step.");
+      setError(cause instanceof Error ? cause.message : "Croki could not stop the current step.");
     } finally { setInterrupting(false); }
   };
   const stoppable = Boolean(activeDrive?.abortSupported);
@@ -224,6 +203,7 @@ export function NowComposer({
           </div>
         ) : null}
         {images.length ? <div className="now-composer-image-tray"><ComposerImageInput images={images} disabled={readOnly || busy} onChoose={(files) => void imageIntake.add(files)} onRemove={(id) => setImages((current) => current.filter((image) => image.id !== id))} /></div> : null}
+        {journeyImport ? <ComposerJourneyInput attachment={journeyImport} disabled={readOnly || busy} staging={journeyIntake.staging} onChoose={(file) => void journeyIntake.choose(file)} onRemove={journeyIntake.remove} /> : null}
         <form className="now-composer-field" onSubmit={(event) => { event.preventDefault(); void submit(draft); }}>
           <div className="now-composer-input">
             {agentComposer.menu}
@@ -246,6 +226,7 @@ export function NowComposer({
           </div>
           <div className="now-composer-tools">
             {!images.length ? <ComposerImageInput images={images} disabled={readOnly || busy} onChoose={(files) => void imageIntake.add(files)} onRemove={() => undefined} /> : null}
+            {journeyImportEnabled && !journeyImport ? <ComposerJourneyInput attachment={null} disabled={readOnly || busy} staging={journeyIntake.staging} onChoose={(file) => void journeyIntake.choose(file)} onRemove={() => undefined} /> : null}
             <button type="button" className="now-intent-orb" aria-label="Read my intent — suggest directions"
               onClick={() => directions.summon(draft)} disabled={readOnly || busy || directions.loading} />
             {speech.supported ? (
@@ -272,7 +253,7 @@ export function NowComposer({
               type="submit"
               className="now-composer-send"
               aria-label={busy ? "Working" : submissionMode === "conversation" || submissionMode === "work" || submissionMode === "product-gtm" ? "Send to this thread" : route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
-              disabled={busy || readOnly || (!draft.trim() && !images.length)}
+              disabled={busy || readOnly || (!draft.trim() && !images.length && !journeyImport)}
             >
               {busy ? <LoaderCircle className="now-composer-spinner" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
             </button>

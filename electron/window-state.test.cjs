@@ -100,8 +100,9 @@ test("track() writes the window's normal bounds and maximized flag on close", ()
       handlers[event] = cb;
     },
   };
-  track({ app: makeApp(userData), window: fakeWindow });
+  const tracker = track({ app: makeApp(userData), window: fakeWindow });
   assert.equal(typeof handlers.close, "function", "close handler is registered");
+  assert.equal(typeof tracker.flush, "function", "quit path receives a flush handle");
   handlers.close();
   const saved = JSON.parse(fs.readFileSync(path.join(userData, "window-state.json"), "utf8"));
   assert.deepEqual(saved, { x: 42, y: 64, width: 1700, height: 1010, maximized: true });
@@ -110,4 +111,18 @@ test("track() writes the window's normal bounds and maximized flag on close", ()
   const restored = resolveInitialBounds({ app: makeApp(userData), screen: makeScreen(PRIMARY) });
   assert.equal(restored.x, 42);
   assert.equal(restored.maximized, true);
+});
+
+test("flush() writes the current state synchronously without a close event", () => {
+  const userData = tempUserData();
+  const fakeWindow = {
+    isDestroyed: () => false,
+    isMaximized: () => false,
+    getNormalBounds: () => ({ x: 12, y: 34, width: 1500, height: 940 }),
+    on: () => {},
+  };
+  const tracker = track({ app: makeApp(userData), window: fakeWindow });
+  tracker.flush();
+  const saved = JSON.parse(fs.readFileSync(path.join(userData, "window-state.json"), "utf8"));
+  assert.deepEqual(saved, { x: 12, y: 34, width: 1500, height: 940, maximized: false });
 });

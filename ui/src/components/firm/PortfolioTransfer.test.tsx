@@ -76,7 +76,7 @@ describe("portfolio wall and venture transfer", () => {
     render(<VentureTransfer ventures={[venture]} onImported={onImported} />);
     await screen.findByRole("option", { name: /moved/i });
     const file = { size: 200, text: async () => JSON.stringify(transfer) } as File;
-    fireEvent.change(screen.getByLabelText("Choose a Drover venture transfer file"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Choose a Croki venture transfer file"), { target: { files: [file] } });
     await screen.findByRole("button", { name: "Moved venture" });
     fireEvent.click(screen.getByRole("button", { name: "Import and rebind" }));
     await waitFor(() => expect(importVentureTransfer).toHaveBeenCalledWith(transfer, "/products/moved"));

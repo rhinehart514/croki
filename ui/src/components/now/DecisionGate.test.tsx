@@ -103,7 +103,7 @@ describe("DecisionGate", () => {
         ventureId="v1"
         item={productChange}
         onDecided={() => {}}
-        readOnlyReason="Drover is reconnecting. Nothing consequential can change until the firm is current again."
+        readOnlyReason="Croki is reconnecting. Nothing consequential can change until the firm is current again."
       />,
     );
 
@@ -123,7 +123,57 @@ describe("DecisionGate", () => {
     render(<DecisionGate ventureId="v1" item={answer} onDecided={() => {}} />);
     expect(screen.getByText(question)).toBeVisible();
     expect(screen.getByText("How should this work continue?")).toBeVisible();
-    expect(screen.queryByText("The exact question Drover asked")).not.toBeInTheDocument();
+    expect(screen.queryByText("The exact question Croki asked")).not.toBeInTheDocument();
+  });
+
+  it("preserves Claude's structured choices, multi-select, and previews", () => {
+    const answer: WallQueueItemView = {
+      ...productChange,
+      id: "wall-provider-question",
+      purpose: "answer",
+      effect: {
+        kind: "provider-question",
+        question: "Approach: Which path?",
+        questions: [{
+          id: "approach",
+          header: "Approach",
+          question: "Which path should Claude use?",
+          multiSelect: true,
+          options: [
+            { label: "Owned preview", description: "Drive the preview in this Work thread.", preview: "preview_open({ port: 5173 })" },
+            { label: "Read only", description: "Inspect without interaction." },
+          ],
+        }],
+      },
+    };
+    render(<DecisionGate ventureId="v1" item={answer} onDecided={() => {}} />);
+    expect(screen.getByText("Which path should Claude use?")).toBeVisible();
+    expect(screen.getByText("Drive the preview in this Work thread.")).toBeVisible();
+    const choice = screen.getByRole("button", { name: /Owned preview/ });
+    expect(choice).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(choice);
+    expect(choice).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("preview_open({ port: 5173 })")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Send answer" })).toBeEnabled();
+  });
+
+  it("shows native permission prompts as exact allow-once decisions", () => {
+    const permission: WallQueueItemView = {
+      ...productChange,
+      id: "wall-provider-permission",
+      purpose: "answer",
+      effect: {
+        kind: "provider-permission",
+        title: "Claude wants to run the UI tests",
+        exactAction: "npm --prefix ui run test:unit",
+        options: ["Allow once", "Deny"],
+      },
+    };
+    render(<DecisionGate ventureId="v1" item={permission} onDecided={() => {}} />);
+    expect(screen.getByText("Claude wants to run the UI tests")).toBeVisible();
+    expect(screen.getByText("npm --prefix ui run test:unit")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Allow once" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Deny" })).toBeVisible();
   });
 
   it("shows a persisted failed send with retry and a working reconnect affordance", () => {

@@ -4,7 +4,7 @@ import { joinDriveRunToWork } from "./work-loop-run.mjs";
 
 export function startCodingRun({ deps, goal, target, driveRun, activeDrive, venture, ventureId, betId, teammateRef, provider, options }) {
   if (deps.cwd || !isCodingDirection(goal, target)) return { workspace: null, cwd: deps.cwd ?? venture.repository };
-  if (!driveRun) throw new Error("Drover could not establish exact Run lineage, so isolated implementation did not start.");
+  if (!driveRun) throw new Error("Croki could not establish exact Run lineage, so isolated implementation did not start.");
   const workspace = openCodingWorkspace({
     ventureId,
     runId: activeDrive.id,
@@ -24,7 +24,7 @@ export function startCodingRun({ deps, goal, target, driveRun, activeDrive, vent
     branch: workspace.branch,
     worktree: workspace.worktree,
   }, options);
-  if (!joined) throw new Error("Drover could not join the isolated workspace to its Run.");
+  if (!joined) throw new Error("Croki could not join the isolated workspace to its Run.");
   return { workspace, cwd: workspace.worktree };
 }
 

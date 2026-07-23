@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { createBet } from "../../brain/src/firm/bet.mjs";
 import { summon } from "../../brain/src/firm/crew.mjs";
+import { syncProductPages } from "../../brain/src/firm/first-run.mjs";
 import { createModelBranch, proposeModelChange } from "../../brain/src/firm/model-branches.mjs";
 import { prepareOutwardAction } from "../../brain/src/firm/outward-actions.mjs";
 import { ensureDirectionThread, getSemanticModel, mutateSemanticModel } from "../../brain/src/firm/semantic-model-store.mjs";
@@ -669,6 +670,7 @@ export function createGeneratedMapsFixture({ root, repository } = {}) {
   const fixture = createAtlasPortfolioFixture({ root, repository });
   const options = { root };
   const ventureId = fixture.venture.id;
+  syncProductPages({ ventureId, repository: fixture.venture.repository }, options);
   const model = getSemanticModel(ventureId, options);
   const objects = [
     ["map-need", "need", "A project worth advancing", "Recent graduates need useful collaborators before they need another profile.", "gtm"],

@@ -4,7 +4,6 @@ import {
   applyCodingWorkspace,
   commitCodingWorkspace,
   discardCodingWorkspace,
-  prepareCodingPullRequest,
   revertCodingWorkspaceApply,
   restoreCodingCheckpoint,
   reviewCodingWorkspace,
@@ -12,6 +11,7 @@ import {
 } from "@/api";
 import { DiffView, FilesChanged } from "@/components/review";
 import { ProductConsequenceReview } from "@/components/work-mode/ProductConsequenceReview";
+import { WorkShipPanel } from "@/components/work-mode/WorkShipPanel";
 import { workStatusLabel } from "@/components/work-mode/workStatusLabel";
 
 const activityLabel: Record<string, string> = {
@@ -19,7 +19,6 @@ const activityLabel: Record<string, string> = {
   reject: "Rejecting checkpoint…",
   apply: "Applying checkpoint to the source workspace…",
   revert: "Reversing the applied change…",
-  prepare: "Preparing branch and pull request commands…",
   commit: "Committing in the isolated branch…",
   restore: "Restoring the selected checkpoint…",
   discard: "Discarding the isolated workspace…",
@@ -48,7 +47,7 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
   const disabled = Boolean(readOnlyReason || busy);
   const reviewed = workspace.consequence?.review;
   const founderActions = workspace.diff && workspace.status !== "discarded" ? <section className="code-workspace-section code-workspace-actions">
-    <header><span>Founder consequence</span><strong>{reviewed ? `Exact checkpoint ${reviewed}` : "Review the exact checkpoint first"}</strong></header>
+    <header><span>Founder consequence</span><strong>{reviewed ? `Checkpoint ${reviewed}` : "Review the checkpoint first"}</strong></header>
     {readOnlyReason ? <p>{readOnlyReason}</p> : null}
     {!reviewed ? <div className="code-workspace-action-row">
       <button type="button" disabled={disabled} onClick={() => void act("approve", () => reviewCodingWorkspace(ventureId, workspace.id, "approve"))}>Approve checkpoint</button>
@@ -59,7 +58,6 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
         {workspace.consequence?.action === "applied"
           ? confirm === "revert" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("revert", () => revertCodingWorkspaceApply(ventureId, workspace.id))}>Confirm reverse applied change</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("revert")}>Reverse applied change</button>
           : confirm === "apply" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("apply", () => applyCodingWorkspace(ventureId, workspace.id))}>Confirm apply to source workspace</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("apply")}>Apply to source workspace</button>}
-        <button type="button" disabled={disabled} onClick={() => void act("prepare", () => prepareCodingPullRequest(ventureId, workspace.id))}>Prepare branch / PR</button>
       </div>
       <div className="code-workspace-commit">
         <input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Commit message" aria-label="Commit message" disabled={disabled} />
@@ -71,8 +69,8 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
           : <button key={checkpoint.id} type="button" disabled={disabled} onClick={() => setConfirm(`restore:${checkpoint.id}`)}>Restore {checkpoint.id}</button>)}
         {confirm === "discard" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("discard", () => discardCodingWorkspace(ventureId, workspace.id))}>Confirm permanent discard</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("discard")}>Discard workspace</button>}
       </div>
+      <WorkShipPanel ventureId={ventureId} workspaceId={workspace.id} disabled={disabled} onChanged={onChanged} />
     </> : null}
-    {workspace.consequence?.preparation ? <pre>{workspace.consequence.preparation.pushCommand}{"\n"}{workspace.consequence.preparation.pullRequestCommand}{"\n\n"}{workspace.consequence.preparation.note}</pre> : null}
   </section> : null;
 
   return (

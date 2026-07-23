@@ -37,7 +37,7 @@ function validateTarget(target) {
 function availableWorkspace(target, resolved) {
   const workspace = resolved?.workspace ?? resolved;
   if (!workspace || workspace.id !== target.workspaceId || workspace.ventureId !== target.ventureId) {
-    throw new Error("Drover could not verify this coding workspace.");
+    throw new Error("Croki could not verify this coding workspace.");
   }
   if (!text(workspace.worktree) || workspace.status === "discarded") {
     throw new Error("This coding workspace no longer has an isolated worktree.");

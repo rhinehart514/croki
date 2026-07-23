@@ -65,7 +65,7 @@ describe("readDriveReceipt", () => {
       outcome: { kind: "completed", summary: "The strongest next move is to close the first-run gap. Then chase distribution." },
       handoff: null,
     }));
-    expect(receipt.headline).toBe("Drover worked through it.");
+    expect(receipt.headline).toBe("Croki worked through it.");
     expect(receipt.detail).toBe("The strongest next move is to close the first-run gap.");
     expect(receipt.targetBetId).toBeNull();
   });

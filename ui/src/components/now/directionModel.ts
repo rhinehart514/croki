@@ -59,7 +59,7 @@ function wallTruth(item: WallQueueItemView): string {
     // can stand; verbose or jargon-laden internal text collapses to a judgment prompt (the exact text
     // stays available under the decision's provenance).
     const question = text(effect.question);
-    return question && question.length <= 140 && !question.includes("_") ? question : "Drover needs your judgment on how to proceed.";
+    return question && question.length <= 140 && !question.includes("_") ? question : "Croki needs your judgment on how to proceed.";
   }
   if (item.purpose === "end-bet") return text(effect.reason) ?? "A decision to end this work is waiting on you.";
   return "A decision is waiting on you.";

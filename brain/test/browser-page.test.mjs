@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { browserReadAvailability, buildBrowserReadTools, readBrowserPage } from "../src/connected-read-capabilities.mjs";
 
-describe("Drover browser read capability", () => {
+describe("Croki browser read capability", () => {
   it("reports the host executable honestly", () => {
     assert.deepEqual(browserReadAvailability({ env: { DROVER_BROWSER_PATH: "/browser" }, platform: "test", existsSync: (path) => path === "/browser" }), {
       available: true,

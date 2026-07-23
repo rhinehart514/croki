@@ -1,6 +1,6 @@
 "use client";
 
-// Installed from AI Elements and intentionally narrowed to the one primitive Drover needs. The
+// Installed from AI Elements and intentionally narrowed to the one primitive Croki needs. The
 // surrounding chat already owns its layout and controls; Streamdown adds robust assistant markdown
 // without importing a second component-system vocabulary into the rail.
 import { lazy, memo, Suspense, type ComponentProps } from "react";

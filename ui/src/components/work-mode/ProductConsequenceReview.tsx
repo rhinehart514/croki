@@ -35,7 +35,7 @@ export function ProductConsequenceReview({ ventureId, workspace, readOnlyReason,
 
   return <section className="code-workspace-section code-workspace-product" data-review={review}>
     <header><span>Product consequence</span><strong>{REVIEW_LABEL[review] ?? humanize(review)}</strong></header>
-    <p className="code-workspace-product-intro">This is Drover’s provisional interpretation of the verified change. It does not alter Product / GTM truth until you adopt it.</p>
+    <p className="code-workspace-product-intro">This is Croki’s provisional interpretation of the verified change. It does not alter Product / GTM truth until you adopt it.</p>
     <label>
       <span>What became possible</span>
       <textarea aria-label="What became possible" value={capability} onChange={(event) => setCapability(event.target.value)} disabled={Boolean(readOnlyReason || busy)} />

@@ -12,7 +12,7 @@ const { createVenture, setVentureDoc } = await import("../../src/firm/venture-st
 const { createBet } = await import("../../src/firm/bet.mjs");
 const { appendConversationMessage } = await import("../../src/firm/conversation.mjs");
 const { ensureDirectionThread, getSemanticModel, recordRun } = await import("../../src/firm/semantic-model-store.mjs");
-const { buildThreadTimeline } = await import("../../src/firm/thread-timeline.mjs");
+const { buildThreadTimeline, liveActivitySteps, liveTodos } = await import("../../src/firm/thread-timeline.mjs");
 const { buildWorkIndex } = await import("../../src/firm/work-index.mjs");
 const { applyFirmConfiguration, getFirmConfiguration } = await import("../../src/firm/configuration.mjs");
 const { beginActiveDrive, noteDriveBeat, noteDriveText, noteDriveToolInput, __resetActiveDrives } = await import("../../src/firm/active-drives.mjs");
@@ -167,23 +167,57 @@ describe("thread timeline projection", () => {
     assert.equal(timeline.usage.driveCount, 2, "the unmeasured receipt still counts as a real run");
   });
 
-  it("streams the assistant's forming reply as a live teammate turn while the drive works", () => {
+  // The forming reply rides the drive's own status item, never a second projected message: a client
+  // paints the reply from the delta stream, so a separate `live:<driveId>` message would double it on
+  // any durable refetch mid-run. This field is the fallback the client reads when no stream is open.
+  it("carries the assistant's forming reply on the drive's status item, not as a second message", () => {
     const fx = fixture();
     const drive = beginActiveDrive({ ventureId: fx.venture.id, teammateRef: "codex", betId: fx.bet.id, runtime: "codex", abortSupported: true });
     try {
       const before = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
-      assert.equal(before.items.some((item) => item.id === `live:${drive.id}`), false, "no live turn before any text streams");
+      assert.equal(before.items.find((item) => item.kind === "agent-status").liveText, "", "nothing formed yet");
 
       noteDriveText(drive.id, "Tracing the setup");
       noteDriveText(drive.id, " flow now.");
       const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
-      const live = timeline.items.find((item) => item.id === `live:${drive.id}`);
-      assert.ok(live, "the forming reply projects as a live turn");
-      assert.equal(live.kind, "message");
-      assert.equal(live.role, "teammate");
-      assert.equal(live.streaming, true);
-      assert.equal(live.content, "Tracing the setup flow now.");
-      assert.equal(live.participantLabel, "Mara");
+      const status = timeline.items.find((item) => item.kind === "agent-status");
+      assert.equal(status.liveText, "Tracing the setup flow now.");
+      assert.equal(status.participantLabel, "Mara");
+      assert.equal(
+        timeline.items.some((item) => item.id === `live:${drive.id}`),
+        false,
+        "the forming reply is never a second message item",
+      );
+    } finally {
+      drive.finish();
+      __resetActiveDrives();
+    }
+  });
+
+  it("projects the model's working texture onto the status item without a second event log", () => {
+    // The live texture is process-local presence on the drive record, so the projection is asserted
+    // directly on a drive-shaped record; the timeline itself is asserted to carry the field and to
+    // show nothing at all when no plan or receipt exists.
+    const steps = liveActivitySteps({
+      id: "drive-1",
+      liveToolResults: [
+        { name: "Read", target: "/repo/brain/src/server.mjs", status: "passed", detail: "412 lines", durationMs: 90 },
+        { name: "Grep", target: "onToolStart", status: "failed", detail: "No matches found" },
+      ],
+      liveThinking: { state: "stop", durationMs: 3_200 },
+    });
+    assert.deepEqual(steps.map((step) => step.label), ["Read /repo/brain/src/server.mjs", "Grep onToolStart", "Thinking through the direction"]);
+    assert.deepEqual(steps.map((step) => step.tone), ["tool", "attention", "thinking"]);
+    assert.deepEqual(steps.map((step) => step.durationMs), [90, null, 3_200]);
+    assert.deepEqual(liveTodos({ liveTodos: [{ content: "Map the seam", status: "in_progress" }, { content: "   " }] }), [{ content: "Map the seam", status: "in_progress" }]);
+    assert.equal(liveTodos({}), null, "no plan projects nothing rather than an empty list");
+
+    const fx = fixture();
+    const drive = beginActiveDrive({ ventureId: fx.venture.id, teammateRef: "codex", betId: fx.bet.id, runtime: "codex", abortSupported: true });
+    try {
+      const status = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options).items.find((item) => item.kind === "agent-status");
+      assert.equal(status.todos, null);
+      assert.deepEqual(status.activitySteps, []);
     } finally {
       drive.finish();
       __resetActiveDrives();
@@ -197,7 +231,7 @@ describe("thread timeline projection", () => {
     drive.finish();
     try {
       const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
-      assert.equal(timeline.items.some((item) => item.id === `live:${drive.id}`), false, "a settled drive leaves no live turn behind");
+      assert.equal(timeline.items.some((item) => item.ref === `run:${drive.id}`), false, "a settled drive leaves no live turn behind");
     } finally {
       __resetActiveDrives();
     }

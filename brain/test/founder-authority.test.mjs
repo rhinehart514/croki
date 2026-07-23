@@ -36,14 +36,14 @@ describe("desktop-host founder authority", () => {
     );
   });
 
-  it("accepts Drover's same origin and refuses a cross-origin request", () => {
+  it("accepts Croki's same origin and refuses a cross-origin request", () => {
     assert.doesNotThrow(() => authorizeFounderWriteForRequest(founderRequest({
       path: "/api/test",
       origin: "http://127.0.0.1:4317",
     })));
     assert.throws(
       () => authorizeFounderWriteForRequest(founderRequest({ path: "/api/test", origin: "https://attacker.example" })),
-      (error) => error?.status === 403 && /local Drover page/i.test(error.message),
+      (error) => error?.status === 403 && /local Croki page/i.test(error.message),
     );
   });
 
@@ -82,7 +82,7 @@ describe("desktop-host founder authority", () => {
       (error) => error?.status === 503 && error?.code === "founder_host_unavailable",
     );
     for (const request of [undefined, null, {}, { headers: null }, { headers: "not-headers" }]) {
-      assert.throws(() => authorizeFounderWriteForRequest(request), /local Drover page/i);
+      assert.throws(() => authorizeFounderWriteForRequest(request), /local Croki page/i);
     }
   });
 

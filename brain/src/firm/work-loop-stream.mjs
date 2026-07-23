@@ -15,7 +15,8 @@
 //      (resumeSessionAt — the last assistant uuid) checkpoints onto the SAME work record that already
 //      carries runtimeSessionId, so { sessionId, resumeSessionAt } persist as one pair per Thread.
 
-import { noteDriveText, noteDriveToolInput } from "./active-drives.mjs";
+import { noteDriveText, noteDriveThinking, noteDriveTodos, noteDriveToolInput, noteDriveToolResult } from "./active-drives.mjs";
+import { publishDriveDelta } from "./drive-stream.mjs";
 
 const liveRuns = new Map(); // driveId -> { driveId, ventureId, betId, threadRef, handle }
 
@@ -85,6 +86,19 @@ export function buildStreamSeam({ activeDrive, receipts, narration, ventureId, b
       if (!streamed) noteDriveText(activeDrive.id, text);
     },
     onToolInputDelta: (name, partialJson) => noteDriveToolInput(activeDrive.id, name, partialJson),
+    // Optional streaming passthroughs onto the drive's own delta stream (drive-stream.mjs). A runtime
+    // adapter calls these with optional chaining, so an adapter that cannot produce a signal simply never
+    // does — nothing here is required for a run to work. They publish presence and nothing else: the
+    // durable receipts, tool authority, and conversation truth stay on their existing seams above.
+    // onThinking carries SHAPE ONLY — that the model is thinking and for how long, never what it thought.
+    // These three route through active-drives rather than straight to the stream so the drive record
+    // and the delta stream never disagree: a client with no stream open reads the same texture off the
+    // thread timeline. onChildDelta has no drive-record half — a subagent's deltas are stream-only.
+    onToolResult: (result) => noteDriveToolResult(activeDrive.id, result),
+    onThinking: (span) => noteDriveThinking(activeDrive.id, span),
+    onTodos: (items) => noteDriveTodos(activeDrive.id, items),
+    onChildDelta: ({ parentToolUseId, delta } = {}) =>
+      publishDriveDelta(activeDrive.id, { kind: "child", parentToolUseId, delta }),
     onResumeCursor: ({ resumeSessionAt } = {}) => {
       const at = String(resumeSessionAt ?? "").trim();
       if (!at || getWork().resumeSessionAt === at) return;

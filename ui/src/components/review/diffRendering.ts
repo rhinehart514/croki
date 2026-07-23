@@ -1,7 +1,7 @@
 // Portions Copyright (c) 2026 T3 Tools Inc. Licensed under MIT (github.com/pingdotgg/t3code).
 // Pure patch-to-renderable projection for @pierre/diffs. No React, no DOM — parsing a git patch
 // into Pierre file metadata is a deterministic transform, so it lives as tested helpers the view
-// layer renders without logic. Drover ships one dark desktop theme, so the theme name is a constant.
+// layer renders without logic. Croki ships one dark desktop theme, so the theme name is a constant.
 
 import { parsePatchFiles } from "@pierre/diffs";
 import type { FileDiffMetadata } from "@pierre/diffs";

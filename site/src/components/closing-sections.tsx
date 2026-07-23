@@ -1,6 +1,6 @@
 import { ArrowRight, GitFork } from "lucide-react";
 import { defaultFaqValue, faqs, githubUrl, pricingLines } from "@/content/home";
-import { DroverWordmark } from "@/components/drover-wordmark";
+import { CrokiWordmark } from "@/components/croki-wordmark";
 import { InView } from "@/components/motion-primitives/in-view";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ export function ClosingSections() {
           <p className="section-index">Pricing</p>
           <h2 id="pricing-title">You already own what it costs.</h2>
           <p>
-            Drover is a source-available alpha you run yourself. No usage bill,
+            Croki is a source-available alpha you run yourself. No usage bill,
             no seat, and no hosted plan yet — you bring the machine and the model
             subscription you already have.
           </p>
@@ -49,7 +49,7 @@ export function ClosingSections() {
     </section>
     <section className="final-cta" aria-labelledby="final-title">
       <InView>
-        <DroverWordmark />
+        <CrokiWordmark />
         <h2 id="final-title">Make the next move before the market catches up.</h2>
         <p>Run Product and GTM as one changing system. Let agents push. Keep truth and outward action yours.</p>
         <Button className="final-button" size="lg" render={<a href={`${githubUrl}#run-locally`} />}>

@@ -16,24 +16,24 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://scaffoldweb.com"),
-  title: "Drover | Move faster across Product and GTM",
+  title: "Croki | Move faster across Product and GTM",
   description:
-    "Drover is building one founder-controlled venture canvas for understanding, manipulating, and executing the full Product and go-to-market system, with exact authority at the world boundary.",
-  applicationName: "Drover",
+    "Croki is building one founder-controlled venture canvas for understanding, manipulating, and executing the full Product and go-to-market system, with exact authority at the world boundary.",
+  applicationName: "Croki",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     url: "/",
-    siteName: "Drover",
-    title: "Drover | Move faster across Product and GTM",
+    siteName: "Croki",
+    title: "Croki | Move faster across Product and GTM",
     description:
-      "Drover is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
+      "Croki is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Drover | Move faster across Product and GTM",
+    title: "Croki | Move faster across Product and GTM",
     description:
-      "Drover is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
+      "Croki is building one venture canvas for Product and go-to-market, directed through conversation and held under exact founder authority.",
   },
 };
 

@@ -56,7 +56,15 @@ this section when the phase ends.
   result router.
 - Work is the full agentic development environment: directing Claude/Codex, coding in isolated workspaces,
   inspecting previews/diffs/commands/tests, steering or comparing attempts, and applying exact changes. Its
-  composer exposes an explicit in-chat participation switch. Code mode exposes repository/worktree context and
+  founder experience is one loop: **return → direct → watch → correct → verify → ship → return**. Keep its
+  visible anchors to **Project**, **Thread**, and the exact **Review**; Review is a projection of material to
+  judge, never another durable work container. A Run or attempt becomes prominent only when its identity,
+  interruption, or comparison matters. Agents, terminal, preview, tests, search, history, and shipping are
+  contextual capabilities inside that loop, not destinations, dashboards, or equal-weight permanent tabs.
+  At rest, show conversation and its composer; reveal exact material only when it exists and is relevant.
+  Prefer enhancements that strengthen exact return, grounded point-to-correct feedback, source-bearing proof,
+  or consequential completion. Fold other power below the waterline or do not add it.
+  Its composer exposes an explicit in-chat participation switch. Code mode exposes repository/worktree context and
   real Claude/Codex model choice; the selected SDK model is the agent the founder talks to, with no Drover-created
   persona or automatic router inserted between them. Product / GTM mode keeps the same Thread and transcript but
   directs Drover agents to ideate workflows, branches, founder gates, capabilities, and evidence loops; it hides

@@ -1,4 +1,5 @@
 import type { ProductGtmNodeRole } from "./productGtmProjection";
+import type { MarketMovementIndex } from "@/types";
 
 // Founder-facing presentation vocabulary for the Product/GTM canvas: the mapping from compatibility semantic
 // types to the words and node roles a founder reads. Kept separate from projection assembly so the projection
@@ -52,4 +53,40 @@ export function semanticRole(type: string, provisional: boolean): ProductGtmNode
   if (normalized === "open") return "evidence-gap";
   if (normalized === "evidence") return "evidence";
   return "product";
+}
+
+const NAME_LABEL_MAX = 40;
+const TRAILING_CONNECTIVE = /\s+(?:the|a|an|to|of|in|into|for|and|or|with|is|are|that|this|its|their|your|our|on|at|by|as|from)$/i;
+
+export function productGtmRestingLabel(rawName: string, rawDetail: string): { name: string; detail: string } {
+  const full = rawName.trim();
+  if (full.length <= NAME_LABEL_MAX) return { name: full || rawName, detail: rawDetail };
+  const firstSentence = full.split(/(?<=[.?!])\s+/)[0]?.trim() ?? full;
+  let label = firstSentence.length >= 12 && firstSentence.length <= NAME_LABEL_MAX ? firstSentence : full;
+  if (label.length > NAME_LABEL_MAX) {
+    let clamped = "";
+    for (const word of label.split(/\s+/)) {
+      const next = clamped ? `${clamped} ${word}` : word;
+      if (next.length > NAME_LABEL_MAX) break;
+      clamped = next;
+    }
+    label = clamped || label.slice(0, NAME_LABEL_MAX);
+    const words = label.split(/\s+/);
+    while (words.length > 2 && TRAILING_CONNECTIVE.test(words.slice(0, -1).join(" "))) words.pop();
+    label = words.join(" ");
+  }
+  label = label.replace(/[\s.,;:–—-]+$/, "");
+  while (TRAILING_CONNECTIVE.test(label)) label = label.replace(TRAILING_CONNECTIVE, "");
+  label = label.trim();
+  if (!label || label.length >= full.length) return { name: full, detail: rawDetail };
+  const extra = rawDetail?.trim();
+  return { name: label, detail: !extra ? full : extra.includes(full) ? rawDetail : `${full} — ${rawDetail}` };
+}
+
+export function productGtmOutwardActionName(action: MarketMovementIndex["actions"][number]) {
+  const material = action.preparedMaterial && typeof action.preparedMaterial === "object" ? action.preparedMaterial : {};
+  const nested = material.effect && typeof material.effect === "object" ? material.effect as Record<string, unknown> : material;
+  const destination = String(nested.destination ?? nested.environment ?? "").trim();
+  const kind = action.kind.replaceAll("-", " ");
+  return destination ? `${kind} · ${destination}` : kind;
 }

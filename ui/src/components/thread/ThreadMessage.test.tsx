@@ -8,6 +8,23 @@ const openThread = vi.fn();
 const item = (kind: ThreadTimelineItem["kind"], extra: Record<string, unknown> = {}): ThreadTimelineItem => ({ kind, id: `${kind}:one`, ref: `${kind}:one`, at: null, ...extra });
 
 describe("thread material grammar", () => {
+  it("renders an observed journey attachment as exact Thread context, never as an image", () => {
+    render(<ThreadMessage
+      item={item("message", {
+        role: "founder",
+        content: "Map this observed journey.",
+        ventureId: "venture:one",
+        attachments: [{ kind: "journey-import", importRef: "journey-import:one", name: "observed.csv", mediaType: "text/csv", byteSize: 42, digest: "abc" }],
+      })}
+      surface="work"
+      onOpenVisual={open}
+      onOpenThread={openThread}
+    />);
+    expect(screen.getByText("observed.csv")).toBeVisible();
+    expect(screen.getByText("Observed journey source · mapping in this Thread")).toBeVisible();
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
   it("keeps returned material compact while preserving honest state and exact open actions", () => {
     const { rerender } = render(<ThreadMessage item={item("artifact", { title: "Live proposal", artifact: {}, ownerLabels: ["Yara"] })} onOpenVisual={open} onOpenThread={openThread} />);
     expect(screen.getByText("Live proposal")).toBeInTheDocument();
@@ -61,7 +78,7 @@ describe("thread material grammar", () => {
     expect(screen.getByText("The work is still active. You can leave this thread and return when it finishes.")).toBeInTheDocument();
   });
 
-  it("keeps Work progress in the response flow without presenting a Drover persona", () => {
+  it("keeps Work progress in the response flow without presenting a Croki persona", () => {
     render(<ThreadMessage surface="work" item={item("agent-status", { participantRef: "founding-teammate", participantLabel: "Mara", state: "working", summary: "Reading venture context", startedAt: new Date(Date.now() - 12_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
     expect(screen.getByText("Reading venture context")).toBeInTheDocument();
     expect(screen.getByText(/Working · 12s/)).toBeInTheDocument();

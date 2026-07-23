@@ -39,13 +39,13 @@ test("native coding: the real Electron host restores work and holds founder auth
     assert.equal(await app.client.evaluate(`document.visibilityState`), "visible", "Electron loaded the renderer without making its BrowserWindow visible");
     await waitForDom(app.client, `!!document.querySelector('.workspace-shell')`, "the visible Electron window did not render its workspace");
     assert.equal(await app.client.evaluate(`document.querySelector('.workspace-shell')?.dataset.desktopPlatform`), "darwin", "the renderer did not receive the native window platform");
-    assert.equal(await app.client.evaluate(`document.querySelector('.thread-venture-switcher')?.getBoundingClientRect().left >= 78`), true, "the venture switcher still collided with the macOS traffic lights");
+    assert.equal(await app.client.evaluate(`(() => { const rect = document.querySelector('.thread-venture-switcher')?.getBoundingClientRect(); return Boolean(rect && (rect.top >= 42 || rect.left >= 78)); })()`), true, "the venture switcher still collided with the macOS traffic lights");
     assert.deepEqual([...new Set(listeningTcpPorts(app.child.pid))], [firstDebugPort], "Electron opened a TCP listener beyond the test-only DevTools port");
     const firstHealth = await app.client.evaluate(`window.droverDesktop.api.request({ path: "/api/health", method: "GET", headers: {}, body: "" }).then((response) => JSON.parse(response.body))`);
     assert.equal(firstHealth.ok, true, "the in-process desktop Brain did not answer through IPC");
     await waitForDom(app.client, `typeof window.droverDesktop?.selectRepository === 'function'`, "the actual Electron preload did not mount");
     await waitForDom(app.client, `document.querySelectorAll('.thread-material[data-kind="native-code"]').length === 2`, "Electron did not restore both coding attempts");
-    assert.equal(await app.client.evaluate(`/Drover restarted before the provider turn settled/.test(document.body.textContent)`), true, "the Electron restart hid interrupted provider work");
+    assert.equal(await app.client.evaluate(`/Croki restarted before the provider turn settled/.test(document.body.textContent)`), true, "the Electron restart hid interrupted provider work");
 
     await waitForDom(app.client, `!!document.querySelector('.work-workbench .code-workspace')`, "Electron did not mount exact code beside conversation");
     await waitForDom(app.client, `!!document.querySelector('button[aria-label="Rename thread"]')`, "the native thread title never became editable");
@@ -64,7 +64,7 @@ test("native coding: the real Electron host restores work and holds founder auth
     await app.client.evaluate(`(() => { const select = document.querySelector('.work-workbench-tools select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('reviewable')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
     await waitForDom(app.client, `/native-coding-browser-proof.txt/.test(document.querySelector('.work-workbench')?.textContent || '')`, "Electron did not select the reviewable attempt");
     assert.equal(await app.client.evaluate(clickButton("Approve checkpoint")), true, "the trusted Electron host could not exercise founder review authority");
-    await waitForDom(app.client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "Electron did not persist founder review");
+    await waitForDom(app.client, `/Checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "Electron did not persist founder review");
 
     await app.close();
     assert.equal(fs.existsSync(path.join(home, ".runtime", "brain.json")), false, "Electron wrote a Brain web-server location");

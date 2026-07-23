@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Drover MCP server — firm + surviving product-work stdio transport.
+ * Croki MCP server — firm + surviving product-work stdio transport.
  *
  * Every tool delegates directly to the venture, wall, and product-change routes in this stdio
  * process. MCP does not require the desktop app and does not discover or call a web server.
@@ -33,7 +33,7 @@ const FIRM_TOOLS = createFirmTools({ brainGet, brainPost });
 const SURVIVING_TOOLS = [
   {
     name: "report_friction",
-    description: "File a dogfood report about Drover itself. The report enters the local review queue; this tool cannot approve, publish, deploy, or release anything.",
+    description: "File a dogfood report about Croki itself. The report enters the local review queue; this tool cannot approve, publish, deploy, or release anything.",
     inputSchema: {
       type: "object",
       properties: {
@@ -48,7 +48,7 @@ const SURVIVING_TOOLS = [
   },
   {
     name: "request_feature",
-    description: "Ask Drover to build a capability in an isolated review worktree. This file-only builder cannot run shell commands, test, commit, merge, push, deploy, or publish.",
+    description: "Ask Croki to build a capability in an isolated review worktree. This file-only builder cannot run shell commands, test, commit, merge, push, deploy, or publish.",
     inputSchema: {
       type: "object",
       properties: {
@@ -64,7 +64,7 @@ const SURVIVING_TOOLS = [
   },
   {
     name: "get_dogfood_queue",
-    description: "Read Drover's local dogfood queue and product-change review status. Read-only.",
+    description: "Read Croki's local dogfood queue and product-change review status. Read-only.",
     inputSchema: { type: "object", properties: {}, required: [] },
     handler: () => brainGet("/api/friction"),
   },
@@ -174,7 +174,7 @@ function main() {
     }
     dispatch(message).catch(() => {});
   });
-  process.stderr.write("Drover MCP server ready (stdio)\n");
+  process.stderr.write("Croki MCP server ready (stdio)\n");
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

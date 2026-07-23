@@ -18,9 +18,10 @@ function clickButton(label) {
 
 function clickMode(label) {
   return `(() => {
-    const button = [...document.querySelectorAll('.workspace-mode-nav button')].find((entry) => entry.querySelector('span')?.textContent.trim() === ${JSON.stringify(label)});
-    button?.click();
-    return Boolean(button && !button.disabled);
+    const button = [...document.querySelectorAll('.workspace-mode-nav button')].find((entry) => entry.textContent.includes(${JSON.stringify(label)}));
+    if (!button) return false;
+    if (button.getAttribute('aria-current') !== 'page') button.click();
+    return true;
   })()`;
 }
 
@@ -66,12 +67,12 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
       agentBorder: "0px",
       scrollOverflow: "auto",
       scrollContained: "contain",
-      composerHeight: "86px",
+      composerHeight: "80px",
       scopeDisplay: "none",
       composerBelowTimeline: true,
       fullHeight: true,
     }, "Work chat lost the T3 conversation geometry or single-scroll contract");
-    assert.equal(await client.evaluate(`/Drover restarted before the provider turn settled/.test(document.body.textContent)`), true, "restart recovery did not surface honestly");
+    assert.equal(await client.evaluate(`/Croki restarted before the provider turn settled/.test(document.body.textContent)`), true, "restart recovery did not surface honestly");
     assert.equal(await client.evaluate(`/Implementation attempts/.test(document.body.textContent)`), true, "separate approaches were not comparable in the thread");
 
     await waitForDom(client, `!!document.querySelector('.work-workbench .code-workspace')`, "the native code workbench did not mount beside conversation");
@@ -98,20 +99,22 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
 
     assert.equal(await client.evaluate(clickMode("Product / GTM")), true);
     try {
-      await waitForDom(client, `!!document.querySelector('.product-gtm-surface') && [...document.querySelectorAll('.product-gtm-node[data-kind="truth"] strong')].some((entry) => entry.textContent.trim() === 'Founders can review verified code without leaving venture context')`, "the adopted consequence did not appear in Product / GTM");
+      await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'consequence-trace' && [...document.querySelectorAll('.product-gtm-node[data-kind="truth"] strong')].some((entry) => entry.textContent.trim() === 'Founders can review verified code')`, "the adopted consequence did not appear in its consequence trace");
     } catch (error) {
       const state = await client.evaluate(`({ mode: document.querySelector('.workspace-shell')?.dataset.mode, productGtm: Boolean(document.querySelector('.product-gtm-surface')), text: document.querySelector('.workspace-primary')?.textContent?.replace(/\\s+/g, ' ').trim().slice(0, 500) })`);
       throw new Error(`${error.message}: ${JSON.stringify(state)}`);
     }
-    assert.equal(await client.evaluate(`(() => { const name = 'Founders can review verified code without leaving venture context'; if (document.querySelector('.product-gtm-node[data-expanded="true"] strong')?.textContent.trim() === name) return true; const node = [...document.querySelectorAll('.product-gtm-node[data-kind="truth"]')].find((entry) => entry.querySelector('strong')?.textContent.trim() === name); node?.click(); return Boolean(node); })()`), true, "mode switching did not preserve the exact linked Product subject");
-    await waitForDom(client, `document.querySelector('.product-gtm-node[data-expanded="true"] strong')?.textContent.trim() === 'Founders can review verified code without leaving venture context' && !document.querySelector('.product-gtm-inspector')`, "the adopted Product consequence did not expand in the living model");
+    assert.equal(await client.evaluate(`(() => { const name = 'Founders can review verified code'; if (document.querySelector('.product-gtm-node[data-expanded="true"] strong')?.textContent.trim() === name) return true; const node = [...document.querySelectorAll('.product-gtm-node[data-kind="truth"]')].find((entry) => entry.querySelector('strong')?.textContent.trim() === name); node?.click(); return Boolean(node); })()`), true, "mode switching did not preserve the exact linked Product subject");
+    await waitForDom(client, `document.querySelector('.product-gtm-node[data-expanded="true"] strong')?.textContent.trim() === 'Founders can review verified code' && /without leaving venture context/.test(document.querySelector('.product-gtm-node[data-expanded="true"]')?.textContent || '') && !document.querySelector('.product-gtm-inspector')`, "the adopted Product consequence did not expand in the living model");
 
     assert.equal(await client.evaluate(clickMode("Work")), true);
     await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row')].find((entry) => entry.querySelector('span')?.textContent.trim() === 'Implement the native coding browser proof'); row?.click(); return Boolean(row); })()`);
     await waitForDom(client, `!!document.querySelector('.work-workbench .code-workspace')`, "returning to Work lost the exact implementation");
+    await client.evaluate(`(() => { const select = document.querySelector('.work-workbench-tools select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('reviewable')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await waitForDom(client, `/native-coding-browser-proof.txt/.test(document.querySelector('.work-workbench')?.textContent || '')`, "returning from Product / GTM did not restore the reviewable implementation");
 
     assert.equal(await client.evaluate(clickButton("Approve checkpoint")), true);
-    await waitForDom(client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "the exact checkpoint review did not persist");
+    await waitForDom(client, `/Checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "the exact checkpoint review did not persist");
     assert.equal(await client.evaluate(`(() => {
       const input = document.querySelector('.work-workbench [aria-label="Commit message"]');
       if (!input) return false;
@@ -133,8 +136,8 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
     assert.equal(fs.existsSync(path.join(ROOT, "native-coding-browser-proof.txt")), false, "committing isolated work changed the founder source workspace");
 
     await client.send("Page.reload", { ignoreCache: true });
-    await waitForDom(client, `!!document.querySelector('.workspace-mode-nav')`, "the venture did not return after reload");
-    assert.equal(await client.evaluate(clickMode("Work")), true);
+    await waitForDom(client, `[...document.querySelectorAll('.workspace-mode-nav button')].some((entry) => entry.textContent.includes('Work'))`, "the venture did not return after reload");
+    await waitForDom(client, clickMode("Work"), "Work did not become available after reload");
     await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row')].find((entry) => entry.querySelector('span')?.textContent.trim() === 'Implement the native coding browser proof'); row?.click(); return Boolean(row); })()`);
     await waitForDom(client, `!!document.querySelector('.work-workbench-tools select')`, "the committed implementation did not restore its exact workbench");
     await client.evaluate(`(() => { const select = document.querySelector('.work-workbench-tools select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('committed')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);

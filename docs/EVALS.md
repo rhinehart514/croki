@@ -1,4 +1,4 @@
-# Drover evals
+# Croki evals
 
 ## 1. First value
 
@@ -16,7 +16,7 @@
 - The founder can continue, compare, steer, stop, and promote an exact Product consequence.
 - Deleting a chat stops every attached live Run, revokes its continuing work, removes the chat from Work, and
   preserves exact Product truth, artifacts, and receipts.
-- Drover adds no mandatory persona, router, or plan that reduces SDK capability.
+- Croki adds no mandatory persona, router, or plan that reduces SDK capability.
 
 ## 3. Product/GTM breadth
 

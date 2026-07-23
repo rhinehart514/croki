@@ -94,9 +94,9 @@ for (const [foreground, background] of [["--ink", "--room"], ["--ink", "--surfac
 }
 
 if (failures.length) {
-  console.error("Drover production token verification failed:\n");
+  console.error("Croki production token verification failed:\n");
   for (const failure of [...new Set(failures)]) console.error(`- ${failure}`);
   process.exitCode = 1;
 } else {
-  console.log(`Drover production tokens verified (${canonical.size} canonical tokens across ${files.length} CSS files).`);
+  console.log(`Croki production tokens verified (${canonical.size} canonical tokens across ${files.length} CSS files).`);
 }

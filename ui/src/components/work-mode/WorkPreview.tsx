@@ -33,7 +33,7 @@ export function WorkPreview({ workspaceId, disabledReason = null, unavailableRea
   const bridge = window.droverDesktop?.preview;
   const nativeUnavailable = !bridge || Boolean(unavailableReason);
   const shownStatus = nativeUnavailable ? "unavailable" : status;
-  const shownError = nativeUnavailable ? unavailableReason ?? "Preview is available in the Drover desktop app." : error;
+  const shownError = nativeUnavailable ? unavailableReason ?? "Preview is available in the Croki desktop app." : error;
 
   // Agent-driven opens: the run's preview_open lands here so the founder watches the same page.
   useEffect(() => {

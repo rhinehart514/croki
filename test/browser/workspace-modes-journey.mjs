@@ -32,7 +32,24 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
     })()`);
     await waitForDom(client, `Boolean(document.querySelector('.workspace-shell'))`, "the workspace did not restore its stale canvas camera fixture");
     await chooseMode(client, "Product / GTM");
-    await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-kind="truth"]').length >= 6`, "current Product/GTM truth did not materialize");
+    await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'product-walk' && document.querySelectorAll('.product-gtm-node[data-role="page"]').length > 0`, "the code-proven Product walk did not materialize");
+    assert.equal(await client.evaluate(`document.querySelectorAll('.product-gtm-node:is([data-kind="branch"], [data-kind="action"])').length`), 0, "the resting Product walk leaked unrelated venture state");
+    assert.equal(await client.evaluate(`(() => {
+      const input = document.querySelector('.workspace-rail input[type="search"]');
+      if (!input) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, 'Start with the work');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`), true, "Product / GTM search was unavailable");
+    await waitForDom(client, `[...document.querySelectorAll('.product-rail-body section button strong')].some((entry) => entry.textContent.trim() === 'Start with the work')`, "the Product consequence anchor was not searchable");
+    assert.equal(await client.evaluate(`(() => {
+      const button = [...document.querySelectorAll('.product-rail-body section button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === 'Start with the work');
+      button?.click();
+      return Boolean(button);
+    })()`), true, "the Product consequence anchor could not be selected");
+    await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'consequence-trace'`, "the selected Product truth did not open its consequence trace");
+    await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-kind="truth"]').length >= 1`, "current Product/GTM truth did not materialize");
     await waitForDom(client, `!!document.querySelector('.product-gtm-node[data-kind="branch"]') && !!document.querySelector('.product-gtm-node[data-kind="action"][data-waiting="true"]')`, "the provisional Product alternative and founder-gated action were not visible together");
     await waitForDom(client, `document.querySelectorAll('.product-gtm-edge-path.is-cross-territory').length > 0`, "territory-crossing relationships did not render");
     await waitForCanvasViewportStable(client);
@@ -49,7 +66,7 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
       codingControls: Boolean(document.querySelector('.workspace-primary .work-composer-bar')),
     }))()`);
     assert.equal(composition.mode, "product-gtm");
-    assert.ok(composition.truth >= 6 && composition.branches >= 1 && composition.work >= 1 && composition.gates >= 1, JSON.stringify(composition));
+    assert.ok(composition.truth >= 1 && composition.branches >= 1 && composition.gates >= 1, JSON.stringify(composition));
     assert.deepEqual({ oldSystem: composition.oldSystem, oldRelease: composition.oldRelease, oldPipeline: composition.oldPipeline, codingControls: composition.codingControls }, { oldSystem: false, oldRelease: false, oldPipeline: false, codingControls: false });
 
     const causalStory = await client.evaluate(`(() => {
@@ -76,22 +93,21 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
         provisionalBranches: document.querySelectorAll('.product-gtm-node[data-kind="branch"][data-provisional="true"]').length,
       };
     })()`);
-    assert.deepEqual({ spineCount: causalStory.spineCount, strictlyLeftToRight: causalStory.strictlyLeftToRight, crossesTerritory: causalStory.crossesTerritory, inlineExpansionOnly: causalStory.inlineExpansionOnly }, { spineCount: 6, strictlyLeftToRight: true, crossesTerritory: true, inlineExpansionOnly: true }, JSON.stringify(causalStory));
+    assert.deepEqual({ spineCount: causalStory.spineCount, strictlyLeftToRight: causalStory.strictlyLeftToRight, crossesTerritory: causalStory.crossesTerritory, inlineExpansionOnly: causalStory.inlineExpansionOnly }, { spineCount: 4, strictlyLeftToRight: true, crossesTerritory: true, inlineExpansionOnly: true }, JSON.stringify(causalStory));
     assert.ok(causalStory.readableOpeningZoom >= 0.81, `the default frame made the causal chapter too small: ${JSON.stringify(causalStory)}`);
-    assert.equal(causalStory.workAttachedToSubject, true, `live work drifted away from its subject: ${JSON.stringify(causalStory)}`);
     assert.equal(causalStory.founderGateInOpeningFrame, true, `the default frame omitted the exact founder decision: ${JSON.stringify(causalStory)}`);
     assert.equal(causalStory.direction, "A project worth advancing");
-    assert.equal(causalStory.context, "product release");
+    assert.equal(causalStory.context, "Start with the work");
     assert.deepEqual(causalStory.compatibilityLabels, []);
     assert.ok(causalStory.provisionalBranches >= 1, "the Product alternative was not visibly provisional");
 
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-gtm-context button')].find((entry) => /Whole venture/.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
-    await waitForDom(client, `!document.querySelector('.product-gtm-context') && !document.querySelector('.product-gtm-surface[data-has-focus="true"]')`, "the founder could not return to the whole venture");
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-gtm-context button')].find((entry) => /Product walk/.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
+    await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'product-walk' && !document.querySelector('.product-gtm-context')`, "the founder could not return to the Product walk");
 
-    assert.equal(await client.evaluate(`(() => { const node = [...document.querySelectorAll('.product-gtm-node')].find((entry) => entry.querySelector('strong')?.textContent === 'Start with the work'); node?.click(); return Boolean(node); })()`), true);
-    await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-focus="false"]').length > 0`, "selection did not quiet unrelated Product/GTM material");
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-rail-body section button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === 'Start with the work'); button?.click(); return Boolean(button); })()`), true);
+    await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'consequence-trace'`, "selection did not restore the consequence trace");
     const focusCounts = await client.evaluate(`({ focused: document.querySelectorAll('.product-gtm-node[data-focus="true"]').length, quiet: document.querySelectorAll('.product-gtm-node[data-focus="false"]').length })`);
-    assert.ok(focusCounts.focused > 0 && focusCounts.quiet > 0, JSON.stringify(focusCounts));
+    assert.ok(focusCounts.focused > 0 && focusCounts.quiet === 0, JSON.stringify(focusCounts));
     assert.match(await client.evaluate(`document.querySelector('.product-gtm-context')?.textContent || ''`), /Start with the work/);
 
     assert.equal(await client.evaluate(`(() => { const node = document.querySelector('.product-gtm-node[data-kind="branch"]'); node?.click(); return Boolean(node); })()`), true);
@@ -101,7 +117,7 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
 
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-gtm-review button')].find((entry) => /Make 1 current/.test(entry.textContent)); button?.click(); return Boolean(button && !button.disabled); })()`), true);
     await waitForDom(client, `!document.querySelector('.product-gtm-review')`, "the founder merge did not settle");
-    assert.equal(await client.evaluate(`(() => { const node = [...document.querySelectorAll('.product-gtm-node[data-kind="truth"]')].find((entry) => entry.querySelector('strong')?.textContent === 'Start with the work'); node?.click(); return Boolean(node); })()`), true);
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-rail-body section button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === 'Start with the work'); button?.click(); return Boolean(button); })()`), true);
     await waitForDom(client, `/manually shapes the first useful project/.test(document.querySelector('.product-gtm-node[data-expanded="true"]')?.textContent || '')`, "the selectively merged Product change did not become current truth in place");
 
     const currentIndex = await drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/system-index?scope=system`).then((response) => response.json());
@@ -144,6 +160,9 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
     await waitForDom(client, `document.querySelector('.product-gtm-workflow-shortcut strong')?.textContent === 'Proof to referral'`, "the adopted GTM workflow did not become the visible canvas shortcut");
     assert.equal(await client.evaluate(`(() => { const button = document.querySelector('.product-gtm-workflow-shortcut'); button?.click(); return Boolean(button); })()`), true);
     await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-kind="workflow"]').length === 7`, "the GTM path did not unfold its complete workflow");
+    // React Flow renders the workflow edges a frame after the step nodes mount and measure, so the
+    // evidence-loop return edge lands just after the 7 steps. Wait for it before reading the snapshot.
+    await waitForDom(client, `document.querySelectorAll('.product-gtm-edge-path.is-return').length >= 1`, "the evidence-loop return edge did not render");
     const workflow = await client.evaluate(`(() => ({
       steps: document.querySelectorAll('.product-gtm-node[data-kind="workflow"]').length,
       founderGates: document.querySelectorAll('.product-gtm-node[data-workflow-step="founder-gate"]').length,
@@ -153,7 +172,7 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
     }))()`);
     assert.deepEqual({ steps: workflow.steps, founderGates: workflow.founderGates, outwardActions: workflow.outwardActions }, { steps: 7, founderGates: 1, outwardActions: 1 }, JSON.stringify(workflow));
     assert.ok(workflow.returnEdges >= 1, `the evidence loop still read as forward progress: ${JSON.stringify(workflow)}`);
-    assert.match(workflow.context, /trigger, work, conditions, founder gates, outward action, and return path/i);
+    assert.match(workflow.context, /Drafted play · 7 steps across its complete operating path/i);
 
     assert.equal(await client.evaluate(`(() => { const node = [...document.querySelectorAll('.product-gtm-node[data-kind="workflow"]')].find((entry) => entry.querySelector('strong')?.textContent === 'Observe the reply'); node?.click(); return Boolean(node); })()`), true);
     await waitForDom(client, `/authorized source returns the reply or silence/i.test(document.querySelector('.product-gtm-node[data-kind="workflow"][data-expanded="true"]')?.textContent || '')`, "the founder could not inspect exact workflow-step material in place");

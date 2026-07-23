@@ -24,7 +24,7 @@ describe("preview broker", () => {
   }, options);
 
   it("fails honestly when no desktop host is registered", async () => {
-    await assert.rejects(invoke(), /only available while the Drover desktop app is running/);
+    await assert.rejects(invoke(), /only available while the Croki desktop app is running/);
   });
 
   it("requires preview_open before any driving operation, then renews the pin on use", async () => {

@@ -17,6 +17,7 @@ import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/product
 import { ThreadConversation } from "@/components/thread/ThreadConversation";
 import type { useThreadTimeline } from "@/components/thread/useThreadTimeline";
 import type { WorkflowSketch } from "@/components/work-mode/workflowSketch";
+import type { WorkModelChoice } from "@/components/work-mode/WorkComposerBar";
 import type { FirmConnectionState } from "@/hooks/use-firm-connection";
 import type { WorkspaceMode } from "@/lib/venture-session";
 import { ROOT_THREAD_REF } from "./useWorkspaceConversation";
@@ -25,8 +26,9 @@ export function WorkspaceConversation({
   venture, mode, item, timeline, lens, connection, activeDrives, activeDraft, draftSession,
   draftSubjectRef, draftRelatedRefs, workflowStep, selectedObject, selectedAgentRef,
   artifactFocus, artifactFocusRequest, systemIndex, resolvedThreadRef, scrolls,
+  modelChoice,
   onArtifactFocus, onScrollChange, onOpenVisual, onOpenThread, onWorkIndex,
-  onRefresh, onDriven, onWorkRouted, onWorkflowAdopted,
+  onRefresh, onDriven, onThreadAccepted, onModelChoice, onWorkRouted, onWorkflowAdopted,
   onReviewModelBranch, onThreadDeleted,
 }: {
   venture: FirmVenture;
@@ -48,6 +50,7 @@ export function WorkspaceConversation({
   systemIndex: SystemIndex | null;
   resolvedThreadRef: string | null;
   scrolls: Record<string, number>;
+  modelChoice: WorkModelChoice;
   onArtifactFocus: (focus: ArtifactSectionFocus | null) => void;
   onScrollChange: (ref: string, top: number) => void;
   onOpenVisual: (visual: VisualReference, source: HTMLElement) => void;
@@ -55,6 +58,8 @@ export function WorkspaceConversation({
   onWorkIndex: (index: WorkIndex) => void;
   onRefresh: () => void;
   onDriven: () => void;
+  onThreadAccepted: (ref: string) => void;
+  onModelChoice: (choice: WorkModelChoice) => void;
   onWorkRouted: (ref: string) => void;
   onWorkflowAdopted: (result: { systemIndex: SystemIndex; objectRef: string }) => void;
   onReviewModelBranch: (branchRef: string) => void;
@@ -84,6 +89,7 @@ export function WorkspaceConversation({
       workflowStep={workflowStep}
       scopeLabel={draftSubjectRef === selectedObject?.objectRef ? selectedObject.name : null}
       targetAgentRef={activeDraft ? selectedAgentRef : null}
+      modelChoice={modelChoice}
       artifactFocus={artifactFocus}
       artifactFocusRequest={artifactFocusRequest}
       onClearArtifactFocus={() => onArtifactFocus(null)}
@@ -110,8 +116,10 @@ export function WorkspaceConversation({
         onOpenThread(ROOT_THREAD_REF);
         onThreadDeleted();
       }}
-      renameDisabledReason={["stale", "offline", "read-only"].includes(connection.phase) ? (connection.message ?? "Thread changes are unavailable until Drover reconnects.") : null}
+      renameDisabledReason={["stale", "offline", "read-only"].includes(connection.phase) ? (connection.message ?? "Thread changes are unavailable until Croki reconnects.") : null}
       onDriven={onDriven}
+      onThreadAccepted={onThreadAccepted}
+      onModelChoice={onModelChoice}
       onWorkRouted={onWorkRouted}
       onAdoptWorkflow={adoptWorkflow}
       onReviewModelBranch={onReviewModelBranch}

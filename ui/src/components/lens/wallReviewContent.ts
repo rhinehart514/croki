@@ -107,9 +107,9 @@ function releaseContent(effect: Record<string, unknown>): ReviewContent {
   return {
     eyebrow: knownMessage ? "Ready to send" : "Waiting for your review",
     title: knownMessage ? subject ?? "Message ready for review" : summary ?? "Action ready for review",
-    why: firstReadable(effect, ["reason", "why"]) ?? "This act would leave Drover and cannot proceed without your hand.",
+    why: firstReadable(effect, ["reason", "why"]) ?? "This act would leave Croki and cannot proceed without your hand.",
     details: [
-      { label: "Exact act", value: body ?? "Drover cannot safely describe this action. Reject it unless you recognize the work.", tone: body ? "voice" : undefined },
+      { label: "Exact act", value: body ?? "Croki cannot safely describe this action. Reject it unless you recognize the work.", tone: body ? "voice" : undefined },
       ...(destination ? [{ label: "Destination", value: destination }] : []),
       ...(proof ? [{ label: "Proof", value: proof, tone: "receipt" as const }] : []),
       { label: "Consequence", value: body ? "Release performs this one outward act." : "The consequence is not legible enough to release safely." },

@@ -90,4 +90,32 @@ describe("venture conversation — passive, durable transcript", () => {
       teammateRefs: ["yara", "reed"],
     });
   });
+
+  it("keeps only portable journey-import metadata in the Thread", () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Observed journey" }, options);
+    appendConversationMessage({
+      ventureId: venture.id,
+      role: "founder",
+      content: "Map this observed journey.",
+      attachments: [{
+        kind: "journey-import",
+        importRef: "journey-import:abc",
+        name: "observed.csv",
+        mediaType: "text/csv",
+        byteSize: 64,
+        digest: "digest-abc",
+        rawRows: [{ session: "person-one" }],
+      }],
+    }, options);
+
+    assert.deepEqual(listConversation(venture.id, options)[0].attachments, [{
+      kind: "journey-import",
+      importRef: "journey-import:abc",
+      name: "observed.csv",
+      mediaType: "text/csv",
+      byteSize: 64,
+      digest: "digest-abc",
+    }]);
+  });
 });

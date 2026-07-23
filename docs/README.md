@@ -1,4 +1,4 @@
-# Drover documentation map
+# Croki documentation map
 
 This map prevents historical implementation packages and design explorations from becoming accidental
 product direction. Authority is domain-specific rather than a winner-takes-all ranking; disagreements must
@@ -53,7 +53,7 @@ coverage lands. Git history is the archive; do not maintain a corrected parallel
 
 An explicitly labeled proposal or exploration may challenge the spec, but changing direction requires
 amending `FIRM-SPEC.md`, then reconciling root `DESIGN.md`, `STATE.md`, and every current translation. Customer
-examples never redefine Drover as customer-specific.
+examples never redefine Croki as customer-specific.
 
 ## Compatibility identifiers
 

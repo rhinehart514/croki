@@ -112,7 +112,7 @@ describe("durable Run lifecycle on a founder-authorized drive", () => {
       baseRevision: 0,
       operations: [{ op: "create-element", element: {
         id: "loop-onboarding", role: "product-loop", name: "Onboarding", actor: "Founder", entry: "First open",
-        value: "Useful first result", intendedChange: "Founder trusts Drover", steps: [{ id: "first-direction", label: "Give a direction" }],
+        value: "Useful first result", intendedChange: "Founder trusts Croki", steps: [{ id: "first-direction", label: "Give a direction" }],
       } }],
       actor: { authority: "founder", id: "jacob" },
     }, options);

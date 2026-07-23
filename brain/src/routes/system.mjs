@@ -72,7 +72,7 @@ export default async function handle({ req, res, url }) {
       if (!initiatedByAgent) authorizeFounderWriteForRequest(req, "Starting a product change request");
       const body = await readBody(req);
       const report = String(body?.report ?? "").trim();
-      if (!report) throw new Error("A feature request needs the words — what should Drover be able to do?");
+      if (!report) throw new Error("A feature request needs the words — what should Croki be able to do?");
       const record = enqueueFeatureRequest({
         report,
         context: body?.context,

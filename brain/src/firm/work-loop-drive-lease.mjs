@@ -1,10 +1,11 @@
 // Durable, per-resource serialization for provider drives.
 //
-// One CAS document atomically claims both the configured participant and the resume record the
-// drive will write. This permits unrelated participants to work together while preventing both
-// daily-spend races and last-write-wins resume state. A crashed process leaves an honest durable
-// lease. Ambient work cannot steal it after restart; only a fresh founder/agent direction may
-// reclaim it, and the caller receives that recovery fact so the resume record can name the stop.
+// One CAS document atomically claims the exact durable resume record the drive will write. A bet,
+// explicit work scope, work item, or Thread gives independent work an independent lease; only
+// legacy/ambient work without an exact target falls back to its participant resume record. A crashed
+// process leaves an honest durable lease. Ambient work cannot steal it after restart; only a fresh
+// founder/agent direction may reclaim it, and the caller receives that recovery fact so the resume
+// record can name the stop.
 
 import crypto from "node:crypto";
 import { PersistenceConflictError } from "../persistence.mjs";
@@ -33,6 +34,14 @@ function blankRegistry() {
 function registry(provider) {
   const stored = provider.getFresh("crew", DRIVE_LEASES_KEY);
   return stored ?? blankRegistry();
+}
+
+export function exactWorkScope(target) {
+  for (const candidate of [target?.workScopeRef, target?.workRef, target?.threadRef]) {
+    const exact = String(candidate ?? "").trim();
+    if (exact) return exact;
+  }
+  return null;
 }
 
 function resourcesFor(teammateRef, betId, workScopeRef) {

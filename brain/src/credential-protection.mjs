@@ -93,6 +93,6 @@ export function credentialProtection(options = {}) {
     return testProtection;
   }
   return createUnavailableCredentialProtection(
-    "Saving or reading founder credentials requires Drover desktop OS-backed protection.",
+    "Saving or reading founder credentials requires Croki desktop OS-backed protection.",
   );
 }

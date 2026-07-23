@@ -1,19 +1,7 @@
-// Claude Code Agent SDK runtime — the preferred local intelligence adapter.
-//
-// Why this exists: Drover is a local harness. Claude Code is exactly
-// that — it runs on the founder's existing authenticated subscription (no raw
-// ANTHROPIC_API_KEY), holds its own agent/tool loop, and reads the repo locally.
-// So when the `claude` CLI is installed, the resident teammate should be driven
-// by a Claude Code subprocess rather than a direct API call.
-//
-// Claude Code owns none of Drover's durable state or founder authority. It receives the goal plus
-// typed Firm tools over an in-process MCP bridge while retaining its native tools, configuration,
-// skills, agents, plugins, and MCP servers. Drover owns its state, typed mutations, cancellation,
-// timeout, restart recovery, and the tools that stage outward work for founder review.
-//
-// The Agent SDK bundles Claude Code, so the product does not depend on a global
-// `claude` binary. It can use an existing Claude Code login or ANTHROPIC_API_KEY.
-// GTM_IDE_CLAUDE_CODE_PATH remains available for an explicit binary override.
+// Preferred local Claude Agent SDK adapter. Claude retains its native agent loop, tools,
+// configuration, skills, agents, plugins, and MCP servers; Croki owns durable state, cancellation,
+// recovery, and founder authority. The bundled executable uses the founder's existing Claude login
+// or API key, with GTM_IDE_CLAUDE_CODE_PATH retained as an explicit override.
 
 import {
   createSdkMcpServer,
@@ -28,7 +16,7 @@ import {
   findClaudeBinary,
   hasStoredClaudeLogin,
 } from "./claude-code-auth.mjs";
-import { createPartialDispatch, createPromptQueue, liveRunHandle, parseStreamLine, reportDriveUsage, sdkUserMessage } from "./claude-stream.mjs";
+import { createPartialDispatch, createPromptQueue, liveRunHandle, parseStreamLine, reportDriveUsage, reportTodoWrite, reportToolResult, sdkUserMessage, toolSummary, toolTarget } from "./claude-stream.mjs";
 
 export {
   authModeLabel,
@@ -50,8 +38,8 @@ export function firmAllowedTools(toolNames, server = BRIDGE_SERVER) {
 // The composer IS the Claude harness (founder decision, 2026-07-01). Full mode is a real native
 // Claude Code session, not a hand-picked imitation: the default toolset (including Bash, Write,
 // and Edit), all normal user/project/local settings, CLAUDE.md files, skills, agents, plugins, and
-// configured MCP servers remain available. Drover adds its screened MCP server to that harness.
-// Those Drover tools keep founder-only outward authority; the founder's own Claude Code policy
+// configured MCP servers remain available. Croki adds its screened MCP server to that harness.
+// Those Croki tools keep founder-only outward authority; the founder's own Claude Code policy
 // remains authoritative for native tools and integrations. GTM_FIRM_HARNESS=caged (or
 // ctx.options.harness === "caged") retains the prior bridge-only compatibility mode.
 
@@ -130,9 +118,23 @@ export function isResumeFailure(error) {
 export async function nativeCodingPermission(toolName, input = {}) {
   const command = String(input?.command ?? "");
   if (toolName === "Bash" && /(^|[;&|]\s*|\bgit\s+)(commit|push|merge|rebase\b|reset\s+--hard)|\bgh\s+pr\s+(create|merge)|\b(vercel|npm)\s+(deploy|publish)\b/i.test(command)) {
-    return { behavior: "deny", message: "Drover keeps commit, merge, push, PR creation, deploy, and destructive restoration behind the founder's exact consequence controls." };
+    return { behavior: "deny", message: "Croki keeps commit, merge, push, PR creation, deploy, and destructive restoration behind the founder's exact consequence controls." };
   }
   return { behavior: "allow", updatedInput: input };
+}
+
+export function claudePermissionHandler(ctx) {
+  return async (toolName, input = {}, prompt = {}) => {
+    if (ctx.nativeCoding) {
+      const nativeDecision = await nativeCodingPermission(toolName, input);
+      if (nativeDecision.behavior === "deny") return nativeDecision;
+    }
+    if (typeof ctx.onProviderIntervention === "function") {
+      return ctx.onProviderIntervention({ toolName, input, prompt });
+    }
+    if (typeof ctx.canUseTool === "function") return ctx.canUseTool(toolName, input, prompt);
+    return { behavior: "allow", updatedInput: input };
+  };
 }
 
 export function createFirmSdkServer(ctx) {
@@ -169,7 +171,7 @@ export function createFirmSdkServer(ctx) {
   return createSdkMcpServer({
     name: BRIDGE_SERVER,
     version: "0.3.0",
-    instructions: "Use these typed Drover tools for venture truth, taste, bets, staged work, and founder-wall pauses. Never narrate a tool call in text.",
+    instructions: "Use these typed Croki tools for venture truth, taste, bets, staged work, and founder-wall pauses. Never narrate a tool call in text.",
     tools,
     alwaysLoad: true,
   });
@@ -296,7 +298,7 @@ export const claudeCodeRuntime = {
       const stderr = [];
       let terminalResult = null;
       let captured = false;
-      const pendingCommands = new Map();
+      const pendingTools = new Map(); // tool_use id -> { name, target, startedAt } awaiting its result
       const promptText = resumeId
         ? (ctx.resumePrompt || "Continue from where you left off.")
         : ctx.goal;
@@ -331,19 +333,24 @@ export const claudeCodeRuntime = {
               ? {
                   type: "preset",
                   preset: "claude_code",
-                  append: `${ctx.system}\n\nThis is a Drover teammate session inside the founder's full native Claude Code harness. Use the native tools, settings, skills, agents, plugins, and configured MCP servers normally. Use the added Drover MCP tools for Drover venture truth, durable work, and any Drover-owned outward staging. Those tools cannot approve, send, or publish on the founder's behalf; only the founder resolves a Drover wall.${ctx.nativeCoding ? " You are in a Drover-owned isolated worktree. Implement and verify here, but do not commit, merge, push, create a pull request, deploy, or apply changes elsewhere; Drover presents those consequences to the founder." : " Native tools and integrations remain governed by the founder's own Claude Code policy."}`,
+                  append: `${ctx.system}\n\nThis is a Croki teammate session inside the founder's full native Claude Code harness. Use the native tools, settings, skills, agents, plugins, and configured MCP servers normally. Use the added Croki MCP tools for Croki venture truth, durable work, and any Croki-owned outward staging. Those tools cannot approve, send, or publish on the founder's behalf; only the founder resolves a Croki wall.${ctx.nativeCoding ? " You are in a Croki-owned isolated worktree. Implement and verify here, but do not commit, merge, push, create a pull request, deploy, or apply changes elsewhere; Croki presents those consequences to the founder. For local UI and browser verification, use Croki's preview_open, preview_navigate, preview_click, preview_type, preview_press, preview_scroll, preview_snapshot, preview_evaluate, and preview_wait_for tools. They drive the preview visible in this Work thread; do not launch a separate browser or browser-automation session." : " Native tools and integrations remain governed by the founder's own Claude Code policy."}`,
                 }
               : ctx.system,
             tools: harness === "full" ? { type: "preset", preset: "claude_code" } : [],
             allowedTools,
             permissionMode: harness === "full" ? "auto" : "dontAsk",
-            ...(ctx.canUseTool || ctx.nativeCoding ? { canUseTool: ctx.canUseTool ?? nativeCodingPermission } : {}),
+            ...(ctx.canUseTool || ctx.nativeCoding || ctx.onProviderIntervention
+              ? { canUseTool: claudePermissionHandler(ctx) }
+              : {}),
             strictMcpConfig: harness === "caged",
             // Omitting settingSources in full mode preserves Claude Code's normal CLI behavior:
             // user, project, and local settings all load. Caged mode opts out explicitly.
             ...(harness === "caged" ? { settingSources: [] } : {}),
             // Partial streaming: content_block_delta text and input_json_delta tool arguments
-            // surface through ctx.onTextDelta / ctx.onToolInputDelta as the model forms them.
+            // surface through ctx.onTextDelta / ctx.onToolInputDelta as the model forms them, a
+            // thinking block surfaces as a measured span through ctx.onThinking (never its content),
+            // and a subagent's own partials surface through ctx.onChildDelta under the parent tool
+            // call that spawned them.
             includePartialMessages: true,
             // Persist the transcript so a later drive can resume it. This is the
             // founder's local Claude session store — the local-harness contract.
@@ -394,27 +401,24 @@ export const claudeCodeRuntime = {
             if (parsed?.toolUses?.length) {
               ctx.onTurn();
               for (const tool of parsed.toolUses) {
-                ctx.onToolStart?.(tool.name, { summary: tool.name === "Bash" && tool.input?.command ? `Running ${tool.input.command}` : `Using ${tool.name}` });
-                if (tool.name === "Bash" && tool.id) pendingCommands.set(tool.id, { command: String(tool.input?.command ?? "Command"), startedAt: new Date().toISOString() });
+                // The plan the model keeps for itself is projected, never narrated as a tool step
+                // and never stored — see reportTodoWrite.
+                if (reportTodoWrite(ctx, tool)) continue;
+                ctx.onToolStart?.(tool.name, { summary: toolSummary(tool) });
+                // Track every tool that names a real subject, not just Bash, so its result comes
+                // back as a receipt carrying that exact target instead of vanishing.
+                const target = toolTarget(tool);
+                if (target && tool.id) pendingTools.set(tool.id, { name: tool.name, target, startedAt: new Date().toISOString() });
               }
             }
           }
 
           if (message.type === "user" && Array.isArray(message.message?.content)) {
             for (const block of message.message.content.filter((entry) => entry?.type === "tool_result")) {
-              const pending = pendingCommands.get(block.tool_use_id);
+              const pending = pendingTools.get(block.tool_use_id);
               if (!pending) continue;
-              pendingCommands.delete(block.tool_use_id);
-              const output = typeof block.content === "string" ? block.content : JSON.stringify(block.content ?? "");
-              ctx.onCommand?.({
-                id: block.tool_use_id,
-                command: pending.command,
-                status: block.is_error ? "failed" : "passed",
-                exitCode: block.is_error ? 1 : 0,
-                startedAt: pending.startedAt,
-                completedAt: new Date().toISOString(),
-                output: output.slice(-8_000),
-              });
+              pendingTools.delete(block.tool_use_id);
+              reportToolResult(ctx, pending, block);
             }
           }
 

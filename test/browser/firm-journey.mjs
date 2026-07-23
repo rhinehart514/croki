@@ -56,7 +56,7 @@ async function freePort() {
 
 async function waitForServer(url, child) {
   for (let attempt = 0; attempt < 120; attempt += 1) {
-    if (child.exitCode !== null) throw new Error("Drover exited before becoming ready.");
+    if (child.exitCode !== null) throw new Error("Croki exited before becoming ready.");
     try {
       const response = await fetch(url);
       if (response.ok) return;
@@ -65,7 +65,7 @@ async function waitForServer(url, child) {
     }
     await delay(50);
   }
-  throw new Error(`Drover did not become ready at ${url}.`);
+  throw new Error(`Croki did not become ready at ${url}.`);
 }
 
 async function waitForDom(client, expression, message) {

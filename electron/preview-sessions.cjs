@@ -60,7 +60,7 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
     const entry = guests.get(workspaceId);
     if (!entry || entry.guest.isDestroyed()) {
       guests.delete(workspaceId);
-      throw new Error("The preview pane for this Thread is not open. Open the Thread's Preview tab in Drover first.");
+      throw new Error("The preview pane for this Thread is not open. Open the Thread's Preview tab in Croki first.");
     }
     return entry;
   }
@@ -71,7 +71,7 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
     if (!workspaceId || !Number.isInteger(webContentsId)) throw new Error("Preview attachment needs a workspace and its webview.");
     const guest = webContentsById(webContentsId);
     if (!guest || guest.isDestroyed()) throw new Error("That preview webview no longer exists.");
-    if (guest.hostWebContents?.id !== ownerId) throw new Error("Preview webviews must belong to the Drover window.");
+    if (guest.hostWebContents?.id !== ownerId) throw new Error("Preview webviews must belong to the Croki window.");
     if (guest.session !== electronSession.fromPartition(partitionFor(workspaceId))) {
       throw new Error("Preview webviews must use their own workspace partition.");
     }
@@ -119,7 +119,7 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
       const timer = setTimeout(() => {
         const waiters = attachWaiters.get(workspaceId) ?? [];
         attachWaiters.set(workspaceId, waiters.filter((waiter) => waiter.timer !== timer));
-        reject(new Error("The preview pane did not open. Open this Thread's Preview tab in Drover, then retry."));
+        reject(new Error("The preview pane did not open. Open this Thread's Preview tab in Croki, then retry."));
       }, ATTACH_WAIT_MS);
       const waiters = attachWaiters.get(workspaceId) ?? [];
       waiters.push({ resolve, reject, timer });
@@ -242,7 +242,7 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
     for (const entry of guests.values()) entry.driver.detach();
     guests.clear();
     for (const waiters of attachWaiters.values()) {
-      for (const waiter of waiters) { clearTimeout(waiter.timer); waiter.reject(new Error("Drover is quitting.")); }
+      for (const waiter of waiters) { clearTimeout(waiter.timer); waiter.reject(new Error("Croki is quitting.")); }
     }
     attachWaiters.clear();
   }

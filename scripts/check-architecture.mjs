@@ -21,7 +21,26 @@ const failures = [];
 // the agent-drivable preview. The broker owns the session-pinning invariant (one run pins one preview
 // session, no cross-thread access) and the tools module screens the preview vocabulary into the work
 // loop; work-loop-tools.mjs already sits near the service limit, so both land as feature-local modules.
-const BRAIN_MODULE_CEILING = 138;
+// 2026-07-23 re-baseline 138 → 140: firm/git-ship.mjs and firm/git-ship-prompts.mjs, the founder-gated
+// ship action. The split is the authority boundary itself: git-ship-prompts.mjs is preparation only
+// (sanitizers, prompts, deterministic drafts — what agents may touch) while git-ship.mjs holds drift
+// facts and the execute path (branch/commit/push/PR — founder-only). Folding them together would put
+// agent-reachable preparation and outward execution in one module and push it past the service limit.
+// 2026-07-23 re-baseline 140 → 141: provider-interventions.mjs is the one durable bridge from
+// provider-native questions/permissions into the existing founder wall and exact session resume.
+// Keeping normalization, one-shot grants, and resume in one feature module avoids provider-specific
+// policy leaking across wall.mjs, work-loop.mjs, and the Claude runtime.
+// 2026-07-23 re-baseline 141 → 146: the local journey-observation boundary adds four cohesive modules
+// for staging/profile privacy, deterministic aggregation, provisional mapping proposals, and HTTP
+// routes. dialogue-event-stream.mjs is the fifth: extracting the existing SSE transport keeps
+// dialogue-routes.mjs under the 500-line service ceiling without creating another conversation path.
+// 2026-07-23 re-baseline 146 → 148: streaming parity adds two modules on the token path. drive-stream.mjs
+// is the payload-carrying bus a forming reply rides (the existing firm-events.mjs stays data-free, so a
+// token cannot cost a timeline refetch), and codex-events.mjs isolates the Codex CLI's JSONL event shapes
+// so the adapter reads one normalized stream instead of parsing item families inline.
+// 2026-07-23 re-baseline 148 → 149: code-workspace-setup.mjs isolates dependency linking and founder
+// consequence guards after code-workspace.mjs crossed the authoritative 500-line service ceiling.
+const BRAIN_MODULE_CEILING = 149;
 
 function files(directory, pattern) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

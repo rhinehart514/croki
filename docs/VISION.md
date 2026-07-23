@@ -1,11 +1,11 @@
-# VISION — Drover
+# VISION — Croki
 
 ## Thesis
 
 Speed is a moat. The founder who can change the Product and every path to market, learn from reality, and make
 the next move before competitors coordinate has a structural advantage.
 
-Drover is a Product and GTM Development Environment for founders building with agents. It gives one founder a
+Croki is a Product and GTM Development Environment for founders building with agents. It gives one founder a
 coherent environment for directing Claude and Codex, pursuing many approaches, doing work that does not scale,
 changing the Product when reality demands it, and compounding every useful result into improving velocity.
 
@@ -29,12 +29,12 @@ direction → exact work → provisional Product/GTM alternatives
           → selective Product change → faster next work
 ```
 
-Drover wins when each loop is faster and more informed than the one before it—not when it contains more workflow
+Croki wins when each loop is faster and more informed than the one before it—not when it contains more workflow
 machinery.
 
 ## Non-goals
 
-Drover is not an AI org chart, pipeline builder, release manager, campaign database, autonomous CEO, or safety
+Croki is not an AI org chart, pipeline builder, release manager, campaign database, autonomous CEO, or safety
 dashboard. It does not reduce Claude or Codex to a planner. It does not require scalable process before learning.
 It does not turn every market act into a release or every approach into a campaign.
 

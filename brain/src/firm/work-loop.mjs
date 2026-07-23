@@ -1,22 +1,11 @@
-// work-loop.mjs — the one loop, driven (FIRM-SPEC.md "The one loop": diverge → stage → wall →
-// decide → outcome → feed). A teammate drives real work through the existing provider-neutral
-// runtime adapters directly. The whole resume state is
-// `{ runtimeSessionId, stepCount, spentUsd, pausedFor }` — living on the bet
-// once one exists, or on a tiny per-teammate work record before the first fork — never a 40-field
-// session.
-//
-// The ctx this module builds is the small callback seam every retained runtime adapter implements
-// (isCancelled/currentStatus/onTurn/onText/onToolStart/onToolError/runTool/onRuntimeSession/onCost/
-// resumePrompt/runtimeSessionId/spentUsd/maxSteps/stepCount/model/system/tools), built here because
-// the drive has no separate session store or execution ledger. Divergence is prompt-level only
-// (FIRM-SPEC.md "What stays open"): the system prompt tells the
-// teammate to fork genuinely divergent bets; the host never counts or shapes them.
+// The provider-neutral loop: diverge → stage → wall → decide → outcome → feed. Native runtimes own
+// their agent loops; Croki owns durable resume state, cancellation, and founder authority.
 
 import { getVentureDoc } from "./venture-store.mjs";
 import { getRuntime, selectRuntime } from "../runtimes/index.mjs";
 import { appendEvent, buildToolSet, releasePreviewPin } from "./work-loop-tools.mjs";
 import { summon } from "./crew.mjs";
-import { appendConversationMessage, listConversation, stampConversationRuntime } from "./conversation.mjs";
+import { appendConversationMessage, listConversation } from "./conversation.mjs";
 import { CONFIGURATION_KEY, configuredAgent, ensureInitialFirmParticipant } from "./configuration.mjs";
 import { buildCoordinationSeam } from "./work-loop-coordination.mjs";
 import { beginActiveDrive } from "./active-drives.mjs";
@@ -24,12 +13,12 @@ import { buildStreamSeam } from "./work-loop-stream.mjs";
 import { buildArchitectureContext, buildWorkingTheoryContext } from "./architecture-context.mjs";
 import { buildWorkLoopSystem } from "./work-loop-prompt.mjs";
 import { createWorkLoopReceipts } from "./work-loop-receipts.mjs";
-import { buildWorkHandoff } from "./work-loop-handoff.mjs";
-import { captureWorkingTheoryBaseline, checkWorkingTheoryCompletion } from "./working-theory-completion.mjs";
+import { settleDriveIntoConversation } from "./work-loop-handoff.mjs";
+import { captureWorkingTheoryBaseline } from "./working-theory-completion.mjs";
 import { loadWork, prepareRuntimeResume, saveWork } from "./work-loop-state.mjs";
-import { beginDriveRun, finishDriveRun } from "./work-loop-run.mjs";
+import { beginDriveRun } from "./work-loop-run.mjs";
 import { drainSteer } from "./work-loop-steer.mjs";
-import { withParticipantDriveLease } from "./work-loop-drive-lease.mjs";
+import { exactWorkScope, withParticipantDriveLease } from "./work-loop-drive-lease.mjs";
 import { codingWorkspaceEnvironment, updateCodingSession } from "./code-workspace.mjs";
 import { isCodingDirection } from "./code-intent.mjs";
 import { executeProviderTurn, startCodingRun } from "./work-loop-coding.mjs";
@@ -41,23 +30,24 @@ import {
   UNMEASURED_DRIVE_ESTIMATE_USD,
 } from "./work-loop-budget.mjs";
 import { publicImageAttachments } from "./image-attachments.mjs";
+import { buildWorkLoopProviderIntervention, consumeInPlaceContinuation } from "./provider-interventions.mjs";
 export { getAgentDailySpend } from "./work-loop-budget.mjs";
 const DEFAULT_MAX_STEPS = 24;
-// driveTeammate — the whole loop, one call. Builds the retained runtime callback seam
-// already proves, selects the runtime, and drives
-// to the next pause. `deps` lets callers (and tests) inject `park`, `client`/`query`/`runtime`
-// (forwarded to selectRuntime), `taste`, `ventureStore`, and `cwd` without reaching into module
-// internals — the same injection convention brain/test/runtimes.test.mjs already uses.
+// Build the retained provider-neutral runtime seam and drive it to the next pause.
 export async function driveTeammate(input = {}) {
   const { ventureId, teammateRef, goal, betId = null, initiatedBy = null, options = {}, deps = {} } = input;
   if (!ventureId) throw new Error("driveTeammate() needs a ventureId.");
   if (!teammateRef) throw new Error("driveTeammate() needs a teammateRef.");
   if (!goal) throw new Error("driveTeammate() needs a goal.");
+  // Already answered inside a live turn (provider-interventions.mjs): that warm session still holds the
+  // provider's callback, so continuing it here would fork a second run over one Thread. The marker is
+  // one-shot and consumed before the drive lease, so no other drive is touched.
+  if (initiatedBy === "founder" && consumeInPlaceContinuation({ ventureId, teammateRef, betId, target: input.target, goal })) return null;
   return withParticipantDriveLease({
     ventureId,
     teammateRef,
     betId,
-    workScopeRef: input.target?.workScopeRef ?? null,
+    workScopeRef: exactWorkScope(input.target),
     explicitContinuation: initiatedBy === "founder" || initiatedBy === "agent",
     options,
     deps,
@@ -96,7 +86,7 @@ async function driveTeammateLeased({
     : ensureInitialFirmParticipant(ventureId, teammateRef, options);
   const agent = configuredAgent(configuration, teammateRef);
   if (!agent) throw Object.assign(new Error(`Participant "${teammateRef}" is not in this venture's firm configuration.`), { code: "participant_not_configured" });
-  const workScopeRef = target?.workScopeRef ?? null;
+  const workScopeRef = exactWorkScope(target);
   const loaded = loadWork({ ventureId, teammateRef, betId, workScopeRef, options });
   const bet = loaded.bet;
   let work = loaded.work;
@@ -127,12 +117,10 @@ async function driveTeammateLeased({
         relationshipId: target.theoryRelationshipId,
       }, options)
     : null;
-  // The initiating message is recorded once. A caller that already durably wrote the founder direction
-  // (e.g. dialogue-routes records it before routing) passes recordInitiation: false so the direction is
-  // not duplicated in the thread.
-  // The initiating message id becomes the run's originMessageRef. When this loop records the direction
-  // itself we capture the appended id; when a caller (e.g. dialogue-routes) already wrote it and passes
-  // recordInitiation:false, that caller supplies originMessageRef so the join stays exact rather than guessed.
+  // The initiating message is recorded once, and its id becomes the run's originMessageRef. When this loop
+  // records the direction itself we capture the appended id; a caller that already durably wrote it (e.g.
+  // dialogue-routes records it before routing) passes recordInitiation:false and supplies originMessageRef,
+  // so the direction is not duplicated in the thread and the run's join stays exact rather than guessed.
   let initiatingMessageId = originMessageRef;
   if ((initiatedBy === "founder" || initiatedBy === "agent") && recordInitiation) {
     const initiation = appendConversationMessage({
@@ -198,8 +186,8 @@ async function driveTeammateLeased({
 
   // Drain any founder steer queued while prior work ran (the §2.7 checkpoint seam). This is the honest
   // "adjusts on the next step": a steer reply the founder made during a run is folded into THIS resume's
-  // brief, then cleared. Landed via work-loop-steer.mjs (a sibling module) so work-loop.mjs stays under
-  // its LOC ceiling. Applies to a fresh drive on an existing effort too (a steer can arrive between runs).
+  // brief, then cleared (work-loop-steer.mjs). Applies to a fresh drive on an existing effort too — a
+  // steer can arrive between runs.
   const steerBrief = (betId ?? bet?.id)
     ? drainSteer({ ventureId, betId: betId ?? bet?.id }, options)
     : null;
@@ -258,6 +246,13 @@ async function driveTeammateLeased({
     throw error;
   }
 
+  const providerIntervention = buildWorkLoopProviderIntervention({
+    ventureId, targetBetId, teammateRef, selection, effectiveModel, effectiveEffort, directSdk, target,
+    driveRun, activeDrive, workScopeRef, configuration, architectureContext, options, getWork: () => currentWork,
+    putWork: (nextWork) => { currentWork = nextWork; checkpointWork(); },
+    park: deps.park ?? (await import("./wall.mjs")).park,
+    appendEvent: (detail) => appendEvent(ventureId, targetBetId, { type: "asked", detail }, options),
+  });
   const built = buildToolSet({
     ventureId,
     teammateRef,
@@ -273,6 +268,7 @@ async function driveTeammateLeased({
     target,
     architectureRevision: architectureContext?.architectureRevision ?? null,
     previewWorkspace: codingWorkspace ?? null, runId: activeDrive.id,
+    continuation: providerIntervention.continuation,
   });
   const outwardBlocked = configuration.authority.outwardEffects === "blocked" || agent.authority.outwardEffects === "blocked";
   const tools = agent.capabilities.firmTools
@@ -338,6 +334,7 @@ async function driveTeammateLeased({
     signal: activeDrive.signal,
     isCancelled: () => activeDrive.signal.aborted || externallyCancelled(),
     currentStatus: () => (currentWork.pausedFor ? "paused" : "running"),
+    onProviderIntervention: providerIntervention.handler,
     onTurn: () => {
       currentWork = { ...currentWork, stepCount: (Number(currentWork.stepCount) || 0) + 1 };
       checkpointWork();
@@ -383,107 +380,52 @@ async function driveTeammateLeased({
   };
 
   const spentBeforeDrive = Number(currentWork.spentUsd) || 0;
-  const execution = await executeProviderTurn({
-    adapter: selection.adapter, ctx, workspace: codingWorkspace, ventureId,
-    runRef: `run:${activeDrive.id}`, options, receipts, activeDrive,
-    afterDrive: () => {
-      if (spendAvailability.cap != null) {
-        const measured = Math.max(0, (Number(currentWork.spentUsd) || 0) - spentBeforeDrive);
-        const fallback = selection.adapter.costReporting === "usd"
-          ? Math.min(UNMEASURED_DRIVE_ESTIMATE_USD, spendAvailability.remainingUsd)
-          : UNMEASURED_DRIVE_ESTIMATE_USD;
-        settleAgentDailySpend({
-          ventureId,
-          teammateRef,
-          reservation: spendAvailability.reservation,
-          usd: measured > 0 ? measured : fallback,
-          nowMs: driveStartedAt,
-          options,
-        });
-      }
-    },
-  });
-  const { outcome } = execution;
-  releasePreviewPin(activeDrive.id); // the finished run frees its preview for the Thread's next run
-  codingWorkspace = execution.workspace;
-  if (outcome.kind === "cancelled") {
-    appendEvent(ventureId, betId ?? bet?.id, { type: "work_stopped", detail: "Stopped by the founder. Staged work was kept." }, options);
+  let execution;
+  try {
+    execution = await executeProviderTurn({
+      adapter: selection.adapter, ctx, workspace: codingWorkspace, ventureId,
+      runRef: `run:${activeDrive.id}`, options, receipts, activeDrive,
+      afterDrive: () => {
+        if (spendAvailability.cap != null) {
+          const measured = Math.max(0, (Number(currentWork.spentUsd) || 0) - spentBeforeDrive);
+          const fallback = selection.adapter.costReporting === "usd"
+            ? Math.min(UNMEASURED_DRIVE_ESTIMATE_USD, spendAvailability.remainingUsd)
+            : UNMEASURED_DRIVE_ESTIMATE_USD;
+          settleAgentDailySpend({
+            ventureId,
+            teammateRef,
+            reservation: spendAvailability.reservation,
+            usd: measured > 0 ? measured : fallback,
+            nowMs: driveStartedAt,
+            options,
+          });
+        }
+      },
+    });
+  } finally {
+    releasePreviewPin(activeDrive.id); // every terminal path frees the preview for the Thread's next run
   }
+  const { outcome } = execution;
+  codingWorkspace = execution.workspace;
+  if (outcome.kind === "cancelled") appendEvent(ventureId, betId ?? bet?.id, { type: "work_stopped", detail: "Stopped by the founder. Staged work was kept." }, options);
   currentWork = {
     ...currentWork,
     pausedFor: outcome.kind === "paused" ? (currentWork.pausedFor ?? outcome.summary ?? "Paused.") : null,
+    nativePermissionGrant: null,
   };
   saveWork({ ventureId, teammateRef, betId, workScopeRef, bet, work: currentWork, options });
 
+  // The drive reached its pause. Everything it owes the Thread — its teammate messages, their runtime
+  // stamp, the handoff for what landed, the working-theory check, and the terminal run receipt — settles
+  // in one place (work-loop-handoff.mjs) so this loop stays the drive and nothing more.
   const runtimeReceipt = buildRuntimeReceipt(selection, effectiveModel, configuration.revision);
-  let newTeammateMessages = listConversation(ventureId, options)
-    .filter((message) => (
-      message.role === "teammate"
-      && message.teammateRef === teammateRef
-      && !priorTeammateMessageIds.has(message.id)
-    ));
-  if (!newTeammateMessages.length) {
-    const directAnswer = narration.at(-1)
-      ?? (outcome.kind === "completed" ? String(outcome.summary ?? "").trim() : "");
-    if (directAnswer) {
-      newTeammateMessages = [appendConversationMessage({
-        ventureId,
-        role: "teammate",
-        content: directAnswer,
-        teammateRef,
-        betId,
-        runtime: runtimeReceipt,
-        coordination: coordination?.request ?? null,
-        target,
-      }, options)];
-    }
-  }
-  const stampedMessages = stampConversationRuntime(
-    ventureId,
-    newTeammateMessages.map((message) => message.id),
-    runtimeReceipt,
-    options,
-    coordination?.request ?? null,
-  );
-
-  const afterWallItems = ventureStore.listVentureDocs(ventureId, "decisions", options);
-  const handoffDraft = buildWorkHandoff({
-    beforeBets,
-    afterBets: ventureStore.listVentureDocs(ventureId, "bets", options),
-    beforeWallItems,
-    afterWallItems,
-  });
-  const handoff = handoffDraft ? appendConversationMessage({
-    ventureId,
-    role: "system",
-    kind: "handoff",
-    content: handoffDraft.content,
-    teammateRef,
-    betId,
-    target,
-    changes: handoffDraft.changes,
-  }, options) : null;
-  const completion = checkWorkingTheoryCompletion({ ventureId, baseline: theoryBaseline, outcome, target, required: workingTheoryDrive }, options);
-  // Terminal Run completion: add the durable decision joins parked during this drive and mint an immutable
-  // WorkflowExecutionReceipt for EVERY founder-authorized terminal — bet-scoped OR betless (betRef null).
-  // A drive that reached here completed OR cancelled (a cancelled outcome returned by adapter.drive still
-  // arrives here and finishes its run with a terminal cancelled receipt, so cancelled stays distinct from
-  // completed post-hoc). Only a truly INTERRUPTED drive — one that THREW before this point — leaves its run
-  // completedAt:null, historical-unknown, never a false completion. Fail-safe: finishDriveRun swallows its
-  // own errors so a completion failure never changes the drive's already-built return.
-  finishDriveRun(driveRun, {
-    outcome,
-    beforeWallItems,
-    afterWallItems,
-    runtime: runtimeReceipt,
-    modelRevision: configuration.revision,
-    messageRefs: [...stampedMessages, ...(handoff ? [handoff] : [])].map((message) => `conversation:${message.id}`),
-    subjectRefs: [...new Set([
-      targetBetId,
-      ...(handoffDraft?.changes?.openedBetIds ?? []),
-      ...(handoffDraft?.changes?.stagedBetIds ?? []),
-      ...(handoffDraft?.changes?.wallBetIds ?? []),
-    ].filter(Boolean))].map((id) => `bet:${id}`),
+  const settled = settleDriveIntoConversation({
+    ventureId, teammateRef, betId, target, options,
+    outcome, narration, priorTeammateMessageIds, runtimeReceipt,
+    coordinationRequest: coordination?.request ?? null,
+    beforeBets, beforeWallItems, ventureStore,
+    driveRun, configurationRevision: configuration.revision,
+    targetBetId, theoryBaseline, workingTheoryDrive,
   });
 
   return {
@@ -491,9 +433,9 @@ async function driveTeammateLeased({
     work: currentWork,
     consultedTools: [...consultedNames],
     runtime: runtimeReceipt,
-    messages: stampedMessages,
-    handoff,
-    completion,
+    messages: settled.messages,
+    handoff: settled.handoff,
+    completion: settled.completion,
     codingWorkspace,
   };
 }

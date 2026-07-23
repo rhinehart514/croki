@@ -12,6 +12,26 @@ import { listVentures } from "./venture-store.mjs";
 import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { decideWithExecution } from "./effect-executors.mjs";
 
+// An answer has native-TUI continuation semantics: it becomes the next founder turn in the exact
+// Thread, then the same provider session/model/worktree resumes.
+export async function resumeAnsweredIntervention(receipt, { drive = null } = {}) {
+  const continuation = receipt?.effect?.continuation;
+  if (receipt?.purpose !== "answer" || receipt?.decision !== "answer" || !continuation?.teammateRef) return null;
+  const run = drive ?? (await import("./work-loop.mjs")).driveTeammate;
+  return run({
+    ventureId: receipt.ventureId,
+    teammateRef: continuation.teammateRef,
+    goal: receipt.note,
+    betId: receipt.betId ?? null,
+    runtime: continuation.runtime ?? null,
+    model: continuation.model ?? null,
+    effort: continuation.effort ?? null,
+    directSdk: continuation.directSdk === true,
+    initiatedBy: "founder",
+    target: continuation.target ?? null,
+  });
+}
+
 export default async function handle({ req, res, url }) {
   // The portfolio wall (F8): every venture's pending decisions in one surface. A founder-gated READ —
   // it aggregates across ventures, so it stands on the same authority boundary as a decide() write
@@ -59,7 +79,14 @@ export default async function handle({ req, res, url }) {
         { ventureId, itemId, decision: body?.decision, note: body?.note ?? null },
         { req },
       );
-      json(res, 200, { receipt });
+      let continuation = null;
+      let continuationError = null;
+      try {
+        continuation = await resumeAnsweredIntervention(receipt);
+      } catch (error) {
+        continuationError = error instanceof Error ? error.message : String(error);
+      }
+      json(res, 200, { receipt, continuation, continuationError });
     } catch (err) {
       // wall.decide() throws the founder-authority guard's own 403, the cross-venture 404, the
       // away-hold 409, and the deploy-confirmation 409 — each already carries its own status; anything

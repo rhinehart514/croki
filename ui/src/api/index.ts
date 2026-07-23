@@ -7,3 +7,4 @@ export * from "./credentials";
 export * from "./coding";
 export * from "./composer";
 export * from "./events";
+export * from "./drive-stream";

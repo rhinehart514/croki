@@ -37,7 +37,7 @@ export function VentureCreateDialog({
           <div>
             <span>New product</span>
             <h2 id="venture-create-title">Add a codebase</h2>
-            <p>Choose its folder. Drover reads it locally and opens a clean Work space for it.</p>
+            <p>Choose its folder. Croki reads it locally and opens a clean Work space for it.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close new venture">
             <X aria-hidden="true" />

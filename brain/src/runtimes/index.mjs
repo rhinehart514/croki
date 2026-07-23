@@ -9,10 +9,10 @@
 //   async drive(ctx) -> { kind, summary? }
 //       kind ∈ "completed" | "paused" | "cancelled" | "budget"
 //
-// `ctx` carries the goal/model/system/tools plus Drover-owned callbacks
+// `ctx` carries the goal/model/system/tools plus Croki-owned callbacks
 // (isCancelled, currentStatus, onTurn, onText, onToolStart, onToolError,
 // runTool, persistMessages). The runtime only calls those callbacks.
-// That keeps persistence and safety on Drover's side of the line no
+// That keeps persistence and safety on Croki's side of the line no
 // matter which runtime (API, Claude Code subprocess, or a future Codex
 // subprocess) is actually reasoning.
 

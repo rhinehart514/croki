@@ -1,6 +1,6 @@
 // The dogfood feature builder — "the house fixes itself when you complain about it."
 //
-// The founder, working in any codebase, requests a Drover feature through the product's own
+// The founder, working in any codebase, requests a Croki feature through the product's own
 // MCP server. This module is the deterministic spine that services the request:
 //
 //   1. the request lands in dogfood/queue/ as a normal queue item (kind: feature)
@@ -116,7 +116,7 @@ function realGit(args, cwd = REPO_ROOT) {
 
 export function builderPrompt({ report, context, snapshot, branch }) {
   return [
-    `You are the dogfood feature builder for Drover, working headless in an isolated git worktree on branch ${branch}. The founder requested, mid-flow:`,
+    `You are the dogfood feature builder for Croki, working headless in an isolated git worktree on branch ${branch}. The founder requested, mid-flow:`,
     "",
     `"${report}"`,
     context ? `\nWhat was happening: ${context}` : "",
@@ -167,7 +167,7 @@ export async function buildFeatureRequest(input = {}, options = {}) {
       fs.mkdirSync(worktreeRoot, { recursive: true });
       const realWorktreeRoot = fs.realpathSync(worktreeRoot);
       if (!inside(repoRoot, realWorktreeRoot)) {
-        throw new Error("The product-change worktree root resolves outside the Drover repository.");
+        throw new Error("The product-change worktree root resolves outside the Croki repository.");
       }
     }
     baseSha = git(["rev-parse", "HEAD"], repoRoot);
@@ -216,7 +216,7 @@ export async function buildFeatureRequest(input = {}, options = {}) {
     if (commits > 0) {
       git(["reset", "--mixed", baseSha], worktree);
       commits = Number(git(["rev-list", "--count", `${baseSha}..${branch}`], worktree) || "0");
-      if (commits > 0) throw new Error("Drover could not return the product change to an uncommitted review state.");
+      if (commits > 0) throw new Error("Croki could not return the product change to an uncommitted review state.");
     }
     const dirty = git(["status", "--porcelain"], worktree);
 
@@ -262,7 +262,7 @@ export async function buildFeatureRequest(input = {}, options = {}) {
     }
     updateFrictionItem(item.file, {
       fields: { status: "failed", ...(preserve ? { branch, worktree, commits: String(commits) } : { branch: "none" }) },
-      appendSection: `## Build result\n\nThe build failed${preserve ? `, and its isolated worktree remains in \`${worktree}\` because it contains reviewable work or could not be safely inspected` : " before producing reviewable work"}. Nothing was pushed, merged, deployed, or released.${commits > 0 ? ` ${commits} local commit${commits === 1 ? " remains" : "s remain"}; Drover did not claim an uncommitted state.` : ""}\n\n\`\`\`\n${message}${inspectionError ? `\nSafety inspection: ${inspectionError}` : ""}\n\`\`\``,
+      appendSection: `## Build result\n\nThe build failed${preserve ? `, and its isolated worktree remains in \`${worktree}\` because it contains reviewable work or could not be safely inspected` : " before producing reviewable work"}. Nothing was pushed, merged, deployed, or released.${commits > 0 ? ` ${commits} local commit${commits === 1 ? " remains" : "s remain"}; Croki did not claim an uncommitted state.` : ""}\n\n\`\`\`\n${message}${inspectionError ? `\nSafety inspection: ${inspectionError}` : ""}\n\`\`\``,
     });
     return { file: item.file, status: "failed", branch: preserve ? branch : null, worktree: preserve ? worktree : null, commits: preserve ? commits : 0, error: message };
   }

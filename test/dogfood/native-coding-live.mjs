@@ -14,7 +14,7 @@ import { discardCodingWorkspace } from "../../brain/src/firm/code-workspace.mjs"
 import { freePort, ROOT, waitForDom } from "../browser/fixtures/browser-harness.mjs";
 import { launchDroverElectron } from "../browser/lib/electron-app.mjs";
 
-const DIRECTION = "Implement only the continuous-integration acceptance wiring. Limit the implementation to package.json and .github/workflows/ci.yml: add a macOS GitHub Actions job that installs dependencies and runs the complete acceptance gate; include the native-coding browser journey in firm acceptance, include the real Electron receipt in test:electron, and include test:electron in test:acceptance. Do not edit documentation or native coding implementation. Run syntax checks and npm test; leave browser and Electron host receipts to Drover's host verification. Do not commit, push, deploy, or open a pull request.";
+const DIRECTION = "Implement only the continuous-integration acceptance wiring. Limit the implementation to package.json and .github/workflows/ci.yml: add a macOS GitHub Actions job that installs dependencies and runs the complete acceptance gate; include the native-coding browser journey in firm acceptance, include the real Electron receipt in test:electron, and include test:electron in test:acceptance. Do not edit documentation or native coding implementation. Run syntax checks and npm test; leave browser and Electron host receipts to Croki's host verification. Do not commit, push, deploy, or open a pull request.";
 
 function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
@@ -54,14 +54,14 @@ let success = false;
 try {
   fixture = resumedHome
     ? { venture: listVentures(options)[0], workspace: null }
-    : { venture: createVenture({ name: "Drover dogfood", repository: ROOT }, options), workspace: null };
+    : { venture: createVenture({ name: "Croki dogfood", repository: ROOT }, options), workspace: null };
   if (!fixture.venture) throw new Error(`No retained dogfood venture exists at ${home}`);
   fixture.workspace = listVentureDocs(fixture.venture.id, "codeWorkspaces", options).find((entry) => entry.goal.includes("continuous integration")) ?? null;
   app = await launchDroverElectron({ root: ROOT, home, port: await freePort() });
-  await waitForDom(app.client, `!!document.querySelector('.thread-composer textarea')`, "Drover did not open its conversation");
+  await waitForDom(app.client, `!!document.querySelector('.thread-composer textarea')`, "Croki did not open its conversation");
   const directedAt = Date.now();
   if (fixture.workspace) {
-    await waitFor(app.client, `fetch('/api/ventures/${fixture.venture.id}/coding-workspaces').then((response) => response.json()).then((body) => body.workspaces.some((entry) => entry.id === '${fixture.workspace.id}' && entry.status === 'interrupted'))`, "Drover did not recover the interrupted live workspace", 30_000);
+    await waitFor(app.client, `fetch('/api/ventures/${fixture.venture.id}/coding-workspaces').then((response) => response.json()).then((body) => body.workspaces.some((entry) => entry.id === '${fixture.workspace.id}' && entry.status === 'interrupted'))`, "Croki did not recover the interrupted live workspace", 30_000);
     await send(app.client, "Resume the retained implementation after the interruption. Implement the requested CI and acceptance wiring, resolve every verification failure, rerun the exact failed checks, and return only when the repository state and proof are reviewable. Do not commit or push.");
   } else {
     await send(app.client, DIRECTION);
@@ -84,7 +84,7 @@ try {
 
   await waitForDom(app.client, `!!document.querySelector('.work-workbench .code-workspace')`, "the live implementation did not return in the Work ADE");
   assert.equal(await app.client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Approve checkpoint'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
-  await waitFor(app.client, `/Exact checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "founder review did not persist", 20_000);
+  await waitFor(app.client, `/Checkpoint approved/.test(document.querySelector('.work-workbench')?.textContent || '')`, "founder review did not persist", 20_000);
   assert.equal(await app.client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Apply to source workspace'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
   assert.equal(await app.client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Confirm apply to source workspace'); button?.click(); return Boolean(button && !button.disabled); })()`), true);
   await waitFor(app.client, `(document.querySelector('.work-status')?.textContent || '').trim() === 'applied'`, "the founder-held apply did not complete", 30_000);

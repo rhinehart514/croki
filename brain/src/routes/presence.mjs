@@ -8,7 +8,7 @@
 // heartbeat/away endpoints; only the browser driver changes, not this surface or presence.mjs.
 //
 // FOUNDER WRITE (EXPERIMENT-MACHINE-SPEC rail 1, FIX 2c). Marking "present" REMOVES a safety hold, so
-// agent-stamped traffic cannot do it. The loopback Drover page can heartbeat directly; a missing request
+// agent-stamped traffic cannot do it. The loopback Croki page can heartbeat directly; a missing request
 // still fails closed. The GET stays open because a read removes no hold, and the lease lapses to away.
 import { json, readBody } from "./util.mjs";
 import { markPresent, markAway, getPresence } from "../presence.mjs";

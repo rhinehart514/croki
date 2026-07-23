@@ -13,7 +13,7 @@ function accountFor(item: WallQueueItemView) {
     return text(outcome?.body) ?? text(effect.body) ?? "The market spoke; review what returned.";
   }
   if (item.purpose === "end-bet") return text(effect.reason) ?? "An agent is asking whether this work should end.";
-  if (effect.kind === "product-change") return text(effect.diffStat) ?? "A product change is ready for exact review.";
+  if (effect.kind === "product-change") return text(effect.diffStat) ?? "A product change is ready for review.";
   if (effect.kind === "deploy") return text(effect.destination) ?? "A deploy is held for explicit authorization.";
   const message = text(effect.message);
   const recipients = Array.isArray(effect.recipients) ? effect.recipients.filter(text).join(", ") : null;

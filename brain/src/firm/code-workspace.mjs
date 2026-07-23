@@ -14,6 +14,7 @@ import { listVentures, getVentureDoc, listVentureDocs, now, setVentureDoc } from
 import { recordCodingProductConsequence } from "./semantic-model-store.mjs";
 import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
 import { hostProjectCheck } from "./code-workspace-verification.mjs";
+import { prepareCodingWorkspaceFilesystem } from "./code-workspace-setup.mjs";
 
 export const CODE_WORKSPACE_COLLECTION = "codeWorkspaces";
 const ACTIVE = new Set(["preparing", "running", "interrupted", "reviewable", "needs-verification", "failed-verification"]);
@@ -57,54 +58,6 @@ function save(record, options = {}) {
   return updated;
 }
 
-function linkDependencyTree(source, destination) {
-  fs.mkdirSync(destination, { recursive: true });
-  const localCaches = new Set([".cache", ".tmp", ".vite"]);
-  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-    const target = path.join(destination, entry.name);
-    if (localCaches.has(entry.name)) {
-      fs.mkdirSync(target, { recursive: true });
-    } else if (entry.name.startsWith("@") && entry.isDirectory()) {
-      fs.mkdirSync(target, { recursive: true });
-      for (const scoped of fs.readdirSync(path.join(source, entry.name))) {
-        fs.symlinkSync(path.join(source, entry.name, scoped), path.join(target, scoped), "junction");
-      }
-    } else {
-      fs.symlinkSync(path.join(source, entry.name), target, "junction");
-    }
-  }
-}
-
-function linkDependencies(repo, worktree) {
-  for (const relative of ["node_modules", "brain/node_modules", "ui/node_modules"]) {
-    const source = path.join(repo, relative);
-    const destination = path.join(worktree, relative);
-    if (!fs.existsSync(source) || fs.existsSync(destination)) continue;
-    linkDependencyTree(source, destination);
-  }
-}
-
-function installConsequenceGuards(worktree) {
-  const gitDir = path.resolve(worktree, git(worktree, ["rev-parse", "--git-dir"]));
-  const hooks = path.join(gitDir, "drover-founder-guards");
-  fs.mkdirSync(hooks, { recursive: true });
-  const protectedRoot = worktree.replaceAll("'", "'\"'\"'");
-  const script = `#!/bin/sh
-protected_root='${protectedRoot}'
-current_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
-if [ "$current_root" = "$protected_root" ]; then
-  echo 'Drover: commit, merge, and push remain founder-held consequences.' >&2
-  exit 1
-fi
-exit 0
-`;
-  for (const name of ["pre-commit", "pre-merge-commit", "pre-push", "pre-rebase"]) {
-    const target = path.join(hooks, name);
-    fs.writeFileSync(target, script, { mode: 0o755 });
-  }
-  return hooks;
-}
-
 function newWorkspaceId(runId) {
   return `code-${String(runId).replace(/^drive-/, "").slice(0, 36)}`;
 }
@@ -145,14 +98,13 @@ export function openCodingWorkspace({ ventureId, runId, threadRef, betId = null,
   fs.mkdirSync(root, { recursive: true });
 
   // Snapshot the founder's exact starting tree (including uncommitted files) without touching their
-  // index. This lets Drover dogfood safely while its own source checkout contains reviewable work.
+  // index. This lets Croki dogfood safely while its own source checkout contains reviewable work.
   const sourceHead = git(repo, ["rev-parse", "HEAD"]);
   const sourcePatchHash = patchDigest(completeUncommittedPatch(repo));
-  const sourceCheckpoint = captureCheckpoint({ worktree: repo, ref: checkpointRef(id, "source"), message: `Drover source baseline for ${id}` });
+  const sourceCheckpoint = captureCheckpoint({ worktree: repo, ref: checkpointRef(id, "source"), message: `Croki source baseline for ${id}` });
   git(repo, ["worktree", "add", "-b", branch, worktree, sourceCheckpoint.commit]);
-  linkDependencies(repo, worktree);
-  const guardHooks = installConsequenceGuards(worktree);
-  const baseline = captureCheckpoint({ worktree, ref: checkpointRef(id, "baseline"), message: `Drover coding baseline for ${id}` });
+  const guardHooks = prepareCodingWorkspaceFilesystem(repo, worktree, git);
+  const baseline = captureCheckpoint({ worktree, ref: checkpointRef(id, "baseline"), message: `Croki coding baseline for ${id}` });
   const timestamp = now();
   const settled = save({
     id, kind: "native-code", ventureId, threadRef, betId, goal,
@@ -231,10 +183,10 @@ export async function settleCodingWorkspace(ventureId, id, { runRef, outcome, er
   const expectedHead = record.workspaceHead ?? git(worktree, ["rev-parse", `${baseline.ref}^`]);
   const actualHead = git(worktree, ["rev-parse", "HEAD"]);
   if (actualHead !== expectedHead) {
-    throw new Error("The provider changed repository history; Drover retained the workspace but will not treat it as reviewable.");
+    throw new Error("The provider changed repository history; Croki retained the workspace but will not treat it as reviewable.");
   }
   const sequence = (record.checkpoints ?? []).filter((entry) => entry.id.startsWith("turn-")).length + 1;
-  const checkpoint = captureCheckpoint({ worktree, ref: checkpointRef(id, `turn-${sequence}`), message: `Drover run ${runRef} checkpoint` });
+  const checkpoint = captureCheckpoint({ worktree, ref: checkpointRef(id, `turn-${sequence}`), message: `Croki run ${runRef} checkpoint` });
   const diff = diffCheckpoints({ worktree, fromRef: baseline.ref, toRef: checkpoint.ref });
   const checkStartedAt = now();
   let diffCheck = { command: "git diff --check", kind: "host", status: "passed", exitCode: 0, startedAt: checkStartedAt, completedAt: now(), output: "No whitespace errors." };
@@ -295,7 +247,7 @@ function assertExactReviewable(record) {
   const currentHead = git(worktree, ["rev-parse", "HEAD"]);
   if (record.consequence?.commit) {
     if (currentHead !== record.consequence.commit || patchDigest(git(worktree, ["diff", "--patch", "--binary", "--no-color", "--no-ext-diff", baseline.ref, currentHead, "--"])) !== record.patchHash) {
-      throw new Error("The committed branch moved after founder review; Drover will not act on ambiguous history.");
+      throw new Error("The committed branch moved after founder review; Croki will not act on ambiguous history.");
     }
   } else {
     const expectedHead = record.workspaceHead ?? git(worktree, ["rev-parse", `${baseline.ref}^`]);
@@ -388,7 +340,7 @@ export function revertCodingWorkspaceApply(ventureId, id, options = {}) {
   if (record?.consequence?.action !== "applied") throw new Error("Only an applied coding checkpoint can be reverted.");
   const current = sourceState(record);
   if (current.head !== record.consequence.appliedSourceHead || current.patchHash !== record.consequence.appliedSourcePatchHash) {
-    throw new Error("The source workspace moved after apply; Drover will not reverse an ambiguous working tree.");
+    throw new Error("The source workspace moved after apply; Croki will not reverse an ambiguous working tree.");
   }
   const { diff } = assertExactReviewable(record);
   const patch = diff.endsWith("\n") ? diff : `${diff}\n`;
@@ -457,7 +409,7 @@ export function discardCodingWorkspace(ventureId, id, options = {}) {
   const record = getVentureDoc(ventureId, CODE_WORKSPACE_COLLECTION, id, options);
   if (!record) throw new Error(`No such coding workspace: ${id}`);
   const { repo, worktree } = assertCodingWorkspaceIdentity(record);
-  if (!record.branch.startsWith("drover/code-")) throw new Error("Refusing to discard a branch outside Drover's coding namespace.");
+  if (!record.branch.startsWith("drover/code-")) throw new Error("Refusing to discard a branch outside Croki's coding namespace.");
   git(repo, ["worktree", "remove", "--force", worktree]);
   try { git(repo, ["branch", "-D", record.branch]); } catch { /* already absent */ }
   for (const checkpoint of record.checkpoints ?? []) {
@@ -483,15 +435,39 @@ export function discardCodingWorkspace(ventureId, id, options = {}) {
   }, options);
 }
 
+// Isolated worktrees used to accumulate forever: one directory and one branch per coding session, never
+// reclaimed, until a repeated workspace name failed a later run outright. Reclamation is deliberately
+// narrow — only a COMMITTED workspace, whose work is already durable on its own drover/code-* branch, and
+// only when its tree is clean. The branch is kept, so nothing becomes unrecoverable. Reviewable, applied,
+// and interrupted workspaces still hold the only copy of founder work and are never touched here; ending
+// those stays the founder's call through discard.
+export function reclaimCommittedCodingWorktrees(options = {}) {
+  const reclaimed = [];
+  for (const venture of listVentures(options)) {
+    for (const record of listVentureDocs(venture.id, CODE_WORKSPACE_COLLECTION, options)) {
+      if (record.status !== "committed" || !record.worktree) continue;
+      try {
+        const { repo, worktree } = assertCodingWorkspaceIdentity(record);
+        if (git(worktree, ["status", "--porcelain"]).trim()) continue; // uncommitted work: leave it alone
+        git(repo, ["worktree", "remove", "--force", worktree]);
+        reclaimed.push(save({ ...record, worktree: null }, options));
+      } catch (error) {
+        console.warn(`[firm/code-workspace] worktree reclaim skipped for ${record.id}: ${error?.message ?? error}`);
+      }
+    }
+  }
+  return reclaimed;
+}
+
 export async function recoverInterruptedCodingWorkspaces(options = {}) {
   const recovered = [];
   for (const venture of listVentures(options)) {
     for (const record of listVentureDocs(venture.id, CODE_WORKSPACE_COLLECTION, options).filter((entry) => ["preparing", "running"].includes(entry.status))) {
       try {
-        const updated = await settleCodingWorkspace(venture.id, record.id, { runRef: record.runRefs.at(-1), outcome: { kind: "failed" }, error: "Drover restarted before the provider turn settled." }, options);
+        const updated = await settleCodingWorkspace(venture.id, record.id, { runRef: record.runRefs.at(-1), outcome: { kind: "failed" }, error: "Croki restarted before the provider turn settled." }, options);
         recovered.push(updated);
       } catch (error) {
-        recovered.push(save({ ...record, status: "interrupted", currentActivity: null, interruption: { message: error.message, at: now(), recovery: "Workspace lineage could not be verified; Drover will not resume or modify it automatically." } }, options));
+        recovered.push(save({ ...record, status: "interrupted", currentActivity: null, interruption: { message: error.message, at: now(), recovery: "Workspace lineage could not be verified; Croki will not resume or modify it automatically." } }, options));
       }
     }
   }

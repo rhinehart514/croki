@@ -138,7 +138,7 @@ describe("SELF-APPROVAL — a hand-crafted actor object shaped to LOOK like a fo
     // already established by the req check).
     assert.throws(
       () => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, { actor: { kind: "founder", ref: "founder", role: "founder" } }, {}, options),
-      /local Drover page/i,
+      /local Croki page/i,
     );
   });
 
@@ -305,7 +305,7 @@ describe("DEPLOY TWO-STEP — pre-stamped confirmation on the parked effect neve
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "deploy", target: "prod" } }, options);
     assert.throws(
       () => decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, {}, {}, options),
-      /local Drover page/i,
+      /local Croki page/i,
     );
     assert.throws(
       () => decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: { headers: AGENT_HEADERS } }, {}, options),
@@ -525,7 +525,7 @@ describe("KILL AUTHORITY — only the founder ends a bet; reject never implies a
   it("wall.decide({decision:'kill'}) is refused for a missing-request or agent-stamped caller — the bet is NOT ended", () => {
     const { venture, bet } = freshVenture("Kill authority via wall — refused");
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { question: "kill?" } }, options);
-    assert.throws(() => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, {}, {}, options), /local Drover page/i);
+    assert.throws(() => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, {}, {}, options), /local Croki page/i);
     assert.throws(
       () => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, { req: { headers: AGENT_HEADERS } }, {}, options),
       /model or MCP session/i,

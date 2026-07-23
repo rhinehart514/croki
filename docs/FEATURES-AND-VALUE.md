@@ -1,4 +1,4 @@
-# Drover features and value
+# Croki features and value
 
 `FIRM-SPEC.md` owns product physics; `STATE.md` owns proof.
 
@@ -33,6 +33,6 @@ simultaneous approaches coherent.
 
 ## Defensible advantage
 
-Drover compounds local venture context, exact execution history, evidence, provisional alternatives, and founder
+Croki compounds local venture context, exact execution history, evidence, provisional alternatives, and founder
 decisions into lower coordination cost and improving next-move speed. The moat is not a fixed workflow. It is the
 rate at which useful reality becomes coherent Product and GTM action.

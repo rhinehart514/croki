@@ -33,7 +33,7 @@ export function useProductGtmDrop({ targets, readOnlyReason, onUseAgent, onAskAg
   const onDrop = useCallback((event: DragEvent) => {
     event.preventDefault();
     dragDepth.current = 0; setDropActive(false);
-    if (readOnlyReason) { setDropNotice("Drover is not current enough to begin new work."); return; }
+    if (readOnlyReason) { setDropNotice("Croki is not current enough to begin new work."); return; }
     const target = targets.find((node) => node.id === droppedNodeId(event.target));
     const agentRef = event.dataTransfer.getData(AGENT_MIME);
     if (agentRef) {
@@ -49,7 +49,7 @@ export function useProductGtmDrop({ targets, readOnlyReason, onUseAgent, onAskAg
         if (!capability.id) throw new Error("missing capability");
         onAskAgent(target.data.ref, [`capability:${capability.id}`]);
         setDropNotice(`${capability.label ?? "Capability"} attached to exact work on ${target.data.name}.`);
-      } catch { setDropNotice("Drover could not identify that tool or source. Nothing was attached."); }
+      } catch { setDropNotice("Croki could not identify that tool or source. Nothing was attached."); }
       return;
     }
     setDropNotice("That item has no supported Product / GTM effect.");

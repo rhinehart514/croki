@@ -29,6 +29,8 @@ import { isFounderPresent as defaultIsFounderPresent } from "../presence.mjs";
 import { stampKnownEffectConsequences } from "./effect-consequences.mjs";
 import { stampDeployContract } from "./deploy-contract.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
+import { loadWork, saveWork } from "./work-loop-state.mjs";
+import { applyProviderInterventionDecision } from "./provider-interventions.mjs";
 
 function genId(prefix) {
   const stamp = now().replace(/\D/g, "").slice(0, 14);
@@ -203,7 +205,7 @@ export function decide(
   options = {},
 ) {
   // THE FOUNDER-AUTHORITY BOUNDARY. Every decide() call — release, kill, reject, or authorize-deploy — is
-  // a founder-only write. The local Drover page needs no unlock ceremony; an agent-stamped request or a
+  // a founder-only write. The local Croki page needs no unlock ceremony; an agent-stamped request or a
   // direct call with no real HTTP request is refused before any effect, bet, or receipt is touched.
   authorizeFounderWriteForRequest(auth?.req, "Deciding a wall item");
   if (!ALL_DECISIONS.has(decision)) {
@@ -322,15 +324,34 @@ export function decide(
     receipt = { ...receipt, learning: ended.learning };
   }
 
-  if (decision === "answer" && item.betId) {
+  if ((decision === "answer" || decision === "dismiss") && item.effect?.continuation?.teammateRef) {
+    const continuation = item.effect.continuation;
+    const loaded = loadWork({
+      ventureId,
+      teammateRef: continuation.teammateRef,
+      betId: item.betId,
+      workScopeRef: continuation.target?.workScopeRef ?? null,
+      options,
+    });
+    const nextWork = applyProviderInterventionDecision(
+      loaded.work, item, decision, normalizedNote, decidedAt,
+    );
+    saveWork({
+      ventureId,
+      teammateRef: continuation.teammateRef,
+      betId: item.betId,
+      workScopeRef: continuation.target?.workScopeRef ?? null,
+      bet: loaded.bet,
+      work: nextWork,
+      options,
+    });
+  } else if (decision === "answer" && item.betId) {
     const bet = getVentureDoc(ventureId, "bets", item.betId, options);
-    if (bet) {
-      const work = {
-        ...(bet.work ?? {}),
-        pausedFor: `The founder answered: ${normalizedNote}`,
-      };
-      setVentureDoc(ventureId, "bets", bet.id, { ...bet, work, updatedAt: decidedAt }, options);
-    }
+    if (bet) setVentureDoc(ventureId, "bets", bet.id, {
+      ...bet,
+      work: { ...(bet.work ?? {}), pausedFor: `The founder answered: ${normalizedNote}` },
+      updatedAt: decidedAt,
+    }, options);
   }
 
   const decided = saveItem(ventureId, receipt, options);

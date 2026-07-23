@@ -137,15 +137,15 @@
 }
 
 .mini-mark {
-  display: grid;
   width: 2rem;
   height: 2rem;
-  place-items: center;
-  border-radius: 0.48rem;
-  background: var(--ink);
-  color: var(--card-raised);
-  font-size: 0.72rem;
-  font-weight: 720;
+  flex: 0 0 auto;
+}
+
+.mini-mark > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .machine-product > span:last-child,
@@ -589,4 +589,3 @@
 .machine-caption span + span {
   border-left: 1px solid var(--line);
 }
-

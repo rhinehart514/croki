@@ -45,10 +45,10 @@ describe("composer intent options", () => {
     const model = async (request) => { seen = request; return "[]"; };
     await suggestDirections(
       { ventureId: "v1", draft: "Ship the", mode: "product-gtm" },
-      { model, assembleContext: () => ({ product: { name: "Drover" }, work: null, mode: "product-gtm" }) },
+      { model, assembleContext: () => ({ product: { name: "Croki" }, work: null, mode: "product-gtm" }) },
     );
     assert.equal(seen.mode, "product-gtm");
-    assert.equal(seen.context.product.name, "Drover");
+    assert.equal(seen.context.product.name, "Croki");
   });
 });
 

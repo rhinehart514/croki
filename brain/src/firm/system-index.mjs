@@ -26,6 +26,13 @@ function searchText(value) {
   try { return JSON.stringify(value ?? "").toLocaleLowerCase(); } catch { return String(value ?? "").toLocaleLowerCase(); }
 }
 
+// Model hygiene is not a founder decision. An object Croki generated but has not yet connected, or one
+// whose read is still tentative, is worth surfacing in the attention scope — it is not something the
+// founder must act on, and it must never inflate the "needs you" badge. Only derived traceability gaps
+// ask for founder judgment.
+const HYGIENE_ATTENTION = new Set(["tentative", "disconnected"]);
+const asksForJudgment = (marks) => marks.some((mark) => !HYGIENE_ATTENTION.has(mark.kind));
+
 function attentionFor(model) {
   const traceability = deriveVentureTraceability(model);
   const byObject = new Map();
@@ -40,7 +47,7 @@ function attentionFor(model) {
   }
   const connected = new Set(model.relationships.flatMap((entry) => [objectId(entry.fromRef), objectId(entry.toRef)]).filter(Boolean));
   for (const object of model.objects) {
-    if (object.assertion === "tentative") add(`object:${object.id}`, "tentative", "Drover's current read still needs founder judgment.");
+    if (object.assertion === "tentative") add(`object:${object.id}`, "tentative", "Croki's current read still needs founder judgment.");
     if (!connected.has(object.id) && model.objects.length > 1) add(`object:${object.id}`, "disconnected", "This is not connected to the operating system yet.");
   }
   return byObject;
@@ -138,7 +145,8 @@ export function projectSystemIndex(model, { scope = "system", query = "", outcom
       total: model.objects.length,
       product: model.objects.filter((object) => objectTerritory(object) === "product").length,
       gtm: model.objects.filter((object) => objectTerritory(object) === "gtm").length,
-      attention: attention.size,
+      attention: [...attention.values()].filter(asksForJudgment).length,
+      unresolved: attention.size,
       matchCount: objects.length,
     },
   };

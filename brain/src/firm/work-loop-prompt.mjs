@@ -2,7 +2,7 @@ import { teammateSoulStore } from "../teammate-soul-store.mjs";
 import { architectureContextPrompt, workingTheoryContextPrompt } from "./architecture-context.mjs";
 
 // Provider-neutral participant instructions remain separate from execution plumbing so runtime and
-// repository isolation can evolve without silently changing Drover's durable firm behavior.
+// repository isolation can evolve without silently changing Croki's durable firm behavior.
 export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, configuration, agent, coordination, firstDirection, target, architectureContext, theoryContext, workingTheoryDrive, steerBrief, directSdk = false }) {
   const soul = directSdk ? {} : teammateSoulStore.ensure(ventureId, teammateRef, {}, options);
   const brief = directSdk ? {} : teammateSoulStore.voiceBriefFor(ventureId, teammateRef, {}, options) ?? {};
@@ -13,7 +13,7 @@ export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, con
     .map((candidate) => `${candidate.name} (${candidate.ref}; ${candidate.activation})${candidate.perspective ? ` — ${candidate.perspective}` : ""}`);
   return [
     directSdk
-      ? `You are ${name}, the SDK model the founder selected for this Work thread. Respond directly as ${name}; do not adopt a Drover-created persona or route the founder through a Product / GTM specialist.`
+      ? `You are ${name}, the SDK model the founder selected for this Work thread. Respond directly as ${name}; do not adopt a Croki-created persona or route the founder through a Product / GTM specialist.`
       : `You are ${name}, a ${participantLabel} in this venture's ${configuration.presentation.collectiveLabel}.`,
     agent.perspective ? `Your perspective: ${agent.perspective}` : "",
     agent.temperament.length ? `Your temperament: ${agent.temperament.join("; ")}` : "",
@@ -53,6 +53,9 @@ export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, con
       : "",
     target?.workflowStep
       ? `The founder is walking through this play step by step and is focused on step ${target.workflowStep.position}, “${target.workflowStep.label}” (step id ${target.workflowStep.id}). Treat the founder's message as a correction to that exact step: revise that step — and only what it forces — in the play's flow, keep every other step and its id intact, and return the revision as the same play rather than a redraft.`
+      : "",
+    target?.journeyImportProfile
+      ? `The founder attached observed journey evidence. You receive only this sanitized profile, never raw rows or user/session identifiers: ${JSON.stringify(target.journeyImportProfile)}. Check the inferred input kind and field mapping against the visible columns, call out unmatched opaque route tokens, and propose the smallest exact mapping needed to relate observations to current Product pages. Treat page counts, transitions, and drop-offs as observed facts only. Do not infer why they occurred, create pages, change repository-proven navigation, or claim the import was adopted.`
       : "",
     target?.teammateRefs?.length
       ? `The founder explicitly included these participants: ${target.teammateRefs.join(", ")}. Preserve that attribution; involve a peer only when their contribution is materially useful.`

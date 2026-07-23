@@ -4,15 +4,33 @@ import { productGtmRefId, productGtmTerritoryFor } from "./productGtmLayout";
 // Product territory is the product itself, mapped as the pages a user walks through. A page carries an
 // honest cited read of what it is now, the founder's prior direction, and the strategy that is about it.
 // These attach to the page and surface inside its expansion rather than floating free in the map.
-export type ProductGtmPageAttachment = { name: string; kind: string; statement: string };
-export type ProductGtmPageData = { route: string; file: string; sourceRef: string; priorDirection: string[]; attachments: ProductGtmPageAttachment[] };
+export type ProductGtmPageAttachment = {
+  name: string;
+  kind: string;
+  statement: string;
+  objectRef?: string;
+  assertion?: "tentative" | "founder-asserted";
+  type?: string;
+};
+export type ProductGtmPageData = {
+  route: string;
+  file: string;
+  sourceRef: string;
+  priorDirection: string[];
+  attachments: ProductGtmPageAttachment[];
+  entryPaths?: Array<{ ref: string; name: string; route: string }>;
+  onwardPaths?: Array<{ ref: string; name: string; route: string }>;
+};
 
 const list = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 const strings = (value: unknown): string[] => list(value).map(String);
 
 // Types that describe strategy about a page (assumptions, proposals, decisions, evidence) attach to the
 // page they concern and surface inside its expansion rather than floating free in Product territory.
-export const PAGE_STRATEGY_TYPES = new Set(["assumption", "proposal", "decision", "evidence", "open", "hypothesis", "risk"]);
+export const PAGE_STRATEGY_TYPES = new Set([
+  "assumption", "proposal", "decision", "evidence", "open", "hypothesis", "risk",
+  "consequence", "product-consequence", "product-delta",
+]);
 
 // Gather what belongs to a page's expansion: the founder's prior direction (open Threads scoped to the
 // page) and the strategy about it (page-scoped insights plus related strategy objects). These attach to
@@ -33,9 +51,38 @@ export function pageAttachments(model: FirmSemanticModel, pageId: string, typeLa
     .map((relationship) => productGtmRefId(relationship.fromRef) === pageId ? productGtmRefId(relationship.toRef) : productGtmRefId(relationship.fromRef)));
   for (const object of model.objects) {
     if (!related.has(object.id) || !PAGE_STRATEGY_TYPES.has(object.type.toLowerCase())) continue;
-    attachments.push({ name: object.name, kind: typeLabel(object.type), statement: object.statement });
+    attachments.push({
+      name: object.name,
+      kind: typeLabel(object.type),
+      statement: object.statement,
+      objectRef: `object:${object.id}`,
+      assertion: object.assertion,
+      type: object.type,
+    });
   }
-  return { priorDirection, attachments };
+  const pageById = new Map(model.objects
+    .filter((object) => object.type.toLowerCase() === "page")
+    .map((object) => [object.id, object]));
+  const linkedPage = (id: string) => {
+    const object = pageById.get(id);
+    if (!object) return null;
+    const page = (object.properties.page ?? {}) as Record<string, unknown>;
+    return { ref: `object:${object.id}`, name: object.name, route: String(page.route ?? "") };
+  };
+  const provenLinks = model.relationships.filter((relationship) =>
+    relationship.sourceRefs.some((ref) => ref.startsWith("repository:"))
+    && pageById.has(productGtmRefId(relationship.fromRef))
+    && pageById.has(productGtmRefId(relationship.toRef))
+  );
+  const entryPaths = provenLinks
+    .filter((relationship) => productGtmRefId(relationship.toRef) === pageId)
+    .map((relationship) => linkedPage(productGtmRefId(relationship.fromRef)))
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  const onwardPaths = provenLinks
+    .filter((relationship) => productGtmRefId(relationship.fromRef) === pageId)
+    .map((relationship) => linkedPage(productGtmRefId(relationship.toRef)))
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  return { priorDirection, attachments, entryPaths, onwardPaths };
 }
 
 // Strategy objects attached to a page in Product territory fold into that page's expansion; they must not

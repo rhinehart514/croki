@@ -19,7 +19,7 @@ function rootItem(ventureId: string): WorkIndexItem {
     originMessageRef: null,
     subjectRefs: [`venture:${ventureId}`],
     focusRef: ROOT_THREAD_REF,
-    founderIntent: "Drover",
+    founderIntent: "Croki",
     lifecycle: "open",
     activity: "idle",
     attention: "none",
@@ -98,6 +98,10 @@ export function useWorkspaceConversation({
     setStage(null);
     setArtifactFocus(null);
   }, []);
+  const acceptThread = useCallback((next: string) => {
+    openThread(next);
+    draftStartedAtRef.current = null;
+  }, [openThread]);
   const beginScopedThread = useCallback((subjectRef: string, relatedRefs: string[] = []) => {
     setDraftSession((current) => current + 1);
     setThreadRef(null);
@@ -139,6 +143,6 @@ export function useWorkspaceConversation({
     stage, setStage, artifactFocus, setArtifactFocus, artifactFocusRequest, setArtifactFocusRequest,
     contextualChatOpen, setContextualChatOpen, scrolls, openerRef, draftStartedAtRef,
     activeDraft, resolvedThreadRef, timeline, selectedItem,
-    openThread, beginScopedThread, newThread, rememberThreadScroll,
+    openThread, acceptThread, beginScopedThread, newThread, rememberThreadScroll,
   };
 }

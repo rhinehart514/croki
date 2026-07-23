@@ -6,6 +6,10 @@ import {
 import { directionsFromWorkIndex } from "@/components/workspace/workIndexModel";
 import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 import {
+  readWorkModelChoice,
+  type WorkModelChoice,
+} from "@/components/work-mode/work-models";
+import {
   readWorkspaceSession,
   rememberWorkspaceSession,
   type WorkspaceMode,
@@ -55,6 +59,9 @@ export function WorkspaceShell({
   );
   const [systemCamera, setSystemCamera] = useState(initial.systemCamera);
   const [search, setSearch] = useState("");
+  const [modelChoice, setModelChoice] = useState<WorkModelChoice>(
+    () => readWorkModelChoice(venture.id, initial.selectedThreadRef ?? "draft"),
+  );
   // The drafted-play step the Product / GTM dock currently focuses. Held here only so the contextual
   // composer can carry that exact step as the subject of a correction; the surface owns the derivation.
   const [walkthroughStep, setWalkthroughStep] = useState<ProductGtmWalkthroughStep | null>(null);
@@ -72,6 +79,7 @@ export function WorkspaceShell({
     setArtifactFocusRequest, contextualChatOpen, setContextualChatOpen, scrolls,
     openerRef, draftStartedAtRef, activeDraft, draftSession, resolvedThreadRef, timeline, selectedItem,
     openThread: openConversationThread,
+    acceptThread: acceptConversationThread,
     beginScopedThread: beginConversationThread,
     newThread: beginNewConversation,
     rememberThreadScroll,
@@ -107,8 +115,8 @@ export function WorkspaceShell({
   const readOnly = ["stale", "offline", "read-only"].includes(connection.phase);
   const readOnlyReason =
     connection.phase === "offline"
-      ? "Offline. Nothing consequential can change until Drover is current again."
-      : (connection.message ?? "Drover is reconnecting.");
+      ? "Offline. Nothing consequential can change until Croki is current again."
+      : (connection.message ?? "Croki is reconnecting.");
 
   useEffect(
     () =>
@@ -164,10 +172,13 @@ export function WorkspaceShell({
     selectedAgentRef={selectedAgentRef} artifactFocus={artifactFocus}
     artifactFocusRequest={artifactFocusRequest} systemIndex={systemIndexAll}
     resolvedThreadRef={resolvedThreadRef} scrolls={scrolls}
+    modelChoice={modelChoice}
     onArtifactFocus={setArtifactFocus} onScrollChange={rememberThreadScroll}
     onOpenVisual={openVisual} onOpenThread={openThread} onWorkIndex={setWorkIndex}
     onRefresh={refresh}
     onDriven={() => { draftStartedAtRef.current = activeDraft ? Date.now() : null; refresh(); void timeline.refresh(); }}
+    onThreadAccepted={acceptConversationThread}
+    onModelChoice={setModelChoice}
     onWorkRouted={(ref) => { openThread(ref); setContextualChatOpen(false); setMode("work"); }}
     onWorkflowAdopted={(result) => {
       setSystemIndex(result.systemIndex); setSystemSelection(result.objectRef);
@@ -243,6 +254,8 @@ export function WorkspaceShell({
           selectedRef={systemSelection}
           camera={systemCamera}
           placement={lens?.placement ?? EMPTY_PLACEMENT}
+          modelChoice={modelChoice}
+          threadRef={resolvedThreadRef}
           onCameraChange={setSystemCamera}
           onFocus={setSystemSelection}
           onUseAgent={assignAgentInSystem}

@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PendingComposerImage } from "./composerImageFiles";
 import type { ComposerFileMention } from "./composerFileMentions";
+import type { StagedJourneyAttachment } from "./ComposerJourneyInput";
 
 const STORAGE_KEY = "drover:composer-drafts:v2";
 const SESSION_KEY_V1 = "drover:composer-drafts:v1";
@@ -12,7 +13,7 @@ const MAX_SCOPES = 12;
 const PERSIST_DEBOUNCE_MS = 250;
 
 type StoredImage = { id: string; name: string; mediaType: string; size: number; data: string };
-type StoredDraft = { text: string; files: ComposerFileMention[]; images: StoredImage[]; at: number };
+type StoredDraft = { text: string; files: ComposerFileMention[]; images: StoredImage[]; journeyImport: StagedJourneyAttachment | null; at: number };
 type DraftMap = Record<string, StoredDraft>;
 
 function normalizedDraft(value: unknown): StoredDraft | null {
@@ -28,8 +29,19 @@ function normalizedDraft(value: unknown): StoredDraft | null {
       && typeof image.mediaType === "string" && typeof image.size === "number" && typeof image.data === "string",
     ))
     : [];
-  if (!text && !images.length) return null;
-  return { text, files, images, at: typeof entry.at === "number" ? entry.at : 0 };
+  const journeyImport = entry.journeyImport
+    && typeof entry.journeyImport.importRef === "string"
+    && typeof entry.journeyImport.name === "string"
+    && typeof entry.journeyImport.byteSize === "number"
+    ? {
+        importRef: entry.journeyImport.importRef,
+        name: entry.journeyImport.name,
+        byteSize: entry.journeyImport.byteSize,
+        ...(typeof entry.journeyImport.rowCount === "number" ? { rowCount: entry.journeyImport.rowCount } : {}),
+      }
+    : null;
+  if (!text && !images.length && !journeyImport) return null;
+  return { text, files, images, journeyImport, at: typeof entry.at === "number" ? entry.at : 0 };
 }
 
 function readDrafts(): DraftMap {
@@ -43,7 +55,7 @@ function readDrafts(): DraftMap {
     // v1 drafts were text-only session memory; carry any not already claimed forward once.
     const legacy = JSON.parse(window.sessionStorage.getItem(SESSION_KEY_V1) ?? "null") as Record<string, unknown> | null;
     for (const [scope, text] of Object.entries(legacy ?? {})) {
-      if (!drafts[scope] && typeof text === "string" && text) drafts[scope] = { text, files: [], images: [], at: 0 };
+      if (!drafts[scope] && typeof text === "string" && text) drafts[scope] = { text, files: [], images: [], journeyImport: null, at: 0 };
     }
   } catch { /* presentation memory is disposable */ }
   return drafts;
@@ -62,7 +74,7 @@ function persistDrafts(drafts: DraftMap) {
   }
 }
 
-const EMPTY_DRAFT: StoredDraft = { text: "", files: [], images: [], at: 0 };
+const EMPTY_DRAFT: StoredDraft = { text: "", files: [], images: [], journeyImport: null, at: 0 };
 
 export function useComposerDraft(scopeKey: string) {
   const [drafts, setDrafts] = useState<DraftMap>(readDrafts);
@@ -85,7 +97,7 @@ export function useComposerDraft(scopeKey: string) {
   const patch = (change: (current: StoredDraft) => Omit<StoredDraft, "at">) => {
     setDrafts((current) => {
       const next = { ...change(current[scopeKey] ?? EMPTY_DRAFT), at: Date.now() };
-      if (!next.text && !next.images.length) {
+      if (!next.text && !next.images.length && !next.journeyImport) {
         if (!current[scopeKey]) return current;
         const rest = { ...current };
         delete rest[scopeKey];
@@ -113,5 +125,7 @@ export function useComposerDraft(scopeKey: string) {
       }),
     fileMentions: entry?.files ?? [],
     setFileMentions: (files: ComposerFileMention[]) => patch((current) => ({ ...current, files })),
+    journeyImport: entry?.journeyImport ?? null,
+    setJourneyImport: (journeyImport: StagedJourneyAttachment | null) => patch((current) => ({ ...current, journeyImport })),
   };
 }

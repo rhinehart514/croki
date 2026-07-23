@@ -1,6 +1,6 @@
 appId: com.gtmide.desktop
-productName: Drover
-copyright: Drover
+productName: Croki
+copyright: Croki
 publish: null
 
 # Brain and renderer files remain inspectable in the local alpha package. Native dependencies are already
@@ -35,4 +35,4 @@ mac:
   identity: null
 
 dmg:
-  title: Drover
+  title: Croki

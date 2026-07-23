@@ -35,9 +35,9 @@ function returnPlan(action: Action) {
 function stateCopy(action: Action) {
   const act = action.kind === "message" ? "Send" : "Deploy";
   if (action.state === "execution-failed") return { eyebrow: `${act} failed`, body: action.lastExecutionError ?? `The exact ${act.toLowerCase()} did not complete. Nothing crossed into the world.` };
-  if (action.state === "execution-unknown") return { eyebrow: `${act} needs verification`, body: `Drover was interrupted after execution began. Verify the destination before preparing another ${act.toLowerCase()}; retry is intentionally disabled.` };
+  if (action.state === "execution-unknown") return { eyebrow: `${act} needs verification`, body: `Croki was interrupted after execution began. Verify the destination before preparing another ${act.toLowerCase()}; retry is intentionally disabled.` };
   if (action.state === "observation-failed") return { eyebrow: "Return check failed", body: action.latestObservation?.lastResult?.error ?? "The authorized source could not be read. The action remains in the world." };
-  if (action.state === "silent") return { eyebrow: "No expected return yet", body: "The exact source was checked, but the prepared return condition was not present. Drover has not interpreted the silence." };
+  if (action.state === "silent") return { eyebrow: "No expected return yet", body: "The source was checked, but the prepared return condition was not present. Croki has not interpreted the silence." };
   if (action.state === "returned") return { eyebrow: "Reality returned", body: "The prepared condition was observed and remains attached to this exact outward action." };
   if (action.state === "in-world") return { eyebrow: "In the world", body: `The ${act.toLowerCase()} completed. Observation stays bounded to the exact prepared target.` };
   return { eyebrow: "Founder authority", body: "Nothing crosses into the world until you execute this exact action here." };
@@ -80,9 +80,9 @@ export function OutwardActionReview({ ventureId, action, readOnly, onChanged }: 
     {material.unavailable ? <p role="status">{material.unavailable}</p> : null}
     {error ? <p className="is-error" role="alert">{error}</p> : null}
     <footer>
-      {canExecute ? <button className="is-founder" type="button" disabled={readOnly || busy !== null} onClick={() => void perform("execute", () => executeOutwardAction(ventureId, action.id))}>{busy === "execute" ? (message ? "Sending…" : "Deploying…") : action.state === "execution-failed" ? (message ? "Retry exact send" : "Retry exact deploy") : message ? "Send this email" : "Deploy now"}</button> : null}
+      {canExecute ? <button className="is-founder" type="button" disabled={readOnly || busy !== null} onClick={() => void perform("execute", () => executeOutwardAction(ventureId, action.id))}>{busy === "execute" ? (message ? "Sending…" : "Deploying…") : action.state === "execution-failed" ? (message ? "Retry send" : "Retry deploy") : message ? "Send this email" : "Deploy now"}</button> : null}
       {canGrant ? <button className="is-founder" type="button" disabled={readOnly || busy !== null} onClick={() => void perform("grant", async () => { const result = await grantOutwardObservation(ventureId, action.id); setLocalObservation(result.observation); })}>{busy === "grant" ? "Authorizing…" : `Watch for ${plan.hours}h`}</button> : null}
-      {canCheck ? <button type="button" disabled={readOnly || busy !== null} onClick={() => void perform("check", async () => { const result = await checkOutwardObservation(ventureId, action.id, observation!.id); setLocalObservation(result.contract); })}>{busy === "check" ? "Checking…" : action.state === "observation-failed" ? "Retry return check" : "Check exact return"}</button> : null}
+      {canCheck ? <button type="button" disabled={readOnly || busy !== null} onClick={() => void perform("check", async () => { const result = await checkOutwardObservation(ventureId, action.id, observation!.id); setLocalObservation(result.contract); })}>{busy === "check" ? "Checking…" : action.state === "observation-failed" ? "Retry return check" : "Check for a return"}</button> : null}
       {!canExecute && !action.executedAt && !executable && !material.unavailable ? <span>This kind is prepared, but no executor adapter is available yet.</span> : null}
       {observation?.revokedAt ? <span>The observation grant was revoked. No further source reads are authorized.</span> : null}
     </footer>

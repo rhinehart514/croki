@@ -59,6 +59,14 @@ export type FirmConfiguration = {
 };
 
 export type FirmImageAttachment = { id: string; name: string; mediaType: string; size: number };
+export type JourneyImportAttachment = {
+  kind: "journey-import";
+  importRef: string;
+  name: string;
+  mediaType: string;
+  byteSize: number;
+  digest: string;
+};
 
 export type FirmConversationMessage = {
   id: string;
@@ -66,7 +74,7 @@ export type FirmConversationMessage = {
   role: "founder" | "teammate" | "agent" | "system";
   kind?: "message" | "handoff" | "configuration-proposal" | "configuration-receipt" | "proposal-assembly";
   content: string;
-  attachments?: FirmImageAttachment[];
+  attachments?: Array<FirmImageAttachment | JourneyImportAttachment>;
   teammateRef: string | null;
   betId: string | null;
   target?: {

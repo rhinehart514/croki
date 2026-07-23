@@ -120,3 +120,20 @@ test("abort is founder-only and cross-venture drive ids fail closed", async () =
   await workRoutes({ req, res, url: new URL(pathname, "http://local") });
   assert.equal(status, 403);
 });
+
+test("quit teardown aborts every live drive exactly once, including abort-unsupported ones", async () => {
+  const { abortAllActiveDrives } = await import("../../src/firm/active-drives.mjs");
+  const first = beginActiveDrive({ ventureId: "quit-venture", teammateRef: "claude", betId: null, runtime: "claude-code", abortSupported: true });
+  const second = beginActiveDrive({ ventureId: "quit-venture", teammateRef: "codex", betId: null, runtime: "codex", abortSupported: false });
+  const now = () => "2026-07-23T12:00:00.000Z";
+
+  assert.equal(abortAllActiveDrives({ now }), 2, "both live drives receive the abort");
+  assert.equal(first.signal.aborted, true);
+  assert.equal(second.signal.aborted, true, "abortSupported never blocks quit teardown");
+  const visible = listActiveDrives("quit-venture");
+  assert.deepEqual(visible.map((drive) => drive.abortRequestedAt), [now(), now()]);
+
+  assert.equal(abortAllActiveDrives({ now }), 0, "a second pass aborts nothing new");
+  first.finish();
+  second.finish();
+});

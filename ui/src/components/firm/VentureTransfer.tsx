@@ -56,7 +56,7 @@ export function VentureTransfer({ ventures, onImported }: {
     if (file.size > MAX_TRANSFER_BYTES) return setError("That transfer file is larger than 20 MB.");
     try {
       const parsed = JSON.parse(await file.text()) as VentureTransferFile;
-      if (parsed.format !== "drover-venture-transfer" || parsed.version !== 1) throw new Error("This is not a supported Drover venture transfer file.");
+      if (parsed.format !== "drover-venture-transfer" || parsed.version !== 1) throw new Error("This is not a supported Croki venture transfer file.");
       setTransfer(parsed);
     } catch (cause) {
       setTransfer(null);
@@ -109,7 +109,7 @@ export function VentureTransfer({ ventures, onImported }: {
         ))}
       </div>
       <div className="venture-transfer-import">
-        <input ref={inputRef} type="file" accept=".json,.drover.json,application/json" aria-label="Choose a Drover venture transfer file" onChange={(event) => { void readFile(event.target.files?.[0]); }} />
+        <input ref={inputRef} type="file" accept=".json,.drover.json,application/json" aria-label="Choose a Croki venture transfer file" onChange={(event) => { void readFile(event.target.files?.[0]); }} />
         <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}><Upload aria-hidden="true" /> {transfer ? transfer.venture.manifest.name : "Choose transfer file"}</Button>
         {desktop ? (
           <Button type="button" variant="outline" onClick={() => { void chooseRepository(); }}><FolderOpen aria-hidden="true" /> {repository ? "Destination selected" : "Bind destination repository"}</Button>

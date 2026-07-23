@@ -49,6 +49,7 @@ export function DecisionGate({
   const [authorized, setAuthorized] = useState<boolean>(Boolean(item.deployAuthorizedAt));
   const [busy, setBusy] = useState<WallDecision | null>(null);
   const [note, setNote] = useState("");
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
   // A same-tick double-activation (a real double-click, or a stray duplicate dispatch) fires both click
   // handlers before React commits the `busy` state update, so the `disabled={decisionDisabled}` render guard
@@ -65,18 +66,66 @@ export function DecisionGate({
       if (decision === "authorize-deploy") { setAuthorized(true); }
       else onDecided();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Drover could not record that decision.");
+      setError(cause instanceof Error ? cause.message : "Croki could not record that decision.");
       if (decision === "release") onDecided();
     } finally { setBusy(null); inFlight.current = false; }
   };
 
   // A judgment request is presented as concise founder-facing language, not the raw agent question.
   const isAnswer = item.purpose === "answer";
-  const rawQuestion = typeof item.effect.question === "string" ? item.effect.question.trim() : null;
+  const isProviderPermission = effectKind === "provider-permission";
+  const providerQuestions = Array.isArray(item.effect.questions)
+    ? (item.effect.questions as Array<Record<string, unknown>>).flatMap((question, index) => {
+        const prompt = typeof question.question === "string" ? question.question.trim() : "";
+        if (!prompt) return [];
+        const questionOptions = Array.isArray(question.options)
+          ? (question.options as Array<Record<string, unknown>>).flatMap((option) => (
+              typeof option.label === "string" && option.label.trim()
+                ? [{
+                    label: option.label.trim(),
+                    description: typeof option.description === "string" ? option.description.trim() : "",
+                    preview: typeof option.preview === "string" ? option.preview.trim() : "",
+                  }]
+                : []
+            ))
+          : [];
+        return [{
+          id: typeof question.id === "string" ? question.id : `question-${index + 1}`,
+          header: typeof question.header === "string" ? question.header : `Question ${index + 1}`,
+          question: prompt,
+          options: questionOptions,
+          multiSelect: question.multiSelect === true,
+        }];
+      })
+    : [];
+  const rawQuestion = isProviderPermission
+    ? String(item.effect.exactAction ?? item.effect.description ?? "").trim() || null
+    : typeof item.effect.question === "string" ? item.effect.question.trim() : null;
   const options = Array.isArray(item.effect.options)
     ? (item.effect.options as unknown[]).filter((option): option is string => typeof option === "string")
     : [];
-  const decisionTitle = isAnswer ? "How should this work continue?" : content.title;
+  const decisionTitle = isProviderPermission
+    ? String(item.effect.title ?? "Claude needs permission")
+    : isAnswer ? "How should this work continue?" : content.title;
+  const selectedAnswer = providerQuestions.map((question) => {
+    const values = selectedAnswers[question.id] ?? [];
+    return values.length ? `${question.header}: ${values.join(", ")}` : null;
+  }).filter(Boolean).join("\n");
+  const completeAnswer = [selectedAnswer, note.trim()].filter(Boolean).join("\n");
+  const everyStructuredQuestionAnswered = providerQuestions.every(
+    (question) => (selectedAnswers[question.id] ?? []).length > 0,
+  );
+  const canSendAnswer = Boolean(completeAnswer)
+    && (!providerQuestions.length || everyStructuredQuestionAnswered || Boolean(note.trim()));
+  const toggleAnswer = (questionId: string, label: string, multiSelect: boolean) => {
+    setSelectedAnswers((current) => {
+      const selected = current[questionId] ?? [];
+      const next = multiSelect
+        ? selected.includes(label) ? selected.filter((value) => value !== label) : [...selected, label]
+        : [label];
+      return { ...current, [questionId]: next };
+    });
+  };
 
   // Detail rows minus the raw-diff row (rendered visually) and, for a judgment request, minus the raw
   // question rows (surfaced as concise language + provenance instead).
@@ -88,7 +137,7 @@ export function DecisionGate({
       <div className="now-gate-head">
         <span className="now-gate-eyebrow">{isAnswer ? "Your judgment is needed" : content.eyebrow}</span>
         <span className="now-gate-title">{decisionTitle}</span>
-        {isAnswer && rawQuestion ? <p className="now-gate-question">{rawQuestion}</p> : null}
+        {isAnswer && rawQuestion && !providerQuestions.length ? <p className="now-gate-question">{rawQuestion}</p> : null}
       </div>
       {artifact?.kind === "diff" ? (
         <div className="now-detail-block">
@@ -112,7 +161,7 @@ export function DecisionGate({
       ) : null}
 
       <div className="now-gate-note">
-        Nothing changes until you decide here. Drover records the exact decision.
+        Nothing changes until you decide here. Croki records the exact decision.
         {isDeploy ? " A deploy needs two acts: authorize it, then deploy." : ""}
       </div>
 
@@ -146,8 +195,36 @@ export function DecisionGate({
         </div>
       ) : isAnswer ? (
         <div className="now-detail-block">
-          <p className="now-detail-why">Your answer steers this direction — Drover stopped rather than decide it for you.</p>
-          {options.length ? (
+          <p className="now-detail-why">Your answer steers this direction — Croki stopped rather than decide it for you.</p>
+          {providerQuestions.length ? (
+            <div className="now-provider-questions">
+              {providerQuestions.map((question) => (
+                <section key={question.id} className="now-provider-question">
+                  <span>{question.header}</span>
+                  <p>{question.question}</p>
+                  <div className="now-provider-options">
+                    {question.options.map((option) => {
+                      const selected = (selectedAnswers[question.id] ?? []).includes(option.label);
+                      return (
+                        <button
+                          key={option.label}
+                          type="button"
+                          className="now-provider-option"
+                          aria-pressed={selected}
+                          disabled={decisionDisabled}
+                          onClick={() => toggleAnswer(question.id, option.label, question.multiSelect)}
+                        >
+                          <strong>{option.label}</strong>
+                          {option.description ? <small>{option.description}</small> : null}
+                          {selected && option.preview ? <pre>{option.preview}</pre> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : options.length ? (
             <div className="now-gate-actions">
               {options.map((option) => (
                 <button key={option} type="button" className="now-gate-btn" data-intent="release" disabled={decisionDisabled} onClick={() => decide("answer", option)}>{option}</button>
@@ -156,7 +233,7 @@ export function DecisionGate({
           ) : null}
           <div className="now-gate-words">
             <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={options.length ? "…or answer in your own words" : "Your answer…"} aria-label="Your answer" />
-            <button type="button" className="now-gate-btn" data-intent="release" disabled={decisionDisabled || !note.trim()} onClick={() => decide("answer", note.trim())}>Send answer</button>
+            <button type="button" className="now-gate-btn" data-intent="release" disabled={decisionDisabled || !canSendAnswer} onClick={() => decide("answer", completeAnswer)}>Send answer</button>
           </div>
           <div className="now-gate-actions">
             <button type="button" className="now-gate-btn" data-intent="reject" disabled={decisionDisabled} onClick={() => decide("dismiss")}>Dismiss</button>

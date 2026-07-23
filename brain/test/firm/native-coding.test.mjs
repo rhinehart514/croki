@@ -92,7 +92,7 @@ describe("Run-linked coding workspace", () => {
       async drive(ctx) {
         assert.match(ctx.cwd, /\.drover-worktrees\/code-/);
         ctx.onRuntimeSession("provider-session-1");
-        fs.writeFileSync(path.join(ctx.cwd, "product.txt"), "implemented in Drover\n");
+        fs.writeFileSync(path.join(ctx.cwd, "product.txt"), "implemented in Croki\n");
         ctx.onCommand({ command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "passed", verification: true });
         return { kind: "completed", summary: "Implemented and verified." };
       },
@@ -109,7 +109,7 @@ describe("Run-linked coding workspace", () => {
     const timeline = buildThreadTimeline(venture.id, threadId, options);
     const artifact = timeline.items.find((item) => item.ref === `work:${result.codingWorkspace.id}`);
     assert.equal(artifact.artifact.kind, "native-code");
-    assert.match(artifact.artifact.diff, /implemented in Drover/);
+    assert.match(artifact.artifact.diff, /implemented in Croki/);
     discardCodingWorkspace(venture.id, result.codingWorkspace.id, options);
     cleanup();
   });

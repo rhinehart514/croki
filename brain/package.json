@@ -2,7 +2,7 @@
   "name": "gtm-ide-brain",
   "version": "0.2.0",
   "type": "module",
-  "description": "Drover's local runtime for founder-directed Product and go-to-market work.",
+  "description": "Croki's local runtime for founder-directed Product and go-to-market work.",
   "scripts": {
     "start": "node src/server.mjs",
     "test": "node ./scripts/run-tests.mjs",
@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.185",
     "@anthropic-ai/sdk": "0.105.0",
+    "d3-dsv": "3.0.1",
     "zod": "4.4.3"
   }
 }

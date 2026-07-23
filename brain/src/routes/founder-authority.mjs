@@ -87,7 +87,7 @@ export function authorizeFounderWriteForRequest(req, action = "This decision", {
     throw error(`${action} is founder-only. A model or MCP session cannot make this decision.`);
   }
   if (!hasHeaders || !hasLocalPageOrigin(req.headers)) {
-    throw error(`${action} must come from the local Drover page through its desktop host.`);
+    throw error(`${action} must come from the local Croki page through its desktop host.`);
   }
 
   const secret = String(env.GTM_IDE_FOUNDER_CAPABILITY ?? "").trim();
@@ -98,7 +98,7 @@ export function authorizeFounderWriteForRequest(req, action = "This decision", {
     return;
   }
   if (!secret) {
-    throw error("Founder writes are unavailable because this page was not opened by the Drover desktop host. Reads remain available; relaunch the desktop app to make changes.", {
+    throw error("Founder writes are unavailable because this page was not opened by the Croki desktop host. Reads remain available; relaunch the desktop app to make changes.", {
       code: "founder_host_unavailable",
       status: 503,
     });
@@ -108,7 +108,7 @@ export function authorizeFounderWriteForRequest(req, action = "This decision", {
   const [version, issuedRaw, nonce, suppliedSignature, ...extra] = claim.split(".");
   const issuedAt = Number(issuedRaw);
   if (version !== VERSION || !Number.isFinite(issuedAt) || !nonce || !suppliedSignature || extra.length) {
-    throw error(`${action} needs a fresh capability from the Drover desktop host.`, { code: "founder_capability_invalid" });
+    throw error(`${action} needs a fresh capability from the Croki desktop host.`, { code: "founder_capability_invalid" });
   }
   if (Math.abs(now - issuedAt) > FOUNDER_CAPABILITY_WINDOW_MS) {
     throw error(`${action} used an expired founder capability. Try the action again.`, { code: "founder_capability_stale" });

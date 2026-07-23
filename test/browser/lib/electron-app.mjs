@@ -39,7 +39,7 @@ async function launchElectron({ executable, args, cwd, home, port }) {
     const endpoint = `http://127.0.0.1:${port}`;
     let page = null;
     for (let attempt = 0; attempt < 400; attempt += 1) {
-      if (child.exitCode !== null) throw new Error(`Electron exited before Drover opened.\n${output}`);
+      if (child.exitCode !== null) throw new Error(`Electron exited before Croki opened.\n${output}`);
       try {
         const targets = await fetch(`${endpoint}/json/list`).then((response) => response.json());
         page = targets.find((target) => target.type === "page" && target.url !== "about:blank");
@@ -47,7 +47,7 @@ async function launchElectron({ executable, args, cwd, home, port }) {
       } catch { /* the actual Electron host is still booting */ }
       await delay(50);
     }
-    if (!page?.webSocketDebuggerUrl) throw new Error(`Electron did not expose the Drover renderer.\n${output}`);
+    if (!page?.webSocketDebuggerUrl) throw new Error(`Electron did not expose the Croki renderer.\n${output}`);
     client = await CdpClient.connect(page.webSocketDebuggerUrl);
     await client.send("Page.enable");
     await client.send("Runtime.enable");

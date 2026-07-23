@@ -46,49 +46,11 @@
 }
 
 .wordmark-mark {
-  position: relative;
-  display: inline-grid;
   width: 2rem;
   height: 2rem;
-  place-items: center;
-  overflow: hidden;
+  flex: 0 0 auto;
   border-radius: 0.55rem;
-  background: var(--ink);
   box-shadow: var(--shadow-card);
-}
-
-.wordmark-mark::before,
-.wordmark-mark::after,
-.wordmark-mark > span {
-  position: absolute;
-  content: "";
-}
-
-.wordmark-mark::before {
-  width: 0.72rem;
-  height: 1.08rem;
-  left: 0.58rem;
-  border: 2px solid var(--card-raised);
-  border-left-width: 3px;
-  border-radius: 0.16rem 0.55rem 0.55rem 0.16rem;
-}
-
-.wordmark-mark::after {
-  width: 0.34rem;
-  height: 0.34rem;
-  right: 0.42rem;
-  bottom: 0.42rem;
-  border-radius: 50%;
-  background: var(--spruce-soft);
-}
-
-.wordmark-mark > span {
-  top: 0.46rem;
-  left: 0.28rem;
-  width: 0.52rem;
-  height: 2px;
-  background: var(--card-raised);
-  box-shadow: 0 0.38rem 0 var(--card-raised), 0 0.76rem 0 var(--card-raised);
 }
 
 .desktop-nav {
@@ -202,4 +164,3 @@
   display: flex;
   gap: 1.3rem;
 }
-

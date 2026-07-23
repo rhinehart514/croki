@@ -1,12 +1,20 @@
 // Codex CLI adapter for teammate drives and isolated product changes. Both doors use the founder's
 // authenticated Codex subscription. Teammate drives are native resumable Codex sessions: they inherit
-// the founder's Codex configuration and receive the current direction's screened Drover tools as one
+// the founder's Codex configuration and receive the current direction's screened Croki tools as one
 // additional process-local MCP server. Product changes remain a narrower isolated-worktree capability.
 
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import http from "node:http";
 import { findCodexBinary, hasCodexLogin } from "./codex-auth.mjs";
+import {
+  codexFileChangeResults,
+  createCodexTextStream,
+  createCodexThinkingSpans,
+  isVerificationCommand,
+  notify,
+  parseCodexEvent,
+} from "./codex-events.mjs";
 
 export {
   codexAuthModeLabel,
@@ -15,11 +23,13 @@ export {
   hasCodexLogin,
 } from "./codex-auth.mjs";
 
+export { parseCodexEvent } from "./codex-events.mjs";
+
 export function buildCodexDriveArgs({ model, resumeId, mcpUrl, nativeCoding = false, effort = null, images = [] } = {}) {
   const common = [
     "--json",
     "--skip-git-repo-check",
-    // Founder-selected reasoning effort, forwarded verbatim as a Codex config override. Drover stays
+    // Founder-selected reasoning effort, forwarded verbatim as a Codex config override. Croki stays
     // model-agnostic here (it forwards the model slug the same way); the composer's model catalog owns
     // which tier each model actually exposes — GPT-5.6 Sol reaches `max`, Terra/Luna top out at `xhigh` —
     // so a level Codex would reject never leaves the picker. An unset choice omits the flag so Codex keeps
@@ -59,7 +69,7 @@ async function readMcpBody(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
-// Codex receives Drover as one additional native MCP server. The bridge is process-local, binds only to
+// Codex receives Croki as one additional native MCP server. The bridge is process-local, binds only to
 // loopback on a random port, and uses an unguessable path. It exposes exactly the already-screened tools
 // from the current direction; it grants no founder decision or outward executor.
 export async function startCodexMcpBridge(ctx) {
@@ -92,7 +102,7 @@ export async function startCodexMcpBridge(ctx) {
           protocolVersion: params?.protocolVersion ?? "2025-03-26",
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: "drover", version: "0.3.0" },
-          instructions: "Use these tools for venture truth and Drover-managed work. They cannot authorize founder-held outward consequences.",
+          instructions: "Use these tools for venture truth and Croki-managed work. They cannot authorize founder-held outward consequences.",
         },
       });
       return;
@@ -108,7 +118,7 @@ export async function startCodexMcpBridge(ctx) {
     if (method === "tools/call") {
       const tool = toolMap.get(params?.name);
       if (!tool) {
-        sendMcpJson(res, 200, { jsonrpc: "2.0", id, result: { isError: true, content: [{ type: "text", text: `Unknown Drover tool: ${params?.name ?? "missing"}` }] } });
+        sendMcpJson(res, 200, { jsonrpc: "2.0", id, result: { isError: true, content: [{ type: "text", text: `Unknown Croki tool: ${params?.name ?? "missing"}` }] } });
         return;
       }
       ctx.onToolStart?.(tool.name);
@@ -151,22 +161,17 @@ function drivePrompt(ctx) {
   return [
     ctx.system,
     "",
-    "You are operating as a native Codex session inside Drover. Your normal Codex configuration,",
+    "You are operating as a native Codex session inside Croki. Your normal Codex configuration,",
     "project rules, tools, skills, apps, plugins, hooks, browser, and MCP servers remain available.",
-    "Drover adds a native MCP server named drover for venture truth, durable work, and founder-held",
-    "consequences. Use those tools when work must attach to the venture. A Drover tool can prepare or",
+    "Croki adds a native MCP server named drover for venture truth, durable work, and founder-held",
+    "consequences. Use those tools when work must attach to the venture. A Croki tool can prepare or",
     "park an outward consequence, but only the founder can authorize it.",
     ctx.nativeCoding
-      ? "You are in a Drover-owned isolated worktree. Implement and verify here. Do not commit, merge, push, create a pull request, deploy, or apply changes to another workspace; Drover presents those exact consequences to the founder."
+      ? "You are in a Croki-owned isolated worktree. Implement and verify here. Do not commit, merge, push, create a pull request, deploy, or apply changes to another workspace; Croki presents those exact consequences to the founder."
       : "",
     "",
     `Founder's outcome: ${ctx.goal}`,
   ].join("\n");
-}
-
-function isVerificationCommand(command) {
-  const value = String(command ?? "");
-  return /(?:^|[;&|]\s*|["'])(?:npm(?:\s+--prefix\s+\S+)?\s+(?:test|run\s+(?:test[^\s]*|lint|build|typecheck|check|verify[^\s]*))|node\s+--(?:test|check)|git\s+diff\s+--check|(?:npx\s+)?(?:tsc|vitest|eslint)\b)/i.test(value);
 }
 
 export async function runCodexDriveTurn({
@@ -191,6 +196,10 @@ export async function runCodexDriveTurn({
   images = [],
   onCommand = null,
   onRuntimeSession = null,
+  onTextDelta = null,
+  onToolResult = null,
+  onThinking = null,
+  onUsage = null,
 } = {}) {
   const binary = findCodexBinary(env);
   if (!binary.ok) return { threadId: null, text: "", error: binary.reason };
@@ -208,6 +217,8 @@ export async function runCodexDriveTurn({
     let stdout = "";
     let stderr = "";
     let threadId = resumeId ?? null;
+    const messages = createCodexTextStream();
+    const thinking = createCodexThinkingSpans();
     let text = "";
     let terminalError = "";
     let settled = false;
@@ -240,8 +251,19 @@ export async function runCodexDriveTurn({
         threadId = event.id;
         onRuntimeSession?.(event.id);
       }
-      if (event?.type === "text" && event.text) text = String(event.text);
+      // A turn routinely reports several agent_message items — the preamble before the work and the
+      // answer after it. Each one accumulates into the turn's text and streams its own tail live, so
+      // nothing the founder was told is dropped and none of it waits for the turn to end.
+      if (event?.type === "text" && event.text) {
+        const fold = messages.push(event);
+        text = fold.text;
+        if (fold.delta) notify(onTextDelta, fold.delta);
+      }
+      if (event?.type === "reasoning-start") for (const span of thinking.start(event.id)) notify(onThinking, span);
+      if (event?.type === "reasoning-stop") for (const span of thinking.stop(event.id)) notify(onThinking, span);
+      if (event?.type === "file-change") for (const result of codexFileChangeResults(event)) notify(onToolResult, result);
       if (event?.type === "completed" && event.summary) text ||= String(event.summary);
+      if (event?.type === "completed" && event.usage) notify(onUsage, event.usage);
       if (event?.type === "error") terminalError = String(event.message || "Codex failed.");
       if (event?.type === "command-start") onToolStart?.("command", { summary: event.command ? `Running ${event.command}` : "Running a command" });
       if (event?.type === "command-complete") onCommand?.({
@@ -335,6 +357,7 @@ export async function runCodexProductChange({
     });
     let stdout = "";
     let stderr = "";
+    const messages = createCodexTextStream();
     let text = "";
     let terminalError = "";
     let settled = false;
@@ -349,7 +372,9 @@ export async function runCodexProductChange({
     };
     const consume = (line) => {
       const event = parseCodexEvent(line);
-      if (event?.type === "text" && event.text) text = String(event.text);
+      // The product-change door has no live channel, but it has the same several-message turn: the
+      // change note the founder reads is the whole turn, not whichever message happened to be last.
+      if (event?.type === "text" && event.text) text = messages.push(event).text;
       if (event?.type === "completed" && event.summary) text ||= String(event.summary);
       if (event?.type === "error") terminalError = String(event.message || "Codex failed.");
     };
@@ -379,42 +404,6 @@ export async function runCodexProductChange({
       else finish({ text, error: { kind: "error", message: stderr.trim().slice(-2_000) || `Codex exited with status ${code}.` } });
     });
   });
-}
-
-// JSONL events are decoded defensively: Codex emits stable thread/turn/item
-// families while individual client versions add fields inside them. We retain
-// only Drover-owned signals: thread id, readable text, MCP tool activity, and
-// terminal errors.
-export function parseCodexEvent(line) {
-  let event;
-  try { event = typeof line === "string" ? JSON.parse(line) : line; } catch { return null; }
-  if (!event || typeof event !== "object") return null;
-  const item = event.item ?? {};
-  if (event.type === "thread.started") {
-    return { type: "thread", id: event.thread_id ?? event.thread?.id ?? null };
-  }
-  if (event.type === "item.completed" && item.type === "agent_message") {
-    return { type: "text", text: item.text ?? item.content ?? "" };
-  }
-  if ((event.type === "item.started" || event.type === "item.completed") && /mcp.*tool|tool.*mcp/i.test(item.type ?? "")) {
-    return { type: "tool", name: item.tool_name ?? item.name ?? item.tool?.name ?? null };
-  }
-  if ((event.type === "item.started" || event.type === "item.completed") && /command_execution/i.test(item.type ?? "")) {
-    return {
-      type: event.type === "item.started" ? "command-start" : "command-complete",
-      id: item.id ?? null,
-      command: item.command ?? null,
-      exitCode: Number.isInteger(item.exit_code) ? item.exit_code : (item.status === "completed" ? 0 : 1),
-      output: item.aggregated_output ?? item.output ?? "",
-    };
-  }
-  if (event.type === "turn.failed" || event.type === "error") {
-    return { type: "error", message: event.error?.message ?? event.message ?? "Codex failed." };
-  }
-  if (event.type === "turn.completed") {
-    return { type: "completed", summary: event.summary ?? event.result ?? null };
-  }
-  return null;
 }
 
 function unavailableReason(env, probe) {
@@ -462,6 +451,13 @@ export const codexRuntime = {
         nativeCoding: ctx.nativeCoding === true,
         onCommand: ctx.onCommand,
         onRuntimeSession: ctx.onRuntimeSession,
+        // The same live channel Claude pushes into: text as it arrives, settled patch edits, measured
+        // thinking spans, and the turn's real token usage. Each is optional on the host side, so an
+        // older seam simply receives nothing extra.
+        onTextDelta: ctx.onTextDelta,
+        onToolResult: ctx.onToolResult,
+        onThinking: ctx.onThinking,
+        onUsage: ctx.onUsage,
         images: (ctx.attachments ?? []).map((attachment) => attachment.path),
       });
       if (turn.error === "cancelled") return { kind: "cancelled" };

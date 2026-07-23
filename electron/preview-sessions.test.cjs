@@ -100,8 +100,8 @@ function makeHarness({ evaluate, net } = {}) {
 
 test("attach validates owner and partition; operations without a pane fail honestly", async () => {
   const { sessions, guest, electronSession } = makeHarness();
-  await assert.rejects(sessions.execute({ operation: "click", workspaceId: "workspace-1", input: { x: 1, y: 1 } }), /Preview tab in Drover first/);
-  assert.throws(() => sessions.attach(999, { workspaceId: "workspace-1", webContentsId: guest.id }), /belong to the Drover window/);
+  await assert.rejects(sessions.execute({ operation: "click", workspaceId: "workspace-1", input: { x: 1, y: 1 } }), /Preview tab in Croki first/);
+  assert.throws(() => sessions.attach(999, { workspaceId: "workspace-1", webContentsId: guest.id }), /belong to the Croki window/);
   assert.throws(() => sessions.attach(7, { workspaceId: "workspace-2", webContentsId: guest.id }), /own workspace partition/);
   assert.throws(() => sessions.attach(7, { workspaceId: "workspace-1", webContentsId: 404 }), /no longer exists/);
   assert.deepEqual(sessions.attach(7, { workspaceId: "workspace-1", webContentsId: guest.id }), { attached: true });

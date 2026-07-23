@@ -3,6 +3,7 @@
 // This module joins them without storing a second status model for the rail to drift from.
 
 import { listActiveDrives } from "./active-drives.mjs";
+import { codeDriftForVenture, newestCodeDriftByThread } from "./git-ship.mjs";
 import { getSemanticModel } from "./semantic-model-store.mjs";
 import { listVentureDocs } from "./venture-store.mjs";
 import { ROOT_THREAD_ID } from "./thread.mjs";
@@ -411,8 +412,9 @@ function compareWorkItems(a, b) {
   return time(b.updatedAt) - time(a.updatedAt) || a.threadRef.localeCompare(b.threadRef);
 }
 
-export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts = [], decisions = [], messages = [], bets = [], outcomes = [], query = "", now = Date.now() } = {}) {
+export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts = [], decisions = [], messages = [], bets = [], outcomes = [], codeDrift = [], query = "", now = Date.now() } = {}) {
   if (!ventureId || !model) throw Object.assign(new Error("A work index needs venture truth."), { code: "work_index_invalid", status: 400 });
+  const driftByThread = newestCodeDriftByThread(list(codeDrift));
   const activeByRun = new Map(list(activeDrives).map((drive) => [drive.id, drive]));
   const receiptByRun = new Map(list(receipts).map((receipt) => [String(receipt.runRef ?? "").replace(/^run:/, ""), receipt]));
   const decisionsById = new Map(list(decisions).filter((decision) => decision?.id).map((decision) => [decision.id, decision]));
@@ -434,6 +436,7 @@ export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts
     }))
     .map((item) => ({
       ...item,
+      drift: driftByThread.get(item.threadRef) ?? null,
       threadMessageRefs: list(model.threads.find((thread) => `thread:${thread.id}` === item.threadRef)?.messageRefs),
     }))
     .sort(compareWorkItems);
@@ -479,6 +482,8 @@ export function buildWorkIndex(ventureId, options = {}) {
   const messages = listVentureDocs(ventureId, "conversation", options);
   const bets = listVentureDocs(ventureId, "bets", options);
   const outcomes = listVentureDocs(ventureId, "outcomes", options);
+  let codeDrift = [];
+  try { codeDrift = codeDriftForVenture(ventureId, options); } catch { /* drift is informative only */ }
   return projectWorkIndex({
     ventureId,
     model: getSemanticModel(ventureId, options),
@@ -488,6 +493,7 @@ export function buildWorkIndex(ventureId, options = {}) {
     messages,
     bets,
     outcomes,
+    codeDrift,
     query: options.query ?? "",
   });
 }

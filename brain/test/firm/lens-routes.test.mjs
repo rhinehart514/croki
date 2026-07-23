@@ -93,7 +93,7 @@ test("POST /api/ventures from an agent-stamped caller is refused", async () => {
   assert.equal(res.status, 403);
 });
 
-test("the local Drover page can start a new venture without an unlock ceremony", async () => {
+test("the local Croki page can start a new venture without an unlock ceremony", async () => {
   const res = await call("POST", "/api/ventures", { name: "A new venture" });
   assert.equal(res.status, 200);
   assert.equal(res.body.venture.name, "A new venture");

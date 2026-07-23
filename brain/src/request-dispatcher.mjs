@@ -14,6 +14,7 @@ import firmDialogueRoutes from "./firm/dialogue-routes.mjs";
 import firmVentureRoutes from "./firm/venture-routes.mjs";
 import firmConfigurationRoutes from "./firm/configuration-routes.mjs";
 import firmModelRoutes from "./firm/model-routes.mjs";
+import firmJourneyRoutes from "./firm/journey-routes.mjs";
 
 const ROUTE_GROUPS = [
   systemRoutes,
@@ -29,6 +30,7 @@ const ROUTE_GROUPS = [
   firmWorkRoutes,
   firmDialogueRoutes,
   firmModelRoutes,
+  firmJourneyRoutes,
   firmConfigurationRoutes,
   firmVentureRoutes,
 ];
@@ -38,8 +40,8 @@ export async function dispatchRequest(req, res) {
 
   if (url.pathname.startsWith("/api/")) {
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("X-Drover-Server-Instance", shellStatus().instanceId);
-    res.setHeader("X-Drover-Responded-At", new Date().toISOString());
+    res.setHeader("X-Croki-Server-Instance", shellStatus().instanceId);
+    res.setHeader("X-Croki-Responded-At", new Date().toISOString());
   }
 
   const ctx = { req, res, url };

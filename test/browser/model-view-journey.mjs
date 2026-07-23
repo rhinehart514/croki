@@ -73,6 +73,7 @@ test("Product / GTM conversation keeps a flexible local model view above the com
 
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.work-graph-sketch[data-kind="model-view"] button')].find((entry) => /Review changes/.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
     await waitForDom(client, `document.querySelector('.workspace-shell')?.dataset.mode === 'product-gtm' && !!document.querySelector('.product-gtm-review[data-inline="true"]')`, "review did not open the exact provisional branch in Product / GTM");
+    await waitForDom(client, `/When should ecosystem distribution begin/.test(document.querySelector('.product-gtm-review')?.textContent || '')`, "the exact provisional branch did not finish loading");
     assert.match(await client.evaluate(`document.querySelector('.product-gtm-review')?.textContent || ''`), /When should ecosystem distribution begin/);
     assert.equal(await client.evaluate(`document.querySelectorAll('.product-gtm-review input[type="checkbox"]:checked').length`), 1);
     await assertNoUnhandledRejections(client);

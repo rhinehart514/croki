@@ -15,7 +15,7 @@ export function useComposerImageIntake({ images, setImages, onSettled }: {
 
   const add = async (files: File[]) => {
     try { setImages(await prepareComposerImages(files, images)); onSettled(null); }
-    catch (cause) { onSettled(cause instanceof Error ? cause.message : "Drover could not attach those images."); }
+    catch (cause) { onSettled(cause instanceof Error ? cause.message : "Croki could not attach those images."); }
   };
 
   const imageFiles = (list: FileList) => [...list].filter((file) => file.type.startsWith("image/"));

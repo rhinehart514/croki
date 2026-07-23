@@ -34,6 +34,10 @@
   font-size: 0.62rem;
   font-weight: 700;
 }
+.proof-mark > svg {
+  width: 100%;
+  height: 100%;
+}
 
 .proof-item {
   gap: 0.6rem;
@@ -654,4 +658,3 @@
   color: var(--ink-2);
   font-size: 1.05rem;
 }
-

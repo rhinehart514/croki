@@ -141,11 +141,11 @@ export default async function handle({ req, res, url }) {
   if (req.method !== "GET") return false;
 
   // Browsers cannot turn a folder selection into a server-readable absolute path. Offer only folders
-  // Drover already trusts instead: the server's launch workspace and repositories connected to an
+  // Croki already trusts instead: the server's launch workspace and repositories connected to an
   // existing venture. This is deliberately not a filesystem browser, and path disclosure stays local.
   if (url.pathname === "/api/repositories") {
     if (!isLocalRepositoryRequest(req)) {
-      json(res, 403, { error: "Product folders are only available from Drover on this Mac." });
+      json(res, 403, { error: "Product folders are only available from Croki on this Mac." });
       return true;
     }
     json(res, 200, { repositories: repositoryChoices() });

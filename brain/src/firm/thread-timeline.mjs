@@ -42,6 +42,47 @@ function inspectableActivity(bet) {
   }).slice(-8);
 }
 
+// The live half of that same activity list: the tool receipts and thinking spans the streaming
+// runtime measured during this drive. Both are process-local presence on the drive record, exactly
+// like liveTool — projecting them here adds no durable record and no second event log (see the file
+// header). A receipt names the tool's real target, which the adapter used to discard; the label is
+// bounded here rather than at the seam so the receipt stays exact. A thinking step carries only its
+// measured duration: the model's reasoning content is dropped at the runtime seam and never reaches
+// this projection.
+export function liveActivitySteps(drive) {
+  const steps = list(drive?.liveToolResults).map((receipt, index) => ({
+    id: `tool:${drive.id}:${index}`,
+    label: receipt?.target ? `${receipt.name} ${String(receipt.target).slice(0, 120)}` : String(receipt?.name ?? "Used a capability"),
+    tone: receipt?.status === "failed" ? "attention" : "tool",
+    at: receipt?.at ?? null,
+    durationMs: Number.isFinite(receipt?.durationMs) ? receipt.durationMs : null,
+    detail: receipt?.detail ?? null,
+  }));
+  // The newest beat, so it sits at the live edge of the list the same way liveText does.
+  if (drive?.liveThinking?.state) {
+    const durationMs = Number(drive.liveThinking.durationMs);
+    steps.push({
+      id: `thinking:${drive.id}`,
+      label: "Thinking through the direction",
+      tone: "thinking",
+      at: drive.liveThinking.at ?? null,
+      durationMs: Number.isFinite(durationMs) && durationMs > 0 ? durationMs : null,
+    });
+  }
+  return steps;
+}
+
+// The plan the model is keeping for itself (TodoWrite), projected as compact shaped steps. It is a
+// projection of the model's latest plan message and nothing more: no storage, no new durable object,
+// and a restart correctly drops it with the drive.
+export function liveTodos(drive) {
+  const todos = list(drive?.liveTodos)
+    .map((todo) => ({ content: String(todo?.content ?? "").trim(), status: String(todo?.status ?? "pending").trim() || "pending" }))
+    .filter((todo) => todo.content)
+    .slice(0, 12);
+  return todos.length ? todos : null;
+}
+
 // The shaped reasoning beats work-loop-receipts emits between tool receipts. Matching by exact
 // label keeps this a projection of existing shaped activity, not a new interpretation layer.
 const THINKING_BEATS = new Set(["Starting work", "Thinking through the direction", "Working through the direction", "Preparing the return", "Updating venture understanding"]);
@@ -192,7 +233,10 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
 
   for (const drive of active) {
     const state = agentState(drive);
-    const activitySteps = inspectableActivity(bets.find((bet) => bet.id === drive.betId));
+    // One activity list, not two: the durable shaped events and this drive's live tool receipts and
+    // thinking spans land in the same compact log, newest kept.
+    const activitySteps = [...inspectableActivity(bets.find((bet) => bet.id === drive.betId)), ...liveActivitySteps(drive)].slice(-8);
+    const thinking = state === "working" && drive.liveThinking?.state === "start";
     items.push({
       kind: "agent-status",
       id: `agent:${drive.id}:${state}`,
@@ -202,7 +246,7 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
       participantLabel: participantLabel(drive.teammateRef),
       state,
       summary: state === "stopping" ? "Stop requested" : state === "queued" ? "Queued" : drive.activity ?? "Working in this thread",
-      summaryTone: state === "working" && THINKING_BEATS.has(String(drive.activity ?? "")) ? "thinking" : null,
+      summaryTone: thinking || (state === "working" && THINKING_BEATS.has(String(drive.activity ?? ""))) ? "thinking" : null,
       startedAt: drive.startedAt,
       updatedAt: drive.lastBeatAt ?? drive.startedAt,
       betRef: drive.betId ? `bet:${drive.betId}` : null,
@@ -210,25 +254,18 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
       // The tool call forming right now — name plus partial arguments the SDK has streamed so far.
       // Process-local presence from the drive, shown live and dropped when the call settles.
       liveTool: state === "working" && drive.liveTool?.name ? { name: drive.liveTool.name, partialInput: String(drive.liveTool.partialInput ?? "") } : null,
+      // The plan the model is keeping right now, so a client that never sees the stream still sees
+      // it. Null while nothing is planned, so the transcript shows nothing rather than an empty list.
+      todos: state === "working" ? liveTodos(drive) : null,
+      // The assistant's reply as it forms, carried on the SAME item as the rest of this drive's live
+      // texture rather than as a second projected message. A separate `live:<driveId>` message used to
+      // sit beside the streamed reply the client already paints, so any durable refetch mid-run showed
+      // the reply twice — once stale from this read, once live from the drive's own delta stream. The
+      // client renders the stream when it is connected and falls back to this exact field when it is
+      // not, so nothing is lost and nothing doubles. It vanishes when the drive settles and its durable
+      // conversation message takes over.
+      liveText: state === "working" ? String(drive.liveText ?? "") : "",
     });
-    // The assistant's reply as it forms — projected as a normal streaming teammate turn so the founder
-    // watches it stream in the transcript, not as a status chip. It carries `at: lastBeatAt` so it sorts
-    // to the live edge, and vanishes when the drive settles and its durable message takes over.
-    const liveText = String(drive.liveText ?? "").trim();
-    if (state === "working" && liveText) {
-      items.push({
-        kind: "message",
-        id: `live:${drive.id}`,
-        ref: `run:${drive.id}`,
-        ventureId,
-        at: drive.lastBeatAt ?? drive.startedAt,
-        role: "teammate",
-        participantRef: drive.teammateRef,
-        participantLabel: participantLabel(drive.teammateRef),
-        content: drive.liveText,
-        streaming: true,
-      });
-    }
   }
 
   for (const bet of bets) {

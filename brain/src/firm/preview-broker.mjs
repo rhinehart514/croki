@@ -37,7 +37,7 @@ function livePinForWorkspace(workspaceId, now) {
  */
 export async function invokePreview({ runId, workspaceId, worktree = null, operation, input = {} }, { now = Date.now } = {}) {
   if (!host) {
-    throw new Error("The preview is only available while the Drover desktop app is running.");
+    throw new Error("The preview is only available while the Croki desktop app is running.");
   }
   const run = String(runId ?? "").trim();
   const workspace = String(workspaceId ?? "").trim();

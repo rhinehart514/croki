@@ -92,7 +92,7 @@ test("all founder consequences settle once from their owning threads and survive
     await client.send("Page.reload", { ignoreCache: true });
     await waitForDom(client, `!!document.querySelector('.workspace-shell .thread-conversation')`, "workspace shell did not return after reload");
     await wallCount(client, ventureId, 0);
-    assert.equal(await client.evaluate(`!!document.querySelector('.thread-conversation [role="log"]')`), true);
+    await waitForDom(client, `!!document.querySelector('.thread-conversation [role="log"]')`, "the owning Thread transcript did not restore after reload");
     await assertBasicAccessibility(client);
     await assertNoUnhandledRejections(client);
   } finally { await chrome.close(); await drover.close(); }

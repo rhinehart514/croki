@@ -17,13 +17,10 @@
 //     only the founder ends work; §5.5: the wall's release authority is untouched — a grant skips only
 //     the WAIT, never the release capability, and nothing here executes an outbound act).
 //
-//   GET /api/ventures/:id/events   (text/event-stream)
-//     The Phase 5 SSE push: a data-free "something changed" stream so a present founder sees work
-//     stream without the 900 ms poll storm. The poll stays as the reconnect fallback (client hook).
+//   GET /api/ventures/:id/events · GET /api/ventures/:id/drives/:driveId/stream  (text/event-stream)
+//     Two live pushes behind the same venture-scoped guard: a data-free "something changed" signal (the
+//     900 ms poll is its fallback), and one drive's payload deltas so a reply streams without a refetch.
 //
-// Direction routing for a FRESH direction (the composer's primary path) is applied in work-routes.mjs
-// where the drive already starts; this file owns the review-reply dispatch and the event stream.
-
 import { json, readBody } from "../routes/util.mjs";
 import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { getFirmConfiguration } from "./configuration.mjs";
@@ -37,12 +34,14 @@ import { recordGrant, actTypeForEffect } from "./grants.mjs";
 import { routeDirection } from "./direction-routing.mjs";
 import { end as endBet, fork as forkBet } from "./bet.mjs";
 import { setVentureDoc } from "./venture-store.mjs";
-import { subscribeFirmEvents } from "./firm-events.mjs";
 import { driveTeammate } from "./work-loop.mjs";
 import { abortActiveDrive, listActiveDrives } from "./active-drives.mjs";
 import { ensureDirectionThread, extendDirectionThread, getSemanticModel, setDirectionThreadLifecycle } from "./semantic-model-store.mjs";
 import { checkAuthorizedObservations } from "./release-observation.mjs";
 import { persistImageAttachments, publicImageAttachments } from "./image-attachments.mjs";
+import { journeyImportProfile, publicJourneyImportAttachment } from "./journey-import.mjs";
+import { handleDialogueEventStream } from "./dialogue-event-stream.mjs";
+import { handleDriveDeltaStream } from "./drive-stream.mjs";
 import imageAttachmentRoutes from "./image-attachment-routes.mjs";
 const trimOrNull = (value) => String(value ?? "").trim() || null;
 function statusFor(err) {
@@ -84,7 +83,7 @@ function launchDrive({ drive, input, ventureId, threadRef, betId, teammateRef, o
         threadRef,
         betId,
         teammateRef,
-        content: `${teammateRef ?? "Drover"} could not continue this work: ${detail}`,
+        content: `${teammateRef ?? "Croki"} could not continue this work: ${detail}`,
         options,
       });
     } catch {
@@ -188,7 +187,16 @@ async function handleReply(ventureId, req, res, deps) {
   const configuration = getFirmConfiguration(ventureId); // fail-closed venture existence
   const body = await readBody(req, { maxBytes: 28 * 1024 * 1024 });
   const attachments = persistImageAttachments(ventureId, body?.images, deps.appendOptions);
-  const message = trimOrNull(body?.message) ?? (attachments.length === 1 ? "Look at this image." : attachments.length ? "Look at these images." : null);
+  const journeyImportRef = trimOrNull(body?.journeyImportRef);
+  // Resolve before recording the founder turn. A missing or cross-venture staged file must fail
+  // closed without leaving a transcript message that implies the import was accepted.
+  const journeyProfile = journeyImportRef
+    ? journeyImportProfile(ventureId, journeyImportRef, deps.appendOptions)
+    : null;
+  const message = trimOrNull(body?.message)
+    ?? (journeyProfile ? "Map this observed journey source to the current Product walk."
+      : attachments.length === 1 ? "Look at this image."
+        : attachments.length ? "Look at these images." : null);
   const betId = trimOrNull(body?.betId);
   const threadRef = trimOrNull(body?.threadRef);
   const workTurn = body?.mode === "work";
@@ -235,7 +243,20 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   // The founder's own message is recorded first — it is the authority every dispatch below rests on.
-  const founderMessage = appendConversationMessage({ ventureId, role: "founder", content: message, betId, attachments: publicImageAttachments(attachments), ...((threadRef || teammateRefs.length) ? { target: { threadRef, teammateRefs } } : {}) }, deps.appendOptions);
+  const founderMessage = appendConversationMessage({
+    ventureId,
+    role: "founder",
+    content: message,
+    betId,
+    attachments: [
+      ...publicImageAttachments(attachments),
+      ...(journeyProfile ? [publicJourneyImportAttachment(journeyProfile)] : []),
+    ],
+    ...((threadRef || teammateRefs.length) ? { target: { threadRef, teammateRefs } } : {}),
+  }, deps.appendOptions);
+  const journeyMaterial = journeyProfile
+    ? { journeyImportRef, journeyImportProfile: journeyProfile }
+    : {};
   if (threadRef) extendDirectionThread(ventureId, threadRef, { messageRefs: [`conversation:${founderMessage.id}`], actor: { authority: "founder", id: "founder" } }, deps.appendOptions);
 
   // Observation is founder-invoked work, too. Keep reply capture on the conversation surface instead
@@ -276,7 +297,9 @@ async function handleReply(ventureId, req, res, deps) {
     return;
   }
 
-  if (await dispatchParticipantCommand({ ventureId, configuration, message, betId, threadRef, founderMessageId: founderMessage.id, attachments, res, deps })) return;
+  // Product / GTM uses the founder-selected SDK; canvas agents never replace it.
+  if (!(workTurn && productGtmView)
+    && await dispatchParticipantCommand({ ventureId, configuration, message, betId, threadRef, founderMessageId: founderMessage.id, attachments, res, deps })) return;
 
   const { act, steerText } = await classifyDialogueAct({ message, effortSummary: summary }, deps.dialogueDeps ?? {});
 
@@ -284,13 +307,14 @@ async function handleReply(ventureId, req, res, deps) {
   // exact work correction. Preserve the founder's words in the transcript, but do not make a general
   // dialogue classifier rediscover that scope.
   if (artifactSection || workflowStep) {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, workflowStep, attachments, teammateRefs });
+    const responseAct = workTurn && productGtmView ? "answer" : "new-direction";
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, responseAct, { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, workflowStep, attachments, teammateRefs, ...journeyMaterial });
   }
   // While this Thread's Run is live, a steer / answer / new direction joins the SAME SDK turn through
   // the run's own prompt queue — no restart, no refusal (T3 run-architecture parity). The founder's
   // explicit stop, close, and gate approvals keep their authority paths above and below; when no run
   // is live (or its queue just closed) the message flows to the existing seams unchanged.
-  if (act === "steer" || act === "answer" || act === "new-direction") {
+  if (!journeyProfile && (act === "steer" || act === "answer" || act === "new-direction")) {
     const live = (deps.steerLiveRun ?? steerLiveRun)({
       ventureId, betId, threadRef, text: act === "steer" ? (steerText ?? message) : message,
       model: workTurn ? model : null, attachments,
@@ -298,10 +322,13 @@ async function handleReply(ventureId, req, res, deps) {
     if (live) return json(res, 200, { act: "steer", applied: "same-turn", betId: live.betId ?? betId, threadRef: threadRef ?? live.threadRef, runRef: `run:${live.driveId}`, messageId: founderMessage.id });
   }
   if (act === "steer") {
-    if (workTurn) return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
+    if (workTurn) {
+      const responseAct = productGtmView ? "answer" : "new-direction";
+      return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, responseAct, { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs, ...journeyMaterial });
+    }
     if (!betId) {
       // A steer with no effort to steer is just a new direction — route it.
-      return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, null, null, null, "new-direction", { attachments, teammateRefs });
+      return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, null, null, null, "new-direction", { attachments, teammateRefs, ...journeyMaterial });
     }
     enqueueSteer({ ventureId, betId, text: steerText ?? message, fromMessageId: founderMessage.id });
     json(res, 200, { act: "steer", betId, applied: "next-step", messageId: founderMessage.id });
@@ -309,7 +336,8 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   if (act === "answer") {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, contextTurn ? "answer" : "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
+    const responseAct = contextTurn || (workTurn && productGtmView) ? "answer" : "new-direction";
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, responseAct, { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs, ...journeyMaterial });
   }
   if (act === "close") {
     if (!betId) throw Object.assign(new Error("Closing needs the effort being closed."), { status: 400 });
@@ -347,7 +375,8 @@ async function handleReply(ventureId, req, res, deps) {
   }
 
   if (act === "new-direction") {
-    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
+    const responseAct = workTurn && productGtmView && journeyProfile ? "answer" : "new-direction";
+    return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, responseAct, { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs, ...journeyMaterial });
   }
 
   json(res, 200, { act, betId, messageId: founderMessage.id });
@@ -399,6 +428,8 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
         ...(material.artifactSection ? { artifactSection: material.artifactSection } : {}),
         ...(material.workflowStep ? { workflowStep: material.workflowStep } : {}),
         ...(material.teammateRefs?.length ? { teammateRefs: material.teammateRefs } : {}),
+        ...(material.journeyImportRef ? { journeyImportRef: material.journeyImportRef } : {}),
+        ...(material.journeyImportProfile ? { journeyImportProfile: material.journeyImportProfile } : {}),
       },
       ...(runtime ? { runtime } : {}),
       ...(model ? { model } : {}),
@@ -415,37 +446,10 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
     teammateRef,
     ...(why ? { why } : {}),
     threadRef: exactThreadRef,
+    messageId: fromMessageId,
+    // Compatibility for older clients that consumed the work-loop origin name.
     fromMessageId,
   });
-}
-
-// The SSE stream: one long-lived response per subscribed client. Writes an initial comment to open the
-// stream, a retry hint, then one small JSON line per firm event for this venture. Cleaned up on close.
-function handleEventStream(ventureId, req, res) {
-  getFirmConfiguration(ventureId); // fail-closed: unknown venture throws before the stream opens
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream; charset=utf-8",
-    "Cache-Control": "no-store",
-    Connection: "keep-alive",
-    "X-Accel-Buffering": "no",
-  });
-  res.write(": connected\n\n");
-  res.write("retry: 3000\n\n");
-  const unsubscribe = subscribeFirmEvents(ventureId, (event) => {
-    try {
-      res.write(`event: ${event.kind}\n`);
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
-    } catch { /* a write to a closed socket is harmless; close handler unsubscribes */ }
-  });
-  // A periodic heartbeat keeps intermediaries from idling the connection closed; unref'd so it never
-  // pins shutdown.
-  const heartbeat = setInterval(() => {
-    try { res.write(": ping\n\n"); } catch { /* closed */ }
-  }, 25_000);
-  heartbeat.unref?.();
-  const close = () => { clearInterval(heartbeat); unsubscribe(); };
-  req.on("close", close);
-  req.on("error", close);
 }
 
 export default async function handle({ req, res, url, deps = {} }) {
@@ -481,14 +485,13 @@ export default async function handle({ req, res, url, deps = {} }) {
     return true;
   }
 
-  const eventsMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/events$/);
-  if (req.method === "GET" && eventsMatch) {
-    const ventureId = decodeURIComponent(eventsMatch[1]);
+  const streamMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/(?:events|drives\/([^/]+)\/stream)$/);
+  if (req.method === "GET" && streamMatch) {
+    const [ventureId, driveId] = streamMatch.slice(1).map((part) => (part ? decodeURIComponent(part) : null));
     try {
-      handleEventStream(ventureId, req, res);
-    } catch (err) {
-      json(res, statusFor(err), { error: err instanceof Error ? err.message : String(err) });
-    }
+      if (!driveId) handleDialogueEventStream(ventureId, req, res);
+      else handleDriveDeltaStream({ ventureId, driveId, req, res, since: url.searchParams.get("since"), drives: listActiveDrives(ventureId) });
+    } catch (err) { json(res, statusFor(err), { error: err instanceof Error ? err.message : String(err) }); }
     return true;
   }
 

@@ -7,8 +7,8 @@ describe("desktop work runtime fallbacks", () => {
 
   it("states native capability honestly in the browser harness", () => {
     render(<><WorkTerminal ventureId="venture-1" workspaceId="workspace-1" /><WorkPreview workspaceId="workspace-1" /></>);
-    expect(screen.getByText("Terminal is available in the Drover desktop app.")).toBeInTheDocument();
-    expect(screen.getByText("Preview is available in the Drover desktop app.")).toBeInTheDocument();
+    expect(screen.getByText("Terminal is available in the Croki desktop app.")).toBeInTheDocument();
+    expect(screen.getByText("Preview is available in the Croki desktop app.")).toBeInTheDocument();
   });
 
   it("shows a canonical workspace unavailability reason", () => {

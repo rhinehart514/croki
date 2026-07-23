@@ -8,7 +8,7 @@ import path from "node:path";
 
 import { anthropicRuntime } from "../src/runtimes/anthropic.mjs";
 import { buildCodexDriveArgs, buildCodexProductChangeArgs, codexRuntime, runCodexDriveTurn, startCodexMcpBridge } from "../src/runtimes/codex.mjs";
-import { claudeCodeRuntime, createFirmSdkServer, detectClaudeAuth, driveBudgetUsd, modelMaxTurns } from "../src/runtimes/claude-code.mjs";
+import { claudeCodeRuntime, claudePermissionHandler, createFirmSdkServer, detectClaudeAuth, driveBudgetUsd, modelMaxTurns } from "../src/runtimes/claude-code.mjs";
 import { runtimeForModel, selectRuntime } from "../src/runtimes/index.mjs";
 
 function baseContext(overrides = {}) {
@@ -233,6 +233,42 @@ describe("subscription adapter boundaries", () => {
     assert.ok(driveBudgetUsd({ spentUsd: 0, maxBudgetUsd: null }) > 0, "an unset participant cap must not become a zero-dollar provider invocation");
   });
 
+  it("parks native Claude prompts but keeps hard consequence controls non-bypassable", async () => {
+    const interventions = [];
+    const handler = claudePermissionHandler({
+      nativeCoding: true,
+      onProviderIntervention: async (request) => {
+        interventions.push(request);
+        return { behavior: "deny", message: "Waiting for the founder." };
+      },
+    });
+    const question = await handler("AskUserQuestion", { questions: [{ question: "Which path?" }] }, { toolUseID: "tool-1" });
+    assert.equal(question.behavior, "deny");
+    assert.equal(interventions[0].toolName, "AskUserQuestion");
+    const commit = await handler("Bash", { command: "git commit -am ship" }, { toolUseID: "tool-2" });
+    assert.equal(commit.behavior, "deny");
+    assert.match(commit.message, /behind the founder/);
+    assert.equal(interventions.length, 1, "a native question cannot grant commit authority");
+  });
+
+  it("directs native UI verification into the visible Croki preview", async () => {
+    let invocation;
+    await claudeCodeRuntime.drive(baseContext({
+      nativeCoding: true,
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      query: (input) => {
+        invocation = input;
+        return (async function* completedQuery() {
+          yield { type: "result", subtype: "success", is_error: false, result: "Done." };
+        })();
+      },
+    }));
+    assert.match(invocation.options.systemPrompt.append, /preview_open/);
+    assert.match(invocation.options.systemPrompt.append, /do not launch a separate browser/);
+    assert.equal(typeof invocation.options.canUseTool, "function");
+  });
+
   it("runs the default Claude teammate in the full native Claude Code harness", async () => {
     let invocation;
     const result = await claudeCodeRuntime.drive(baseContext({
@@ -400,7 +436,7 @@ describe("subscription adapter boundaries", () => {
     }
   });
 
-  it("exposes screened Drover tools through the native Codex MCP contract", async () => {
+  it("exposes screened Croki tools through the native Codex MCP contract", async () => {
     const calls = [];
     const context = baseContext({
       tools: [{
@@ -439,7 +475,7 @@ describe("subscription adapter boundaries", () => {
     assert.equal(calls[0].name, "read_truth");
   });
 
-  it("accepts a normal Codex final response without a Drover action envelope", async () => {
+  it("accepts a normal Codex final response without a Croki action envelope", async () => {
     const sessions = [];
     const result = await codexRuntime.drive(baseContext({
       model: null,
@@ -451,7 +487,7 @@ describe("subscription adapter boundaries", () => {
     assert.deepEqual(sessions, ["thread-1"]);
   });
 
-  it("preserves a founder-wall pause returned by a native Drover MCP tool", async () => {
+  it("preserves a founder-wall pause returned by a native Croki MCP tool", async () => {
     const bridge = await startCodexMcpBridge(baseContext({
       tools: [{ name: "stage_outward", description: "Park an outward act.", input_schema: { type: "object", properties: {} } }],
       async runTool() { return { result: { parked: true }, pause: true }; },
@@ -600,5 +636,117 @@ describe("Claude streaming run architecture", () => {
     assert.equal(invocation.options.resume, "claude-session-1");
     assert.equal(invocation.options.resumeSessionAt, "uuid-prev");
     assert.deepEqual(cursors, [{ resumeSessionAt: "uuid-9" }]);
+  });
+});
+
+describe("Claude working texture", () => {
+  it("measures thinking as a span and never lets the reasoning content leave the adapter", async () => {
+    const REASONING = "hidden chain of thought the founder must never be shown";
+    // Every outward callback is recorded, so the containment claim is asserted against the WHOLE
+    // surface the adapter can reach, not just the thinking callback.
+    const outward = [];
+    const record = (name) => (...args) => outward.push([name, ...args]);
+    const spans = [];
+    const result = await claudeCodeRuntime.drive(baseContext({
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      onText: record("onText"),
+      onTextDelta: record("onTextDelta"),
+      onToolStart: record("onToolStart"),
+      onToolInputDelta: record("onToolInputDelta"),
+      onToolResult: record("onToolResult"),
+      onChildDelta: record("onChildDelta"),
+      onTodos: record("onTodos"),
+      onThinking: (span) => { spans.push(span); outward.push(["onThinking", span]); },
+      query: () => (async function* thinkingQuery() {
+        yield { type: "stream_event", session_id: "s1", event: { type: "content_block_start", index: 0, content_block: { type: "thinking" } } };
+        yield { type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: REASONING } } };
+        yield { type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "signature_delta", signature: "signature-abc" } } };
+        yield { type: "stream_event", event: { type: "content_block_stop", index: 0 } };
+        yield { type: "stream_event", event: { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "Here is the answer." } } };
+        yield { type: "result", subtype: "success", is_error: false, result: "Done." };
+      })(),
+    }));
+
+    assert.equal(result.kind, "completed");
+    assert.deepEqual(spans.map((span) => span.state), ["start", "stop"]);
+    assert.equal(spans[0].durationMs, 0);
+    assert.ok(Number.isFinite(spans[1].durationMs) && spans[1].durationMs >= 0, "the closed span carries a measured wall-clock duration");
+    const surfaced = JSON.stringify(outward);
+    assert.equal(surfaced.includes(REASONING), false, "no thinking content ever reaches a host callback");
+    assert.equal(surfaced.includes("signature-abc"), false, "nor does the thinking signature");
+  });
+
+  it("attributes subagent partials to their parent tool call instead of flattening the reply", async () => {
+    const textDeltas = [];
+    const childDeltas = [];
+    const result = await claudeCodeRuntime.drive(baseContext({
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      onTextDelta: (text) => textDeltas.push(text),
+      onChildDelta: (event) => childDeltas.push(event),
+      query: () => (async function* fanOutQuery() {
+        yield { type: "stream_event", session_id: "s1", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Delegating." } } };
+        yield { type: "stream_event", parent_tool_use_id: "task-1", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Child read the pricing page." } } };
+        yield { type: "stream_event", parent_tool_use_id: "task-1", event: { type: "content_block_start", index: 1, content_block: { type: "tool_use", name: "Grep" } } };
+        yield { type: "stream_event", parent_tool_use_id: "task-1", event: { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"pattern":"price"}' } } };
+        yield { type: "stream_event", parent_tool_use_id: "task-2", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Second child." } } };
+        yield { type: "result", subtype: "success", is_error: false, result: "Done." };
+      })(),
+    }));
+
+    assert.equal(result.kind, "completed");
+    assert.deepEqual(textDeltas, ["Delegating."], "a child's prose never flattens into the founder's reply");
+    assert.deepEqual(childDeltas, [
+      { parentToolUseId: "task-1", delta: { kind: "text", text: "Child read the pricing page." } },
+      { parentToolUseId: "task-1", delta: { kind: "tool_input", name: "Grep", partialJson: '{"pattern":"price"}' } },
+      { parentToolUseId: "task-2", delta: { kind: "text", text: "Second child." } },
+    ]);
+  });
+
+  it("projects the model's plan and returns every tool receipt with its real target", async () => {
+    const todos = [];
+    const receipts = [];
+    const commands = [];
+    const starts = [];
+    const result = await claudeCodeRuntime.drive(baseContext({
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      onTodos: (items) => todos.push(items),
+      onToolResult: (receipt) => receipts.push(receipt),
+      onCommand: (command) => commands.push(command),
+      onToolStart: (name, detail) => starts.push([name, detail?.summary ?? null]),
+      query: () => (async function* toolQuery() {
+        yield { type: "assistant", session_id: "s1", message: { content: [
+          { type: "tool_use", id: "t-todo", name: "TodoWrite", input: { todos: [{ content: "Map the seam", status: "in_progress", activeForm: "Mapping the seam" }, { content: "  ", status: "pending" }] } },
+          { type: "tool_use", id: "t-read", name: "Read", input: { file_path: "/repo/brain/src/server.mjs" } },
+          { type: "tool_use", id: "t-grep", name: "Grep", input: { pattern: "onToolStart" } },
+          { type: "tool_use", id: "t-bash", name: "Bash", input: { command: "npm test" } },
+        ] } };
+        yield { type: "user", message: { content: [
+          { type: "tool_result", tool_use_id: "t-read", content: "line one\nline two\nline three" },
+          { type: "tool_result", tool_use_id: "t-grep", is_error: true, content: "No matches found" },
+          { type: "tool_result", tool_use_id: "t-bash", content: "3 tests passed" },
+        ] } };
+        yield { type: "result", subtype: "success", is_error: false, result: "Done." };
+      })(),
+    }));
+
+    assert.equal(result.kind, "completed");
+    assert.deepEqual(todos, [[{ content: "Map the seam", status: "in_progress" }]], "the plan projects shaped content and status only");
+    assert.deepEqual(starts, [
+      ["Read", "Reading /repo/brain/src/server.mjs"],
+      ["Grep", "Searching for onToolStart"],
+      ["Bash", "Running npm test"],
+    ], "the plan is projected, never narrated as another tool step");
+    assert.deepEqual(receipts, [
+      { name: "Read", target: "/repo/brain/src/server.mjs", status: "passed", detail: "3 lines" },
+      { name: "Grep", target: "onToolStart", status: "failed", detail: "No matches found" },
+      { name: "Bash", target: "npm test", status: "passed", detail: "3 tests passed" },
+    ]);
+    assert.equal(commands.length, 1, "only Bash still earns the full command receipt");
+    assert.equal(commands[0].command, "npm test");
+    assert.equal(commands[0].status, "passed");
+    assert.equal(commands[0].output, "3 tests passed");
   });
 });

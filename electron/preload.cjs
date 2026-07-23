@@ -1,25 +1,77 @@
-// The renderer receives one narrow desktop capability: ask the trusted host to let the founder
-// choose a product repository. It never gets Node or Electron access, and it cannot name an
-// arbitrary filesystem path without the founder choosing it in the native dialog.
+// @ts-check
+// The renderer receives one narrow desktop capability surface. It never gets Node or Electron
+// access, and it cannot name an arbitrary filesystem path without the founder choosing it in the
+// native dialog. The whole exposure is checked against the one shared contract the renderer also
+// compiles against (ui/src/desktop.d.ts, enforced by `tsc -p electron`); channel names are stable.
 
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("droverDesktop", {
-  platform: process.platform,
+let nextVentureSubscriptionId = 0;
+
+/**
+ * @param {string} channel
+ * @returns {(listener: (payload: any) => void) => () => void}
+ */
+function subscription(channel) {
+  return (listener) => {
+    const handler = (/** @type {unknown} */ _event, /** @type {any} */ payload) => listener(payload);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  };
+}
+
+/** @satisfies {DroverDesktopBridge} */
+const droverDesktopBridge = {
+  platform: /** @type {DroverDesktopBridge["platform"]} */ (process.platform),
   api: {
     request: (input) => ipcRenderer.invoke("drover:brain-request", input),
     subscribe: async (ventureId, listener) => {
-      const handler = (_event, payload) => listener(payload);
+      const subscriptionId = `venture:${Date.now()}:${++nextVentureSubscriptionId}`;
+      const handler = (
+        /** @type {unknown} */ _event,
+        /** @type {{ subscriptionId?: string, event?: any }} */ payload,
+      ) => {
+        if (payload?.subscriptionId === subscriptionId) listener(payload.event);
+      };
       ipcRenderer.on("drover:venture-event", handler);
       try {
-        await ipcRenderer.invoke("drover:events-subscribe", ventureId);
+        await ipcRenderer.invoke("drover:events-subscribe", { ventureId, subscriptionId });
       } catch (error) {
         ipcRenderer.removeListener("drover:venture-event", handler);
         throw error;
       }
+      let active = true;
       return () => {
+        if (!active) return;
+        active = false;
         ipcRenderer.removeListener("drover:venture-event", handler);
-        void ipcRenderer.invoke("drover:events-unsubscribe");
+        void ipcRenderer.invoke("drover:events-unsubscribe", subscriptionId);
+      };
+    },
+    // The payload-carrying twin of `subscribe`: one drive's forming reply, tool calls, and plan, so
+    // the desktop transcript streams instead of refetching the whole timeline per token. It teardown
+    // through the same unsubscribe channel because the host keeps both in one subscription registry.
+    subscribeDrive: async (ventureId, driveId, listener) => {
+      const subscriptionId = `drive:${Date.now()}:${++nextVentureSubscriptionId}`;
+      const handler = (
+        /** @type {unknown} */ _event,
+        /** @type {{ subscriptionId?: string, frame?: any }} */ payload,
+      ) => {
+        if (payload?.subscriptionId === subscriptionId) listener(payload.frame);
+      };
+      ipcRenderer.on("drover:drive-delta", handler);
+      try {
+        await ipcRenderer.invoke("drover:drive-stream-subscribe", { ventureId, driveId, subscriptionId });
+      } catch (error) {
+        ipcRenderer.removeListener("drover:drive-delta", handler);
+        throw error;
+      }
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        ipcRenderer.removeListener("drover:drive-delta", handler);
+        void ipcRenderer.invoke("drover:events-unsubscribe", subscriptionId);
       };
     },
   },
@@ -30,31 +82,17 @@ contextBridge.exposeInMainWorld("droverDesktop", {
     resize: (sessionId, cols, rows) => ipcRenderer.invoke("drover:terminal-resize", sessionId, cols, rows),
     restart: (sessionId) => ipcRenderer.invoke("drover:terminal-restart", sessionId),
     close: (sessionId) => ipcRenderer.invoke("drover:terminal-close", sessionId),
-    onData: (listener) => {
-      const handler = (_event, payload) => listener(payload);
-      ipcRenderer.on("drover:terminal-data", handler);
-      return () => ipcRenderer.removeListener("drover:terminal-data", handler);
-    },
-    onExit: (listener) => {
-      const handler = (_event, payload) => listener(payload);
-      ipcRenderer.on("drover:terminal-exit", handler);
-      return () => ipcRenderer.removeListener("drover:terminal-exit", handler);
-    },
+    onData: subscription("drover:terminal-data"),
+    onExit: subscription("drover:terminal-exit"),
   },
   preview: {
     attach: (workspaceId, webContentsId) => ipcRenderer.invoke("drover:preview-attach", { workspaceId, webContentsId }),
     detach: (workspaceId) => ipcRenderer.invoke("drover:preview-detach", workspaceId),
     startPick: (workspaceId) => ipcRenderer.invoke("drover:preview-start-pick", workspaceId),
     cancelPick: (workspaceId) => ipcRenderer.invoke("drover:preview-cancel-pick", workspaceId),
-    onOpenRequest: (listener) => {
-      const handler = (_event, payload) => listener(payload);
-      ipcRenderer.on("drover:preview-open", handler);
-      return () => ipcRenderer.removeListener("drover:preview-open", handler);
-    },
-    onAnnotation: (listener) => {
-      const handler = (_event, payload) => listener(payload);
-      ipcRenderer.on("drover:preview-annotation", handler);
-      return () => ipcRenderer.removeListener("drover:preview-annotation", handler);
-    },
+    onOpenRequest: subscription("drover:preview-open"),
+    onAnnotation: subscription("drover:preview-annotation"),
   },
-});
+};
+
+contextBridge.exposeInMainWorld("droverDesktop", droverDesktopBridge);

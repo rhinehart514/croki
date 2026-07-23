@@ -15,7 +15,7 @@ function listeningTcpPorts(pid) {
   return [...output.matchAll(/:(\d+)$/gm)].map((match) => Number(match[1]));
 }
 
-test("the packaged Drover app boots its Brain and trusted founder bridge", async () => {
+test("the packaged Croki app boots its Brain and trusted founder bridge", async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "drover-package-acceptance-"));
   const output = path.join(temp, "release");
   const builder = path.join(ROOT, "node_modules", ".bin", "electron-builder");
@@ -24,19 +24,19 @@ test("the packaged Drover app boots its Brain and trusted founder bridge", async
   });
   assert.equal(built.status, 0, `The packaged app could not be built.\n${built.stdout}\n${built.stderr}`);
 
-  const executable = path.join(output, "mac-arm64", "Drover.app", "Contents", "MacOS", "Drover");
+  const executable = path.join(output, "mac-arm64", "Croki.app", "Contents", "MacOS", "Croki");
   const appBundle = path.resolve(path.dirname(executable), "../..");
   const infoPlist = path.join(appBundle, "Contents", "Info.plist");
   const iconName = execFileSync("/usr/bin/plutil", ["-extract", "CFBundleIconFile", "raw", infoPlist], { encoding: "utf8" }).trim();
-  assert.equal(iconName, "icon.icns", "the packaged app did not declare Drover's application icon");
-  assert.ok(fs.statSync(path.join(appBundle, "Contents", "Resources", iconName)).size > 100_000, "the packaged Drover icon was missing or incomplete");
+  assert.equal(iconName, "icon.icns", "the packaged app did not declare Croki's application icon");
+  assert.ok(fs.statSync(path.join(appBundle, "Contents", "Resources", iconName)).size > 100_000, "the packaged Croki icon was missing or incomplete");
   const home = path.join(temp, "home");
   fs.mkdirSync(home, { recursive: true });
   let app = null;
   try {
     const debugPort = await freePort();
     app = await launchPackagedDroverElectron({ executable, home, port: debugPort });
-    await waitForDom(app.client, `document.title === "Drover"`, "the package did not open the Drover renderer");
+    await waitForDom(app.client, `document.title === "Croki"`, "the package did not open the Croki renderer");
     await waitForDom(app.client, `typeof window.droverDesktop?.selectRepository === "function"`, "the package did not expose the trusted desktop bridge");
     assert.equal(await app.client.evaluate(`location.protocol`), "file:", "the package did not load a local renderer asset");
     assert.equal(await app.client.evaluate(`document.visibilityState`), "visible", "the package did not make its BrowserWindow visible");

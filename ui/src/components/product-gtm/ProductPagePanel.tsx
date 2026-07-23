@@ -7,7 +7,7 @@ import type { ProductGtmPageData } from "./productGtmProjection";
 // mapped as its pages; clicking one shows an honest, cited read of what the page is now and takes a
 // brain-dump of what should be different — which mints an exact Work Thread scoped to that page and
 // follows it into Work (AGENTS.md §Boundaries; docs/FIRM-SPEC.md, 2026-07-22). There is no planning
-// layer and no Drover persona between the founder and the SDK: the founder's words become the direction.
+// layer and no Croki persona between the founder and the SDK: the founder's words become the direction.
 
 // The bounded repository citation behind a page read, rendered as the exact file and line range the
 // summary was drawn from rather than an opaque digest.
@@ -31,6 +31,10 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cite = citation(page.sourceRef) ?? page.file;
+  const adoptedConsequences = page.attachments.filter((attachment) =>
+    attachment.assertion === "founder-asserted"
+    && ["consequence", "product-consequence", "product-delta"].includes(attachment.type?.toLowerCase() ?? "")
+  );
 
   const submit = async (message: string, failure: string) => {
     if (!message || pending || readOnly) return;
@@ -56,12 +60,9 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
   };
 
   const start = () => void submit(intent.trim(), "That direction did not open a Work Thread. Nothing was changed.");
-  // The one GTM action a page offers: have an agent draft a go-to-market play about this page. There is no
-  // join target wired here yet, so this mints the intent as an adoptable proposal Thread rather than faking
-  // a joined play (AGENTS.md §Boundaries; docs/FIRM-SPEC.md, 2026-07-22).
-  const proposePlay = () => void submit(
-    `Propose a go-to-market play for the ${name} page. Draft the full sequence as an adoptable proposal I can review.`,
-    "A GTM play could not be proposed. Nothing was changed.",
+  const connectToMarket = () => void submit(
+    `Connect the adopted Product consequence for the ${name} page to market. First assess whether it belongs in an existing play; otherwise draft a new play with explicit intended steps. Return the join or play as an adoptable proposal.`,
+    "This Product change could not be connected to market. Nothing was changed.",
   );
 
   return <section className="product-page-panel" aria-label={`${name} page`}>
@@ -84,6 +85,14 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
       <ul>{page.priorDirection.map((line, index) => <li key={index}>{line}</li>)}</ul>
     </div> : null}
 
+    {page.entryPaths?.length || page.onwardPaths?.length ? <div className="product-page-panel-paths">
+      <p className="product-page-panel-eyebrow">Known user paths</p>
+      <dl>
+        {page.entryPaths?.map((entry) => <div key={`entry:${entry.ref}`}><dt>Arrives from</dt><dd>{entry.name}<small>{entry.route}</small></dd></div>)}
+        {page.onwardPaths?.map((entry) => <div key={`onward:${entry.ref}`}><dt>Continues to</dt><dd>{entry.name}<small>{entry.route}</small></dd></div>)}
+      </dl>
+    </div> : null}
+
     {page.attachments.length ? <div className="product-page-panel-attached">
       <p className="product-page-panel-eyebrow">What this page is about</p>
       <ul>{page.attachments.map((attachment, index) => <li key={index}>
@@ -93,7 +102,7 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
     </div> : null}
 
     <div className="product-page-panel-intent">
-      <label htmlFor={`page-intent-${pageRef}`}>What should be different here?</label>
+      <label htmlFor={`page-intent-${pageRef}`}>What should be different—and for whom?</label>
       <textarea
         id={`page-intent-${pageRef}`}
         value={intent}
@@ -109,12 +118,12 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
       </button>
     </div>
 
-    <div className="product-page-panel-gtm">
+    {adoptedConsequences.length ? <div className="product-page-panel-gtm">
       <p className="product-page-panel-eyebrow">Take it to market</p>
-      <button type="button" className="product-page-panel-play" onClick={() => proposePlay()} disabled={pending || readOnly}>
-        Propose a GTM play
+      <button type="button" className="product-page-panel-play" onClick={() => connectToMarket()} disabled={pending || readOnly}>
+        Connect this change to market
       </button>
-      <p className="product-page-panel-gtm-note">An agent drafts a play for this page as an adoptable proposal.</p>
-    </div>
+      <p className="product-page-panel-gtm-note">An agent proposes a play to join, or a new drafted play.</p>
+    </div> : null}
   </section>;
 }

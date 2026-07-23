@@ -1,4 +1,4 @@
-// Friction capture — the dogfood build queue for Drover itself.
+// Friction capture — the dogfood build queue for Croki itself.
 //
 // Reports land as one markdown file per item in dogfood/queue/ at the repo root — where a
 // coding agent (a nightly Claude Code routine) can read them, work them into PRs, and the
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const DEFAULT_QUEUE_DIR = path.join(REPO_ROOT, "dogfood", "queue");
 
-// An explicitly isolated Drover home is a tenancy boundary, not just a persistence preference. Keep the
+// An explicitly isolated Croki home is a tenancy boundary, not just a persistence preference. Keep the
 // self-observation queue inside that home as well, otherwise a clean founder workspace can read prompt
 // excerpts and failures from the repository-wide dogfood queue. Callers may still pin queueDir directly.
 export function resolveFrictionQueueDir(options = {}) {

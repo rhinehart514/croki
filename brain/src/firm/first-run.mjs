@@ -1,6 +1,6 @@
 // first-run.mjs — the connect → read-back → offers sequence, assembled deterministically at repo bind.
 //
-// Contract §4A.5 / Phase 7. When a venture binds a real product repository, Drover must (1) read the
+// Contract §4A.5 / Phase 7. When a venture binds a real product repository, Croki must (1) read the
 // product back on the canvas as a correctable working theory — what it does, who it's for, and what is
 // still uncertain, with uncertainty explicitly LABELED rather than asserted — and (2) offer the founder
 // two or three concrete, repository-derived directions in the conversation ("contact these buyers",
@@ -9,7 +9,7 @@
 // Truth discipline (FIRM-SPEC): a read-back is either CITED or LABELED INFERENCE, never asserted. This
 // module derives the read-back from truth.mjs's bounded, cited repository scan and records it as a
 // working theory whose grounded subjects carry real, digest-verified repository sources and whose
-// interpretive subject is explicitly framed as Drover's guess for the founder to correct. It makes NO
+// interpretive subject is explicitly framed as Croki's guess for the founder to correct. It makes NO
 // model call: the derivation is deterministic over cited facts, which keeps first-run offline-safe and
 // reproducible. The interpretive step is intentionally injectable (see `deriveReadBack`) so a future
 // model-backed product-model generator can replace the deterministic reader without moving this seam.
@@ -103,10 +103,10 @@ export function deriveReadBack(scan, sources, ventureName = null) {
     : `${productName} is the product in this repository; its manifest and code are the read.`;
 
   // The "who it's for" read is genuine interpretation layered on cited facts — labeled so the founder
-  // sees it as Drover's guess, correctable in dialogue, not an asserted fact.
+  // sees it as Croki's guess, correctable in dialogue, not an asserted fact.
   const audienceGuess = description
-    ? `Drover's read (correct me): the people ${productName} helps are those the description points at — ${sentence(description)}. Who they really are is a guess until you say.`
-    : `Drover's read (correct me): who ${productName} is for is not yet stated in the repository. Tell me who you're building for and I'll ground it.`;
+    ? `Croki's read (correct me): the people ${productName} helps are those the description points at — ${sentence(description)}. Who they really are is a guess until you say.`
+    : `Croki's read (correct me): who ${productName} is for is not yet stated in the repository. Tell me who you're building for and I'll ground it.`;
 
   const stackNote = deps.length
     ? `Built on ${deps.slice(0, 4).join(", ")}${deps.length > 4 ? ", and more" : ""}.`
@@ -128,7 +128,7 @@ export function deriveReadBack(scan, sources, ventureName = null) {
     {
       id: "read-uncertain",
       name: "What's uncertain",
-      statement: `Uncertain, needs you: how ${productName} makes value happen and which of these people to reach first. This is Drover's inference from the repository, not a claim it proves — correct it and I'll re-ground.`,
+      statement: `Uncertain, needs you: how ${productName} makes value happen and which of these people to reach first. This is Croki's inference from the repository, not a claim it proves — correct it and I'll re-ground.`,
       anchor: groundedRefs,
     },
   ];
@@ -466,7 +466,7 @@ export function runFirstRun({ ventureId, repository, ventureName = null }, optio
   const { theory } = recordWorkingTheory({
     ventureId,
     baseRevision: architecture.revision,
-    intent: "Drover's first read of the connected product — correct anything and I'll re-ground it.",
+    intent: "Croki's first read of the connected product — correct anything and I'll re-ground it.",
     supersedes: null,
     operations,
     anchors,

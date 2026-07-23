@@ -105,8 +105,22 @@ export type WorkIndexItem = {
   participantRefs: string[];
   activeParticipantRefs: string[];
   matchRefs?: Array<{ kind: "message" | "artifact" | "evidence" | "decision"; ref: string; label: string }>;
+  drift?: ShipDrift | null;
   createdAt: string | null;
   updatedAt: string | null;
+};
+
+export type ShipDrift = {
+  threadRef?: string;
+  workspaceRef?: string;
+  branch: string | null;
+  baseRef: string | null;
+  hasUpstream: boolean;
+  upstreamRef: string | null;
+  upstreamAheadCount: number;
+  upstreamBehindCount: number;
+  aheadOfDefaultCount: number;
+  behindDefaultCount: number;
 };
 
 export type WorkIndexOutlineObject = {
@@ -318,6 +332,8 @@ export type CodingWorkspace = {
   interruption?: { message: string; recovery: string; at: string } | null;
   consequence?: { review?: "approved" | "rejected"; note?: string; action?: string; commit?: string; preparation?: { pushCommand: string; pullRequestCommand: string; note: string } } | null;
   restoration?: { checkpointId: string; restoredAt: string; note: string } | null;
+  ship?: { drafts?: ShipDrafts; preparedAt?: string; attempt?: ShipAttempt | null } | null;
+  shipReceipts?: ShipAttempt[];
   productConsequence?: {
     capability: string;
     system: string[];
@@ -331,11 +347,69 @@ export type CodingWorkspace = {
 
 export type CodingReadiness = { ready: boolean; approved: boolean; verified: boolean; exact: boolean; source: { head: string; patchHash: string; unchanged: boolean }; reasons: string[] };
 
+export type ShipDrafts = {
+  branch: string;
+  commitSubject: string;
+  commitBody: string;
+  commitMessage: string;
+  prTitle: string;
+  prBody: string;
+};
+
+export type ShipPhase = {
+  phase: "branch" | "commit" | "push" | "pr";
+  status: "pending" | "running" | "ready" | "done" | "skipped" | "failed";
+  detail: string | null;
+  at: string | null;
+};
+
+export type ShipAttempt = {
+  id: string;
+  dryRun: boolean;
+  startedAt: string;
+  completedAt: string | null;
+  outcome: "running" | "completed" | "dry-run" | "failed";
+  error: string | null;
+  failedPhase: string | null;
+  branch: string;
+  baseBranch: string | null;
+  commitSha: string | null;
+  pushed: boolean;
+  prUrl: string | null;
+  prNote: string | null;
+  content: { commitMessage: string; prTitle: string; prBody: string };
+  phases: ShipPhase[];
+};
+
+export type ShipInfo = {
+  drafts: ShipDrafts;
+  drift: ShipDrift | null;
+  baseBranch: string | null;
+  gh: { available: boolean; authenticated: boolean; reason: string | null };
+  attempt: ShipAttempt | null;
+  receipts: ShipAttempt[];
+};
+
 const codingAction = (ventureId: string, id: string, action: string, body: Record<string, unknown>) =>
-  guardedPost<{ workspace: CodingWorkspace; readiness: CodingReadiness | null }>(
+  guardedPost<{ workspace: CodingWorkspace; readiness: CodingReadiness | null; ship?: ShipInfo | null }>(
     `/api/ventures/${encodeURIComponent(ventureId)}/coding-workspaces/${encodeURIComponent(id)}/${action}`,
     body,
   );
+
+export const getCodingWorkspaceShip = (ventureId: string, id: string) =>
+  get<{ workspace: CodingWorkspace; readiness: CodingReadiness | null; ship: ShipInfo | null }>(
+    `/api/ventures/${encodeURIComponent(ventureId)}/coding-workspaces/${encodeURIComponent(id)}`,
+  );
+
+export type ShipRequest = { dryRun?: boolean; branch?: string; commitMessage?: string; prTitle?: string; prBody?: string };
+
+export const shipCodingWorkspace = (ventureId: string, id: string, body: ShipRequest = {}) =>
+  codingAction(ventureId, id, "ship", body.dryRun ? { ...body } : { ...body, confirm: true });
+
+// Stage founder edits through the brain's sanitizers so the confirmation shows the exact branch and
+// content that will ship, not the raw text before shaping.
+export const prepareCodingWorkspaceShip = (ventureId: string, id: string, body: Omit<ShipRequest, "dryRun"> = {}) =>
+  codingAction(ventureId, id, "prepare-ship", { ...body });
 
 export const reviewCodingWorkspace = (ventureId: string, id: string, decision: "approve" | "reject", note = "") => codingAction(ventureId, id, "review", { decision, note });
 export const reviewCodingProductConsequence = (

@@ -110,7 +110,7 @@ export function useWorkspaceResources({
     return {
       data,
       status: data == null ? (degraded ? "error" : "loading") : (degraded ? "stale" : "ready"),
-      error: degraded ? (firm.connection.message ?? "Drover could not refresh this local resource.") : null,
+      error: degraded ? (firm.connection.message ?? "Croki could not refresh this local resource.") : null,
     };
   }, [firm.connection.message, firm.connection.phase]);
 

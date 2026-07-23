@@ -49,7 +49,7 @@ export function WorkChangeComment({ workspace, path, readOnlyReason, onSteered }
       setOpen(false);
       onSteered();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Drover could not send that comment.");
+      setError(cause instanceof Error ? cause.message : "Croki could not send that comment.");
     } finally {
       setSending(false);
     }

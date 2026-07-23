@@ -99,7 +99,7 @@ export default async function handle({ req, res, url }) {
       const active = listActiveDrives(ventureId).filter((drive) => runIds.has(drive.id) || (drive.betId && betIds.has(drive.betId)));
       const unsafe = active.find((drive) => !drive.abortSupported);
       if (unsafe) {
-        throw Object.assign(new Error(`${unsafe.runtime} cannot safely stop this chat yet, so Drover did not delete it.`), { code: "thread_delete_stop_unsupported", status: 409 });
+        throw Object.assign(new Error(`${unsafe.runtime} cannot safely stop this chat yet, so Croki did not delete it.`), { code: "thread_delete_stop_unsupported", status: 409 });
       }
 
       // Tombstone first: no new continuation may target this Thread once deletion begins. Existing live

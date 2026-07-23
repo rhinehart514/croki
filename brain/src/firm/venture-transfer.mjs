@@ -126,7 +126,7 @@ function transferError(message, code = "venture_transfer_invalid", status = 400)
 
 function validateTransfer(file) {
   if (file?.format !== VENTURE_TRANSFER_FORMAT || !SUPPORTED_TRANSFER_VERSIONS.has(file?.version)) {
-    throw transferError("This is not a supported Drover venture transfer file.");
+    throw transferError("This is not a supported Croki venture transfer file.");
   }
   const ventureId = String(file?.venture?.manifest?.id ?? "").trim();
   if (!ventureId || !String(file?.venture?.manifest?.name ?? "").trim()) {

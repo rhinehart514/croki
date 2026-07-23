@@ -248,7 +248,7 @@ export function recordWorkingTheory({
   if (!text(intent)) fail("Working theory needs a plain-language intent.", "working_theory_invalid");
   if (!Array.isArray(operations) || !operations.length) fail("Working theory needs restricted semantic operations.", "working_theory_invalid");
   const authority = text(proposedBy?.authority) ?? "agent";
-  if (authority === "founder") fail("A working theory records Drover's provisional read, not founder-confirmed architecture.", "working_theory_authority", 403);
+  if (authority === "founder") fail("A working theory records Croki's provisional read, not founder-confirmed architecture.", "working_theory_authority", 403);
   const state = getArchitectureState(ventureId, options);
   if (state.current.revision !== baseRevision) {
     fail("Durable architecture changed before this theory was recorded.", "architecture_stale_revision", 409, { baseRevision, currentRevision: state.current.revision });

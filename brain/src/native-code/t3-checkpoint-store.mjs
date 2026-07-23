@@ -1,6 +1,6 @@
 // This boundary adapts the temporary-index checkpoint technique from T3 Code's
 // CheckpointStore.ts (https://github.com/pingdotgg/t3code), used under the MIT
-// license preserved at licenses/t3code-MIT.txt. Drover owns the records and
+// license preserved at licenses/t3code-MIT.txt. Croki owns the records and
 // refs; this module only supplies isolated Git snapshot mechanics.
 
 import crypto from "node:crypto";
@@ -27,7 +27,7 @@ function git(cwd, args, { env = process.env, input } = {}) {
 function safeRef(value) {
   const ref = String(value ?? "").trim();
   if (!/^refs\/drover\/checkpoints\/[a-zA-Z0-9._/-]+$/.test(ref) || ref.includes("..")) {
-    throw new Error("A Drover checkpoint needs a safe refs/drover/checkpoints/* ref.");
+    throw new Error("A Croki checkpoint needs a safe refs/drover/checkpoints/* ref.");
   }
   return ref;
 }
@@ -43,7 +43,7 @@ export function captureCheckpoint({ worktree, ref, message }) {
     git(worktree, ["add", "-A", "--", "."], { env });
     const tree = git(worktree, ["write-tree"], { env });
     const parent = git(worktree, ["rev-parse", "HEAD"]);
-    const commit = git(worktree, ["commit-tree", tree, "-p", parent, "-m", String(message || "Drover checkpoint")], { env });
+    const commit = git(worktree, ["commit-tree", tree, "-p", parent, "-m", String(message || "Croki checkpoint")], { env });
     git(worktree, ["update-ref", checkpointRef, commit]);
     return { ref: checkpointRef, commit, tree, capturedAt: new Date().toISOString() };
   } finally {

@@ -1,7 +1,7 @@
 // Intent options for the composer — a founder-side direction assist, not a router between the founder and
 // the SDK model.
 //
-// The founder deliberately asks (a composer button) for candidate directions. Drover reads the venture's
+// The founder deliberately asks (a composer button) for candidate directions. Croki reads the venture's
 // real product truth and its live WorkIndex and returns a few DISTINCT candidate intents — the different
 // things the founder might actually be trying to do — as short, clickable options. Clicking one loads it
 // into the composer as a full, editable direction; the actual turn still goes to the chosen Claude/Codex
@@ -105,7 +105,7 @@ const MODE_INTENT = {
 function buildIntentPrompt(draft, mode, context) {
   const seed = draft.trim();
   const lines = [
-    "You read a founder's intent inside Drover, an agentic venture-building product.",
+    "You read a founder's intent inside Croki, an agentic venture-building product.",
     MODE_INTENT[mode] ?? MODE_INTENT.auto,
     "",
     "Infer the DISTINCT things the founder might actually be trying to do — their candidate intents — from",

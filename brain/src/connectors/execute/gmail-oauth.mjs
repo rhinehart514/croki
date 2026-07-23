@@ -207,7 +207,7 @@ const SUCCESS_HTML =
   "<body style=\"font:15px -apple-system,system-ui,sans-serif;color:#18181b;background:#fafafa;" +
   "display:flex;align-items:center;justify-content:center;height:100vh;margin:0\">" +
   "<div style=\"text-align:center\"><div style=\"font-size:15px;font-weight:600\">Gmail connected</div>" +
-  "<div style=\"margin-top:6px;color:#71717a\">You can close this tab and return to Drover.</div></div>";
+  "<div style=\"margin-top:6px;color:#71717a\">You can close this tab and return to Croki.</div></div>";
 
 function errorHtml(message) {
   return "<!doctype html><meta charset=utf-8><title>Connect failed</title>" +
@@ -304,8 +304,8 @@ export async function runLoopbackConnect({
     const tokens = await exchangeCode({ clientId, clientSecret, code, codeVerifier: verifier, redirectUri, fetchImpl, tokenEndpoint });
     if (!tokens.refreshToken) {
       // Google withholds a refresh token when the app was already authorized. prompt=consent normally
-      // forces one; if it is still missing, the founder must revoke Drover's access and reconnect.
-      throw new Error("Google returned no refresh token — remove Drover under your Google account's third-party access, then reconnect so consent is prompted again.");
+      // forces one; if it is still missing, the founder must revoke Croki's access and reconnect.
+      throw new Error("Google returned no refresh token — remove Croki under your Google account's third-party access, then reconnect so consent is prompted again.");
     }
     const accountAddress = await resolveGmailProfileAddress({ accessToken: tokens.accessToken, fetchImpl });
     return {

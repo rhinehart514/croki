@@ -34,7 +34,7 @@ describe("product page panel", () => {
     const start = screen.getByRole("button", { name: "Start work on this page" });
     expect(start).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText("What should be different here?"), { target: { value: "Cut it to email and password only." } });
+    fireEvent.change(screen.getByLabelText("What should be different—and for whom?"), { target: { value: "Cut it to email and password only." } });
     expect(start).toBeEnabled();
     fireEvent.click(start);
 
@@ -57,6 +57,24 @@ describe("product page panel", () => {
   it("does not start work while read-only", () => {
     render(<ProductPagePanel ventureId="venture-one" name="Signup" summary="Create your Acme workspace" pageRef="object:page-signup" page={page()} readOnly onOpenWork={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Start work on this page" })).toBeDisabled();
-    expect(screen.getByLabelText("What should be different here?")).toBeDisabled();
+    expect(screen.getByLabelText("What should be different—and for whom?")).toBeDisabled();
+  });
+
+  it("only offers a market connection after a Product consequence is adopted", async () => {
+    const { rerender } = render(<ProductPagePanel ventureId="venture-one" name="Signup" summary="Create your Acme workspace" pageRef="object:page-signup" page={page({
+      attachments: [{ name: "Faster first value", kind: "Product consequence", statement: "People reach value before setup.", type: "product-consequence", assertion: "tentative" }],
+    })} readOnly={false} onOpenWork={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: "Connect this change to market" })).toBeNull();
+
+    rerender(<ProductPagePanel ventureId="venture-one" name="Signup" summary="Create your Acme workspace" pageRef="object:page-signup" page={page({
+      attachments: [{ name: "Faster first value", kind: "Product consequence", statement: "People reach value before setup.", type: "product-consequence", assertion: "founder-asserted" }],
+    })} readOnly={false} onOpenWork={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect this change to market" }));
+
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("venture-one", expect.objectContaining({
+      message: expect.stringContaining("Connect the adopted Product consequence"),
+      subjectRefs: ["object:page-signup"],
+    })));
   });
 });

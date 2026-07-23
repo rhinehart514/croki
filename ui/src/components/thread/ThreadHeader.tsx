@@ -27,8 +27,11 @@ function usageReadout(timeline: ThreadTimeline | null) {
   return { label: parts.join(" · "), detail };
 }
 
+// Every branch here names a STATE. With no thread open there is no fourth container to name — the
+// project is simply at rest, and the header says so rather than minting a "Venture conversation" noun
+// beside Project, Thread, and Review.
 function status(item: WorkIndexItem | null) {
-  if (!item) return "Venture conversation";
+  if (!item) return "Nothing running";
   if (item.attention === "decision") return "Waiting for your judgment";
   if (item.attention === "failure") return "Interrupted";
   if (item.activity !== "idle") return "Agents working";
@@ -36,8 +39,9 @@ function status(item: WorkIndexItem | null) {
   return item.lifecycle === "closed" ? "Closed" : "Ready to continue";
 }
 
-export function ThreadHeader({ item, timeline, onOpenVisual, onTogglePin, onRename, onDelete, renameDisabledReason }: {
+export function ThreadHeader({ item, ventureName, timeline, onOpenVisual, onTogglePin, onRename, onDelete, renameDisabledReason }: {
   item: WorkIndexItem | null;
+  ventureName: string;
   timeline: ThreadTimeline | null;
   onOpenVisual: (visual: VisualReference, origin: HTMLElement) => void;
   onTogglePin: () => void;
@@ -109,7 +113,7 @@ export function ThreadHeader({ item, timeline, onOpenVisual, onTogglePin, onRena
           <button type="submit" aria-label="Save thread name" disabled={saving || !name.trim()}><Check aria-hidden="true" /></button>
           <button type="button" aria-label="Cancel renaming" disabled={saving} onClick={cancelRename}><X aria-hidden="true" /></button>
         </form> : <div className="thread-title-row">
-          <h1>{item?.founderIntent ?? "Drover"}</h1>
+          <h1>{item?.founderIntent ?? ventureName}</h1>
           {renameAllowed ? <button type="button" aria-label="Rename thread" title="Rename thread" onClick={beginRename}><Pencil aria-hidden="true" /></button> : null}
         </div>}
         <span>{status(item)}{usage ? <span className="thread-usage" title={usage.detail}> · {usage.label}</span> : null}</span>

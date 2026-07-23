@@ -242,6 +242,17 @@ const NAME_POOL = [
   "Faye", "Idris", "Petra", "Cyrus", "Livia", "Sol", "Greta", "Amir",
 ];
 
+// A coding runtime is not a Drover teammate. In Work the founder is talking to the SDK model they
+// selected, so it keeps its provider label and never acquires an invented first name — no Drover
+// persona stands between the founder and Claude or Codex. Deliberately a local constant rather than an
+// import from the runtime registry: this module states the naming rule and must not depend on adapters.
+const SDK_RUNTIME_NAMES = {
+  claude: "Claude",
+  "claude-code": "Claude Code",
+  anthropic: "Claude",
+  codex: "Codex",
+};
+
 function stableHash(str) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -252,6 +263,8 @@ function stableHash(str) {
 }
 
 export function assignName(ref, { taken = [] } = {}) {
+  const sdk = SDK_RUNTIME_NAMES[String(ref || "").toLowerCase()];
+  if (sdk) return sdk;
   const used = new Set((taken || []).map((n) => String(n).toLowerCase()));
   const start = stableHash(String(ref || "teammate")) % NAME_POOL.length;
   for (let i = 0; i < NAME_POOL.length; i++) {

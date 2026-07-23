@@ -17,7 +17,7 @@ tree actually renders.
 
 ## Product grammar
 
-Drover is one calm, near-black desktop room with two founder surfaces:
+Croki is one calm, near-black desktop room with two founder surfaces:
 
 - Work is direct Claude/Codex conversation and exact repository work.
 - Product / GTM is the spatial living venture model: current truth, durable alternatives, live work, outward
@@ -34,6 +34,9 @@ component trees and their feature CSS are absent from the production graph.
 - Near-black `#090b0f` canvas, `#10141b` panels, and `#1a202a` lifted material.
 - Blue `#5b8cff` only for direct action/focus.
 - Amber `#e2a84a` only for founder authority.
+- The fused dog-and-cat face is Croki's identity mark. It stays black and white at rest, leads installation,
+  startup, and marketing surfaces, and remains restrained inside daily work. One spectrum sweep may mark launch
+  or an idle-to-active transition; it settles immediately and never becomes ambient progress decoration.
 - Current truth uses solid treatment. Provisional Product models use a dashed restrained texture and explicit
   language. Evidence returns use distinct source-bearing return edges.
 

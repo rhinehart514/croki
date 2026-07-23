@@ -2,6 +2,7 @@ import { Plus, Search, Settings } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useMemo, useState, type PointerEvent } from "react";
 import type { FirmVenture, SystemIndex, SystemIndexObject, WorkIndex, WorkIndexItem } from "@/api";
+import { CrokiMark } from "@/components/brand/CrokiMark";
 import { VentureSwitcher } from "@/components/firm/VentureSwitcher";
 import { VentureCreateDialog } from "@/components/firm/VentureCreateDialog";
 import type { WorkspaceMode } from "@/lib/venture-session";
@@ -31,6 +32,7 @@ export function WorkspaceRail({ venture, ventures, mode, modeMotion, width, sear
   const move = reducedMotion || !modeMotion.animate ? 0 : modeMotion.direction * 7;
   const resize = (event: PointerEvent<HTMLButtonElement>) => { const origin = event.clientX; const start = width; const move = (next: globalThis.PointerEvent) => onResize(Math.min(360, Math.max(272, start + next.clientX - origin))); const done = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", done); }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", done); };
   return <aside className="thread-rail workspace-rail" aria-label={`${venture.name} workspace rail`}>
+    <div className="workspace-brand" aria-label="Croki"><CrokiMark active={Boolean(workIndex?.counts.active)} decorative /><span>Croki</span></div>
     <VentureSwitcher venture={venture} ventures={ventures} onSwitch={onSwitchVenture} onCreate={() => setCreate(true)} />
     <WorkspaceModeNav mode={mode} animate={modeMotion.animate} attention={attention} onMode={onMode} />
     <div className="workspace-rail-tools" data-new-thread={mode === "work" ? "true" : undefined}>

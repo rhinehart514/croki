@@ -27,6 +27,7 @@ const { ensureDirectionThread, getSemanticModel, recordRun } = await import("../
 const { beginActiveDrive, listActiveDrives } = await import("../../src/firm/active-drives.mjs");
 const { registerLiveRun, __resetLiveRuns } = await import("../../src/firm/work-loop-stream.mjs");
 const { driveTeammate: driveThroughWorkLoop } = await import("../../src/firm/work-loop.mjs");
+const { stageJourneyImport } = await import("../../src/firm/journey-import.mjs");
 const { AGENT_HEADERS } = { AGENT_HEADERS: { "x-gtm-actor": "agent" } };
 
 const options = { root };
@@ -199,6 +200,96 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.deepEqual(driven.target, { threadRef: res.body.threadRef });
   });
 
+  it("keeps a Product question on its canvas while using the selected Work SDK", async () => {
+    const { venture, threadRef } = configuredThread("direct Product question");
+    let driven = null;
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "what does this onboarding page prove today",
+      mode: "work",
+      threadRef,
+      runtime: "codex",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+      productGtmView: true,
+    }, { deps: {
+      driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; },
+    } });
+    assert.equal(res.status, 202);
+    assert.equal(res.body.act, "answer");
+    assert.equal(res.body.teammateRef, "codex");
+    assert.equal(driven.runtime, "codex");
+    assert.equal(driven.model, "gpt-5.6-sol");
+    assert.equal(driven.effort, "xhigh");
+    assert.equal(driven.directSdk, true);
+    assert.equal(driven.target.threadRef, threadRef);
+    assert.equal(res.body.threadRef, threadRef);
+  });
+
+  it("binds a sanitized journey profile to the exact Product Thread without exposing raw rows", async () => {
+    const { venture, threadRef } = configuredThread("journey mapping Thread");
+    const raw = "session_id,timestamp,route,email\nprivate-session,2026-07-01T10:00:00Z,/pricing,founder@example.com\n";
+    const profile = stageJourneyImport(venture.id, {
+      name: "journey.csv",
+      mediaType: "text/csv",
+      data: Buffer.from(raw).toString("base64"),
+    }, options);
+    let driven = null;
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "Map this journey source to the Product walk.",
+      mode: "work",
+      threadRef,
+      runtime: "codex",
+      model: "gpt-5.6-sol",
+      effort: "high",
+      productGtmView: true,
+      journeyImportRef: profile.importRef,
+    }, { deps: {
+      driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; },
+    } });
+
+    assert.equal(res.status, 202);
+    assert.equal(res.body.act, "answer", "journey mapping stays beside the Product canvas");
+    assert.equal(driven.target.threadRef, threadRef);
+    assert.equal(driven.target.journeyImportRef, profile.importRef);
+    assert.equal(driven.target.journeyImportProfile.rowCount, 1);
+    assert.equal(driven.attachments.length, 0, "raw journey evidence is never passed as a provider attachment");
+    assert.equal(JSON.stringify(driven.target).includes("private-session"), false);
+    assert.equal(JSON.stringify(driven.target).includes("founder@example.com"), false);
+    assert.equal(JSON.stringify(driven.target).includes("/pricing"), false);
+
+    const founderTurn = listConversation(venture.id, options).find((message) => message.id === res.body.messageId);
+    assert.deepEqual(founderTurn.attachments, [{
+      kind: "journey-import",
+      importRef: profile.importRef,
+      name: "journey.csv",
+      mediaType: "text/csv",
+      byteSize: Buffer.byteLength(raw),
+      digest: profile.digest,
+    }]);
+  });
+
+  it("does not replace the selected Product SDK with a contextual participant", async () => {
+    const { venture, bet, threadRef } = configuredThread("selected Product SDK");
+    let driven = null;
+    const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "Have Claude inspect the onboarding consequence",
+      mode: "work",
+      threadRef,
+      betId: bet.id,
+      runtime: "codex",
+      model: "gpt-5.6-sol",
+      effort: "high",
+      productGtmView: true,
+    }, { deps: {
+      driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; },
+    } });
+    assert.equal(res.status, 202);
+    assert.equal(res.body.teammateRef, "codex");
+    assert.equal(driven.runtime, "codex");
+    assert.equal(driven.directSdk, true);
+    assert.equal(driven.target.teammateRefs, undefined);
+  });
+
   it("routes an explicitly included agent by exact ref and preserves the participation target", async () => {
     const { venture } = configuredThread("mentioned contextual agent");
     let driven = null;
@@ -245,8 +336,9 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.equal(driven.directSdk, true);
     assert.equal(driven.target.threadRef, res.body.threadRef);
     assert.equal(res.body.why, undefined, "the selected SDK does not narrate its own continuation");
+    assert.equal(res.body.messageId, res.body.fromMessageId, "the acceptance exposes the founder turn's durable identity");
     const thread = getSemanticModel(venture.id).threads.find((entry) => `thread:${entry.id}` === res.body.threadRef);
-    assert.ok(thread?.messageRefs.includes(`conversation:${res.body.fromMessageId}`));
+    assert.ok(thread?.messageRefs.includes(`conversation:${res.body.messageId}`));
     assert.equal(listConversation(venture.id, options).some((message) => /^Continuing with /.test(message.content)), false,
       "Work waits for the SDK's real response instead of inserting a provider acknowledgement");
   });
@@ -256,9 +348,10 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     let driven = null;
     const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
       message: "Wait seven days before taking the silence branch", mode: "work", threadRef,
-      betId: bet.id, workRef: "workflow-one", workflowSketch: true,
+      betId: bet.id, workRef: "workflow-one", workflowSketch: true, productGtmView: true,
     }, { deps: { driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; } } });
     assert.equal(res.status, 202);
+    assert.equal(res.body.act, "answer", "a canvas correction stays with the canvas while its SDK work runs");
     assert.equal(driven.betId, bet.id);
     assert.equal(driven.target.threadRef, threadRef);
     assert.equal(driven.target.workRef, "workflow-one");

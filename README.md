@@ -1,8 +1,8 @@
-# Drover
+# Croki
 
 **A Product and GTM Development Environment for founders building with agents.**
 
-Drover lets one founder run Product and go-to-market as one fast, changing system. Direct Claude and Codex,
+Croki lets one founder run Product and go-to-market as one fast, changing system. Direct Claude and Codex,
 pursue several routes to growth, change the Product when reality demands it, and compound every useful result
 into faster next moves.
 
@@ -22,7 +22,7 @@ Product truth, promise, offer, pricing, audience, experience, capability, and bu
 PLG, outbound, inbound, partnerships, manual onboarding, bespoke customer work, and unusual experiments may
 coexist. Unscalable work is first-class.
 
-Claude and Codex retain their native capability. Drover supplies venture context, durable Threads and Runs,
+Claude and Codex retain their native capability. Croki supplies venture context, durable Threads and Runs,
 isolated work, branching, evidence, review, and authority. Agents may revise provisional Product models and
 prepare outward actions; only the founder can make a Product change current or cross into the world.
 

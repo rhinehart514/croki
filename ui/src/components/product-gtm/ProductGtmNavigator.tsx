@@ -1,5 +1,5 @@
 import { useRef, type KeyboardEvent } from "react";
-import { Box, ChevronDown, GitMerge, Route } from "lucide-react";
+import { Box, ChevronDown, Eye, GitMerge, Route } from "lucide-react";
 import type { FirmSemanticModel, MarketMovementIndex } from "@/types";
 import { productGtmTerritoryFor } from "./productGtmLayout";
 import { deriveWorkflowRegisters, parseProductGtmWorkflowNodeId, productGtmWorkflowGraph, type ProductGtmWorkflowRegister } from "./productGtmWorkflow";
@@ -14,12 +14,18 @@ function pathKind(type: string, properties: Record<string, unknown>, register: P
   return "Earned mechanism · workflow not mapped";
 }
 
-export function ProductGtmNavigator({ model, movement, selectedRef, onFocus, onDraftPlay }: {
+export function ProductGtmNavigator({
+  model, movement, selectedRef, onFocus, onDraftPlay,
+  journeyAvailable = false, journeyActive = false, onToggleJourney,
+}: {
   model: FirmSemanticModel;
   movement: MarketMovementIndex | null;
   selectedRef: string | null;
   onFocus: (ref: string) => void;
   onDraftPlay?: () => void;
+  journeyAvailable?: boolean;
+  journeyActive?: boolean;
+  onToggleJourney?: () => void;
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   // Register is derived from real market movement, not the play's blob, so an established play truly ran.
@@ -56,6 +62,12 @@ export function ProductGtmNavigator({ model, movement, selectedRef, onFocus, onD
       <span data-territory="shared"><GitMerge aria-hidden="true" />Shared</span>
       <span data-territory="gtm" data-empty={paths.length ? undefined : "true"} title={paths.length ? undefined : "No GTM plays yet"}><Route aria-hidden="true" />GTM</span>
     </div>
+    {journeyAvailable && onToggleJourney ? <button
+      className="product-gtm-journey-toggle"
+      type="button"
+      aria-pressed={journeyActive}
+      onClick={onToggleJourney}
+    ><Eye aria-hidden="true" />{journeyActive ? "Hide observed journey" : "Observed journey"}</button> : null}
     {primaryWorkflow && !selectedIsPrimary ? <button
       className="product-gtm-workflow-shortcut"
       type="button"

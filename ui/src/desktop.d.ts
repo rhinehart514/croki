@@ -33,6 +33,24 @@ type DroverWebviewElement = HTMLElement & {
   reload: () => void;
 };
 
+// The data-free venture stream notification the brain pushes over the bridge. Declared here (the
+// one contract file both the preload and the renderer check against) so this file needs no imports
+// from the UI graph; product-gtm.ts re-exports it as FirmStreamEvent for renderer call sites.
+type DroverVentureStreamEvent = {
+  ventureId: string;
+  kind: "lens" | "conversation" | "drive" | "wall" | "outcome" | "timeline" | "system" | "release";
+  at: string;
+  betId?: string;
+  threadRef?: string;
+};
+
+// One frame of a drive's live stream over the bridge. The shape matches the SSE frames the browser
+// harness parses byte for byte (ui/src/api/drive-stream.ts owns the delta union), so one caller reads
+// both transports. Typed loosely here on purpose: this contract file imports nothing from the UI graph.
+type DroverDriveStreamFrame =
+  | { frame: "snapshot"; snapshot: Record<string, unknown> }
+  | { frame: "delta"; delta: Record<string, unknown> };
+
 type DroverDesktopBridge = {
   platform: "darwin" | "win32" | "linux";
   api: {
@@ -41,7 +59,12 @@ type DroverDesktopBridge = {
       headers: Record<string, string>;
       body: string;
     }>;
-    subscribe: (ventureId: string, listener: (event: import("@/api").FirmStreamEvent) => void) => Promise<() => void>;
+    subscribe: (ventureId: string, listener: (event: DroverVentureStreamEvent) => void) => Promise<() => void>;
+    subscribeDrive: (
+      ventureId: string,
+      driveId: string,
+      listener: (frame: DroverDriveStreamFrame) => void,
+    ) => Promise<() => void>;
   };
   selectRepository: () => Promise<DroverRepositorySelection | null>;
   terminal: {

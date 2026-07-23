@@ -17,6 +17,9 @@
    words and texture; full-length step geometry remains the dominant selected composition. */
 .product-gtm-node[data-workflow-register="drafted"] { border-style: dashed; }
 .product-gtm-node[data-role="workflow-step"][data-workflow-register="drafted"] { background: #101816; }
+/* The drafted register in words, in the slot an established play uses for derived counts. Quieter than a
+   real count so a running play still wins the eye, but never absent. */
+.product-gtm-node-register { font-style: normal; margin-left: auto; padding: 1px 7px; border: 1px dashed #3b4655; border-radius: 999px; color: #7b8798; font: 620 9px var(--sans); white-space: nowrap; }
 .product-gtm-node[data-role="workflow-step"] .product-gtm-node-copy small b { font-family: var(--mono); font-size: 8px; letter-spacing: .02em; text-transform: none; }
 .product-gtm-node-running { font-style: normal; margin-left: auto; padding: 1px 7px; border: 1px solid #333c49; border-radius: 999px; background: #141922; color: #9aa6b6; font: 620 9px var(--sans); white-space: nowrap; }
 .product-gtm-node[data-workflow-step="source"] .product-gtm-node-symbol,
@@ -40,12 +43,52 @@
 .product-gtm-empty-gtm svg { width: 14px; height: 14px; color: #72ac9f; }
 .product-gtm-surface[data-has-selection=true] .product-gtm-empty-gtm, .product-gtm-surface[data-has-focus=true] .product-gtm-empty-gtm { display: none; }
 
-/* Every opened page offers one GTM action beside the Work handoff. */
+/* A page earns a market action only after an adopted Product consequence exists. */
 .product-page-panel-gtm { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid #222a34; }
 .product-page-panel-play { justify-self: start; min-height: 32px; padding: 0 12px; border: 1px solid #2e4842; border-radius: 9px; background: transparent; color: #90c0b6; font: 600 11px var(--sans); cursor: pointer; }
 .product-page-panel-play:hover:not(:disabled) { border-color: #4d8176; color: #d6eee9; }
 .product-page-panel-play:disabled { opacity: .5; cursor: default; }
 .product-page-panel-play:focus-visible { outline: 2px solid #5b8cff; outline-offset: 2px; }
 .product-page-panel-gtm-note { margin: 0; color: #748094; font-size: 10px; line-height: 1.4; }
+.product-page-panel-paths dl { display: grid; gap: 6px; margin: 0; }
+.product-page-panel-paths dl div { display: grid; grid-template-columns: 82px minmax(0,1fr); align-items: baseline; gap: 9px; }
+.product-page-panel-paths dt { color: #748094; font: 600 9px var(--sans); text-transform: uppercase; letter-spacing: .05em; }
+.product-page-panel-paths dd { display: flex; min-width: 0; align-items: baseline; gap: 7px; margin: 0; color: #b8c3d1; font-size: 11px; }
+.product-page-panel-paths dd small { overflow: hidden; color: #667384; font: 9px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 
 /* One camera escape: the floating return pill is the only recenter control, in every chapter. */
+
+/* Journey evidence is summoned, aggregate-only context. It stays visually distinct from repository
+   topology and disappears completely when the overlay is dismissed. */
+.product-gtm-journey-toggle { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 0 8px; border: 0; border-left: 1px solid #29333e; border-radius: 7px; background: transparent; color: #9fb6ad; font: 600 10px var(--sans); white-space: nowrap; }
+.product-gtm-journey-toggle:hover, .product-gtm-journey-toggle[aria-pressed=true] { background: #13201e; color: #d8eee8; }
+.product-gtm-journey-toggle:focus-visible { outline: 2px solid #5b8cff; outline-offset: 1px; }
+.product-gtm-journey-toggle svg { width: 13px; height: 13px; }
+.product-gtm-node-observed { color: #76c9af; font-style: normal; }
+.product-gtm-edge-path.is-observed { stroke: #579e89; stroke-width: 2; }
+.product-gtm-edge-path.is-observed-only { stroke: #579e89; stroke-width: 1.7; stroke-dasharray: 3 7; }
+.product-gtm-journey-receipt { position: absolute; z-index: 7; top: 62px; right: 14px; display: flex; max-width: min(560px, calc(100% - 28px)); min-height: 34px; align-items: center; gap: 8px; padding: 6px 8px 6px 11px; border: 1px solid #31564c; border-radius: 10px; background: rgba(13,24,21,.96); color: #aacbc2; box-shadow: 0 8px 24px rgba(0,0,0,.24); }
+.product-gtm-journey-receipt span { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.product-gtm-journey-receipt button { min-height: 24px; border: 0; border-radius: 6px; background: #172923; color: #c7e4dc; font: 600 10px var(--sans); }
+.product-gtm-journey-receipt button:focus-visible { outline: 2px solid #5b8cff; outline-offset: 1px; }
+
+/* A mapping proposal is exact Thread material, so its founder gate sits in the existing canvas dock
+   instead of opening analytics setup or another inspector. */
+.journey-mapping-review { display: grid; gap: 9px; margin: 0 10px 8px; padding: 10px; border: 1px solid var(--n-line-2); border-radius: 10px; background: color-mix(in srgb, var(--n-sunk) 78%, #153229); }
+.journey-mapping-review header { display: flex; align-items: center; gap: 9px; }
+.journey-mapping-review header > span { display: grid; width: 28px; height: 28px; place-items: center; flex: none; border: 1px solid #31564c; border-radius: 8px; color: #76c9af; }
+.journey-mapping-review header svg, .journey-mapping-review footer button svg { width: 13px; height: 13px; }
+.journey-mapping-review header div { display: grid; min-width: 0; gap: 2px; }
+.journey-mapping-review header strong { color: var(--n-ink-2); font-size: 11px; }
+.journey-mapping-review header small, .journey-mapping-review footer > span { color: var(--n-ink-4); font-size: 9px; }
+.journey-mapping-review-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.journey-mapping-review-counts > span { display: grid; gap: 2px; padding: 7px 8px; border: 1px solid var(--n-line); border-radius: 8px; background: color-mix(in srgb, var(--n-panel) 82%, transparent); }
+.journey-mapping-review-counts strong { color: var(--n-ink); font: 650 12px var(--mono); }
+.journey-mapping-review-counts small { color: var(--n-ink-4); font-size: 9px; }
+.journey-mapping-review > p { margin: 0; color: var(--amber-ink); font-size: 10px; line-height: 1.4; }
+.journey-mapping-review footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.journey-mapping-review footer > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.journey-mapping-review footer button { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 0 9px; flex: none; border: 1px solid #31564c; border-radius: 8px; background: #172923; color: #c7e4dc; font: 620 10px var(--sans); }
+.journey-mapping-review footer button:hover:not(:disabled) { border-color: #579e89; color: #e0f3ee; }
+.journey-mapping-review footer button:disabled { opacity: .45; }
+.journey-mapping-review footer button:focus-visible { outline: 2px solid #5b8cff; outline-offset: 2px; }

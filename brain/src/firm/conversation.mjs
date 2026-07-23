@@ -44,12 +44,32 @@ function normalizeOutcomeReport(value) {
 
 function normalizeAttachments(value) {
   if (!Array.isArray(value)) return [];
-  return value.map((attachment) => ({
-    id: trimOrNull(attachment?.id),
-    name: trimOrNull(attachment?.name),
-    mediaType: trimOrNull(attachment?.mediaType),
-    size: Number(attachment?.size),
-  })).filter((attachment) => attachment.id && attachment.name && /^image\/(jpeg|png|gif|webp)$/.test(attachment.mediaType) && Number.isSafeInteger(attachment.size) && attachment.size > 0);
+  return value.map((attachment) => {
+    if (attachment?.kind === "journey-import") {
+      return {
+        kind: "journey-import",
+        importRef: trimOrNull(attachment.importRef),
+        name: trimOrNull(attachment.name),
+        mediaType: trimOrNull(attachment.mediaType),
+        byteSize: Number(attachment.byteSize),
+        digest: trimOrNull(attachment.digest),
+      };
+    }
+    return {
+      id: trimOrNull(attachment?.id),
+      name: trimOrNull(attachment?.name),
+      mediaType: trimOrNull(attachment?.mediaType),
+      size: Number(attachment?.size),
+    };
+  }).filter((attachment) => attachment.kind === "journey-import"
+    ? Boolean(
+        attachment.importRef && attachment.name && attachment.mediaType && attachment.digest
+        && Number.isSafeInteger(attachment.byteSize) && attachment.byteSize > 0
+      )
+    : Boolean(
+        attachment.id && attachment.name && /^image\/(jpeg|png|gif|webp)$/.test(attachment.mediaType)
+        && Number.isSafeInteger(attachment.size) && attachment.size > 0,
+      ));
 }
 
 function normalizeTarget(value) {

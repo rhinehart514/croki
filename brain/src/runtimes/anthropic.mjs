@@ -2,7 +2,7 @@
 //
 // This is the original in-process model/tool loop, moved behind the runtime
 // interface (see ./index.mjs for the contract). It owns nothing durable: GTM
-// Drover supplies every persistence, wall, and cancellation decision through the
+// Croki supplies every persistence, wall, and cancellation decision through the
 // `ctx` callbacks. This adapter only turns the conversation into the next model
 // turn and asks GTM IDE to execute the tool calls it produced.
 

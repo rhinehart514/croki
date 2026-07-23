@@ -15,6 +15,7 @@ import { buildRepositoryWorkLoopTools } from "./repository-work-loop-tools.mjs";
 import { buildPreviewWorkLoopTools } from "./preview-work-loop-tools.mjs";
 export { releasePreviewPin } from "./preview-broker.mjs";
 import { buildModelWorkLoopTools } from "./model-branches.mjs";
+import { buildJourneyMappingWorkLoopTools } from "./journey-mapping-proposals.mjs";
 import { parkOutwardAtWall } from "./grant-stage-outward.mjs";
 import { extendDirectionThread } from "./semantic-model-store.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
@@ -383,7 +384,7 @@ function makeStageOutward({ ventureId, configurationRevision, architectureRevisi
 // ask_founder: parks one question at the wall queue rather than blocking the model on a chat turn it
 // cannot have. A question is not an outward effect, but it is still the founder's door — it goes
 // through the same park() injection point so F3 owns the one queue every pause lands in.
-function makeAskFounder({ ventureId, configurationRevision, architectureRevision, target, options, deps }) {
+function makeAskFounder({ ventureId, configurationRevision, architectureRevision, target, continuation, options, deps }) {
   return {
     name: "ask_founder",
     description: "Park a question for the founder when work cannot continue without an answer.",
@@ -401,7 +402,7 @@ function makeAskFounder({ ventureId, configurationRevision, architectureRevision
         configurationRevision,
         architectureRevision,
         architectureTarget: target?.architectureId ? { id: target.architectureId, stepId: target.architectureStepId ?? null } : null,
-        effect: { question },
+        effect: { kind: "question", question, ...(continuation ? { continuation } : {}) },
       }, options);
       appendEvent(ventureId, betId, { type: "asked", detail: question }, options);
       return queueItem;
@@ -455,6 +456,7 @@ export function buildToolSet({
   target = null,
   previewWorkspace = null,
   runId = null,
+  continuation = null,
 }) {
   const consultedNames = new Set();
   const contributingRefs = new Set([teammateRef]);
@@ -467,13 +469,14 @@ export function buildToolSet({
     ...buildBrowserReadTools({ trackCall }),
     ...buildExaReadTools({ options, trackCall }),
     ...buildModelWorkLoopTools({ ventureId, teammateRef, target, options, trackCall }),
+    ...buildJourneyMappingWorkLoopTools({ ventureId, teammateRef, target, options, trackCall }),
     makeGetFirmConfiguration({ ventureId, options }),
     makeGetTaste({ ventureId, options, taste, ventureStore }),
     ...buildArchitectureWorkLoopTools({ ventureId, teammateRef, configurationRevision, options, trackCall, consultedNames, capturedSources, target }),
     makeForkBet({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall }),
     makeStageArtifact({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, contributingRefs }),
     makeStageOutward({ ventureId, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, deps }),
-    makeAskFounder({ ventureId, configurationRevision, architectureRevision, target, options, deps }),
+    makeAskFounder({ ventureId, configurationRevision, architectureRevision, target, continuation, options, deps }),
     makeSpeak({ ventureId, teammateRef, target, options }),
     makeProposeFirmConfiguration({ ventureId, teammateRef, options, trackCall }),
     coordinationParticipants.length && coordinationProtocols.length && involveParticipant

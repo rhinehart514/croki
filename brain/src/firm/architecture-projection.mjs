@@ -249,6 +249,6 @@ export function explainArchitecturePressure(ventureId, subjectId = null, options
   return {
     revision: projection.revision,
     pressure: subjectId ? projection.pressure.filter((entry) => entry.subjectId === subjectId) : projection.pressure,
-    note: "Each reason is derived independently; Drover does not assign an architecture health score.",
+    note: "Each reason is derived independently; Croki does not assign an architecture health score.",
   };
 }

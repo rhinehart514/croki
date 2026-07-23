@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUpRight, GitFork, Menu } from "lucide-react";
-import { DroverWordmark } from "@/components/drover-wordmark";
+import { CrokiWordmark } from "@/components/croki-wordmark";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -18,8 +18,8 @@ const githubUrl = "https://github.com/rhinehart514/drover";
 export function SiteHeader() {
   return (
     <header className="site-header">
-      <a className="brand-link" href="#top" aria-label="Drover home">
-        <DroverWordmark />
+      <a className="brand-link" href="#top" aria-label="Croki home">
+        <CrokiWordmark />
       </a>
 
       <nav className="desktop-nav" aria-label="Primary navigation">
@@ -58,7 +58,7 @@ export function SiteHeader() {
         <SheetContent className="mobile-sheet" side="right">
           <SheetHeader>
             <SheetTitle>
-              <DroverWordmark />
+              <CrokiWordmark />
             </SheetTitle>
             <SheetDescription>
               The founder-controlled Product and go-to-market system.

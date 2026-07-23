@@ -9,11 +9,15 @@ const driveTeammate = vi.fn<(...args: unknown[]) => Promise<DriveTeammateResult>
 const replyInConversation = vi.fn<(...args: unknown[]) => Promise<ConversationReplyResult>>();
 const putFirmConfiguration = vi.fn();
 const stopActiveDrive = vi.fn();
+const stageJourneyImport = vi.fn();
+const deleteJourneyImport = vi.fn();
 vi.mock("@/api", () => ({
   driveTeammate: (...args: unknown[]) => driveTeammate(...args),
   replyInConversation: (...args: unknown[]) => replyInConversation(...args),
   putFirmConfiguration: (...args: unknown[]) => putFirmConfiguration(...args),
   stopActiveDrive: (...args: unknown[]) => stopActiveDrive(...args),
+  stageJourneyImport: (...args: unknown[]) => stageJourneyImport(...args),
+  deleteJourneyImport: (...args: unknown[]) => deleteJourneyImport(...args),
 }));
 
 const runningDrive = {
@@ -62,6 +66,8 @@ describe("NowComposer contextual routing", () => {
     driveTeammate.mockReset();
     replyInConversation.mockReset();
     putFirmConfiguration.mockReset();
+    stageJourneyImport.mockReset();
+    deleteJourneyImport.mockReset();
   });
 
   it("STEERS an existing direction through the conversation when scoped to a bet — not a fresh /drive", async () => {
@@ -476,6 +482,34 @@ describe("NowComposer contextual routing", () => {
     expect(screen.getByLabelText(/Say what you want/)).toHaveValue("");
     rerender(<NowComposer ventureId="v1" ventureName="Acme" selection={null} subjectRefs={["object:one"]} scopeLabel={null} hasWork variant="dock" submissionMode="conversation" />);
     expect(screen.getByLabelText(/Say what you want/)).toHaveValue("Draft for object one");
+  });
+
+  it("stages one observed journey source and sends only its reference to the exact Work Thread", async () => {
+    stageJourneyImport.mockResolvedValue({ import: {
+      importRef: "journey-import:one", name: "observed.csv", mediaType: "text/csv", byteSize: 42,
+      digest: "abc", rowCount: 2, columns: [], createdAt: "2026-07-23T00:00:00Z", expiresAt: "2026-07-24T00:00:00Z",
+    } });
+    replyInConversation.mockResolvedValue({ act: "new-direction", threadRef: "thread:journey" } as ConversationReplyResult);
+    const { container } = render(<NowComposer
+      ventureId="v1" ventureName="Acme" selection={null} subjectRefs={["object:page-home"]}
+      scopeLabel="Home" hasWork variant="dock" submissionMode="work" productGtmView journeyImportEnabled
+      runtimeOverride="codex" modelOverride="gpt-5" effortOverride="high" onDriven={() => {}}
+    />);
+    const file = new File(["session,route\none,/\n"], "observed.csv", { type: "text/csv" });
+    fireEvent.change(container.querySelector(".now-composer-journey-input")!, { target: { files: [file] } });
+    expect(await screen.findByLabelText("Observed journey source observed.csv")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", expect.objectContaining({
+      message: "Map this observed journey source to the current Product walk.",
+      journeyImportRef: "journey-import:one",
+      subjectRefs: ["object:page-home"],
+      mode: "work",
+      runtime: "codex",
+      model: "gpt-5",
+      effort: "high",
+      productGtmView: true,
+    })));
+    expect(screen.queryByLabelText("Observed journey source observed.csv")).toBeNull();
   });
 });
 

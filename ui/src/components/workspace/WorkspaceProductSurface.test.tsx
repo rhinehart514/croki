@@ -7,15 +7,23 @@ import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/product
 import { WorkspaceProductSurface } from "./WorkspaceProductSurface";
 
 const getMarketMovement = vi.fn();
+const getJourneyObservations = vi.fn();
+const getJourneyMappingProposals = vi.fn();
 const replyInConversation = vi.fn();
+let canvasProps: Record<string, unknown> = {};
 vi.mock("@/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api")>()),
   getMarketMovement: (...args: unknown[]) => getMarketMovement(...args),
+  getJourneyObservations: (...args: unknown[]) => getJourneyObservations(...args),
+  getJourneyMappingProposals: (...args: unknown[]) => getJourneyMappingProposals(...args),
   replyInConversation: (...args: unknown[]) => replyInConversation(...args),
 }));
 // The canvas itself is React Flow; step focus is plain selection state, so the surface behavior under
 // test never needs a real graph render.
-vi.mock("@/components/product-gtm/ProductGtmSurface", () => ({ ProductGtmSurface: () => <div data-testid="product-gtm-canvas" /> }));
+vi.mock("@/components/product-gtm/ProductGtmSurface", () => ({ ProductGtmSurface: (props: Record<string, unknown>) => {
+  canvasProps = props;
+  return <div data-testid="product-gtm-canvas" />;
+} }));
 
 const playObject = (assertion: "tentative" | "founder-asserted") => ({
   id: "play-1", objectRef: "object:play-1", name: "Founder proof loop", statement: "Turn proof into conversations.",
@@ -46,24 +54,29 @@ const ranMovement = {
   actions: [{ id: "act-1", state: "in-world", subjectRefs: ["object:play-1"] }],
 } as unknown as MarketMovementIndex;
 
-function Harness({ assertion, initialSelected, onFocusSpy, onWalkthroughStep = () => {}, onBeginScopedThread = () => {}, onContextualChatOpen = () => {} }: {
+function Harness({ assertion, initialSelected, contextualChatOpen = false, threadRef, onFocusSpy, onWalkthroughStep = () => {}, onBeginScopedThread = () => {}, onContextualChatOpen = () => {}, onOpenWork = () => {} }: {
   assertion: "tentative" | "founder-asserted";
   initialSelected: string | null;
+  contextualChatOpen?: boolean;
+  threadRef?: string;
   onFocusSpy?: (ref: string | null) => void;
   onWalkthroughStep?: (step: ProductGtmWalkthroughStep | null) => void;
   onBeginScopedThread?: (subjectRef: string, relatedRefs?: string[]) => void;
   onContextualChatOpen?: (open: boolean) => void;
+  onOpenWork?: (threadRef: string) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(initialSelected);
   const index = systemIndex(assertion);
   return (
     <WorkspaceProductSurface
-      ventureId="v1" motionProps={{}} conversation={<div />} contextualChatOpen={false}
+      ventureId="v1" motionProps={{}} conversation={<div />} contextualChatOpen={contextualChatOpen}
       openerRef={createRef<HTMLElement | null>()} systemIndex={index} workIndex={null}
       selectedRef={selected} camera={null} placement={{ positions: {}, revision: 0 }}
+      modelChoice={{ runtime: "codex", model: "gpt-5.6-sol", effort: "high" }}
+      threadRef={threadRef}
       readOnlyReason={null} systemResource={{ data: index, status: "ready", error: null }}
       onCameraChange={() => {}} onFocus={(ref) => { onFocusSpy?.(ref); setSelected(ref); }}
-      onUseAgent={() => {}} onOpenWork={() => {}} onBeginScopedThread={onBeginScopedThread}
+      onUseAgent={() => {}} onOpenWork={onOpenWork} onBeginScopedThread={onBeginScopedThread}
       onNewThread={() => {}} onChanged={() => {}} onContextualChatOpen={onContextualChatOpen}
       onWalkthroughStep={onWalkthroughStep}
     />
@@ -72,7 +85,10 @@ function Harness({ assertion, initialSelected, onFocusSpy, onWalkthroughStep = (
 
 describe("WorkspaceProductSurface drafted-play walkthrough", () => {
   beforeEach(() => {
+    canvasProps = {};
     getMarketMovement.mockReset().mockResolvedValue({ marketMovement: quietMovement });
+    getJourneyObservations.mockReset().mockResolvedValue({ observations: [], receipts: [] });
+    getJourneyMappingProposals.mockReset().mockResolvedValue({ proposals: [] });
     replyInConversation.mockReset();
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -88,6 +104,61 @@ describe("WorkspaceProductSurface drafted-play walkthrough", () => {
     expect(onBeginScopedThread).toHaveBeenCalledWith("object:play-1", undefined);
     expect(onContextualChatOpen).toHaveBeenCalledWith(true);
     expect(await screen.findByText("Drafted play · Step 1 of 3")).toBeInTheDocument();
+  });
+
+  it("refreshes aggregate journey observations with the current system model", async () => {
+    const observation = {
+      id: "journey:one", ventureId: "v1", receiptRef: "receipt:one", sourceRef: "analytics.csv",
+      window: { from: "2026-07-01", to: "2026-07-20", timezone: "UTC" },
+      pageCounts: [{ pageRef: "object:landing", count: 12 }], transitions: [], dropOffs: [],
+      unmatchedRoutes: [], createdAt: "2026-07-21T10:00:00.000Z",
+    };
+    getJourneyObservations.mockResolvedValue({ observations: [observation], receipts: [] });
+    render(<Harness assertion="tentative" initialSelected={null} />);
+    await waitFor(() => expect(getJourneyObservations).toHaveBeenCalledWith("v1"));
+    expect(canvasProps.journeyObservations).toEqual([observation]);
+    expect(screen.queryByRole("button", { name: "Organize" })).not.toBeInTheDocument();
+  });
+
+  it("does not restore a mapping proposal whose import already has an adopted receipt", async () => {
+    getJourneyObservations.mockResolvedValue({
+      observations: [],
+      receipts: [{ importRef: "import-one" }],
+    });
+    getJourneyMappingProposals.mockResolvedValue({
+      proposals: [{
+        importRef: "import-one",
+        threadRef: "thread:journey",
+      }],
+    });
+    render(<Harness
+      assertion="tentative"
+      initialSelected={null}
+      contextualChatOpen
+      threadRef="thread:journey"
+    />);
+    await waitFor(() => {
+      expect(getJourneyObservations).toHaveBeenCalledWith("v1");
+      expect(getJourneyMappingProposals).toHaveBeenCalledWith("v1");
+    });
+    expect(screen.queryByLabelText("Observed journey mapping proposal")).not.toBeInTheDocument();
+  });
+
+  it("opens repository mapping in the exact selected-SDK Work Thread", async () => {
+    const onOpenWork = vi.fn();
+    replyInConversation.mockResolvedValue({
+      act: "answer", accepted: true, threadRef: "thread:product-map",
+    });
+    render(<Harness assertion="tentative" initialSelected={null} onOpenWork={onOpenWork} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Map product" }));
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", expect.objectContaining({
+      mode: "work",
+      runtime: "codex",
+      model: "gpt-5.6-sol",
+      effort: "high",
+      productGtmView: true,
+    })));
+    expect(onOpenWork).toHaveBeenCalledWith("thread:product-map");
   });
 
   it("advances and rewinds the focused step, naming it where the founder composes", async () => {

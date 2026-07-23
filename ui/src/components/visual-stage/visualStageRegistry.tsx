@@ -39,7 +39,7 @@ function ComparisonStage({ item }: { item: ThreadTimelineItem }) {
   const artifact = item.artifact as Record<string, unknown> | undefined;
   const content = artifact?.content as Record<string, unknown> | undefined;
   const columns = records(item.alternatives).length ? records(item.alternatives) : records(content?.columns);
-  if (!columns.length) return <div className="visual-stage-empty"><strong>No approaches were returned.</strong><p>The conversation remains the governing record until an exact comparison is prepared.</p></div>;
+  if (!columns.length) return <div className="visual-stage-empty"><strong>No approaches were returned.</strong><p>The conversation remains the governing record until a comparison is prepared.</p></div>;
   return <section className="visual-comparison" aria-label="Approach comparison">{columns.map((column, index) => <article key={text(column.id, String(index))}><header><span>{String.fromCharCode(65 + index)}</span><h3>{text(column.title, `Option ${index + 1}`)}</h3></header><div className="visual-comparison-body">{records(column.items).map((entry) => <section key={text(entry.label)}><strong>{text(entry.label)}</strong>{text(entry.detail) ? <p>{text(entry.detail)}</p> : null}</section>)}</div></article>)}</section>;
 }
 
@@ -79,7 +79,7 @@ export function renderVisualStage({ visual, timeline, lens, readOnlyReason, arti
   if (visual.kind === "consequence") {
     const decision = item.decision as Record<string, unknown> | undefined;
     const wallItem = lens?.wallItems?.find((candidate) => candidate.id === decision?.id) ?? null;
-    return <div className="visual-consequence">{wallItem ? <DecisionGate ventureId={timeline!.ventureId} item={wallItem} onDecided={onChanged} readOnlyReason={readOnlyReason} /> : <><h3>{text(item.title, "Consequence")}</h3><pre>{JSON.stringify(item.decision, null, 2)}</pre><p>No external effect occurs from opening this review. Release, apply, deploy, spend, and destructive actions still require their exact host control.</p></>}</div>;
+    return <div className="visual-consequence">{wallItem ? <DecisionGate ventureId={timeline!.ventureId} item={wallItem} onDecided={onChanged} readOnlyReason={readOnlyReason} /> : <><h3>{text(item.title, "Consequence")}</h3><pre>{JSON.stringify(item.decision, null, 2)}</pre><p>No external effect occurs from opening this review. Release, apply, deploy, spend, and destructive actions still require their own host control.</p></>}</div>;
   }
   return <pre className="visual-stage-json">{JSON.stringify(item, null, 2)}</pre>;
 }

@@ -19,7 +19,7 @@ function action(overrides: Partial<Action> = {}): Action {
   return {
     id: "action-one", ventureId: "venture-one", kind: "deploy", subjectRefs: [], branchRefs: [], motionRefs: [], productDeltaRefs: [], workRefs: [], decisionRef: "decision:one",
     executedAt: null, executorReceipt: null, executionAttempts: [], lastExecutionError: null, needsReconnect: false, observationRefs: [], outcomeRefs: [],
-    preparedMaterial: { deployContract: { command: "npm run deploy", destination: "Drover production" } },
+    preparedMaterial: { deployContract: { command: "npm run deploy", destination: "Croki production" } },
     expectedReturn: { source: "http", target: { url: "https://drover.test" }, windowHours: 24, returnConditions: [{ type: "http-status", equals: 200 }] },
     state: "needs-founder", observations: [], latestObservation: null, latestOutcome: null,
     ...overrides,
@@ -33,7 +33,7 @@ describe("outward action review", () => {
     const onChanged = vi.fn();
     render(<OutwardActionReview ventureId="venture-one" action={action()} readOnly={false} onChanged={onChanged} />);
     expect(screen.getByText("npm run deploy")).toBeInTheDocument();
-    expect(screen.getByText("Drover production")).toBeInTheDocument();
+    expect(screen.getByText("Croki production")).toBeInTheDocument();
     expect(screen.getByText("24 hours, only after you grant it")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Deploy now" }));
     await waitFor(() => expect(executeOutwardAction).toHaveBeenCalledWith("venture-one", "action-one"));
@@ -45,7 +45,7 @@ describe("outward action review", () => {
     render(<OutwardActionReview ventureId="venture-one" action={action({ state: "silent", executedAt: "2026-07-21T12:00:00.000Z", observationRefs: ["observation:observation-one"], observations: [observation], latestObservation: observation })} readOnly={false} onChanged={vi.fn()} />);
     expect(screen.getByText("No expected return yet")).toBeInTheDocument();
     expect(screen.getByText(/has not interpreted the silence/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Check exact return" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check for a return" }));
     await waitFor(() => expect(checkOutwardObservation).toHaveBeenCalledWith("venture-one", "action-one", "observation-one"));
   });
 

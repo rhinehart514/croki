@@ -25,7 +25,7 @@ export function NowComposerFooter({
   return (
     <>
       <div className="now-composer-provenance" aria-hidden="true">
-        Drover chooses how to do the work. Nothing leaves without your decision.
+        Croki chooses how to do the work. Nothing leaves without your decision.
       </div>
 
       {showChips ? (

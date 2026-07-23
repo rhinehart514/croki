@@ -16,7 +16,7 @@ export function ModelBranchReview({ ventureId, branchId, readOnly, inline = fals
   const [busy, setBusy] = useState(false);
   useEffect(() => { let live = true; void getModelBranch(ventureId, branchId).then(({ branch }) => { if (!live) return; setProjection(branch); setSelected(new Set(branch.changes.map((change) => change.id))); }).catch((reason) => live && setError(reason instanceof Error ? reason.message : "This Product alternative could not load.")); return () => { live = false; }; }, [branchId, ventureId]);
   const conflicts = useMemo(() => new Set(projection?.conflicts.map((entry) => entry.changeRef.replace(/^model-change:/, "")) ?? []), [projection]);
-  if (!projection) return <aside className="product-gtm-review" data-inline={inline ? "true" : undefined} aria-label="Product model review"><header><span>Product alternative</span><button type="button" onClick={onClose} aria-label="Close"><X /></button></header><p>{error ?? "Reading the exact delta…"}</p></aside>;
+  if (!projection) return <aside className="product-gtm-review" data-inline={inline ? "true" : undefined} aria-label="Product model review"><header><span>Product alternative</span><button type="button" onClick={onClose} aria-label="Close"><X /></button></header><p>{error ?? "Reading the delta…"}</p></aside>;
   const merge = async () => {
     setBusy(true); setError(null);
     try { await mergeModelBranch(ventureId, branchId, [...selected].map((id) => `model-change:${id}`), `Make selected changes from ${projection.branch.name} current.`); onChanged(); onClose(); }

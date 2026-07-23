@@ -11,7 +11,7 @@ import {
 import "./review.css";
 
 // One shared options object so every diff body renders identically and FileDiff can skip
-// re-render work on referentially equal options. Drover keeps its own compact file header.
+// re-render work on referentially equal options. Croki keeps its own compact file header.
 const FILE_DIFF_OPTIONS: FileDiffOptions<undefined> = {
   theme: DIFF_THEME_NAME,
   themeType: "dark",
@@ -49,7 +49,7 @@ function FileBlock({ fileDiff }: { fileDiff: FileDiffMetadata }) {
 }
 
 /**
- * Render a unified diff with @pierre/diffs: syntax-highlighted per-file bodies under Drover's
+ * Render a unified diff with @pierre/diffs: syntax-highlighted per-file bodies under Croki's
  * compact file headers. Highlighting runs in the shared worker pool when one is mounted. Empty
  * input yields a quiet empty state; unparseable input shows the exact raw text, never a crash.
  */

@@ -19,10 +19,14 @@ export function ProductGtmEdge({
   const labelX = anchorToSource ? sourceX + trunk + 18 : (sourceX + targetX) / 2;
   const labelY = route === "return"
     ? Math.max(sourceY, targetY) + 112 + bundleOffset
+    : route === "observed"
+      ? Math.min(sourceY, targetY) - 76 - bundleOffset
     : anchorToSource
       ? sourceY + bundleOffset
       : (sourceY + targetY) / 2 + bundleOffset;
-  const path = route === "vertical"
+  const path = route === "observed"
+    ? `M ${sourceX} ${sourceY} C ${sourceX + Math.max(72, deltaX * .28)} ${sourceY - 96}, ${targetX - Math.max(72, deltaX * .28)} ${targetY - 96}, ${targetX} ${targetY}`
+    : route === "vertical"
     ? `M ${sourceX} ${sourceY} C ${sourceX + bundleOffset} ${sourceY - 58}, ${targetX + bundleOffset} ${targetY + 58}, ${targetX} ${targetY}`
     : route === "return"
       ? `M ${sourceX} ${sourceY} C ${sourceX + 82} ${sourceY}, ${sourceX + 82} ${labelY}, ${labelX} ${labelY} C ${targetX - 82} ${labelY}, ${targetX - 82} ${targetY}, ${targetX} ${targetY}`
@@ -34,7 +38,9 @@ export function ProductGtmEdge({
   // edge takes the terminal spectrum hue so the restrained gradient reads through to its tip.
   const arrowColor = crossTerritory
     ? "#62a986"
-    : data?.kind === "return"
+    : data?.kind === "observed"
+      ? "#67b69e"
+      : data?.kind === "return"
       ? "#54c79a"
       : data?.kind === "spine"
         ? "#a3b2c6"
@@ -67,7 +73,7 @@ export function ProductGtmEdge({
       labelY={labelY}
       labelShowBg
       markerEnd={`url(#${arrowId})`}
-      className={`product-gtm-edge-path is-${data?.kind ?? "support"}${data?.focused ? " is-focus" : ""}${crossTerritory ? " is-cross-territory" : ""}`}
+      className={`product-gtm-edge-path is-${data?.kind ?? "support"}${route === "return" && data?.kind !== "return" ? " is-return" : ""}${data?.focused ? " is-focus" : ""}${crossTerritory ? " is-cross-territory" : ""}${data?.observedCount ? " is-observed" : ""}${data?.observedOnly ? " is-observed-only" : ""}`}
       style={{ ...style, ...(crossTerritory ? { stroke: `url(#${gradientId})` } : {}) }}
     />
   </>;

@@ -358,7 +358,7 @@ export async function observeHttpReturn(contract, _options = {}, deps = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), deps.timeoutMs ?? 15_000);
   try {
-    const response = await (deps.fetch ?? fetch)(target, { method: "GET", redirect: "error", signal: controller.signal, headers: { "user-agent": "Drover return observer" } });
+    const response = await (deps.fetch ?? fetch)(target, { method: "GET", redirect: "error", signal: controller.signal, headers: { "user-agent": "Croki return observer" } });
     const body = await readBoundedBody(response);
     const bodyText = body.toString("utf8");
     const conditions = contract.returnConditions.map((condition) => ({ ...condition, matched: condition.type === "http-status" ? response.status === condition.equals : condition.type === "body-includes" ? bodyText.includes(condition.value) : condition.type === "header-equals" ? response.headers.get(condition.name) === condition.value : false }));

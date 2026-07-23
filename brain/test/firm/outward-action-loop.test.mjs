@@ -46,7 +46,7 @@ describe("current outward action loop", () => {
     const prepared = await call("POST", base, {
       kind: "deploy",
       decisionRef: "decision:ship-one",
-      preparedMaterial: { destination: "Drover production" },
+      preparedMaterial: { destination: "Croki production" },
       expectedReturn: plan(),
     });
     assert.equal(prepared.status, 201);
@@ -65,7 +65,7 @@ describe("current outward action loop", () => {
     const failedMovement = await call("GET", `/api/ventures/${venture.id}/market-movement`);
     assert.equal(failedMovement.body.marketMovement.actions[0].state, "execution-failed");
 
-    const executed = await call("POST", executePath, {}, { deps: { executeOutwardAction: async () => { executions += 1; return { ok: true, receipt: { adapter: "test-deploy", destination: "Drover production" } }; } } });
+    const executed = await call("POST", executePath, {}, { deps: { executeOutwardAction: async () => { executions += 1; return { ok: true, receipt: { adapter: "test-deploy", destination: "Croki production" } }; } } });
     assert.equal(executed.status, 200);
     assert.equal(executed.body.outwardAction.executionAttempts.length, 2);
     assert.equal(executed.body.outwardAction.executorReceipt.adapter, "test-deploy");

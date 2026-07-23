@@ -53,7 +53,8 @@
   --blind: #737373;
 
   /* The agent spectrum marks the exact boundary where direct Claude/Codex work becomes
-     Product / GTM collaboration. It is a boundary signal, never ambient decoration. */
+     Product / GTM collaboration. Croki may borrow it for one launch or idle-to-active
+     sweep, but it never becomes ambient decoration. */
   --agent-spectrum-cyan: #6ee7f5;
   --agent-spectrum-blue: #7c9cff;
   --agent-spectrum-violet: #a78bfa;
@@ -147,7 +148,7 @@
   --line-soft: var(--line);
   --hair: var(--line);
 
-  /* Status colors keep their Drover meaning; color is never used as chrome. */
+  /* Status colors keep their Croki meaning; color is never used as chrome. */
   --green: #6ee7b7;
   --green-2: #34d399;
   --green-3: #22c55e;

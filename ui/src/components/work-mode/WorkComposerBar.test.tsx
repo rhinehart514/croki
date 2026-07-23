@@ -3,12 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkComposerBar } from "./WorkComposerBar";
 
 const getRuntimeStatuses = vi.fn();
-const getCapabilityInventory = vi.fn();
-const getCredentials = vi.fn();
 vi.mock("@/api", () => ({
   getRuntimeStatuses: () => getRuntimeStatuses(),
-  getCapabilityInventory: () => getCapabilityInventory(),
-  getCredentials: () => getCredentials(),
 }));
 
 const props = { ventureId: "venture-one", threadKey: "thread:one", repository: "/projects/drover", disabled: false, mode: "code" as const };
@@ -16,8 +12,6 @@ const props = { ventureId: "venture-one", threadKey: "thread:one", repository: "
 describe("WorkComposerBar", () => {
   beforeEach(() => {
     localStorage.clear();
-    getCapabilityInventory.mockReset().mockResolvedValue({ capabilities: [] });
-    getCredentials.mockReset().mockResolvedValue({ credentials: [] });
     getRuntimeStatuses.mockReset().mockResolvedValue({
       runtimes: [
         { id: "codex", label: "Codex", connected: true, auth: "chatgpt-login", authLabel: "ChatGPT subscription", reason: null },
@@ -33,9 +27,11 @@ describe("WorkComposerBar", () => {
     expect(screen.getByText("Worktree")).toBeInTheDocument();
     expect(screen.getByText("Guarded")).toBeInTheDocument();
     expect(screen.getByLabelText("Chat participation controls")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Connected capabilities the coding agent can reach")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("menuitemradio", { name: /GPT-5\.6 Sol/ }));
     await waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ runtime: "codex", model: "gpt-5.6-sol", effort: "high" }));
+    expect(localStorage.getItem("drover:work-model:venture-one")).toBe("codex:gpt-5.6-sol");
     expect(localStorage.getItem("drover:work-model:venture-one:thread:one")).toBe("codex:gpt-5.6-sol");
   });
 
@@ -46,7 +42,21 @@ describe("WorkComposerBar", () => {
     expect(screen.getByRole("menuitemradio", { name: /Maximum/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("menuitemradio", { name: /Quick/ }));
     await waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ runtime: "claude-code", model: null, effort: "low" }));
+    expect(localStorage.getItem("drover:work-effort:venture-one")).toBe("low");
     expect(localStorage.getItem("drover:work-effort:venture-one:thread:one")).toBe("low");
+  });
+
+  it("restores one venture model choice across Thread keys", async () => {
+    localStorage.setItem("drover:work-model:venture-one", "codex:gpt-5.6-terra");
+    localStorage.setItem("drover:work-effort:venture-one", "xhigh");
+    const onChange = vi.fn();
+    render(<WorkComposerBar {...props} threadKey="thread:another" onModeChange={vi.fn()} onChange={onChange} />);
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith({
+      runtime: "codex",
+      model: "gpt-5.6-terra",
+      effort: "xhigh",
+    }));
+    expect(screen.getByLabelText("SDK model")).toHaveTextContent("GPT-5.6 Terra");
   });
 
   it("clamps a Max tier down when switching to a model whose ceiling is lower", async () => {
@@ -78,7 +88,7 @@ describe("WorkComposerBar", () => {
     expect(onModeChange).toHaveBeenCalledWith("product-gtm");
 
     rerender(<WorkComposerBar {...props} mode="product-gtm" onModeChange={onModeChange} onChange={vi.fn()} />);
-    expect(screen.getByText("Drover agents")).toBeInTheDocument();
+    expect(screen.getByText("Croki agents")).toBeInTheDocument();
     expect(screen.getByText(/Ideate workflows, branches, gates/)).toBeInTheDocument();
     expect(screen.queryByLabelText("SDK model")).not.toBeInTheDocument();
   });

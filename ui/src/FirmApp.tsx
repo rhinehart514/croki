@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { listVentures, markFounderAway, markFounderPresent } from "@/api";
 import type { FirmVenture } from "@/api";
+import { CrokiMark } from "@/components/brand/CrokiMark";
 import { VenturePicker } from "@/components/firm/VenturePicker";
 import { VentureWorkspace } from "@/components/workspace/VentureWorkspace";
 import { readActiveVentureId, rememberActiveVenture } from "@/lib/venture-session";
@@ -64,7 +65,10 @@ export default function FirmApp() {
   if (phase === "opening") {
     return (
       <div className="firm-app firm-app-opening" aria-busy="true">
-        <span role="status">Opening your last venture…</span>
+        <span className="firm-app-opening-lockup" role="status">
+          <CrokiMark active decorative />
+          Opening your last venture…
+        </span>
       </div>
     );
   }
@@ -73,9 +77,9 @@ export default function FirmApp() {
     return (
       <div className="firm-app firm-app-failed">
         <div role="alert">
-          <span>Drover</span>
+          <span className="firm-app-brand"><CrokiMark decorative />Croki</span>
           <h1>Couldn’t reach your ventures</h1>
-          <p>This is a local read from Drover that didn’t answer. Your products, work, and evidence are unchanged on this machine.</p>
+          <p>This is a local read from Croki that didn’t answer. Your products, work, and evidence are unchanged on this machine.</p>
           <button type="button" onClick={() => { setPhase("opening"); openLastVenture(); }}>Try again</button>
         </div>
       </div>

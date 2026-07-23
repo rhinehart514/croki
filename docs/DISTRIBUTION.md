@@ -1,4 +1,4 @@
-# Distribution — how a founder gets Drover
+# Distribution — how a founder gets Croki
 
 **Honest snapshot:** 2026-07-20, alpha. [STATE.md](STATE.md) remains the authority for product proof.
 This file covers delivery mechanics only.
@@ -16,14 +16,14 @@ notarized or suitable for an unattended public handoff.
 | Build `npm run app:dist` | Verified local arm64 path | Produces an ad-hoc-signed local DMG and app bundle |
 | Download a signed, notarized app | Does not exist | Requires founder-owned Apple identity and hosting decisions |
 
-Drover is local software, not bundled intelligence. Founder-directed Product and go-to-market work needs
+Croki is local software, not bundled intelligence. Founder-directed Product and go-to-market work needs
 at least one connected runtime:
 
 - Claude Code through the bundled Agent SDK, using an existing Claude Code login or configured
   Anthropic credential; or
 - the `codex` CLI on `PATH` with `codex login status` succeeding.
 
-Runtime credentials remain provider-owned. Drover records the runtime and authentication mode, never
+Runtime credentials remain provider-owned. Croki records the runtime and authentication mode, never
 the credential. Durable product state lives under the intentional historical `~/.gtm-ide` path.
 
 ## Source path
@@ -55,7 +55,7 @@ npm run app
 npm run app:dist
 ```
 
-`app:dist` targets Apple-silicon macOS and writes a versioned `Drover-<version>-arm64.dmg` under
+`app:dist` targets Apple-silicon macOS and writes a versioned `Croki-<version>-arm64.dmg` under
 `release/`. `release/` is ignored and must never be treated as proof for a different package version
 or source tree.
 
@@ -66,10 +66,10 @@ loading, the trusted preload, IPC Brain health, and the absence of a published w
 The package has no Developer ID signature or notarization. Gatekeeper therefore requires the
 founder to use the explicit one-time right-click **Open** path. `electron-builder.yml` sets
 `publish: null`; no update manifest is emitted and the app performs no update check.
-The local alpha carries Drover's own application icon but keeps its application files inspectable outside
+The local alpha carries Croki's own application icon but keeps its application files inspectable outside
 ASAR. Hardened archive posture, signing, and notarization belong to the public-distribution pass.
 
-The packaged display name is Drover. Compatibility identifiers stay unchanged: npm package
+The packaged display name is Croki. Compatibility identifiers stay unchanged: npm package
 `gtm-ide`, bundle id `com.gtmide.desktop`, storage path `~/.gtm-ide`, and historical `channel`
 records are intentional.
 

@@ -15,7 +15,7 @@ const model: FirmSemanticModel = {
   ventureId: "venture-one",
   revision: 1,
   objects: [
-    { id: "product", type: "product", name: "Drover", statement: "The Product", properties: { territory: "product" }, assertion: "founder-asserted" },
+    { id: "product", type: "product", name: "Croki", statement: "The Product", properties: { territory: "product" }, assertion: "founder-asserted" },
     { id: "outbound", type: "motion", name: "Founder-led outbound", statement: "Reach founders directly.", properties: {}, assertion: "founder-asserted" },
     { id: "proof-loop", type: "mechanism", name: "Proof loop", statement: "Reuse returned proof.", properties: { territory: "shared", workflowGraph: {
       steps: [{ id: "trigger", label: "Proof returns", type: "trigger" }, { id: "share", label: "Route proof", type: "agent-work" }],

@@ -30,7 +30,7 @@ export function VentureCreateForm({
       .catch(() => {
         if (!live) return;
         setRepositoryChoices([]);
-        setError("Drover could not read local codebases from this window. Use the desktop app or reopen Drover from the folder you want to add.");
+        setError("Croki could not read local codebases from this window. Use the desktop app or reopen Croki from the folder you want to add.");
       });
     return () => { live = false; };
   }, [desktop]);
@@ -82,7 +82,7 @@ export function VentureCreateForm({
           <FolderOpen aria-hidden="true" />
           <span>
             <strong>{busyPath ? "Adding codebase…" : choosingRepository ? "Choose a folder" : "Choose a codebase"}</strong>
-            <small>{busyPath ?? "Drover reads it locally, then opens Work"}</small>
+            <small>{busyPath ?? "Croki reads it locally, then opens Work"}</small>
           </span>
           <em>{busyPath ? "Adding…" : choosingRepository ? "Opening…" : "Choose"}</em>
         </button>
@@ -112,7 +112,7 @@ export function VentureCreateForm({
               ))}
             </div>
           ) : (
-            <p className="firm-app-picker-connect-help"><strong>No codebase is available yet.</strong> Open Drover from the product folder you want to add, then return here.</p>
+            <p className="firm-app-picker-connect-help"><strong>No codebase is available yet.</strong> Open Croki from the product folder you want to add, then return here.</p>
           )}
           <small>The folder name becomes the product name. You can start directing work as soon as it opens.</small>
         </fieldset>

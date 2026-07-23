@@ -1,6 +1,54 @@
 import { useEffect, useRef, useState } from "react";
 import { subscribeVentureEvents, type FirmStreamEvent } from "@/api";
 
+type StreamConsumer = {
+  onEvent: (event: FirmStreamEvent) => void;
+  onStateChange: (state: "open" | "closed") => void;
+};
+
+type SharedVentureStream = {
+  consumers: Set<StreamConsumer>;
+  state: "open" | "closed";
+  unsubscribe: () => void;
+};
+
+const sharedVentureStreams = new Map<string, SharedVentureStream>();
+
+function subscribeSharedVentureStream(ventureId: string, consumer: StreamConsumer): () => void {
+  let stream = sharedVentureStreams.get(ventureId);
+  if (!stream) {
+    stream = {
+      consumers: new Set(),
+      state: "closed",
+      unsubscribe: () => {},
+    };
+    sharedVentureStreams.set(ventureId, stream);
+    stream.unsubscribe = subscribeVentureEvents(
+      ventureId,
+      (event) => {
+        for (const activeConsumer of stream!.consumers) activeConsumer.onEvent(event);
+      },
+      (state) => {
+        stream!.state = state;
+        for (const activeConsumer of stream!.consumers) activeConsumer.onStateChange(state);
+      },
+    );
+  }
+
+  stream.consumers.add(consumer);
+  const observedStream = stream;
+  queueMicrotask(() => {
+    if (observedStream.consumers.has(consumer)) consumer.onStateChange(observedStream.state);
+  });
+
+  return () => {
+    observedStream.consumers.delete(consumer);
+    if (observedStream.consumers.size > 0) return;
+    if (sharedVentureStreams.get(ventureId) === observedStream) sharedVentureStreams.delete(ventureId);
+    observedStream.unsubscribe();
+  };
+}
+
 // useFirmEventStream — the live-work push half of the streaming seam (build contract §2.4 / Phase 5).
 //
 // The brain pushes a small, data-free "something changed in this venture" event over SSE. This hook
@@ -20,7 +68,7 @@ export function useFirmEventStream(
   ventureId: string | null,
   onEvent: (event: FirmStreamEvent) => void,
 ): { streaming: boolean } {
-  const [streaming, setStreaming] = useState(false);
+  const [openVentureId, setOpenVentureId] = useState<string | null>(null);
   // Keep the latest callback without resubscribing on every render — written in an effect (never during
   // render) so the subscription always calls the current handler without tearing down on each rerender.
   const handlerRef = useRef(onEvent);
@@ -30,20 +78,15 @@ export function useFirmEventStream(
 
   useEffect(() => {
     if (!ventureId) return undefined;
-    // `streaming` flips only from the subscription's async open/close callbacks (external-system
-    // updates), never synchronously in the effect body — the reset on teardown is a callback too, so a
-    // stale "streaming" is never shown for a torn-down subscription.
+    // Open/closed state comes only from the external subscription callback. The returned value is
+    // also scoped to this exact venture, so a venture switch cannot briefly inherit the prior
+    // venture's open state while the new connection is settling.
     if (typeof subscribeVentureEvents !== "function") return undefined;
-    const unsubscribe = subscribeVentureEvents(
-      ventureId,
-      (event) => handlerRef.current(event),
-      (state) => setStreaming(state === "open"),
-    );
-    return () => {
-      unsubscribe();
-      setStreaming(false);
-    };
+    return subscribeSharedVentureStream(ventureId, {
+      onEvent: (event) => handlerRef.current(event),
+      onStateChange: (state) => setOpenVentureId(state === "open" ? ventureId : null),
+    });
   }, [ventureId]);
 
-  return { streaming };
+  return { streaming: Boolean(ventureId && openVentureId === ventureId) };
 }

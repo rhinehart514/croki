@@ -406,6 +406,12 @@ describe("Product/GTM causal projection", () => {
     ]);
     expect(walkEdges.every((entry) => entry.className?.includes("is-spine"))).toBe(true);
     expect(graph.edges.some((entry) => entry.target === "settings")).toBe(false);
+    expect(graph.nodes.find((node) => node.id === "pricing")?.data.page?.entryPaths).toEqual([
+      expect.objectContaining({ ref: "object:landing", route: "/" }),
+    ]);
+    expect(graph.nodes.find((node) => node.id === "pricing")?.data.page?.onwardPaths).toEqual([
+      expect.objectContaining({ ref: "object:signup", route: "/signup" }),
+    ]);
   });
 
   it("reflows only the selected node's immediate neighborhood", () => {

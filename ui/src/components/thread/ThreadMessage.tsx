@@ -1,4 +1,4 @@
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, FileChartColumnIncreasing } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ThreadTimelineItem, VisualReference } from "@/api";
 import { MessageResponse } from "@/components/ai-elements/message";
@@ -73,7 +73,7 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
   }
 
   if (item.kind === "message" && item.messageKind === "handoff") {
-    const participant = text(item.participantLabel, text(item.participantRef, "Drover"));
+    const participant = text(item.participantLabel, text(item.participantRef, "Croki"));
     const content = text(item.content);
     const detail = content.toLocaleLowerCase().startsWith(`${participant.toLocaleLowerCase()} `)
       ? content.slice(participant.length + 1)
@@ -92,10 +92,10 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
     const actions = Array.isArray(item.actions) ? item.actions as Array<Record<string, unknown>> : [];
     return (
       <section className="thread-home-summary">
-        <span>Drover</span>
+        <span>Croki</span>
         <h2>Since you left</h2>
         <p>{counts?.attention ? `${counts.attention} ${counts.attention === 1 ? "thread needs" : "threads need"} your judgment.` : counts?.active ? `${counts.active} ${counts.active === 1 ? "agent is" : "agents are"} still working.` : "There are no new consequences waiting for review."}</p>
-        {actions.length ? <div>{actions.map((action) => <button type="button" key={text(action.threadRef)} onClick={() => onOpenThread(text(action.threadRef))}>{text(action.label, "Review thread")}</button>)}</div> : <p>Ask Drover what matters most, or start a new direction.</p>}
+        {actions.length ? <div>{actions.map((action) => <button type="button" key={text(action.threadRef)} onClick={() => onOpenThread(text(action.threadRef))}>{text(action.label, "Review thread")}</button>)}</div> : <p>Ask Croki what matters most, or start a new direction.</p>}
         <h3>What do you want to work on?</h3>
       </section>
     );
@@ -103,11 +103,16 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
 
   const role = text(item.role, "teammate");
   const participantRef = text(item.participantRef);
-  const participant = role === "founder" ? "You" : text(item.participantLabel, text(item.participantRef, "Drover"));
+  const participant = role === "founder" ? "You" : text(item.participantLabel, text(item.participantRef, "Croki"));
   const content = text(item.content);
   const attachments = Array.isArray(item.attachments) ? item.attachments.filter((attachment): attachment is { id: string; name: string } => (
     Boolean(attachment && typeof attachment === "object" && typeof (attachment as Record<string, unknown>).id === "string" && typeof (attachment as Record<string, unknown>).name === "string")
   )) : [];
+  const journeyAttachments = Array.isArray(item.attachments) ? item.attachments.filter((attachment): attachment is { kind: "journey-import"; importRef: string; name: string } => {
+    if (!attachment || typeof attachment !== "object") return false;
+    const value = attachment as Record<string, unknown>;
+    return value.kind === "journey-import" && typeof value.importRef === "string" && typeof value.name === "string";
+  }) : [];
   if (surface === "work" && role !== "founder" && content.trim().toLocaleLowerCase() === `${participant.toLocaleLowerCase()} is taking this one.`) return null;
   // Older direct-SDK turns persisted a provider acknowledgement before every real response. The
   // selected model and factual activity already carry that state, so keep existing Threads as quiet
@@ -120,6 +125,9 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
       <div className="thread-message-body">
         {attachments.length ? <div className="thread-message-images">
           {attachments.map((attachment) => <ThreadImage key={attachment.id} ventureId={String(item.ventureId ?? "")} imageId={attachment.id} name={attachment.name} />)}
+        </div> : null}
+        {journeyAttachments.length ? <div className="thread-message-journeys">
+          {journeyAttachments.map((attachment) => <span key={attachment.importRef}><FileChartColumnIncreasing aria-hidden="true" /><span><strong>{attachment.name}</strong><small>Observed journey source · mapping in this Thread</small></span></span>)}
         </div> : null}
         {role === "founder"
           ? <FounderMessageBody content={content} />

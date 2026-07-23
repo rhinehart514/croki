@@ -1,6 +1,6 @@
-# STATE — Drover
+# STATE — Croki
 
-**Stage:** alpha. **Updated:** 2026-07-22.
+**Stage:** alpha. **Updated:** 2026-07-23.
 **Authority:** [`FIRM-SPEC.md`](FIRM-SPEC.md) defines durable product/build physics. Root
 [`DESIGN.md`](../DESIGN.md) defines the intended desktop experience.
 
@@ -22,35 +22,43 @@ Work in that single choice. **What are you trying to make true?** and Claude/Cod
 Work composer rather than blocking repository connection. Missing authentication never blocks adding the
 codebase.
 
+Desktop startup now loads and reveals the founder window before unfinished-work recovery begins. Recovery yields
+until after the renderer load and fails to the diagnostic log rather than closing a usable shell. Brain and its
+synchronous repository work still share Electron main, so this proves earlier visibility, not sustained
+responsiveness under recovery; the process boundary remains unbuilt.
+
 The product map now stays true without founder upkeep: a founder-confirmed source apply re-runs the page
 derivation as a reconciler. An unchanged page produces zero store writes (no revision or timestamp churn, so
 unrelated canvas nodes never move), a page the code no longer proves retracts only while it is still the
 adapter's own tentative read — founder-corrected or adopted records are never rewritten or removed, and a page
 other venture truth still references keeps its object while its derived links retract. A derivation returning
-zero pages leaves the existing map alone, a sync failure never fails the apply, Drover's own isolated worktrees
+zero pages leaves the existing map alone, a sync failure never fails the apply, Croki's own isolated worktrees
 are excluded from derivation, and there is no file watcher or polling; manual re-map still works unchanged.
 
 Work remains the direct coding-agent surface with exact provider/model choice, isolated coding attempts,
 conversation, files, diff, preview, terminal, verification, checkpoints, and founder-controlled source apply.
+New Work directions now receive their exact durable Thread and founder-message identities in the acceptance
+response. The immediate founder turn rebinds from its draft address to that Thread and remains visible until the
+same durable message arrives, rather than discovering the new Thread from a creation-time heuristic.
 The founder can delete any non-root chat from its existing action menu. One inline confirmation makes clear that
 live work will stop; the founder-only delete tombstones the Thread, refuses future continuation, requests
 cancellation for every attached live Run, revokes restartable WorkScopes rooted there, and removes the chat from
 Work while preserving Product truth, artifacts, and receipts.
-Product/GTM participation in a Work Thread now stages a branch-backed provisional local model view above the
-composer. The view can mix current truth, proposals, alternatives, unknowns, evidence, actions, gates, and
-outcomes; it does not require workflow order. Corrections preserve the same durable work and `ModelBranch`, and
-review opens the existing selective `ModelChange` merge surface. Legacy workflow artifacts remain readable.
+Product/GTM conversation now uses the same exact Work Thread and founder-selected Claude or Codex runtime,
+model, and effort as Work. Its compact canvas composer hides repository controls but does not replace their
+values or create another participant identity. Closing and reopening the dock preserves the scoped draft,
+Thread, and last coherent transcript. Product interpretation and proposal review stay beside the canvas;
+native repository execution, preview, terminal, diff, or other Work-owned material follows the same Thread
+into Work. A branch-backed provisional local model view may appear above that Thread's composer; corrections
+preserve the same durable work and `ModelBranch`, and review uses the existing selective merge surface.
 
-Product / GTM now renders a single living-v3 canvas rather than the former fixed-lane map. It projects current
-semantic objects and relationships, durable provisional model branches, live WorkIndex state, generic outward
-actions, and evidence returns. Current truth, provisional alternatives, live work, founder gates, and evidence
-use distinct visual states. Product, shared Product/GTM truth, and GTM occupy distinct territories inside one
-strictly left-to-right causal graph; curved spectrum edges identify real territory crossings. Its default opening
-frame now composes the first useful causal chapter instead of fitting the entire portfolio: a shared trunk,
-territory-weighted neighborhoods, attached work and decisions, compressed secondary features, and state-derived
-emphasis make the route legible without another setting or mode. Node selection expands exact detail or branch
-review in place and reflows only the local neighborhood. Founder drag placement persists as presentation, and
-rail agents, tools, and sources open exact scoped work only when dropped on a supported subject.
+Product / GTM now rests on the code-proven Product walk: repository-derived pages in left-to-right walk order
+with only source-supported navigation links. Selecting a page, consequence, play, play step, or evidence return
+derives one feature-local presentation projection around that question; projections are ephemeral canvas state,
+not modes or semantic truth. Current truth, provisional alternatives, live work, founder gates, and evidence
+remain visually distinct across Product, shared Product/GTM, and GTM territories. Automatic layout owns
+placement. Nodes are not draggable, the Organize control and placement writes are absent, and legacy placement
+records remain readable compatibility data. Node selection expands exact material in place.
 
 The opening chapter now ranks Product-to-market-to-evidence consequence above mere path length and frames no
 more than five relevant nodes at a `0.82` readability floor. Old overview cameras cannot override that default.
@@ -91,6 +99,22 @@ paused rather than spending on boot.
 
 Drive leases now key exact Run/resume identity instead of serializing every request by participant. Daily spend
 reservations use a revisioned CAS ledger. Provider sessions and coding worktrees remain isolated by Run.
+Targeted work scopes resume state by explicit WorkScope, exact work item, or Thread in that order. Unrelated
+Threads for the same provider can run concurrently, while the same Thread or work item remains single-writer.
+Untargeted legacy work keeps the participant-wide fallback rather than guessing an unsafe association.
+
+Desktop live updates now have one ref-counted upstream connection per venture in the renderer, while the Electron
+bridge routes subscriptions by opaque identity. Work connection and Thread timeline consumers receive the same
+venture events, and removing either consumer cannot tear down the other's stream. The events remain invalidations;
+typed delta delivery and targeted projection updates are not yet built.
+
+Claude's native `AskUserQuestion` and policy-triggered permission prompts now cross the headless Agent SDK seam
+without disappearing. Croki parks the structured question or exact requested action on the existing founder
+wall, keeps option descriptions, multi-select choices, and previews, and pauses durable Work. A founder answer
+becomes the next founder turn and resumes the same Thread, Claude session, selected model, and isolated worktree.
+A native tool permission may be allowed once only for the exact hashed tool input; the grant is consumed on use
+and expires at the end of that resumed drive. Commit, merge, push, PR, deploy, publish, and destructive restore
+commands remain behind Croki's existing exact consequence controls and cannot be granted through this seam.
 
 This proves independent lease and spend primitives; it does not yet prove a broad real 10–15-approach dogfood
 portfolio or automatic provider resumption after restart.
@@ -127,12 +151,19 @@ Other action kinds remain preparation-only.
 
 ## Connected read capabilities and credentials
 
-Both Claude and Codex receive the same screened Drover work-loop tools. When a supported local Chromium browser
+Both Claude and Codex receive the same screened Croki work-loop tools. When a supported local Chromium browser
 exists, `read_browser_page` opens one public HTTP(S) page in a fresh in-memory context, returns rendered text and
 links, and closes it. It has no click, typing, upload, download, persisted cookies, or access to the founder's
 browser session. When an Exa key is connected, `search_web_with_exa` and `read_web_with_exa` provide attributable
 public-web reads; the key stays in the host request header and never enters a prompt, subprocess argument, or tool
 result. Existing Gmail OAuth remains the structured mail connector and its send path remains founder-gated.
+
+Native coding UI work uses a separate Croki-owned preview, not a founder browser session or an agent-launched
+browser. Each Run is pinned to its exact isolated coding workspace and can use `preview_open`, navigation,
+click/type/press/scroll, DOM evaluation/wait, and screenshot tools against the preview mounted visibly in that
+Work Thread. Claude's native coding prompt explicitly directs local UI verification through those tools and
+forbids launching a separate browser-automation session. The broker refuses cross-Run or cross-workspace access
+and releases the pin on every provider exit, including failure, before the error propagates.
 
 Founder credentials now persist as schema-v2 encrypted envelopes. Electron configures operating-system
 `safeStorage` below the renderer boundary; Linux `basic_text` is rejected. Existing plaintext credentials migrate
@@ -164,6 +195,12 @@ Implemented current routes:
 - `GET|POST /api/ventures/:ventureId/work-scopes`
 - `POST /api/ventures/:ventureId/work-scopes/:scopeId/revoke`
 - `GET /api/ventures/:ventureId/market-movement`
+- `POST /api/ventures/:ventureId/journey-imports`
+- `POST /api/ventures/:ventureId/journey-imports/:importRef/preview`
+- `POST /api/ventures/:ventureId/journey-imports/:importRef/adopt`
+- `DELETE /api/ventures/:ventureId/journey-imports/:importRef`
+- `GET /api/ventures/:ventureId/journey-observations`
+- `GET /api/ventures/:ventureId/journey-mapping-proposals`
 - `POST /api/ventures/:ventureId/outward-actions`
 - `POST /api/ventures/:ventureId/outward-actions/:actionId/execute`
 - `POST /api/ventures/:ventureId/outward-actions/:actionId/observations`
@@ -172,17 +209,14 @@ Implemented current routes:
 
 ## Visual implementation
 
-The current Product / GTM implementation lives under `ui/src/components/product-gtm/`. It uses a near-black
-neutral room, DM Sans operating text, mono exact material, blue focus, amber authority, restrained provisional
-texture, distinct meaning-bearing node silhouettes and ports, solid causal arrows, curved dashed dependencies,
-source-bearing return edges, Product/GTM crossing spectra, semantic zoom, keyboard controls, minimap, inline node
-expansion, persisted drag placement, exact rail-to-node drop handling, and reduced-motion rules. It now composes a
-bounded contextual causal chapter around exact selection, founder gates, unread evidence, review work, stale
-branches, or active work; unrelated material remains present but quiet, and `Whole venture` returns directly to
-the broad causal trunk. A compact top-right map key distinguishes Product, shared truth, and GTM. Its GTM workflow
-disclosure puts adopted workflows first and unfolds their exact operational steps on the same canvas; motions
-without established mechanics remain visibly unmapped rather than becoming fabricated flows. Exact Work items
-keep separate canvas identities even when they share one Thread.
+The current Product / GTM implementation lives under `ui/src/components/product-gtm/`. It uses the shared
+T3-shaped shell and a near-black spatial center with DM Sans operating text, mono exact material, blue focus,
+amber authority, restrained provisional texture, meaning-bearing node silhouettes, explicit relationship verbs,
+source-bearing returns, Product/GTM crossing spectra, keyboard controls, minimap, inline expansion, and
+reduced-motion rules. The default Product walk, consequence trace, full play, and evidence-return projections
+reuse the same React Flow canvas and existing node and edge components. Unknown legacy edges render as
+**Related to**; code, expectation, support, contradiction, sequence, dependency, and return meanings remain
+available without relying on color.
 
 The GTM key now presents ambitious plays in two honest registers. A play's register is derived from physics,
 never a self-declared field on its graph: it reads as **drafted** — an intended workflow, visibly marked not yet
@@ -204,8 +238,8 @@ retired end to end: adoption no longer writes it, and the flow-artifact authorin
 prompt no longer require or emit it. Legacy records that still carry the old field read forward cleanly as
 drafted until they truly run. The opening camera holds a readable frame on the play and its first steps rather
 than shrinking a long workflow to fit; selecting a later step frames that exact point while preserving the whole
-graph. Whole-venture and focused camera composition preserve a readable active chapter; below semantic-detail
-zoom the remaining portfolio uses meaningful overview markers rather than tiny full labels.
+play. Product-walk and focused camera composition preserve a readable active chapter; below semantic-detail zoom
+secondary context uses meaningful overview markers rather than tiny full labels.
 
 Drafted plays now carry the mandated per-step walkthrough. "Walk through this play" focuses step one on the
 canvas and opens the play-scoped conversation; step focus is canvas selection (`workflow:<playId>:<stepId>`),
@@ -218,18 +252,30 @@ every other step. An established play keeps "Run again" and none of this machine
 `message` outward action shows the exact recipient, subject, and full unclamped body at the founder decision
 point, and the gmail-thread watch control appears only when the send receipt names a thread.
 
-The 2026-07-22 T3 polish pass raised legibility and honesty on the existing surfaces without adding capability.
-In Work, non-founder agent output now caps at an 80ch reading measure while the composer keeps its full width, so
-long agent turns no longer run to a ~1167px line. In Product / GTM, the whole-venture canvas now opens fit to all
-nodes rather than a five-node sample, so nothing lands scattered off-screen; provisional read nodes that would
-render edgeless are attached to the page(s) they derive from, or chain into one left-to-right reading trunk when no
-page exists yet, so first-run reads are never orphans; an empty GTM territory shows an honest on-canvas note and
-dims the GTM legend chip instead of promising plays that do not exist; the page-refine panel now offers the
-mandated GTM action — proposing a play that lands as an adoptable Work Thread proposal — alongside starting work;
-and resting node labels were raised for legibility. The projection was split under the 500-line ceiling
+The 2026-07-23 Product/GTM pass replaces fit-all opening behavior with the Product walk and adaptive local
+framing. Page refinement asks what should be different and for whom; connecting a change to market is unavailable
+until an adopted Product consequence exists. Selected plays still render every step, while their opening camera
+frames the owner and first three steps readably. Observed journey imports accept one UTF-8 JSON, JSONL, or CSV
+file up to 12 MiB. Raw rows and identifiers remain in a venture-scoped `0600` staging file only long enough for
+deterministic aggregation; SDKs receive a sanitized profile, the founder adopts an exact mapping proposal, and
+only aggregate counts plus a bounded receipt persist. The summoned overlay can show page observations,
+transitions, drop-offs, and observed-only curves without changing repository topology or semantic-model v3.
+
+The earlier T3 polish pass also raised legibility and honesty on the existing surfaces. In Work, non-founder
+agent output caps at an 80ch reading measure while the composer keeps its full width. Resting canvas labels were
+raised for legibility, an empty GTM territory remains honestly empty, and the projection code stays below the
+repository size ceiling. The projection was split under the 500-line ceiling
 (`productGtmProjection.ts` 468, new co-located `productGtmChapter.ts` 101) with identical behavior. The dead
 `release` member of the thread `contextKind` union was dropped, and the previously undeclared `--n-surface-2`
 token the workspace shell already referenced is now declared in `ui/src/index.css`.
+
+The 2026-07-23 Work polish pass further reduced resting chrome. The anchored composer no longer repeats the
+connected-capability inventory already owned by Product / GTM; it keeps only the explicit participant, SDK
+model and effort, repository, isolated worktree, and guarded-authority context. Those controls stay on one row
+at the full conversation width and wrap as one unit when the adjacent review workspace narrows the chat.
+Artifact, evidence, comparison, and code references now read as compact transcript receipts rather than stacked
+ledger bands, while an unresolved founder consequence retains the only attention treatment. The Work composer
+uses the same 16px corner geometry as founder turns with a quieter 80px minimum and restrained shadow.
 
 The deterministic browser harness remains a development/test surface. Electron remains the shipped product.
 Visual verification must confirm that the BrowserWindow loaded and became visible; a healthy Brain alone is not
@@ -243,7 +289,8 @@ Validated during this realignment:
 - selective merge, drift conflict, and agent merge refusal pass;
 - WorkScope lease/concurrency and atomic spend tests pass;
 - the provider-neutral MCP surface and authority matrix pass;
-- the complete Brain suite passes 883 tests; the UI suite passes 54 files and 278 tests;
+- the complete Brain suite passes 941 tests; the complete UI suite passes 332 tests, the exact-turn/event
+  focused UI set passes 48 tests, the Electron suite passes 54 tests, and the production UI build succeeds;
 - the outward message receipts pass: preparation stamps the exact contract with zero network use, agent
   execution is refused, the founder send records Gmail message/thread ids, the CAS lease excludes a concurrent
   double send, interruption leaves verification-required and refuses blind retry, a gmail-thread grant is
@@ -263,6 +310,9 @@ Validated during this realignment:
   record reads forward into the two-register model without trusting its stored register;
 - focused canvas tests pass 28/28; focused credential/connector tests pass 31/31;
 - UI lint, the production build, and service/component size checks pass;
+- focused provider-intervention and Claude runtime boundary receipts pass 41/41, and the structured founder-
+  decision UI passes 9/9; architecture verification passes at the consciously re-baselined 141-module
+  ceiling with the intervention bridge kept in one feature-local module;
 - runtime reachability, dead-code, and UI bundle checks pass;
 - the live browser-read adapter opened `https://example.com`, returned rendered text and one link, and closed its
   isolated context;
@@ -286,17 +336,11 @@ Validated during this realignment:
 - deleting the retired UI bundles reduced the production graph and bundle while keeping size budgets green.
 
 The complete pre-enhancement `npm run test:acceptance` receipt passed on July 21, 2026. It is not a current
-post-enhancement receipt. `npm run check:architecture` passes at a consciously re-baselined 134-module ceiling:
-the 2026-07-22 capability pass (outward message, map reconciler, per-step walkthrough) added zero Brain modules,
-and the 134th module — `repository-files.mjs`, the @-file composer reach — was adopted deliberately with its
-route, test, and composer wiring rather than folded into an unrelated module. No dead Brain module remains: every module has at least one importer, and the one-importer
-families (`work-loop-*`, the work-loop guards, the semantic-model compat shim) are LOC-ceiling-compliant
-feature-local splits whose sole importers already sit at the 500-line service ceiling. Folding any of them back
-would trade the module-count violation for an LOC violation, a worse outcome; the check was not weakened.
-`npm run verify:tokens` now passes (171 canonical tokens across 14 CSS files); every remaining infinite animation
-sits on an exempt `spinner`/`data-state="stopping"` work-receipt selector. `npm --prefix brain test` passes 883/883
-and `npm --prefix ui run test:unit` passes 278/278 across 54 files; the UI production build, lint, token, and
-service/component size checks pass.
+post-enhancement receipt. `npm run check:architecture` passes across the current 141 Brain modules with no cycles
+or retired imports, and the service/component size checks pass. `npm run verify:tokens` passes with 171 canonical
+tokens across 15 CSS files; remaining infinite animations are limited to the gate's explicit work-state
+exemptions. The UI production build and bundle budgets pass, with the entry at or below 350 KB, general chunks
+at or below 600 KB, and listed on-demand grammars at or below 850 KB.
 
 The deterministic complete founder loop is proven through selective Product-model merge. One real external
 dogfood loop remains required before release readiness because it would invoke provider credits and world-

@@ -43,7 +43,7 @@ export function readDriveReceipt(result: DriveTeammateResult): DriveReceipt {
 
   let headline: string;
   if (waiting) {
-    headline = "Drover reached a decision that's yours to make.";
+    headline = "Croki reached a decision that's yours to make.";
   } else if (staged > 0 && opened > 0) {
     headline = "New work is underway and a change is ready to review.";
   } else if (staged > 0) {
@@ -53,7 +53,7 @@ export function readDriveReceipt(result: DriveTeammateResult): DriveReceipt {
   } else if (kind === "cancelled") {
     headline = "Work stopped — what it produced so far is kept.";
   } else if (summary) {
-    headline = "Drover worked through it.";
+    headline = "Croki worked through it.";
   } else {
     headline = "Work started — it will take shape in this direction.";
   }
@@ -103,16 +103,16 @@ export function readReplyReceipt(result: ConversationReplyResult): DriveReceipt 
       headline = "The SDK is answering here.";
       break;
     case "stop-run":
-      headline = result.stoppedRunRef ? "Stop requested — the rest of this thread stays active." : "Drover needs a more specific run to stop.";
+      headline = result.stoppedRunRef ? "Stop requested — the rest of this thread stays active." : "Croki needs a more specific run to stop.";
       break;
     case "parallel-attempts":
-      headline = result.needsFounderJudgment ? "Drover needs the two participants you mean." : "Independent attempts are underway in this thread.";
+      headline = result.needsFounderJudgment ? "Croki needs the two participants you mean." : "Independent attempts are underway in this thread.";
       break;
     case "critique":
-      headline = result.needsFounderJudgment ? "Drover needs the exact work to critique." : `${result.teammateRef ?? "A participant"} is critiquing the returned work.`;
+      headline = result.needsFounderJudgment ? "Croki needs the exact work to critique." : `${result.teammateRef ?? "A participant"} is critiquing the returned work.`;
       break;
     case "involve-participant":
-      headline = result.needsFounderJudgment ? "Drover needs the participant you mean." : `${result.teammateRef ?? "A participant"} is joining this thread.`;
+      headline = result.needsFounderJudgment ? "Croki needs the participant you mean." : `${result.teammateRef ?? "A participant"} is joining this thread.`;
       break;
     case "observe":
       headline = "Returned evidence checked.";
@@ -124,7 +124,7 @@ export function readReplyReceipt(result: ConversationReplyResult): DriveReceipt 
         : "Your steer is in — it adjusts at the next step.";
       break;
     default:
-      headline = "Your steer is in — Drover is adjusting course.";
+      headline = "Your steer is in — Croki is adjusting course.";
   }
   const note = typeof result.note === "string" ? result.note.trim() : "";
   const why = typeof result.why === "string" ? result.why.trim() : "";

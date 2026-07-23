@@ -34,7 +34,7 @@ function closeHttpServer() {
   if (!server.listening) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
-    // Let in-flight requests finish, but do not let a stuck connection pin Drover forever.
+    // Let in-flight requests finish, but do not let a stuck connection pin Croki forever.
     const forceClose = setTimeout(() => server.closeAllConnections?.(), SHUTDOWN_GRACE_MS);
     forceClose.unref();
 
@@ -53,7 +53,7 @@ function shutdownServer() {
   shutdownPromise = closeHttpServer().catch((err) => {
     server.closeAllConnections?.();
     process.exitCode = 1;
-    console.error(`Drover shutdown failed: ${err instanceof Error ? err.message : err}`);
+    console.error(`Croki shutdown failed: ${err instanceof Error ? err.message : err}`);
     throw err;
   });
   return shutdownPromise;
@@ -62,10 +62,10 @@ function shutdownServer() {
 function shutdownAfterSignal() {
   // This timer is unref'd so a healthy shutdown still exits naturally. If a broken listener or
   // connection keeps the event loop alive past the drain window, fail closed instead of pinning the
-  // old Drover process and port forever.
+  // old Croki process and port forever.
   if (!shutdownFailSafe) {
     shutdownFailSafe = setTimeout(() => {
-      console.error("Drover shutdown timed out; forcing exit.");
+      console.error("Croki shutdown timed out; forcing exit.");
       process.exit(1);
     }, SHUTDOWN_GRACE_MS + 1_000);
     shutdownFailSafe.unref();
@@ -82,7 +82,7 @@ function shutdownAfterSignal() {
 function startServer() {
   server.listen(port, host, () => {
     const activePort = server.address().port;
-    console.log(`Drover running at http://${host}:${activePort}`);
+    console.log(`Croki running at http://${host}:${activePort}`);
     if (devFounderAuthorityEnabled()) {
       console.warn("  Development founder writes enabled for non-agent loopback browser requests.");
     }

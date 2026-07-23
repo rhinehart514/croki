@@ -111,7 +111,7 @@ export function useFirmConnection(ventureId: string | null) {
           lastUpdatedAt: now,
           retryAt: null,
           failures,
-          message: writable ? null : "Open Drover through its desktop host to make changes.",
+          message: writable ? null : "Open Croki through its desktop host to make changes.",
         });
         setConsequentialWritesAllowed(writable);
         schedule(streamingRef.current ? 15_000 : IDLE_POLL_MS);

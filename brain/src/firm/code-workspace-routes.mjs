@@ -13,6 +13,12 @@ import {
   reviewCodingProductConsequence,
   reviewCodingWorkspace,
 } from "./code-workspace.mjs";
+import { inspectShip, prepareShipDrafts, runShipAction } from "./git-ship.mjs";
+
+function shipInfo(ventureId, id) {
+  try { return inspectShip(ventureId, id); }
+  catch { return null; }
+}
 
 function fail(res, error) {
   json(res, Number.isInteger(error?.status) ? error.status : 400, { error: error instanceof Error ? error.message : String(error) });
@@ -39,12 +45,12 @@ export default async function handle({ req, res, url }) {
     try {
       const ventureId = decodeURIComponent(itemMatch[1]);
       const id = decodeURIComponent(itemMatch[2]);
-      json(res, 200, { workspace: exactWorkspace(ventureId, id), readiness: inspectCodingReadiness(ventureId, id) });
+      json(res, 200, { workspace: exactWorkspace(ventureId, id), readiness: inspectCodingReadiness(ventureId, id), ship: shipInfo(ventureId, id) });
     } catch (error) { fail(res, error); }
     return true;
   }
 
-  const actionMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/coding-workspaces\/([^/]+)\/(review|product-consequence|apply|revert|commit|prepare-pull-request|restore|discard)$/);
+  const actionMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/coding-workspaces\/([^/]+)\/(review|product-consequence|apply|revert|commit|prepare-pull-request|prepare-ship|ship|restore|discard)$/);
   if (req.method !== "POST" || !actionMatch) return false;
   const ventureId = decodeURIComponent(actionMatch[1]);
   const id = decodeURIComponent(actionMatch[2]);
@@ -55,6 +61,16 @@ export default async function handle({ req, res, url }) {
     const body = await readBody(req);
     if (["apply", "revert", "commit", "restore", "discard"].includes(action) && body?.confirm !== true) {
       throw new Error(`${action} requires explicit confirmation.`);
+    }
+    // A real ship pushes and opens a pull request; only a dry run may proceed without confirmation.
+    if (action === "ship" && body?.dryRun !== true && body?.confirm !== true) {
+      throw new Error("ship requires explicit confirmation.");
+    }
+    if (action === "ship" || action === "prepare-ship") {
+      if (action === "prepare-ship") prepareShipDrafts(ventureId, id, body ?? {});
+      else await runShipAction(ventureId, id, body ?? {}, { authority: "founder", id: "founder" });
+      json(res, 200, { workspace: exactWorkspace(ventureId, id), readiness: inspectCodingReadiness(ventureId, id), ship: shipInfo(ventureId, id) });
+      return true;
     }
     const workspace = action === "review" ? reviewCodingWorkspace(ventureId, id, body?.decision, body?.note)
       : action === "product-consequence" ? reviewCodingProductConsequence(ventureId, id, body, { authority: "founder", id: "founder" })

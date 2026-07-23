@@ -1,0 +1,34 @@
+.croki-mark-spectrum {
+  opacity: 0;
+  transform: translateX(-80px);
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.croki-mark[data-active="true"] .croki-mark-spectrum {
+  animation: croki-mark-spectrum-sweep 650ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes croki-mark-spectrum-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-80px);
+  }
+  18%,
+  68% {
+    opacity: .92;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(80px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .croki-mark[data-active="true"] .croki-mark-spectrum {
+    opacity: .54;
+    transform: none;
+    animation: none;
+  }
+}

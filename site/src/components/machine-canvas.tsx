@@ -6,6 +6,7 @@ import {
   ScanSearch,
   Sparkles,
 } from "lucide-react";
+import { CrokiMark } from "./croki-wordmark";
 
 function RunLine({ runtime, task }: { runtime: string; task: string }) {
   return (
@@ -28,12 +29,12 @@ export function MachineCanvas() {
     <div
       className="machine-shell"
       role="img"
-      aria-label="A Drover venture canvas joining Product and go-to-market work, bounded Claude and Codex execution, an exact founder consequence, and returned evidence"
+      aria-label="A Croki venture canvas joining Product and go-to-market work, bounded Claude and Codex execution, an exact founder consequence, and returned evidence"
     >
       <div className="machine-topbar">
         <div className="machine-product">
-          <span className="mini-mark" aria-hidden="true">
-            D
+          <span className="mini-mark">
+            <CrokiMark />
           </span>
           <span>
             Buffalo Projects

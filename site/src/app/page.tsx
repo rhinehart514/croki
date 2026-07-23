@@ -10,7 +10,7 @@ import {
 import { AnimatedGroup } from "@/components/motion-primitives/animated-group";
 import { InView } from "@/components/motion-primitives/in-view";
 import { MachineCanvas } from "@/components/machine-canvas";
-import { DroverWordmark } from "@/components/drover-wordmark";
+import { CrokiMark, CrokiWordmark } from "@/components/croki-wordmark";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ export default function Home() {
                   size="lg"
                   render={<a href={`${githubUrl}#run-locally`} />}
                 >
-                  Run Drover locally
+                  Run Croki locally
                   <ArrowRight data-icon="inline-end" />
                 </Button>
                 <Button
@@ -70,10 +70,10 @@ export default function Home() {
             </AnimatedGroup>
           </section>
 
-          <section className="proof-band" aria-label="Drover operating principles">
+          <section className="proof-band" aria-label="Croki operating principles">
             <div className="proof-intro">
               <span className="proof-mark" aria-hidden="true">
-                D
+                <CrokiMark />
               </span>
               <strong>One founder. Many approaches. One coherent changing venture.</strong>
             </div>
@@ -133,7 +133,7 @@ export default function Home() {
                 <p>
                   Claude and Codex can research, build, and verify inside your
                   direction. The moment work would send, publish, deploy, spend,
-                  destroy, or materially rewrite ambiguous venture truth, Drover
+                  destroy, or materially rewrite ambiguous venture truth, Croki
                   presents the exact consequence for your call.
                 </p>
                 <p className="wall-maxim">The system prepares. The founder decides.</p>
@@ -243,18 +243,18 @@ export default function Home() {
                   <i />
                   <i />
                 </span>
-                <span>Run Drover</span>
+                <span>Run Croki</span>
                 <span>zsh</span>
               </div>
               <pre>
                 <code>
-                  <span className="terminal-comment"># from the Drover repo</span>
+                  <span className="terminal-comment"># from the Croki repo</span>
                   {"\n"}
                   <span className="terminal-prompt">$</span> npm install
                   {"\n"}
                   <span className="terminal-prompt">$</span> npm run app
                   {"\n\n"}
-                  <span className="terminal-success">✓</span> Drover desktop is opening
+                  <span className="terminal-success">✓</span> Croki desktop is opening
                   {"\n"}  Electron + local Brain
                 </code>
               </pre>
@@ -272,7 +272,7 @@ export default function Home() {
 
         <footer className="site-footer">
           <a href="#top" aria-label="Back to top">
-            <DroverWordmark />
+            <CrokiWordmark />
           </a>
           <p>The founder-controlled Product and go-to-market system.</p>
           <div>

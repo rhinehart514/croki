@@ -3,10 +3,11 @@
 // here is a shipping model as of July 2026. Reasoning tiers are per-MODEL, not per-runtime, because the
 // ceiling genuinely differs by model: Claude reasons up through `max`; Codex GPT-5.6 Sol reaches `max`
 // while Terra and Luna top out at `xhigh`. Codex's `ultra` tier is deliberately omitted — it is Sol-only,
-// runs parallel subagents, and is not reachable through the `codex exec` path Drover drives, so offering
+// runs parallel subagents, and is not reachable through the `codex exec` path Croki drives, so offering
 // it would be a control that lies about what the runtime can deliver.
 export type WorkRuntime = "claude-code" | "codex";
 export type WorkEffort = "low" | "medium" | "high" | "xhigh" | "max";
+export type WorkModelChoice = { runtime: string | null; model: string | null; effort: WorkEffort };
 
 export type WorkModelOption = {
   id: string;
@@ -66,4 +67,48 @@ export function effortsForModel(id: string): WorkEffort[] {
 export function clampEffort(effort: WorkEffort, id: string): WorkEffort {
   const allowed = effortsForModel(id);
   return allowed.includes(effort) ? effort : allowed[allowed.length - 1];
+}
+
+function modelIdForChoice(choice: Pick<WorkModelChoice, "runtime" | "model">) {
+  return WORK_MODELS.find((option) => option.runtime === choice.runtime && option.model === choice.model)?.id
+    ?? DEFAULT_MODEL_ID;
+}
+
+export function readWorkModelChoice(ventureId: string, legacyThreadKey?: string): WorkModelChoice {
+  const modelKey = `drover:work-model:${ventureId}`;
+  const effortKey = `drover:work-effort:${ventureId}`;
+  const legacyModelKey = legacyThreadKey ? `${modelKey}:${legacyThreadKey}` : null;
+  const legacyEffortKey = legacyThreadKey ? `${effortKey}:${legacyThreadKey}` : null;
+  try {
+    const selected = localStorage.getItem(modelKey)
+      ?? (legacyModelKey ? localStorage.getItem(legacyModelKey) : null)
+      ?? DEFAULT_MODEL_ID;
+    const option = modelById(selected);
+    const storedEffort = localStorage.getItem(effortKey)
+      ?? (legacyEffortKey ? localStorage.getItem(legacyEffortKey) : null);
+    return {
+      runtime: option.runtime,
+      model: option.model,
+      effort: clampEffort(isEffort(storedEffort) ? storedEffort : DEFAULT_EFFORT, option.id),
+    };
+  } catch {
+    const option = modelById(DEFAULT_MODEL_ID);
+    return { runtime: option.runtime, model: option.model, effort: DEFAULT_EFFORT };
+  }
+}
+
+export function rememberWorkModelChoice(ventureId: string, threadKey: string, choice: WorkModelChoice) {
+  const selected = modelIdForChoice(choice);
+  try {
+    // One venture-level presentation preference is shared by Work and Product / GTM. The
+    // thread-scoped writes are retained only as a compatibility seam for older builds.
+    localStorage.setItem(`drover:work-model:${ventureId}`, selected);
+    localStorage.setItem(`drover:work-effort:${ventureId}`, choice.effort);
+    localStorage.setItem(`drover:work-model:${ventureId}:${threadKey}`, selected);
+    localStorage.setItem(`drover:work-effort:${ventureId}:${threadKey}`, choice.effort);
+  } catch { /* presentation preference only */ }
+}
+
+export function modelIdFromWorkChoice(choice: Pick<WorkModelChoice, "runtime" | "model">) {
+  return modelIdForChoice(choice);
 }

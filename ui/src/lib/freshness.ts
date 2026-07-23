@@ -6,6 +6,6 @@ export function setConsequentialWritesAllowed(allowed: boolean) {
 
 export function requireFreshConnection() {
   if (!consequentialWritesAllowed) {
-    throw new Error("Drover is reconnecting. Nothing consequential can change until the firm is current again.");
+    throw new Error("Croki is reconnecting. Nothing consequential can change until the firm is current again.");
   }
 }

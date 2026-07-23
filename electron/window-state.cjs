@@ -78,7 +78,8 @@ function resolveInitialBounds({ app, screen }) {
 
 // Attach persistence to a window: save on move/resize (debounced) and on close. When the window is
 // maximized we keep the last normal bounds (getNormalBounds) so unmaximizing restores a real size,
-// but record maximized:true so the next launch opens maximized.
+// but record maximized:true so the next launch opens maximized. Returns a flush handle so the quit
+// path can force the final synchronous save before teardown begins.
 function track({ app, window }) {
   let saveTimer = null;
 
@@ -107,18 +108,21 @@ function track({ app, window }) {
     saveTimer = setTimeout(snapshot, 400);
   };
 
-  window.on("resize", scheduleSave);
-  window.on("move", scheduleSave);
-  window.on("maximize", scheduleSave);
-  window.on("unmaximize", scheduleSave);
-  // close fires before the window is destroyed; capture the final state synchronously.
-  window.on("close", () => {
+  const flush = () => {
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = null;
     }
     snapshot();
-  });
+  };
+
+  window.on("resize", scheduleSave);
+  window.on("move", scheduleSave);
+  window.on("maximize", scheduleSave);
+  window.on("unmaximize", scheduleSave);
+  // close fires before the window is destroyed; capture the final state synchronously.
+  window.on("close", flush);
+  return { flush };
 }
 
 module.exports = { resolveInitialBounds, track, DEFAULT_BOUNDS };

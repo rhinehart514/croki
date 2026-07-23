@@ -1,7 +1,12 @@
 @import "@/components/thread/thread-shell.css";
 
 .workspace-shell { position: fixed; inset: 0; display: grid; grid-template-columns: var(--thread-rail-width, 272px) minmax(420px, 1fr); min-width: 0; overflow: hidden; background: var(--n-app); color: var(--n-ink); font-family: var(--sans); transition: grid-template-columns 240ms var(--ease-out); }
-.workspace-shell[data-desktop-platform="darwin"] .thread-venture-switcher { width: calc(100% - 68px); margin-left: 68px; }
+.workspace-brand { display: flex; min-height: 32px; align-items: center; gap: 8px; margin: 0 0 7px; padding: 0 7px; color: var(--n-ink); font-size: 13px; font-weight: 650; letter-spacing: -.01em; }
+.workspace-brand svg { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 6px; }
+.workspace-brand span { line-height: 1; }
+.workspace-shell[data-desktop-platform="darwin"] .workspace-rail { padding-top: 44px; }
+.workspace-shell[data-desktop-platform="darwin"] .workspace-brand { app-region: drag; -webkit-app-region: drag; }
+.workspace-shell[data-desktop-platform="darwin"] .workspace-brand > * { app-region: no-drag; -webkit-app-region: no-drag; }
 .workspace-shell[data-desktop-platform="darwin"] .thread-header { app-region: drag; -webkit-app-region: drag; }
 .workspace-shell[data-desktop-platform="darwin"] .thread-header :is(button, input, summary) { app-region: no-drag; -webkit-app-region: no-drag; }
 .workspace-shell:not([data-mode="work"])[data-chat-open="true"] { grid-template-columns: var(--thread-rail-width, 272px) minmax(420px, 1fr); }
@@ -70,9 +75,7 @@
 .workspace-mode-copy strong { overflow: hidden; color: inherit; font-size: 12px; font-weight: 570; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-mode-badge { display: inline-flex; flex: none; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; font: 600 10px/1 var(--sans, inherit); font-variant-numeric: tabular-nums; }
 .workspace-mode-badge[data-tone="attention"] { background: var(--amber-ink, #b45309); color: #fff; }
-.workspace-mode-badge[data-tone="active"] { min-width: 7px; width: 7px; height: 7px; padding: 0; background: var(--green, #16a34a); animation: workspace-mode-pulse 1.8s ease-in-out infinite; }
-@keyframes workspace-mode-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-@media (prefers-reduced-motion: reduce) { .workspace-mode-badge[data-tone="active"] { animation: none; } }
+.workspace-mode-badge[data-tone="active"] { min-width: 7px; width: 7px; height: 7px; padding: 0; background: var(--green, #16a34a); }
 .workspace-rail-tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin-bottom: 12px; }
 .workspace-rail-tools[data-new-thread="true"] { grid-template-columns: minmax(0, 1fr) 34px; }
 .workspace-rail-tools .thread-search { min-width: 0; margin: 0; background: color-mix(in srgb, var(--n-panel) 58%, transparent); }
@@ -140,6 +143,9 @@
 .product-palette-pill > span { display: grid; min-width: 0; gap: 1px; text-align: left; }
 .mode-rail-body section .product-palette-pill > span strong { max-width: 132px; font-size: 12px; font-weight: 600; }
 .mode-rail-body section .product-palette-pill > span small { display: block; overflow: hidden; color: var(--n-ink-4); font: 10px/1.2 var(--mono); text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+/* An unusable capability says why in the pill. A bare UNAVAILABLE with the reason buried in a native
+   tooltip is a dead end the founder cannot act on. */
+.mode-rail-body section .product-palette-pill > span .product-palette-pill-reason { display: block; max-width: 148px; color: var(--n-ink-4); font: italic 10px/1.25 var(--sans); white-space: normal; }
 .product-palette-pill > .crew-face { border: 0; }
 .product-capability-palette .capability-logo { display: grid; flex: none; place-items: center; padding: 4px; border: 1px solid var(--n-line-2); border-radius: 50%; background: var(--n-panel); color: var(--n-ink-2); }
 .product-capability-palette .capability-logo--exa { padding: 3px; background: #fff; color: #1840ed; }

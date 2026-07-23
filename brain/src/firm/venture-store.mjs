@@ -54,6 +54,10 @@ export const VENTURE_COLLECTIONS = Object.freeze([
   "grants",
   "observationContracts",
   "receipts",
+  "journeyImports",
+  "journeyMappingProposals",
+  "journeyObservations",
+  "journeyReceipts",
   // Law 12 — saved live views + snapshots (a WAY OF LOOKING at the venture, never a copy of it). Each
   // view record's `.id` IS its storage key, so importVenture (storageKeyFor) round-trips it unchanged.
   "views",
@@ -210,6 +214,12 @@ export function exportVenture(ventureId, options = {}) {
   if (!manifest) throw new Error(`No such venture: ${ventureId}`);
   const documents = {};
   for (const collection of VENTURE_COLLECTIONS) {
+    // Journey imports are deliberately transient: their raw 0600 staging file does not travel, so
+    // exporting its short-lived metadata would create an unusable attachment on the destination.
+    if (collection === "journeyImports") {
+      documents[collection] = [];
+      continue;
+    }
     const docs = venturePersistence(options, ventureId).list(collection);
     documents[collection] = ["productChanges", "codeWorkspaces"].includes(collection) ? docs.map(portableProductChange) : docs;
   }

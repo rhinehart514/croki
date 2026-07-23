@@ -67,14 +67,14 @@ export const pricingLines = [
     number: "01",
     icon: Code2,
     title: "The software",
-    body: "Clone the source and run the current alpha. There is no Drover license or seat fee today.",
-    detail: "$0 to Drover",
+    body: "Clone the source and run the current alpha. There is no Croki license or seat fee today.",
+    detail: "$0 to Croki",
   },
   {
     number: "02",
     icon: TerminalSquare,
     title: "Your machine",
-    body: "Drover's verified alpha path is the local Electron desktop app on Apple-silicon macOS. Your product and working state stay local.",
+    body: "Croki's verified alpha path is the local Electron desktop app on Apple-silicon macOS. Your product and working state stay local.",
     detail: "You host it",
   },
   {
@@ -88,22 +88,22 @@ export const pricingLines = [
 
 export const faqs = [
   {
-    question: "What is Drover, exactly?",
+    question: "What is Croki, exactly?",
     answer:
-      "Drover is a Product and GTM Development Environment for founders building with agents. Work is the direct Claude/Codex environment; Product / GTM is the living venture model. Product releases are one outward-action kind, not a separate workspace.",
+      "Croki is a Product and GTM Development Environment for founders building with agents. Work is the direct Claude/Codex environment; Product / GTM is the living venture model. Product releases are one outward-action kind, not a separate workspace.",
   },
   {
     question: "Do I need Claude or Codex to start?",
     answer:
-      "Drover's durable venture model and repository truth are local. Connect Codex or Claude Code when you want founder-directed research, design, implementation, comparison, or verification.",
+      "Croki's durable venture model and repository truth are local. Connect Codex or Claude Code when you want founder-directed research, design, implementation, comparison, or verification.",
   },
   {
     question: "What does local-first mean here?",
     answer:
-      "Drover runs on your machine and keeps canonical venture state there. It binds to your local product repository and uses the model subscription you already have.",
+      "Croki runs on your machine and keeps canonical venture state there. It binds to your local product repository and uses the model subscription you already have.",
   },
   {
-    question: "Can Drover keep work moving?",
+    question: "Can Croki keep work moving?",
     answer:
       "A founder direction can grant durable, revocable scope for safe inward work and relevant evidence returns. Exact sends, publishes, deploys, spend, destructive actions, and Product-truth promotion remain founder-held.",
   },

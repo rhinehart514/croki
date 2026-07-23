@@ -22,8 +22,8 @@ test("shutdown closes the HTTP listener once and is safe to call repeatedly", as
   const response = await fetch(`http://127.0.0.1:${server.address().port}/api/health`);
   const health = await response.json();
   assert.equal(response.headers.get("cache-control"), "no-store");
-  assert.equal(response.headers.get("x-drover-server-instance"), health.instanceId);
-  assert.ok(Number.isFinite(Date.parse(response.headers.get("x-drover-responded-at"))));
+  assert.equal(response.headers.get("x-croki-server-instance"), health.instanceId);
+  assert.ok(Number.isFinite(Date.parse(response.headers.get("x-croki-responded-at"))));
   assert.ok(Number.isFinite(Date.parse(health.now)));
 
   const first = shutdownServer();
@@ -56,7 +56,7 @@ test("the executable exits cleanly after SIGTERM", async () => {
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`server did not start:\n${output}`)), 5_000);
     child.stdout.on("data", () => {
-      if (!output.includes("Drover running at")) return;
+      if (!output.includes("Croki running at")) return;
       clearTimeout(timeout);
       resolve();
     });

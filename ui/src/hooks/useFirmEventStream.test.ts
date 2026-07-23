@@ -55,7 +55,7 @@ describe("useFirmEventStream", () => {
 
     const first = vi.fn();
     const second = vi.fn();
-    const { rerender } = renderHook(({ cb }) => useFirmEventStream("v1", cb), {
+    const { rerender, unmount } = renderHook(({ cb }) => useFirmEventStream("v1", cb), {
       initialProps: { cb: first },
     });
     expect(subscribeMock).toHaveBeenCalledTimes(1);
@@ -66,5 +66,44 @@ describe("useFirmEventStream", () => {
     act(() => emit({ ventureId: "v1", kind: "lens", at: "now" }));
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  it("shares one venture connection and cleans up consumers independently", async () => {
+    let emit: (event: FirmStreamEvent) => void = () => {};
+    let setState: (state: "open" | "closed") => void = () => {};
+    const unsubscribe = vi.fn();
+    subscribeMock.mockImplementation((_ventureId, onEvent, onStateChange) => {
+      emit = onEvent;
+      setState = onStateChange!;
+      return unsubscribe;
+    });
+
+    const first = vi.fn();
+    const second = vi.fn();
+    const firstHook = renderHook(() => useFirmEventStream("v1", first));
+    const secondHook = renderHook(() => useFirmEventStream("v1", second));
+
+    expect(subscribeMock).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+    act(() => setState("open"));
+    expect(firstHook.result.current.streaming).toBe(true);
+    expect(secondHook.result.current.streaming).toBe(true);
+
+    act(() => emit({ ventureId: "v1", kind: "timeline", at: "now" }));
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+
+    firstHook.unmount();
+    expect(unsubscribe).not.toHaveBeenCalled();
+    act(() => setState("closed"));
+    expect(secondHook.result.current.streaming).toBe(false);
+
+    act(() => emit({ ventureId: "v1", kind: "drive", at: "later" }));
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(2);
+
+    secondHook.unmount();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });

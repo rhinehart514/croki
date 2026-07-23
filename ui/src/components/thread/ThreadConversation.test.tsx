@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThreadTimeline, WorkIndexItem } from "@/api";
 import { ThreadConversation } from "./ThreadConversation";
@@ -47,8 +47,10 @@ function props(currentTimeline: ThreadTimeline, onWorkRouted: (ref: string) => v
     contextKind: "product-gtm" as const, item, timeline: currentTimeline, lens: null,
     connection: { phase: "current" as const, message: null, lastCurrentAt: null },
     loading: false, error: null, draft: false, draftSession: 1,
+    modelChoice: { runtime: "codex", model: "gpt-5.6-sol", effort: "high" as const },
     initialScrollTop: null, onScrollChange: vi.fn(), onOpenVisual: vi.fn(), onOpenThread: vi.fn(),
-    onTogglePin: vi.fn(), onRename: vi.fn(), onDelete: vi.fn(), onDriven: vi.fn(), onWorkRouted,
+    onTogglePin: vi.fn(), onRename: vi.fn(), onDelete: vi.fn(), onDriven: vi.fn(),
+    onModelChoice: vi.fn(), onWorkRouted,
   };
 }
 
@@ -76,5 +78,101 @@ describe("ThreadConversation contextual work handoff", () => {
 
     await waitFor(() => expect(composerProps.onSubmitStart).toBeTypeOf("function"));
     expect(onWorkRouted).not.toHaveBeenCalled();
+  });
+
+  it("accepts the exact Work Thread but routes only native new-direction material", async () => {
+    const onThreadAccepted = vi.fn();
+    const onWorkRouted = vi.fn();
+    render(<ThreadConversation {...props(timeline([]), onWorkRouted)} onThreadAccepted={onThreadAccepted} />);
+
+    await act(async () => {
+      (composerProps.onSubmitStart as (content: string) => void)("What does this page prove?");
+      (composerProps.onSubmitAccepted as (content: string, result: {
+        act: "answer";
+        threadRef: string;
+        messageId: string;
+      }) => void)("What does this page prove?", {
+        act: "answer",
+        threadRef: "thread:product-answer",
+        messageId: "message:product-answer",
+      });
+    });
+    expect(onThreadAccepted).toHaveBeenCalledWith("thread:product-answer");
+    expect(onWorkRouted).not.toHaveBeenCalled();
+
+    await act(async () => {
+      (composerProps.onSubmitAccepted as (content: string, result: {
+        act: "new-direction";
+        threadRef: string;
+        messageId: string;
+      }) => void)("Implement this page", {
+        act: "new-direction",
+        threadRef: "thread:product-build",
+        messageId: "message:product-build",
+      });
+    });
+    expect(onWorkRouted).toHaveBeenCalledWith("thread:product-build");
+  });
+});
+
+describe("ThreadConversation founder-turn continuity", () => {
+  beforeEach(() => { composerProps = {}; });
+
+  it("rebinds the immediate draft turn to the exact accepted Thread until its durable message arrives", async () => {
+    const onThreadAccepted = vi.fn();
+    const message = "Implement the fast project switch";
+    const draftProps = {
+      ...props(timeline([]), vi.fn()),
+      surface: "work" as const,
+      item: null,
+      timeline: null,
+      draft: true,
+      loading: false,
+      onThreadAccepted,
+    };
+    const view = render(<ThreadConversation {...draftProps} />);
+
+    await act(async () => {
+      (composerProps.onSubmitStart as (content: string) => void)(message);
+    });
+    expect(view.getByText(message)).toBeInTheDocument();
+
+    await act(async () => {
+      (composerProps.onSubmitAccepted as (content: string, result: {
+        act: "new-direction";
+        threadRef: string;
+        messageId: string;
+      }) => void)(message, {
+        act: "new-direction",
+        threadRef: "thread:new",
+        messageId: "message:new",
+      });
+    });
+    expect(onThreadAccepted).toHaveBeenCalledWith("thread:new");
+
+    view.rerender(<ThreadConversation
+      {...draftProps}
+      item={{ ...item, threadRef: "thread:new" }}
+      draft={false}
+      loading
+    />);
+    expect(view.getByText(message)).toBeInTheDocument();
+
+    view.rerender(<ThreadConversation
+      {...draftProps}
+      item={{ ...item, threadRef: "thread:new" }}
+      timeline={timeline([{
+        kind: "message",
+        id: "message:new",
+        ref: "conversation:message:new",
+        at: null,
+        role: "founder",
+        messageKind: "message",
+        content: message,
+        changes: null,
+      }])}
+      draft={false}
+    />);
+    expect(view.queryByText(message)).not.toBeInTheDocument();
   });
 });

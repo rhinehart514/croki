@@ -72,7 +72,7 @@ function recordVentureWorkingTheory({
 }) {
   return {
     name: "record_working_theory",
-    description: "Record or supersede Drover's provisional, source-bearing current read. Each operation's `op` is one of upsert-subject, remove-subject, upsert-relationship, remove-relationship. This cannot create durable architecture, campaigns, sends, deploys, or spend.",
+    description: "Record or supersede Croki's provisional, source-bearing current read. Each operation's `op` is one of upsert-subject, remove-subject, upsert-relationship, remove-relationship. This cannot create durable architecture, campaigns, sends, deploys, or spend.",
     input_schema: {
       type: "object",
       properties: {

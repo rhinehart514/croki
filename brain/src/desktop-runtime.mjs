@@ -1,7 +1,10 @@
 import { Readable } from "node:stream";
 import { dispatchRequest } from "./request-dispatcher.mjs";
+import { abortAllActiveDrives, listActiveDrives } from "./firm/active-drives.mjs";
+import { driveSnapshot, subscribeDriveDeltas } from "./firm/drive-stream.mjs";
 import { recoverStaleBuilds } from "./feature-builder.mjs";
-import { recoverInterruptedCodingWorkspaces } from "./firm/code-workspace.mjs";
+import { reclaimCommittedCodingWorktrees, recoverInterruptedCodingWorkspaces } from "./firm/code-workspace.mjs";
+import { cleanupExpiredJourneyImports } from "./firm/journey-import.mjs";
 import { subscribeFirmEvents } from "./firm/firm-events.mjs";
 import { listVentures } from "./firm/venture-store.mjs";
 import { restartableWorkScopes } from "./firm/work-scopes.mjs";
@@ -73,9 +76,34 @@ export function subscribeToVenture(ventureId, listener) {
   return subscribeFirmEvents(ventureId, listener);
 }
 
+// The desktop half of the drive delta stream. The shipped surface has no HTTP port, so the SSE route
+// (handleDriveDeltaStream) is unreachable from Electron; without this the desktop transcript would move
+// only on durable events while the browser harness streamed tokens — the product surface strictly worse
+// than the test surface. This carries the same frames in the same order over IPC.
+//
+// Venture isolation is enforced exactly as the route enforces it: the drive must be live in the venture
+// the caller named, so another venture's drive id (and a settled one) is refused rather than streamed.
+// The listener receives the same { frame } union the SSE client parses, starting with one snapshot.
+export function subscribeToDriveStream(ventureId, driveId, listener) {
+  if (!listActiveDrives(ventureId).some((drive) => drive.id === driveId)) {
+    throw Object.assign(new Error(`No such active drive in this venture: ${driveId}`), { status: 404 });
+  }
+  listener({ frame: "snapshot", snapshot: driveSnapshot(driveId) });
+  return subscribeDriveDeltas(driveId, (delta) => listener({ frame: "delta", delta }));
+}
+
+// The desktop shell's graceful-quit handshake: stop live provider work before Electron exits.
+// Persistence in this brain is synchronous per mutation, so aborting the drives is the whole
+// teardown; durable work records remain for recoverDesktopWork on the next launch.
+export async function shutdownDesktopWork() {
+  return { abortedDrives: abortAllActiveDrives() };
+}
+
 export async function recoverDesktopWork() {
+  const expiredJourneyImports = cleanupExpiredJourneyImports();
   const recoveredBuilds = recoverStaleBuilds();
   const recoveredWorkspaces = await recoverInterruptedCodingWorkspaces();
+  const reclaimedWorktrees = reclaimCommittedCodingWorktrees();
   const authorizedScopes = listVentures().flatMap((venture) => restartableWorkScopes(venture.id).map((scope) => ({
     ventureId: venture.id,
     scopeId: scope.id,
@@ -85,5 +113,5 @@ export async function recoverDesktopWork() {
     canResumeAutomatically: Boolean(scope.spendPolicyRef),
     pauseReason: scope.spendPolicyRef ? null : "An exact spend policy is required before provider work resumes.",
   })));
-  return { recoveredBuilds, recoveredWorkspaces, authorizedScopes };
+  return { recoveredBuilds, recoveredWorkspaces, reclaimedWorktrees, authorizedScopes, expiredJourneyImports };
 }

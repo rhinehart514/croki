@@ -14,6 +14,8 @@ async function seedOutwardActionFixture({ root }) {
   fs.mkdirSync(repository, { recursive: true });
   fs.writeFileSync(path.join(repository, "package.json"), JSON.stringify({ scripts: { deploy: "node deploy.mjs" } }, null, 2));
   fs.writeFileSync(path.join(repository, "deploy.mjs"), "import fs from 'node:fs'; fs.writeFileSync('deployed.json', JSON.stringify({ deployed: true }));\n");
+  fs.mkdirSync(path.join(repository, "app"), { recursive: true });
+  fs.writeFileSync(path.join(repository, "app/page.tsx"), "export default function Page() { return <main><h1>Dogfood preview</h1></main>; }\n");
   const fixture = createGeneratedMapsFixture({ root, repository });
   const preparedMaterial = prepareOutwardMaterial({ ventureId: fixture.venture.id, kind: "deploy", preparedMaterial: { destination: "Dogfood preview" } }, { root });
   const action = prepareOutwardAction({
@@ -41,6 +43,22 @@ test("Product / GTM executes one exact deploy and grants only its bounded return
   try {
     const { client } = chrome;
     assert.equal(await client.evaluate(`(() => { const button=[...document.querySelectorAll('.workspace-mode-nav button')].find((entry)=>entry.textContent.includes('Product / GTM')); button?.click(); return Boolean(button); })()`), true);
+    await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'product-walk'`, "Product / GTM did not open on the Product walk");
+    assert.equal(await client.evaluate(`(() => {
+      const input = document.querySelector('.workspace-rail input[type="search"]');
+      if (!input) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, 'Project-drop invitation v1');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`), true, "the Product / GTM rail search was unavailable");
+    await waitForDom(client, `[...document.querySelectorAll('.product-rail-body section button strong')].some((entry) => entry.textContent.trim() === 'Project-drop invitation v1')`, "the deploy's Product dependency was not searchable");
+    assert.equal(await client.evaluate(`(() => {
+      const button = [...document.querySelectorAll('.product-rail-body section button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === 'Project-drop invitation v1');
+      button?.click();
+      return Boolean(button);
+    })()`), true, "the deploy's Product dependency could not be selected");
+    await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'consequence-trace'`, "the deploy did not open in its Product consequence trace");
     await waitForDom(client, `[...document.querySelectorAll('.product-gtm-node strong')].some((entry) => entry.textContent.includes('Dogfood preview'))`, "the exact dogfood deploy did not reach Product / GTM");
     assert.equal(await client.evaluate(`(() => { const node=[...document.querySelectorAll('.product-gtm-node')].find((entry)=>entry.querySelector('strong')?.textContent.includes('Dogfood preview')); node?.click(); return Boolean(node); })()`), true);
     await waitForDom(client, `/npm run deploy/.test(document.querySelector('.product-gtm-outward-review')?.textContent || '')`, "the exact deploy command did not expand in place");
@@ -56,7 +74,7 @@ test("Product / GTM executes one exact deploy and grants only its bounded return
 
     assert.equal(await client.evaluate(`(() => { const button=[...document.querySelectorAll('.product-gtm-outward-review button')].find((entry)=>entry.textContent.includes('Watch for 24h')); button?.click(); return Boolean(button && !button.disabled); })()`), true);
     try {
-      await waitForDom(client, `[...document.querySelectorAll('.product-gtm-outward-review button')].some((entry)=>entry.textContent.includes('Check exact return'))`, "the bounded return authority was not granted");
+      await waitForDom(client, `[...document.querySelectorAll('.product-gtm-outward-review button')].some((entry)=>entry.textContent.includes('Check for a return'))`, "the bounded return authority was not granted");
     } catch (error) {
       const state = await client.evaluate(`(async () => { const movement = await fetch('/api/ventures/${drover.fixture.venture.id}/market-movement').then((response) => response.json()); return { action: movement.marketMovement.actions.find((entry) => entry.id === ${JSON.stringify(drover.fixture.outwardActionId)}), review: document.querySelector('.product-gtm-outward-review')?.textContent || '', body: document.body.textContent?.replace(/\\s+/g, ' ').slice(0, 1000) || '', resources: performance.getEntriesByType('resource').filter((entry) => entry.name.includes('outward-actions')).slice(-10).map((entry) => ({ name: entry.name, status: entry.responseStatus })) }; })()`);
       throw new Error(`${error.message}: ${JSON.stringify(state)}`);

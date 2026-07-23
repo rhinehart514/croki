@@ -1,7 +1,7 @@
 import type { FirmConfiguration, FirmConversationMessage, FirmPlacement } from "@/types";
 import type { FirmModelBranch, FirmModelBranchProjection, FirmModelMergeReceipt, FirmSemanticModel, FirmWorkScope, MarketMovementIndex, OutwardActionReceipt, OutwardObservation, OutwardReturnEvidence } from "@/types";
 import { finishReturnDecisionTimer, recordUxMetric } from "@/lib/ux-metrics";
-import { get, guardedGet, guardedPost, guardedPut } from "./transport";
+import { get, guardedDelete, guardedGet, guardedPost, guardedPut } from "./transport";
 import type { FirmVenture } from "./work";
 export const getCurrentModel = (ventureId: string) =>
   get<{ model: FirmSemanticModel }>(`/api/ventures/${encodeURIComponent(ventureId)}/model`);
@@ -39,6 +39,141 @@ export const revokeWorkScope = (ventureId: string, scopeId: string, reason: stri
 
 export const getMarketMovement = (ventureId: string) =>
   get<{ marketMovement: MarketMovementIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/market-movement`);
+
+export type JourneyInputKind = "event-rows" | "aggregate-transitions";
+export type JourneyFieldMapping =
+  | { sequenceKey: string; timestamp: string; route: string; eventName?: string }
+  | { from: string; to: string; count: string };
+
+export type JourneyImportProfile = {
+  importRef: string;
+  name: string;
+  mediaType: string;
+  byteSize: number;
+  digest: string;
+  valid: boolean;
+  format: "json" | "jsonl" | "csv";
+  rowCount: number;
+  columns: Array<{ name: string; sensitive: boolean }>;
+  inferredMapping: { inputKind: JourneyInputKind | null; fields: Record<string, string | null> };
+  routes: Array<{
+    token: string;
+    count: number;
+    shape?: string;
+    match: { pageRef: string; pageName: string; basis: "exact-route" } | null;
+  }>;
+  pageModelRevision: number;
+  pageCandidates: Array<{ pageRef: string; name: string; route: string }>;
+  issues: Array<{ code: string; message: string }>;
+};
+
+export type JourneyMappingProposal = {
+  inputKind: JourneyInputKind;
+  fields: JourneyFieldMapping;
+  routeMappings?: Record<string, string>;
+  timezone?: string;
+  sourceRef?: string;
+};
+
+export type JourneyImportPreview = {
+  importRef: string;
+  inputKind: JourneyInputKind;
+  pageModelRevision: number;
+  source: { name: string; mediaType: string; byteSize: number; digest: string };
+  mapping: JourneyMappingProposal;
+  rejectedRows: { count: number; reasons: Array<{ reason: string; count: number }> };
+  window: { from: string; to: string; timezone: string } | null;
+  pageCounts: Array<{ pageRef: string; count: number }>;
+  transitions: Array<{ fromPageRef: string; toPageRef: string; count: number }>;
+  dropOffs: Array<{ pageRef: string; count: number }>;
+  unmatchedRoutes: Array<{ route: string; count: number }>;
+};
+
+export type JourneyObservationSnapshot = {
+  id: string;
+  ventureId: string;
+  receiptRef: string;
+  sourceRef: string;
+  window: { from: string; to: string; timezone: string };
+  pageCounts: Array<{ pageRef: string; count: number }>;
+  transitions: Array<{ fromPageRef: string; toPageRef: string; count: number }>;
+  dropOffs: Array<{ pageRef: string; count: number }>;
+  unmatchedRoutes: Array<{ route: string; count: number }>;
+  createdAt: string;
+};
+
+export type JourneyImportReceipt = {
+  id: string;
+  ventureId: string;
+  importRef: string;
+  sourceRef: string;
+  file: { name: string; mediaType: string; byteSize: number; digest: string };
+  inputKind: JourneyInputKind;
+  rowCount: number;
+  rejectedRows: { count: number; reasons: Array<{ reason: string; count: number }> };
+  fieldMapping: JourneyFieldMapping;
+  routeToPageMapping: Record<string, string>;
+  sourceWindow: { from: string; to: string; timezone: string };
+  pageModelRevision: number;
+  threadRef: string | null;
+  messageRef: string | null;
+  importedBy: { authority: "founder"; id: string };
+  adoptedAt: string;
+};
+
+export type JourneyMappingProposalRecord = {
+  id: string;
+  ventureId: string;
+  importRef: string;
+  revision: number;
+  status: "proposed";
+  mapping: JourneyMappingProposal;
+  pageModelRevision: number;
+  preview: {
+    window: { from: string; to: string; timezone: string };
+    pageCounts: Array<{ pageRef: string; count: number }>;
+    transitions: Array<{ fromPageRef: string; toPageRef: string; count: number }>;
+    dropOffs: Array<{ pageRef: string; count: number }>;
+    unmatchedRoutes: Array<{ route: string; count: number }>;
+    rejectedRows: { count: number; reasons: Array<{ reason: string; count: number }> };
+  };
+  threadRef: string | null;
+  messageRef: string | null;
+  proposedBy: { authority: "agent"; id: string };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const stageJourneyImport = (ventureId: string, body: { name: string; mediaType?: string; data: string }) =>
+  guardedPost<{ import: JourneyImportProfile }>(`/api/ventures/${encodeURIComponent(ventureId)}/journey-imports`, body);
+
+export const previewJourneyImport = (ventureId: string, importRef: string, mapping: JourneyMappingProposal) =>
+  guardedPost<{ preview: JourneyImportPreview }>(`/api/ventures/${encodeURIComponent(ventureId)}/journey-imports/${encodeURIComponent(importRef)}/preview`, mapping);
+
+export const adoptJourneyImport = (ventureId: string, importRef: string, mapping: JourneyMappingProposal, body: {
+  expectedPageModelRevision: number;
+  threadRef?: string | null;
+  messageRef?: string | null;
+  sourceRef?: string;
+}) => guardedPost<{ snapshot: JourneyObservationSnapshot; receipt: JourneyImportReceipt }>(
+  `/api/ventures/${encodeURIComponent(ventureId)}/journey-imports/${encodeURIComponent(importRef)}/adopt`,
+  { mapping, ...body },
+);
+
+export const deleteJourneyImport = (ventureId: string, importRef: string) =>
+  guardedDelete<{ deleted: true }>(`/api/ventures/${encodeURIComponent(ventureId)}/journey-imports/${encodeURIComponent(importRef)}`);
+
+export const getJourneyObservations = (ventureId: string) =>
+  get<{ observations: JourneyObservationSnapshot[]; receipts: JourneyImportReceipt[] }>(
+    `/api/ventures/${encodeURIComponent(ventureId)}/journey-observations`,
+  );
+
+export const getJourneyMappingProposals = (ventureId: string, importRef?: string) => {
+  const query = importRef ? `?importRef=${encodeURIComponent(importRef)}` : "";
+  return get<{ proposals: JourneyMappingProposalRecord[] }>(
+    `/api/ventures/${encodeURIComponent(ventureId)}/journey-mapping-proposals${query}`,
+  );
+};
 
 export const executeOutwardAction = (ventureId: string, actionId: string) =>
   guardedPost<{ outwardAction: OutwardActionReceipt }>(`/api/ventures/${encodeURIComponent(ventureId)}/outward-actions/${encodeURIComponent(actionId)}/execute`, {});
@@ -83,7 +218,7 @@ export type ComposerImageInput = { name: string; mediaType: string; data: string
 
 export const replyInConversation = (
   ventureId: string,
-  body: { message: string; images?: ComposerImageInput[]; threadRef?: string | null; betId?: string | null; workRef?: string | null; modelBranchRef?: string | null; subjectRefs?: string[]; teammateRefs?: string[]; mode?: "work" | "context"; runtime?: string | null; model?: string | null; effort?: string | null; productGtmView?: boolean; workflowSketch?: boolean; artifactSection?: { title: string; index: number }; workflowStep?: { id: string; label: string; position: number } },
+  body: { message: string; images?: ComposerImageInput[]; journeyImportRef?: string; threadRef?: string | null; betId?: string | null; workRef?: string | null; modelBranchRef?: string | null; subjectRefs?: string[]; teammateRefs?: string[]; mode?: "work" | "context"; runtime?: string | null; model?: string | null; effort?: string | null; productGtmView?: boolean; workflowSketch?: boolean; artifactSection?: { title: string; index: number }; workflowStep?: { id: string; label: string; position: number } },
 ) => guardedPost<ConversationReplyResult>(
   `/api/ventures/${encodeURIComponent(ventureId)}/conversation/reply`,
   body,
@@ -94,13 +229,7 @@ export const replyInConversation = (
 // ({ ventureId, kind, at }); a listener re-reads the relevant surface through the existing routes. The
 // caller keeps the 900 ms poll as the reconnect fallback (see useFirmEventStream). Returns an
 // unsubscribe function that closes the connection.
-export type FirmStreamEvent = {
-  ventureId: string;
-  kind: "lens" | "conversation" | "drive" | "wall" | "outcome" | "timeline" | "system" | "release";
-  at: string;
-  betId?: string;
-  threadRef?: string;
-};
+export type FirmStreamEvent = DroverVentureStreamEvent;
 
 export function subscribeVentureEvents(
   ventureId: string,
