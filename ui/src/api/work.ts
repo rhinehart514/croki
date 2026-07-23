@@ -155,6 +155,9 @@ export type WorkIndex = {
 export const getWorkIndex = (ventureId: string, query = "") =>
   get<{ workIndex: WorkIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/work-index${query ? `?q=${encodeURIComponent(query)}` : ""}`);
 
+export const getRepositoryFiles = (ventureId: string) =>
+  get<{ files: string[] }>(`/api/ventures/${encodeURIComponent(ventureId)}/repository-files`);
+
 export type SystemIndexObject = {
   id: string; objectRef: string; name: string; statement: string; type: string;
   territory: "product" | "gtm" | null; assertion: "tentative" | "founder-asserted";

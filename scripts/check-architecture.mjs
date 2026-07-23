@@ -4,9 +4,16 @@ import path from "node:path";
 const repository = path.resolve(import.meta.dirname, "..");
 const forbidden = ["components/canvas", "components/stage", "@gtm-ide/design-system", "design-system/"];
 const failures = [];
-// Observed after the 2026-07-21 cleanup: 126 production Brain modules. Five files of headroom permit
-// feature-local extraction without allowing a new parallel framework to grow unnoticed.
-const BRAIN_MODULE_CEILING = 131;
+// Observed after the 2026-07-22 T3 polish cleanup: 133 production Brain modules. The one dead module
+// (firm/architecture-system-assembly.mjs) was deleted; the remaining growth over the prior 126 baseline
+// is legitimate feature-local extraction forced by the 500-line service limit — work-loop alone splits
+// into focused files because work-loop.mjs already sits at that limit. knip and reachability confirm no
+// other orphans. Headroom is intentionally spent to zero during the polish freeze: no new modules should
+// land now, so the next extraction must re-baseline this line consciously rather than drift past it.
+// 2026-07-22 re-baseline 133 → 134: firm/repository-files.mjs, the @-file composer reach — a bounded
+// read of what git already sees, adopted with its route, test, and composer wiring rather than folded
+// into an unrelated module. The capability pass that landed the same day added zero modules.
+const BRAIN_MODULE_CEILING = 134;
 
 function files(directory, pattern) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -23,7 +30,7 @@ for (const file of [...files(path.join(repository, "ui/src"), /\.(?:ts|tsx|css)$
 
 const brainFiles = files(path.join(repository, "brain/src"), /\.mjs$/).map((file) => path.resolve(file));
 if (brainFiles.length > BRAIN_MODULE_CEILING) {
-  failures.push(`Brain module ceiling exceeded: ${brainFiles.length} > ${BRAIN_MODULE_CEILING} (observed 126 + 5 headroom)`);
+  failures.push(`Brain module ceiling exceeded: ${brainFiles.length} > ${BRAIN_MODULE_CEILING} (polish-freeze baseline; re-baseline this line consciously if the new module is legitimate)`);
 }
 const brainSet = new Set(brainFiles);
 const graph = new Map(brainFiles.map((file) => [file, []]));

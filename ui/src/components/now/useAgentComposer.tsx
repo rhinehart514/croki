@@ -1,8 +1,33 @@
 import { useMemo, useState, type KeyboardEvent, type RefObject } from "react";
-import { Plus } from "lucide-react";
+import { FileCode, Plus } from "lucide-react";
 import type { FirmConfiguration, FirmConfiguredAgent } from "@/types";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { AgentCreateDialog } from "@/components/workspace/AgentCreateDialog";
+
+const MAX_FILE_MATCHES = 6;
+
+// Rank repo-relative paths against what the founder has typed after `@`: a basename that starts with the
+// needle beats one that merely contains it, so `@Work` surfaces WorkSurface.tsx before a deep path that
+// happens to include the word. Shorter paths win ties — the nearer file is usually the intended one.
+function fileMatchesFor(needle: string, files: string[]) {
+  if (!needle) return [];
+  const query = needle.toLowerCase();
+  return files
+    .map((path) => {
+      const lower = path.toLowerCase();
+      const base = lower.slice(lower.lastIndexOf("/") + 1);
+      const rank = base.startsWith(query) ? 0 : lower.startsWith(query) ? 1 : base.includes(query) ? 2 : lower.includes(query) ? 3 : 4;
+      return { path, rank };
+    })
+    .filter((entry) => entry.rank < 4)
+    .sort((left, right) => left.rank - right.rank || left.path.length - right.path.length || left.path.localeCompare(right.path))
+    .slice(0, MAX_FILE_MATCHES)
+    .map((entry) => entry.path);
+}
+
+function fileBasename(path: string) {
+  return path.slice(path.lastIndexOf("/") + 1);
+}
 
 type Trigger = { kind: "mention" | "command"; start: number; end: number; query: string; key: string };
 type Mention = { ref: string; token: string };
@@ -33,7 +58,7 @@ function mentionedAgentRefs(draft: string, agents: FirmConfiguredAgent[], mentio
   return [...new Set([...selected, ...typed])];
 }
 
-export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, configuration, readOnlyReason, onConfigurationChanged }: {
+export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, configuration, readOnlyReason, onConfigurationChanged, repositoryFiles = [] }: {
   ventureId: string;
   draft: string;
   setDraft: (value: string | ((current: string) => string)) => void;
@@ -41,6 +66,10 @@ export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, conf
   configuration: FirmConfiguration | null;
   readOnlyReason: string | null | undefined;
   onConfigurationChanged: () => void;
+  // Repo-relative paths the founder can scope with `@` in Work code mode. Empty everywhere else, so the
+  // `@` menu stays agent-only outside coding. Selecting one drops the literal path into the prompt — the
+  // coding agent reads it natively; Drover neither pins nor tracks it.
+  repositoryFiles?: string[];
 }) {
   const [caret, setCaret] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -61,7 +90,12 @@ export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, conf
     const needle = visibleTrigger.query.toLowerCase();
     return agents.filter((agent) => !needle || `${agent.name} ${agent.ref} ${agent.perspective ?? ""}`.toLowerCase().includes(needle)).slice(0, 6);
   }, [agents, visibleTrigger]);
-  const optionCount = matches.length + (visibleTrigger ? 1 : 0);
+  const fileMatches = useMemo(() => {
+    if (visibleTrigger?.kind !== "mention" || !repositoryFiles.length) return [];
+    return fileMatchesFor(visibleTrigger.query, repositoryFiles);
+  }, [repositoryFiles, visibleTrigger]);
+  const optionCount = matches.length + fileMatches.length + (visibleTrigger ? 1 : 0);
+  const createIndex = matches.length + fileMatches.length;
   const selectedIndex = Math.min(activeIndex, Math.max(optionCount - 1, 0));
 
   const restoreCaret = (position: number) => {
@@ -83,6 +117,19 @@ export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, conf
     setPendingTrigger(null);
     restoreCaret(next.indexOf(token, start) + token.length + 1);
   };
+  const insertFile = (path: string, at = visibleTrigger ?? pendingTrigger) => {
+    // Replace the `@query` region with the literal repo-relative path — plain prompt text the coding
+    // agent reads directly, not a tracked mention.
+    const start = at?.start ?? draft.length;
+    const end = at?.end ?? draft.length;
+    const prefix = draft.slice(0, start);
+    const suffix = draft.slice(end).replace(/^\s+/, "");
+    const next = `${prefix}${prefix && !/\s$/.test(prefix) ? " " : ""}${path} ${suffix}`;
+    setDraft(next);
+    setDismissedTrigger(null);
+    setPendingTrigger(null);
+    restoreCaret(next.indexOf(path, start) + path.length + 1);
+  };
   const openCreator = () => {
     if (!visibleTrigger || !activeConfiguration || readOnlyReason) return;
     setPendingTrigger(visibleTrigger);
@@ -91,6 +138,7 @@ export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, conf
   };
   const choose = (index: number) => {
     if (index < matches.length) insertAgent(matches[index]);
+    else if (index < createIndex) insertFile(fileMatches[index - matches.length]);
     else openCreator();
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -119,11 +167,17 @@ export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, conf
     setDismissedTrigger(null);
   };
 
-  const menu = visibleTrigger ? <div className="now-agent-menu" id="composer-agent-menu" role="listbox" aria-label={visibleTrigger.kind === "mention" ? "Mention an agent" : "Agent commands"}>
+  const menuLabel = visibleTrigger?.kind === "command"
+    ? "Agent commands"
+    : fileMatches.length ? "Mention an agent or file" : "Mention an agent";
+  const menu = visibleTrigger ? <div className="now-agent-menu" id="composer-agent-menu" role="listbox" aria-label={menuLabel}>
     {matches.map((agent, index) => <button type="button" role="option" aria-selected={selectedIndex === index} data-active={selectedIndex === index ? "true" : undefined} id={`composer-agent-${agent.ref}`} key={agent.ref} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(index)}>
       <CrewFace agentRef={agent.ref} size={26} /><span><strong>{agent.name}</strong><small>{agent.perspective ?? "Venture agent"}</small></span>
     </button>)}
-    <button type="button" role="option" aria-selected={selectedIndex === matches.length} data-active={selectedIndex === matches.length ? "true" : undefined} id="composer-agent-create" disabled={!activeConfiguration || Boolean(readOnlyReason)} onMouseDown={(event) => event.preventDefault()} onClick={openCreator}>
+    {fileMatches.map((path, index) => { const optionIndex = matches.length + index; return <button type="button" className="now-agent-menu-file" role="option" aria-selected={selectedIndex === optionIndex} data-active={selectedIndex === optionIndex ? "true" : undefined} id={`composer-file-${index}`} key={path} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(optionIndex)}>
+      <i><FileCode aria-hidden="true" /></i><span><strong>{fileBasename(path)}</strong><small>{path}</small></span><b>File</b>
+    </button>; })}
+    <button type="button" role="option" aria-selected={selectedIndex === createIndex} data-active={selectedIndex === createIndex ? "true" : undefined} id="composer-agent-create" disabled={!activeConfiguration || Boolean(readOnlyReason)} onMouseDown={(event) => event.preventDefault()} onClick={openCreator}>
       <i><Plus aria-hidden="true" /></i><span><strong>{visibleTrigger.kind === "command" ? "Create an agent" : visibleTrigger.query ? `Create “${visibleTrigger.query}”` : "Create an agent"}</strong><small>{visibleTrigger.kind === "command" ? "/agent · /add-agent" : "Add a venture specialist"}</small></span>
     </button>
   </div> : null;
@@ -154,7 +208,9 @@ export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, conf
       "aria-autocomplete": "list" as const,
       "aria-controls": "composer-agent-menu",
       "aria-expanded": true,
-      "aria-activedescendant": selectedIndex < matches.length ? `composer-agent-${matches[selectedIndex].ref}` : "composer-agent-create",
+      "aria-activedescendant": selectedIndex < matches.length
+        ? `composer-agent-${matches[selectedIndex].ref}`
+        : selectedIndex < createIndex ? `composer-file-${selectedIndex - matches.length}` : "composer-agent-create",
     } : { "aria-expanded": false },
   };
 }

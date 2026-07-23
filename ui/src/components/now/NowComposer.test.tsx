@@ -8,11 +8,18 @@ import { NowComposer } from "./NowComposer";
 const driveTeammate = vi.fn<(...args: unknown[]) => Promise<DriveTeammateResult>>();
 const replyInConversation = vi.fn<(...args: unknown[]) => Promise<ConversationReplyResult>>();
 const putFirmConfiguration = vi.fn();
+const stopActiveDrive = vi.fn();
 vi.mock("@/api", () => ({
   driveTeammate: (...args: unknown[]) => driveTeammate(...args),
   replyInConversation: (...args: unknown[]) => replyInConversation(...args),
   putFirmConfiguration: (...args: unknown[]) => putFirmConfiguration(...args),
+  stopActiveDrive: (...args: unknown[]) => stopActiveDrive(...args),
 }));
+
+const runningDrive = {
+  id: "drive-1", ventureId: "v1", teammateRef: "t1", betId: "b1", runtime: "codex",
+  startedAt: "2026-01-01T00:00:00Z", abortSupported: true, abortRequestedAt: null, activity: "Editing WorkSurface.tsx",
+} as const;
 
 const mara: FirmConfiguredAgent = {
   ref: "mara", name: "Mara", label: "Specialist", perspective: "Find the sharpest market proof.",
@@ -135,6 +142,48 @@ describe("NowComposer contextual routing", () => {
     await waitFor(() => expect(driveTeammate).toHaveBeenCalledWith("v1", {
       goal: "@Mara audit the onboarding proof", teammateRefs: ["mara"],
     }));
+  });
+
+  it("scopes with @ to a real repo file and drops the literal path into the prompt", async () => {
+    driveTeammate.mockResolvedValue(result({ handoff: handoff({ openedBetIds: ["b-file"] }) }));
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork variant="dock" submissionMode="work"
+      repositoryFiles={["ui/src/components/work-mode/WorkSurface.tsx", "ui/src/components/thread/ThreadMessage.tsx", "brain/src/firm/work-loop.mjs"]} />);
+    const field = screen.getByLabelText(/Say what you want/);
+    fireEvent.change(field, { target: { value: "fix @WorkSurf" } });
+    // The basename match is offered and named a File, never by icon alone.
+    const option = screen.getByRole("option", { name: /WorkSurface\.tsx/ });
+    expect(option).toHaveTextContent("File");
+    fireEvent.click(option);
+    // The literal repo-relative path lands in the prompt — no @, nothing tracked.
+    expect(field).toHaveValue("fix ui/src/components/work-mode/WorkSurface.tsx ");
+  });
+
+  it("requests an honest interrupt of the running drive and keeps the draft to steer with", async () => {
+    stopActiveDrive.mockResolvedValue({ drive: { ...runningDrive, abortRequestedAt: "2026-01-01T00:01:00Z" } });
+    const onDriven = vi.fn();
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: "b1", workRef: null, teammateRefs: [] }} scopeLabel={null} hasWork variant="dock" submissionMode="work" activeDrive={runningDrive} onDriven={onDriven} />);
+    const field = screen.getByLabelText(/Say what you want/);
+    fireEvent.change(field, { target: { value: "actually use the other endpoint" } });
+    // The live line reflects the drive's real reported activity, not invented prose.
+    expect(screen.getByText("Editing WorkSurface.tsx")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stop the current step" }));
+    await waitFor(() => expect(stopActiveDrive).toHaveBeenCalledWith("v1", "drive-1"));
+    expect(onDriven).toHaveBeenCalled();
+    // The correction the founder typed is preserved so they can send it the moment the step ends.
+    expect(field).toHaveValue("actually use the other endpoint");
+  });
+
+  it("shows no stop control for a drive the host cannot interrupt", () => {
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: "b1", workRef: null, teammateRefs: [] }} scopeLabel={null} hasWork variant="dock" submissionMode="work" activeDrive={{ ...runningDrive, abortSupported: false }} />);
+    expect(screen.queryByRole("button", { name: "Stop the current step" })).toBeNull();
+  });
+
+  it("keeps the @ menu agent-only when no repository files are supplied", async () => {
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork variant="dock" configuration={configuration} />);
+    const field = screen.getByLabelText(/Say what you want/);
+    fireEvent.change(field, { target: { value: "@Work" } });
+    expect(screen.getByRole("listbox")).toHaveAccessibleName("Mention an agent");
+    expect(screen.queryByText("File")).toBeNull();
   });
 
   it("opens the same creation form from /add-agent and inserts the new mention", async () => {
@@ -265,6 +314,39 @@ describe("NowComposer contextual routing", () => {
     await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", {
       message: "Wait seven days before taking the silence branch", betId: "bet-1", workRef: "workflow-one",
       threadRef: "thread:workflow", mode: "work", workflowSketch: true,
+    }));
+  });
+
+  it("carries the focused walkthrough step of a drafted play as the correction's exact subject", async () => {
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:play" } as ConversationReplyResult);
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} subjectRefs={["object:play-1"]} scopeLabel="Founder proof loop" hasWork variant="dock" submissionMode="conversation"
+      workflowStep={{ ref: "workflow:play-1:prepare", id: "prepare", label: "Prepare the story", position: 2, count: 5 }} onDriven={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Lead with the customer's own numbers" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    // The play arrives as the thread subject, the step's stable graph id rides alongside it, and the
+    // turn is a play revision (workflowSketch) — never a fabricated step object id.
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", {
+      message: "Lead with the customer's own numbers",
+      subjectRefs: ["object:play-1", "workflow:play-1:prepare"],
+      workflowStep: { id: "prepare", label: "Prepare the story", position: 2 },
+      mode: "context",
+      workflowSketch: true,
+    }));
+  });
+
+  it("keeps the focused step on a correction sent into the play's existing thread", async () => {
+    replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: "thread:play" } as ConversationReplyResult);
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: null, workRef: null, teammateRefs: [], threadRef: "thread:play" }} scopeLabel="Founder proof loop" hasWork variant="dock" submissionMode="conversation"
+      workflowStep={{ ref: "workflow:play-1:approve", id: "approve", label: "Approve the claim", position: 3, count: 5 }} onDriven={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "Gate this on the pricing page too" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
+    // An existing thread rejects subjectRefs at the route; the step still travels as structured context.
+    await waitFor(() => expect(replyInConversation).toHaveBeenCalledWith("v1", {
+      message: "Gate this on the pricing page too",
+      threadRef: "thread:play",
+      workflowStep: { id: "approve", label: "Approve the claim", position: 3 },
+      mode: "context",
+      workflowSketch: true,
     }));
   });
 

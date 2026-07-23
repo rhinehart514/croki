@@ -1,7 +1,7 @@
 // One plain-words ask starts real work; scope is an attachment rather than another mode.
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowRight, ArrowUp, LoaderCircle, Mic, PencilLine, X } from "lucide-react";
-import { driveTeammate, replyInConversation, type DriveTeammateResult } from "@/api";
+import { ArrowUp, LoaderCircle, Mic, PencilLine, Square, X } from "lucide-react";
+import { driveTeammate, replyInConversation, stopActiveDrive, type DriveTeammateResult, type FirmActiveDrive } from "@/api";
 import { useDirections } from "./useDirections";
 import { DirectionsTray } from "./DirectionsTray";
 import type { CanvasSelection } from "@/components/firm/directionTarget";
@@ -10,16 +10,12 @@ import { readDriveReceipt, readReplyReceipt, type DriveReceipt } from "./driveRe
 import { useScopedDraft } from "./useScopedDraft";
 import { useSpeechInput } from "./useSpeechInput";
 import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
+import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 import { ComposerImageInput } from "./ComposerImages";
 import { prepareComposerImages, type PendingComposerImage } from "./composerImageFiles";
 import { useAgentComposer } from "./useAgentComposer";
 import type { FirmConfiguration } from "@/types";
-const EMPTY_SUGGESTIONS = [
-  "Find the strongest next move",
-  "Find the first 20 customers",
-  "Sharpen the pitch",
-  "Audit the first-run experience",
-];
+import { NowComposerFooter } from "./NowComposerFooter";
 
 export function NowComposer({
   ventureId, ventureName, selection, scopeLabel, hasWork,
@@ -27,7 +23,7 @@ export function NowComposer({
   placeholder: placeholderOverride, submissionMode = "auto", onClearScope, onSubmitStart, onSubmitFailed,
   onDriven, onWorkRouted, onOpenResult, subjectRefs = [], runtimeOverride = null, modelOverride = null,
   effortOverride = null, composerControls = null, configuration = null, productGtmView = false, workflowSketch = false,
-  modelBranchRef = null, artifactSection = null, onClearArtifactSection,
+  modelBranchRef = null, artifactSection = null, onClearArtifactSection, workflowStep = null, repositoryFiles = [], activeDrive = null,
 }: {
   ventureId: string; ventureName: string; selection: CanvasSelection; scopeLabel: string | null; hasWork: boolean;
   variant?: "hero" | "dock"; readOnly?: boolean;
@@ -49,6 +45,15 @@ export function NowComposer({
   configuration?: FirmConfiguration | null;
   productGtmView?: boolean; workflowSketch?: boolean; modelBranchRef?: string | null;
   artifactSection?: ArtifactSectionFocus | null; onClearArtifactSection?: () => void;
+  // The drafted-play step the Product / GTM canvas has focused; a turn sent while it is set is a
+  // correction to that exact step, carried with the play's real ref plus the step's stable graph id.
+  workflowStep?: ProductGtmWalkthroughStep | null;
+  // Repo-relative paths for `@`-file scoping; supplied only in Work code mode.
+  repositoryFiles?: string[];
+  // The drive running on this exact Thread, if any. Its presence turns the composer's send affordance
+  // into a Stop that requests the running step end at its next safe boundary — the honest interrupt the
+  // brain supports, never a fake token-level kill.
+  activeDrive?: FirmActiveDrive | null;
 }) {
   const route = composerRoute(selection);
   const contextualDraftRef = !selection && subjectRefs.length ? `:subjects:${[...subjectRefs].sort().join("|")}` : "";
@@ -60,8 +65,9 @@ export function NowComposer({
   const [sentArtifactSectionKey, setSentArtifactSectionKey] = useState<string | null>(null);
   const [images, setImages] = useState<PendingComposerImage[]>([]);
   const [draggingImages, setDraggingImages] = useState(false);
+  const [interrupting, setInterrupting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const agentComposer = useAgentComposer({ ventureId, draft, setDraft, textareaRef, configuration, readOnlyReason, onConfigurationChanged: () => onDriven?.() });
+  const agentComposer = useAgentComposer({ ventureId, draft, setDraft, textareaRef, configuration, readOnlyReason, repositoryFiles, onConfigurationChanged: () => onDriven?.() });
   // Intent options the founder deliberately summons: candidate directions grounded in venture truth + open
   // work. Picking one loads it into the composer; the actual turn still goes to the chosen SDK model.
   const directions = useDirections({ ventureId, mode: submissionMode, threadRef: selection?.threadRef ?? null });
@@ -115,14 +121,15 @@ export function NowComposer({
           ...(selection?.workRef ? { workRef: selection.workRef } : {}),
           ...(modelBranchRef ? { modelBranchRef } : {}),
           ...(selection?.threadRef ? { threadRef: selection.threadRef } : {}),
-          ...(!selection?.threadRef && subjectRefs.length ? { subjectRefs } : {}),
+          ...(!selection?.threadRef && subjectRefs.length ? { subjectRefs: workflowStep ? [...new Set([...subjectRefs, workflowStep.ref])] : subjectRefs } : {}),
+          ...(workflowStep ? { workflowStep: { id: workflowStep.id, label: workflowStep.label, position: workflowStep.position } } : {}),
           ...(agentComposer.mentionedAgentRefs.length ? { teammateRefs } : {}),
           ...(submissionMode === "work" ? { mode: "work" as const } : {}),
           ...(submissionMode === "conversation" || submissionMode === "product-gtm" ? { mode: "context" as const } : {}),
           ...(submissionMode === "work" && runtimeOverride ? { runtime: runtimeOverride } : {}),
           ...(submissionMode === "work" && modelOverride ? { model: modelOverride } : {}),
           ...((submissionMode === "work" || submissionMode === "product-gtm") && effortOverride ? { effort: effortOverride } : {}),
-          ...(productGtmView ? { productGtmView: true } : workflowSketch ? { workflowSketch: true } : {}),
+          ...(workflowStep ? { workflowSketch: true } : productGtmView ? { productGtmView: true } : workflowSketch ? { workflowSketch: true } : {}),
           ...(artifactSection ? { artifactSection: { title: artifactSection.sectionTitle, index: artifactSection.sectionIndex } } : {}),
         });
         if (artifactSectionKey) setSentArtifactSectionKey(artifactSectionKey);
@@ -150,6 +157,21 @@ export function NowComposer({
       setError(cause instanceof Error ? cause.message : "Drover could not take that direction.");
     } finally { setBusy(false); }
   };
+
+  // Honest interrupt: ask the running drive to stop at its next safe boundary. The typed draft is left
+  // untouched, so the founder can send it as the corrected direction the moment the step ends.
+  const interrupt = async () => {
+    if (!activeDrive || interrupting || activeDrive.abortRequestedAt) return;
+    setInterrupting(true); setError(null);
+    try {
+      await stopActiveDrive(ventureId, activeDrive.id);
+      onDriven?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Drover could not stop the current step.");
+    } finally { setInterrupting(false); }
+  };
+  const stoppable = Boolean(activeDrive?.abortSupported);
+  const stopRequested = Boolean(activeDrive?.abortRequestedAt) || interrupting;
 
   const addImages = async (files: File[]) => {
     try { setImages(await prepareComposerImages(files, images)); setError(null); setReceipt(null); }
@@ -230,16 +252,23 @@ export function NowComposer({
             <button type="button" className="now-intent-orb" aria-label="Read my intent — suggest directions"
               onClick={() => directions.summon(draft)} disabled={readOnly || busy || directions.loading} />
             {speech.supported ? (
+              <button type="button" className="now-icon-btn" data-recording={speech.recording ? "true" : undefined}
+                aria-label={speech.recording ? "Stop dictation" : "Speak your direction"} aria-pressed={speech.recording}
+                onClick={speech.toggle} disabled={readOnly}>
+                <Mic aria-hidden="true" />
+              </button>
+            ) : null}
+            {stoppable ? (
               <button
                 type="button"
-                className="now-icon-btn"
-                data-recording={speech.recording ? "true" : undefined}
-                aria-label={speech.recording ? "Stop dictation" : "Speak your direction"}
-                aria-pressed={speech.recording}
-                onClick={speech.toggle}
-                disabled={readOnly}
+                className="now-composer-stop"
+                data-requested={stopRequested ? "true" : undefined}
+                aria-label={stopRequested ? "Stopping at the next safe point" : "Stop the current step"}
+                title={stopRequested ? "Stopping at the next safe point" : "Stop the current step; your draft is kept so you can steer"}
+                onClick={() => void interrupt()}
+                disabled={stopRequested}
               >
-                <Mic aria-hidden="true" />
+                {stopRequested ? <LoaderCircle className="now-composer-spinner" aria-hidden="true" /> : <Square aria-hidden="true" />}
               </button>
             ) : null}
             <button
@@ -256,43 +285,11 @@ export function NowComposer({
         {composerControls}
       </div>
 
-      <div className="now-composer-provenance" aria-hidden="true">
-        Drover chooses how to do the work. Nothing leaves without your decision.
-      </div>
-
-      {showChips ? (
-        <div className="now-composer-chips">
-          {EMPTY_SUGGESTIONS.map((intent) => (
-            <button key={intent} type="button" className="now-chip" onClick={() => void submit(intent)} disabled={readOnly}>
-              {intent}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="now-composer-feedback" aria-live="polite">
-        {speech.recording ? <span role="status">Listening…</span> : null}
-        {busy ? <span role="status">{submissionMode === "work" ? "Starting coding work…" : submissionMode === "product-gtm" ? "Agents are shaping the workflow…" : submissionMode === "conversation" || route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
-        {error ? <span role="alert">{error}</span> : null}
-        {readOnly && readOnlyReason && !error ? (
-          <span className="now-composer-held" role="status">{readOnlyReason}</span>
-        ) : null}
-      </div>
-
-      {receipt ? (
-        <div className="now-drive-receipt" data-waiting={receipt.waiting ? "true" : "false"} role="status">
-          <div className="now-drive-receipt-body">
-            <span className="now-drive-receipt-headline">{receipt.headline}</span>
-            {receipt.detail ? <span className="now-drive-receipt-detail">{receipt.detail}</span> : null}
-          </div>
-          {onOpenResult && receipt.targetBetId ? (
-            <button type="button" className="now-drive-receipt-open" onClick={() => onOpenResult(receipt.targetBetId)}>
-              {receipt.waiting ? "Make the decision" : "Open this direction"}
-              <ArrowRight aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      <NowComposerFooter
+        showChips={showChips} readOnly={readOnly} readOnlyReason={readOnlyReason} busy={busy} error={error}
+        recording={speech.recording} submissionMode={submissionMode} route={route} activeDrive={activeDrive}
+        stopRequested={stopRequested} receipt={receipt} onPickSuggestion={(intent) => void submit(intent)} onOpenResult={onOpenResult}
+      />
       {agentComposer.dialog}
     </section>
   );

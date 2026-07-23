@@ -28,6 +28,7 @@ import { fork } from "./bet.mjs";
 import { getSemanticModel } from "./semantic-model-store.mjs";
 import { requireActiveWorkScope } from "./work-scopes.mjs";
 import { persistImageAttachments } from "./image-attachments.mjs";
+import { listRepositoryFiles } from "./repository-files.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -76,6 +77,19 @@ export default async function handle({ req, res, url, deps = {} }) {
       authorizeFounderWriteForRequest(req, "Stopping current work");
       getFirmConfiguration(ventureId);
       json(res, 200, { drive: abortActiveDrive({ ventureId, driveId }) });
+    } catch (err) {
+      const status = err?.code === "venture_not_found" ? 404 : (Number.isInteger(err?.status) ? err.status : 400);
+      json(res, status, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  const filesMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/repository-files$/);
+  if (req.method === "GET" && filesMatch) {
+    const ventureId = decodeURIComponent(filesMatch[1]);
+    try {
+      getFirmConfiguration(ventureId);
+      json(res, 200, { files: listRepositoryFiles(ventureId) });
     } catch (err) {
       const status = err?.code === "venture_not_found" ? 404 : (Number.isInteger(err?.status) ? err.status : 400);
       json(res, status, { error: err instanceof Error ? err.message : String(err) });

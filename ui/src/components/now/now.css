@@ -311,6 +311,12 @@
 .now-agent-menu button > span { display: grid; min-width: 0; gap: 2px; }
 .now-agent-menu strong { overflow: hidden; font-size: 12px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .now-agent-menu small { overflow: hidden; color: var(--n-ink-4); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.now-agent-menu button.now-agent-menu-file { grid-template-columns: 30px minmax(0, 1fr) auto; }
+.now-agent-menu-file > i { color: var(--n-ink-4); }
+.now-agent-menu-file > b {
+  padding: 2px 6px; border: 1px solid var(--n-line-2); border-radius: 5px;
+  color: var(--n-ink-4); font-size: 9px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+}
 .now-directions {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   margin-top: 8px;
@@ -373,6 +379,15 @@
 .now-composer-send svg { width: 16px; height: 16px; }
 .now-composer-send:disabled { opacity: 0.3; cursor: default; }
 .now-composer-send:not(:disabled):hover { background: #000; }
+.now-composer-stop {
+  width: 30px; height: 30px; border: 1px solid var(--n-line-2); border-radius: var(--r-tool);
+  background: var(--n-panel); color: var(--n-ink-2); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.now-composer-stop svg { width: 14px; height: 14px; }
+.now-composer-stop:not(:disabled):hover { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--n-panel)); }
+.now-composer-stop[data-requested="true"] { opacity: 0.6; cursor: default; }
 .now-composer-spinner { animation: now-composer-spin 800ms linear infinite; }
 .now-composer-provenance {
   display: flex; gap: var(--space-2); align-items: center;
