@@ -325,9 +325,16 @@ describe("subscription adapter boundaries", () => {
 
     assert.equal(result.kind, "completed");
     assert.equal(invocation.options.resume, "claude-session-1");
-    assert.equal(invocation.prompt, resumePrompt);
-    assert.match(invocation.prompt, /Prior pause context:/);
-    assert.match(invocation.prompt, /New founder direction:/);
+    // The prompt is now the run's long-lived queue (streaming input); the resume text rides its
+    // first SDKUserMessage. The drive's own finally closed the queue, so iteration drains and ends.
+    const queued = [];
+    for await (const message of invocation.prompt) queued.push(message);
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].type, "user");
+    assert.equal(queued[0].parent_tool_use_id, null);
+    assert.equal(queued[0].message.content, resumePrompt);
+    assert.match(queued[0].message.content, /Prior pause context:/);
+    assert.match(queued[0].message.content, /New founder direction:/);
   });
 
   it("surfaces Claude subprocess stderr when the SDK exits before yielding a result", async () => {
@@ -471,5 +478,127 @@ describe("subscription adapter boundaries", () => {
       currentStatus: () => "running",
     });
     assert.ok(createFirmSdkServer(ctx));
+  });
+});
+
+describe("Claude streaming run architecture", () => {
+  it("streams partial text and forming tool arguments while skipping subagent partials", async () => {
+    const textDeltas = [];
+    const toolDeltas = [];
+    let invocation;
+    const result = await claudeCodeRuntime.drive(baseContext({
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      onTextDelta: (text) => textDeltas.push(text),
+      onToolInputDelta: (name, partialJson) => toolDeltas.push([name, partialJson]),
+      query: (input) => {
+        invocation = input;
+        return (async function* partialQuery() {
+          yield { type: "stream_event", session_id: "s1", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Hel" } } };
+          yield { type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "lo" } } };
+          yield { type: "stream_event", parent_tool_use_id: "sub-1", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "hidden subagent text" } } };
+          yield { type: "stream_event", event: { type: "content_block_start", index: 1, content_block: { type: "tool_use", name: "Bash" } } };
+          yield { type: "stream_event", event: { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"command":' } } };
+          yield { type: "stream_event", event: { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '"ls"}' } } };
+          yield { type: "stream_event", event: { type: "content_block_stop", index: 1 } };
+          yield { type: "result", subtype: "success", is_error: false, result: "Done." };
+        })();
+      },
+    }));
+
+    assert.equal(result.kind, "completed");
+    assert.equal(invocation.options.includePartialMessages, true);
+    assert.equal(Object.hasOwn(invocation.options, "resumeSessionAt"), false);
+    assert.deepEqual(textDeltas, ["Hel", "lo"]);
+    assert.deepEqual(toolDeltas, [
+      ["Bash", '{"command":'],
+      ["Bash", '{"command":"ls"}'],
+      [null, null],
+    ]);
+  });
+
+  it("steers a founder message onto the SAME live turn through the run handle", async () => {
+    const consumed = [];
+    const handles = [];
+    let steerAccepted = null;
+    const result = await claudeCodeRuntime.drive(baseContext({
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      onRunHandle: (handle) => handles.push(handle),
+      onText: (text) => {
+        // The turn is mid-flight: the founder's follow-up joins this run's own prompt queue.
+        if (text === "Working on it.") steerAccepted = handles[0].steer("Focus on pricing instead.");
+      },
+      query: ({ prompt }) => (async function* steeredQuery() {
+        const turns = prompt[Symbol.asyncIterator]();
+        consumed.push((await turns.next()).value.message.content);
+        yield { type: "assistant", session_id: "s1", uuid: "uuid-1", message: { content: [{ type: "text", text: "Working on it." }] } };
+        consumed.push((await turns.next()).value.message.content);
+        yield { type: "result", subtype: "success", is_error: false, result: "Steered and done." };
+      })(),
+    }));
+
+    assert.equal(result.kind, "completed");
+    assert.equal(steerAccepted, true, "a live queue accepts the steer");
+    assert.deepEqual(consumed, ["Explore a distinct bet", "Focus on pricing instead."]);
+    assert.equal(handles.length, 2, "the handle registers at start and unregisters at end");
+    assert.equal(handles[1], null);
+    assert.equal(handles[0].steer("too late"), false, "a settled run refuses the steer so it falls back to the durable queue");
+  });
+
+  it("routes a founder stop through the SDK interrupt before any hard abort", async () => {
+    const controller = new AbortController();
+    let interrupted = false;
+    let invocation;
+    let releaseTurn;
+    const gate = new Promise((resolve) => { releaseTurn = resolve; });
+    let queryStarted;
+    const started = new Promise((resolve) => { queryStarted = resolve; });
+    const drive = claudeCodeRuntime.drive(baseContext({
+      signal: controller.signal,
+      isCancelled: () => controller.signal.aborted,
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      query: (input) => {
+        invocation = input;
+        return {
+          async interrupt() { interrupted = true; releaseTurn(); },
+          [Symbol.asyncIterator]: async function* blockedTurn() {
+            queryStarted();
+            await gate;
+          },
+        };
+      },
+    }));
+    await started;
+    controller.abort();
+    assert.deepEqual(await drive, { kind: "cancelled" });
+    assert.equal(interrupted, true);
+    assert.equal(invocation.options.abortController.signal.aborted, false, "a successful interrupt never needed the hard abort");
+  });
+
+  it("pins a resumed turn to the stored assistant cursor and reports each fresh cursor", async () => {
+    const cursors = [];
+    let invocation;
+    const result = await claudeCodeRuntime.drive(baseContext({
+      runtimeSessionId: "claude-session-1",
+      resumePrompt: "New founder direction: keep going",
+      resumeSessionAt: "uuid-prev",
+      onResumeCursor: (cursor) => cursors.push(cursor),
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      query: (input) => {
+        invocation = input;
+        return (async function* resumedQuery() {
+          yield { type: "assistant", session_id: "claude-session-1", uuid: "uuid-9", message: { content: [{ type: "text", text: "Resumed." }] } };
+          yield { type: "result", subtype: "success", is_error: false, result: "Done." };
+        })();
+      },
+    }));
+
+    assert.equal(result.kind, "completed");
+    assert.equal(invocation.options.resume, "claude-session-1");
+    assert.equal(invocation.options.resumeSessionAt, "uuid-prev");
+    assert.deepEqual(cursors, [{ resumeSessionAt: "uuid-9" }]);
   });
 });

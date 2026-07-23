@@ -25,6 +25,7 @@ const { liveGrants } = await import("../../src/firm/grants.mjs");
 const { getFirmConfiguration, applyFirmConfiguration } = await import("../../src/firm/configuration.mjs");
 const { ensureDirectionThread, getSemanticModel, recordRun } = await import("../../src/firm/semantic-model-store.mjs");
 const { beginActiveDrive, listActiveDrives } = await import("../../src/firm/active-drives.mjs");
+const { registerLiveRun, __resetLiveRuns } = await import("../../src/firm/work-loop-stream.mjs");
 const { driveTeammate: driveThroughWorkLoop } = await import("../../src/firm/work-loop.mjs");
 const { AGENT_HEADERS } = { AGENT_HEADERS: { "x-gtm-actor": "agent" } };
 
@@ -76,6 +77,44 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.equal(res.body.applied, "next-step");
     assert.equal(pendingSteerFor(venture.id, bet.id, options).length, 1);
     assert.ok(listConversation(venture.id, options).some((m) => m.role === "founder" && /tighten the opening/.test(m.content)));
+  });
+
+  it("a reply into a Thread with a live run steers the SAME turn instead of queueing for the next one", async () => {
+    const { venture, bet } = ventureWithEffort("live same-turn steer");
+    const steers = [];
+    registerLiveRun({
+      driveId: "drive-live-1", ventureId: venture.id, betId: bet.id,
+      handle: { steer: (text, attachments) => { steers.push({ text, attachments }); return true; } },
+    });
+    try {
+      const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+        message: "focus on the pricing objection first", betId: bet.id,
+      }, { deps: { dialogueDeps: { classify: async () => null } } });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.act, "steer");
+      assert.equal(res.body.applied, "same-turn");
+      assert.equal(res.body.runRef, "run:drive-live-1");
+      assert.deepEqual(steers.map((s) => s.text), ["focus on the pricing objection first"]);
+      assert.equal(pendingSteerFor(venture.id, bet.id, options).length, 0, "the live turn owns the steer; nothing waits for a restart");
+      assert.ok(listConversation(venture.id, options).some((m) => m.role === "founder" && /pricing objection/.test(m.content)));
+    } finally {
+      __resetLiveRuns();
+    }
+  });
+
+  it("a steer that races the run's settled queue falls back to the durable next-step path", async () => {
+    const { venture, bet } = ventureWithEffort("settled queue fallback");
+    registerLiveRun({ driveId: "drive-live-2", ventureId: venture.id, betId: bet.id, handle: { steer: () => false } });
+    try {
+      const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+        message: "tighten the second paragraph", betId: bet.id,
+      }, { deps: { dialogueDeps: { classify: async () => null } } });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.applied, "next-step");
+      assert.equal(pendingSteerFor(venture.id, bet.id, options).length, 1, "a racing steer lands durably instead of vanishing");
+    } finally {
+      __resetLiveRuns();
+    }
   });
 
   it("persists multiple images on the founder turn and gives their real paths to the selected SDK", async () => {

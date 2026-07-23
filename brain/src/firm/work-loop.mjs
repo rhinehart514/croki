@@ -19,7 +19,8 @@ import { summon } from "./crew.mjs";
 import { appendConversationMessage, listConversation, stampConversationRuntime } from "./conversation.mjs";
 import { CONFIGURATION_KEY, configuredAgent, ensureInitialFirmParticipant } from "./configuration.mjs";
 import { buildCoordinationSeam } from "./work-loop-coordination.mjs";
-import { beginActiveDrive, noteDriveText } from "./active-drives.mjs";
+import { beginActiveDrive } from "./active-drives.mjs";
+import { buildStreamSeam } from "./work-loop-stream.mjs";
 import { buildArchitectureContext, buildWorkingTheoryContext } from "./architecture-context.mjs";
 import { buildWorkLoopSystem } from "./work-loop-prompt.mjs";
 import { createWorkLoopReceipts } from "./work-loop-receipts.mjs";
@@ -94,11 +95,7 @@ async function driveTeammateLeased({
     ? directSdkConfiguration(persistedConfiguration, teammateRef, runtime, model)
     : ensureInitialFirmParticipant(ventureId, teammateRef, options);
   const agent = configuredAgent(configuration, teammateRef);
-  if (!agent) {
-    const error = new Error(`Participant "${teammateRef}" is not in this venture's firm configuration.`);
-    error.code = "participant_not_configured";
-    throw error;
-  }
+  if (!agent) throw Object.assign(new Error(`Participant "${teammateRef}" is not in this venture's firm configuration.`), { code: "participant_not_configured" });
   const workScopeRef = target?.workScopeRef ?? null;
   const loaded = loadWork({ ventureId, teammateRef, betId, workScopeRef, options });
   const bet = loaded.bet;
@@ -187,11 +184,7 @@ async function driveTeammateLeased({
     model: effectiveModel,
     env: deps.env,
   });
-  if (!selection.adapter) {
-    const error = new Error(selection.reason || "No runtime available to drive this teammate.");
-    error.code = "runtime_unavailable";
-    throw error;
-  }
+  if (!selection.adapter) throw Object.assign(new Error(selection.reason || "No runtime available to drive this teammate."), { code: "runtime_unavailable" });
 
   const driveStartedAt = deps.nowMs ?? Date.now();
   const spendAvailability = reserveAgentDailySpend({
@@ -213,13 +206,11 @@ async function driveTeammateLeased({
   // drainSteer cleared the durable queue on the effort's work record; mirror that onto the in-memory
   // work this drive will checkpoint, so the drive's own saveWork never resurrects an already-folded
   // steer (loadWork ran before the drain).
-  if (steerBrief && work && Array.isArray(work.pendingSteer)) {
-    work = { ...work, pendingSteer: [] };
-  }
+  if (steerBrief && work && Array.isArray(work.pendingSteer)) work = { ...work, pendingSteer: [] };
 
   // Provider transcript continuity is retained, but every resume still receives the founder's new
   // direction. Adapter changes intentionally do not inherit a foreign provider session id.
-  let { currentWork, resumePrompt, runtimeSessionId } = prepareRuntimeResume({
+  let { currentWork, resumePrompt, runtimeSessionId, resumeSessionAt } = prepareRuntimeResume({
     work, goal, steerBrief, architectureContext, adapterId: selection.adapter.id,
   });
   const checkpointWork = () => saveWork({ ventureId, teammateRef, betId, workScopeRef, bet, work: currentWork, options });
@@ -324,8 +315,13 @@ async function driveTeammateLeased({
       ? codingWorkspace.providerSessions?.filter((entry) => entry.provider === selection.adapter.id && entry.sessionId).at(-1)?.sessionId ?? null
       : runtimeSessionId,
     resumePrompt,
+    // The stored resume cursor only rides a non-workspace session: a coding run's session id comes
+    // from the workspace's own provider sessions, so the work record's cursor would not match it.
+    resumeSessionAt: codingWorkspace ? null : resumeSessionAt,
     onRuntimeSession: (sid) => {
-      currentWork = { ...currentWork, runtimeSessionId: sid ? `${selection.adapter.id}:${sid}` : null };
+      const stamped = sid ? `${selection.adapter.id}:${sid}` : null;
+      // A brand-new provider session invalidates the stored cursor; the pair stays coherent.
+      if (stamped !== currentWork.runtimeSessionId) currentWork = { ...currentWork, runtimeSessionId: stamped, resumeSessionAt: null };
       checkpointWork();
       if (codingWorkspace && sid) updateCodingSession(ventureId, codingWorkspace.id, { runRef: `run:${activeDrive.id}`, sessionId: sid }, options);
     },
@@ -347,11 +343,13 @@ async function driveTeammateLeased({
       receipts.beat("Thinking through the direction");
       return currentWork.stepCount;
     },
-    onText: (text) => {
-      receipts.record({ type: "text", detail: text });
-      noteDriveText(activeDrive.id, text);
-      const line = String(text ?? "").trim(); if (line) narration.push(line);
-    },
+    // Streaming seam (work-loop-stream.mjs): onText/onTextDelta/onToolInputDelta live presence, the
+    // resume-cursor checkpoint, and the live-run handle a founder steer reaches mid-turn.
+    ...buildStreamSeam({
+      activeDrive, receipts, narration, ventureId, betId: targetBetId,
+      threadRef: target?.threadRef ?? driveRun?.threadRef ?? null,
+      getWork: () => currentWork, putWork: (work) => { currentWork = work; checkpointWork(); },
+    }),
     onToolStart: (name, detail = null) => {
       receipts.startTool(name);
       if (codingWorkspace) updateCodingSession(ventureId, codingWorkspace.id, { runRef: `run:${activeDrive.id}`, activity: detail?.summary ?? `Using ${String(name).replaceAll("_", " ")}` }, options);

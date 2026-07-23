@@ -10,7 +10,7 @@ function workKey(teammateRef, workScopeRef = null) {
 }
 
 export function blankWork() {
-  return { runtimeSessionId: null, stepCount: 0, spentUsd: 0, pausedFor: null };
+  return { runtimeSessionId: null, resumeSessionAt: null, stepCount: 0, spentUsd: 0, pausedFor: null };
 }
 
 export function loadWork({ ventureId, teammateRef, betId, workScopeRef = null, options }) {
@@ -56,5 +56,10 @@ export function prepareRuntimeResume({ work, goal, steerBrief, architectureConte
   const runtimeSessionId = storedAdapter
     ? (storedAdapter === adapterId ? stored.slice(separator + 1) : null)
     : stored;
-  return { currentWork, resumePrompt, runtimeSessionId };
+  // The resume cursor's second half — the last assistant uuid — only travels with its own session.
+  // An adapter change drops both together, and a missing cursor keeps resume behavior identical.
+  const resumeSessionAt = runtimeSessionId && typeof currentWork.resumeSessionAt === "string" && currentWork.resumeSessionAt
+    ? currentWork.resumeSessionAt
+    : null;
+  return { currentWork, resumePrompt, runtimeSessionId, resumeSessionAt };
 }

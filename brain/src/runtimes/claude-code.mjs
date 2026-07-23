@@ -28,7 +28,7 @@ import {
   findClaudeBinary,
   hasStoredClaudeLogin,
 } from "./claude-code-auth.mjs";
-import { sdkImagePrompt } from "./image-input.mjs";
+import { createPartialDispatch, createPromptQueue, liveRunHandle, parseStreamLine, sdkUserMessage } from "./claude-stream.mjs";
 
 export {
   authModeLabel,
@@ -36,6 +36,7 @@ export {
   findClaudeBinary,
   hasStoredClaudeLogin,
 } from "./claude-code-auth.mjs";
+export { parseStreamLine } from "./claude-stream.mjs";
 
 const BRIDGE_SERVER = "drover-firm";
 
@@ -109,45 +110,6 @@ function conciseProcessError(raw) {
   const marker = clean.lastIndexOf("\nerror:");
   const relevant = marker >= 0 ? clean.slice(marker + 1) : clean.slice(-1_200);
   return relevant.split("\n").slice(0, 7).join("\n").slice(0, 1_200);
-}
-
-// Parse one newline-delimited stream-json line into a neutral event. Returns
-// null for lines we do not surface. Tolerant of partial/non-JSON noise.
-export function parseStreamLine(line) {
-  const trimmed = String(line || "").trim();
-  if (!trimmed) return null;
-  let event;
-  try {
-    event = JSON.parse(trimmed);
-  } catch {
-    return null;
-  }
-  if (event.type === "assistant" && event.message?.content) {
-    const blocks = event.message.content;
-    const text = blocks
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("\n")
-      .trim();
-    const toolUses = blocks
-      .filter((block) => block.type === "tool_use")
-      .map((block) => ({ id: block.id ?? null, name: stripServer(block.name), nativeName: block.name, input: block.input ?? {} }));
-    return { type: "assistant", text, toolUses };
-  }
-  if (event.type === "result") {
-    return {
-      type: "result",
-      isError: event.is_error === true || event.subtype === "error_max_turns",
-      text: typeof event.result === "string" ? event.result : null,
-      subtype: event.subtype ?? null,
-    };
-  }
-  return null;
-}
-
-function stripServer(toolName) {
-  const match = /^mcp__[^_]+(?:_[^_]+)*__(.+)$/.exec(toolName || "");
-  return match ? match[1] : toolName;
 }
 
 // Every status that must HALT the subprocess drive. The adapter polls ctx.currentStatus()
@@ -301,10 +263,33 @@ export const claudeCodeRuntime = {
 
     // One pass over the SDK. resumeId !== null means "continue the stored
     // conversation"; null means "start a fresh one from the goal".
+    //
+    // The prompt is a long-lived per-run queue, not a one-shot message (T3 Code run architecture,
+    // ported off Effect). The SDK keeps ONE agent loop alive while the queue is open, so a founder
+    // steer pushed through the live-run handle joins the SAME turn instead of restarting it. The
+    // queue closes when the turn's terminal result lands with nothing further queued; a steer the
+    // SDK already pulled keeps the stream alive past that close and lands its own result.
     const attempt = async (resumeId) => {
       const abortController = new AbortController();
-      const abortFromHost = () => abortController.abort(ctx.signal?.reason);
-      if (ctx.signal?.aborted) abortFromHost();
+      const queue = createPromptQueue();
+      let sdkStream = null;
+      let graceTimer = null;
+      const hardAbort = () => abortController.abort(ctx.signal?.reason);
+      // The founder's stop path: try the SDK's graceful interrupt() first so the turn winds down and
+      // the transcript persists, then hard-abort if the stream does not end within the grace window.
+      const abortFromHost = () => {
+        queue.close();
+        let interrupted = null;
+        try { interrupted = sdkStream?.interrupt?.(); } catch { /* fall through to the hard abort */ }
+        if (interrupted?.catch) {
+          interrupted.catch(hardAbort);
+          graceTimer = setTimeout(hardAbort, Number(process.env.GTM_IDE_CLAUDE_CODE_INTERRUPT_GRACE_MS) || 2_000);
+          graceTimer.unref?.();
+        } else {
+          hardAbort();
+        }
+      };
+      if (ctx.signal?.aborted) hardAbort();
       else ctx.signal?.addEventListener?.("abort", abortFromHost, { once: true });
       const timeoutMs = Number(process.env.GTM_IDE_CLAUDE_CODE_TIMEOUT_MS) || 600_000;
       const timeout = setTimeout(() => abortController.abort(), timeoutMs);
@@ -315,11 +300,12 @@ export const claudeCodeRuntime = {
       const promptText = resumeId
         ? (ctx.resumePrompt || "Continue from where you left off.")
         : ctx.goal;
-      const prompt = sdkImagePrompt(promptText, ctx.attachments ?? []);
+      queue.push(sdkUserMessage(promptText, ctx.attachments ?? []));
+      const dispatchPartial = createPartialDispatch(ctx);
 
       try {
         const stream = runQuery({
-          prompt,
+          prompt: queue,
           options: {
             abortController,
             cwd: ctx.cwd || process.cwd(),
@@ -351,15 +337,22 @@ export const claudeCodeRuntime = {
             tools: harness === "full" ? { type: "preset", preset: "claude_code" } : [],
             allowedTools,
             permissionMode: harness === "full" ? "auto" : "dontAsk",
-            ...(ctx.nativeCoding ? { canUseTool: nativeCodingPermission } : {}),
+            ...(ctx.canUseTool || ctx.nativeCoding ? { canUseTool: ctx.canUseTool ?? nativeCodingPermission } : {}),
             strictMcpConfig: harness === "caged",
             // Omitting settingSources in full mode preserves Claude Code's normal CLI behavior:
             // user, project, and local settings all load. Caged mode opts out explicitly.
             ...(harness === "caged" ? { settingSources: [] } : {}),
+            // Partial streaming: content_block_delta text and input_json_delta tool arguments
+            // surface through ctx.onTextDelta / ctx.onToolInputDelta as the model forms them.
+            includePartialMessages: true,
             // Persist the transcript so a later drive can resume it. This is the
             // founder's local Claude session store — the local-harness contract.
             persistSession: true,
             ...(resumeId ? { resume: resumeId } : {}),
+            // The resume cursor's second half: the last assistant message uuid this thread already
+            // holds. Resuming AT that message keeps the provider transcript exactly aligned with the
+            // durable record; without a stored cursor the behavior is byte-identical to plain resume.
+            ...(resumeId && ctx.resumeSessionAt ? { resumeSessionAt: ctx.resumeSessionAt } : {}),
             pathToClaudeCodeExecutable: ctx.env?.GTM_IDE_CLAUDE_CODE_PATH || undefined,
             env: childEnv,
             mcpServers: {
@@ -368,6 +361,11 @@ export const claudeCodeRuntime = {
             stderr: (line) => stderr.push(line),
           },
         });
+        sdkStream = stream;
+        // Live controls for the duration of this turn: steer (same-turn prompt-queue push),
+        // interrupt, setModel, setPermissionMode. The host registers/unregisters it so a founder
+        // message into this Thread can reach the run while it is genuinely live.
+        ctx.onRunHandle?.(liveRunHandle({ queue, stream }));
 
         for await (const message of stream) {
           // Capture the session id from the first message that carries one and
@@ -383,7 +381,14 @@ export const claudeCodeRuntime = {
             return { kind: "cancelled" };
           }
 
+          dispatchPartial(message);
+
           if (message.type === "assistant" && message.message?.content) {
+            // The resume cursor's second half: remember the last assistant uuid so the next resume
+            // can pin the provider transcript to exactly what this thread durably holds.
+            if (typeof message.uuid === "string" && message.uuid) {
+              ctx.onResumeCursor?.({ resumeSessionAt: message.uuid });
+            }
             const parsed = parseStreamLine(JSON.stringify(message));
             if (parsed?.text) ctx.onText(parsed.text);
             if (parsed?.toolUses?.length) {
@@ -413,7 +418,13 @@ export const claudeCodeRuntime = {
             }
           }
 
-          if (message.type === "result") terminalResult = message;
+          if (message.type === "result") {
+            terminalResult = message;
+            // The turn is answered. Close the long-lived queue so the agent loop can end — unless a
+            // steer is still queued locally, in which case the SDK pulls it next and this turn
+            // continues to its own terminal result.
+            if (queue.size === 0) queue.close();
+          }
 
           // MCP tool execution completes before the following SDK message is
           // yielded. Check every message so the wall reached by the bridge stops
@@ -436,9 +447,13 @@ export const claudeCodeRuntime = {
         throw new Error(`${message}: ${detail}`, { cause: error });
       } finally {
         clearTimeout(timeout);
+        if (graceTimer) clearTimeout(graceTimer);
+        queue.close();
+        ctx.onRunHandle?.(null);
         ctx.signal?.removeEventListener?.("abort", abortFromHost);
       }
 
+      if (ctx.isCancelled() || ctx.signal?.aborted) return { kind: "cancelled" };
       if (!terminalResult) {
         if (abortController.signal.aborted) return { kind: "budget" };
         throw new Error(stderr.join("").trim().slice(-2_000) || "Claude Code ended without a result.");

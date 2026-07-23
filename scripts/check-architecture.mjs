@@ -13,7 +13,11 @@ const failures = [];
 // 2026-07-22 re-baseline 133 → 134: firm/repository-files.mjs, the @-file composer reach — a bounded
 // read of what git already sees, adopted with its route, test, and composer wiring rather than folded
 // into an unrelated module. The capability pass that landed the same day added zero modules.
-const BRAIN_MODULE_CEILING = 134;
+// 2026-07-22 re-baseline 134 → 136: firm/work-loop-stream.mjs and runtimes/claude-stream.mjs, the
+// SDK streaming core (long-lived prompt queue, steering, live run controls, partial deltas, resume
+// cursor). Both parents sit at the 500-line service limit (work-loop.mjs 497, claude-code.mjs 493),
+// so the extraction is forced feature-local splitting, not drift.
+const BRAIN_MODULE_CEILING = 136;
 
 function files(directory, pattern) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

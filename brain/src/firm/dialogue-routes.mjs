@@ -32,6 +32,7 @@ import { getVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { appendConversationMessage } from "./conversation.mjs";
 import { classifyDialogueAct } from "./dialogue-act.mjs";
 import { enqueueSteer } from "./work-loop-steer.mjs";
+import { steerLiveRun } from "./work-loop-stream.mjs";
 import { recordGrant, actTypeForEffect } from "./grants.mjs";
 import { routeDirection } from "./direction-routing.mjs";
 import { end as endBet, fork as forkBet } from "./bet.mjs";
@@ -43,10 +44,7 @@ import { ensureDirectionThread, extendDirectionThread, getSemanticModel, setDire
 import { checkAuthorizedObservations } from "./release-observation.mjs";
 import { persistImageAttachments, publicImageAttachments } from "./image-attachments.mjs";
 import imageAttachmentRoutes from "./image-attachment-routes.mjs";
-function trimOrNull(value) {
-  const text = String(value ?? "").trim();
-  return text || null;
-}
+const trimOrNull = (value) => String(value ?? "").trim() || null;
 function statusFor(err) {
   if (err?.code === "venture_not_found") return 404;
   if (err?.code === "founder_decision_forbidden") return 403;
@@ -288,6 +286,17 @@ async function handleReply(ventureId, req, res, deps) {
   if (artifactSection || workflowStep) {
     return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, workflowStep, attachments, teammateRefs });
   }
+  // While this Thread's Run is live, a steer / answer / new direction joins the SAME SDK turn through
+  // the run's own prompt queue — no restart, no refusal (T3 run-architecture parity). The founder's
+  // explicit stop, close, and gate approvals keep their authority paths above and below; when no run
+  // is live (or its queue just closed) the message flows to the existing seams unchanged.
+  if (act === "steer" || act === "answer" || act === "new-direction") {
+    const live = (deps.steerLiveRun ?? steerLiveRun)({
+      ventureId, betId, threadRef, text: act === "steer" ? (steerText ?? message) : message,
+      model: workTurn ? model : null, attachments,
+    });
+    if (live) return json(res, 200, { act: "steer", applied: "same-turn", betId: live.betId ?? betId, threadRef: threadRef ?? live.threadRef, runRef: `run:${live.driveId}`, messageId: founderMessage.id });
+  }
   if (act === "steer") {
     if (workTurn) return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
     if (!betId) {
@@ -303,11 +312,7 @@ async function handleReply(ventureId, req, res, deps) {
     return dispatchNewDirection(ventureId, configuration, message, res, deps, founderMessage.id, threadRef, subjectRefs, runtime, model, effort, contextTurn ? "answer" : "new-direction", { betId, workRef, productGtmView, workflowSketch, modelBranchRef, artifactSection, attachments, teammateRefs });
   }
   if (act === "close") {
-    if (!betId) {
-      const error = new Error("Closing needs the effort being closed.");
-      error.status = 400;
-      throw error;
-    }
+    if (!betId) throw Object.assign(new Error("Closing needs the effort being closed."), { status: 400 });
     const bet = getVentureDoc(ventureId, "bets", betId);
     if (!bet) { const e = new Error(`No such effort: ${betId}`); e.status = 404; throw e; }
     // Only the founder ends work (invariant §5.9 / FIRM-SPEC rail 2). This route already established
@@ -367,11 +372,7 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
   // refuses rather than inventing an activation path.
   const teammateRef = routed.teammateRef
     ?? (configuration?.revision === 1 && configuration.agents.length === 0 ? "founding-teammate" : null);
-  if (!teammateRef) {
-    const error = new Error("This firm has no configured participant to take the direction.");
-    error.status = 409;
-    throw error;
-  }
+  if (!teammateRef) throw Object.assign(new Error("This firm has no configured participant to take the direction."), { status: 409 });
   const why = directSdk ? null : routed.why ?? "Taking this one.";
   // Product / GTM routing names the participant and reason before work begins (§4A.1). In Work,
   // the founder already chose the SDK model in the composer, so another provider acknowledgement is

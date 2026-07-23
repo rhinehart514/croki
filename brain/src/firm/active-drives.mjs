@@ -25,6 +25,9 @@ function publicDrive(entry) {
     // `activity`. The thread-timeline read model surfaces it as a streaming teammate turn; a restart
     // correctly drops it, and the durable conversation message is the truth once the drive settles.
     liveText: entry.liveText ?? "",
+    // The tool call the model is composing right now — name plus the partial JSON arguments streamed
+    // so far — the same process-local presence contract as liveText. Null when no call is forming.
+    liveTool: entry.liveTool ?? null,
     // A process-local presence pointer: true when a founder steer arrived for this effort while the
     // drive is running. The durable queue (work-loop-steer.mjs, on the effort's work record) is the
     // truth the resume reads; this only lets a live drive/UI honestly say "a steer will apply next step."
@@ -91,6 +94,22 @@ export function noteDriveText(driveId, text, { now = Date.now } = {}) {
   const at = now();
   if (at - (entry.lastTextEmitAt ?? 0) >= 120) {
     entry.lastTextEmitAt = at;
+    emitFirmEvent(entry.ventureId, "drive", { betId: entry.betId });
+  }
+  return publicDrive(entry);
+}
+
+// Mirror of noteDriveText for the tool call the model is composing: input_json_delta partial
+// arguments stream in here as they form, throttled the same way, and a null name clears the
+// presence when the tool block closes. Best-effort and no-op once the drive is gone.
+export function noteDriveToolInput(driveId, name, partialInput, { now = Date.now } = {}) {
+  const entry = active.get(driveId);
+  if (!entry) return null;
+  entry.liveTool = name ? { name: String(name), partialInput: String(partialInput ?? "").slice(-2_000) } : null;
+  entry.lastBeatAt = new Date().toISOString();
+  const at = now();
+  if (at - (entry.lastToolEmitAt ?? 0) >= 120) {
+    entry.lastToolEmitAt = at;
     emitFirmEvent(entry.ventureId, "drive", { betId: entry.betId });
   }
   return publicDrive(entry);
