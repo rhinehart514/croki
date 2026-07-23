@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DecisionGate } from "./DecisionGate";
 import type { WallQueueItemView } from "@/api";
+
+/** @pierre/diffs renders each file body into a <diffs-container> shadow root. */
+function diffBodyText(): string {
+  return [...document.querySelectorAll("diffs-container")]
+    .map((node) => node.shadowRoot?.textContent ?? "")
+    .join("\n");
+}
 
 const productChange: WallQueueItemView = {
   id: "wall-1", ventureId: "v1", betId: "b1", purpose: "release", blocksBet: false,
@@ -24,12 +31,12 @@ const productChange: WallQueueItemView = {
 };
 
 describe("DecisionGate", () => {
-  it("renders the produced diff before the approve/reject actions", () => {
+  it("renders the produced diff before the approve/reject actions", async () => {
     const { container } = render(<DecisionGate ventureId="v1" item={productChange} onDecided={() => {}} />);
     // The real artifact renders (the changed file path + the added line from the diff).
     const pathNodes = screen.getAllByText(/src\/App\.tsx/);
     expect(pathNodes.length).toBeGreaterThan(0);
-    expect(screen.getByText(/FirstRunBanner/)).toBeTruthy();
+    await waitFor(() => expect(diffBodyText()).toContain("FirstRunBanner"));
     // The exact decision is explicit and binary.
     const approve = screen.getByRole("button", { name: /Approve & send/ });
     const reject = screen.getByRole("button", { name: /Reject/ });
@@ -62,7 +69,7 @@ describe("DecisionGate", () => {
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Deploy unavailable" }).disabled).toBe(true);
   });
 
-  it("shows one selected file diff instead of repeating every file", () => {
+  it("shows one selected file diff instead of repeating every file", async () => {
     const twoFiles: WallQueueItemView = {
       ...productChange,
       effect: {
@@ -83,11 +90,11 @@ describe("DecisionGate", () => {
       },
     };
     render(<DecisionGate ventureId="v1" item={twoFiles} onDecided={() => {}} />);
-    expect(screen.getByText(/const app = 'new'/)).toBeTruthy();
-    expect(screen.queryByText(/export const New/)).toBeNull();
+    await waitFor(() => expect(diffBodyText()).toContain("const app = 'new'"));
+    expect(diffBodyText()).not.toContain("export const New");
     fireEvent.click(screen.getByRole("button", { name: /src\/New\.tsx/ }));
-    expect(screen.queryByText(/const app = 'new'/)).toBeNull();
-    expect(screen.getByText(/export const New/)).toBeTruthy();
+    await waitFor(() => expect(diffBodyText()).toContain("export const New"));
+    expect(diffBodyText()).not.toContain("const app = 'new'");
   });
 
   it("holds every decision visibly while the venture is read-only", () => {

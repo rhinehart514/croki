@@ -763,26 +763,25 @@ button.now-approach:hover { background: var(--n-hover); border-color: var(--n-in
 .now .review-files-summary,
 .now .review-tree-group > .review-tree-row,
 .now .review-artifact-label { background: var(--n-sunk); border-color: var(--n-line); color: var(--n-ink-2); }
-.now .review-diff-scroll,
-.now .review-diff-table { background: var(--n-panel); }
-.now .review-diff-gutter { background: var(--n-sunk); border-right-color: var(--n-line); color: var(--n-ink-4); }
-.now .review-diff-code,
 .now .review-diff-path,
 .now .review-file-path,
 .now .review-tree-name,
 .now .review-artifact-text,
 .now .review-artifact-markdown { color: var(--n-ink-2); }
-.now .review-diff-row:hover .review-diff-code,
 .now .review-file-row:hover,
 .now .review-tree-row:hover { background: var(--n-hover); }
 .now .review-stat,
-.now .review-artifact-caption,
-.now .review-diff-marker { color: var(--n-ink-3); }
-.now .review-diff-row-hunk,
-.now .review-diff-row-hunk .review-diff-code {
-  background: var(--n-sunk);
-  border-color: var(--n-line);
-  color: var(--n-ink-3);
+.now .review-artifact-caption { color: var(--n-ink-3); }
+.now .review-diff-file diffs-container {
+  --diffs-bg: var(--n-panel);
+  --diffs-light-bg: var(--n-panel);
+  --diffs-dark-bg: var(--n-panel);
+  --diffs-bg-context-override: var(--n-panel);
+  --diffs-bg-hover-override: var(--n-hover);
+  --diffs-bg-separator-override: var(--n-sunk);
+  --diffs-bg-buffer-override: var(--n-sunk);
+  --diffs-fg-number-override: var(--n-ink-4);
+  background: var(--n-panel);
 }
 
 @media (prefers-reduced-motion: reduce) {

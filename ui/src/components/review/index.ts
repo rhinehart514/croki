@@ -1,6 +1,7 @@
 // Artifact-review primitive kit: review the produced thing, not its explanation.
 
 export { DiffView } from "./DiffView";
+export { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 export { FilesChanged } from "./FilesChanged";
 export { FileTree } from "./FileTree";
 export { ArtifactPreview, type ReviewArtifact } from "./ArtifactPreview";

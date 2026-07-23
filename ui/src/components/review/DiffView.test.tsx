@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DiffView } from "./DiffView";
 
@@ -12,20 +12,36 @@ const DIFF = `diff --git a/src/hello.ts b/src/hello.ts
 +another new
 `;
 
+/** @pierre/diffs renders each file body into a <diffs-container> shadow root. */
+function diffBodyText(): string {
+  return [...document.querySelectorAll("diffs-container")]
+    .map((node) => node.shadowRoot?.textContent ?? "")
+    .join("\n");
+}
+
 describe("DiffView", () => {
-  it("renders a known diff with path, hunk, and +/- counts", () => {
+  it("renders a known diff with path, +/- counts, and highlighted body", async () => {
     render(<DiffView diff={DIFF} />);
     expect(screen.getByText("src/hello.ts")).toBeInTheDocument();
     // Two additions, one deletion shown in the file stat.
     expect(screen.getByText("+2")).toBeInTheDocument();
     expect(screen.getByText("−1")).toBeInTheDocument();
-    expect(screen.getByText("new line")).toBeInTheDocument();
-    expect(screen.getByText("old line")).toBeInTheDocument();
-    expect(screen.getByText(/@@ -1,2 \+1,3 @@/)).toBeInTheDocument();
+    await waitFor(() => {
+      const body = diffBodyText();
+      expect(body).toContain("new line");
+      expect(body).toContain("old line");
+      expect(body).toContain("keep");
+    });
   });
 
-  it("shows a quiet empty state for unparseable input", () => {
+  it("shows the exact raw text with an honest reason for unparseable input", () => {
     render(<DiffView diff="not a diff at all" />);
+    expect(screen.getByText("This isn’t a readable diff, so the exact text is shown.")).toBeInTheDocument();
+    expect(screen.getByText("not a diff at all")).toBeInTheDocument();
+  });
+
+  it("shows a quiet empty state when there is nothing to review", () => {
+    render(<DiffView diff="   " />);
     expect(screen.getByText("No reviewable difference is available.")).toBeInTheDocument();
   });
 

@@ -60,9 +60,24 @@ function reachable(entries, aliasRoot = null) {
   return seen;
 }
 
+// Vite resolve.alias entries can wire a ui/src module into the bundle under a bare specifier
+// (for example "shiki/wasm" -> src/lib/shikiWasmStub.ts). Those modules are bundler entry
+// points, not orphans, so alias targets that resolve to files inside ui/src join the trace roots.
+function viteAliasEntries(uiRoot) {
+  const config = path.join(uiRoot, "..", "vite.config.ts");
+  if (!fs.existsSync(config)) return [];
+  const source = fs.readFileSync(config, "utf8");
+  const entries = [];
+  for (const match of source.matchAll(/path\.resolve\(import\.meta\.dirname,\s*["']([^"']+)["']\)/g)) {
+    const target = path.resolve(uiRoot, "..", match[1]);
+    if (target.startsWith(uiRoot + path.sep) && fs.existsSync(target) && fs.statSync(target).isFile()) entries.push(target);
+  }
+  return entries;
+}
+
 const uiRoot = path.join(repository, "ui/src");
 const uiProduction = walk(uiRoot, (file) => /\.(?:ts|tsx|css)$/.test(file) && !/\.(?:test|spec)\.[^.]+$/.test(file) && !file.endsWith(".d.ts") && !file.endsWith("test/setupTests.ts"));
-const uiReachable = reachable([path.join(uiRoot, "main.tsx")], uiRoot);
+const uiReachable = reachable([path.join(uiRoot, "main.tsx"), ...viteAliasEntries(uiRoot)], uiRoot);
 const uiOrphans = uiProduction.filter((file) => !uiReachable.has(file));
 
 const brainRoot = path.join(repository, "brain/src");

@@ -143,88 +143,54 @@ button.review-file-row:focus-visible {
   color: var(--ink-3-warm);
 }
 
-.review-diff-scroll {
-  overflow-x: auto;
+.review-diff-raw-reason {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--ink-3-warm);
+  font-size: 12.5px;
 }
 
-.review-diff-table {
-  width: 100%;
-  border-collapse: collapse;
+.review-diff-raw {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--line-warm);
+  border-radius: var(--r-card);
+  background: var(--card-resting);
+  color: var(--ink-warm);
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.55;
-  tab-size: 2;
 }
 
-.review-diff-row td {
-  padding: 0;
-  vertical-align: top;
-  white-space: pre;
-}
-
-.review-diff-gutter {
-  width: 1%;
-  padding: 0 8px !important;
-  text-align: right;
-  color: var(--ink-3-warm);
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-  background: var(--paper-2);
-  border-right: 1px solid var(--line-soft);
-}
-
-.review-diff-marker {
-  width: 1%;
-  padding: 0 6px !important;
-  text-align: center;
-  color: var(--ink-3-warm);
-  user-select: none;
-}
-
-.review-diff-code {
-  padding: 0 12px 0 4px !important;
-  color: var(--ink-warm);
-}
-
-.review-diff-row-add {
-  background: var(--green-tint);
-}
-
-.review-diff-row-add .review-diff-marker {
-  color: var(--green);
-}
-
-.review-diff-row-add .review-diff-gutter {
-  background: var(--green-soft);
-  border-right-color: var(--green-line);
-}
-
-.review-diff-row-del {
-  background: color-mix(in oklch, var(--danger) 8%, transparent);
-}
-
-.review-diff-row-del .review-diff-marker {
-  color: var(--danger);
-}
-
-.review-diff-row-del .review-diff-gutter {
-  background: color-mix(in oklch, var(--danger) 12%, var(--paper-2));
-  border-right-color: color-mix(in oklch, var(--danger) 25%, var(--line-soft));
-}
-
-.review-diff-row-hunk td {
-  padding: 4px 12px !important;
-  background: var(--paper-2);
-  color: var(--ink-3-warm);
-  border-top: 1px solid var(--line-soft);
-  border-bottom: 1px solid var(--line-soft);
-  white-space: pre-wrap;
-}
-
-.review-diff-binary {
-  padding: 12px 14px;
-  color: var(--ink-3-warm);
-  font-size: 12.5px;
+/* The diff body is rendered by @pierre/diffs into a <diffs-container> element. Its palette is
+   projected from the same review tokens the surrounding chrome uses, so highlighted code sits on
+   the identical card surface as everything else in the review workspace. */
+.review-diff-file diffs-container {
+  --diffs-font-family: var(--mono);
+  --diffs-header-font-family: var(--sans);
+  --diffs-font-size: 12px;
+  --diffs-line-height: 1.55;
+  --diffs-bg: var(--card-resting);
+  --diffs-light-bg: var(--card-resting);
+  --diffs-dark-bg: var(--card-resting);
+  --diffs-token-light-bg: transparent;
+  --diffs-token-dark-bg: transparent;
+  --diffs-bg-context-override: var(--card-resting);
+  --diffs-bg-hover-override: var(--card-raised);
+  --diffs-bg-separator-override: var(--paper-2);
+  --diffs-bg-buffer-override: var(--paper-2);
+  --diffs-fg-number-override: var(--ink-3-warm);
+  --diffs-bg-addition-override: color-mix(in oklch, var(--green) 9%, transparent);
+  --diffs-bg-addition-number-override: color-mix(in oklch, var(--green) 14%, var(--paper-2));
+  --diffs-bg-addition-hover-override: color-mix(in oklch, var(--green) 18%, var(--card-resting));
+  --diffs-bg-addition-emphasis-override: color-mix(in oklch, var(--green) 26%, var(--card-resting));
+  --diffs-bg-deletion-override: color-mix(in oklch, var(--danger) 8%, transparent);
+  --diffs-bg-deletion-number-override: color-mix(in oklch, var(--danger) 12%, var(--paper-2));
+  --diffs-bg-deletion-hover-override: color-mix(in oklch, var(--danger) 16%, var(--card-resting));
+  --diffs-bg-deletion-emphasis-override: color-mix(in oklch, var(--danger) 24%, var(--card-resting));
+  display: block;
+  background: var(--card-resting);
 }
 
 /* ---- FileTree ----------------------------------------------------------- */

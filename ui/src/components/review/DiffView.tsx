@@ -1,88 +1,72 @@
 import { useMemo } from "react";
-import { parseUnifiedDiff, type DiffFile, type DiffLine } from "./parseDiff";
+import { FileDiff } from "@pierre/diffs/react";
+import type { FileDiffMetadata, FileDiffOptions } from "@pierre/diffs";
+import {
+  DIFF_THEME_NAME,
+  buildFileDiffRenderKey,
+  fileDiffStats,
+  getRenderablePatch,
+  resolveFileDiffPath,
+} from "./diffRendering";
 import "./review.css";
 
-const MARKER: Record<DiffLine["kind"], string> = { add: "+", del: "−", context: "", meta: "" };
+// One shared options object so every diff body renders identically and FileDiff can skip
+// re-render work on referentially equal options. Drover keeps its own compact file header.
+const FILE_DIFF_OPTIONS: FileDiffOptions<undefined> = {
+  theme: DIFF_THEME_NAME,
+  themeType: "dark",
+  diffStyle: "unified",
+  collapsed: false,
+  disableFileHeader: true,
+  overflow: "scroll",
+};
 
-function fileStatLabel(file: DiffFile) {
-  return (
-    <span className="review-stat" aria-label={`${file.additions} added, ${file.deletions} removed`}>
-      <span className={file.additions ? "review-stat-add" : "review-stat-zero"}>+{file.additions}</span>
-      <span className={file.deletions ? "review-stat-del" : "review-stat-zero"}>−{file.deletions}</span>
-    </span>
-  );
-}
-
-function FileBlock({ file }: { file: DiffFile }) {
+function FileBlock({ fileDiff }: { fileDiff: FileDiffMetadata }) {
+  const path = resolveFileDiffPath(fileDiff);
+  const prevPath = fileDiff.prevName ? resolveFileDiffPath({ ...fileDiff, name: fileDiff.prevName }) : null;
+  const { additions, deletions } = fileDiffStats(fileDiff);
   return (
     <div className="review-diff-file">
       <div className="review-diff-head">
-        <span className="review-diff-path" title={file.path}>
-          {file.oldPath && file.oldPath !== file.path ? (
+        <span className="review-diff-path" title={path}>
+          {prevPath && prevPath !== path ? (
             <>
-              <span className="review-diff-rename">{file.oldPath} → </span>
-              {file.path}
+              <span className="review-diff-rename">{prevPath} → </span>
+              {path}
             </>
           ) : (
-            file.path
+            path
           )}
         </span>
-        {fileStatLabel(file)}
+        <span className="review-stat" aria-label={`${additions} added, ${deletions} removed`}>
+          <span className={additions ? "review-stat-add" : "review-stat-zero"}>+{additions}</span>
+          <span className={deletions ? "review-stat-del" : "review-stat-zero"}>−{deletions}</span>
+        </span>
       </div>
-      {file.binary ? (
-        <p className="review-diff-binary">Binary file — not shown as text.</p>
-      ) : (
-        <div className="review-diff-scroll">
-          <table className="review-diff-table">
-            <tbody>
-              {file.hunks.map((hunk, hi) => (
-                <HunkRows key={hi} header={hunk.header} lines={hunk.lines} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <FileDiff fileDiff={fileDiff} options={FILE_DIFF_OPTIONS} />
     </div>
   );
 }
 
-function HunkRows({ header, lines }: { header: string; lines: DiffLine[] }) {
-  return (
-    <>
-      <tr className="review-diff-row review-diff-row-hunk">
-        <td colSpan={4}>{header}</td>
-      </tr>
-      {lines.map((line, li) => {
-        if (line.kind === "meta") {
-          return (
-            <tr key={li} className="review-diff-row review-diff-row-hunk">
-              <td colSpan={4}>\ {line.text}</td>
-            </tr>
-          );
-        }
-        return (
-          <tr key={li} className={`review-diff-row review-diff-row-${line.kind}`}>
-            <td className="review-diff-gutter">{line.oldLine ?? ""}</td>
-            <td className="review-diff-gutter">{line.newLine ?? ""}</td>
-            <td className="review-diff-marker" aria-hidden="true">
-              {MARKER[line.kind]}
-            </td>
-            <td className="review-diff-code">{line.text === "" ? " " : line.text}</td>
-          </tr>
-        );
-      })}
-    </>
-  );
-}
-
 /**
- * Render a unified diff string as per-file cards with two-column line numbers and add/del/context
- * styling. Long lines scroll horizontally inside each file; the page never breaks. Empty or
- * unparseable input yields a quiet empty state.
+ * Render a unified diff with @pierre/diffs: syntax-highlighted per-file bodies under Drover's
+ * compact file headers. Highlighting runs in the shared worker pool when one is mounted. Empty
+ * input yields a quiet empty state; unparseable input shows the exact raw text, never a crash.
  */
 export function DiffView({ diff, path = null }: { diff: string; path?: string | null }) {
-  const files = useMemo(() => parseUnifiedDiff(diff), [diff]);
-  const visibleFiles = path ? files.filter((file) => file.path === path) : files;
+  const renderable = useMemo(() => getRenderablePatch(diff, "review-diff"), [diff]);
+
+  if (renderable?.kind === "raw") {
+    return (
+      <div className="review-diff">
+        <p className="review-diff-raw-reason">{renderable.reason}</p>
+        <pre className="review-diff-raw">{renderable.text}</pre>
+      </div>
+    );
+  }
+
+  const files = renderable ? renderable.files : [];
+  const visibleFiles = path ? files.filter((fileDiff) => resolveFileDiffPath(fileDiff) === path) : files;
 
   if (visibleFiles.length === 0) {
     return <div className="review-empty">No reviewable difference is available.</div>;
@@ -90,8 +74,8 @@ export function DiffView({ diff, path = null }: { diff: string; path?: string | 
 
   return (
     <div className="review-diff">
-      {visibleFiles.map((file, i) => (
-        <FileBlock key={`${file.path}-${i}`} file={file} />
+      {visibleFiles.map((fileDiff) => (
+        <FileBlock key={buildFileDiffRenderKey(fileDiff)} fileDiff={fileDiff} />
       ))}
     </div>
   );
