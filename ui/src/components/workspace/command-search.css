@@ -1,0 +1,24 @@
+/* Search (⌘K): one quiet overlay above the current surface. Keyboard-first, no chrome beyond the
+   input, the results, and the traversal hints. */
+.command-search-backdrop { position: fixed; inset: 0; z-index: 110; background: rgb(0 0 0 / 45%); backdrop-filter: blur(4px); }
+.command-search-viewport { position: fixed; inset: 0; z-index: 111; display: grid; justify-items: center; align-items: start; padding: clamp(48px, 14vh, 140px) 16px 16px; }
+.command-search { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(600px, 100%); max-height: min(430px, calc(100vh - 96px)); overflow: hidden; border: 1px solid var(--n-line-2); border-radius: 14px; outline: none; background: color-mix(in srgb, var(--n-panel) 97%, transparent); box-shadow: 0 24px 72px rgb(0 0 0 / 44%), 0 1px 0 rgb(255 255 255 / 4%) inset; }
+.command-search-field { display: flex; align-items: center; gap: 9px; padding: 13px 15px; border-bottom: 1px solid var(--n-line); }
+.command-search-field svg { width: 15px; height: 15px; flex: none; color: var(--n-ink-4); }
+.command-search-field input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--n-ink); font: 450 14px var(--sans); }
+.command-search-field input::placeholder { color: var(--n-ink-4); }
+.command-search-results { overflow-y: auto; padding: 6px; overscroll-behavior: contain; }
+.command-search-results section h3 { margin: 6px 8px 3px; color: var(--n-ink-4); font: 600 10px var(--sans); letter-spacing: .08em; text-transform: uppercase; }
+.command-search-results [role="option"] { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 5px 8px; border-radius: 8px; color: var(--n-ink-2); cursor: pointer; }
+.command-search-results [role="option"][data-active] { background: var(--n-selected); color: var(--n-ink); }
+.command-search-results [role="option"] > svg { width: 14px; height: 14px; flex: none; color: var(--n-ink-4); }
+.command-search-results [role="option"][data-active] > svg { color: var(--n-ink-2); }
+.command-search-copy { display: flex; min-width: 0; flex: 1; align-items: baseline; gap: 8px; }
+.command-search-copy strong { overflow: hidden; color: inherit; font-size: 13px; font-weight: 530; text-overflow: ellipsis; white-space: nowrap; }
+.command-search-copy small { flex: none; color: var(--n-ink-4); font-size: 11px; }
+.command-search-results kbd, .command-search-hints kbd { flex: none; padding: 1px 5px; border: 1px solid var(--n-line-2); border-radius: 5px; background: color-mix(in srgb, var(--n-sunk) 72%, transparent); color: var(--n-ink-3); font: 500 10px var(--mono); }
+.command-search-empty { display: grid; gap: 3px; margin: 0; padding: 26px 16px 30px; text-align: center; }
+.command-search-empty strong { color: var(--n-ink-2); font-size: 13px; font-weight: 560; }
+.command-search-empty span { color: var(--n-ink-4); font-size: 12px; }
+.command-search-hints { display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--n-line); color: var(--n-ink-4); font-size: 11px; }
+.command-search-hints span { display: inline-flex; align-items: center; gap: 4px; }

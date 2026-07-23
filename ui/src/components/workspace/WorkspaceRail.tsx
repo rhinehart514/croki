@@ -1,6 +1,6 @@
 import { Plus, Search, Settings } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useMemo, useState, type PointerEvent } from "react";
 import type { FirmVenture, SystemIndex, SystemIndexObject, WorkIndex, WorkIndexItem } from "@/api";
 import { VentureSwitcher } from "@/components/firm/VentureSwitcher";
 import { VentureCreateDialog } from "@/components/firm/VentureCreateDialog";
@@ -22,20 +22,19 @@ export function WorkspaceRail({ venture, ventures, mode, modeMotion, width, sear
   onNew: () => void; onSwitchVenture: (venture: FirmVenture) => void; onResize: (width: number) => void; onSettings: () => void;
   onConfigurationChanged: () => void;
 }) {
-  const [create, setCreate] = useState(false); const searchRef = useRef<HTMLInputElement | null>(null);
+  const [create, setCreate] = useState(false);
   const attention = useMemo<Record<WorkspaceMode, ModeAttention>>(() => ({
     work: { needsYou: workIndex?.counts.attention ?? 0, active: workIndex?.counts.active ?? 0 },
     "product-gtm": { needsYou: systemIndex?.counts.attention ?? 0, active: 0 },
   }), [workIndex?.counts.attention, workIndex?.counts.active, systemIndex?.counts.attention]);
   const reducedMotion = useReducedMotion();
   const move = reducedMotion || !modeMotion.animate ? 0 : modeMotion.direction * 7;
-  useEffect(() => { const shortcut = (event: KeyboardEvent) => { if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); searchRef.current?.focus(); } }; window.addEventListener("keydown", shortcut); return () => window.removeEventListener("keydown", shortcut); }, []);
   const resize = (event: PointerEvent<HTMLButtonElement>) => { const origin = event.clientX; const start = width; const move = (next: globalThis.PointerEvent) => onResize(Math.min(360, Math.max(272, start + next.clientX - origin))); const done = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", done); }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", done); };
   return <aside className="thread-rail workspace-rail" aria-label={`${venture.name} workspace rail`}>
     <VentureSwitcher venture={venture} ventures={ventures} onSwitch={onSwitchVenture} onCreate={() => setCreate(true)} />
     <WorkspaceModeNav mode={mode} animate={modeMotion.animate} attention={attention} onMode={onMode} />
     <div className="workspace-rail-tools" data-new-thread={mode === "work" ? "true" : undefined}>
-      <label className="thread-search"><Search aria-hidden="true" /><span className="sr-only">Search {mode === "work" ? "threads" : "Product and go-to-market"}</span><input ref={searchRef} type="search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={mode === "work" ? "Search threads" : "Search Product / GTM"} /><kbd>⌘K</kbd></label>
+      <label className="thread-search"><Search aria-hidden="true" /><span className="sr-only">Search {mode === "work" ? "threads" : "Product and go-to-market"}</span><input type="search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={mode === "work" ? "Search threads" : "Search Product / GTM"} /></label>
       {mode === "work" ? <button type="button" className="workspace-new-thread" aria-label="New thread" title="New thread" onClick={onNew}><Plus aria-hidden="true" /><span className="sr-only">New thread</span></button> : null}
     </div>
     <AnimatePresence initial={false} mode="popLayout">

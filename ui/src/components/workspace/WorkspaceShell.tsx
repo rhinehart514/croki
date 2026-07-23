@@ -16,6 +16,7 @@ import { WorkspaceWorkSurface } from "./WorkspaceWorkSurface";
 import { WorkspaceConversation } from "./WorkspaceConversation";
 import { WorkspaceRailPanel } from "./WorkspaceRailPanel";
 import { WorkspaceOverlays } from "./WorkspaceOverlays";
+import { CommandSearch } from "./CommandSearch";
 import { useWorkspaceConversation } from "./useWorkspaceConversation";
 import { useWorkspaceNavigation } from "./useWorkspaceNavigation";
 import { useWorkspaceVisuals } from "./useWorkspaceVisuals";
@@ -265,6 +266,11 @@ export function WorkspaceShell({
         onOpenThread={openThread} onChanged={() => { refresh(); void timeline.refresh(); }}
         onSettingsConnection={setSettingsConnection}
         onCapabilitiesChanged={refresh}
+      />
+      <CommandSearch
+        mode={mode} workIndex={workIndex} systemIndex={systemIndexAll}
+        onSelectThread={selectThread} onSelectObject={selectObject}
+        onMode={changeMode} onNewThread={newThread}
       />
     </div>
   );
