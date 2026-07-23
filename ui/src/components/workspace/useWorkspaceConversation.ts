@@ -25,6 +25,7 @@ function rootItem(ventureId: string): WorkIndexItem {
     attention: "none",
     terminal: null,
     unread: false,
+    settled: false,
     reviewedThrough: null,
     latestMeaningfulEvent: { kind: "created", ref: ROOT_THREAD_REF, at: null, summary: null },
     runRefs: [],

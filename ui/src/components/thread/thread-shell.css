@@ -61,9 +61,8 @@
 .thread-search kbd { font: var(--text-xs) var(--mono); }
 .thread-rail-list { min-height: 0; flex: 1; overflow: auto; padding: 0 0 20px; scrollbar-width: thin; }
 .thread-rail-list section { margin: 0 0 14px; }
-.thread-rail-list h2, .thread-history h3 { display: flex; align-items: center; justify-content: space-between; margin: 0 8px 7px; color: var(--n-ink-4); font: 600 var(--text-xs)/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+.thread-rail-list h2 { display: flex; align-items: center; justify-content: space-between; margin: 0 8px 7px; color: var(--n-ink-4); font: 600 var(--text-xs)/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; }
 .thread-rail-list h2 small { color: var(--n-ink-4); font: 500 var(--text-xs) var(--mono); letter-spacing: 0; }
-.thread-history h3 { margin-top: 11px; font-size: var(--text-xs); }
 .thread-rail-row { display: grid; width: 100%; min-height: 34px; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 0 7px; border-radius: 7px; color: var(--n-ink-3); font-size: 13px; text-align: left; }
 .thread-rail-row:hover { background: var(--n-hover); color: var(--n-ink); }
 .thread-rail-row[data-selected="true"] { background: var(--n-selected); color: var(--n-ink); }
@@ -72,14 +71,9 @@
 .thread-rail-row > span:not(.sr-only) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread-rail-row small { min-width: 18px; color: var(--n-ink-4); font: var(--text-xs) var(--mono); text-align: right; }
 .thread-rail-empty { margin: 0 8px; color: var(--n-ink-4); font-size: 12px; }
-.thread-list-disclosure { margin: 2px 0 14px; }
-.thread-list-disclosure > summary { display: grid; min-height: 30px; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 0 8px; border-radius: 7px; color: var(--n-ink-4); cursor: pointer; font-size: var(--text-xs); font-weight: 600; letter-spacing: .1em; list-style: none; text-transform: uppercase; }
-.thread-list-disclosure > summary::-webkit-details-marker { display: none; }
-.thread-list-disclosure > summary:hover { background: var(--n-hover); color: var(--n-ink-3); }
-.thread-list-disclosure > summary svg { width: 12px; transition: transform var(--dur-fast) var(--ease-out); }
-.thread-list-disclosure[open] > summary svg { transform: rotate(90deg); }
-.thread-list-disclosure > summary small { font: 500 var(--text-xs) var(--mono); letter-spacing: 0; }
-.thread-list-disclosure > div { padding-top: 3px; }
+.thread-rail-earlier { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--n-line); }
+.thread-rail-earlier .thread-rail-row { min-height: 29px; font-size: 12px; }
+.thread-rail-earlier .thread-rail-row svg { width: 12px; }
 .thread-settings { margin-top: auto; }
 .thread-rail-resizer { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: ew-resize; }
 .thread-rail-resizer:focus-visible, .thread-rail-resizer:hover { background: rgb(79 134 247 / 25%); outline: 0; }

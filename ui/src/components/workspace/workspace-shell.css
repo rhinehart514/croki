@@ -81,7 +81,6 @@
 .workspace-new-thread:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .workspace-new-thread svg { width: 15px; }
 .workspace-rail-mode { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; will-change: transform, opacity; }
-.thread-history > summary { margin: 0 8px; color: var(--n-ink-4); cursor: pointer; font-size: 11px; }
 .mode-rail-body { min-height: 0; flex: 1; overflow: auto; }
 .mode-rail-body nav { display: grid; gap: 2px; padding: 0 1px 10px; }
 .mode-rail-body nav button, .mode-rail-body section > button { display: grid; width: 100%; min-height: 34px; align-items: center; padding: 7px 8px; border-radius: 7px; color: var(--n-ink-3); font-size: 12px; text-align: left; }

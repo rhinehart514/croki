@@ -1,5 +1,4 @@
-import { AlertTriangle, CheckCircle2, ChevronRight, Circle, Clock3, LoaderCircle } from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle, CheckCircle2, Circle, Clock3, LoaderCircle } from "lucide-react";
 import type { WorkIndex, WorkIndexItem } from "@/api";
 
 function ThreadState({ item }: { item: WorkIndexItem }) {
@@ -15,35 +14,19 @@ function Rows({ items, selected, onSelect }: { items: WorkIndexItem[]; selected:
 }
 
 function relative(value: string | null) { const elapsed = Date.now() - Date.parse(value ?? ""); if (!Number.isFinite(elapsed)) return ""; if (elapsed < 3_600_000) return `${Math.max(1, Math.round(elapsed / 60_000))}m`; if (elapsed < 86_400_000) return `${Math.round(elapsed / 3_600_000)}h`; return `${Math.round(elapsed / 86_400_000)}d`; }
-function historyGroups(items: WorkIndexItem[]) {
-  const startToday = new Date().setHours(0, 0, 0, 0);
-  return [
-    ["Today", items.filter((item) => Date.parse(item.updatedAt ?? "") >= startToday)],
-    ["Yesterday", items.filter((item) => { const value = Date.parse(item.updatedAt ?? ""); return value < startToday && value >= startToday - 86_400_000; })],
-    ["Last 7 days", items.filter((item) => { const value = Date.parse(item.updatedAt ?? ""); return value < startToday - 86_400_000 && value >= startToday - 604_800_000; })],
-    ["Older", items.filter((item) => Date.parse(item.updatedAt ?? "") < startToday - 604_800_000)],
-  ] as Array<[string, WorkIndexItem[]]>;
-}
 
+// Settled is derived server-side from real state (open founder decisions, live or queued runs, and a
+// short activity grace window), so the rail never keeps a hand-maintained status of its own: work in
+// motion or waiting on the founder sits above one quiet divider, everything else rests beneath it.
 export function ThreadList({ workIndex, search, selected, onSelect }: { workIndex: WorkIndex | null; crew?: unknown[]; search: string; selected: string | null; onSelect: (item: WorkIndexItem) => void }) {
   const items = workIndex?.items ?? [];
-  const pinned = items.filter((item) => item.pinnedAt).sort((a, b) => String(b.pinnedAt).localeCompare(String(a.pinnedAt)));
-  const active = items.filter((item) => item.activity !== "idle" && !item.pinnedAt);
-  const review = items.filter((item) => item.activity === "idle" && item.attention !== "none" && !item.pinnedAt);
-  const recent = items.filter((item) => item.activity === "idle" && item.attention === "none" && !item.pinnedAt).slice(0, search ? undefined : 12);
-  const older = items.filter((item) => item.lifecycle === "closed" && !recent.includes(item) && !item.pinnedAt);
-  const recentSelected = recent.some((item) => selected === item.threadRef);
-  const [recentExpanded, setRecentExpanded] = useState(false);
-  const recentOpen = review.length < 5 || recentSelected || recentExpanded;
   if (search) return <nav className="thread-rail-list"><section><h2><span>Results</span><small>{workIndex?.counts.matchCount ?? items.length}</small></h2>{items.length ? <Rows items={items} selected={selected} onSelect={onSelect} /> : <p className="thread-rail-empty">No matching threads</p>}</section></nav>;
+  const pinned = items.filter((item) => item.pinnedAt).sort((a, b) => String(b.pinnedAt).localeCompare(String(a.pinnedAt)));
+  const active = items.filter((item) => !item.pinnedAt && !item.settled);
+  const earlier = items.filter((item) => !item.pinnedAt && item.settled);
   return <nav className="thread-rail-list">
     {pinned.length ? <section><h2><span>Pinned</span><small>{pinned.length}</small></h2><Rows items={pinned} selected={selected} onSelect={onSelect} /></section> : null}
-    {active.length ? <section><h2><span>Active</span><small>{active.length}</small></h2><Rows items={active} selected={selected} onSelect={onSelect} /></section> : null}
-    {review.length ? <section><h2><span>Needs review</span><small>{review.length}</small></h2><Rows items={review} selected={selected} onSelect={onSelect} /></section> : null}
-    <details className="thread-list-disclosure" open={recentOpen} onToggle={(event) => { if (review.length >= 5 && !recentSelected) setRecentExpanded(event.currentTarget.open); }}>
-      <summary><ChevronRight aria-hidden="true" /><span>Recent</span><small>{recent.length}</small></summary>
-      <div>{recent.length ? <Rows items={recent} selected={selected} onSelect={onSelect} /> : <p className="thread-rail-empty">Start with a direction</p>}</div>
-    </details>
-    {older.length ? <details className="thread-history"><summary>Older work</summary>{historyGroups(older).map(([label, group]) => group.length ? <div key={label}><h3>{label}</h3><Rows items={group} selected={selected} onSelect={onSelect} /></div> : null)}</details> : null}
+    <section aria-label="Threads in motion">{active.length ? <Rows items={active} selected={selected} onSelect={onSelect} /> : <p className="thread-rail-empty">{items.length ? "Nothing needs you right now" : "Start with a direction"}</p>}</section>
+    {earlier.length ? <section className="thread-rail-earlier" aria-label="Earlier threads"><h2><span>Earlier</span><small>{earlier.length}</small></h2><Rows items={earlier} selected={selected} onSelect={onSelect} /></section> : null}
   </nav>;
 }

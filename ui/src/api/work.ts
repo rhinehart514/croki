@@ -97,6 +97,7 @@ export type WorkIndexItem = {
   attention: WorkIndexAttention;
   terminal: WorkIndexTerminal;
   unread: boolean;
+  settled: boolean;
   reviewedThrough: string | null;
   latestMeaningfulEvent: { kind: string; ref: string; at: string | null; summary: string | null };
   runRefs: string[];

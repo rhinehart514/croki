@@ -5,7 +5,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import test, { describe, it } from "node:test";
 
-import { projectWorkIndex } from "../../src/firm/work-index.mjs";
+import { SETTLED_ACTIVITY_GRACE_MS, projectWorkIndex } from "../../src/firm/work-index.mjs";
 import { founderHeaders } from "../helpers/founder-capability.mjs";
 
 function thread(id, name = `Direction ${id}`, extra = {}) {
@@ -119,6 +119,70 @@ describe("production work-index projection", () => {
       const right = threads.find((entry) => `thread:${entry.id}` === b);
       return Date.parse(right.updatedAt) - Date.parse(left.updatedAt) || a.localeCompare(b);
     }));
+  });
+
+  it("derives settled at read time: founder-blocked, moving, or just-touched work stays active", () => {
+    const now = Date.parse("2026-07-18T12:00:00.000Z");
+    const threads = [
+      thread("blocked", "Approve the launch"),
+      thread("running", "Interview the market"),
+      thread("queued", "Draft the follow-up"),
+      thread("fresh", "Just answered", { updatedAt: new Date(now - 30_000).toISOString() }),
+      thread("quiet", "Old finished work"),
+      thread("timeless", "No honest timestamp", { createdAt: null, updatedAt: null }),
+    ];
+    const runs = [
+      run("r-blocked", "blocked", { decisionRefs: ["decision:wall-1"] }),
+      run("r-running", "running", { completedAt: null }),
+      run("r-queued", "queued", { completedAt: null }),
+      run("r-quiet", "quiet"),
+    ];
+    const index = projectWorkIndex({
+      ventureId: "venture-a",
+      model: model({ threads, runs }),
+      activeDrives: [
+        { id: "r-running", startedAt: "2026-07-18T11:59:00.000Z" },
+        { id: "r-queued", queuedAt: "2026-07-18T11:59:00.000Z" },
+      ],
+      receipts: [receipt("r-quiet", "completed")],
+      decisions: [{ id: "wall-1", decision: null, createdAt: "2026-07-18T09:00:00.000Z" }],
+      now,
+    });
+    const settledByThread = new Map(index.items.map((item) => [item.threadRef, item.settled]));
+    assert.equal(settledByThread.get("thread:blocked"), false, "an open founder decision is never settled");
+    assert.equal(settledByThread.get("thread:running"), false, "a live run is never settled");
+    assert.equal(settledByThread.get("thread:queued"), false, "a queued run is never settled");
+    assert.equal(settledByThread.get("thread:fresh"), false, "activity inside the grace window stays active");
+    assert.equal(settledByThread.get("thread:quiet"), true, "idle unblocked work past the grace window settles");
+    assert.equal(settledByThread.get("thread:timeless"), false, "a row without a real timestamp is never filed away");
+  });
+
+  it("bounds the settled grace window on both sides so clock skew cannot pin a row active", () => {
+    const now = Date.parse("2026-07-18T12:00:00.000Z");
+    const skewed = thread("skewed", "From a fast clock", {
+      updatedAt: new Date(now + SETTLED_ACTIVITY_GRACE_MS + 60_000).toISOString(),
+    });
+    const near = thread("near", "Slightly ahead", { updatedAt: new Date(now + 30_000).toISOString() });
+    const index = projectWorkIndex({ ventureId: "venture-a", model: model({ threads: [skewed, near] }), now });
+    assert.equal(index.items.find((item) => item.threadRef === "thread:skewed").settled, true);
+    assert.equal(index.items.find((item) => item.threadRef === "thread:near").settled, false);
+  });
+
+  it("derives settled for legacy bet families from the same real state", () => {
+    const now = Date.parse("2026-07-18T12:00:00.000Z");
+    const bets = [
+      { id: "old-bet", intent: "Historical direction", createdAt: "2026-07-01T10:00:00.000Z", updatedAt: "2026-07-01T10:00:00.000Z" },
+      { id: "gated-bet", intent: "Waiting on the founder", createdAt: "2026-07-01T10:00:00.000Z", updatedAt: "2026-07-01T10:00:00.000Z" },
+    ];
+    const index = projectWorkIndex({
+      ventureId: "venture-a",
+      model: model({}),
+      bets,
+      decisions: [{ id: "gate-1", betId: "gated-bet", decision: null, createdAt: "2026-07-01T11:00:00.000Z" }],
+      now,
+    });
+    assert.equal(index.items.find((item) => item.threadRef === "thread:legacy-old-bet").settled, true);
+    assert.equal(index.items.find((item) => item.threadRef === "thread:legacy-gated-bet").settled, false);
   });
 
   it("projects Product/GTM objects and nests each thought under the canonical subjects it changes", () => {

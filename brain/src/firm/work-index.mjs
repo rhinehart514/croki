@@ -151,6 +151,22 @@ function activityFor(activeDrive) {
   return "running";
 }
 
+// Just-touched work keeps its place above the quiet divider for this long. Two minutes mirrors the
+// adoption grace window T3 Code uses for the same partition: long enough that a message whose run has
+// not registered yet is never mistaken for finished work, short enough that stale rows settle.
+export const SETTLED_ACTIVITY_GRACE_MS = 2 * 60 * 1_000;
+
+// Settled is derived at read time from real state, like every other facet here — never stored, so it
+// cannot drift. Anything blocked on the founder or still moving is active; the two-sided grace bound
+// keeps a skewed future timestamp from pinning a row active for the whole skew, and a row with no
+// honest timestamp at all stays active rather than being quietly filed away.
+function settledFor({ pendingDecision, activity, lastActivityMs, now }) {
+  if (pendingDecision) return false;
+  if (activity !== "idle") return false;
+  if (!lastActivityMs) return false;
+  return Math.abs(now - lastActivityMs) > SETTLED_ACTIVITY_GRACE_MS;
+}
+
 function decisionEvent(runs, decisionsById) {
   const pending = list(runs).flatMap((run) => list(run?.decisionRefs))
     .map((ref) => decisionsById.get(String(ref).replace(/^decision:/, "")))
@@ -200,7 +216,7 @@ function latestEvent({ thread, run, activeDrive, receipt, pendingDecision }) {
   };
 }
 
-function itemFor({ ventureId, thread, runs, activeByRun, receiptByRun, decisionsById }) {
+function itemFor({ ventureId, thread, runs, activeByRun, receiptByRun, decisionsById, now }) {
   const latestRun = newest(runs, (run) => {
     const active = activeByRun.get(run.id);
     const receipt = receiptByRun.get(run.id);
@@ -240,6 +256,12 @@ function itemFor({ ventureId, thread, runs, activeByRun, receiptByRun, decisions
     attention,
     terminal,
     unread,
+    settled: settledFor({
+      pendingDecision,
+      activity: activityFor(activeDrive),
+      lastActivityMs: Math.max(time(latestMeaningfulEvent.at), time(thread.updatedAt), time(thread.createdAt)),
+      now,
+    }),
     reviewedThrough: thread.reviewedThrough ?? null,
     latestMeaningfulEvent,
     runRefs: runs.map((run) => `run:${run.id}`),
@@ -314,7 +336,7 @@ function legacyFamilies(bets) {
   return [...families.values()];
 }
 
-function legacyItemsFor({ ventureId, bets, messages, decisions, outcomes, activeDrives }) {
+function legacyItemsFor({ ventureId, bets, messages, decisions, outcomes, activeDrives, now }) {
   return legacyFamilies(bets).map((family) => {
     const ids = new Set(family.bets.map((bet) => bet.id));
     const familyMessages = list(messages).filter((message) => ids.has(message.betId));
@@ -351,6 +373,12 @@ function legacyItemsFor({ ventureId, bets, messages, decisions, outcomes, active
       attention: pending ? "decision" : latestOutcome ? "review" : "none",
       terminal: lifecycle === "closed" ? "completed" : null,
       unread: Boolean(pending || latestOutcome),
+      settled: settledFor({
+        pendingDecision: pending,
+        activity: activityFor(latestDrive),
+        lastActivityMs: Math.max(time(latestMeaningfulEvent.at), time(latestBet?.updatedAt), time(latestBet?.createdAt)),
+        now,
+      }),
       reviewedThrough: null,
       latestMeaningfulEvent,
       runRefs: [],
@@ -383,7 +411,7 @@ function compareWorkItems(a, b) {
   return time(b.updatedAt) - time(a.updatedAt) || a.threadRef.localeCompare(b.threadRef);
 }
 
-export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts = [], decisions = [], messages = [], bets = [], outcomes = [], query = "" } = {}) {
+export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts = [], decisions = [], messages = [], bets = [], outcomes = [], query = "", now = Date.now() } = {}) {
   if (!ventureId || !model) throw Object.assign(new Error("A work index needs venture truth."), { code: "work_index_invalid", status: 400 });
   const activeByRun = new Map(list(activeDrives).map((drive) => [drive.id, drive]));
   const receiptByRun = new Map(list(receipts).map((receipt) => [String(receipt.runRef ?? "").replace(/^run:/, ""), receipt]));
@@ -402,6 +430,7 @@ export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts
       activeByRun,
       receiptByRun,
       decisionsById,
+      now,
     }))
     .map((item) => ({
       ...item,
@@ -415,7 +444,7 @@ export function projectWorkIndex({ ventureId, model, activeDrives = [], receipts
   const legacyBets = list(bets).filter((bet) => !canonicalBetIds.has(bet.id));
   // Migration is additive: creating the first canonical Thread must not make every older direction
   // disappear. Project unclaimed bet families beside canonical threads until exact joins exist.
-  const legacyItems = legacyItemsFor({ ventureId, bets: legacyBets, messages, decisions, outcomes, activeDrives });
+  const legacyItems = legacyItemsFor({ ventureId, bets: legacyBets, messages, decisions, outcomes, activeDrives, now });
   const allItems = [...canonicalItems, ...legacyItems].sort(compareWorkItems);
   const items = String(query ?? "").trim()
     ? allItems.map((item) => ({ ...item, matchRefs: searchMatches(item, query, { messages, bets, decisions, outcomes }) }))
