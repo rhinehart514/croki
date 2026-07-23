@@ -91,6 +91,7 @@
 .thread-header-copy h1 { margin: 0; overflow: hidden; color: var(--n-ink); font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .thread-header-copy span { color: var(--n-ink-4); font-size: 11px; }
 .thread-header-copy > small[role="alert"] { display: block; color: var(--danger); font-size: 10px; }
+.thread-usage { font-variant-numeric: tabular-nums; }
 .thread-title-editor { display: flex; min-width: 0; align-items: center; gap: 3px; }
 .thread-title-editor input { width: min(520px, 100%); min-width: 120px; height: 30px; padding: 0 8px; border: 1px solid var(--primary); border-radius: 6px; outline: 2px solid color-mix(in srgb, var(--primary) 18%, transparent); background: var(--n-sunk); color: var(--n-ink); font: 650 14px var(--sans); }
 .thread-title-editor button { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 6px; color: var(--n-ink-3); }
@@ -148,6 +149,20 @@
 .thread-message-body .firm-app-message-response :is(h3, h4) { font-size: 14px; }
 .thread-message-body .firm-app-message-response hr { margin: 18px 0; border: 0; border-top: 1px solid var(--n-line); }
 .thread-message-body .firm-app-message-response code:not(pre code) { padding: 1px 4px; border-radius: 4px; background: var(--n-hover); color: var(--n-ink); }
+
+/* A long founder brain-dump keeps the transcript rhythm: it collapses behind a fade with the full
+   text one click away. Nothing in the durable record is truncated. */
+.thread-founder-collapse p { margin: 0; white-space: pre-wrap; }
+.thread-founder-collapse:not([data-expanded]) p { max-height: 176px; overflow: hidden; mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent); }
+.thread-message-expand { display: block; margin-top: 6px; padding: 0; border: 0; background: none; color: var(--n-ink-4); font-size: 11px; font-weight: 550; cursor: pointer; }
+.thread-message-expand:hover { color: var(--n-ink-2); }
+
+/* Copy-as-Markdown on any settled turn: invisible at rest, revealed by hovering or focusing the turn. */
+.thread-message { position: relative; }
+.thread-message-copy { position: absolute; z-index: 1; right: 0; bottom: -2px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--n-ink-4); cursor: pointer; opacity: 0; transition: opacity 140ms var(--ease), color 140ms var(--ease); transform: translateY(100%); }
+.thread-message:hover .thread-message-copy, .thread-message-copy:focus-visible { opacity: 1; }
+.thread-message-copy:hover { background: var(--n-hover); color: var(--n-ink-2); }
+.thread-message-copy svg { width: 12px; height: 12px; }
 .thread-handoff { display: grid; grid-template-columns: 8px auto minmax(0, 1fr); align-items: baseline; gap: 8px; margin: -8px 0 28px 82px; color: var(--n-ink-3); font-size: 12px; }
 .thread-handoff-mark { width: 6px; height: 6px; border-radius: 99px; background: #63c18b; box-shadow: 0 0 0 3px rgb(99 193 139 / 10%); }
 .thread-handoff strong { color: var(--n-ink-2); font-weight: 600; }
@@ -157,14 +172,20 @@
 .thread-agent-update strong { color: var(--n-ink-2); font-size: 12px; }
 .thread-agent-update p { margin: 2px 0 0; font-size: 12px; }
 .thread-agent-state { color: var(--n-ink-4); font: var(--text-xs) var(--mono); text-transform: uppercase; }
-.thread-agent-details { margin-top: 7px; }
-.thread-agent-details summary { width: fit-content; color: var(--n-ink-4); font-size: 11px; cursor: pointer; list-style: none; }
-.thread-agent-details summary::-webkit-details-marker { display: none; }
-.thread-agent-details summary::before { display: inline-block; width: 12px; content: "›"; transition: transform 160ms var(--ease); }
-.thread-agent-details[open] summary::before { transform: rotate(90deg); }
-.thread-agent-details ol { display: grid; gap: 5px; margin: 8px 0 0 5px; padding: 0 0 0 13px; border-left: 1px solid var(--n-line); list-style: none; }
-.thread-agent-details li { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 18px; color: var(--n-ink-3); font-size: 11px; line-height: 1.45; }
-.thread-agent-details li small { flex: 0 0 auto; color: var(--n-ink-4); font: 9px var(--mono); }
+/* Safe tool steps: the latest few stay visible; the earlier run folds behind one factual toggle.
+   Tones stay quiet — thinking beats dim and soften, failures use the shared attention ink. */
+.thread-agent-line p[data-tone="thinking"] { color: var(--n-ink-4); font-style: italic; }
+.thread-agent-steps { margin-top: 7px; }
+.thread-agent-fold { display: block; margin: 0 0 6px 5px; padding: 0 0 0 13px; border: 0; background: none; color: var(--n-ink-4); font-size: 11px; cursor: pointer; }
+.thread-agent-fold:hover { color: var(--n-ink-2); }
+.thread-agent-steps ol { display: grid; gap: 5px; margin: 0 0 0 5px; padding: 0 0 0 13px; border-left: 1px solid var(--n-line); list-style: none; }
+.thread-agent-steps li { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 18px; color: var(--n-ink-3); font-size: 11px; line-height: 1.45; }
+.thread-agent-steps li small { flex: 0 0 auto; color: var(--n-ink-4); font: 9px var(--mono); }
+.thread-agent-steps li[data-tone="thinking"] { color: var(--n-ink-4); font-style: italic; }
+.thread-agent-steps li[data-tone="attention"] { color: var(--amber-ink); }
+.thread-agent-live-tool { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin: 6px 0 0 5px; padding: 0 0 0 13px; border-left: 1px solid var(--n-line); }
+.thread-agent-live-tool code { flex: 0 0 auto; color: var(--n-ink-3); font: 10px var(--mono); }
+.thread-agent-live-tool span { overflow: hidden; color: var(--n-ink-4); font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .thread-loading, .thread-stale { margin: 10px auto; color: var(--n-ink-4); font-size: 12px; }
 
 /* A restoring Work Thread reads as content on the way back, not an empty pane: the skeleton keeps the
@@ -261,9 +282,10 @@
 .thread-conversation[data-surface="work"] .thread-agent-update p { margin: 0; color: var(--n-ink-2); font-size: 14px; line-height: 1.6; }
 .thread-conversation[data-surface="work"] .thread-agent-state { color: var(--n-ink-4); font: 500 10px/1.4 var(--mono); letter-spacing: 0; text-transform: none; }
 .thread-conversation[data-surface="work"] .thread-agent-wait-note { width: fit-content; margin-top: 4px; color: var(--n-ink-4); font-size: 11px; line-height: 1.45; }
-.thread-conversation[data-surface="work"] .thread-agent-details { margin-top: 5px; }
-.thread-conversation[data-surface="work"] .thread-agent-details summary:hover { color: var(--n-ink-2); }
-.thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-agent-details ol { border-left-color: color-mix(in srgb, var(--agent-spectrum-violet) 42%, var(--n-line)); }
+.thread-conversation[data-surface="work"] .thread-agent-update .thread-agent-line p[data-tone="thinking"] { color: var(--n-ink-4); font-style: italic; }
+.thread-conversation[data-surface="work"] .thread-agent-steps { margin-top: 5px; }
+.thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-agent-steps ol,
+.thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-agent-live-tool { border-left-color: color-mix(in srgb, var(--agent-spectrum-violet) 42%, var(--n-line)); }
 @keyframes thread-agent-breathe {
   50% { opacity: .42; transform: scale(.72); }
 }
@@ -475,6 +497,6 @@
   .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-message:not([data-role="founder"]) > header::before,
   .thread-conversation[data-surface="work"] .thread-composer[data-chat-mode="product-gtm"] .now-composer-shell,
   .thread-conversation[data-surface="work"] .thread-composer .now-composer-flight { animation: none; }
-  .thread-agent-details summary::before { transition: none; }
+  .thread-message-copy { transition: none; }
   .visual-stage { will-change: auto; }
 }

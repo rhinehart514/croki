@@ -27,16 +27,42 @@ const TOOL_ACTIVITY = {
   involve_participant: "Involved another participant",
 };
 
+// Each step carries a tone so the transcript can render reasoning capture quietly, failures as
+// attention, and ordinary tool work plainly — shaped labels only, never model prose.
 function inspectableActivity(bet) {
   return list(bet?.events).flatMap((event) => {
     if (event?.type === "tool_started") {
-      return [{ id: event.id, label: TOOL_ACTIVITY[event.detail] ?? "Used a venture capability", at: event.at ?? null, durationMs: Number.isFinite(event.durationMs) ? event.durationMs : null }];
+      const tone = event.detail === "record_working_theory" ? "thinking" : "tool";
+      return [{ id: event.id, label: TOOL_ACTIVITY[event.detail] ?? "Used a venture capability", tone, at: event.at ?? null, durationMs: Number.isFinite(event.durationMs) ? event.durationMs : null }];
     }
-    if (event?.type === "tool_failed") return [{ id: event.id, label: "A work step needs attention", at: event.at ?? null, durationMs: null }];
-    if (event?.type === "asked") return [{ id: event.id, label: "Prepared a founder question", at: event.at ?? null, durationMs: null }];
-    if (event?.type === "speak") return [{ id: event.id, label: "Shared a progress update", at: event.at ?? null, durationMs: null }];
+    if (event?.type === "tool_failed") return [{ id: event.id, label: "A work step needs attention", tone: "attention", at: event.at ?? null, durationMs: null }];
+    if (event?.type === "asked") return [{ id: event.id, label: "Prepared a founder question", tone: "info", at: event.at ?? null, durationMs: null }];
+    if (event?.type === "speak") return [{ id: event.id, label: "Shared a progress update", tone: "info", at: event.at ?? null, durationMs: null }];
     return [];
   }).slice(-8);
+}
+
+// The shaped reasoning beats work-loop-receipts emits between tool receipts. Matching by exact
+// label keeps this a projection of existing shaped activity, not a new interpretation layer.
+const THINKING_BEATS = new Set(["Starting work", "Thinking through the direction", "Working through the direction", "Preparing the return", "Updating venture understanding"]);
+
+// One honest usage line per Thread: the sum of what drive receipts actually measured (adapter-reported
+// dollars, SDK-reported tokens). Null when nothing was measured — the UI shows nothing rather than 0.
+function threadUsage(bets) {
+  const total = { costUsd: 0, inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, driveCount: 0 };
+  let recorded = false;
+  for (const bet of bets) {
+    for (const event of list(bet?.events)) {
+      if (event?.type !== "drive_receipt") continue;
+      total.driveCount += 1;
+      if (Number.isFinite(event.costUsd) && event.costUsd >= 0) { total.costUsd += event.costUsd; recorded = true; }
+      for (const key of ["inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"]) {
+        const amount = Number(event.usage?.[key]);
+        if (Number.isFinite(amount) && amount > 0) { total[key] += amount; recorded = true; }
+      }
+    }
+  }
+  return recorded ? total : null;
 }
 
 function at(value, fallback = null) {
@@ -176,10 +202,14 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
       participantLabel: participantLabel(drive.teammateRef),
       state,
       summary: state === "stopping" ? "Stop requested" : state === "queued" ? "Queued" : drive.activity ?? "Working in this thread",
+      summaryTone: state === "working" && THINKING_BEATS.has(String(drive.activity ?? "")) ? "thinking" : null,
       startedAt: drive.startedAt,
       updatedAt: drive.lastBeatAt ?? drive.startedAt,
       betRef: drive.betId ? `bet:${drive.betId}` : null,
       activitySteps,
+      // The tool call forming right now — name plus partial arguments the SDK has streamed so far.
+      // Process-local presence from the drive, shown live and dropped when the call settles.
+      liveTool: state === "working" && drive.liveTool?.name ? { name: drive.liveTool.name, partialInput: String(drive.liveTool.partialInput ?? "") } : null,
     });
     // The assistant's reply as it forms — projected as a normal streaming teammate turn so the founder
     // watches it stream in the transcript, not as a status chip. It carries `at: lastBeatAt` so it sorts
@@ -335,6 +365,7 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
     revision: model.revision,
     thread: indexItem ?? { threadRef, founderIntent: thread.name, lifecycle: thread.lifecycle, participantRefs: thread.participantRefs, activeParticipantRefs: [] },
     items,
+    usage: threadUsage(bets),
     agents: active.map((drive) => ({ participantRef: drive.teammateRef, participantLabel: participantLabel(drive.teammateRef), state: agentState(drive), runRef: `run:${drive.id}`, betRef: drive.betId ? `bet:${drive.betId}` : null, activity: drive.activity ?? null, startedAt: drive.startedAt, updatedAt: drive.abortRequestedAt ?? drive.lastBeatAt ?? drive.startedAt })),
     visuals,
   };

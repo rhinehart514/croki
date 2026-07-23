@@ -1,3 +1,5 @@
+import { Check, Copy } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { ThreadTimelineItem, VisualReference } from "@/api";
 import { MessageResponse } from "@/components/ai-elements/message";
 import {
@@ -19,6 +21,45 @@ type Props = {
 };
 
 const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
+
+// A founder brain-dump longer than this collapses behind a fade so the transcript keeps its rhythm;
+// the full message is one click away and nothing is truncated in the durable record.
+const MAX_COLLAPSED_FOUNDER_CHARS = 600;
+const MAX_COLLAPSED_FOUNDER_LINES = 8;
+
+function FounderMessageBody({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const collapsible = content.length > MAX_COLLAPSED_FOUNDER_CHARS || content.split("\n").length > MAX_COLLAPSED_FOUNDER_LINES;
+  if (!collapsible) return <p>{content}</p>;
+  return (
+    <div className="thread-founder-collapse" data-expanded={expanded ? "true" : undefined}>
+      <p>{content}</p>
+      <button type="button" className="thread-message-expand" aria-expanded={expanded} onClick={() => setExpanded((open) => !open)}>
+        {expanded ? "Show less" : "Show full message"}
+      </button>
+    </div>
+  );
+}
+
+function CopyTurnButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return undefined;
+    const timer = window.setTimeout(() => setCopied(false), 1_000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+    } catch { /* Clipboard unavailable: the button simply does not confirm. */ }
+  };
+  return (
+    <button type="button" className="thread-message-copy" aria-label={copied ? "Copied" : "Copy message as Markdown"} title="Copy as Markdown" onClick={() => void copy()}>
+      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    </button>
+  );
+}
 
 export function ThreadMessage({ item, surface = "context", chatMode = "code", onOpenVisual, onOpenThread }: Props) {
   if (item.kind === "artifact") return <ArtifactMessage item={item} onOpenVisual={onOpenVisual} />;
@@ -81,10 +122,11 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
           {attachments.map((attachment) => <ThreadImage key={attachment.id} ventureId={String(item.ventureId ?? "")} imageId={attachment.id} name={attachment.name} />)}
         </div> : null}
         {role === "founder"
-          ? <p>{content}</p>
+          ? <FounderMessageBody content={content} />
           : <MessageResponse>{content}</MessageResponse>}
         {streaming ? <span className="thread-message-caret" aria-label="Responding…" /> : null}
       </div>
+      {!streaming && content.trim() ? <CopyTurnButton content={content} /> : null}
     </article>
   );
 }

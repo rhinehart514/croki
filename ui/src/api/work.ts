@@ -271,11 +271,23 @@ export type ThreadTimelineItem = {
   [key: string]: unknown;
 };
 
+// Measured spend for a Thread: adapter-reported dollars and SDK-reported tokens summed from drive
+// receipts. Null when nothing was measured — the UI shows nothing rather than a fabricated zero.
+export type ThreadUsage = {
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  driveCount: number;
+};
+
 export type ThreadTimeline = {
   ventureId: string;
   revision: number;
   thread: WorkIndexItem;
   items: ThreadTimelineItem[];
+  usage?: ThreadUsage | null;
   agents: ThreadAgentStatus[];
   visuals: VisualReference[];
 };

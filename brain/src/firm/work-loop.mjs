@@ -331,6 +331,7 @@ async function driveTeammateLeased({
       currentWork = { ...currentWork, spentUsd: (Number(currentWork.spentUsd) || 0) + (Number(usd) || 0) };
       checkpointWork();
     },
+    onUsage: (usage) => receipts.noteUsage(usage),
     maxSteps: deps.maxSteps ?? agent.budget.maxSteps ?? configuration.defaults.maxSteps ?? DEFAULT_MAX_STEPS,
     maxBudgetUsd: spendAvailability.remainingUsd,
     stepCount: Number(currentWork.stepCount) || 0,

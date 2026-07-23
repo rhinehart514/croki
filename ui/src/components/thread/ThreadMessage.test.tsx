@@ -69,24 +69,78 @@ describe("thread material grammar", () => {
     expect(screen.getByRole("status")).toHaveAccessibleName(/^Reading venture context/);
   });
 
-  it("expands a factual work log without exposing hidden model prose", () => {
+  it("keeps the latest factual steps visible and folds earlier ones without exposing hidden model prose", () => {
     render(<ThreadMessage surface="work" item={item("agent-status", {
       participantRef: "founding-teammate",
       state: "working",
       summary: "Reading source evidence",
       startedAt: new Date(Date.now() - 12_000).toISOString(),
       activitySteps: [
+        { id: "event:truth", label: "Read venture truth", durationMs: 90 },
+        { id: "event:config", label: "Checked venture configuration", durationMs: 60 },
         { id: "event:search", label: "Searched the repository", durationMs: 145 },
         { id: "event:read", label: "Read source evidence", durationMs: 1_420 },
+        { id: "event:theory", label: "Updated venture understanding", tone: "thinking", durationMs: 300 },
       ],
       hiddenText: "private internal reasoning",
     })} onOpenVisual={open} onOpenThread={openThread} />);
-    fireEvent.click(screen.getByText("Show activity"));
     expect(screen.getByText("Searched the repository")).toBeVisible();
     expect(screen.getByText("145ms")).toBeVisible();
     expect(screen.getByText("Read source evidence")).toBeVisible();
     expect(screen.getByText("1.4s")).toBeVisible();
+    expect(screen.queryByText("Read venture truth")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+2 earlier steps" }));
+    expect(screen.getByText("Read venture truth")).toBeVisible();
+    expect(screen.getByText("Checked venture configuration")).toBeVisible();
+    expect(screen.getByText("Updated venture understanding").closest("li")).toHaveAttribute("data-tone", "thinking");
+    fireEvent.click(screen.getByRole("button", { name: "Hide earlier steps" }));
+    expect(screen.queryByText("Read venture truth")).not.toBeInTheDocument();
     expect(screen.queryByText("private internal reasoning")).not.toBeInTheDocument();
+  });
+
+  it("renders reasoning beats quietly and the forming tool call factually while work is live", () => {
+    const { container, rerender } = render(<ThreadMessage surface="work" item={item("agent-status", {
+      participantRef: "founding-teammate",
+      state: "working",
+      summary: "Thinking through the direction",
+      summaryTone: "thinking",
+      startedAt: new Date(Date.now() - 5_000).toISOString(),
+      liveTool: { name: "search_repository", partialInput: '{"query": "onboarding fl' },
+    })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.getByText("Thinking through the direction")).toHaveAttribute("data-tone", "thinking");
+    expect(screen.getByText("search_repository")).toBeVisible();
+    expect(screen.getByText('{"query": "onboarding fl')).toBeVisible();
+    rerender(<ThreadMessage surface="work" item={item("agent-status", {
+      participantRef: "founding-teammate",
+      state: "working",
+      summary: "Searched the repository",
+      startedAt: new Date(Date.now() - 5_000).toISOString(),
+      liveTool: null,
+    })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(container.querySelector(".thread-agent-live-tool")).toBeNull();
+    expect(screen.getByText("Searched the repository")).not.toHaveAttribute("data-tone");
+  });
+
+  it("collapses a long founder message behind an expand control without truncating the record", () => {
+    const longDirection = "The onboarding flow needs a rethink. ".repeat(30).trim();
+    render(<ThreadMessage surface="work" item={item("message", { role: "founder", content: longDirection })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.getByText(longDirection)).toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Show full message" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Show less" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("keeps short founder messages plain and offers copy only on settled turns", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { rerender } = render(<ThreadMessage surface="work" item={item("message", { role: "founder", content: "Ship it" })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.queryByRole("button", { name: "Show full message" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy message as Markdown" }));
+    await screen.findByRole("button", { name: "Copied" });
+    expect(writeText).toHaveBeenCalledWith("Ship it");
+    rerender(<ThreadMessage surface="work" item={item("message", { role: "teammate", participantRef: "codex", content: "Still forming", streaming: true })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.queryByRole("button", { name: "Copy message as Markdown" })).not.toBeInTheDocument();
   });
 
   it("identifies the participating agent inside Product and GTM chat", () => {

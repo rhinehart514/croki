@@ -5,6 +5,9 @@ import type { WorkChatMode } from "@/components/work-mode/WorkComposerBar";
 const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
 const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
 
+// How many of the most recent safe tool steps stay visible; earlier ones fold behind one toggle.
+const VISIBLE_STEPS = 3;
+
 function durationLabel(value: unknown) {
   const milliseconds = number(value);
   if (milliseconds == null) return null;
@@ -26,8 +29,20 @@ function elapsedMilliseconds(startedAt: unknown, now: number) {
   return Number.isFinite(started) ? Math.max(0, now - started) : null;
 }
 
+type Step = { id: string; label: string; tone: string; duration: string | null };
+
+function StepRow({ step }: { step: Step }) {
+  return (
+    <li data-tone={step.tone}>
+      <span>{step.label}</span>
+      {step.duration ? <small>{step.duration}</small> : null}
+    </li>
+  );
+}
+
 export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code" }: { item: ThreadTimelineItem; surface?: "work" | "context"; chatMode?: WorkChatMode }) {
   const [now, setNow] = useState(() => Date.now());
+  const [showEarlier, setShowEarlier] = useState(false);
   const participantRef = text(item.participantRef, "agent");
   const participant = text(item.participantLabel, participantRef);
   const state = text(item.state, "working");
@@ -39,12 +54,19 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
   const elapsed = elapsedLabel(item.startedAt, now);
   const elapsedMs = elapsedMilliseconds(item.startedAt, now);
   const summary = text(item.summary, "Working in this thread");
-  const activitySteps = Array.isArray(item.activitySteps) ? item.activitySteps.flatMap((entry) => {
+  const summaryTone = text(item.summaryTone);
+  const activitySteps: Step[] = Array.isArray(item.activitySteps) ? item.activitySteps.flatMap((entry) => {
     if (!entry || typeof entry !== "object") return [];
     const step = entry as Record<string, unknown>;
     const label = text(step.label).trim();
-    return label ? [{ id: text(step.id, label), label, duration: durationLabel(step.durationMs) }] : [];
+    return label ? [{ id: text(step.id, label), label, tone: text(step.tone, "tool"), duration: durationLabel(step.durationMs) }] : [];
   }) : [];
+  const earlierSteps = activitySteps.slice(0, Math.max(0, activitySteps.length - VISIBLE_STEPS));
+  const latestSteps = activitySteps.slice(-VISIBLE_STEPS);
+  const liveTool = item.liveTool && typeof item.liveTool === "object" ? item.liveTool as Record<string, unknown> : null;
+  const liveToolName = text(liveTool?.name).trim();
+  // Only the tail of the forming arguments fits on one quiet line; the newest characters carry the signal.
+  const liveToolInput = text(liveTool?.partialInput).replace(/\s+/g, " ").trim().slice(-140);
   const longWait = state === "working" && elapsedMs != null && elapsedMs >= 90_000;
   const stateLabel = `${longWait ? "Taking longer than usual" : `${state.charAt(0).toUpperCase()}${state.slice(1)}`}${elapsed ? ` · ${elapsed}` : ""}`;
   const showParticipant = surface === "context" || chatMode === "product-gtm";
@@ -55,14 +77,26 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
       <div>
         <div className="thread-agent-line">
           {showParticipant ? <strong>{participant}</strong> : null}
-          <p>{summary}</p>
+          <p data-tone={summaryTone || undefined}>{summary}</p>
           <span className="thread-agent-state">{stateLabel}</span>
         </div>
         {longWait ? <p className="thread-agent-wait-note">The work is still active. You can leave this thread and return when it finishes.</p> : null}
-        {activitySteps.length ? <details className="thread-agent-details">
-          <summary>Show activity</summary>
-          <ol>{activitySteps.map((step) => <li key={step.id}><span>{step.label}</span>{step.duration ? <small>{step.duration}</small> : null}</li>)}</ol>
-        </details> : null}
+        {activitySteps.length ? <div className="thread-agent-steps">
+          {earlierSteps.length ? <button
+            type="button"
+            className="thread-agent-fold"
+            aria-expanded={showEarlier}
+            onClick={() => setShowEarlier((open) => !open)}
+          >{showEarlier ? "Hide earlier steps" : `+${earlierSteps.length} earlier ${earlierSteps.length === 1 ? "step" : "steps"}`}</button> : null}
+          <ol>
+            {showEarlier ? earlierSteps.map((step) => <StepRow key={step.id} step={step} />) : null}
+            {latestSteps.map((step) => <StepRow key={step.id} step={step} />)}
+          </ol>
+        </div> : null}
+        {state === "working" && liveToolName ? <p className="thread-agent-live-tool">
+          <code>{liveToolName}</code>
+          {liveToolInput ? <span>{liveToolInput}</span> : null}
+        </p> : null}
       </div>
     </article>
   );

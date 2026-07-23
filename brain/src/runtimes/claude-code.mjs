@@ -28,7 +28,7 @@ import {
   findClaudeBinary,
   hasStoredClaudeLogin,
 } from "./claude-code-auth.mjs";
-import { createPartialDispatch, createPromptQueue, liveRunHandle, parseStreamLine, sdkUserMessage } from "./claude-stream.mjs";
+import { createPartialDispatch, createPromptQueue, liveRunHandle, parseStreamLine, reportDriveUsage, sdkUserMessage } from "./claude-stream.mjs";
 
 export {
   authModeLabel,
@@ -464,6 +464,7 @@ export const claudeCodeRuntime = {
       if (driveCost > 0 && typeof ctx.onCost === "function") {
         try { ctx.onCost(driveCost); } catch { /* a cost-report error never breaks the run */ }
       }
+      reportDriveUsage(ctx, terminalResult);
       if (terminalResult.subtype === "error_max_turns" || terminalResult.subtype === "error_max_budget_usd") {
         return { kind: "budget" };
       }

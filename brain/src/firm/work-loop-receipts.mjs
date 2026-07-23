@@ -42,6 +42,8 @@ export function createWorkLoopReceipts({
   const pendingTools = new Map();
   let didReportCost = false;
   let reportedCostUsd = 0;
+  let didReportUsage = false;
+  const reportedUsage = { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 };
 
   function record(event) {
     const stored = appendEvent(ventureId, betId, { ...event, stepIndex: stepIndex() }, options);
@@ -63,6 +65,17 @@ export function createWorkLoopReceipts({
       if (adapter.costReporting !== "usd" || !Number.isFinite(amount) || amount < 0) return;
       didReportCost = true;
       reportedCostUsd += amount;
+    },
+    // Token usage the adapter measured from its own result message. Only fields the SDK actually
+    // reported accumulate; a drive that reports nothing leaves no usage on its receipt.
+    noteUsage(usage) {
+      if (!usage || typeof usage !== "object") return;
+      for (const key of Object.keys(reportedUsage)) {
+        const amount = Number(usage[key]);
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        didReportUsage = true;
+        reportedUsage[key] += amount;
+      }
     },
     startTool(name) {
       const event = record({ type: "tool_started", detail: name });
@@ -94,6 +107,7 @@ export function createWorkLoopReceipts({
         stepIndex: stepIndex(),
         durationMs: Math.max(0, monotonicNow() - driveStartedAt),
         ...(didReportCost ? { costUsd: reportedCostUsd } : {}),
+        ...(didReportUsage ? { usage: { ...reportedUsage } } : {}),
       }, options);
     },
   };

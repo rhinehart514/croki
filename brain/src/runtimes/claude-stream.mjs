@@ -135,3 +135,20 @@ function stripServer(toolName) {
   const match = /^mcp__[^_]+(?:_[^_]+)*__(.+)$/.exec(toolName || "");
   return match ? match[1] : toolName;
 }
+
+// Report the drive's real token usage from the SDK's terminal result message back through
+// ctx.onUsage — the same best-effort contract as ctx.onCost. Nothing is fabricated: fields the
+// SDK omitted simply do not report, and a result with no measured tokens reports nothing.
+export function reportDriveUsage(ctx, terminalResult) {
+  if (typeof ctx?.onUsage !== "function") return;
+  const usage = terminalResult?.usage;
+  if (!usage || typeof usage !== "object") return;
+  const measured = {
+    inputTokens: Number(usage.input_tokens) || 0,
+    outputTokens: Number(usage.output_tokens) || 0,
+    cacheReadInputTokens: Number(usage.cache_read_input_tokens) || 0,
+    cacheCreationInputTokens: Number(usage.cache_creation_input_tokens) || 0,
+  };
+  if (!Object.values(measured).some((amount) => amount > 0)) return;
+  try { ctx.onUsage(measured); } catch { /* a usage-report error never breaks the run */ }
+}

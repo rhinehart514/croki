@@ -2,6 +2,31 @@ import { Check, Ellipsis, Map, Pencil, Pin, PinOff, Trash2, X } from "lucide-rea
 import { useEffect, useRef, useState } from "react";
 import type { ThreadTimeline, VisualReference, WorkIndexItem } from "@/api";
 
+function tokensLabel(count: number) {
+  if (count < 1_000) return `${count}`;
+  if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
+  if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
+  return `${(count / 1_000_000).toFixed(1)}m`;
+}
+
+// One quiet measured line: only dollars the adapter reported and tokens the SDK reported. When
+// nothing was measured, nothing renders — no fabricated zeros.
+function usageReadout(timeline: ThreadTimeline | null) {
+  const usage = timeline?.usage;
+  if (!usage) return null;
+  const tokens = usage.inputTokens + usage.outputTokens + usage.cacheReadInputTokens + usage.cacheCreationInputTokens;
+  const parts = [
+    usage.costUsd > 0 ? (usage.costUsd >= 0.005 ? `$${usage.costUsd.toFixed(2)}` : "under $0.01") : null,
+    tokens > 0 ? `${tokensLabel(tokens)} tokens` : null,
+  ].filter(Boolean);
+  if (!parts.length) return null;
+  const detail = [
+    tokens > 0 ? `${tokensLabel(usage.inputTokens + usage.cacheReadInputTokens + usage.cacheCreationInputTokens)} in · ${tokensLabel(usage.outputTokens)} out` : null,
+    `${usage.driveCount} ${usage.driveCount === 1 ? "run" : "runs"}`,
+  ].filter(Boolean).join(" · ");
+  return { label: parts.join(" · "), detail };
+}
+
 function status(item: WorkIndexItem | null) {
   if (!item) return "Venture conversation";
   if (item.attention === "decision") return "Waiting for your judgment";
@@ -33,6 +58,7 @@ export function ThreadHeader({ item, timeline, onOpenVisual, onTogglePin, onRena
   const confirmingDelete = Boolean(currentDeleteState);
   const deleting = currentDeleteState?.phase === "deleting";
   const deleteError = currentDeleteState?.error ?? null;
+  const usage = usageReadout(timeline);
   const map = timeline?.visuals.find((visual) => visual.kind === "map")
     ?? (item ? { kind: "map" as const, ref: `${item.threadRef}#venture-map`, threadRef: item.threadRef, title: "Venture map" } : null);
   const jumpToAgent = (participantRef: string) => document.getElementById(`agent-update-${participantRef}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -86,7 +112,7 @@ export function ThreadHeader({ item, timeline, onOpenVisual, onTogglePin, onRena
           <h1>{item?.founderIntent ?? "Drover"}</h1>
           {renameAllowed ? <button type="button" aria-label="Rename thread" title="Rename thread" onClick={beginRename}><Pencil aria-hidden="true" /></button> : null}
         </div>}
-        <span>{status(item)}</span>
+        <span>{status(item)}{usage ? <span className="thread-usage" title={usage.detail}> · {usage.label}</span> : null}</span>
         {renameError ? <small role="alert">{renameError}</small> : null}
       </div>
       <div className="thread-header-agents" aria-label="Thread participants">

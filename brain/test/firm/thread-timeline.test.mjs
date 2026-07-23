@@ -15,8 +15,9 @@ const { ensureDirectionThread, getSemanticModel, recordRun } = await import("../
 const { buildThreadTimeline } = await import("../../src/firm/thread-timeline.mjs");
 const { buildWorkIndex } = await import("../../src/firm/work-index.mjs");
 const { applyFirmConfiguration, getFirmConfiguration } = await import("../../src/firm/configuration.mjs");
-const { beginActiveDrive, noteDriveText, __resetActiveDrives } = await import("../../src/firm/active-drives.mjs");
+const { beginActiveDrive, noteDriveBeat, noteDriveText, noteDriveToolInput, __resetActiveDrives } = await import("../../src/firm/active-drives.mjs");
 const { appendEvent } = await import("../../src/firm/work-loop-tools.mjs");
+const { createWorkLoopReceipts } = await import("../../src/firm/work-loop-receipts.mjs");
 
 const options = { root };
 
@@ -116,6 +117,54 @@ describe("thread timeline projection", () => {
       drive.finish();
       __resetActiveDrives();
     }
+  });
+
+  it("tones reasoning beats and steps quietly and projects the forming tool call without prose", () => {
+    const fx = fixture();
+    const drive = beginActiveDrive({ ventureId: fx.venture.id, teammateRef: "codex", betId: fx.bet.id, runtime: "codex", abortSupported: true });
+    try {
+      appendEvent(fx.venture.id, fx.bet.id, { id: "event-theory", type: "tool_started", detail: "record_working_theory" }, options);
+      appendEvent(fx.venture.id, fx.bet.id, { id: "event-broken", type: "tool_failed", detail: "search_repository: timeout" }, options);
+      noteDriveBeat(drive.id, { activity: "Thinking through the direction" });
+      noteDriveToolInput(drive.id, "search_repository", '{"query": "onboarding');
+      const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
+      const status = timeline.items.find((item) => item.kind === "agent-status");
+      assert.equal(status.summaryTone, "thinking");
+      assert.deepEqual(status.activitySteps.map((step) => step.tone), ["thinking", "attention"]);
+      assert.deepEqual(status.liveTool, { name: "search_repository", partialInput: '{"query": "onboarding' });
+      assert.equal(JSON.stringify(status).includes("timeout"), false, "failure detail stays out of the founder-facing step");
+
+      noteDriveToolInput(drive.id, null, "");
+      const settled = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
+      assert.equal(settled.items.find((item) => item.kind === "agent-status").liveTool, null, "a closed tool block clears the live call");
+    } finally {
+      drive.finish();
+      __resetActiveDrives();
+    }
+  });
+
+  it("sums measured drive receipts into one honest usage line and stays null when nothing was measured", () => {
+    const fx = fixture();
+    const before = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
+    assert.equal(before.usage, null, "no fabricated usage before any drive receipt");
+
+    const receipts = createWorkLoopReceipts({
+      ventureId: fx.venture.id, betId: fx.bet.id, activeDriveId: "drive-none",
+      adapter: { label: "claude-code", costReporting: "usd" }, options, stepIndex: () => 1,
+    });
+    receipts.noteCost(0.2);
+    receipts.noteUsage({ inputTokens: 1_000, outputTokens: 200, cacheReadInputTokens: 50, cacheCreationInputTokens: 0 });
+    receipts.noteUsage({ inputTokens: 500, outputTokens: 100 });
+    receipts.finishDrive();
+    appendEvent(fx.venture.id, fx.bet.id, { type: "drive_receipt", detail: "codex", durationMs: 900 }, options);
+
+    const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
+    assert.equal(Math.round(timeline.usage.costUsd * 100), 20);
+    assert.equal(timeline.usage.inputTokens, 1_500);
+    assert.equal(timeline.usage.outputTokens, 300);
+    assert.equal(timeline.usage.cacheReadInputTokens, 50);
+    assert.equal(timeline.usage.cacheCreationInputTokens, 0);
+    assert.equal(timeline.usage.driveCount, 2, "the unmeasured receipt still counts as a real run");
   });
 
   it("streams the assistant's forming reply as a live teammate turn while the drive works", () => {
