@@ -3,19 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createGeneratedMapsFixture } from "../fixtures/atlas-fixtures.mjs";
-import { assertNoUnhandledRejections, bootFixture, openFixtureVenture, waitForCanvasViewportStable, waitForDom } from "./fixtures/browser-harness.mjs";
-
-async function chooseMode(client, label) {
-  const clicked = await client.evaluate(`(() => {
-    const button = [...document.querySelectorAll('.workspace-mode-nav button')]
-      .find((entry) => entry.textContent.includes(${JSON.stringify(label)}));
-    if (!button) return false;
-    if (button.getAttribute('aria-current') !== 'page') button.click();
-    return true;
-  })()`);
-  assert.equal(clicked, true, `${label} surface was unavailable`);
-  await waitForDom(client, `document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes(${JSON.stringify(label)})`, `${label} did not become current`);
-}
+import { assertNoUnhandledRejections, bootFixture, hideCanvas, openCanvas, openFixtureVenture, selectCanvasObject, waitForCanvasViewportStable, waitForDom } from "./fixtures/browser-harness.mjs";
 
 test("Product / GTM shows current truth, durable alternatives, exact work, and founder-gated outward action", async () => {
   const drover = await bootFixture(createGeneratedMapsFixture);
@@ -31,23 +19,10 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
       location.reload();
     })()`);
     await waitForDom(client, `Boolean(document.querySelector('.workspace-shell'))`, "the workspace did not restore its stale canvas camera fixture");
-    await chooseMode(client, "Product / GTM");
+    await openCanvas(client);
     await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'product-walk' && document.querySelectorAll('.product-gtm-node[data-role="page"]').length > 0`, "the code-proven Product walk did not materialize");
     assert.equal(await client.evaluate(`document.querySelectorAll('.product-gtm-node:is([data-kind="branch"], [data-kind="action"])').length`), 0, "the resting Product walk leaked unrelated venture state");
-    assert.equal(await client.evaluate(`(() => {
-      const input = document.querySelector('.workspace-rail input[type="search"]');
-      if (!input) return false;
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-      setter.call(input, 'Start with the work');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    })()`), true, "Product / GTM search was unavailable");
-    await waitForDom(client, `[...document.querySelectorAll('.product-rail-body section button strong')].some((entry) => entry.textContent.trim() === 'Start with the work')`, "the Product consequence anchor was not searchable");
-    assert.equal(await client.evaluate(`(() => {
-      const button = [...document.querySelectorAll('.product-rail-body section button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === 'Start with the work');
-      button?.click();
-      return Boolean(button);
-    })()`), true, "the Product consequence anchor could not be selected");
+    await selectCanvasObject(client, "Start with the work");
     await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'consequence-trace'`, "the selected Product truth did not open its consequence trace");
     await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-kind="truth"]').length >= 1`, "current Product/GTM truth did not materialize");
     await waitForDom(client, `!!document.querySelector('.product-gtm-node[data-kind="branch"]') && !!document.querySelector('.product-gtm-node[data-kind="action"][data-waiting="true"]')`, "the provisional Product alternative and founder-gated action were not visible together");
@@ -55,7 +30,7 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
     await waitForCanvasViewportStable(client);
 
     const composition = await client.evaluate(`(() => ({
-      mode: document.querySelector('.workspace-shell')?.dataset.mode,
+      canvasOpen: document.querySelector('.workspace-shell')?.getAttribute('data-canvas-open') === 'true',
       truth: document.querySelectorAll('.product-gtm-node[data-kind="truth"]').length,
       branches: document.querySelectorAll('.product-gtm-node[data-kind="branch"]').length,
       work: document.querySelectorAll('.product-gtm-node[data-kind="work"]').length,
@@ -63,11 +38,12 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
       oldSystem: Boolean(document.querySelector('.system-workspace')),
       oldRelease: Boolean(document.querySelector('.release-workspace')),
       oldPipeline: Boolean(document.querySelector('.venture-pipeline-lane')),
-      codingControls: Boolean(document.querySelector('.workspace-primary .work-composer-bar')),
+      canvasCodingControls: Boolean(document.querySelector('.workspace-canvas .work-composer-bar')),
     }))()`);
-    assert.equal(composition.mode, "product-gtm");
+    assert.equal(composition.canvasOpen, true);
     assert.ok(composition.truth >= 1 && composition.branches >= 1 && composition.gates >= 1, JSON.stringify(composition));
-    assert.deepEqual({ oldSystem: composition.oldSystem, oldRelease: composition.oldRelease, oldPipeline: composition.oldPipeline, codingControls: composition.codingControls }, { oldSystem: false, oldRelease: false, oldPipeline: false, codingControls: false });
+    // Coding controls stay in the spine and never bleed into the Canvas.
+    assert.deepEqual({ oldSystem: composition.oldSystem, oldRelease: composition.oldRelease, oldPipeline: composition.oldPipeline, canvasCodingControls: composition.canvasCodingControls }, { oldSystem: false, oldRelease: false, oldPipeline: false, canvasCodingControls: false });
 
     const causalStory = await client.evaluate(`(() => {
       const byName = (name) => [...document.querySelectorAll('.product-gtm-node')].find((entry) => entry.querySelector('strong')?.textContent === name);
@@ -104,7 +80,7 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-gtm-context button')].find((entry) => /Product walk/.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
     await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'product-walk' && !document.querySelector('.product-gtm-context')`, "the founder could not return to the Product walk");
 
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-rail-body section button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === 'Start with the work'); button?.click(); return Boolean(button); })()`), true);
+    await selectCanvasObject(client, "Start with the work");
     await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'consequence-trace'`, "selection did not restore the consequence trace");
     const focusCounts = await client.evaluate(`({ focused: document.querySelectorAll('.product-gtm-node[data-focus="true"]').length, quiet: document.querySelectorAll('.product-gtm-node[data-focus="false"]').length })`);
     assert.ok(focusCounts.focused > 0 && focusCounts.quiet === 0, JSON.stringify(focusCounts));
@@ -113,12 +89,18 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
     assert.equal(await client.evaluate(`(() => { const node = document.querySelector('.product-gtm-node[data-kind="branch"]'); node?.click(); return Boolean(node); })()`), true);
     await waitForDom(client, `/Should bespoke onboarding become the Product/.test(document.querySelector('.product-gtm-node[data-expanded="true"] .product-gtm-review[data-inline="true"]')?.textContent || '')`, "the exact Product-model delta did not expand in its owning node");
     assert.match(await client.evaluate(`document.querySelector('.product-gtm-review')?.textContent || ''`), /doing the unscalable work before automating it/i);
-    assert.equal(await client.evaluate(`document.querySelectorAll('.product-gtm-review input[type="checkbox"]:checked').length`), 1, "the selective merge did not expose its exact selected change");
+    // The founder register keeps one exact change at the point of encounter: a per-object Keep, no
+    // checkbox and no bulk merge, and no branch/merge vocabulary on the surface (decisions 29–30).
+    assert.equal(await client.evaluate(`document.querySelectorAll('.product-gtm-review input[type="checkbox"]').length`), 0, "the founder register still exposed the old multi-select merge control");
+    assert.ok(await client.evaluate(`document.querySelectorAll('.product-gtm-review .product-gtm-delta').length >= 1`), "the suggested change did not appear as a keepable delta");
 
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-gtm-review button')].find((entry) => /Make 1 current/.test(entry.textContent)); button?.click(); return Boolean(button && !button.disabled); })()`), true);
-    await waitForDom(client, `!document.querySelector('.product-gtm-review')`, "the founder merge did not settle");
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-rail-body section button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === 'Start with the work'); button?.click(); return Boolean(button); })()`), true);
-    await waitForDom(client, `/manually shapes the first useful project/.test(document.querySelector('.product-gtm-node[data-expanded="true"]')?.textContent || '')`, "the selectively merged Product change did not become current truth in place");
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-gtm-review .product-gtm-delta button')].find((entry) => /^Keep/.test(entry.textContent)); button?.click(); return Boolean(button && !button.disabled); })()`), true, "the founder could not keep the exact change");
+    await waitForDom(client, `Boolean([...document.querySelectorAll('.product-gtm-review .product-gtm-delta')].find((entry) => entry.getAttribute('data-kept') === 'true'))`, "the kept change did not settle in the founder register");
+    // Dismiss what was not kept; the register closes and the kept change is now current truth in place.
+    await client.evaluate(`(() => { const button = [...document.querySelectorAll('.product-gtm-review footer button')].find((entry) => /Done|Dismiss the rest/.test(entry.textContent)); button?.click(); })()`);
+    await waitForDom(client, `!document.querySelector('.product-gtm-review')`, "the founder register did not close after the keep");
+    await selectCanvasObject(client, "Start with the work");
+    await waitForDom(client, `/manually shapes the first useful project/.test(document.querySelector('.product-gtm-node[data-expanded="true"]')?.textContent || '')`, "the kept Product change did not become current truth in place");
 
     const currentIndex = await drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/system-index?scope=system`).then((response) => response.json());
     const workflowResponse = await drover.founderFetch(`/api/ventures/${drover.fixture.venture.id}/system/mutations`, {
@@ -156,7 +138,7 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
     assert.equal(workflowResponse.status, 200, await workflowResponse.text());
     await client.evaluate("location.reload()");
     await waitForDom(client, "Boolean(document.querySelector('.workspace-shell'))", "the workspace did not return after adopting the workflow");
-    await chooseMode(client, "Product / GTM");
+    await openCanvas(client);
     await waitForDom(client, `document.querySelector('.product-gtm-workflow-shortcut strong')?.textContent === 'Proof to referral'`, "the adopted GTM workflow did not become the visible canvas shortcut");
     assert.equal(await client.evaluate(`(() => { const button = document.querySelector('.product-gtm-workflow-shortcut'); button?.click(); return Boolean(button); })()`), true);
     await waitForDom(client, `document.querySelectorAll('.product-gtm-node[data-kind="workflow"]').length === 7`, "the GTM path did not unfold its complete workflow");
@@ -179,7 +161,7 @@ test("Product / GTM shows current truth, durable alternatives, exact work, and f
     assert.match(await client.evaluate(`document.querySelector('.product-gtm-context')?.textContent || ''`), /Observe the reply/);
     assert.match(await client.evaluate(`document.querySelector('.product-gtm-node[data-kind="workflow"][data-expanded="true"]')?.textContent || ''`), /Work on this step/);
 
-    await chooseMode(client, "Work");
+    await hideCanvas(client);
     await waitForDom(client, `!!document.querySelector('.work-surface .thread-conversation') && !!document.querySelector('.work-composer-bar [aria-label="SDK model"]')`, "Work did not restore the direct SDK environment");
     assert.equal(await client.evaluate(`!!document.querySelector('.work-surface .thread-conversation') && !!document.querySelector('.work-composer-bar [aria-label="SDK model"]')`), true, "Work did not restore the direct SDK environment");
     await assertNoUnhandledRejections(client);

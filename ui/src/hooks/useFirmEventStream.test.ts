@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { subscribeVentureEvents, type FirmStreamEvent } from "@/api";
-import { useFirmEventStream } from "./useFirmEventStream";
+import { subscribeVentureEvents, type FirmStreamEvent, type FirmWorkDelta } from "@/api";
+import { useFirmEventStream, useWorkDeltaStream } from "./useFirmEventStream";
 
 vi.mock("@/api", () => ({
   subscribeVentureEvents: vi.fn(),
@@ -104,6 +104,91 @@ describe("useFirmEventStream", () => {
     expect(second).toHaveBeenCalledTimes(2);
 
     secondHook.unmount();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not forward the additive work-delta kind to invalidation consumers", () => {
+    let emit: (event: FirmStreamEvent) => void = () => {};
+    subscribeMock.mockImplementation((_v, onEvent) => { emit = onEvent; return () => {}; });
+
+    const refetch = vi.fn();
+    const { unmount } = renderHook(() => useFirmEventStream("v1", refetch));
+
+    act(() => emit({ ventureId: "v1", kind: "lens", at: "now" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+
+    // A work-delta must NOT reach a refetch consumer — otherwise every tool step becomes a full refetch.
+    act(() => emit({ ventureId: "v1", kind: "work-delta", at: "now", delta: { type: "status-changed", status: "working", previous: "idle" } }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+});
+
+describe("useWorkDeltaStream", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("does not subscribe without a venture", () => {
+    const { result } = renderHook(() => useWorkDeltaStream(null, null, () => {}));
+    expect(subscribeMock).not.toHaveBeenCalled();
+    expect(result.current.streaming).toBe(false);
+  });
+
+  it("forwards typed deltas for the focused subject and ignores everything else", () => {
+    let emit: (event: FirmStreamEvent) => void = () => {};
+    let setState: (state: "open" | "closed") => void = () => {};
+    subscribeMock.mockImplementation((_v, onEvent, onStateChange) => {
+      emit = onEvent;
+      setState = onStateChange!;
+      return () => {};
+    });
+
+    const received: FirmWorkDelta[] = [];
+    const { result, unmount } = renderHook(() =>
+      useWorkDeltaStream("v1", { betId: "bet-9" }, (delta) => received.push(delta)),
+    );
+
+    act(() => setState("open"));
+    expect(result.current.streaming).toBe(true);
+
+    // An invalidation is not a delta.
+    act(() => emit({ ventureId: "v1", kind: "drive", at: "t", betId: "bet-9" }));
+    // A delta for another node is filtered out by subject.
+    act(() => emit({ ventureId: "v1", kind: "work-delta", at: "t", betId: "bet-other", delta: { type: "status-changed", status: "working", previous: "idle" } }));
+    // A delta for the focused node is forwarded, payload only.
+    act(() => emit({ ventureId: "v1", kind: "work-delta", at: "t", betId: "bet-9", delta: { type: "step-started", stepId: "d:1", label: "Read" } }));
+
+    expect(received).toEqual([{ type: "step-started", stepId: "d:1", label: "Read" }]);
+    unmount();
+  });
+
+  it("with a null subject hears every delta in the venture", () => {
+    let emit: (event: FirmStreamEvent) => void = () => {};
+    subscribeMock.mockImplementation((_v, onEvent) => { emit = onEvent; return () => {}; });
+
+    const received: FirmWorkDelta[] = [];
+    const { unmount } = renderHook(() => useWorkDeltaStream("v1", null, (delta) => received.push(delta)));
+
+    act(() => emit({ ventureId: "v1", kind: "work-delta", at: "t", threadRef: "thread:1", delta: { type: "step-finished", stepId: "d:1", label: "Bash", status: "ok", durationMs: 12 } }));
+    expect(received).toEqual([{ type: "step-finished", stepId: "d:1", label: "Bash", status: "ok", durationMs: 12 }]);
+    unmount();
+  });
+
+  it("shares the one venture connection with useFirmEventStream", async () => {
+    const unsubscribe = vi.fn();
+    subscribeMock.mockImplementation(() => unsubscribe);
+
+    const invalidation = renderHook(() => useFirmEventStream("v1", () => {}));
+    const delta = renderHook(() => useWorkDeltaStream("v1", null, () => {}));
+    await act(async () => {});
+
+    // Both views ride ONE EventSource/bridge subscription for the venture.
+    expect(subscribeMock).toHaveBeenCalledTimes(1);
+
+    invalidation.unmount();
+    expect(unsubscribe).not.toHaveBeenCalled();
+    delta.unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });

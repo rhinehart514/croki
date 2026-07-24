@@ -81,10 +81,11 @@ describe("row derivation", () => {
     expect(threadSearchRow(thread({})).searchTerms).toContain("Shipped the setup flow");
   });
 
-  it("labels map objects by territory in business language", () => {
+  it("shows a map object's own sentence, since the statement is searched too", () => {
     const object = { objectRef: "object:motion", name: "Founder-led sales", statement: "Learn directly.", type: "motion", territory: "gtm" } as SystemIndexObject;
-    expect(objectSearchRow(object)).toMatchObject({ id: "object:motion", title: "Founder-led sales", detail: "Go-to-market" });
-    expect(objectSearchRow({ ...object, territory: "product" } as SystemIndexObject).detail).toBe("Product");
+    expect(objectSearchRow(object)).toMatchObject({ id: "object:motion", title: "Founder-led sales", detail: "Learn directly." });
+    expect(objectSearchRow({ ...object, statement: "" } as SystemIndexObject).detail).toBe("Go-to-market");
+    expect(objectSearchRow({ ...object, statement: "", territory: "product" } as SystemIndexObject).detail).toBe("Product");
   });
 
   it("sorts threads by recency for the resting list", () => {

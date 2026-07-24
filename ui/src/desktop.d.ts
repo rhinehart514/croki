@@ -33,15 +33,29 @@ type DroverWebviewElement = HTMLElement & {
   reload: () => void;
 };
 
-// The data-free venture stream notification the brain pushes over the bridge. Declared here (the
-// one contract file both the preload and the renderer check against) so this file needs no imports
-// from the UI graph; product-gtm.ts re-exports it as FirmStreamEvent for renderer call sites.
+// One typed work delta — the safe factual shape of live work the brain pushes for a focused node
+// (Reshape decisions 27/28). A small discriminated union: it carries a tool-step label, an optional
+// source ref, a status, a step id to correlate started/finished, and a measured duration — NEVER
+// chain-of-thought, prose, secrets, or content. brain/src/firm/work-delta.mjs owns the authoritative
+// normalization; this is the renderer's compile-time mirror.
+type DroverWorkDelta =
+  | { type: "step-started"; stepId: string; label: string }
+  | { type: "step-finished"; stepId: string; label: string; status: string; durationMs: number | null }
+  | { type: "source-consulted"; label: string; ref: string | null }
+  | { type: "status-changed"; status: string; previous: string | null };
+
+// The venture stream notification the brain pushes over the bridge. Declared here (the one contract file
+// both the preload and the renderer check against) so this file needs no imports from the UI graph;
+// product-gtm.ts re-exports it as FirmStreamEvent for renderer call sites. Every kind but `work-delta` is
+// a data-free invalidation ("something changed, re-read the owning route"); `work-delta` is the one
+// additive kind that carries a typed `delta` payload. Old consumers never subscribed to it and ignore it.
 type DroverVentureStreamEvent = {
   ventureId: string;
-  kind: "lens" | "conversation" | "drive" | "wall" | "outcome" | "timeline" | "system" | "release";
+  kind: "lens" | "conversation" | "drive" | "wall" | "outcome" | "timeline" | "system" | "release" | "work-delta";
   at: string;
   betId?: string;
   threadRef?: string;
+  delta?: DroverWorkDelta;
 };
 
 // One frame of a drive's live stream over the bridge. The shape matches the SSE frames the browser

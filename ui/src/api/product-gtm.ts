@@ -15,6 +15,11 @@ export const getModelBranch = (ventureId: string, branchId: string) =>
 export const mergeModelBranch = (ventureId: string, branchId: string, selectedChangeRefs: string[], reason: string, resolvedConflicts: Record<string, unknown>[] = []) =>
   guardedPost<{ receipt: FirmModelMergeReceipt; model: FirmSemanticModel }>(`/api/ventures/${encodeURIComponent(ventureId)}/model/branches/${encodeURIComponent(branchId)}/merge`, { selectedChangeRefs, reason, resolvedConflicts });
 
+// The founder-register grammar over the same machinery: keep exactly one change at a time. No bulk
+// keep, no branch/merge vocabulary — the merge receipt stays the inspectable record underneath.
+export const keepModelChange = (ventureId: string, branchId: string, changeRef: string, reason?: string) =>
+  guardedPost<{ receipt: FirmModelMergeReceipt; model: FirmSemanticModel }>(`/api/ventures/${encodeURIComponent(ventureId)}/model/branches/${encodeURIComponent(branchId)}/keep`, { changeRef, ...(reason ? { reason } : {}) });
+
 export const closeModelBranch = (ventureId: string, branchId: string, reason: string) =>
   guardedPost<{ branch: FirmModelBranch }>(`/api/ventures/${encodeURIComponent(ventureId)}/model/branches/${encodeURIComponent(branchId)}/close`, { reason });
 
@@ -230,6 +235,7 @@ export const replyInConversation = (
 // caller keeps the 900 ms poll as the reconnect fallback (see useFirmEventStream). Returns an
 // unsubscribe function that closes the connection.
 export type FirmStreamEvent = DroverVentureStreamEvent;
+export type FirmWorkDelta = DroverWorkDelta;
 
 export function subscribeVentureEvents(
   ventureId: string,
@@ -261,7 +267,7 @@ export function subscribeVentureEvents(
       /* a malformed frame is ignored; the poll fallback still refreshes the surface */
     }
   };
-  for (const kind of ["lens", "conversation", "drive", "wall", "outcome", "timeline", "system", "release"]) {
+  for (const kind of ["lens", "conversation", "drive", "wall", "outcome", "timeline", "system", "release", "work-delta"]) {
     source.addEventListener(kind, relay as EventListener);
   }
   source.onopen = () => onStateChange?.("open");

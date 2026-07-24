@@ -231,6 +231,7 @@
    ───────────────────────────────────────────────────────────────────────── */
 .now-composer { display: flex; flex-direction: column; gap: var(--space-2); }
 .now-composer-shell {
+  container-type: inline-size;
   display: flex; flex-direction: column; gap: var(--space-2);
   padding: var(--space-3);
   border: 1px solid var(--n-line-2); border-radius: var(--r-md);
@@ -312,6 +313,13 @@
 .now-composer-journey > button:hover:not(:disabled) { background: var(--n-hover); color: var(--n-ink); }
 .now-composer-journey > button svg { width: 13px; height: 13px; }
 .now-composer-field { display: flex; align-items: flex-end; gap: var(--space-2); }
+/* The tool cluster holds its intrinsic width whatever the column does, so in a spine narrowed by the
+   Canvas it took nearly half the shell and left the founder typing into a 163px slot that wrapped the
+   placeholder. Below this width the tools take their own row and the text field spans the composer. */
+@container (max-width: 340px) {
+  .now-composer-field { align-items: stretch; flex-direction: column; }
+  .now-composer-field .now-composer-tools { justify-content: flex-end; }
+}
 .now-composer-field textarea {
   flex: 1; resize: none; border: none; background: none;
   color: var(--n-ink); font-size: var(--text-base); line-height: var(--leading-normal);
@@ -379,8 +387,10 @@
 }
 .now-direction span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-direction:hover { background: var(--n-hover); border-color: var(--n-line); }
-/* Rainbow marks — the intent language across the composer: the trigger orb, the pending mark, and each
-   option's dot all read as the same spectrum, no lucide iconography. */
+/* Spectrum marks — the intent language of the composer: the trigger orb, the pending mark, and each
+   option's dot share one ring shape, no lucide iconography. The spectrum itself means live agent
+   intent, so the resting trigger stays ink-quiet and only takes color when the founder reaches for it
+   or a summon is actually running. */
 .now-intent-orb {
   width: 20px; height: 20px; flex: 0 0 auto; padding: 0;
   border: 1px solid transparent; border-radius: 50%; cursor: pointer;
@@ -390,12 +400,14 @@
       var(--agent-spectrum-cyan), var(--agent-spectrum-blue), var(--agent-spectrum-violet),
       var(--agent-spectrum-rose), var(--agent-spectrum-amber), var(--agent-spectrum-green),
       var(--agent-spectrum-cyan)) border-box;
-  box-shadow: 0 0 12px rgb(124 156 255 / 16%);
-  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  filter: saturate(0);
+  opacity: .55;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), filter var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
 }
-.now-intent-orb:hover:not(:disabled) { transform: scale(1.1); box-shadow: 0 0 16px rgb(124 156 255 / 30%); }
-.now-intent-orb:disabled { cursor: default; }
-.now-intent-orb--pending { width: 14px; height: 14px; }
+.now-intent-orb:hover:not(:disabled), .now-intent-orb:focus-visible {
+  transform: scale(1.1); box-shadow: 0 0 16px rgb(124 156 255 / 30%); filter: none; opacity: 1;
+}
+.now-intent-orb--pending { width: 14px; height: 14px; filter: none; opacity: 1; }
 .now-intent-spinner { animation: now-intent-turn 1.3s linear infinite; }
 .now-direction-orb {
   width: 11px; height: 11px; flex: 0 0 auto; border-radius: 50%;
@@ -413,7 +425,7 @@
 }
 .now-icon-btn svg { width: 16px; height: 16px; }
 .now-icon-btn:hover:not(:disabled) { background: var(--n-hover); color: var(--n-ink); }
-.now-icon-btn:disabled { opacity: 0.4; cursor: default; }
+.now-icon-btn:disabled { opacity: 0.4; }
 .now-icon-btn[data-recording="true"] { color: var(--danger); }
 .now-composer-send {
   width: 30px; height: 30px; border: none; border-radius: var(--r-tool);
@@ -422,8 +434,15 @@
   transition: background var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
 }
 .now-composer-send svg { width: 16px; height: 16px; }
-.now-composer-send:disabled { opacity: 0.3; cursor: default; }
+.now-composer-send:disabled { opacity: 0.3; }
 .now-composer-send:not(:disabled):hover { background: #000; }
+
+/* Morphed stop: same slot, same shape — only the color and glyph change, so the flip reads as one
+   instrument changing state rather than a second control arriving. */
+.now-composer-send[data-stop="true"] { background: var(--danger); color: #fff; }
+.now-composer-send[data-stop="true"] svg { width: 13px; height: 13px; }
+.now-composer-send[data-stop="true"]:not(:disabled):hover { background: color-mix(in srgb, var(--danger) 82%, #000); }
+.now-composer-send[data-stop="true"]:disabled { opacity: 0.65; }
 .now-composer-stop {
   width: 30px; height: 30px; border: 1px solid var(--n-line-2); border-radius: var(--r-tool);
   background: var(--n-panel); color: var(--n-ink-2); cursor: pointer;
@@ -432,7 +451,7 @@
 }
 .now-composer-stop svg { width: 14px; height: 14px; }
 .now-composer-stop:not(:disabled):hover { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--n-panel)); }
-.now-composer-stop[data-requested="true"] { opacity: 0.6; cursor: default; }
+.now-composer-stop[data-requested="true"] { opacity: 0.6; }
 .now-composer-spinner { animation: now-composer-spin 800ms linear infinite; }
 .now-composer-provenance {
   display: flex; gap: var(--space-2); align-items: center;
@@ -459,11 +478,6 @@
 
 @keyframes now-composer-spin { to { transform: rotate(360deg); } }
 
-@media (prefers-reduced-motion: reduce) {
-  .now-composer-spinner { animation: none; }
-  .now-intent-spinner { animation: none; }
-}
-
 /* The post-submit receipt — a composed confirmation of what the drive made concrete, in place of a status
    line into a void. Green by default (work landed); amber when a decision now waits on the founder. */
 .now-drive-receipt {
@@ -471,7 +485,7 @@
   padding: var(--space-3);
   border: 1px solid var(--green-line, var(--n-line-2)); border-radius: var(--r-md);
   background: var(--green-tint);
-  animation: now-receipt-in 240ms var(--ease) both;
+  animation: now-receipt-in var(--dur-slow) var(--ease-out) both;
 }
 .now-drive-receipt[data-waiting="true"] {
   border-color: var(--amber-line); background: var(--amber-soft);
@@ -489,7 +503,6 @@
 }
 .now-drive-receipt-open svg { width: 13px; height: 13px; }
 .now-drive-receipt-open:hover { background: #000; }
-.now[data-reduced-motion="true"] .now-drive-receipt { animation: none; }
 @keyframes now-receipt-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -667,7 +680,7 @@ button.now-approach:hover { background: var(--n-hover); border-color: var(--n-in
   background: var(--n-panel); color: var(--n-ink-2); font-size: var(--text-sm); cursor: pointer;
 }
 .now-progress-stop:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
-.now-progress-stop:disabled { opacity: 0.5; cursor: default; }
+.now-progress-stop:disabled { opacity: 0.5; }
 
 /* Artifact well — the strongest region. Real work, framed in a cool recessed plane. */
 .now-artifact-cap {
@@ -746,7 +759,7 @@ button.now-approach:hover { background: var(--n-hover); border-color: var(--n-in
   transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
 .now-gate-btn:hover:not(:disabled) { background: var(--n-hover); }
-.now-gate-btn:disabled { opacity: 0.4; cursor: default; }
+.now-gate-btn:disabled { opacity: 0.4; }
 .now-gate-btn[data-intent="release"] { background: var(--green); color: #fff; border-color: var(--green); }
 .now-gate-btn[data-intent="release"]:hover:not(:disabled) { background: var(--green-2); }
 .now-gate-btn[data-intent="reject"] { color: var(--danger); }
@@ -821,8 +834,4 @@ button.now-approach:hover { background: var(--n-hover); border-color: var(--n-in
   --diffs-bg-buffer-override: var(--n-sunk);
   --diffs-fg-number-override: var(--n-ink-4);
   background: var(--n-panel);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .now * { transition-duration: 0.01ms !important; }
 }

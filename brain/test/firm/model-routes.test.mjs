@@ -58,3 +58,33 @@ it("HTTP model routes keep an agent change provisional until a selective founder
   assert.equal(merged.body.model.objects.some((object) => object.id === "manual-onboarding"), true);
   assert.equal(merged.body.receipt.selectedChangeRefs.length, 1);
 });
+
+it("HTTP keep route makes exactly one change current in the founder register", async () => {
+  const venture = createVenture({ name: "Keep register", repository: process.cwd() }, { root });
+  setVentureDoc(venture.id, "conversation", "direction", { id: "direction", ventureId: venture.id, role: "founder", content: "Refine the promise." }, { root });
+
+  const created = await call("POST", `/api/ventures/${venture.id}/model/branches`, {
+    question: "Refine the promise?",
+    sourceRefs: ["conversation:direction"],
+  });
+  const branchId = created.body.branch.id;
+  const proposed = await call("POST", `/api/ventures/${venture.id}/model/branches/${branchId}/changes`, {
+    targetFamily: "objects",
+    operation: "create",
+    proposedRecord: { id: "kept-object", type: "experience", name: "Kept", statement: "One kept change.", properties: { territory: "both" }, assertion: "tentative" },
+    rationale: "Worth keeping.",
+    sourceRefs: ["conversation:direction"],
+  }, { "x-gtm-actor": "agent", "x-gtm-agent": "codex" });
+
+  const kept = await call("POST", `/api/ventures/${venture.id}/model/branches/${branchId}/keep`, {
+    changeRef: `model-change:${proposed.body.change.id}`,
+  });
+  assert.equal(kept.status, 200);
+  assert.equal(kept.body.receipt.kind, "keep");
+  assert.equal(kept.body.model.objects.some((object) => object.id === "kept-object"), true);
+
+  const denied = await call("POST", `/api/ventures/${venture.id}/model/branches/${branchId}/keep`, {
+    changeRef: `model-change:${proposed.body.change.id}`,
+  }, { "x-gtm-actor": "agent", "x-gtm-agent": "codex" });
+  assert.equal(denied.status, 403);
+});

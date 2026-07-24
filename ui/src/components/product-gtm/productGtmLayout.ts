@@ -152,6 +152,16 @@ function deriveSpine(model: FirmSemanticModel, context: ProductGtmLayoutContext 
     incoming.set(target, (incoming.get(target) ?? 0) + 1);
   }
 
+  // The resting Product walk is defined by the code-proven page graph, and a repository-derived page is
+  // always a tentative read. Ranking only non-tentative objects therefore drops every page out of the
+  // trunk below, so page placement fell through to the detached grid — which lays pages out in read-back
+  // order, not walk order, putting the entry page last. When the whole venture is framed, the page walk
+  // IS the trunk, so entry pages sit far left and every proven link runs forward.
+  if (context.wholeVenture && !context.focusObjectId) {
+    const pageOrder = pageWalkOrder(model);
+    if (pageOrder.length) return pageOrder;
+  }
+
   if (context.focusObjectId && contextualIds.has(context.focusObjectId) && !context.wholeVenture) {
     const upstream = longestPathInto(context.focusObjectId, reverse);
     const downstream = longestPath(context.focusObjectId, adjacency);

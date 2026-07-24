@@ -5,6 +5,7 @@ const os = require("node:os");
 const {
   externalHttpUrl,
   parseSafeExternalUrl,
+  parseLoopbackDevServerUrl,
   isAllowedRendererNavigation,
   resolveLoginShell,
   mergePathLists,
@@ -38,7 +39,39 @@ test("renderer navigation is allowed only back to the exact local application do
   ]) {
     assert.equal(isAllowedRendererNavigation(applicationUrl, navigation), false, navigation);
   }
-  assert.equal(isAllowedRendererNavigation("https://example.com/app", "https://example.com/app"), false, "non-file application URLs never authorize navigation");
+  assert.equal(isAllowedRendererNavigation("https://example.com/app", "https://example.com/app"), false, "non-file, non-loopback application URLs never authorize navigation");
+});
+
+test("the dev-server hatch accepts only credential-free plain-http loopback origins", () => {
+  assert.equal(parseLoopbackDevServerUrl("http://127.0.0.1:5173"), "http://127.0.0.1:5173/");
+  assert.equal(parseLoopbackDevServerUrl("http://localhost:5173/anything?x=1"), "http://localhost:5173/", "normalizes to the bare origin");
+  for (const value of [
+    "https://127.0.0.1:5173",
+    "http://192.168.1.20:5173",
+    "http://evil.example.com",
+    "http://user:secret@127.0.0.1:5173",
+    "file:///tmp/index.html",
+    "",
+    null,
+    undefined,
+  ]) {
+    assert.equal(parseLoopbackDevServerUrl(value), null, String(value));
+  }
+});
+
+test("with a loopback dev-server document, navigation stays on that exact origin", () => {
+  const devUrl = "http://127.0.0.1:5173/";
+  assert.equal(isAllowedRendererNavigation(devUrl, devUrl), true);
+  assert.equal(isAllowedRendererNavigation(devUrl, "http://127.0.0.1:5173/index.html?reload=1"), true, "reloads stay in-window");
+  for (const navigation of [
+    "http://127.0.0.1:4317/api/health",
+    "http://localhost:5173/",
+    "https://example.com/",
+    "file:///Users/founder/drover/ui/dist/index.html",
+    "javascript:alert(1)",
+  ]) {
+    assert.equal(isAllowedRendererNavigation(devUrl, navigation), false, navigation);
+  }
 });
 
 test("login shell resolution accepts only an absolute executable file", () => {

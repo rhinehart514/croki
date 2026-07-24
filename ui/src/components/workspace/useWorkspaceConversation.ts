@@ -45,12 +45,11 @@ export function latestLinkedThread(refs: string[], workIndex: WorkIndex | null) 
 }
 
 export function useWorkspaceConversation({
-  ventureId, initialThreadRef, initialContextualChatOpen, initialScrolls,
+  ventureId, initialThreadRef, initialScrolls,
   workIndex, systemIndex,
 }: {
   ventureId: string;
   initialThreadRef: string | null;
-  initialContextualChatOpen: boolean;
   initialScrolls: Record<string, number>;
   workIndex: WorkIndex | null;
   systemIndex: SystemIndex | null;
@@ -64,7 +63,6 @@ export function useWorkspaceConversation({
   const [stage, setStage] = useState<VisualReference | null>(null);
   const [artifactFocus, setArtifactFocus] = useState<ArtifactSectionFocus | null>(null);
   const [artifactFocusRequest, setArtifactFocusRequest] = useState(0);
-  const [contextualChatOpen, setContextualChatOpen] = useState(initialContextualChatOpen);
   const [scrolls, setScrolls] = useState(initialScrolls);
   const openerRef = useRef<HTMLElement | null>(null);
   const draftStartedAtRef = useRef<number | null>(null);
@@ -141,7 +139,7 @@ export function useWorkspaceConversation({
   return {
     threadRef, selectedAgentRef, setSelectedAgentRef, draft, draftSession, draftSubjectRef, draftRelatedRefs,
     stage, setStage, artifactFocus, setArtifactFocus, artifactFocusRequest, setArtifactFocusRequest,
-    contextualChatOpen, setContextualChatOpen, scrolls, openerRef, draftStartedAtRef,
+    scrolls, openerRef, draftStartedAtRef,
     activeDraft, resolvedThreadRef, timeline, selectedItem,
     openThread, acceptThread, beginScopedThread, newThread, rememberThreadScroll,
   };

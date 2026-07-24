@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { subscribeVentureEvents, type FirmStreamEvent } from "@/api";
+import { subscribeVentureEvents, type FirmStreamEvent, type FirmWorkDelta } from "@/api";
 
 type StreamConsumer = {
   onEvent: (event: FirmStreamEvent) => void;
@@ -83,7 +83,60 @@ export function useFirmEventStream(
     // venture's open state while the new connection is settling.
     if (typeof subscribeVentureEvents !== "function") return undefined;
     return subscribeSharedVentureStream(ventureId, {
-      onEvent: (event) => handlerRef.current(event),
+      // Invalidation consumers refetch on every event they hear. The additive `work-delta` kind is NOT an
+      // invalidation — it is live detail with its own subscription seam (useWorkDeltaStream) — so it is
+      // filtered out here. Forwarding it would turn every tool step into a full lens refetch, the exact
+      // storm the typed-delta path exists to avoid. Old refetch behavior is unchanged: this kind never
+      // existed for it before.
+      onEvent: (event) => { if (event.kind !== "work-delta") handlerRef.current(event); },
+      onStateChange: (state) => setOpenVentureId(state === "open" ? ventureId : null),
+    });
+  }, [ventureId]);
+
+  return { streaming: Boolean(ventureId && openVentureId === ventureId) };
+}
+
+// The subject a delta consumer focuses. A bet/node (`betId`) and/or a Thread (`threadRef`); null means
+// "every delta in this venture." A delta matches when it names the same bet or the same Thread — the same
+// coordinates a focused canvas node already carries.
+export type WorkDeltaSubject = { betId?: string | null; threadRef?: string | null } | null;
+
+function deltaMatchesSubject(event: FirmStreamEvent, subject: WorkDeltaSubject): boolean {
+  if (!subject) return true;
+  if (subject.betId && event.betId === subject.betId) return true;
+  if (subject.threadRef && event.threadRef === subject.threadRef) return true;
+  return false;
+}
+
+// useWorkDeltaStream — the narrow, additive delta-subscription seam (Reshape decisions 27/28). It shares
+// the SAME per-venture EventSource/bridge connection as useFirmEventStream (one stream, two views), hears
+// only `work-delta` events, and forwards the typed payload for deltas that match the focused subject. It
+// carries no refetch and owns no poll: a focused node adopts it for sub-second live detail while the
+// existing poll stays the correctness floor underneath. `onDelta` receives the typed delta plus the full
+// event (for its betId/threadRef/at). The API is intentionally thin so the shell can adopt it later
+// without any change here.
+export function useWorkDeltaStream(
+  ventureId: string | null,
+  subject: WorkDeltaSubject,
+  onDelta: (delta: FirmWorkDelta, event: FirmStreamEvent) => void,
+): { streaming: boolean } {
+  const [openVentureId, setOpenVentureId] = useState<string | null>(null);
+  // Latest callback + subject without resubscribing the shared stream on every render (written in an
+  // effect, never during render), mirroring useFirmEventStream.
+  const handlerRef = useRef(onDelta);
+  const subjectRef = useRef(subject);
+  useEffect(() => { handlerRef.current = onDelta; }, [onDelta]);
+  useEffect(() => { subjectRef.current = subject; }, [subject]);
+
+  useEffect(() => {
+    if (!ventureId) return undefined;
+    if (typeof subscribeVentureEvents !== "function") return undefined;
+    return subscribeSharedVentureStream(ventureId, {
+      onEvent: (event) => {
+        if (event.kind !== "work-delta" || !event.delta) return;
+        if (!deltaMatchesSubject(event, subjectRef.current)) return;
+        handlerRef.current(event.delta, event);
+      },
       onStateChange: (state) => setOpenVentureId(state === "open" ? ventureId : null),
     });
   }, [ventureId]);

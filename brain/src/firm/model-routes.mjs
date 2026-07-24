@@ -5,6 +5,7 @@ import {
   closeModelBranch,
   compareModelBranches,
   createModelBranch,
+  keepModelChange,
   mergeModelBranch,
   projectModelBranch,
   proposeModelChange,
@@ -47,7 +48,7 @@ function requestActor(req, founderAction = null) {
 export default async function handle({ req, res, url, deps = {} }) {
   const model = url.pathname.match(/^\/api\/ventures\/([^/]+)\/model$/);
   const branches = url.pathname.match(/^\/api\/ventures\/([^/]+)\/model\/branches$/);
-  const branch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/model\/branches\/([^/]+)(?:\/(changes|merge|close|compare))?$/);
+  const branch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/model\/branches\/([^/]+)(?:\/(changes|merge|keep|close|compare))?$/);
   const scopes = url.pathname.match(/^\/api\/ventures\/([^/]+)\/work-scopes$/);
   const revokeScope = url.pathname.match(/^\/api\/ventures\/([^/]+)\/work-scopes\/([^/]+)\/revoke$/);
   const movement = url.pathname.match(/^\/api\/ventures\/([^/]+)\/market-movement$/);
@@ -99,6 +100,14 @@ export default async function handle({ req, res, url, deps = {} }) {
       const body = await readBody(req);
       const actor = requestActor(req, "Making selected Product changes current");
       const result = mergeModelBranch({ ventureId, branchId: decodeURIComponent(branch[2]), ...body, actor });
+      json(res, 200, { receipt: result.receipt, model: result.model });
+      return true;
+    }
+    if (req.method === "POST" && branch && branch[3] === "keep") {
+      const ventureId = decodeURIComponent(branch[1]);
+      const body = await readBody(req);
+      const actor = requestActor(req, "Keeping a Product change");
+      const result = keepModelChange({ ventureId, branchId: decodeURIComponent(branch[2]), ...body, actor });
       json(res, 200, { receipt: result.receipt, model: result.model });
       return true;
     }

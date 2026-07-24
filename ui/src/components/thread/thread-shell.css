@@ -67,10 +67,23 @@
 .thread-rail-row:hover { background: var(--n-hover); color: var(--n-ink); }
 .thread-rail-row[data-selected="true"] { background: var(--n-selected); color: var(--n-ink); }
 .thread-rail-row svg { width: 13px; color: var(--n-ink-4); }
+/* Color is rationed to the two states that ask for the founder: a thread waiting on judgment and one
+   that broke. Active, unread, and quiet stay muted so those two read at a glance. */
+.thread-rail-row[data-state="decision"] svg { color: var(--amber-ink); }
+.thread-rail-row[data-state="failure"] svg { color: var(--danger); }
+.thread-rail-row[data-state="decision"] > span:not(.sr-only),
+.thread-rail-row[data-state="failure"] > span:not(.sr-only) { color: var(--n-ink-2); }
 .thread-rail-row .thread-state-spinner { animation: thread-state-spin 800ms linear infinite; }
 .thread-rail-row > span:not(.sr-only) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread-rail-row small { min-width: 18px; color: var(--n-ink-4); font: var(--text-xs) var(--mono); text-align: right; }
 .thread-rail-empty { margin: 0 8px; color: var(--n-ink-4); font-size: 12px; }
+.thread-rail-empty[role="alert"] { color: var(--danger); }
+/* A restoring list reads as content on the way in, not an empty rail: static muted rows in the row
+   rhythm, no shimmer — the wait is brief and motion here would only fidget. */
+.thread-rail-skeleton { display: grid; gap: 2px; padding: 2px 0; }
+.thread-rail-skeleton-row { display: grid; min-height: 34px; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 6px; padding: 0 7px; }
+.thread-rail-skeleton-row span { height: 9px; border-radius: 6px; background: var(--n-line-2); opacity: .5; }
+.thread-rail-skeleton-row span:first-child { width: 13px; height: 13px; border-radius: 50%; opacity: .38; }
 .thread-rail-earlier { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--n-line); }
 .thread-rail-earlier .thread-rail-row { min-height: 29px; font-size: 12px; }
 .thread-rail-earlier .thread-rail-row svg { width: 12px; }
@@ -125,9 +138,15 @@
 .thread-delete-confirmation > span .thread-delete-action:hover { background: color-mix(in srgb, var(--danger) 84%, white); color: var(--n-app); }
 .thread-conversation > .firm-freshness { position: absolute; top: 66px; left: 50%; z-index: 10; translate: -50% 0; }
 
-.thread-log { min-height: 0; flex: 1; }
+.thread-log { position: relative; min-height: 0; flex: 1; overflow: hidden; }
 .thread-log-scroll { overflow-x: hidden !important; overscroll-behavior-y: contain; scrollbar-width: thin; }
-.thread-log-content { width: min(100%, 760px); margin: 0 auto; gap: 0 !important; padding: 48px 32px 72px !important; }
+/* Virtualized transcript geometry: the list element itself must stay padding-free (Virtuoso projects
+   off-screen turns as inline padding on it), so the lead, each item wrapper, and the tail carry the
+   column width and breathing room instead. `flow-root` keeps message margins inside measured heights. */
+.thread-log-lead, .thread-log-item { width: min(100%, 760px); margin: 0 auto; padding: 0 32px; }
+.thread-log-lead { padding-top: 48px; }
+.thread-log-item { display: flow-root; }
+.thread-log-tail { height: 72px; }
 .thread-message { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 18px; margin: 0 0 34px; }
 .thread-message > header { padding-top: 3px; color: var(--n-ink-4); font-size: 11px; font-weight: 600; text-align: right; }
 .thread-message[data-role="founder"] .thread-message-body { color: var(--n-ink); font-weight: 520; }
@@ -167,7 +186,7 @@
 
 /* Copy-as-Markdown on any settled turn: invisible at rest, revealed by hovering or focusing the turn. */
 .thread-message { position: relative; }
-.thread-message-copy { position: absolute; z-index: 1; right: 0; bottom: -2px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--n-ink-4); cursor: pointer; opacity: 0; transition: opacity 140ms var(--ease), color 140ms var(--ease); transform: translateY(100%); }
+.thread-message-copy { position: absolute; z-index: 1; right: 0; bottom: -2px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--n-ink-4); cursor: pointer; opacity: 0; transition: opacity var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); transform: translateY(100%); }
 .thread-message:hover .thread-message-copy, .thread-message-copy:focus-visible { opacity: 1; }
 .thread-message-copy:hover { background: var(--n-hover); color: var(--n-ink-2); }
 .thread-message-copy svg { width: 12px; height: 12px; }
@@ -225,6 +244,19 @@
 .thread-material-copy small { overflow: hidden; color: var(--n-ink-4); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
 .thread-material-action { display: flex; min-height: 24px; align-items: center; gap: 3px; padding: 0 3px 0 8px; color: #9bbcff; font-size: 11px; white-space: nowrap; }
 .thread-material-action svg { width: 13px; }
+
+/* Changed-files card: the header row keeps the material grammar; the file rows sit beneath it,
+   aligned to the copy column (76px kind + 10px gap + 8px pad). */
+.thread-code-stat { display: inline-flex; gap: 7px; margin-right: 7px; font: 600 var(--text-xs) var(--mono); }
+.thread-code-stat [data-tone="added"] { color: var(--green); }
+.thread-code-stat [data-tone="removed"] { color: var(--danger); }
+.thread-code-files { display: grid; margin: 0; padding: 0 8px 6px 94px; gap: 3px; list-style: none; }
+.thread-code-files li { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.thread-code-files li > span { flex: 0 0 auto; width: 11px; color: var(--n-ink-4); font: 600 var(--text-xs) var(--mono); }
+.thread-code-files li[data-status="A"] > span { color: var(--green); }
+.thread-code-files li[data-status="D"] > span { color: var(--danger); }
+.thread-code-files code { overflow: hidden; color: var(--n-ink-3); font: var(--text-xs) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.thread-code-files li[data-more="true"] { color: var(--n-ink-4); font-size: var(--text-xs); }
 .thread-composer { flex: 0 0 auto; padding: 12px 18px 14px; border-top: 1px solid var(--n-line); background: var(--n-app); }
 .thread-composer .now-composer { width: min(100%, 680px); margin: 0 auto; gap: 5px; }
 .thread-composer .now-composer-shell { gap: 0; padding: 8px 8px 8px 13px; border: 1px solid var(--n-line-2); border-radius: 11px; background: var(--n-panel); box-shadow: none; }
@@ -240,13 +272,27 @@
 .thread-composer .now-drive-receipt-detail { color: var(--n-ink-4); }
 .thread-composer .now-drive-receipt-open { margin-left: auto; padding: 3px 7px; border: 1px solid var(--n-line-2); background: transparent; color: var(--n-ink-2); }
 
+/* At rest a Work Thread is a true centered chat: the greeting and composer sit together as one block
+   in the vertical middle rather than a heading stranded above a bottom-docked input. The moment real
+   material exists the composer re-anchors to the bottom (the default rules below the [data-rest] scope). */
+/* The resting hero is sized by the column it sits in, not the window. Opening the Canvas takes most of
+   the body, and a headline scaled to viewport width kept its poster size in a 355px spine — three lines
+   with a 66px leading where one calm question belongs. */
+.thread-conversation[data-rest="true"] .thread-rest { container-type: inline-size; display: flex; min-height: 0; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 24px 24px 12vh; overflow-y: auto; }
+.thread-conversation[data-rest="true"] .thread-rest .thread-home { width: auto; min-height: 0; max-width: 760px; margin: 0; padding: 0 20px 10px; }
+.thread-conversation[data-rest="true"] .thread-rest .thread-home h2 { margin: 10px 0 0; font-size: clamp(26px, 6.2cqi, 44px); font-weight: 560; line-height: 1.16; }
+.thread-conversation[data-rest="true"] .thread-rest .thread-home p { margin-top: 12px; }
+.thread-conversation[data-rest="true"] .thread-rest .thread-composer { width: 100%; padding: 0; border-top: 0; background: transparent; }
+.thread-conversation[data-rest="true"] .thread-rest .thread-composer .now-composer { width: min(100%, 720px); }
+.thread-conversation[data-rest="true"] .thread-rest .thread-composer .now-composer-field textarea { min-height: 92px; }
+
 /* Product / GTM and Releases get one contextual SDK composer, not a mini Work window. Exact history
    earns space above it; an empty or restoring Thread remains a compact anchored input. */
 .thread-conversation[data-surface="context"] { overflow: hidden; border: 0; border-radius: 14px; background: transparent; box-shadow: 0 18px 52px rgb(0 0 0 / 34%); }
 .thread-conversation[data-surface="context"] > .firm-freshness { top: 6px; }
 /* One dissolvable latest reply or live status, never an accumulating transcript. A long single
    answer scrolls inside itself; multi-turn history lives in the Work Thread this composer routes to. */
-.thread-conversation[data-surface="context"] .thread-context-answer { max-height: min(38vh, 360px); overflow-y: auto; padding: 20px 22px 14px; border: 1px solid var(--n-line-2); border-bottom: 0; border-radius: 14px 14px 0 0; background: var(--n-app); scrollbar-width: thin; animation: thread-context-answer-in 200ms var(--ease-out); }
+.thread-conversation[data-surface="context"] .thread-context-answer { max-height: min(38vh, 360px); overflow-y: auto; padding: 20px 22px 14px; border: 1px solid var(--n-line-2); border-bottom: 0; border-radius: 14px 14px 0 0; background: var(--n-app); scrollbar-width: thin; animation: thread-context-answer-in var(--dur-slow) var(--ease-out); }
 .thread-conversation[data-surface="context"] .thread-context-note { margin: 0; color: var(--n-ink-4); font-size: var(--text-xs); }
 .thread-conversation[data-surface="context"] .thread-message { grid-template-columns: 54px minmax(0, 1fr); gap: 14px; margin-bottom: 0; }
 .thread-conversation[data-surface="context"] .thread-composer { padding: 0; border: 0; background: transparent; }
@@ -261,7 +307,9 @@
 .thread-conversation[data-surface="work"] .thread-header { min-height: 52px; padding: 7px 12px 7px 18px; }
 .thread-conversation[data-surface="work"] > .firm-freshness { top: 54px; }
 .thread-conversation[data-surface="work"] .thread-log-scroll { overflow-anchor: none; }
-.thread-conversation[data-surface="work"] .thread-log-content { width: 100%; max-width: none; padding: 24px 20px 28px !important; }
+.thread-conversation[data-surface="work"] .thread-log-lead, .thread-conversation[data-surface="work"] .thread-log-item { width: 100%; max-width: none; padding-right: 20px; padding-left: 20px; }
+.thread-conversation[data-surface="work"] .thread-log-lead { padding-top: 24px; }
+.thread-conversation[data-surface="work"] .thread-log-tail { height: 28px; }
 .thread-conversation[data-surface="work"] .thread-message { display: flex; width: min(100%, 768px); grid-template-columns: none; gap: 0; margin: 0 auto 8px; }
 .thread-conversation[data-surface="work"] .thread-message > header { display: none; }
 .thread-conversation[data-surface="work"] .thread-message-body { width: 100%; font-size: 14px; line-height: 1.6; }
@@ -359,7 +407,7 @@
 .thread-conversation[data-surface="work"] .thread-composer { position: relative; z-index: 12; padding: 10px 20px 16px; border-top: 0; background: var(--n-app); container-type: inline-size; }
 .thread-conversation[data-surface="work"] .thread-composer .now-composer { width: min(100%, 768px); gap: 0; }
 .thread-conversation[data-surface="work"] .thread-composer .now-composer-shell { position: relative; min-height: 80px; gap: 0; padding: 9px 9px 8px 13px; border-color: color-mix(in srgb, var(--n-line-2) 84%, transparent); border-radius: 16px; background: color-mix(in srgb, var(--n-panel) 96%, transparent); box-shadow: 0 8px 26px rgb(0 0 0 / 15%), inset 0 1px 0 rgb(255 255 255 / 2.5%); }
-.thread-conversation[data-surface="work"] .thread-composer .now-composer-flight { position: absolute; top: 16px; right: 68px; left: 20px; z-index: 3; overflow: hidden; color: color-mix(in srgb, var(--primary) 78%, var(--n-ink)); font-size: 15px; line-height: 1.5; pointer-events: none; text-overflow: ellipsis; white-space: nowrap; animation: thread-prompt-depart 500ms cubic-bezier(.22, 1, .36, 1) both; }
+.thread-conversation[data-surface="work"] .thread-composer .now-composer-flight { position: absolute; top: 16px; right: 68px; left: 20px; z-index: 3; overflow: hidden; color: color-mix(in srgb, var(--primary) 78%, var(--n-ink)); font-size: 15px; line-height: 1.5; pointer-events: none; text-overflow: ellipsis; white-space: nowrap; animation: thread-prompt-depart var(--dur-flight) var(--ease-emphasized) both; }
 .thread-conversation[data-surface="work"] .thread-composer .now-composer[data-launching="true"] textarea { opacity: 0; }
 .thread-conversation[data-surface="work"] .thread-composer .now-composer[data-submission-mode="product-gtm"] .now-composer-flight { background: linear-gradient(90deg, var(--agent-spectrum-cyan), var(--agent-spectrum-violet) 38%, var(--agent-spectrum-rose) 68%, var(--agent-spectrum-amber)); background-clip: text; color: transparent; }
 .thread-conversation[data-surface="work"] .thread-composer .now-composer-shell:focus-within { border-color: color-mix(in srgb, var(--primary) 42%, var(--n-line-2)); box-shadow: 0 10px 30px rgb(0 0 0 / 18%), 0 0 0 3px rgb(79 134 247 / 7%), inset 0 1px 0 rgb(255 255 255 / 3%); }
@@ -513,21 +561,10 @@
 @media (max-width: 959px) {
   .thread-shell, .thread-shell[data-stage-open="true"] { grid-template-columns: minmax(320px, 1fr); }
   .thread-shell[data-stage-open="true"] { grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr); }
-  .thread-rail { position: fixed; inset: 0 auto 0 0; width: min(var(--thread-rail-width), calc(100vw - 48px)); translate: -105% 0; box-shadow: 20px 0 60px rgb(0 0 0 / 35%); transition: translate var(--dur-fast) var(--ease-out); }
+  .thread-rail { position: fixed; inset: 0 auto 0 0; width: min(var(--thread-rail-width), calc(100vw - 48px)); translate: -105% 0; box-shadow: 20px 0 60px rgb(0 0 0 / 35%); transition: translate var(--dur-slow) var(--ease-out); }
   .thread-shell[data-rail-open="true"] .thread-rail { translate: 0 0; }
   .thread-rail-launcher { position: fixed; top: 16px; left: 10px; z-index: 19; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 7px; color: var(--n-ink-3); }
   .thread-header { padding-left: 48px; }
   .thread-header-agents small, .thread-header-actions > button span { display: none; }
-  .thread-log-content { padding-right: 20px !important; padding-left: 20px !important; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .thread-rail { transition: none; }
-  .thread-rail-row .thread-state-spinner,
-  .thread-conversation[data-surface="work"] .thread-agent-update .thread-agent-mark,
-  .thread-conversation[data-surface="work"][data-chat-mode="product-gtm"] .thread-message:not([data-role="founder"]) > header::before,
-  .thread-conversation[data-surface="work"] .thread-composer[data-chat-mode="product-gtm"] .now-composer-shell,
-  .thread-conversation[data-surface="work"] .thread-composer .now-composer-flight { animation: none; }
-  .thread-message-copy { transition: none; }
-  .visual-stage { will-change: auto; }
+  .thread-conversation .thread-log-lead, .thread-conversation .thread-log-item { padding-right: 20px; padding-left: 20px; }
 }

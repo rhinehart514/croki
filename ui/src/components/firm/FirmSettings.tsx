@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { motion } from "motion/react";
 import { Check, Database, Mail, Settings2, ShieldCheck, Unplug, X } from "lucide-react";
 import {
   connectGmail,
@@ -10,6 +11,7 @@ import {
 } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DUR, EASE_OUT, panelMotion } from "@/lib/motion";
 import { ExaConnection } from "./ExaConnection";
 import "@/styles/firm-settings.css";
 
@@ -103,14 +105,24 @@ export function FirmSettings({
 
   return (
     <div className="firm-settings-layer">
-      <button type="button" className="firm-settings-backdrop" aria-label="Close venture settings" onClick={onClose} />
-      <aside
+      <motion.button
+        type="button"
+        className="firm-settings-backdrop"
+        aria-label="Close venture settings"
+        onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: DUR.slow, ease: EASE_OUT }}
+      />
+      <motion.aside
         ref={panelRef}
         className="firm-settings-panel"
         role="dialog"
         aria-modal="true"
         aria-labelledby="firm-settings-title"
         tabIndex={-1}
+        {...panelMotion}
       >
         <header className="firm-settings-head">
           <span className="firm-settings-head-icon" aria-hidden="true"><Settings2 /></span>
@@ -195,7 +207,12 @@ export function FirmSettings({
                     ) : <span><Button type="button" variant="ghost" size="sm" disabled={readOnly} onClick={() => setConnectOpen(true)}>Reconnect</Button><Button type="button" variant="ghost" size="sm" disabled={readOnly} onClick={() => setDisconnectOpen(true)}>Disconnect</Button></span>}
                   </div>
                 ) : (
-                  <Button type="button" variant="outline" size="sm" disabled={!loaded || readOnly} onClick={() => setConnectOpen(true)}>Connect Gmail</Button>
+                  // Same row shape as every other connection footer. Standing alone this button sat hard
+                  // left while Exa's sat right, so two cards in the same stack disagreed about where the
+                  // action for an unconnected source lives.
+                  <div className="firm-settings-connection-actions">
+                    <Button type="button" variant="outline" size="sm" disabled={!loaded || readOnly} onClick={() => setConnectOpen(true)}>Connect Gmail</Button>
+                  </div>
                 )}
               </div>
             </article>
@@ -209,7 +226,7 @@ export function FirmSettings({
             {error ? <span className="firm-settings-error" role="alert">{error}</span> : null}
           </section>
         </div>
-      </aside>
+      </motion.aside>
     </div>
   );
 }

@@ -24,7 +24,7 @@ describe("WorkComposerBar", () => {
     const onChange = vi.fn();
     render(<WorkComposerBar {...props} onModeChange={vi.fn()} onChange={onChange} />);
     expect(screen.getByText("drover")).toBeInTheDocument();
-    expect(screen.getByText("Worktree")).toBeInTheDocument();
+    expect(screen.getByText("Isolated worktree")).toBeInTheDocument();
     expect(screen.getByText("Guarded")).toBeInTheDocument();
     expect(screen.getByLabelText("Chat participation controls")).toBeInTheDocument();
     expect(screen.queryByLabelText("Connected capabilities the coding agent can reach")).not.toBeInTheDocument();
@@ -38,10 +38,10 @@ describe("WorkComposerBar", () => {
   it("exposes the model's actual reasoning tiers and remembers the choice", async () => {
     const onChange = vi.fn();
     render(<WorkComposerBar {...props} onModeChange={vi.fn()} onChange={onChange} />);
-    // Claude (default) reasons up through max.
+    // Claude Opus 4.8 (default) reasons up through max.
     expect(screen.getByRole("menuitemradio", { name: /Maximum/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("menuitemradio", { name: /Quick/ }));
-    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ runtime: "claude-code", model: null, effort: "low" }));
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ runtime: "claude-code", model: "claude-opus-4-8", effort: "low" }));
     expect(localStorage.getItem("drover:work-effort:venture-one")).toBe("low");
     expect(localStorage.getItem("drover:work-effort:venture-one:thread:one")).toBe("low");
   });
@@ -63,7 +63,7 @@ describe("WorkComposerBar", () => {
     const onChange = vi.fn();
     render(<WorkComposerBar {...props} onModeChange={vi.fn()} onChange={onChange} />);
     fireEvent.click(screen.getByRole("menuitemradio", { name: /Maximum/ }));
-    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ runtime: "claude-code", model: null, effort: "max" }));
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ runtime: "claude-code", model: "claude-opus-4-8", effort: "max" }));
 
     // GPT-5.6 Sol reaches Max too, so switching to it keeps the tier.
     fireEvent.click(screen.getByRole("menuitemradio", { name: /GPT-5\.6 Sol/ }));
@@ -75,21 +75,46 @@ describe("WorkComposerBar", () => {
     expect(screen.queryByRole("menuitemradio", { name: /Maximum/ })).not.toBeInTheDocument();
   });
 
-  it("never hides the participant behind an automatic router", () => {
+  it("keeps the founder's participant when its runtime is offline instead of silently swapping", async () => {
+    localStorage.setItem("drover:work-model:venture-one", "codex:gpt-5.6-sol");
+    getRuntimeStatuses.mockResolvedValue({
+      runtimes: [
+        { id: "codex", label: "Codex", connected: false, auth: "chatgpt-login", authLabel: "ChatGPT subscription", reason: "Not signed in" },
+        { id: "claude-code", label: "Claude", connected: true, auth: "oauth", authLabel: "Claude subscription", reason: null },
+      ],
+    });
+    const onChange = vi.fn();
+    render(<WorkComposerBar {...props} onModeChange={vi.fn()} onChange={onChange} />);
+    await waitFor(() => expect(screen.getByLabelText("SDK model")).toHaveTextContent("Not connected"));
+    expect(screen.getByLabelText("SDK model")).toHaveTextContent("GPT-5.6 Sol");
+    expect(localStorage.getItem("drover:work-model:venture-one")).toBe("codex:gpt-5.6-sol");
+    expect(onChange).toHaveBeenLastCalledWith({ runtime: "codex", model: "gpt-5.6-sol", effort: "high" });
+  });
+
+  it("never hides the participant behind an automatic router or an unnamed default", () => {
     render(<WorkComposerBar {...props} onModeChange={vi.fn()} onChange={vi.fn()} />);
     expect(screen.queryByText("Auto")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("SDK model")).toHaveTextContent("Claude Code");
+    // Every offered participant names an exact model; no row defers to whatever the CLI is configured for.
+    expect(screen.queryByText("Default model")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("SDK model")).toHaveTextContent("Claude Opus 4.8");
+  });
+
+  it("keeps the runtime a founder chose when an old adapter-only preference forward-maps", async () => {
+    localStorage.setItem("drover:work-model:venture-one", "codex");
+    const onChange = vi.fn();
+    render(<WorkComposerBar {...props} onModeChange={vi.fn()} onChange={onChange} />);
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ runtime: "codex", model: "gpt-5.6-sol", effort: "high" }));
+    expect(screen.getByLabelText("SDK model")).toHaveTextContent("GPT-5.6 Sol");
   });
 
   it("switches the chat itself from direct coding to Product and GTM agents", () => {
     const onModeChange = vi.fn();
     const { rerender } = render(<WorkComposerBar {...props} onModeChange={onModeChange} onChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Product / GTM — Agents" }));
+    fireEvent.click(screen.getByRole("button", { name: "Canvas" }));
     expect(onModeChange).toHaveBeenCalledWith("product-gtm");
 
     rerender(<WorkComposerBar {...props} mode="product-gtm" onModeChange={onModeChange} onChange={vi.fn()} />);
-    expect(screen.getByText("Croki agents")).toBeInTheDocument();
-    expect(screen.getByText(/Ideate workflows, branches, gates/)).toBeInTheDocument();
+    expect(screen.getByText("Croki agents")).toHaveAttribute("title", expect.stringContaining("workflows, branches, founder gates, and evidence loops"));
     expect(screen.queryByLabelText("SDK model")).not.toBeInTheDocument();
   });
 });

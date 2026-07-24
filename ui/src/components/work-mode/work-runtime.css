@@ -45,7 +45,7 @@
 .work-preview-toolbar button:focus-visible,
 .work-preview-toolbar input:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 .work-runtime-bar button:disabled,
-.work-preview-toolbar button:disabled { opacity: 0.5; cursor: default; }
+.work-preview-toolbar button:disabled { opacity: 0.5; }
 
 .work-terminal { display: grid; grid-template-rows: auto auto minmax(120px, 1fr); }
 .work-terminal-host { min-height: 120px; padding: var(--space-2) var(--space-3); overflow: hidden; }

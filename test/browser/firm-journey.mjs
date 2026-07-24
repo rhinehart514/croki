@@ -116,7 +116,7 @@ async function bootDrover() {
   }
 }
 
-test("cutover: opening a venture lands the two-surface founder workspace", async () => {
+test("cutover: opening a venture lands the one-shell founder workspace", async () => {
   const drover = await bootDrover();
   const chrome = await launchChrome({
     port: await freePort(),
@@ -142,9 +142,19 @@ test("cutover: opening a venture lands the two-surface founder workspace", async
     assert.equal(await client.evaluate(`document.querySelector('.thread-conversation')?.getBoundingClientRect().width > 1500 && !document.querySelector('.work-workbench')`), true, "a fresh venture did not give conversation the available Work surface until repository work exists");
     assert.equal(await client.evaluate(`!document.querySelector('.visual-stage')`), true, "a visual mounted before the founder opened one");
     assert.equal(await client.evaluate(`!document.querySelector('[data-testid="venture-workbench"]')`), true, "the retired workbench leaked into the default shell");
-    assert.equal(await client.evaluate(`['Work', 'Product / GTM'].every((label) => [...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes(label))) && ![...document.querySelectorAll('.workspace-mode-nav button')].some((button) => button.textContent.includes('Releases'))`), true, "the two founder surfaces did not mount cleanly");
-    assert.equal(await client.evaluate(`document.querySelector('.workspace-mode-nav button[aria-current="page"]')?.textContent.includes('Work')`), true, "Work was not the initial mode");
-    assert.equal(await client.evaluate(`(() => { const bar = document.querySelector('.work-composer-bar'); const model = bar?.querySelector('[aria-label="SDK model"]'); const text = bar?.textContent || ''; return Boolean(model && text.includes('acme-saas') && text.includes('Worktree') && text.includes('Guarded')); })()`), true, "Work did not expose repository, worktree, founder guard, and model context");
+    assert.equal(await client.evaluate(`(() => { const toggle = [...document.querySelectorAll('button')].find((entry) => entry.getAttribute('aria-label') === 'Canvas'); return Boolean(toggle) && toggle.getAttribute('aria-pressed') === 'false' && ![...document.querySelectorAll('button')].some((entry) => /Releases/.test(entry.textContent)); })()`), true, "the one shell did not mount a single closed Canvas toggle without a Releases destination");
+    assert.equal(await client.evaluate(`!document.querySelector('.workspace-shell[data-canvas-open]')`), true, "the Canvas opened before the founder asked for it");
+    assert.equal(await client.evaluate(`(() => { const group = document.querySelector('.work-chat-mode[role="group"]'); const code = group && [...group.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Code'); return Boolean(code) && code.getAttribute('aria-pressed') === 'true'; })()`), true, "the always-present composer did not default to Code participation");
+    assert.equal(await client.evaluate(`(() => { const bar = document.querySelector('.work-composer-bar'); const model = bar?.querySelector('[aria-label="SDK model"]'); const text = bar?.textContent || ''; return Boolean(model && text.includes('acme-saas') && text.includes('Isolated worktree') && text.includes('Guarded')); })()`), true, "Work did not expose repository, worktree, founder guard, and model context");
+    assert.equal(await client.evaluate(`(() => {
+      const bar = document.querySelector('.work-composer-bar');
+      if (!bar) return false;
+      const boundary = bar.getBoundingClientRect();
+      return [...bar.children].every((child) => {
+        const rect = child.getBoundingClientRect();
+        return rect.left >= boundary.left - 1 && rect.right <= boundary.right + 1;
+      });
+    })()`), true, "Work participation controls escaped the composer width");
 
     // A fresh thread stays local until the founder sends its first direction.
     const durableThreadsBeforeDraft = await client.evaluate(`document.querySelectorAll('.thread-rail-row').length`);

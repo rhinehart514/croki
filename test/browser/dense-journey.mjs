@@ -3,14 +3,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createDenseGeneratedMapsFixture } from "../fixtures/atlas-fixtures.mjs";
-import { assertNoUnhandledRejections, bootFixture, openFixtureVenture, waitForCanvasViewportStable, waitForDom } from "./fixtures/browser-harness.mjs";
+import { assertNoUnhandledRejections, bootFixture, openCanvas, openFixtureVenture, waitForCanvasViewportStable, waitForDom } from "./fixtures/browser-harness.mjs";
 
 test("dense Product/GTM remains causal, contained, and reachable under semantic zoom", async () => {
   const drover = await bootFixture(createDenseGeneratedMapsFixture);
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1440, height: 900 } });
   try {
     const { client } = chrome;
-    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.workspace-mode-nav button')].find((entry) => entry.textContent.includes('Product / GTM')); button?.click(); return Boolean(button); })()`), true);
+    await openCanvas(client);
     await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'product-walk' && document.querySelectorAll('.product-gtm-node[data-role="page"]').length > 0`, "the code-proven Product walk did not become the resting projection");
     const normal = await client.evaluate(`(() => {
       const surface = document.querySelector('.product-gtm-surface')?.getBoundingClientRect();
@@ -60,10 +60,10 @@ test("dense Product/GTM remains causal, contained, and reachable under semantic 
       objects: model.model.objects.length,
       branches: model.model.modelBranches.filter((branch) => !branch.closedAt).length,
       actions: movement.marketMovement.actions.length,
-      modes: document.querySelectorAll('.workspace-mode-nav button').length,
+      canvasOpen: document.querySelector('.workspace-shell')?.getAttribute('data-canvas-open') === 'true' && Boolean(document.querySelector('button[aria-label="Canvas"]')),
     }))`);
     assert.ok(zoomed.pageOverflow <= 1, `200% zoom introduced ${zoomed.pageOverflow}px horizontal overflow`);
-    assert.deepEqual({ surface: zoomed.surface, fullPlay: zoomed.fullPlay, modes: zoomed.modes }, { surface: true, fullPlay: 12, modes: 2 });
+    assert.deepEqual({ surface: zoomed.surface, fullPlay: zoomed.fullPlay, canvasOpen: zoomed.canvasOpen }, { surface: true, fullPlay: 12, canvasOpen: true });
     assert.match(zoomed.canvasLabel, /contextually composed/i);
     assert.equal(zoomed.minimap, true, "semantic zoom lost direct portfolio navigation");
     assert.ok(zoomed.objects >= 126 && zoomed.branches >= 1 && zoomed.actions >= 1, `semantic zoom lost venture breadth: ${JSON.stringify(zoomed)}`);

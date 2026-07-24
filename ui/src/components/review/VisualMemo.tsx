@@ -56,7 +56,11 @@ function parseMemo(content: string, fallbackTitle?: string) {
     current.push({ kind: "paragraph", text: line });
   }
 
-  return { title: title || fallbackTitle || "Produced work", intro, sections };
+  // A produced document that never named itself gets no invented headline. "Produced work" set at
+  // hero weight above a single drafted sentence is a placeholder wearing the authority of a title,
+  // and the review panel that opens this artifact has already named it. Its own first words lead
+  // instead; the fallback survives only where the title is needed as data.
+  return { title: title || fallbackTitle || null, intro, sections };
 }
 
 function Block({ block }: { block: MemoBlock }) {
@@ -79,9 +83,9 @@ export function VisualMemo({ content, title, artifactRef, artifactAt = null, foc
   const interactive = Boolean(artifactRef && onFocusSection);
   return (
     <article className="review-artifact review-visual-memo">
-      <header className="review-visual-hero">
+      <header className="review-visual-hero" data-untitled={memo.title ? undefined : "true"}>
         <span>Product / GTM artifact</span>
-        <h1>{memo.title}</h1>
+        {memo.title ? <h1>{memo.title}</h1> : null}
         {memo.intro.length ? <div>{memo.intro.map((block, index) => <Block key={index} block={block} />)}</div> : null}
       </header>
       <div className="review-visual-sections">
@@ -90,7 +94,7 @@ export function VisualMemo({ content, title, artifactRef, artifactAt = null, foc
           const selected = focusedSectionId === sectionId;
           const focus = () => {
             if (!artifactRef || !onFocusSection) return;
-            onFocusSection({ artifactRef, artifactTitle: memo.title, artifactAt, sectionId, sectionTitle: section.title, sectionIndex: index });
+            onFocusSection({ artifactRef, artifactTitle: memo.title ?? "Produced work", artifactAt, sectionId, sectionTitle: section.title, sectionIndex: index });
           };
           return (
           <section key={sectionId} data-featured={index === 0 ? "true" : undefined} data-steerable={interactive ? "true" : undefined} data-selected={selected ? "true" : undefined} onClick={interactive ? focus : undefined}>

@@ -440,12 +440,6 @@
 .firm-app-runtime-status strong { font-size:var(--text-xs); }
 .firm-app-runtime-status small { color:var(--muted); font-size:10px; }
 
-@media (prefers-reduced-motion: reduce) {
-  .firm-app-picker-list button,
-  .firm-app-picker-list button em svg,
-  .firm-app-picker-new-toggle > svg:last-child { transition: none; }
-}
-
 /* ─── The open venture: global shell + optional conversation + canvas ─────── */
 
 .firm-app-open { position: relative; }
@@ -494,10 +488,6 @@
 .firm-app-body[data-rail="collapsed"] { grid-template-columns: [rail] 56px [stage] minmax(0, 1fr) [inspector] 0px; }
 .firm-app-body[data-inspector="open"] { grid-template-columns: [rail] 336px [stage] minmax(0, 1fr) [inspector] 380px; }
 .firm-app-body[data-rail="collapsed"][data-inspector="open"] { grid-template-columns: [rail] 56px [stage] minmax(0, 1fr) [inspector] 380px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .firm-app-body { transition: none; }
-}
 
 .firm-app-rail {
   grid-column: rail;
@@ -1457,8 +1447,3 @@
 }
 .firm-app-feed-recovery button:hover { text-decoration: underline; text-underline-offset: 2px; }
 .firm-app-feed-recovery button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .firm-app-roster-list button,
-  .firm-app-composer form { transition: none; }
-}

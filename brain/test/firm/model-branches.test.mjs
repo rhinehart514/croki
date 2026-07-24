@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 
 import {
   createModelBranch,
+  keepModelChange,
   mergeModelBranch,
   projectModelBranch,
   proposeModelChange,
@@ -90,6 +91,55 @@ describe("durable competing Product models", () => {
     assert.throws(
       () => mergeModelBranch({ ventureId: fx.venture.id, branchId: branch.id, selectedChangeRefs: [change.id], actor: { authority: "founder", id: "jacob" } }, fx.options),
       (error) => error.code === "model_branch_conflict" && error.conflicts.length === 1,
+    );
+  });
+
+  it("keeps one object at a time in the founder register and records a keep receipt underneath", () => {
+    const fx = fixture();
+    const branch = createModelBranch({ ventureId: fx.venture.id, question: "Change the promise?", sourceRefs: ["conversation:direction-one"], createdBy: { authority: "agent", id: "codex" } }, fx.options);
+    const update = proposeModelChange({ ventureId: fx.venture.id, branchId: branch.id, targetFamily: "objects", targetRef: "object:promise", operation: "update", patch: { name: "Velocity promise" }, rationale: "Speed is the value.", sourceRefs: ["conversation:direction-one"], proposedBy: { authority: "agent", id: "codex" } }, fx.options);
+    const other = proposeModelChange({ ventureId: fx.venture.id, branchId: branch.id, targetFamily: "objects", operation: "create", proposedRecord: { id: "motion-outbound", type: "motion", name: "Outbound", statement: "Outreach.", properties: { territory: "gtm" } }, rationale: "Outbound coexists.", sourceRefs: ["conversation:direction-one"], proposedBy: { authority: "agent", id: "codex" } }, fx.options);
+
+    const kept = keepModelChange({ ventureId: fx.venture.id, branchId: branch.id, changeRef: `model-change:${update.id}`, actor: { authority: "founder", id: "jacob" } }, fx.options);
+    assert.equal(kept.model.objects.find((entry) => entry.id === "promise").name, "Velocity promise");
+    assert.equal(kept.model.objects.some((entry) => entry.id === "motion-outbound"), false);
+    assert.equal(kept.receipt.kind, "keep");
+    assert.deepEqual(kept.receipt.selectedChangeRefs, [`model-change:${update.id}`]);
+    assert.equal(projectModelBranch(fx.venture.id, branch.id, fx.options).changes.some((entry) => entry.id === other.id), true);
+  });
+
+  it("rate-bounds keeps so a branch cannot be rapid-fired into current truth", () => {
+    const fx = fixture();
+    const branch = createModelBranch({ ventureId: fx.venture.id, question: "Two changes?", sourceRefs: ["conversation:direction-one"], createdBy: { authority: "agent", id: "codex" } }, fx.options);
+    const first = proposeModelChange({ ventureId: fx.venture.id, branchId: branch.id, targetFamily: "objects", targetRef: "object:promise", operation: "update", patch: { name: "One" }, rationale: "First.", sourceRefs: ["conversation:direction-one"], proposedBy: { authority: "agent", id: "codex" } }, fx.options);
+    const second = proposeModelChange({ ventureId: fx.venture.id, branchId: branch.id, targetFamily: "objects", operation: "create", proposedRecord: { id: "motion-two", type: "motion", name: "Two", statement: "Second.", properties: { territory: "gtm" } }, rationale: "Second.", sourceRefs: ["conversation:direction-one"], proposedBy: { authority: "agent", id: "codex" } }, fx.options);
+
+    keepModelChange({ ventureId: fx.venture.id, branchId: branch.id, changeRef: `model-change:${first.id}`, actor: { authority: "founder", id: "jacob" }, at: "2026-07-23T00:00:00.000Z" }, fx.options);
+    assert.throws(
+      () => keepModelChange({ ventureId: fx.venture.id, branchId: branch.id, changeRef: `model-change:${second.id}`, actor: { authority: "founder", id: "jacob" }, at: "2026-07-23T00:00:00.300Z" }, fx.options),
+      (error) => error.code === "model_keep_rate_limited",
+    );
+    const later = keepModelChange({ ventureId: fx.venture.id, branchId: branch.id, changeRef: `model-change:${second.id}`, actor: { authority: "founder", id: "jacob" }, at: "2026-07-23T00:00:01.000Z" }, fx.options);
+    assert.equal(later.model.objects.some((entry) => entry.id === "motion-two"), true);
+  });
+
+  it("never lets an agent keep adopted Product truth", () => {
+    const fx = fixture();
+    const branch = createModelBranch({ ventureId: fx.venture.id, question: "Change it?", sourceRefs: ["conversation:direction-one"], createdBy: { authority: "agent", id: "codex" } }, fx.options);
+    assert.throws(
+      () => keepModelChange({ ventureId: fx.venture.id, branchId: branch.id, changeRef: "model-change:anything", actor: { authority: "agent", id: "codex" } }, fx.options),
+      (error) => error.code === "model_branch_authority_denied",
+    );
+  });
+
+  it("refuses to stack a create on another branch's still-provisional output", () => {
+    const fx = fixture();
+    const branchA = createModelBranch({ ventureId: fx.venture.id, question: "Branch A?", sourceRefs: ["conversation:direction-one"], createdBy: { authority: "agent", id: "codex" } }, fx.options);
+    const branchB = createModelBranch({ ventureId: fx.venture.id, question: "Branch B?", sourceRefs: ["conversation:direction-one"], createdBy: { authority: "agent", id: "claude" } }, fx.options);
+    proposeModelChange({ ventureId: fx.venture.id, branchId: branchA.id, targetFamily: "objects", operation: "create", proposedRecord: { id: "motion-shared", type: "motion", name: "Shared", statement: "On A.", properties: { territory: "gtm" } }, rationale: "A creates it.", sourceRefs: ["conversation:direction-one"], proposedBy: { authority: "agent", id: "codex" } }, fx.options);
+    assert.throws(
+      () => proposeModelChange({ ventureId: fx.venture.id, branchId: branchB.id, targetFamily: "objects", operation: "create", proposedRecord: { id: "motion-shared", type: "motion", name: "Shared", statement: "On B.", properties: { territory: "gtm" } }, rationale: "B builds on A.", sourceRefs: ["conversation:direction-one"], proposedBy: { authority: "agent", id: "claude" } }, fx.options),
+      (error) => error.code === "model_change_cross_branch",
     );
   });
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   applyCodingWorkspace,
   commitCodingWorkspace,
@@ -13,6 +13,7 @@ import { DiffView, FilesChanged } from "@/components/review";
 import { ProductConsequenceReview } from "@/components/work-mode/ProductConsequenceReview";
 import { WorkShipPanel } from "@/components/work-mode/WorkShipPanel";
 import { workStatusLabel } from "@/components/work-mode/workStatusLabel";
+import { swapMotion } from "@/lib/motion";
 
 const activityLabel: Record<string, string> = {
   approve: "Approving checkpoint…",
@@ -36,7 +37,6 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
-  const reducedMotion = useReducedMotion();
 
   const act = async (name: string, operation: () => Promise<unknown>) => {
     setBusy(name); setError(null);
@@ -76,7 +76,7 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
   return (
     <div className="code-workspace" data-variant={variant}>
       {variant === "full" ? <section className="code-workspace-summary">
-        <div><span>Status</span><AnimatePresence initial={false} mode="popLayout"><motion.strong key={workspace.status} data-status={workspace.status} initial={reducedMotion ? false : { opacity: 0, y: 4, filter: "blur(2px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -2 }} transition={{ duration: reducedMotion ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}>{workStatusLabel(workspace.status)}</motion.strong></AnimatePresence></div>
+        <div><span>Status</span><AnimatePresence initial={false} mode="popLayout"><motion.strong key={workspace.status} data-status={workspace.status} {...swapMotion}>{workStatusLabel(workspace.status)}</motion.strong></AnimatePresence></div>
         <div><span>Branch</span><code>{workspace.branch}</code></div>
         <div><span>Workspace</span><code>{workspace.worktree ?? "Removed"}</code></div>
         <div><span>Lineage</span><code>{workspace.runRefs.length} {workspace.runRefs.length === 1 ? "Run" : "Runs"} · {workspace.checkpoints.length} checkpoints</code></div>
@@ -88,10 +88,7 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
           className="code-workspace-activity"
           data-state={error ? "error" : "busy"}
           role={error ? "alert" : "status"}
-          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, y: -5, filter: "blur(2px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -3 }}
-          transition={{ duration: reducedMotion ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}
+          {...swapMotion}
         ><span aria-hidden="true" />{error ?? activityLabel[busy!] ?? "Updating workspace…"}</motion.div> : null}
       </AnimatePresence>
 

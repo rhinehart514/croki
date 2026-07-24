@@ -14,8 +14,12 @@
 .command-search-results [role="option"] > svg { width: 14px; height: 14px; flex: none; color: var(--n-ink-4); }
 .command-search-results [role="option"][data-active] > svg { color: var(--n-ink-2); }
 .command-search-copy { display: flex; min-width: 0; flex: 1; align-items: baseline; gap: 8px; }
-.command-search-copy strong { overflow: hidden; color: inherit; font-size: 13px; font-weight: 530; text-overflow: ellipsis; white-space: nowrap; }
-.command-search-copy small { flex: none; color: var(--n-ink-4); font-size: 11px; }
+.command-search-copy strong { overflow: hidden; flex: 0 1 auto; color: inherit; font-size: 13px; font-weight: 530; text-overflow: ellipsis; white-space: nowrap; }
+/* The detail now carries a canvas object's own sentence, which can run long. Sizing it from zero and letting
+   it grow into what is left means the name is never asked to shrink at all — a shrink factor merely made the
+   name's share small, and a 0.06px share is still enough for Chrome to render "Pricing" as "Prici…". The name
+   still yields last: it keeps its own shrink for a title too long for the row on its own. */
+.command-search-copy small { min-width: 0; flex: 1 1 0; overflow: hidden; color: var(--n-ink-4); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .command-search-results kbd, .command-search-hints kbd { flex: none; padding: 1px 5px; border: 1px solid var(--n-line-2); border-radius: 5px; background: color-mix(in srgb, var(--n-sunk) 72%, transparent); color: var(--n-ink-3); font: 500 10px var(--mono); }
 .command-search-empty { display: grid; gap: 3px; margin: 0; padding: 26px 16px 30px; text-align: center; }
 .command-search-empty strong { color: var(--n-ink-2); font-size: 13px; font-weight: 560; }

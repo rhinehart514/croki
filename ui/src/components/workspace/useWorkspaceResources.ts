@@ -12,7 +12,6 @@ import {
   type WorkIndex,
 } from "@/api";
 import { useFirmConnection } from "@/hooks/use-firm-connection";
-import type { WorkspaceMode } from "@/lib/venture-session";
 
 export type WorkspaceResource<T> = {
   data: T | null;
@@ -64,18 +63,17 @@ function useLoadedResource<T>(initial: T | null = null) {
 
 export function useWorkspaceResources({
   venture,
-  mode,
   search,
   settingsConnection,
 }: {
   venture: FirmVenture;
-  mode: WorkspaceMode;
   search: string;
   settingsConnection: "gmail" | null | undefined;
 }) {
   const firm = useFirmConnection(venture.id);
   const { resource: systemResource, load: loadSystem, setData: setSystemIndex } = useLoadedResource<SystemIndex>();
   const [searchWork, setSearchWork] = useState<WorkIndex | null>(null);
+  const [searchStatus, setSearchStatus] = useState<"idle" | "searching" | "ready" | "error">("idle");
   const [ventures, setVentures] = useState<FirmVenture[]>([venture]);
   const [credentials, setCredentials] = useState<FounderCredential[]>([]);
   const [capabilities, setCapabilities] = useState<RuntimeCapabilityInventoryItem[]>([]);
@@ -97,13 +95,13 @@ export function useWorkspaceResources({
   }, [firm.workIndex?.revision, reloadSystem]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (mode !== "work" || !search.trim()) setSearchWork(null);
-      else void getWorkIndex(venture.id, search)
-        .then((value) => setSearchWork(value.workIndex))
-        .catch(() => setSearchWork(null));
+      if (!search.trim()) { setSearchWork(null); setSearchStatus("idle"); return; }
+      void getWorkIndex(venture.id, search)
+        .then((value) => { setSearchWork(value.workIndex); setSearchStatus("ready"); })
+        .catch(() => { setSearchWork(null); setSearchStatus("error"); });
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [mode, search, venture.id]);
+  }, [search, venture.id]);
 
   const connectionResource = useCallback(<T,>(data: T | null): WorkspaceResource<T> => {
     const degraded = ["stale", "offline", "read-only"].includes(firm.connection.phase);
@@ -122,9 +120,10 @@ export function useWorkspaceResources({
     setSystemIndex,
     reloadSystem,
     searchWork,
+    searchStatus,
     ventures,
     credentials,
     capabilities,
-  }), [connectionResource, credentials, firm, reloadSystem, searchWork,
+  }), [connectionResource, credentials, firm, reloadSystem, searchWork, searchStatus,
     setSystemIndex, systemResource, ventures, capabilities]);
 }

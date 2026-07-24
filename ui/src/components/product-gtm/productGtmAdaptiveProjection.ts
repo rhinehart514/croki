@@ -219,6 +219,11 @@ export function projectAdaptiveProductGtm(
         ? graph.focusSummary
         : projection.kind === "evidence-return"
           ? "Returned reality beside the exact Product or GTM consequence it may change."
-          : "The Product change, its assumptions, supporting evidence, and next founder decision.",
+          // Focusing a GTM motion whose workflow is not mapped yet lands here too, and the Product
+          // sentence below is then a false read of the founder's own object — a market motion
+          // described as a Product change. The territory the focus actually sits in decides.
+          : selectedNode?.data.territory === "gtm"
+            ? "Everything this market motion is joined to."
+            : "The Product change, its assumptions, supporting evidence, and next founder decision.",
   };
 }

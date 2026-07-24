@@ -100,11 +100,19 @@
   --avatar-inset: inset 0 0 0 1px rgb(255 255 255 / 8%);
   --elev-panel-shadow: var(--shadow-modal);
   --elev-panel-radius: 16px;
+  /* Motion scale. fast = color/opacity/hover; base = movement, morphs, list
+     reflow, surface switches; slow = overlays, height, chrome width; flight =
+     the prompt departure only. --ease is the standard curve, --ease-out is for
+     content entering, --ease-emphasized is reserved for signature moments
+     (participant slide, prompt flight, spectrum sweep). Keyboard-initiated and
+     per-second-updating surfaces do not animate. */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-out: var(--ease);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 150ms;
   --dur-base: 180ms;
-  --dur-focus: 200ms;
+  --dur-slow: 200ms;
+  --dur-flight: 500ms;
 
   --app-scrollbar-width: 6px;
   --workspace-topbar-height: 52px;
@@ -269,6 +277,20 @@ textarea { font: inherit; }
   border-radius: var(--r-sm);
 }
 
+/* The pointer affordance is a property of being actionable, not of each component remembering to say so.
+   Declaring it once here means a new control is correctly clickable by default; a component only needs a
+   rule when it wants something else (text, grab, ew-resize). Unavailable controls state that instead. */
+:where(button, summary, a[href], [role="button"], [role="option"], label[for]) { cursor: pointer; }
+
+/* An unavailable control returns to the plain arrow, which is what a dozen components here already
+   declared by hand. Saying it once removes those repeats and, more importantly, ends the split where
+   some disabled controls warned with a slashed circle and others did not. Unlike the pointer default
+   above, this rule carries real specificity on purpose: components style their controls by class, and
+   a zero-specificity override would lose to every one of them. */
+button:disabled,
+[role="button"]:disabled,
+[aria-disabled="true"] { cursor: default; }
+
 svg { width: 1em; height: 1em; }
 
 pre,
@@ -304,10 +326,19 @@ samp { font-family: var(--mono); }
 
 .react-flow__edge-path { stroke-width: 1.5; }
 
+/* The single CSS reduced-motion authority: every transition and animation
+   collapses to an instant final state. Per-file blocks are intentionally
+   absent. The motion/react side is covered by MotionConfig reducedMotion="user"
+   in main.tsx. */
 @media (prefers-reduced-motion: reduce) {
-  [data-slot="button"],
-  [data-slot="input"],
-  [data-slot="textarea"] { transition-duration: 0.01ms !important; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 
   [data-slot="button"]:active { transform: none; }
 }

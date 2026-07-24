@@ -9,6 +9,7 @@ import type { SystemIndex, WorkIndex } from "@/api";
 import type { FirmPlacement, FirmSemanticModel, MarketMovementIndex } from "@/types";
 import { ModelBranchReview } from "./ModelBranchReview";
 import { OutwardActionReview } from "./OutwardActionReview";
+import { ProductGtmLiveDetail } from "./ProductGtmLiveDetail";
 import { ProductGtmEdge } from "./ProductGtmEdge";
 import { ProductGtmNavigator } from "./ProductGtmNavigator";
 import { ProductGtmNode } from "./ProductGtmNode";
@@ -18,7 +19,7 @@ import { reflowExpandedNeighborhood } from "./productGtmLayout";
 import { projectAdaptiveProductGtm } from "./productGtmAdaptiveProjection";
 import { applyJourneyObservation, journeyObservationByRef, type ProductGtmJourneyObservation } from "./productGtmJourney";
 import { type ProductGtmNode as ProductGtmFlowNode } from "./productGtmProjection";
-import { PRODUCT_GTM_MIN_ZOOM, PRODUCT_GTM_READABLE_ZOOM, productGtmMotionDuration, productGtmViewportIsAway } from "./productGtmViewport";
+import { PRODUCT_GTM_MIN_ZOOM, PRODUCT_GTM_READABLE_ZOOM, PRODUCT_GTM_WALK_EDGE_PAD, productGtmMotionDuration, productGtmViewportIsAway } from "./productGtmViewport";
 import "@xyflow/react/dist/style.css";
 import "./product-gtm.css";
 
@@ -45,7 +46,7 @@ function selectedNodeId(ref: string | null): string | null {
 export function ProductGtmSurface({
   ventureId, index, workIndex, selectedRef, camera, readOnlyReason,
   journeyObservations = [], selectedJourneyOverlayRef, onJourneyOverlayChange,
-  onCameraChange, onFocus, onOpenWork, onAskAgent, onUseAgent, onChanged,
+  onCameraChange, onFocus, onOpenWork, onAskAgent, onDraftPlay, onUseAgent, onChanged,
 }: {
   ventureId: string; index: SystemIndex | null; workIndex: WorkIndex | null; selectedRef: string | null; camera: Viewport | null; placement: FirmPlacement; readOnlyReason: string | null;
   organizeRequest?: number;
@@ -54,6 +55,7 @@ export function ProductGtmSurface({
   onJourneyOverlayChange?: (ref: string | null) => void;
   onCameraChange: (camera: Viewport) => void; onFocus: (ref: string | null) => void; onOpenWork: (threadRef: string) => void;
   onAskAgent: (subjectRef?: string, relatedRefs?: string[]) => void; onUseAgent: (agentRef: string, subjectRef?: string) => void; onChanged: () => void;
+  onDraftPlay?: () => void | Promise<void>;
 }) {
   const [model, setModel] = useState<FirmSemanticModel | null>(() => fallbackModel(ventureId, index));
   const [movement, setMovement] = useState<MarketMovementIndex | null>(null);
@@ -61,6 +63,7 @@ export function ProductGtmSurface({
   const [journeyOverlayRef, setJourneyOverlayRef] = useState<string | null>(selectedJourneyOverlayRef ?? null);
   const [refreshKey, setRefreshKey] = useState(0);
   const flowInstance = useRef<ReactFlowInstance<ProductGtmFlowNode> | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
   const journeyRestore = useRef<{ camera: Viewport | null; selectedRef: string | null } | null>(null);
   const [zoomLevel, setZoomLevel] = useState(camera?.zoom ?? 1);
   const [flowReady, setFlowReady] = useState(false);
@@ -102,9 +105,13 @@ export function ProductGtmSurface({
   );
   const projectedNodes = useMemo(() => graph?.nodes ?? [], [graph]);
   const projectedEdges = useMemo(() => graph?.edges ?? [], [graph]);
-  const { dropNotice, dropActive, dropHandlers } = useProductGtmDrop({ targets: projectedNodes, readOnlyReason, onUseAgent, onAskAgent });
   const selectedNode = projectedNodes.find((node) => node.id === selected) ?? null;
   const branchId = selectedNode?.data.kind === "branch" ? selectedNode.data.ref.replace(/^model-branch:/, "") : null;
+  const { dropNotice, dropChoice, resolveChoice, dismissChoice, dropActive, dropHandlers } = useProductGtmDrop({
+    targets: projectedNodes,
+    selection: selectedNode ? { ref: selectedNode.data.ref, name: selectedNode.data.name } : null,
+    readOnlyReason, onUseAgent, onAskAgent,
+  });
 
   const select = useCallback((id: string | null) => {
     const node = projectedNodes.find((entry) => entry.id === id);
@@ -126,7 +133,11 @@ export function ProductGtmSurface({
           ? <OutwardActionReview ventureId={ventureId} action={node.data.action} readOnly={Boolean(readOnlyReason)} onChanged={() => { refresh(); onChanged(); }} />
           : node.data.role === "page" && node.data.page
             ? <ProductPagePanel ventureId={ventureId} name={node.data.name} summary={node.data.detail} pageRef={node.data.ref} page={node.data.page} readOnly={Boolean(readOnlyReason)} onOpenWork={onOpenWork} />
-            : undefined;
+            // Decision 28: only the focused node carries live detail, and only while it is actually running.
+            // A quiet or finished node shows its resting detail; nothing animates ambiently across the canvas.
+            : isWork && node.data.active
+              ? <ProductGtmLiveDetail ventureId={ventureId} threadRef={node.data.ref} detail={typeof node.data.detail === "string" ? node.data.detail : undefined} />
+              : undefined;
     return {
       ...node,
       zIndex: expanded ? 20 : node.zIndex,
@@ -163,15 +174,46 @@ export function ProductGtmSurface({
       nodes: targets,
       padding: 0.2,
       minZoom: PRODUCT_GTM_READABLE_ZOOM,
-      maxZoom: 0.98,
+      // A focused node reveals enough of its causal neighborhood that the founder decision where branches
+      // converge stays in the opening frame, including inside the narrower one-shell Canvas panel.
+      maxZoom: 0.92,
       duration: productGtmMotionDuration(duration),
     });
-    if (instance.getViewport().zoom < PRODUCT_GTM_READABLE_ZOOM - 0.001) {
-      const bounds = instance.getNodesBounds(targets);
+    const bounds = instance.getNodesBounds(targets);
+    const paneWidth = canvasRef.current?.clientWidth ?? 0;
+    const zoom = instance.getViewport().zoom;
+    // The readability floor wins over fitting, so a walk wider than the pane must lose something off the
+    // edge. fitView centres what it cannot fit, which crops both ends and takes the entry page — the one
+    // node a walk map must open on — with it. A walk has a reading start, so anchor the frame there and
+    // let the remainder run forward off the right edge, the direction the founder already reads and pans.
+    const overflows = paneWidth > 0 && bounds.width * zoom > paneWidth - PRODUCT_GTM_WALK_EDGE_PAD * 2;
+    if (graph.projection.kind === "product-walk" && !selected && overflows) {
+      await instance.setCenter(
+        bounds.x + (paneWidth / 2 - PRODUCT_GTM_WALK_EDGE_PAD) / zoom,
+        bounds.y + bounds.height / 2,
+        { zoom, duration: productGtmMotionDuration(duration) },
+      );
+    } else if (zoom < PRODUCT_GTM_READABLE_ZOOM - 0.001) {
+      // A projection with no inherent reading start still centres on its subject at the readable floor.
       await instance.setCenter(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, {
         zoom: PRODUCT_GTM_READABLE_ZOOM,
         duration: productGtmMotionDuration(duration),
       });
+    }
+    // The agents-and-capabilities dock floats over the foot of the same pane React Flow fits into — at 800px
+    // tall it covers 29% of the canvas — so a focused node centred in the whole pane lands with its
+    // brain-dump and its "Start work on this page" behind an opaque panel. Lift the frame by exactly what
+    // the dock covers of this node, and never past the node's own top edge.
+    const focusedNode = selected ? canvasRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(selected)}"]`) : null;
+    const dock = canvasRef.current?.closest(".workspace-canvas-graph")?.querySelector(".product-palette");
+    const pane = canvasRef.current?.getBoundingClientRect();
+    if (focusedNode && dock && pane) {
+      const node = focusedNode.getBoundingClientRect();
+      const lift = Math.min(node.bottom - dock.getBoundingClientRect().top + 12, node.top - pane.top - 12);
+      if (lift > 0) {
+        const view = instance.getViewport();
+        await instance.setViewport({ ...view, y: view.y - lift }, { duration: productGtmMotionDuration(duration) });
+      }
     }
     focalViewport.current = instance.getViewport();
     window.requestAnimationFrame(() => setCameraAway(false));
@@ -215,7 +257,7 @@ export function ProductGtmSurface({
       <div><strong>{graph.focusName}</strong><span>{graph.focusSummary}</span></div>
       <button type="button" onClick={showProductWalk}>Product walk</button>
     </aside> : null}
-    <ProductGtmNavigator model={visibleModel} movement={movement} selectedRef={selectedRef} onDraftPlay={() => onAskAgent()} onFocus={onFocus}
+    <ProductGtmNavigator model={visibleModel} movement={movement} selectedRef={selectedRef} onDraftPlay={onDraftPlay} onFocus={onFocus}
       journeyAvailable={Boolean(latestJourney)} journeyActive={Boolean(selectedJourney)}
       onToggleJourney={selectedJourney ? closeJourney : openJourney} />
     {selectedJourney ? <aside className="product-gtm-journey-receipt" aria-label="Observed journey source">
@@ -225,7 +267,7 @@ export function ProductGtmSurface({
     {cameraAway ? <button className="product-gtm-return-current" type="button" onClick={() => void frameCurrent()}>
       <LocateFixed aria-hidden="true" />Return to current
     </button> : null}
-    <div className="product-gtm-canvas" {...dropHandlers}><ReactFlow
+    <div className="product-gtm-canvas" ref={canvasRef} {...dropHandlers}><ReactFlow
       nodes={nodes} edges={projectedEdges} nodeTypes={NODE_TYPES} edgeTypes={EDGE_TYPES}
       defaultViewport={camera ?? undefined} onInit={(instance) => { flowInstance.current = instance; setFlowReady(true); }}
       minZoom={PRODUCT_GTM_MIN_ZOOM} maxZoom={1.8} panOnDrag selectionOnDrag={false} nodesConnectable={false} nodesDraggable={false}
@@ -241,6 +283,11 @@ export function ProductGtmSurface({
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
       <Controls position="bottom-left" showInteractive={false} />
       <MiniMap position="bottom-right" pannable zoomable nodeStrokeWidth={2} />
-    </ReactFlow></div>
+    </ReactFlow>{dropChoice ? <div className="product-gtm-drop-choice-scrim" role="presentation" onClick={dismissChoice}>
+      <div className="product-gtm-drop-choice" style={{ left: dropChoice.x, top: dropChoice.y }} role="group" aria-label={dropChoice.prompt} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") dismissChoice(); }}>
+        <p>{dropChoice.prompt}</p>
+        {dropChoice.options.map((option, index) => <button key={option.label} type="button" autoFocus={index === 0} onClick={() => resolveChoice(option.run)}>{option.label}</button>)}
+      </div>
+    </div> : null}</div>
   </main>;
 }

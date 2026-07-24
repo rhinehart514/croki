@@ -31,6 +31,7 @@
     "mcp": "node brain/src/mcp.mjs",
     "build:desktop": "npm run prepare:pty && npm run build",
     "app": "npm run build:desktop && node electron/launch.cjs",
+    "app:dev": "npm run prepare:pty && node electron/launch-dev.cjs",
     "app:dist": "npm run build:desktop && electron-builder --mac"
   },
   "devDependencies": {

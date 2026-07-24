@@ -28,9 +28,9 @@ const systemIndex = {
 
 function renderSearch(overrides: Partial<React.ComponentProps<typeof CommandSearch>> = {}) {
   const handlers = {
-    onSelectThread: vi.fn(), onSelectObject: vi.fn(), onMode: vi.fn(), onNewThread: vi.fn(),
+    onSelectThread: vi.fn(), onSelectObject: vi.fn(), onToggleCanvas: vi.fn(), onNewThread: vi.fn(),
   };
-  render(<CommandSearch mode="work" workIndex={workIndex} systemIndex={systemIndex} {...handlers} {...overrides} />);
+  render(<CommandSearch canvasOpen={false} workIndex={workIndex} systemIndex={systemIndex} {...handlers} {...overrides} />);
   return handlers;
 }
 
@@ -49,10 +49,9 @@ describe("CommandSearch", () => {
     const input = await screen.findByRole("combobox", { name: "Search this venture" });
     await waitFor(() => expect(input).toHaveFocus());
     expect(screen.getByRole("option", { name: /New Thread/ })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /Go to Product \/ GTM/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Show Canvas/ })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /Improve onboarding/ })).toBeInTheDocument();
     expect(screen.getByText("⌘N")).toBeInTheDocument();
-    expect(screen.getByText("⌘2")).toBeInTheDocument();
   });
 
   it("filters Threads by query and jumps with full keyboard traversal", async () => {
@@ -84,19 +83,26 @@ describe("CommandSearch", () => {
     const input = await screen.findByRole("combobox", { name: "Search this venture" });
     fireEvent.change(input, { target: { value: "zebra" } });
     expect(screen.getByText("No matches for “zebra”.")).toBeInTheDocument();
-    expect(screen.getByText("Search covers Threads and actions on this surface.")).toBeInTheDocument();
+    expect(screen.getByText("Search covers Threads, the Canvas, and actions in this venture.")).toBeInTheDocument();
   });
 
-  it("scopes content to the Product / GTM map on that surface and keeps it query-only at rest", async () => {
-    const handlers = renderSearch({ mode: "product-gtm" });
+  it("reaches Canvas objects and keeps them query-only at rest", async () => {
+    const handlers = renderSearch();
     openSearch();
     const input = await screen.findByRole("combobox", { name: "Search this venture" });
+    // The Canvas map is query-only at rest: no object rows until the founder types.
     expect(screen.queryByRole("option", { name: /Founder-led sales/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /Improve onboarding/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /Go to Work/ })).toBeInTheDocument();
     fireEvent.change(input, { target: { value: "founder-led" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(handlers.onSelectObject).toHaveBeenCalledWith(expect.objectContaining({ objectRef: "object:motion" })));
+  });
+
+  it("toggles the Canvas from search, honestly labeled by its current state", async () => {
+    const handlers = renderSearch({ canvasOpen: true });
+    openSearch();
+    await screen.findByRole("combobox", { name: "Search this venture" });
+    fireEvent.click(screen.getByRole("option", { name: /Hide Canvas/ }));
+    await waitFor(() => expect(handlers.onToggleCanvas).toHaveBeenCalledTimes(1));
   });
 
   it("offers exact workbench material only when it is on screen, and drives the real tabs", async () => {

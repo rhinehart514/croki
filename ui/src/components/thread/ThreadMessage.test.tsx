@@ -194,4 +194,23 @@ describe("thread material grammar", () => {
     expect(screen.getByText(/needs verification · 1 check passed/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show changes: Implement native coding" })).toBeInTheDocument();
   });
+
+  it("renders returned code changes as a changed-files card with exact counts", () => {
+    render(<ThreadMessage item={item("artifact", {
+      title: "Implement native coding",
+      artifact: {
+        kind: "native-code", status: "reviewable",
+        changedFiles: [{ status: "M", path: "src/app.ts" }, { status: "A", path: "src/new.ts" }, { status: "D", path: "src/old.ts" }],
+        diffStat: " 3 files changed, 120 insertions(+), 45 deletions(-)",
+      },
+      visual: { kind: "diff", ref: "work:code-one", threadRef: "thread:one", title: "Implement native coding" },
+    })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.getByText("3 changed files")).toBeInTheDocument();
+    expect(screen.getByText("+120")).toBeInTheDocument();
+    expect(screen.getByText("−45")).toBeInTheDocument();
+    expect(screen.getByText("src/new.ts")).toBeInTheDocument();
+    expect(screen.getByText("View diff")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show changes: Implement native coding" }));
+    expect(open).toHaveBeenCalled();
+  });
 });

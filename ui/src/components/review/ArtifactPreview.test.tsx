@@ -42,7 +42,7 @@ describe("ArtifactPreview", () => {
 
   it("renders plain text inside the same visual artifact composition", () => {
     render(<ArtifactPreview artifact={{ kind: "text", content: "plain body" }} />);
-    expect(screen.getByRole("heading", { level: 1, name: "Produced work" })).toBeVisible();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.getByText("plain body")).toBeVisible();
   });
 

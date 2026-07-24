@@ -162,6 +162,11 @@ export function NowComposer({
   };
   const stoppable = Boolean(activeDrive?.abortSupported);
   const stopRequested = Boolean(activeDrive?.abortRequestedAt) || interrupting;
+  const draftReady = Boolean(draft.trim()) || images.length > 0 || Boolean(journeyImport);
+  // One instrument in the send position: while stoppable work runs and nothing is staged, it IS the
+  // stop control. The moment the founder stages a correction it returns to send — sending mid-run is
+  // real steering here — and stop steps aside to its own slot so ending work stays one click away.
+  const morphToStop = stoppable && !draftReady && !busy;
 
   const pickDirection = (direction: string) => {
     setDraft(direction); directions.clear(); textareaRef.current?.focus();
@@ -207,7 +212,7 @@ export function NowComposer({
         <form className="now-composer-field" onSubmit={(event) => { event.preventDefault(); void submit(draft); }}>
           <div className="now-composer-input">
             {agentComposer.menu}
-            <ComposerMentionBackdrop ref={backdropRef} draft={draft} mentions={fileMentions} />
+            <ComposerMentionBackdrop ref={backdropRef} draft={draft} mentions={agentComposer.chipMentions} />
             <textarea
               ref={textareaRef}
               rows={1}
@@ -236,7 +241,7 @@ export function NowComposer({
                 <Mic aria-hidden="true" />
               </button>
             ) : null}
-            {stoppable ? (
+            {stoppable && draftReady ? (
               <button
                 type="button"
                 className="now-composer-stop"
@@ -249,14 +254,29 @@ export function NowComposer({
                 {stopRequested ? <LoaderCircle className="now-composer-spinner" aria-hidden="true" /> : <Square aria-hidden="true" />}
               </button>
             ) : null}
-            <button
-              type="submit"
-              className="now-composer-send"
-              aria-label={busy ? "Working" : submissionMode === "conversation" || submissionMode === "work" || submissionMode === "product-gtm" ? "Send to this thread" : route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
-              disabled={busy || readOnly || (!draft.trim() && !images.length && !journeyImport)}
-            >
-              {busy ? <LoaderCircle className="now-composer-spinner" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
-            </button>
+            {morphToStop ? (
+              <button
+                type="button"
+                className="now-composer-send"
+                data-stop="true"
+                data-requested={stopRequested ? "true" : undefined}
+                aria-label={stopRequested ? "Stopping at the next safe point" : "Stop the current step"}
+                title={stopRequested ? "Stopping at the next safe point" : "Stop the current step; type to steer instead"}
+                onClick={() => void interrupt()}
+                disabled={stopRequested}
+              >
+                {stopRequested ? <LoaderCircle className="now-composer-spinner" aria-hidden="true" /> : <Square aria-hidden="true" />}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="now-composer-send"
+                aria-label={busy ? "Working" : submissionMode === "conversation" || submissionMode === "work" || submissionMode === "product-gtm" ? "Send to this thread" : route === "steer" ? "Send to this direction" : route === "correct" ? "Correct this work" : "Start work"}
+                disabled={busy || readOnly || !draftReady}
+              >
+                {busy ? <LoaderCircle className="now-composer-spinner" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
+              </button>
+            )}
           </div>
         </form>
         <DirectionsTray options={directions.options} loading={directions.loading} onPick={pickDirection} />

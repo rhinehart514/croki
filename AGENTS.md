@@ -7,13 +7,16 @@ tree proves. `DESIGN.md` defines the intended desktop experience. `PRODUCT.md` i
 translation and cannot override them. When these sources disagree, surface the conflict rather than
 blending them. Design explorations remain evidence until an authority file adopts them.
 
-## Current phase (2026-07-22)
+## Current phase (2026-07-23)
 
-The active work is a T3 polish pass on the shipped UI and UX: raise the existing Work and Product / GTM
-surfaces to the native coding-client bar audited in `docs/design/experience-intent-architecture.md` (T3
-Code). Polish means subtraction, better defaults, hierarchy, legibility, motion restraint, and honest
-empty/loading/error states on what already exists — not new capability, surfaces, or abstractions. Delete
-this section when the phase ends.
+The active work is the one-shell reshape adopted as decisions 25–35 in `docs/FIRM-SPEC.md`: collapse Work
+and Product / GTM into a single surface whose canvas is named **Canvas**, with conversation as the spine,
+stay-in-place direction and focused-node live detail, per-object keep over the existing merge machinery,
+ballistic drops with one-tap disambiguation, and node-anchored brain-dumps in the founder's own words.
+Where those decisions conflict with two-surface language elsewhere in this file, the decisions win; the
+boundary prose is rewritten as the shell lands. `docs/STATE.md` continues to report the two-surface tree
+until the code changes. Preparing one real gated play run is in scope; its execution remains founder-gated.
+Delete this section when the phase ends.
 
 ## Boundaries
 
@@ -34,17 +37,20 @@ this section when the phase ends.
 - When opening, restarting, or verifying Electron, a live process and healthy Brain are insufficient
   proof. Confirm that the BrowserWindow loaded and became visible; an invisible or transparent renderer
   is a failed launch even when its API is healthy.
-- The shipped shell has two founder surfaces—Work and Product / GTM—over one canonical venture model and
-  shared context. Market movement is state on the canonical Product / GTM branch, never a separate founder
-  workspace, mode, or source of truth. The Work → Product / GTM → market action → Evidence loop is causal
-  venture physics, never a required navigation sequence: a founder may enter anywhere. Conversation is primary in
-  Work and contextual and closable in Product / GTM, where the branch canvas owns the
-  center. Closing contextual conversation never loses its draft, Thread identity, or last coherent content.
-  Do not collapse this back to a thread-only shell, turn modes into lifecycle stages or separate authorities,
-  or restore competing navigation roots.
-- The workspace rail is surface-owned beneath one stable venture and surface switch. Work shows Threads;
-  Product / GTM supplies agents, connected capabilities, and surface-local search to its conditional-logic
-  canvas. When exact joined market movement exists, a compact collapsed **In market** focus may show Needs you,
+- The shipped shell is one founder surface over one canonical venture model and shared context: conversation is
+  the permanent spine and the venture graph is an auxiliary **Canvas** panel toggled beside it. Opening the Canvas
+  is how the founder reaches Product / GTM; hiding it returns to the coding spine, which never left. Product / GTM
+  is a participation register of the spine composer, not a separate surface, mode-nav, lifecycle stage, or
+  authority. Market movement is state on the canonical Product / GTM branch, never a separate founder workspace or
+  source of truth. The Work → Product / GTM → market action → Evidence loop is causal venture physics, never a
+  required navigation sequence: a founder may enter anywhere. With the Canvas open the branch graph owns the larger
+  pane while the spine stays present; opening or hiding the Canvas never loses the spine composer draft, Thread
+  identity, or last coherent content. Do not restore a two-surface mode-nav, a separate Releases destination, a
+  founder-facing System mode, or competing navigation roots.
+- The workspace rail is Threads-only beneath one stable venture and the Canvas toggle. The Canvas map, its objects,
+  its agents and connected capabilities, and the Canvas toggle itself are reached through the venture-wide ⌘K search
+  that spans Threads, the Canvas, and actions—there is no surface-local product rail search. When exact joined
+  market movement exists, a compact collapsed **In market** focus may show Needs you,
   Preparing, Moving, and Evidence returned. Selecting an item focuses its canonical branch in the same canvas;
   it never swaps in a release workspace. Unjoined or quiet historical receipts earn no rail space. Do not repeat
   the canvas title or a raw object count as a rail destination; Product / GTM rail space begins with actionable

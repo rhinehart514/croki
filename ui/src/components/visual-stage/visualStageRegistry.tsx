@@ -3,6 +3,7 @@ import type { CodingWorkspace, ThreadTimeline, ThreadTimelineItem, VisualReferen
 import type { Direction } from "@/components/now/directionModel";
 import { ExactArtifact } from "@/components/thread/RichThreadItems";
 import { DecisionGate } from "@/components/now/DecisionGate";
+import { DecisionReceipt } from "@/components/now/DecisionReceipt";
 import type { FirmLens } from "@/types";
 import { Background, Controls, MarkerType, Position, ReactFlow } from "@xyflow/react";
 import { CodeWorkspaceStage } from "./CodeWorkspaceStage";
@@ -79,7 +80,13 @@ export function renderVisualStage({ visual, timeline, lens, readOnlyReason, arti
   if (visual.kind === "consequence") {
     const decision = item.decision as Record<string, unknown> | undefined;
     const wallItem = lens?.wallItems?.find((candidate) => candidate.id === decision?.id) ?? null;
-    return <div className="visual-consequence">{wallItem ? <DecisionGate ventureId={timeline!.ventureId} item={wallItem} onDecided={onChanged} readOnlyReason={readOnlyReason} /> : <><h3>{text(item.title, "Consequence")}</h3><pre>{JSON.stringify(item.decision, null, 2)}</pre><p>No external effect occurs from opening this review. Release, apply, deploy, spend, and destructive actions still require their own host control.</p></>}</div>;
+    // No live wall item means this review is already decided — the ordinary path for reopening one from
+    // the transcript. It gets the same composition one tense later, never the stored row as JSON.
+    return <div className="visual-consequence">{wallItem
+      ? <DecisionGate ventureId={timeline!.ventureId} item={wallItem} onDecided={onChanged} readOnlyReason={readOnlyReason} />
+      : decision
+        ? <DecisionReceipt decision={decision} fallbackTitle={text(item.title, "This review was decided.")} />
+        : <div className="visual-stage-empty"><strong>This review is no longer available.</strong><p>The conversation remains the governing record of what was decided here.</p></div>}</div>;
   }
   return <pre className="visual-stage-json">{JSON.stringify(item, null, 2)}</pre>;
 }

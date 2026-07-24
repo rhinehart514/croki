@@ -11,7 +11,7 @@ const pty = require("node-pty");
 const windowState = require("./window-state.cjs");
 const { createTerminalRuntime } = require("./terminal-runtime.cjs");
 const { createPreviewSessions, hardenPreviewWebview } = require("./preview-sessions.cjs");
-const { parseSafeExternalUrl, isAllowedRendererNavigation, resolveLoginShell, mergePathLists } = require("./security.cjs");
+const { parseSafeExternalUrl, parseLoopbackDevServerUrl, isAllowedRendererNavigation, resolveLoginShell, mergePathLists } = require("./security.cjs");
 
 app.setName("Croki");
 
@@ -283,9 +283,12 @@ async function createWindow() {
   });
 
   // Navigation lockdown: the renderer shows exactly one local document. Anything else is blocked,
-  // and safe web links still reach the founder's real browser.
+  // and safe web links still reach the founder's real browser. The development hatch swaps that
+  // document for a loopback Vite dev server (npm run app:dev) so renderer edits go live without a
+  // rebuild; packaged launches never read the variable.
+  const devServerUrl = app.isPackaged ? null : parseLoopbackDevServerUrl(process.env.DROVER_DEV_SERVER);
   const applicationDocument = path.join(__dirname, "..", "ui", "dist", "index.html");
-  const applicationUrl = pathToFileURL(applicationDocument).href;
+  const applicationUrl = devServerUrl ?? pathToFileURL(applicationDocument).href;
   mainWindow.webContents.on("will-navigate", (event, url) => {
     if (isAllowedRendererNavigation(applicationUrl, url)) return;
     event.preventDefault();
@@ -294,7 +297,8 @@ async function createWindow() {
   });
 
   const ownerId = mainWindow.webContents.id;
-  await mainWindow.loadFile(applicationDocument);
+  if (devServerUrl) await mainWindow.loadURL(devServerUrl);
+  else await mainWindow.loadFile(applicationDocument);
   // `ready-to-show` can be missed or withheld by a renderer that paints before this listener's
   // platform notification. A successful load is enough to reveal the founder surface; never leave
   // a healthy Brain behind an indefinitely hidden desktop window.

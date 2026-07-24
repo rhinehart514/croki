@@ -11,12 +11,13 @@ const WORKSPACE_V9_PREFIX = "drover:workspace-session:v9:";
 const WORKSPACE_V10_PREFIX = "drover:workspace-session:v10:";
 const WORKSPACE_V11_PREFIX = "drover:workspace-session:v11:";
 const WORKSPACE_V12_PREFIX = "drover:workspace-session:v12:";
+const WORKSPACE_V13_PREFIX = "drover:workspace-session:v13:";
 
-export type WorkspaceMode = "work" | "product-gtm";
+// The one-shell session. Conversation is always present; the Canvas is a collapsible panel beside it,
+// so a single `canvasOpen` boolean replaces the retired two-surface `mode` and its contextual-chat flag.
 export type WorkspaceSession = {
-  mode: WorkspaceMode;
   railWidth: number;
-  contextualChatOpen: boolean;
+  canvasOpen: boolean;
   selectedThreadRef: string | null;
   selectedObjectRef: string | null;
   systemCamera: { x: number; y: number; zoom: number } | null;
@@ -78,9 +79,8 @@ export function rememberThreadSession(ventureId: string, session: ThreadSession)
 
 function defaultWorkspaceSession(): WorkspaceSession {
   return {
-    mode: "work",
     railWidth: 272,
-    contextualChatOpen: false,
+    canvasOpen: false,
     selectedThreadRef: null,
     selectedObjectRef: null,
     systemCamera: null,
@@ -100,118 +100,65 @@ function cameraOrNull(value: unknown): WorkspaceSession["systemCamera"] {
     : null;
 }
 
+function scrollsOrEmpty(value: unknown): Record<string, number> {
+  return value && typeof value === "object" ? value as Record<string, number> : {};
+}
+
+// Every superseded two-surface record carried a `mode` and a `contextualChatOpen`. In the one shell the
+// Canvas is open when either the founder was last on the retired Product / GTM surface or its contextual
+// chat was open. `defaultMode` differs across the chain because early records defaulted to the map.
+type LegacyWorkspaceRecord = {
+  mode?: unknown; contextualChatOpen?: unknown; railWidth?: unknown;
+  selectedThreadRef?: unknown; selectedObjectRef?: unknown; systemCamera?: unknown; chatScrollByThread?: unknown;
+};
+
+function readLegacyWorkspace(
+  ventureId: string, prefix: string,
+  options: { defaultMode: "work" | "product-gtm"; keepCamera: boolean },
+): WorkspaceSession | null {
+  const raw = JSON.parse(window.localStorage.getItem(`${prefix}${ventureId}`) ?? "null") as LegacyWorkspaceRecord | null;
+  if (!raw) return null;
+  const mode = options.defaultMode === "work"
+    ? (raw.mode === "product-gtm" ? "product-gtm" : "work")
+    : (raw.mode === "work" ? "work" : "product-gtm");
+  return {
+    railWidth: safeRailWidth(raw.railWidth),
+    canvasOpen: mode === "product-gtm" || raw.contextualChatOpen === true,
+    selectedThreadRef: stringOrNull(raw.selectedThreadRef),
+    selectedObjectRef: stringOrNull(raw.selectedObjectRef),
+    systemCamera: options.keepCamera ? cameraOrNull(raw.systemCamera) : null,
+    chatScrollByThread: scrollsOrEmpty(raw.chatScrollByThread),
+  };
+}
+
 export function readWorkspaceSession(ventureId: string): WorkspaceSession {
   const fallback = defaultWorkspaceSession();
   if (!ventureId.trim()) return fallback;
   try {
-    const current = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V12_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
-    if (current) {
+    const v13 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V13_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
+    if (v13) {
       return {
-        mode: current.mode === "product-gtm" ? "product-gtm" : "work",
-        railWidth: safeRailWidth(current.railWidth),
-        contextualChatOpen: current.contextualChatOpen === true,
-        selectedThreadRef: stringOrNull(current.selectedThreadRef),
-        selectedObjectRef: stringOrNull(current.selectedObjectRef),
-        systemCamera: cameraOrNull(current.systemCamera),
-        chatScrollByThread: current.chatScrollByThread && typeof current.chatScrollByThread === "object" ? current.chatScrollByThread : {},
+        railWidth: safeRailWidth(v13.railWidth),
+        canvasOpen: v13.canvasOpen === true,
+        selectedThreadRef: stringOrNull(v13.selectedThreadRef),
+        selectedObjectRef: stringOrNull(v13.selectedObjectRef),
+        systemCamera: cameraOrNull(v13.systemCamera),
+        chatScrollByThread: scrollsOrEmpty(v13.chatScrollByThread),
       };
     }
-    const v11 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V11_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
-    if (v11) {
-      return {
-        mode: v11.mode === "product-gtm" ? "product-gtm" : "work",
-        railWidth: safeRailWidth(v11.railWidth),
-        contextualChatOpen: v11.contextualChatOpen === true,
-        selectedThreadRef: stringOrNull(v11.selectedThreadRef),
-        selectedObjectRef: stringOrNull(v11.selectedObjectRef),
-        systemCamera: null,
-        chatScrollByThread: v11.chatScrollByThread && typeof v11.chatScrollByThread === "object" ? v11.chatScrollByThread : {},
-      };
+    // v12→v13 keeps the camera; the earlier records reset the superseded canvas camera as before.
+    const v12 = readLegacyWorkspace(ventureId, WORKSPACE_V12_PREFIX, { defaultMode: "work", keepCamera: true });
+    if (v12) return v12;
+    for (const prefix of [WORKSPACE_V11_PREFIX, WORKSPACE_V10_PREFIX, WORKSPACE_V9_PREFIX, WORKSPACE_V8_PREFIX, WORKSPACE_V7_PREFIX]) {
+      const parsed = readLegacyWorkspace(ventureId, prefix, { defaultMode: "work", keepCamera: false });
+      if (parsed) return parsed;
     }
-    const v10 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V10_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
-    if (v10) {
-      return {
-        mode: v10.mode === "product-gtm" ? "product-gtm" : "work",
-        railWidth: safeRailWidth(v10.railWidth),
-        contextualChatOpen: v10.contextualChatOpen === true,
-        selectedThreadRef: stringOrNull(v10.selectedThreadRef),
-        selectedObjectRef: stringOrNull(v10.selectedObjectRef),
-        systemCamera: null,
-        chatScrollByThread: v10.chatScrollByThread && typeof v10.chatScrollByThread === "object" ? v10.chatScrollByThread : {},
-      };
-    }
-    const v9 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V9_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
-    if (v9) {
-      return {
-        mode: v9.mode === "product-gtm" ? "product-gtm" : "work",
-        railWidth: safeRailWidth(v9.railWidth),
-        contextualChatOpen: v9.contextualChatOpen === true,
-        selectedThreadRef: stringOrNull(v9.selectedThreadRef),
-        selectedObjectRef: stringOrNull(v9.selectedObjectRef),
-        systemCamera: null,
-        chatScrollByThread: v9.chatScrollByThread && typeof v9.chatScrollByThread === "object" ? v9.chatScrollByThread : {},
-      };
-    }
-    const v8 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V8_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
-    if (v8) {
-      return {
-        mode: v8.mode === "product-gtm" ? "product-gtm" : "work",
-        railWidth: safeRailWidth(v8.railWidth),
-        contextualChatOpen: v8.contextualChatOpen === true,
-        selectedThreadRef: stringOrNull(v8.selectedThreadRef),
-        selectedObjectRef: stringOrNull(v8.selectedObjectRef),
-        systemCamera: null,
-        chatScrollByThread: v8.chatScrollByThread && typeof v8.chatScrollByThread === "object" ? v8.chatScrollByThread : {},
-      };
-    }
-    const v7 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V7_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
-    if (v7) {
-      return {
-        mode: v7.mode === "product-gtm" ? "product-gtm" : "work",
-        railWidth: safeRailWidth(v7.railWidth),
-        contextualChatOpen: v7.contextualChatOpen === true,
-        selectedThreadRef: stringOrNull(v7.selectedThreadRef),
-        selectedObjectRef: stringOrNull(v7.selectedObjectRef),
-        systemCamera: null,
-        chatScrollByThread: v7.chatScrollByThread && typeof v7.chatScrollByThread === "object" ? v7.chatScrollByThread : {},
-      };
-    }
-    const v6 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V6_PREFIX}${ventureId}`) ?? "null") as (Partial<WorkspaceSession> & { mode?: unknown }) | null;
-    if (v6) {
-      return {
-        mode: v6.mode === "work" ? "work" : "product-gtm",
-        railWidth: safeRailWidth(v6.railWidth),
-        contextualChatOpen: v6.contextualChatOpen === true,
-        selectedThreadRef: stringOrNull(v6.selectedThreadRef),
-        selectedObjectRef: stringOrNull(v6.selectedObjectRef),
-        systemCamera: cameraOrNull(v6.systemCamera),
-        chatScrollByThread: v6.chatScrollByThread && typeof v6.chatScrollByThread === "object" ? v6.chatScrollByThread : {},
-      };
-    }
-    const parsed = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V5_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
-    if (parsed) {
-      return {
-        mode: parsed.mode === "work" ? "work" : "product-gtm",
-        railWidth: safeRailWidth(parsed.railWidth),
-        contextualChatOpen: parsed.contextualChatOpen === true,
-        selectedThreadRef: stringOrNull(parsed.selectedThreadRef),
-        selectedObjectRef: stringOrNull(parsed.selectedObjectRef),
-        systemCamera: cameraOrNull(parsed.systemCamera),
-        chatScrollByThread: parsed.chatScrollByThread && typeof parsed.chatScrollByThread === "object" ? parsed.chatScrollByThread : {},
-      };
-    }
-    const v4 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V4_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
-    if (v4) {
-      return {
-        mode: v4.mode === "work" ? "work" : "product-gtm",
-        railWidth: safeRailWidth(v4.railWidth),
-        contextualChatOpen: v4.contextualChatOpen === true,
-        selectedThreadRef: stringOrNull(v4.selectedThreadRef),
-        selectedObjectRef: stringOrNull(v4.selectedObjectRef),
-        systemCamera: null,
-        chatScrollByThread: v4.chatScrollByThread && typeof v4.chatScrollByThread === "object" ? v4.chatScrollByThread : {},
-      };
-    }
+    const v6 = readLegacyWorkspace(ventureId, WORKSPACE_V6_PREFIX, { defaultMode: "product-gtm", keepCamera: true });
+    if (v6) return v6;
+    const v5 = readLegacyWorkspace(ventureId, WORKSPACE_V5_PREFIX, { defaultMode: "product-gtm", keepCamera: true });
+    if (v5) return v5;
+    const v4 = readLegacyWorkspace(ventureId, WORKSPACE_V4_PREFIX, { defaultMode: "product-gtm", keepCamera: false });
+    if (v4) return v4;
     const v3 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V3_PREFIX}${ventureId}`) ?? "null") as {
       mode?: unknown; railWidth?: unknown; context?: { kind?: unknown; ref?: unknown };
       work?: Partial<ThreadSession>; system?: { scope?: unknown; selection?: unknown; camera?: unknown };
@@ -220,10 +167,10 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
     if (v3) {
       const contextRef = stringOrNull(v3.context?.ref);
       const contextKind = String(v3.context?.kind ?? "");
+      const mode = v3.mode === "work" ? "work" : "product-gtm";
       return {
-        mode: v3.mode === "work" ? "work" : "product-gtm",
         railWidth: safeRailWidth(v3.railWidth ?? v3.work?.railWidth),
-        contextualChatOpen: false,
+        canvasOpen: mode === "product-gtm",
         selectedThreadRef: stringOrNull(v3.work?.threadRef) ?? (contextKind === "thread" ? contextRef : null),
         selectedObjectRef: stringOrNull(v3.system?.selection) ?? (contextKind === "object" ? contextRef : null),
         systemCamera: null,
@@ -233,14 +180,43 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
     const v2 = readThreadSession(ventureId);
     if (v2) return { ...fallback, railWidth: v2.railWidth, selectedThreadRef: v2.threadRef, chatScrollByThread: v2.chatScrollByThread };
     const legacy = readLegacyWorkspaceRaw(ventureId);
-    if (legacy?.mode === "map" && legacy.objectRef) return { ...fallback, mode: "product-gtm", selectedObjectRef: legacy.objectRef };
+    if (legacy?.mode === "map" && legacy.objectRef) return { ...fallback, canvasOpen: true, selectedObjectRef: legacy.objectRef };
     return fallback;
   } catch { return fallback; }
 }
 
 export function rememberWorkspaceSession(ventureId: string, session: WorkspaceSession) {
   if (!ventureId.trim()) return;
-  try { window.localStorage.setItem(`${WORKSPACE_V12_PREFIX}${ventureId}`, JSON.stringify({ ...session, railWidth: safeRailWidth(session.railWidth) })); } catch { /* presentation memory is disposable */ }
+  try { window.localStorage.setItem(`${WORKSPACE_V13_PREFIX}${ventureId}`, JSON.stringify({ ...session, railWidth: safeRailWidth(session.railWidth) })); } catch { /* presentation memory is disposable */ }
+}
+
+const WORKBENCH_PREFIX = "drover:work-workbench:v1:";
+
+export const WORKBENCH_MIN_WIDTH = 480;
+export const WORKBENCH_MAX_WIDTH = 960;
+
+// width null means "the default split" — an explicit pixel width exists only after the founder drags.
+export type WorkbenchSession = { open: boolean; width: number | null };
+
+export function safeWorkbenchWidth(value: unknown): number | null {
+  const width = Number(value);
+  return Number.isFinite(width) && width > 0
+    ? Math.min(WORKBENCH_MAX_WIDTH, Math.max(WORKBENCH_MIN_WIDTH, Math.round(width)))
+    : null;
+}
+
+export function readWorkbenchSession(ventureId: string): WorkbenchSession {
+  const fallback: WorkbenchSession = { open: true, width: null };
+  if (!ventureId.trim()) return fallback;
+  try {
+    const current = JSON.parse(window.localStorage.getItem(`${WORKBENCH_PREFIX}${ventureId}`) ?? "null") as Partial<WorkbenchSession> | null;
+    return current ? { open: current.open !== false, width: safeWorkbenchWidth(current.width) } : fallback;
+  } catch { return fallback; }
+}
+
+export function rememberWorkbenchSession(ventureId: string, session: WorkbenchSession) {
+  if (!ventureId.trim()) return;
+  try { window.localStorage.setItem(`${WORKBENCH_PREFIX}${ventureId}`, JSON.stringify({ open: session.open, width: safeWorkbenchWidth(session.width) })); } catch { /* presentation memory is disposable */ }
 }
 
 export function readActiveVentureId(): string | null {

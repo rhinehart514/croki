@@ -63,3 +63,8 @@ export function expandFileMentions(draft: string, mentions: ComposerFileMention[
 export function fileMentionEndingAt(draft: string, caret: number, mentions: ComposerFileMention[]): FileMentionSpan | null {
   return fileMentionSpans(draft, mentions).find((span) => span.end === caret) ?? null;
 }
+
+// The forward twin for the Delete key: the span starting exactly at a collapsed caret, or null.
+export function fileMentionStartingAt(draft: string, caret: number, mentions: ComposerFileMention[]): FileMentionSpan | null {
+  return fileMentionSpans(draft, mentions).find((span) => span.start === caret) ?? null;
+}

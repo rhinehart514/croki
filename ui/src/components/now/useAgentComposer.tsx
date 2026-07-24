@@ -5,6 +5,7 @@ import { CrewFace } from "@/components/crew/CrewFace";
 import { AgentCreateDialog } from "@/components/workspace/AgentCreateDialog";
 import {
   fileMentionEndingAt,
+  fileMentionStartingAt,
   fileMentionTokenFor,
   pruneFileMentions,
   type ComposerFileMention,
@@ -157,13 +158,18 @@ export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, conf
     else if (index < createIndex) insertFile(fileMatches[index - matches.length]);
     else openCreator();
   };
+  // Every tracked reference in this draft — file chips and agent mentions — under one chip grammar,
+  // for painting and for atomic deletion.
+  const chips: ComposerFileMention[] = [...fileMentions, ...mentions.map((entry) => ({ path: entry.ref, token: entry.token }))];
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // A chip deletes as one unit: Backspace with a collapsed caret at a token's end removes the whole
-    // token and drops its tracking, never one character of a reference.
-    if (event.key === "Backspace" && fileMentions.length) {
+    // A chip deletes as one unit: Backspace at a token's end or Delete at its start removes the whole
+    // reference and drops its tracking, never one character of it.
+    if ((event.key === "Backspace" || event.key === "Delete") && chips.length) {
       const node = event.currentTarget;
       if (node.selectionStart === node.selectionEnd) {
-        const span = fileMentionEndingAt(draft, node.selectionStart, fileMentions);
+        const span = event.key === "Backspace"
+          ? fileMentionEndingAt(draft, node.selectionStart, chips)
+          : fileMentionStartingAt(draft, node.selectionStart, chips);
         if (span) {
           event.preventDefault();
           const next = draft.slice(0, span.start) + draft.slice(span.end);
@@ -234,6 +240,7 @@ export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, conf
     onDraftChange,
     onCaretChange: (position: number) => { setCaret(position); setActiveIndex(0); },
     onKeyDown,
+    chipMentions: chips,
     mentionedAgentRefs: mentionedAgentRefs(draft, agents, mentions),
     clearMentions: () => setMentions([]),
     inputAria: visibleTrigger ? {

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { FirmSemanticModel, MarketMovementIndex } from "@/types";
 import { ProductGtmNavigator } from "./ProductGtmNavigator";
@@ -32,7 +32,7 @@ describe("ProductGtmNavigator", () => {
 
     expect(screen.getByLabelText("Canvas territories")).toHaveTextContent("ProductSharedGTM");
     fireEvent.click(screen.getByLabelText("Browse GTM plays and motions"));
-    fireEvent.click(screen.getByRole("button", { name: "Founder-led outbound, Motion · workflow not mapped" }));
+    fireEvent.click(screen.getByRole("button", { name: "Founder-led outbound, Motion · no steps yet" }));
 
     expect(onFocus).toHaveBeenCalledWith("object:outbound");
   });
@@ -86,5 +86,21 @@ describe("ProductGtmNavigator", () => {
     expect(screen.getByRole("button", { name: "Category launch, Drafted play · 1 step" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Draft a play with an agent" }));
     expect(onDraftPlay).toHaveBeenCalledOnce();
+  });
+
+  it("reports the agent's wait on the button that asked for it", async () => {
+    let release = () => {};
+    const onDraftPlay = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    render(<ProductGtmNavigator model={model} movement={null} selectedRef={null} onFocus={vi.fn()} onDraftPlay={onDraftPlay} />);
+    fireEvent.click(screen.getByLabelText("Browse GTM plays and motions"));
+    fireEvent.click(screen.getByRole("button", { name: "Draft a play with an agent" }));
+
+    const pending = screen.getByRole("button", { name: "Drafting a play…" });
+    expect(pending).toBeDisabled();
+    fireEvent.click(pending);
+    expect(onDraftPlay).toHaveBeenCalledOnce();
+
+    release();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Drafting a play…" })).toBeNull());
   });
 });

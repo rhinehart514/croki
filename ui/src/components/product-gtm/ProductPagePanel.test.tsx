@@ -45,6 +45,9 @@ describe("product page panel", () => {
       productGtmView: true,
     }));
     await waitFor(() => expect(onOpenWork).toHaveBeenCalledWith("thread:signup-work"));
+    // The words are the Thread now, so the box that took them is empty and cannot start a duplicate.
+    await waitFor(() => expect(screen.getByLabelText("What should be different—and for whom?")).toHaveValue(""));
+    expect(screen.getByRole("button", { name: "Start work on this page" })).toBeDisabled();
   });
 
   it("surfaces the founder's prior direction and page-scoped strategy", () => {

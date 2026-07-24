@@ -97,7 +97,10 @@ export function objectSearchRow(object: SystemIndexObject): SearchRow {
   return {
     id: object.objectRef,
     title: object.name,
-    detail: object.territory === "gtm" ? "Go-to-market" : "Product",
+    // The object's own sentence, not its territory. A search matches the statement too, so a row that
+    // showed only "Product" left the founder looking at a Pricing result for the query "Land" with
+    // nothing on screen to explain it — and repeated a word the CANVAS heading above already said.
+    detail: object.statement?.trim() || (object.territory === "gtm" ? "Go-to-market" : "Product"),
     shortcut: null,
     searchTerms: [object.name, object.statement, object.type],
   };

@@ -8,9 +8,17 @@ This file reports what the current tree proves. Direction is not proof.
 
 ## Current product shape
 
-The founder shell has two presentation surfaces over one venture: Work and Product / GTM. There is no current
-Releases destination or founder-facing System mode. The rail is surface-owned: Work shows Threads; Product / GTM
-shows local search, agents, and connected capabilities.
+The founder shell is one surface over one venture: conversation is the permanent spine and the venture graph is
+an auxiliary **Canvas** panel beside it. The spine composer's participation switch (**Code / Canvas**) is the
+Canvas's only standing toggle: choosing Canvas opens the graph and puts the composer in the Product / GTM
+register, and choosing Code (or closing the panel) returns to the coding spine, which never left, keeping the
+spine composer draft intact. Canvas participation and the open panel are one state, so opening the Canvas from
+⌘K, a canvas object, or an adopted workflow moves the same switch. There is no mode-nav, no Releases
+destination, no founder-facing System mode, and no rail Canvas button; the rail is Threads-only, and the Canvas
+map, its objects, and the Canvas toggle are reached through the venture-wide ⌘K search that spans Threads, the
+Canvas, and actions. With the Canvas open the branch graph owns the larger pane while the spine stays present.
+The coding controls (repository, worktree, founder guard, SDK model) belong to Code and never bleed into the
+Product / GTM register; the Canvas attention count now sits on the composer's Canvas switch.
 
 The capability rail now consumes a host-owned runtime inventory rather than assuming a saved label is callable.
 At rest it shows at most three useful capabilities; exact Product/GTM selection may surface up to five relevant
@@ -44,13 +52,14 @@ The founder can delete any non-root chat from its existing action menu. One inli
 live work will stop; the founder-only delete tombstones the Thread, refuses future continuation, requests
 cancellation for every attached live Run, revokes restartable WorkScopes rooted there, and removes the chat from
 Work while preserving Product truth, artifacts, and receipts.
-Product/GTM conversation now uses the same exact Work Thread and founder-selected Claude or Codex runtime,
-model, and effort as Work. Its compact canvas composer hides repository controls but does not replace their
-values or create another participant identity. Closing and reopening the dock preserves the scoped draft,
-Thread, and last coherent transcript. Product interpretation and proposal review stay beside the canvas;
-native repository execution, preview, terminal, diff, or other Work-owned material follows the same Thread
-into Work. A branch-backed provisional local model view may appear above that Thread's composer; corrections
-preserve the same durable work and `ModelBranch`, and review uses the existing selective merge surface.
+The Product / GTM register is the spine composer's in-chat participation switch rather than a separate dock: it
+keeps the same exact Thread and transcript, sends `mode: "context"` with `productGtmView`, directs Croki agents,
+and hides the Code repository/worktree/SDK-model controls without replacing their values or creating another
+participant identity. Opening and hiding the Canvas preserves the spine composer draft and Thread. Product
+interpretation and proposal review open on the Canvas beside the spine; native repository execution, preview,
+terminal, diff, or other Work-owned material stays in the spine's Code register on the same Thread. A branch-backed provisional local model view may appear above that Thread's composer; corrections
+preserve the same durable work and `ModelBranch`, and review uses the per-object Keep surface (each suggested
+change carries its own Keep control, no checkbox merge) over the same underlying merge machinery.
 
 Product / GTM now rests on the code-proven Product walk: repository-derived pages in left-to-right walk order
 with only source-supported navigation links. Selecting a page, consequence, play, play step, or evidence return
@@ -58,7 +67,12 @@ derives one feature-local presentation projection around that question; projecti
 not modes or semantic truth. Current truth, provisional alternatives, live work, founder gates, and evidence
 remain visually distinct across Product, shared Product/GTM, and GTM territories. Automatic layout owns
 placement. Nodes are not draggable, the Organize control and placement writes are absent, and legacy placement
-records remain readable compatibility data. Node selection expands exact material in place.
+records remain readable compatibility data. Node selection expands exact material in place. Palette drops are
+ballistic (`ui/src/components/product-gtm/productGtmDrop.ts`): an agent or capability dropped on an exact node
+resolves to one concrete effect — the agent directed at that node, or the capability attached to that node's exact
+work. An agent dropped on empty canvas is never read as intent by position; with a focused node it raises a
+one-tap choice at the drop point (direct at the focus, or start new work), and with nothing focused it refuses and
+points at an exact node. Capabilities on empty canvas and any unsupported item refuse visibly and persist nothing.
 
 The opening chapter now ranks Product-to-market-to-evidence consequence above mere path length and frames no
 more than five relevant nodes at a `0.82` readability floor. Old overview cameras cannot override that default.
@@ -89,6 +103,20 @@ architecture proposal unions, release-only market indexes, or release write rout
 Branch work overlays current truth without copying the full model. Current target digests expose drift conflicts.
 Independent agent writes retry after unrelated CAS contention. Selective merge is founder-only, applies only the
 selected changes transactionally, records previous/resulting model revisions, and does not close the branch.
+
+Over that machinery the founder register exposes per-object **Keep**: `keepModelChange`
+(`POST /api/ventures/:ventureId/model/branches/:branchId/keep`) makes exactly one change current — there is no
+bulk keep — and writes a `modelMergeReceipt` with `kind: "keep"` as the inspectable record underneath. Keep is
+founder-only (an agent actor is denied) and rate-bounded: a second keep within the interval is rejected with
+`model_keep_rate_limited`, so a branch cannot be rapid-fired into current truth. A proposed change may only build
+on current truth or its own branch — a create that collides with another branch's still-provisional record, or a
+supersede that points across branches, is rejected with `model_change_cross_branch`. Undo-after-keep is not built;
+no inverse-operation capture exists. These behaviors are proven by `brain/test/firm/model-branches.test.mjs` and
+`brain/test/firm/model-routes.test.mjs`. The founder-facing review (`ui/src/components/product-gtm/ModelBranchReview.tsx`)
+presents this register: each suggested change carries its own **Keep** control (no checkbox, no bulk-merge button),
+kept rows mark as such in place, and the copy stays in the founder's register with no branch, merge, provisional, or
+model vocabulary. It states that a keep cannot yet be undone. The per-object Keep surface is exercised end-to-end by
+`test/browser/workspace-modes-journey.mjs`.
 
 ## Work authority and execution
 
@@ -191,6 +219,7 @@ Implemented current routes:
 - `POST /api/ventures/:ventureId/model/branches/:branchId/changes`
 - `GET /api/ventures/:ventureId/model/branches/:branchId/compare`
 - `POST /api/ventures/:ventureId/model/branches/:branchId/merge`
+- `POST /api/ventures/:ventureId/model/branches/:branchId/keep`
 - `POST /api/ventures/:ventureId/model/branches/:branchId/close`
 - `GET|POST /api/ventures/:ventureId/work-scopes`
 - `POST /api/ventures/:ventureId/work-scopes/:scopeId/revoke`
@@ -316,10 +345,10 @@ Validated during this realignment:
 - runtime reachability, dead-code, and UI bundle checks pass;
 - the live browser-read adapter opened `https://example.com`, returned rendered text and one link, and closed its
   isolated context;
-- the deterministic `1440×900` Product/GTM browser journey proves the `0.82` opening floor and one-click adopted
-  workflow disclosure;
+- the deterministic `1440×900` Canvas browser journey proves the opening frame keeps the causal chapter above the
+  `0.81` readable floor with the exact founder decision inside the frame, and one-click adopted workflow disclosure;
 - deterministic browser acceptance passes for first run, return/offline recovery, founder consequences, native
-  coding, dense Product/GTM, selective merge, and the two-surface boundary (8/8 journeys);
+  coding, dense Product/GTM, per-object keep, and the one-shell Canvas boundary (8/8 journeys);
 - Product/GTM receipts prove the code-proven Product walk as the resting projection, page expansion in place,
   consequence-before-market gating, full-play local framing, non-draggable automatic placement, Thread continuity
   across the canvas and Work, and a summoned observed-journey overlay that restores the prior camera and selection;

@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ThreadTimelineItem } from "@/api";
 import { MessageResponse } from "@/components/ai-elements/message";
 import type { WorkChatMode } from "@/components/work-mode/WorkComposerBar";
-import { useDriveStream, type DriveStreamStep } from "@/hooks/useDriveStream";
+import { useDriveStream, type DriveStreamStep, type DriveStreamThinking } from "@/hooks/useDriveStream";
 import { readActiveVentureId } from "@/lib/venture-session";
 
 const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
@@ -27,9 +27,52 @@ function elapsedLabel(startedAt: unknown, now: number) {
   return seconds < 3600 ? `${minutes}m ${seconds % 60}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-function elapsedMilliseconds(startedAt: unknown, now: number) {
-  const started = Date.parse(text(startedAt));
-  return Number.isFinite(started) ? Math.max(0, now - started) : null;
+function startedMilliseconds(value: unknown) {
+  const started = Date.parse(text(value));
+  return Number.isFinite(started) ? started : null;
+}
+
+// After this long in one working state, the label stops pretending the wait is ordinary.
+const LONG_WAIT_MS = 90_000;
+
+const thinkingSecondsLabel = (ms: number | null) => `Thinking · ${Math.max(1, Math.round((ms ?? 0) / 1_000))}s`;
+
+// Live timers write their own text node once a second. A working turn must never commit a React
+// render just to advance "2m 3s" — on a long thread that per-second commit is real jank.
+function AgentState({ prefix, startedAt, active }: { prefix: string; startedAt: unknown; active: boolean }) {
+  const node = useRef<HTMLSpanElement | null>(null);
+  // Render stays pure: the clock is read once at mount, then only the interval advances the text.
+  const [mountedAt] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active || startedMilliseconds(startedAt) == null) return undefined;
+    const tick = () => {
+      const label = elapsedLabel(startedAt, Date.now());
+      if (node.current) node.current.textContent = label ? `${prefix} · ${label}` : prefix;
+    };
+    tick();
+    const timer = window.setInterval(tick, 1_000);
+    return () => window.clearInterval(timer);
+  }, [active, prefix, startedAt]);
+  const label = elapsedLabel(startedAt, mountedAt);
+  return <span className="thread-agent-state" ref={node}>{label ? `${prefix} · ${label}` : prefix}</span>;
+}
+
+function ThinkingState({ thinking }: { thinking: DriveStreamThinking | null }) {
+  const node = useRef<HTMLSpanElement | null>(null);
+  const [observedAt] = useState(() => Date.now());
+  const activeStart = thinking?.active && thinking.startedAt != null ? thinking.startedAt : null;
+  useEffect(() => {
+    if (activeStart == null) return undefined;
+    const tick = () => {
+      if (node.current) node.current.textContent = thinkingSecondsLabel(Date.now() - activeStart);
+    };
+    tick();
+    const timer = window.setInterval(tick, 1_000);
+    return () => window.clearInterval(timer);
+  }, [activeStart]);
+  if (!thinking) return null;
+  const currentMs = activeStart != null ? Math.max(0, observedAt - activeStart) : thinking.durationMs;
+  return <span className="thread-agent-state" data-live="thinking" ref={node}>{thinkingSecondsLabel(currentMs)}</span>;
 }
 
 type Step = { id: string; label: string; tone: string; duration: string | null };
@@ -64,7 +107,6 @@ function liveStep(step: DriveStreamStep): Step {
 }
 
 export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code" }: { item: ThreadTimelineItem; surface?: "work" | "context"; chatMode?: WorkChatMode }) {
-  const [now, setNow] = useState(() => Date.now());
   const [showEarlier, setShowEarlier] = useState(false);
   const participantRef = text(item.participantRef, "agent");
   const participant = text(item.participantLabel, participantRef);
@@ -76,13 +118,21 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
   const ventureId = text(item.ventureId) || readActiveVentureId() || "";
   const driveId = driveIdFromItem(item);
   const live = useDriveStream(active ? ventureId || null : null, active ? driveId : null);
+  // The accessible state label reads the clock once at mount; ElapsedTime owns the live ticking.
+  const [observedAt] = useState(() => Date.now());
+  const [longWaitReached, setLongWaitReached] = useState(() => {
+    const started = startedMilliseconds(item.startedAt);
+    return started != null && Date.now() - started >= LONG_WAIT_MS;
+  });
   useEffect(() => {
-    if (state !== "working" && state !== "stopping") return undefined;
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [state]);
-  const elapsed = elapsedLabel(item.startedAt, now);
-  const elapsedMs = elapsedMilliseconds(item.startedAt, now);
+    if (state !== "working" || longWaitReached) return undefined;
+    const started = startedMilliseconds(item.startedAt);
+    if (started == null) return undefined;
+    // One structural flip at the 90s mark — never a per-second poll to notice it.
+    const remaining = Math.max(0, started + LONG_WAIT_MS - Date.now());
+    const timer = window.setTimeout(() => setLongWaitReached(true), remaining);
+    return () => window.clearTimeout(timer);
+  }, [state, item.startedAt, longWaitReached]);
   const summary = text(item.summary, "Working in this thread");
   const summaryTone = text(item.summaryTone);
   const durableSteps: Step[] = Array.isArray(item.activitySteps) ? item.activitySteps.flatMap((entry) => {
@@ -104,16 +154,13 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
   const liveToolName = text(formingTool?.name).trim();
   // Only the tail of the forming arguments fits on one quiet line; the newest characters carry the signal.
   const liveToolInput = text(formingTool?.partialInput).replace(/\s+/g, " ").trim().slice(-140);
-  // Shape only: how long the model has been thinking, never what it thought.
-  const thinkingMs = live.thinking?.active && live.thinking.startedAt != null
-    ? now - live.thinking.startedAt
-    : live.thinking && !live.thinking.active ? live.thinking.durationMs : null;
-  const thinkingLabel = live.thinking ? `Thinking · ${Math.max(1, Math.round((thinkingMs ?? 0) / 1_000))}s` : null;
   // The stream while it is connected; the timeline's own last durable read of the forming reply when
   // it is not. One painted reply either way — the timeline no longer projects a second live message.
   const replyText = (live.text || text(item.liveText)).trim();
-  const longWait = state === "working" && elapsedMs != null && elapsedMs >= 90_000;
-  const stateLabel = `${longWait ? "Taking longer than usual" : `${state.charAt(0).toUpperCase()}${state.slice(1)}`}${elapsed ? ` · ${elapsed}` : ""}`;
+  const longWait = state === "working" && longWaitReached;
+  const stateText = longWait ? "Taking longer than usual" : `${state.charAt(0).toUpperCase()}${state.slice(1)}`;
+  const elapsedNow = elapsedLabel(item.startedAt, observedAt);
+  const stateLabel = `${stateText}${elapsedNow ? ` · ${elapsedNow}` : ""}`;
   const showParticipant = surface === "context" || chatMode === "product-gtm";
   const accessibleLabel = showParticipant ? `${participant}: ${summary}. ${stateLabel}` : `${summary}. ${stateLabel}`;
   return (
@@ -124,8 +171,8 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
           <div className="thread-agent-line">
             {showParticipant ? <strong>{participant}</strong> : null}
             <p data-tone={summaryTone || undefined}>{summary}</p>
-            <span className="thread-agent-state">{stateLabel}</span>
-            {thinkingLabel ? <span className="thread-agent-state" data-live="thinking">{thinkingLabel}</span> : null}
+            <AgentState prefix={stateText} startedAt={item.startedAt} active={active} />
+            <ThinkingState thinking={live.thinking} />
           </div>
           {longWait ? <p className="thread-agent-wait-note">The work is still active. You can leave this thread and return when it finishes.</p> : null}
           {live.todos.length ? <div className="thread-agent-steps" aria-label="Plan">

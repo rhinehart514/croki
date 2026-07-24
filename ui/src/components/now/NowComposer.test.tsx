@@ -219,6 +219,23 @@ describe("NowComposer contextual routing", () => {
     expect(screen.queryByRole("button", { name: "Stop the current step" })).toBeNull();
   });
 
+  it("morphs the empty send slot into stop during a live run and back the moment a draft exists", async () => {
+    stopActiveDrive.mockResolvedValue({ drive: { ...runningDrive, abortRequestedAt: "2026-01-01T00:01:00Z" } });
+    render(<NowComposer ventureId="v1" ventureName="Acme" selection={{ betId: "b1", workRef: null, teammateRefs: [] }} scopeLabel={null} hasWork variant="dock" submissionMode="work" activeDrive={runningDrive} />);
+    // Nothing staged: the send position itself is the stop control.
+    const morphed = screen.getByRole("button", { name: "Stop the current step" });
+    expect(morphed).toHaveClass("now-composer-send");
+    expect(screen.queryByRole("button", { name: "Send to this thread" })).toBeNull();
+    // A staged correction restores send — steering mid-run is real — while stop keeps its own slot.
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "steer it" } });
+    expect(screen.getByRole("button", { name: "Send to this thread" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Stop the current step" })).toHaveClass("now-composer-stop");
+    // Clearing the draft morphs the slot back, and it still requests the honest interrupt.
+    fireEvent.change(screen.getByLabelText(/Say what you want/), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Stop the current step" }));
+    await waitFor(() => expect(stopActiveDrive).toHaveBeenCalledWith("v1", "drive-1"));
+  });
+
   it("keeps the @ menu agent-only when no repository files are supplied", async () => {
     render(<NowComposer ventureId="v1" ventureName="Acme" selection={null} scopeLabel={null} hasWork variant="dock" configuration={configuration} />);
     const field = screen.getByLabelText(/Say what you want/);

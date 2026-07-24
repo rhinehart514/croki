@@ -16,7 +16,7 @@ const timeline: ThreadTimeline = { ventureId: venture.id, revision: 2, thread: i
 
 vi.mock("@/hooks/use-firm-connection", () => ({ useFirmConnection: () => ({ lens: { bets: [{ id: "onboarding", intent: "Improve onboarding", staged: [], evidence: [] }], crew: [], wallItems: [] }, messages: [], activeDrives: [], workIndex, connection: { phase: "fresh", lastUpdatedAt: Date.now(), retryAt: null, failures: 0, message: null }, refresh: vi.fn(), setWorkIndex: vi.fn() }) }));
 vi.mock("@/components/thread/useThreadTimeline", () => ({ useThreadTimeline: (_ventureId: string, threadRef: string | null) => ({ timeline: threadRef === item.threadRef ? timeline : null, loading: false, error: null, streaming: true, refresh: vi.fn() }) }));
-vi.mock("@/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/api")>()), listVentures: vi.fn(async () => ({ ventures: [venture] })), getWorkIndex: vi.fn(async () => ({ workIndex })), getSystemIndex: vi.fn(async () => ({ systemIndex: { ventureId: venture.id, revision: 2, architectureRevision: 1, scope: "system", objects: [{ id: "product", objectRef: "object:product", name: "Immediate setup", statement: "A founder reaches value immediately.", type: "experience", territory: "product", assertion: "founder-asserted", provenance: null, properties: {}, compatibilityOwned: false, architectureRole: null, threadRefs: [item.threadRef], attention: [], createdAt: null, updatedAt: null }], relationships: [], counts: { total: 1, product: 1, gtm: 0, attention: 0, matchCount: 1 } } })), getCurrentModel: vi.fn(async () => ({ model: { schemaVersion: 3, ventureId: venture.id, revision: 2, objects: [{ id: "product", type: "experience", name: "Immediate setup", statement: "A founder reaches value immediately.", properties: { territory: "product" }, assertion: "founder-asserted" }], relationships: [], modelBranches: [], modelChanges: [], modelMergeReceipts: [], workScopes: [], outwardActions: [] } })), getMarketMovement: vi.fn(async () => ({ marketMovement: { ventureId: venture.id, modelRevision: 2, generatedAt: "now", actions: [], liveWork: [] } })), replyInConversation: mocks.replyInConversation, markWorkIndexReviewed: vi.fn(), setThreadPinned: vi.fn(async () => ({ item, workIndex })), setThreadName: mocks.setThreadName }));
+vi.mock("@/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/api")>()), listVentures: vi.fn(async () => ({ ventures: [venture] })), getWorkIndex: vi.fn(async () => ({ workIndex })), getSystemIndex: vi.fn(async () => ({ systemIndex: { ventureId: venture.id, revision: 2, architectureRevision: 1, scope: "system", objects: [{ id: "product", objectRef: "object:product", name: "Immediate setup", statement: "A founder reaches value immediately.", type: "experience", territory: "product", assertion: "founder-asserted", provenance: null, properties: {}, compatibilityOwned: false, architectureRole: null, threadRefs: [item.threadRef], attention: [], createdAt: null, updatedAt: null }], relationships: [], counts: { total: 1, product: 1, gtm: 0, attention: 0, matchCount: 1 } } })), getCurrentModel: vi.fn(async () => ({ model: { schemaVersion: 3, ventureId: venture.id, revision: 2, objects: [{ id: "product", type: "experience", name: "Immediate setup", statement: "A founder reaches value immediately.", properties: { territory: "product" }, assertion: "founder-asserted" }], relationships: [], modelBranches: [], modelChanges: [], modelMergeReceipts: [], workScopes: [], outwardActions: [] } })), getMarketMovement: vi.fn(async () => ({ marketMovement: { ventureId: venture.id, modelRevision: 2, generatedAt: "now", actions: [], liveWork: [] } })), getJourneyObservations: vi.fn(async () => ({ observations: [], receipts: [] })), getJourneyMappingProposals: vi.fn(async () => ({ proposals: [] })), replyInConversation: mocks.replyInConversation, markWorkIndexReviewed: vi.fn(), setThreadPinned: vi.fn(async () => ({ item, workIndex })), setThreadName: mocks.setThreadName }));
 
 beforeEach(() => {
   mocks.replyInConversation.mockReset().mockResolvedValue({ act: "steer" });
@@ -26,17 +26,21 @@ beforeEach(() => {
 });
 
 describe("VentureWorkspace — unified founder shell", () => {
-  it("renders Work with permanent conversation and two first-class surfaces", async () => {
+  it("renders one shell with a permanent conversation spine and a closed Canvas toggle", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     expect(await screen.findByRole("heading", { name: "Improve onboarding" })).toBeInTheDocument();
     expect(screen.getByLabelText("Buffalo Projects workspace rail")).toBeInTheDocument();
     expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
     expect(screen.getByText("Make setup feel immediate.").closest(".thread-conversation")).toHaveAttribute("data-surface", "work");
     expect(screen.getByLabelText("Chat participation controls")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Code — Claude / Codex" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByLabelText("Agent presence")).not.toBeInTheDocument();
-    expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /Product \/ GTM/ })).toBeInTheDocument();
-    expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).queryByRole("button", { name: /Releases/ })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Chat mode" })).getByRole("button", { name: "Code" })).toHaveAttribute("aria-pressed", "true");
+    // The authority change lives in the composer, not in a competing navigation root.
+    expect(screen.queryByRole("navigation", { name: "Workspace modes" })).not.toBeInTheDocument();
+    // The Canvas is an auxiliary panel; its only standing toggle is the composer's participation switch.
+    const toggle = screen.getByRole("button", { name: "Canvas" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("complementary", { name: "Venture Canvas" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Releases/ })).not.toBeInTheDocument();
   });
 
   it("renames the thread inline while preserving its original transcript", async () => {
@@ -51,45 +55,42 @@ describe("VentureWorkspace — unified founder shell", () => {
     expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
   });
 
-  it("keeps Product / GTM on one canvas without a Releases destination", async () => {
+  it("opens the Canvas as one graph beside the spine without a Releases destination", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     await screen.findByText("Make setup feel immediate.");
-    fireEvent.keyDown(window, { key: "2", metaKey: true });
-    expect(await screen.findByText("What are you trying to make true?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Canvas" }));
+    const canvas = await screen.findByRole("complementary", { name: "Venture Canvas" });
+    // The conversation spine stays present; the Canvas is auxiliary, not a mode swap.
+    expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
+    expect(screen.getByText("Make setup feel immediate.").closest(".thread-conversation")).toHaveAttribute("data-surface", "work");
+    expect(screen.getByText("Make setup feel immediate.").closest(".workspace-shell")).toHaveAttribute("data-canvas-open", "true");
+    expect(screen.getByRole("button", { name: "Canvas" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(canvas).getByRole("region", { name: "Canvas agents" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Releases/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /In market/ })).not.toBeInTheDocument();
-    expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /Product \/ GTM/ })).toHaveAttribute("aria-current", "page");
   });
 
-  it("switches modes into mode-owned space with one persistent canvas dock", async () => {
+  it("keeps the conversation spine while the Canvas opens and closes", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     await screen.findByText("Make setup feel immediate.");
-    fireEvent.keyDown(window, { key: "2", metaKey: true });
-    expect(await screen.findByText("What are you trying to make true?")).toBeInTheDocument();
-    expect(screen.queryByText("Make setup feel immediate.")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "New thread" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "Product and go-to-market scopes" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "Product and go-to-market sections" })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Product and go-to-market agents" })).toBeInTheDocument();
-    const contextual = screen.getByRole("complementary", { name: "Product and GTM canvas dock" });
-    expect(contextual.querySelector(".thread-conversation")).toHaveAttribute("data-surface", "context");
-    expect(contextual.querySelector(".thread-header")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open Work Thread on canvas" }));
-    expect(contextual).toHaveAttribute("data-expanded", "true");
-    fireEvent.click(screen.getByRole("button", { name: "Collapse Work Thread" }));
-    expect(contextual).toHaveAttribute("data-expanded", "false");
-    expect(screen.queryByText("Make setup feel immediate.")).not.toBeInTheDocument();
-    expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /Product \/ GTM/ })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(screen.getByRole("button", { name: "Canvas" }));
+    await screen.findByRole("complementary", { name: "Venture Canvas" });
+    // No second conversation is spun up on the Canvas; direction stays in the one spine.
+    expect(screen.getAllByText("Make setup feel immediate.")).toHaveLength(1);
+    expect(screen.getByLabelText("Say what you want for this venture")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hide Canvas" }));
+    await waitFor(() => expect(screen.queryByRole("complementary", { name: "Venture Canvas" })).not.toBeInTheDocument());
+    expect(screen.getByText("Make setup feel immediate.")).toBeInTheDocument();
+    expect(screen.getByText("Make setup feel immediate.").closest(".workspace-shell")).not.toHaveAttribute("data-canvas-open");
+    expect(screen.getByRole("button", { name: "Canvas" })).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("moves substantive contextual work into the exact Work thread", async () => {
+  it("sends a code direction to the exact Work Thread with the chosen SDK model", async () => {
     localStorage.setItem(`drover:work-model:${venture.id}`, "codex:gpt-5.6-sol");
     localStorage.setItem(`drover:work-effort:${venture.id}`, "xhigh");
     mocks.replyInConversation.mockResolvedValue({ act: "new-direction", accepted: true, threadRef: item.threadRef });
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     await screen.findByText("Make setup feel immediate.");
-    fireEvent.keyDown(window, { key: "2", metaKey: true });
-    await screen.findByRole("complementary", { name: "Product and GTM canvas dock" });
     fireEvent.change(screen.getByLabelText("Say what you want for this venture"), { target: { value: "Implement this workflow" } });
     fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
     await waitFor(() => expect(mocks.replyInConversation).toHaveBeenCalledWith(venture.id, expect.objectContaining({
@@ -99,41 +100,23 @@ describe("VentureWorkspace — unified founder shell", () => {
       runtime: "codex",
       model: "gpt-5.6-sol",
       effort: "xhigh",
-      productGtmView: true,
     })));
-    await waitFor(() => expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /^Work/ })).toHaveAttribute("aria-current", "page"));
-    await waitFor(() => expect(screen.queryByRole("complementary", { name: "Product and GTM canvas dock" })).not.toBeInTheDocument());
+    // Direction stays in place: the same Work spine, no surface swap.
+    expect(screen.getByText("Make setup feel immediate.").closest(".thread-conversation")).toHaveAttribute("data-surface", "work");
   });
 
-  it("keeps a Product answer and its unsent draft on the canvas Thread", async () => {
-    localStorage.setItem(`drover:work-model:${venture.id}`, "codex:gpt-5.6-terra");
-    localStorage.setItem(`drover:work-effort:${venture.id}`, "xhigh");
-    mocks.replyInConversation.mockResolvedValue({
-      act: "answer", accepted: true, threadRef: item.threadRef, messageId: "message:answer",
-    });
+  it("keeps the spine composer draft while the Canvas opens and closes", async () => {
     render(<VentureWorkspace venture={venture} onOpenVenture={vi.fn()} />);
     await screen.findByText("Make setup feel immediate.");
-    fireEvent.keyDown(window, { key: "2", metaKey: true });
-    await screen.findByRole("complementary", { name: "Product and GTM canvas dock" });
-    expect(screen.queryByLabelText("SDK model")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Open Work Thread on canvas" }));
     const composer = screen.getByLabelText("Say what you want for this venture");
     fireEvent.change(composer, { target: { value: "Keep this exact canvas thought" } });
-    fireEvent.click(screen.getByRole("button", { name: "Collapse Work Thread" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open Work Thread on canvas" }));
-    expect(screen.getByLabelText("Say what you want for this venture")).toHaveValue("Keep this exact canvas thought");
 
-    fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
-    await waitFor(() => expect(mocks.replyInConversation).toHaveBeenCalledWith(venture.id, expect.objectContaining({
-      message: "Keep this exact canvas thought",
-      threadRef: item.threadRef,
-      mode: "work",
-      runtime: "codex",
-      model: "gpt-5.6-terra",
-      effort: "xhigh",
-    })));
-    expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /Product \/ GTM/ })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(screen.getByRole("button", { name: "Canvas" }));
+    await screen.findByRole("complementary", { name: "Venture Canvas" });
+    expect(screen.getByLabelText("Say what you want for this venture")).toHaveValue("Keep this exact canvas thought");
+    fireEvent.click(screen.getByRole("button", { name: "Hide Canvas" }));
+    await waitFor(() => expect(screen.queryByRole("complementary", { name: "Venture Canvas" })).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Say what you want for this venture")).toHaveValue("Keep this exact canvas thought");
   });
 
   it("puts the existing Work chat into Product and GTM agent mode for visual model work", async () => {
@@ -141,14 +124,14 @@ describe("VentureWorkspace — unified founder shell", () => {
     await screen.findByText("Make setup feel immediate.");
     const composer = screen.getByLabelText("Say what you want for this venture");
     fireEvent.change(composer, { target: { value: "Ideate a founder approval and evidence workflow" } });
-    fireEvent.click(screen.getByRole("button", { name: "Product / GTM — Agents" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Chat mode" })).getByRole("button", { name: "Canvas" }));
     expect(composer.closest(".thread-conversation")).toHaveAttribute("data-chat-mode", "product-gtm");
     expect(screen.getByText("Croki agents")).toBeInTheDocument();
     expect(screen.queryByLabelText("SDK model")).not.toBeInTheDocument();
-    expect(composer).toHaveAttribute("placeholder", "Explore Product / GTM visually…");
+    expect(composer).toHaveAttribute("placeholder", "Direct Product / GTM…");
     expect(composer).toHaveValue("Ideate a founder approval and evidence workflow");
-    expect(within(screen.getByRole("navigation", { name: "Workspace modes" })).getByRole("button", { name: /^Work/ })).toHaveAttribute("aria-current", "page");
-    expect(localStorage.getItem(`drover:work-chat-mode:${venture.id}`)).toBe("product-gtm");
+    // Canvas participation and the Canvas panel are one state: switching the composer opens the graph.
+    await screen.findByRole("complementary", { name: "Venture Canvas" });
     fireEvent.click(screen.getByRole("button", { name: "Send to this thread" }));
     await waitFor(() => expect(mocks.replyInConversation).toHaveBeenCalledWith(venture.id, expect.objectContaining({
       message: "Ideate a founder approval and evidence workflow",

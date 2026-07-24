@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-import { bootFixture, openFixtureVenture, ROOT, waitForDom } from "./fixtures/browser-harness.mjs";
+import { bootFixture, hideCanvas, openCanvas, openFixtureVenture, ROOT, selectCanvasObject, waitForDom } from "./fixtures/browser-harness.mjs";
 import { seedNativeCoding } from "./fixtures/native-coding-fixture.mjs";
 
 function clickButton(label) {
@@ -13,15 +13,6 @@ function clickButton(label) {
     const button = [...document.querySelectorAll('button')].find((entry) => entry.textContent.trim() === ${JSON.stringify(label)});
     button?.click();
     return Boolean(button && !button.disabled);
-  })()`;
-}
-
-function clickMode(label) {
-  return `(() => {
-    const button = [...document.querySelectorAll('.workspace-mode-nav button')].find((entry) => entry.textContent.includes(${JSON.stringify(label)}));
-    if (!button) return false;
-    if (button.getAttribute('aria-current') !== 'page') button.click();
-    return true;
   })()`;
 }
 
@@ -97,17 +88,19 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
     assert.equal(await client.evaluate(clickButton("Adopt Product consequence")), true);
     await waitForDom(client, `document.querySelector('.code-workspace-product')?.dataset.review === 'adopted'`, "founder adoption did not persist");
 
-    assert.equal(await client.evaluate(clickMode("Product / GTM")), true);
+    // Opening the Canvas beside the spine reaches the same venture model; the founder navigates to the exact
+    // adopted consequence through the venture search that spans the Canvas.
+    await openCanvas(client);
     try {
+      await selectCanvasObject(client, "Founders can review verified code without leaving venture context");
       await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'consequence-trace' && [...document.querySelectorAll('.product-gtm-node[data-kind="truth"] strong')].some((entry) => entry.textContent.trim() === 'Founders can review verified code')`, "the adopted consequence did not appear in its consequence trace");
     } catch (error) {
-      const state = await client.evaluate(`({ mode: document.querySelector('.workspace-shell')?.dataset.mode, productGtm: Boolean(document.querySelector('.product-gtm-surface')), text: document.querySelector('.workspace-primary')?.textContent?.replace(/\\s+/g, ' ').trim().slice(0, 500) })`);
+      const state = await client.evaluate(`({ canvasOpen: document.querySelector('.workspace-shell')?.getAttribute('data-canvas-open'), productGtm: Boolean(document.querySelector('.product-gtm-surface')), text: document.querySelector('.workspace-canvas')?.textContent?.replace(/\\s+/g, ' ').trim().slice(0, 500) })`);
       throw new Error(`${error.message}: ${JSON.stringify(state)}`);
     }
-    assert.equal(await client.evaluate(`(() => { const name = 'Founders can review verified code'; if (document.querySelector('.product-gtm-node[data-expanded="true"] strong')?.textContent.trim() === name) return true; const node = [...document.querySelectorAll('.product-gtm-node[data-kind="truth"]')].find((entry) => entry.querySelector('strong')?.textContent.trim() === name); node?.click(); return Boolean(node); })()`), true, "mode switching did not preserve the exact linked Product subject");
     await waitForDom(client, `document.querySelector('.product-gtm-node[data-expanded="true"] strong')?.textContent.trim() === 'Founders can review verified code' && /without leaving venture context/.test(document.querySelector('.product-gtm-node[data-expanded="true"]')?.textContent || '') && !document.querySelector('.product-gtm-inspector')`, "the adopted Product consequence did not expand in the living model");
 
-    assert.equal(await client.evaluate(clickMode("Work")), true);
+    await hideCanvas(client);
     await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row')].find((entry) => entry.querySelector('span')?.textContent.trim() === 'Implement the native coding browser proof'); row?.click(); return Boolean(row); })()`);
     await waitForDom(client, `!!document.querySelector('.work-workbench .code-workspace')`, "returning to Work lost the exact implementation");
     await client.evaluate(`(() => { const select = document.querySelector('.work-workbench-tools select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('reviewable')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
@@ -136,8 +129,7 @@ test("native coding: exact work, restart recovery, and founder commit stay besid
     assert.equal(fs.existsSync(path.join(ROOT, "native-coding-browser-proof.txt")), false, "committing isolated work changed the founder source workspace");
 
     await client.send("Page.reload", { ignoreCache: true });
-    await waitForDom(client, `[...document.querySelectorAll('.workspace-mode-nav button')].some((entry) => entry.textContent.includes('Work'))`, "the venture did not return after reload");
-    await waitForDom(client, clickMode("Work"), "Work did not become available after reload");
+    await waitForDom(client, `!!document.querySelector('.workspace-shell .thread-rail') && document.querySelector('button[aria-label="Canvas"]')?.getAttribute('aria-pressed') === 'false'`, "the venture did not return to the coding spine after reload");
     await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row')].find((entry) => entry.querySelector('span')?.textContent.trim() === 'Implement the native coding browser proof'); row?.click(); return Boolean(row); })()`);
     await waitForDom(client, `!!document.querySelector('.work-workbench-tools select')`, "the committed implementation did not restore its exact workbench");
     await client.evaluate(`(() => { const select = document.querySelector('.work-workbench-tools select'); const option = [...(select?.options || [])].find((entry) => entry.textContent.includes('committed')); if (!select || !option) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, option.value); select.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);

@@ -40,9 +40,9 @@ describe("ThreadHeader deletion", () => {
     />);
 
     fireEvent.click(screen.getByLabelText("Thread actions"));
-    fireEvent.click(screen.getByRole("button", { name: "Delete chat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete thread" }));
     expect(screen.getByText("Any active work will stop. Product changes and receipts stay.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Delete chat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete thread" }));
 
     await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
   });

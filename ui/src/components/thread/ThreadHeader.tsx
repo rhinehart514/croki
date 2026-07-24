@@ -129,17 +129,17 @@ export function ThreadHeader({ item, ventureName, timeline, onOpenVisual, onTogg
             <summary aria-label="Thread actions"><Ellipsis aria-hidden="true" /></summary>
             <div data-confirming-delete={confirmingDelete ? "true" : undefined}>
               {confirmingDelete ? <div className="thread-delete-confirmation">
-                <strong>Delete this chat?</strong>
+                <strong>Delete this thread?</strong>
                 <small>Any active work will stop. Product changes and receipts stay.</small>
                 {deleteError ? <small role="alert">{deleteError}</small> : null}
                 <span>
                   <button type="button" disabled={deleting} onClick={() => { setDeleteState(null); }}>Cancel</button>
-                  <button type="button" className="thread-delete-action" disabled={deleting} onClick={() => { void deleteChat(); }}>{deleting ? "Deleting…" : "Delete chat"}</button>
+                  <button type="button" className="thread-delete-action" disabled={deleting} onClick={() => { void deleteChat(); }}>{deleting ? "Deleting…" : "Delete thread"}</button>
                 </span>
               </div> : <>
                 <button type="button" onClick={onTogglePin}>{item.pinnedAt ? <PinOff aria-hidden="true" /> : <Pin aria-hidden="true" />}{item.pinnedAt ? "Unpin thread" : "Pin thread"}</button>
-                <button type="button" disabled={!renameAllowed} title={renameDisabledReason ?? undefined} onClick={beginRename}>Rename thread</button>
-                <button type="button" className="thread-delete-menu-item" disabled={Boolean(renameDisabledReason)} title={renameDisabledReason ?? undefined} onClick={() => { setDeleteState({ threadRef: item.threadRef, phase: "confirming", error: null }); }}><Trash2 aria-hidden="true" />Delete chat</button>
+                <button type="button" disabled={!renameAllowed} title={renameDisabledReason ?? undefined} onClick={beginRename}><Pencil aria-hidden="true" />Rename thread</button>
+                <button type="button" className="thread-delete-menu-item" disabled={Boolean(renameDisabledReason)} title={renameDisabledReason ?? undefined} onClick={() => { setDeleteState({ threadRef: item.threadRef, phase: "confirming", error: null }); }}><Trash2 aria-hidden="true" />Delete thread</button>
               </>}
             </div>
           </details>

@@ -120,8 +120,3 @@
   font-size: var(--text-xs);
 }
 .portfolio-frontier-open-import { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--link); font-size: var(--text-sm); font-weight: 650; cursor: pointer; }
-
-@media (prefers-reduced-motion: reduce) {
-  .portfolio-wall-group button,
-  .venture-transfer-export button { transition: none; }
-}

@@ -7,7 +7,7 @@
 }
 
 .croki-mark[data-active="true"] .croki-mark-spectrum {
-  animation: croki-mark-spectrum-sweep 650ms cubic-bezier(.22, 1, .36, 1) both;
+  animation: croki-mark-spectrum-sweep 650ms var(--ease-emphasized) both;
 }
 
 @keyframes croki-mark-spectrum-sweep {
@@ -25,6 +25,9 @@
   }
 }
 
+/* Not a duration override: the global reduced-motion rule would land the sweep on
+   its final keyframe (opacity 0), erasing the activity signal. Substitute a static
+   visible state instead. */
 @media (prefers-reduced-motion: reduce) {
   .croki-mark[data-active="true"] .croki-mark-spectrum {
     opacity: .54;

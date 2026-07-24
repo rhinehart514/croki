@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
-import { useState } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { useRef, useState } from "react";
+import { Maximize2, Minimize2, PanelRightClose } from "lucide-react";
 import type { CodingWorkspace } from "@/api";
+import { WORKBENCH_MAX_WIDTH, WORKBENCH_MIN_WIDTH } from "@/lib/venture-session";
 import { CodeWorkspaceStage } from "@/components/visual-stage/CodeWorkspaceStage";
 import { WorkChangesPane } from "./WorkChangesPane";
 import { WorkCheckpoints } from "./WorkCheckpoints";
@@ -11,7 +13,7 @@ import { attemptLabel } from "./workspaceProjection";
 
 export type WorkbenchTab = "changes" | "preview" | "history";
 
-export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspaceId, readOnlyReason, canCompare = false, onCompare, preview, terminal, terminalStatus = null, onSelectWorkspace, onChanged }: {
+export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspaceId, readOnlyReason, canCompare = false, onCompare, preview, terminal, terminalStatus = null, onSelectWorkspace, onChanged, maximized = false, onToggleMaximize, onHide, onResize }: {
   ventureId: string;
   workspace: CodingWorkspace;
   attempts: CodingWorkspace[];
@@ -24,11 +26,43 @@ export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspac
   terminalStatus?: WorkTerminalStatus | null;
   onSelectWorkspace: (id: string) => void;
   onChanged: () => void;
+  maximized?: boolean;
+  onToggleMaximize?: () => void;
+  onHide?: () => void;
+  onResize?: (width: number) => void;
 }) {
   const [tab, setTab] = useState<WorkbenchTab>("changes");
   const tabs: WorkbenchTab[] = ["changes", "preview", "history"];
+  const section = useRef<HTMLElement | null>(null);
+  // The drag starts from the measured width, so the default proportional split hands off to an exact
+  // pixel width without a jump on the first pointer move.
+  const currentWidth = () => section.current?.getBoundingClientRect().width ?? WORKBENCH_MIN_WIDTH;
+  const clampWidth = (width: number) => Math.min(WORKBENCH_MAX_WIDTH, Math.max(WORKBENCH_MIN_WIDTH, Math.round(width)));
+  const resize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!onResize) return;
+    const origin = event.clientX;
+    const start = currentWidth();
+    const move = (next: globalThis.PointerEvent) => onResize(clampWidth(start + (origin - next.clientX)));
+    const done = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", done); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", done);
+  };
   return (
-    <section className="work-workbench" aria-label="Coding workbench">
+    <section className="work-workbench" aria-label="Coding workbench" ref={section}>
+      {onResize && !maximized ? <button
+        type="button"
+        className="work-workbench-resizer"
+        role="separator"
+        aria-label="Resize workbench"
+        aria-orientation="vertical"
+        aria-valuemin={WORKBENCH_MIN_WIDTH}
+        aria-valuemax={WORKBENCH_MAX_WIDTH}
+        onPointerDown={resize}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft") onResize(clampWidth(currentWidth() + 8));
+          if (event.key === "ArrowRight") onResize(clampWidth(currentWidth() - 8));
+        }}
+      /> : null}
       <header className="work-workbench-head">
         <div className="work-workbench-title">
           <strong title={workspace.goal}>{workspace.goal}</strong>
@@ -39,6 +73,12 @@ export function WorkWorkbench({ ventureId, workspace, attempts, selectedWorkspac
           <span className="work-change-stat">{workspace.diffStat || `${workspace.changedFiles.length} ${workspace.changedFiles.length === 1 ? "file" : "files"}`}</span>
           {attempts.length > 1 ? <label><span className="sr-only">Coding attempt</span><select value={selectedWorkspaceId} onChange={(event) => onSelectWorkspace(event.target.value)}>{attempts.map((attempt) => <option key={attempt.id} value={attempt.id}>{attemptLabel(attempts, attempt)} · {workStatusLabel(attempt.status)}</option>)}</select></label> : null}
           <strong className="work-status" data-status={workspace.status}>{workStatusLabel(workspace.status)}</strong>
+          {onToggleMaximize ? <button type="button" className="work-workbench-icon" aria-label={maximized ? "Restore the split view" : "Expand the workbench"} title={maximized ? "Restore the split view" : "Expand the workbench"} onClick={onToggleMaximize}>
+            {maximized ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+          </button> : null}
+          {onHide ? <button type="button" className="work-workbench-icon" aria-label="Hide the workbench" title="Hide the workbench" onClick={onHide}>
+            <PanelRightClose aria-hidden="true" />
+          </button> : null}
         </div>
       </header>
 

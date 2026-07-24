@@ -40,7 +40,10 @@ const failures = [];
 // so the adapter reads one normalized stream instead of parsing item families inline.
 // 2026-07-23 re-baseline 148 → 149: code-workspace-setup.mjs isolates dependency linking and founder
 // consequence guards after code-workspace.mjs crossed the authoritative 500-line service ceiling.
-const BRAIN_MODULE_CEILING = 149;
+// 2026-07-23 re-baseline 149 → 150: firm/work-delta.mjs is the narrow payload firewall for focused-node
+// live detail. It normalizes the only factual payload allowed onto the otherwise data-free firm event bus,
+// preventing tool output, model prose, or secrets from leaking into venture-wide fan-out.
+const BRAIN_MODULE_CEILING = 150;
 
 function files(directory, pattern) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

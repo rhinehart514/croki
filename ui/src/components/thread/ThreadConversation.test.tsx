@@ -69,6 +69,33 @@ describe("ThreadConversation contextual work handoff", () => {
     expect(onWorkRouted).toHaveBeenCalledTimes(1);
   });
 
+  it("moves a submitted contextual turn into Work when it spawns a live drive", async () => {
+    const onWorkRouted = vi.fn();
+    const view = render(<ThreadConversation {...props(timeline([]), onWorkRouted)} />);
+
+    fireEvent.click(view.getByRole("button", { name: "Submit context" }));
+    view.rerender(<ThreadConversation {...props(timeline([{
+      kind: "agent-status", id: "agent:d1:working", ref: "run:d1", at: null, state: "working",
+    }]), onWorkRouted)} />);
+
+    await waitFor(() => expect(onWorkRouted).toHaveBeenCalledWith("thread:one"));
+    expect(onWorkRouted).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a drive that was already running when the turn was submitted", async () => {
+    const onWorkRouted = vi.fn();
+    const running = timeline([{
+      kind: "agent-status", id: "agent:d0:working", ref: "run:d0", at: null, state: "working",
+    }]);
+    const view = render(<ThreadConversation {...props(running, onWorkRouted)} />);
+
+    fireEvent.click(view.getByRole("button", { name: "Submit context" }));
+    view.rerender(<ThreadConversation {...props(running, onWorkRouted)} />);
+
+    await waitFor(() => expect(composerProps.onSubmitStart).toBeTypeOf("function"));
+    expect(onWorkRouted).not.toHaveBeenCalled();
+  });
+
   it("keeps a plain contextual answer in place", async () => {
     const onWorkRouted = vi.fn();
     const view = render(<ThreadConversation {...props(timeline([]), onWorkRouted)} />);

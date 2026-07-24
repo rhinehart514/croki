@@ -7,7 +7,7 @@ import { test } from "node:test";
 
 import { prepareOutwardAction, prepareOutwardMaterial } from "../../brain/src/firm/outward-actions.mjs";
 import { createGeneratedMapsFixture } from "../fixtures/atlas-fixtures.mjs";
-import { assertNoUnhandledRejections, bootFixture, openFixtureVenture, waitForDom } from "./fixtures/browser-harness.mjs";
+import { assertNoUnhandledRejections, bootFixture, openCanvas, openFixtureVenture, selectCanvasObject, waitForDom } from "./fixtures/browser-harness.mjs";
 
 async function seedOutwardActionFixture({ root }) {
   const repository = path.join(root, "dogfood-product");
@@ -42,22 +42,11 @@ test("Product / GTM executes one exact deploy and grants only its bounded return
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1440, height: 900 } });
   try {
     const { client } = chrome;
-    assert.equal(await client.evaluate(`(() => { const button=[...document.querySelectorAll('.workspace-mode-nav button')].find((entry)=>entry.textContent.includes('Product / GTM')); button?.click(); return Boolean(button); })()`), true);
-    await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'product-walk'`, "Product / GTM did not open on the Product walk");
-    assert.equal(await client.evaluate(`(() => {
-      const input = document.querySelector('.workspace-rail input[type="search"]');
-      if (!input) return false;
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-      setter.call(input, 'Project-drop invitation v1');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    })()`), true, "the Product / GTM rail search was unavailable");
-    await waitForDom(client, `[...document.querySelectorAll('.product-rail-body section button strong')].some((entry) => entry.textContent.trim() === 'Project-drop invitation v1')`, "the deploy's Product dependency was not searchable");
-    assert.equal(await client.evaluate(`(() => {
-      const button = [...document.querySelectorAll('.product-rail-body section button')].find((entry) => entry.querySelector('strong')?.textContent.trim() === 'Project-drop invitation v1');
-      button?.click();
-      return Boolean(button);
-    })()`), true, "the deploy's Product dependency could not be selected");
+    await openCanvas(client);
+    await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'product-walk'`, "the Canvas did not open on the Product walk");
+    // The rail is Threads-only in the one shell; the deploy's Product dependency is reached through the
+    // venture search that spans the Canvas.
+    await selectCanvasObject(client, "Project-drop invitation v1");
     await waitForDom(client, `document.querySelector('.product-gtm-surface')?.dataset.projection === 'consequence-trace'`, "the deploy did not open in its Product consequence trace");
     await waitForDom(client, `[...document.querySelectorAll('.product-gtm-node strong')].some((entry) => entry.textContent.includes('Dogfood preview'))`, "the exact dogfood deploy did not reach Product / GTM");
     assert.equal(await client.evaluate(`(() => { const node=[...document.querySelectorAll('.product-gtm-node')].find((entry)=>entry.querySelector('strong')?.textContent.includes('Dogfood preview')); node?.click(); return Boolean(node); })()`), true);

@@ -14,7 +14,9 @@
   inset: 0;
   width: 100%;
   border: 0;
-  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  /* --ink is the text token, so on the shipped dark shell this scrim was white at 18% and washed the
+     workspace out instead of dimming it. The palette's overlay value is the shell's one scrim. */
+  background: rgb(0 0 0 / 45%);
   cursor: default;
 }
 
@@ -126,7 +128,10 @@
 .firm-settings-connection-status svg { width: 12px; height: 12px; }
 .firm-settings-connection-status[data-connected="true"] { color: var(--link); }
 
-.firm-settings-connection-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+/* The action sits at the trailing edge whether or not a standing note precedes it, so a footer with only
+   a button lines up with the footers that carry both. */
+.firm-settings-connection-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); }
+.firm-settings-connection-actions > small { margin-right: auto; }
 .firm-settings-connection-actions > small { color: var(--muted); font-size: var(--text-meta); line-height: var(--leading-normal); }
 .firm-settings-connection-actions > span { display: flex; flex: none; gap: var(--space-1); }
 
@@ -193,8 +198,3 @@
 
 .firm-settings-error { color: var(--danger); font-size: var(--text-xs); line-height: var(--leading-normal); }
 .firm-settings-read-only { color: var(--muted); font-size: var(--text-meta); line-height: var(--leading-normal); }
-
-@media (prefers-reduced-motion: reduce) {
-  .firm-settings-switch > span,
-  .firm-settings-switch > span::after { transition: none; }
-}

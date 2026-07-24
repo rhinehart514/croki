@@ -7,6 +7,11 @@
 //   • It carries NO venture data — only { ventureId, kind, at } notifications. A subscriber that hears
 //     "the lens changed" re-reads the lens through the existing venture-scoped, fail-closed read path;
 //     the bus never becomes a second data channel that could leak one venture's content to another.
+//     The ONE bounded exception is the additive `work-delta` kind: it carries a small typed payload that
+//     work-delta.mjs has already normalized to safe factual shape (a tool-step label, a source ref, a
+//     status, a measured duration — never prose, secrets, or content). The bus does not interpret that
+//     payload; it only fans it out. Every OTHER kind stays strictly data-free, so this stays a named,
+//     auditable exception rather than a slide into a generic data channel.
 //   • It is process-local by design (like active-drives.mjs). Work runs only while the app is open
 //     (decided, honest scope §2.4); there is no cross-process fan-out and no durable event log here —
 //     durable truth already lives in the venture store, and "since you left" means "since your last
@@ -14,7 +19,7 @@
 //   • Publishing NEVER throws into a caller's happy path: a firm mutation that emits an event must not
 //     fail because a listener did. Every emit is best-effort.
 
-const KINDS = new Set(["lens", "conversation", "drive", "wall", "outcome", "timeline", "system", "release"]);
+const KINDS = new Set(["lens", "conversation", "drive", "wall", "outcome", "timeline", "system", "release", "work-delta"]);
 
 const subscribers = new Map(); // subscriptionId -> { ventureId, listener }
 let nextId = 1;
@@ -46,6 +51,9 @@ export function emitFirmEvent(ventureId, kind, detail = {}) {
     at: detail?.at ?? nowIso(),
     ...(detail?.betId ? { betId: String(detail.betId) } : {}),
     ...(detail?.threadRef ? { threadRef: String(detail.threadRef) } : {}),
+    // The typed payload rides ONLY the work-delta kind; every other kind stays data-free. work-delta.mjs
+    // has already normalized it, so the bus passes it through without inspection.
+    ...(kind === "work-delta" && detail?.delta ? { delta: detail.delta } : {}),
   };
   let delivered = 0;
   for (const { ventureId: scoped, listener } of subscribers.values()) {

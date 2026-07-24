@@ -5,6 +5,10 @@
 // while Terra and Luna top out at `xhigh`. Codex's `ultra` tier is deliberately omitted — it is Sol-only,
 // runs parallel subagents, and is not reachable through the `codex exec` path Croki drives, so offering
 // it would be a control that lies about what the runtime can deliver.
+//
+// Every entry names an exact model. There is no "Default model" row: it read as a participant while
+// actually deferring to whatever the CLI happened to be configured for, so the founder could not tell
+// which agent answered — the same reason the composer refuses an automatic router.
 export type WorkRuntime = "claude-code" | "codex";
 export type WorkEffort = "low" | "medium" | "high" | "xhigh" | "max";
 export type WorkModelChoice = { runtime: string | null; model: string | null; effort: WorkEffort };
@@ -14,17 +18,15 @@ export type WorkModelOption = {
   label: string;
   sublabel: string;
   runtime: WorkRuntime;
-  model: string | null;
+  model: string;
   maxEffort: WorkEffort;
 };
 
 export const WORK_MODELS: WorkModelOption[] = [
-  { id: "claude-code", label: "Claude Code", sublabel: "Default model", runtime: "claude-code", model: null, maxEffort: "max" },
   { id: "claude-code:claude-fable-5", label: "Claude Fable 5", sublabel: "Most capable", runtime: "claude-code", model: "claude-fable-5", maxEffort: "max" },
   { id: "claude-code:claude-opus-4-8", label: "Claude Opus 4.8", sublabel: "Deep coding", runtime: "claude-code", model: "claude-opus-4-8", maxEffort: "max" },
   { id: "claude-code:claude-sonnet-5", label: "Claude Sonnet 5", sublabel: "Balanced", runtime: "claude-code", model: "claude-sonnet-5", maxEffort: "max" },
   { id: "claude-code:claude-haiku-4-5", label: "Claude Haiku 4.5", sublabel: "Fast", runtime: "claude-code", model: "claude-haiku-4-5", maxEffort: "max" },
-  { id: "codex", label: "Codex", sublabel: "Default model", runtime: "codex", model: null, maxEffort: "max" },
   { id: "codex:gpt-5.6-sol", label: "GPT-5.6 Sol", sublabel: "Flagship", runtime: "codex", model: "gpt-5.6-sol", maxEffort: "max" },
   { id: "codex:gpt-5.6-terra", label: "GPT-5.6 Terra", sublabel: "Balanced", runtime: "codex", model: "gpt-5.6-terra", maxEffort: "xhigh" },
   { id: "codex:gpt-5.6-luna", label: "GPT-5.6 Luna", sublabel: "Efficient", runtime: "codex", model: "gpt-5.6-luna", maxEffort: "xhigh" },
@@ -45,11 +47,23 @@ export const EFFORT_META: Record<WorkEffort, { label: string; hint: string; bars
   max: { label: "Maximum", hint: "Longest reasoning", bars: 5 },
 };
 
-export const DEFAULT_MODEL_ID = "claude-code";
+export const DEFAULT_MODEL_ID = "claude-code:claude-opus-4-8";
 export const DEFAULT_EFFORT: WorkEffort = "high";
 
+// Forward map for the adapter-only selection a build with "Default model" could store or emit — the id
+// `"codex"` or a choice of `{ runtime: "codex", model: null }`. It resolves to that runtime's own model
+// rather than to the global default, because the founder did choose a runtime and swapping Codex for
+// Claude on upgrade would change who answers without the founder touching the control.
+const LEGACY_ADAPTER_MODEL_ID: Record<string, string> = {
+  "claude-code": DEFAULT_MODEL_ID,
+  codex: "codex:gpt-5.6-sol",
+};
+
 export function modelById(id: string): WorkModelOption {
-  return WORK_MODELS.find((entry) => entry.id === id) ?? WORK_MODELS[0];
+  const resolved = LEGACY_ADAPTER_MODEL_ID[id] ?? id;
+  return WORK_MODELS.find((entry) => entry.id === resolved)
+    ?? WORK_MODELS.find((entry) => entry.id === DEFAULT_MODEL_ID)
+    ?? WORK_MODELS[0];
 }
 
 export function isEffort(value: unknown): value is WorkEffort {
@@ -70,8 +84,11 @@ export function clampEffort(effort: WorkEffort, id: string): WorkEffort {
 }
 
 function modelIdForChoice(choice: Pick<WorkModelChoice, "runtime" | "model">) {
-  return WORK_MODELS.find((option) => option.runtime === choice.runtime && option.model === choice.model)?.id
-    ?? DEFAULT_MODEL_ID;
+  const exact = WORK_MODELS.find((option) => option.runtime === choice.runtime && option.model === choice.model);
+  if (exact) return exact.id;
+  // A choice carrying no model came from a build that let the adapter pick. Keep the runtime the founder
+  // chose and name its flagship, rather than resolving to the other vendor's default.
+  return (choice.runtime ? LEGACY_ADAPTER_MODEL_ID[choice.runtime] : null) ?? DEFAULT_MODEL_ID;
 }
 
 export function readWorkModelChoice(ventureId: string, legacyThreadKey?: string): WorkModelChoice {

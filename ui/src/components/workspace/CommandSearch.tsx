@@ -1,10 +1,9 @@
 import { Dialog } from "@base-ui/react/dialog";
 import {
-  ArrowRight, Boxes, Eye, FileDiff, MessageSquare, PenLine, Search, SquarePen, SquareTerminal,
+  Boxes, Eye, FileDiff, MessageSquare, PenLine, Search, SquarePen, SquareTerminal,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SystemIndex, SystemIndexObject, WorkIndex, WorkIndexItem } from "@/api";
-import type { WorkspaceMode } from "@/lib/venture-session";
 import {
   filterSearchGroups, flattenSearchRows, moveHighlight, objectSearchRow,
   sortThreadsForSearch, threadSearchRow, type SearchGroup, type SearchRow,
@@ -13,7 +12,7 @@ import "./command-search.css";
 
 const ROW_ICONS: Record<string, typeof Search> = {
   "action:new-thread": SquarePen,
-  "action:switch-mode": ArrowRight,
+  "action:toggle-canvas": Boxes,
   "action:composer": PenLine,
   "action:changes": FileDiff,
   "action:preview": Eye,
@@ -38,16 +37,15 @@ function openTerminalDrawer() {
   if (trigger && trigger.getAttribute("aria-expanded") !== "true") trigger.click();
 }
 
-// Search (⌘K) over the current surface: jump to Threads or Product / GTM map objects and run the
-// few navigation actions that exist everywhere. Content scope follows the surface on purpose —
-// this is not a cross-mode router.
-export function CommandSearch({ mode, workIndex, systemIndex, onSelectThread, onSelectObject, onMode, onNewThread }: {
-  mode: WorkspaceMode;
+// Search (⌘K) over the one shell: jump to Threads or the Canvas map objects, toggle the Canvas, and run
+// the few navigation actions that exist everywhere. This is a within-venture jump, not a cross-mode router.
+export function CommandSearch({ canvasOpen, workIndex, systemIndex, onSelectThread, onSelectObject, onToggleCanvas, onNewThread }: {
+  canvasOpen: boolean;
   workIndex: WorkIndex | null;
   systemIndex: SystemIndex | null;
   onSelectThread: (item: WorkIndexItem) => void;
   onSelectObject: (object: SystemIndexObject) => void;
-  onMode: (mode: WorkspaceMode) => void;
+  onToggleCanvas: () => void;
   onNewThread: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -90,16 +88,16 @@ export function CommandSearch({ mode, workIndex, systemIndex, onSelectThread, on
       onNewThread,
     );
     addAction(
-      mode === "work"
-        ? { id: "action:switch-mode", title: "Go to Product / GTM", detail: "The venture map and plays", shortcut: `${mod}2`, searchTerms: ["product", "gtm", "go-to-market", "map", "switch surface"] }
-        : { id: "action:switch-mode", title: "Go to Work", detail: "Threads and coding", shortcut: `${mod}1`, searchTerms: ["work", "threads", "code", "switch surface"] },
-      () => onMode(mode === "work" ? "product-gtm" : "work"),
+      canvasOpen
+        ? { id: "action:toggle-canvas", title: "Hide Canvas", detail: "Return to conversation", shortcut: null, searchTerms: ["canvas", "hide", "map", "graph", "close"] }
+        : { id: "action:toggle-canvas", title: "Show Canvas", detail: "The venture map and plays", shortcut: null, searchTerms: ["canvas", "show", "product", "gtm", "map", "graph", "plays"] },
+      onToggleCanvas,
     );
     addAction(
       { id: "action:composer", title: "Write a direction", detail: "Jump to the message box", shortcut: null, searchTerms: ["write", "direction", "message", "prompt", "compose"] },
       focusComposer,
     );
-    if (mode === "work" && hasWorkbench) {
+    if (hasWorkbench) {
       addAction(
         { id: "action:changes", title: "Show code changes", detail: "Exact diff for this Thread", shortcut: null, searchTerms: ["changes", "diff", "code", "review"] },
         () => clickWorkbenchTab("changes"),
@@ -114,17 +112,16 @@ export function CommandSearch({ mode, workIndex, systemIndex, onSelectThread, on
       );
     }
     const built: SearchGroup[] = [{ id: "actions", label: "Actions", atRestLimit: actionRows.length, rows: actionRows }];
-    if (mode === "work") {
-      const threads = sortThreadsForSearch(workIndex?.items ?? []);
-      built.push({ id: "threads", label: "Threads", atRestLimit: 6, rows: threads.map(threadSearchRow) });
-      for (const item of threads) runs.set(item.threadRef, () => onSelectThread(item));
-    } else {
-      const objects = systemIndex?.objects ?? [];
-      built.push({ id: "objects", label: "Product / GTM map", atRestLimit: 0, rows: objects.map(objectSearchRow) });
+    const threads = sortThreadsForSearch(workIndex?.items ?? []);
+    built.push({ id: "threads", label: "Threads", atRestLimit: 6, rows: threads.map(threadSearchRow) });
+    for (const item of threads) runs.set(item.threadRef, () => onSelectThread(item));
+    const objects = systemIndex?.objects ?? [];
+    if (objects.length) {
+      built.push({ id: "objects", label: "Canvas", atRestLimit: 0, rows: objects.map(objectSearchRow) });
       for (const object of objects) runs.set(object.objectRef, () => onSelectObject(object));
     }
     return { groups: built, runById: runs };
-  }, [hasWorkbench, mod, mode, onMode, onNewThread, onSelectObject, onSelectThread, systemIndex?.objects, workIndex?.items]);
+  }, [canvasOpen, hasWorkbench, mod, onNewThread, onSelectObject, onSelectThread, onToggleCanvas, systemIndex?.objects, workIndex?.items]);
 
   const visible = useMemo(() => filterSearchGroups(groups, query), [groups, query]);
   const flatRows = useMemo(() => flattenSearchRows(visible), [visible]);
@@ -186,7 +183,7 @@ export function CommandSearch({ mode, workIndex, systemIndex, onSelectThread, on
                 aria-label="Search this venture"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder={mode === "work" ? "Search Threads and actions" : "Search the Product / GTM map and actions"}
+                placeholder="Search Threads, the Canvas, and actions"
                 value={query}
                 onChange={(event) => { setQuery(event.target.value); setHighlight(0); }}
                 onKeyDown={onInputKeyDown}
@@ -196,7 +193,7 @@ export function CommandSearch({ mode, workIndex, systemIndex, onSelectThread, on
               {flatRows.length === 0 ? (
                 <p className="command-search-empty">
                   <strong>No matches for “{query.trim()}”.</strong>
-                  <span>{mode === "work" ? "Search covers Threads and actions on this surface." : "Search covers the Product / GTM map and actions on this surface."}</span>
+                  <span>Search covers Threads, the Canvas, and actions in this venture.</span>
                 </p>
               ) : (
                 visible.map((group, groupIndex) => {

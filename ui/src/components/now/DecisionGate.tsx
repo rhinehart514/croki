@@ -128,8 +128,13 @@ export function DecisionGate({
   };
 
   // Detail rows minus the raw-diff row (rendered visually) and, for a judgment request, minus the raw
-  // question rows (surfaced as concise language + provenance instead).
-  const rows = isAnswer ? [] : content.details.filter((detail) => detail.tone !== "artifact");
+  // question rows (surfaced as concise language + provenance instead). A drafted message reaches both
+  // sides from the same effect body, so "Exact act" restated the whole draft verbatim a hundred pixels
+  // under the preview of it — the produced thing is shown once, above, at full fidelity.
+  const previewed = artifact?.kind === "preview" ? artifact.artifact.content?.trim() ?? null : null;
+  const rows = isAnswer
+    ? []
+    : content.details.filter((detail) => detail.tone !== "artifact" && !(previewed && detail.value.trim() === previewed));
   const decisionDisabled = busy !== null || Boolean(readOnlyReason);
 
   return (

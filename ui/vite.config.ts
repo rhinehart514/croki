@@ -1,7 +1,20 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+
+// The dev server must allow the inline react-refresh preamble that @vitejs/plugin-react injects;
+// the strict meta CSP in index.html would silently kill HMR. Serve-only — built documents keep
+// script-src 'self' untouched.
+function devServerCsp(): Plugin {
+  return {
+    name: "drover-dev-csp",
+    apply: "serve",
+    transformIndexHtml(html) {
+      return html.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'");
+    },
+  };
+}
 
 // Keep the lens engine and React runtime cached independently from application code.
 function vendorChunk(id: string): string | undefined {
@@ -27,7 +40,7 @@ function vendorChunk(id: string): string | undefined {
 
 export default defineConfig({
   base: "./",
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), devServerCsp()],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),

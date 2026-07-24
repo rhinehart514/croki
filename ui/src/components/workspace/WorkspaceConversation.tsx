@@ -17,22 +17,20 @@ import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/product
 import { ThreadConversation } from "@/components/thread/ThreadConversation";
 import type { useThreadTimeline } from "@/components/thread/useThreadTimeline";
 import type { WorkflowSketch } from "@/components/work-mode/workflowSketch";
-import type { WorkModelChoice } from "@/components/work-mode/WorkComposerBar";
+import type { WorkChatMode, WorkModelChoice } from "@/components/work-mode/WorkComposerBar";
 import type { FirmConnectionState } from "@/hooks/use-firm-connection";
-import type { WorkspaceMode } from "@/lib/venture-session";
 import { ROOT_THREAD_REF } from "./useWorkspaceConversation";
 
 export function WorkspaceConversation({
-  venture, mode, item, timeline, lens, connection, activeDrives, activeDraft, draftSession,
+  venture, item, timeline, lens, connection, activeDrives, activeDraft, draftSession,
   draftSubjectRef, draftRelatedRefs, workflowStep, selectedObject, selectedAgentRef,
   artifactFocus, artifactFocusRequest, systemIndex, resolvedThreadRef, scrolls,
-  modelChoice,
+  modelChoice, workChatMode, canvasAttention,
   onArtifactFocus, onScrollChange, onOpenVisual, onOpenThread, onWorkIndex,
-  onRefresh, onDriven, onThreadAccepted, onModelChoice, onWorkRouted, onWorkflowAdopted,
+  onRefresh, onDriven, onThreadAccepted, onModelChoice, onWorkChatModeChange, onWorkRouted, onWorkflowAdopted,
   onReviewModelBranch, onThreadDeleted,
 }: {
   venture: FirmVenture;
-  mode: WorkspaceMode;
   item: WorkIndexItem | null;
   timeline: ReturnType<typeof useThreadTimeline>;
   lens: FirmLens | null;
@@ -51,6 +49,9 @@ export function WorkspaceConversation({
   resolvedThreadRef: string | null;
   scrolls: Record<string, number>;
   modelChoice: WorkModelChoice;
+  workChatMode: WorkChatMode;
+  canvasAttention: number;
+  onWorkChatModeChange: (mode: WorkChatMode) => void;
   onArtifactFocus: (focus: ArtifactSectionFocus | null) => void;
   onScrollChange: (ref: string, top: number) => void;
   onOpenVisual: (visual: VisualReference, source: HTMLElement) => void;
@@ -67,7 +68,7 @@ export function WorkspaceConversation({
 }) {
   const workflowVersions = adoptedWorkflowVersions(systemIndex);
   const adoptWorkflow = async (sketch: WorkflowSketch) => {
-    if (!systemIndex) throw new Error("Product / GTM is still loading. Try again when the canvas is current.");
+    if (!systemIndex) throw new Error("The Canvas is still loading. Try again when it is current.");
     onWorkflowAdopted(await adoptWorkflowSketch(venture.id, systemIndex, sketch));
   };
   return (
@@ -75,8 +76,8 @@ export function WorkspaceConversation({
       ventureId={venture.id}
       ventureName={venture.name}
       repository={venture.repository}
-      surface={mode === "work" ? "work" : "context"}
-      contextKind={mode === "product-gtm" ? "product-gtm" : null}
+      surface="work"
+      contextKind={null}
       item={item}
       timeline={timeline.timeline}
       lens={lens}
@@ -90,6 +91,9 @@ export function WorkspaceConversation({
       scopeLabel={draftSubjectRef === selectedObject?.objectRef ? selectedObject.name : null}
       targetAgentRef={activeDraft ? selectedAgentRef : null}
       modelChoice={modelChoice}
+      workChatMode={workChatMode}
+      canvasAttention={canvasAttention}
+      onWorkChatModeChange={onWorkChatModeChange}
       artifactFocus={artifactFocus}
       artifactFocusRequest={artifactFocusRequest}
       onClearArtifactFocus={() => onArtifactFocus(null)}

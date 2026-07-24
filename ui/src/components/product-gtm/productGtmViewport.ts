@@ -8,6 +8,9 @@ export const PRODUCT_GTM_WHOLE_ZOOM = 0.5;
 // The camera's hard floor. Below this the compact pill face is unreadable dust; a wide venture or a
 // full-length play may fit down to here, never past it.
 export const PRODUCT_GTM_MIN_ZOOM = 0.3;
+// Breathing room in screen pixels between the pane's left edge and the walk's entry page when the walk
+// is too wide to fit at the readability floor and the camera anchors on its start.
+export const PRODUCT_GTM_WALK_EDGE_PAD = 28;
 
 export function productGtmViewportIsAway(current: Viewport, focal: Viewport) {
   return Math.abs(current.zoom - focal.zoom) > 0.08

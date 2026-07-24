@@ -3,6 +3,7 @@ import {
   expandFileMentions,
   fileMentionEndingAt,
   fileMentionSpans,
+  fileMentionStartingAt,
   fileMentionTokenFor,
   pruneFileMentions,
   type ComposerFileMention,
@@ -64,5 +65,13 @@ describe("fileMentionEndingAt", () => {
     const draft = "fix @WorkSurface.tsx now";
     expect(fileMentionEndingAt(draft, 20, [surface])?.path).toBe(surface.path);
     expect(fileMentionEndingAt(draft, 19, [surface])).toBeNull();
+  });
+});
+
+describe("fileMentionStartingAt", () => {
+  it("returns the span whose start sits exactly at the caret — the forward-delete target", () => {
+    const draft = "fix @WorkSurface.tsx now";
+    expect(fileMentionStartingAt(draft, 4, [surface])?.path).toBe(surface.path);
+    expect(fileMentionStartingAt(draft, 5, [surface])).toBeNull();
   });
 });

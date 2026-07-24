@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { FileText } from "lucide-react";
 import { replyInConversation } from "@/api";
 import type { ProductGtmPageData } from "./productGtmProjection";
 
@@ -48,6 +47,10 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
         productGtmView: true,
       });
       if (result.act === "new-direction" && result.threadRef) {
+        // The dump has become a Thread and is already the first turn of its transcript. Leaving it in the
+        // box left a live "Start work on this page" sitting over words that had already landed, one click
+        // from a duplicate Thread; the canvas stays open behind the Thread, so the founder sees both.
+        setIntent("");
         onOpenWork(result.threadRef);
         return;
       }
@@ -66,13 +69,10 @@ export function ProductPagePanel({ ventureId, name, summary, pageRef, page, read
   );
 
   return <section className="product-page-panel" aria-label={`${name} page`}>
-    <header className="product-page-panel-head">
-      <span className="product-page-panel-symbol"><FileText aria-hidden="true" /></span>
-      <div>
-        <strong>{name}</strong>
-        <small>{page.route}</small>
-      </div>
-    </header>
+    {/* This panel only ever opens inside the page's own node, whose pill face already carries the icon
+        and the name — repeating both here put the same title on screen twice within fifty pixels. The
+        route is the one part of the page's identity the pill does not show, so it is all that remains. */}
+    <p className="product-page-panel-route">{page.route}</p>
 
     <div className="product-page-panel-now">
       <p className="product-page-panel-eyebrow">What it is now</p>

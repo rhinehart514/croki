@@ -24,18 +24,33 @@ function parseSafeExternalUrl(rawUrl) {
   }
 }
 
+// Development hatch: an unpackaged launch may load the renderer from a local Vite dev server so
+// UI edits go live without a rebuild. Only a credential-free plain-http loopback origin qualifies;
+// anything else returns null and the shell keeps its file-only document. This never defines a
+// production surface — packaged launches ignore it entirely.
+function parseLoopbackDevServerUrl(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl ?? ""));
+    const loopback = url.hostname === "127.0.0.1" || url.hostname === "localhost";
+    if (url.protocol !== "http:" || !loopback || url.username || url.password) return null;
+    return `${url.origin}/`;
+  } catch {
+    return null;
+  }
+}
+
 // The main window renders exactly one local document. The only in-window navigation that is ever
 // legitimate is back to that same file (a reload); anything else must be blocked by the caller and,
-// when it is a safe external link, handed to the real browser instead.
+// when it is a safe external link, handed to the real browser instead. When the application URL is
+// the loopback dev server, reloads and HMR full-page fallbacks stay on that exact origin.
 function isAllowedRendererNavigation(applicationUrl, navigationUrl) {
   try {
     const application = new URL(String(applicationUrl ?? ""));
     const navigation = new URL(String(navigationUrl ?? ""));
-    return (
-      application.protocol === "file:" &&
-      navigation.protocol === "file:" &&
-      navigation.pathname === application.pathname
-    );
+    if (application.protocol === "file:") {
+      return navigation.protocol === "file:" && navigation.pathname === application.pathname;
+    }
+    return parseLoopbackDevServerUrl(application.href) !== null && navigation.origin === application.origin;
   } catch {
     return false;
   }
@@ -70,4 +85,4 @@ function mergePathLists(lists, delimiter = ":") {
   return entries.join(delimiter);
 }
 
-module.exports = { externalHttpUrl, parseSafeExternalUrl, isAllowedRendererNavigation, resolveLoginShell, mergePathLists };
+module.exports = { externalHttpUrl, parseSafeExternalUrl, parseLoopbackDevServerUrl, isAllowedRendererNavigation, resolveLoginShell, mergePathLists };

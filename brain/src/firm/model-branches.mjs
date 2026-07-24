@@ -123,6 +123,20 @@ export function proposeModelChange({ ventureId, branchId, targetFamily, targetRe
     const target = currentTarget(current, targetFamily, targetRef ?? proposedRecord?.id);
     if (operation === "create" && target) fail("That Product model record already exists in current truth.", "model_change_conflict", 409);
     if (operation !== "create" && !target) fail("The Product model change target no longer exists.", "model_change_target_missing", 404);
+    // Within-branch stacking: an agent may only build on current truth or its own branch, never on
+    // another branch's still-provisional output. A colliding create or a cross-branch supersede is the
+    // exact way that invariant breaks, so both are rejected here rather than silently ignored.
+    const branchRef = `model-branch:${branchIdValue}`;
+    if (operation === "create" && proposedRecord?.id) {
+      const foreign = current.modelChanges.find((entry) =>
+        entry.branchRef !== branchRef && entry.operation === "create" && entry.proposedRecord?.id === proposedRecord.id);
+      if (foreign) fail("That record is still provisional on another branch. Build on current truth, not another branch's unkept work.", "model_change_cross_branch", 409);
+    }
+    if (text(supersedesRef)) {
+      const supersededId = text(supersedesRef).replace(/^model-change:/, "");
+      const superseded = current.modelChanges.find((entry) => entry.id === supersededId);
+      if (superseded && superseded.branchRef !== branchRef) fail("A change can only supersede earlier work on its own branch.", "model_change_cross_branch", 409);
+    }
     const normalizedRecord = proposedRecord ? { ...structuredClone(proposedRecord), assertion: "tentative" } : undefined;
     const record = {
       id: changeId,
@@ -202,7 +216,7 @@ export function compareModelBranches(ventureId, branchIds, options = {}) {
   return { ventureId, branches: ids.map((branchId) => projectModelBranch(ventureId, branchId, options)) };
 }
 
-export function mergeModelBranch({ ventureId, branchId, selectedChangeRefs, resolvedConflicts = [], reason, actor: inputActor } = {}, options = {}) {
+export function mergeModelBranch({ ventureId, branchId, selectedChangeRefs, resolvedConflicts = [], reason, actor: inputActor, kind = "merge", at = null } = {}, options = {}) {
   const founder = actor(inputActor);
   if (founder.authority !== "founder") fail("Only the founder can make a Product model current.", "model_branch_authority_denied", 403);
   const selectedIds = unique(selectedChangeRefs).map((ref) => ref.replace(/^model-change:/, ""));
@@ -228,6 +242,7 @@ export function mergeModelBranch({ ventureId, branchId, selectedChangeRefs, reso
     }
     receipt = {
       id: receiptId,
+      kind,
       branchRef: `model-branch:${branchId}`,
       selectedChangeRefs: selected.map((change) => `model-change:${change.id}`),
       resolvedConflicts: structuredClone(resolvedConflicts),
@@ -235,12 +250,37 @@ export function mergeModelBranch({ ventureId, branchId, selectedChangeRefs, reso
       resultingModelRevision: model.revision + 1,
       actor: founder,
       reason: text(reason) ?? "Make the selected Product changes current.",
-      createdAt: now(),
+      createdAt: text(at) ?? now(),
     };
     operations.push({ op: "create-record", family: "modelMergeReceipts", record: receipt });
     return operations;
   }, founder, options);
   return { model: merged, receipt: structuredClone(receipt) };
+}
+
+// The founder-facing grammar over the merge machinery: keep exactly one change at a time. There is no
+// bulk keep and no branch/merge vocabulary at this boundary — the founder keeps one object; the merge
+// receipt underneath stays the inspectable authority record. Keeps are rate-bounded so a founder (or an
+// agent acting on their behalf) cannot rapid-fire a whole branch into current truth as de facto bulk.
+const KEEP_MIN_INTERVAL_MS = 700;
+
+export function keepModelChange({ ventureId, branchId, changeRef, reason, actor: inputActor, at = null } = {}, options = {}) {
+  const founder = actor(inputActor);
+  if (founder.authority !== "founder") fail("Only the founder can keep a Product change.", "model_branch_authority_denied", 403);
+  const ref = text(changeRef) ?? fail("Keep one exact change.");
+  const keptAt = text(at) ?? now();
+  const minInterval = Number.isFinite(options.keepMinIntervalMs) ? options.keepMinIntervalMs : KEEP_MIN_INTERVAL_MS;
+  if (minInterval > 0) {
+    const model = getSemanticModel(ventureId, options);
+    const lastKeep = model.modelMergeReceipts
+      .filter((entry) => entry.kind === "keep")
+      .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))[0];
+    if (lastKeep) {
+      const gap = Date.parse(keptAt) - Date.parse(lastKeep.createdAt);
+      if (Number.isFinite(gap) && gap >= 0 && gap < minInterval) fail("One change at a time. Give the last keep a moment before the next.", "model_keep_rate_limited", 429);
+    }
+  }
+  return mergeModelBranch({ ventureId, branchId, selectedChangeRefs: [ref], reason: text(reason) ?? "Keep this change.", actor: inputActor, kind: "keep", at: keptAt }, options);
 }
 
 export function closeModelBranch({ ventureId, branchId, reason, actor: inputActor } = {}, options = {}) {

@@ -344,6 +344,27 @@ pageless product machinery appears (deferred); direct analytics-provider adapter
 provider-neutral receipt contract proves); and individual-level journey inspection (explicitly outside
 the first release).
 
+#### Reshape decisions (founder session and red-team, 2026-07-23)
+
+Where these decisions conflict with the two-surface founder experience described elsewhere in this file,
+in `DESIGN.md`, or in `AGENTS.md`, these decisions win; the surrounding prose is rewritten when the shell
+lands. Decision 35 exists because four shell architectures were adopted from introspection within five
+weeks while the store contains no receipt from a real outward recipient.
+
+| # | Decision | Note |
+| --- | --- | --- |
+| 25 | One shell: Work and Product / GTM collapse into a single surface; conversation is always present and the canvas is collapsible beside it | Chat is the spine; the canvas is a first-class view the founder focuses into. Supersedes the two-surface experience and its mode navigation |
+| 26 | The founder-facing name of the canvas is **Canvas** | "Product / GTM" is retired as a founder-facing label; territory names remain internal vocabulary |
+| 27 | Prompting stays in place: a minted direction attaches a live-work marker to its subject node instead of navigating the founder away | Reverses forced follow-into-Work; the exact material stays one click away and founder gates keep their interruption authority |
+| 28 | Live detail renders only on the focused node; every other node shows state without motion | Ambient animation of concurrent runs is a defect (attention habituates and the dead channel then carries the gate that matters); reduced-motion rules unchanged |
+| 29 | Machinery is receipt, never message: founder-facing output uses the founder's register; branch, merge, provisional, and model vocabulary never surface | The branch machinery remains the substrate and the audit trail |
+| 30 | Founder adoption is per-object keep at the point of encounter, running on the existing selective merge; pending marks are rate-bounded and bulk keep is forbidden | v1 undo dismisses unkept proposals only; undo of kept changes waits for inverse-operation capture and must state load-bearing dependency at keep time |
+| 31 | Agents may stack proposals within their own branch; no agent treats another branch's unkept output as truth without explicitly joining that branch | The dependency rule that keeps keep/undo honest during founder absence |
+| 32 | Drops are ballistic: one explicit concrete effect, with one-tap disambiguation when the target is ambiguous; ambient spatial arrangement is never interpreted as intent | Placement remains non-semantic; proximity-as-intent is rejected on the spatial-hypertext record — interpretation must be invoked, never ambient |
+| 33 | A brain-dump attaches to a node and persists verbatim in the founder's words as that node's visible direction | Free-position dumps are out of scope until node-anchored dumps prove use; any future free dump must visibly age and never re-anchor silently across map changes |
+| 34 | The navigation spine is recency and search; the Canvas is never the mandatory transit root | Unscoped Threads live in the chat spine; they have no canvas subject by design |
+| 35 | No further shell architecture change is adopted without at least one real outward receipt informing it | One real founder-gated play run precedes the next reshape conversation |
+
 ### First run and return
 
 First run is one consequential choice: the founder chooses a real Product codebase and Croki derives its

@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["electron/main.cjs", "electron/launch.cjs", "electron/prepare-node-pty.cjs", "electron/preview-pick-preload.cjs"],
+      "entry": ["electron/main.cjs", "electron/launch.cjs", "electron/launch-dev.cjs", "electron/prepare-node-pty.cjs", "electron/preview-pick-preload.cjs"],
       "project": ["electron/**/*.{cjs,js,mjs}"]
     },
     "brain": {

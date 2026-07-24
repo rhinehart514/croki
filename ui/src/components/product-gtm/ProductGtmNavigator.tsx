@@ -1,5 +1,5 @@
-import { useRef, type KeyboardEvent } from "react";
-import { Box, ChevronDown, Eye, GitMerge, Route } from "lucide-react";
+import { useRef, useState, type KeyboardEvent } from "react";
+import { Box, ChevronDown, Eye, GitMerge, LoaderCircle, Route } from "lucide-react";
 import type { FirmSemanticModel, MarketMovementIndex } from "@/types";
 import { productGtmTerritoryFor } from "./productGtmLayout";
 import { deriveWorkflowRegisters, parseProductGtmWorkflowNodeId, productGtmWorkflowGraph, type ProductGtmWorkflowRegister } from "./productGtmWorkflow";
@@ -9,9 +9,11 @@ const PATH_TYPES = new Set(["motion", "mechanism", "pipeline"]);
 function pathKind(type: string, properties: Record<string, unknown>, register: ProductGtmWorkflowRegister | undefined) {
   const workflow = productGtmWorkflowGraph(properties);
   if (workflow) return `${register === "established" ? "Established" : "Drafted"} play · ${workflow.steps.length} ${workflow.steps.length === 1 ? "step" : "steps"}`;
-  if (type.toLowerCase() === "motion") return "Motion · workflow not mapped";
-  if (type.toLowerCase() === "pipeline") return "GTM path · workflow not mapped";
-  return "Earned mechanism · workflow not mapped";
+  // Neither register yet: a named motion with nothing to run. "Workflow not mapped" reported the shape of
+  // the stored record; what the founder needs to know is that it has no steps.
+  if (type.toLowerCase() === "motion") return "Motion · no steps yet";
+  if (type.toLowerCase() === "pipeline") return "GTM path · no steps yet";
+  return "Earned mechanism · no steps yet";
 }
 
 export function ProductGtmNavigator({
@@ -22,12 +24,13 @@ export function ProductGtmNavigator({
   movement: MarketMovementIndex | null;
   selectedRef: string | null;
   onFocus: (ref: string) => void;
-  onDraftPlay?: () => void;
+  onDraftPlay?: () => void | Promise<void>;
   journeyAvailable?: boolean;
   journeyActive?: boolean;
   onToggleJourney?: () => void;
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const [drafting, setDrafting] = useState(false);
   // Register is derived from real market movement, not the play's blob, so an established play truly ran.
   const registers = deriveWorkflowRegisters(model, movement);
   const paths = model.objects.filter((object) => (PATH_TYPES.has(object.type.toLowerCase()) || Boolean(productGtmWorkflowGraph(object.properties)))
@@ -48,6 +51,13 @@ export function ProductGtmNavigator({
 
   const close = () => {
     if (detailsRef.current) detailsRef.current.open = false;
+  };
+  // The agent is asked from here, so the wait is reported here. Closing on click instead would leave the
+  // founder watching an unchanged canvas with nothing to say a play was being written.
+  const draft = () => {
+    if (!onDraftPlay || drafting) return;
+    setDrafting(true);
+    void Promise.resolve(onDraftPlay()).finally(() => { setDrafting(false); close(); });
   };
   const handleKeyDown = (event: KeyboardEvent<HTMLDetailsElement>) => {
     if (event.key !== "Escape") return;
@@ -82,7 +92,14 @@ export function ProductGtmNavigator({
         <ChevronDown aria-hidden="true" />
       </summary>
       <nav aria-label="GTM plays and motions">
-        <header><strong>GTM plays</strong><span>Ambitious node workflows, drafted in full and established by running.</span>{onDraftPlay ? <button type="button" className="product-gtm-draft-play" onClick={() => { onDraftPlay(); close(); }}>Draft a play with an agent</button> : null}</header>
+        {/* No title here: the summary that opens this panel is sitting directly above it, so a heading
+            would put "GTM plays" on screen twice in forty pixels. No register blurb either — every row
+            below already states its own register, and a sentence promising plays "drafted in full" over
+            a list where none of them has steps described the idea rather than what is here. */}
+        {onDraftPlay ? <header><button type="button" className="product-gtm-draft-play" disabled={drafting} onClick={draft}>
+          {drafting ? <LoaderCircle className="is-spinner" aria-hidden="true" /> : null}
+          {drafting ? "Drafting a play…" : "Draft a play with an agent"}
+        </button></header> : null}
         {paths.length ? paths.map((path) => <button
           type="button"
           key={path.id}

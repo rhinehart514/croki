@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { emitFirmEvent } from "./firm-events.mjs";
+import { emitWorkDelta } from "./work-delta.mjs";
 import { dropDriveStream, publishDriveDelta } from "./drive-stream.mjs";
 
 // Process-local by design: a provider drive cannot survive a brain restart. Durable bets, events,
@@ -64,14 +65,26 @@ export function beginActiveDrive({ ventureId, teammateRef, betId = null, runtime
     liveThinking: null,
     liveTodos: [],
     steerPending: false,
+    // Correlates a tool-step's started/finished work deltas and measures its duration. Process-local
+    // presence like every other live field; a restart drops it and the durable receipt is the truth.
+    stepSeq: 0,
+    liveToolStep: null,
     controller,
   };
   active.set(entry.id, entry);
   emitFirmEvent(ventureId, "drive", { betId });
+  // A focused node sees the drive start as a live status transition (Reshape decision 27) alongside the
+  // data-free "drive" invalidation. Best-effort — the delta never gates the drive.
+  emitWorkDelta(ventureId, { betId, delta: { type: "status-changed", status: "working", previous: "idle" } });
   return {
     ...publicDrive(entry),
     signal: controller.signal,
-    finish: () => { active.delete(entry.id); dropDriveStream(entry.id); emitFirmEvent(ventureId, "drive", { betId }); },
+    finish: () => {
+      active.delete(entry.id);
+      dropDriveStream(entry.id);
+      emitFirmEvent(ventureId, "drive", { betId });
+      emitWorkDelta(ventureId, { betId, delta: { type: "status-changed", status: "settled", previous: "working" } });
+    },
   };
 }
 
@@ -124,8 +137,20 @@ export function noteDriveText(driveId, text, { now = Date.now } = {}) {
 export function noteDriveToolInput(driveId, name, partialInput, { now = Date.now } = {}) {
   const entry = active.get(driveId);
   if (!entry) return null;
+  const wasForming = entry.liveTool != null;
   entry.liveTool = name ? { name: String(name), partialInput: String(partialInput ?? "").slice(-2_000) } : null;
   entry.lastBeatAt = new Date().toISOString();
+  // A tool block opening (name appears where none was forming) is a work step starting. Mint the step id
+  // ONCE per block — later partial-argument deltas for the same call do not re-fire it — so the focused
+  // node sees one started marker per step, bounded by the serial tool loop.
+  if (entry.liveTool && !wasForming) {
+    entry.stepSeq += 1;
+    entry.liveToolStep = { id: `${driveId}:${entry.stepSeq}`, label: entry.liveTool.name, startedAt: now() };
+    emitWorkDelta(entry.ventureId, {
+      betId: entry.betId,
+      delta: { type: "step-started", stepId: entry.liveToolStep.id, label: entry.liveToolStep.label },
+    });
+  }
   publishDriveDelta(driveId, { kind: "tool", name: entry.liveTool?.name ?? null, partialInput: entry.liveTool?.partialInput ?? "" });
   pingDriveFallback(entry, now());
   return publicDrive(entry);
@@ -150,6 +175,21 @@ export function noteDriveToolResult(driveId, { name = null, target = null, statu
   ].slice(-TOOL_RESULT_CAP);
   // A settled call also closes whatever call was forming, the same way the delta stream folds it.
   entry.liveTool = null;
+  // The focused node sees the step finish with its measured duration and status — the safe factual shape,
+  // never the result body (`detail` stays on the drive-scoped stream, not on this venture delta).
+  const step = entry.liveToolStep;
+  const stepLabel = String(name ?? "").trim() || step?.label || "tool";
+  emitWorkDelta(entry.ventureId, {
+    betId: entry.betId,
+    delta: {
+      type: "step-finished",
+      stepId: step?.id ?? `${driveId}:${entry.stepSeq || 1}`,
+      label: stepLabel,
+      status: String(status ?? "ok"),
+      durationMs: step ? now() - step.startedAt : null,
+    },
+  });
+  entry.liveToolStep = null;
   entry.lastBeatAt = at;
   publishDriveDelta(driveId, { kind: "tool-result", name, target, status, detail });
   pingDriveFallback(entry, now());

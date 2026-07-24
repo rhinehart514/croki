@@ -72,10 +72,12 @@ test("Product / GTM conversation keeps a flexible local model view above the com
     assert.deepEqual(state, { title: "Ecosystem distribution after proof", label: "Provisional Product / GTM view", proposed: 4, unresolved: 1, sequentialLanguage: false, contained: true });
 
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.work-graph-sketch[data-kind="model-view"] button')].find((entry) => /Review changes/.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
-    await waitForDom(client, `document.querySelector('.workspace-shell')?.dataset.mode === 'product-gtm' && !!document.querySelector('.product-gtm-review[data-inline="true"]')`, "review did not open the exact provisional branch in Product / GTM");
+    await waitForDom(client, `document.querySelector('.workspace-shell')?.getAttribute('data-canvas-open') === 'true' && !!document.querySelector('.workspace-canvas .product-gtm-review[data-inline="true"]')`, "review did not open the exact provisional branch on the Canvas");
     await waitForDom(client, `/When should ecosystem distribution begin/.test(document.querySelector('.product-gtm-review')?.textContent || '')`, "the exact provisional branch did not finish loading");
     assert.match(await client.evaluate(`document.querySelector('.product-gtm-review')?.textContent || ''`), /When should ecosystem distribution begin/);
-    assert.equal(await client.evaluate(`document.querySelectorAll('.product-gtm-review input[type="checkbox"]:checked').length`), 1);
+    // The founder register keeps one exact change at a time (per-object Keep, no checkbox merge control).
+    assert.equal(await client.evaluate(`document.querySelectorAll('.product-gtm-review input[type="checkbox"]').length`), 0, "the branch review still exposed the retired multi-select merge control");
+    assert.ok(await client.evaluate(`document.querySelectorAll('.product-gtm-review .product-gtm-delta').length >= 1`), "the provisional branch did not offer a keepable change");
     await assertNoUnhandledRejections(client);
   } finally {
     await chrome.close();
