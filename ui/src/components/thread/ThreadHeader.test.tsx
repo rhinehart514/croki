@@ -32,7 +32,6 @@ describe("ThreadHeader deletion", () => {
     render(<ThreadHeader
       item={item}
       timeline={null}
-      onOpenVisual={vi.fn()}
       onTogglePin={vi.fn()}
       onRename={vi.fn(async () => undefined)}
       onDelete={onDelete}
@@ -41,7 +40,7 @@ describe("ThreadHeader deletion", () => {
 
     fireEvent.click(screen.getByLabelText("Thread actions"));
     fireEvent.click(screen.getByRole("button", { name: "Delete thread" }));
-    expect(screen.getByText("Any active work will stop. Product changes and receipts stay.")).toBeTruthy();
+    expect(screen.getByText("Any active work will stop. Applied changes and receipts stay.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Delete thread" }));
 
     await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
@@ -61,7 +60,6 @@ describe("ThreadHeader usage readout", () => {
   const renderHeader = (timeline: ThreadTimeline | null) => render(<ThreadHeader
     item={item}
     timeline={timeline}
-    onOpenVisual={vi.fn()}
     onTogglePin={vi.fn()}
     onRename={vi.fn(async () => undefined)}
     onDelete={vi.fn(async () => undefined)}

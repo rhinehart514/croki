@@ -70,7 +70,7 @@ test("seq is monotonic within a drive and isolated between drives", () => {
   assert.equal(driveSnapshot("drive-never-ran").seq, 0, "an unknown drive reads as an empty snapshot, not an error");
 
   dropDriveStream("drive-a");
-  assert.deepEqual(driveSnapshot("drive-a"), { seq: 0, text: "", tool: null, thinking: null, todos: [], children: {} });
+  assert.deepEqual(driveSnapshot("drive-a"), { seq: 0, text: "", tool: null, thinking: null, todos: [], children: {}, nestedTasks: {} });
 });
 
 test("the snapshot folds every delta kind, and thinking carries shape only", () => {
@@ -80,12 +80,41 @@ test("the snapshot folds every delta kind, and thinking carries shape only", () 
   publishDriveDelta("drive-c", { kind: "thinking", state: "stop", durationMs: 4_200 });
   publishDriveDelta("drive-c", { kind: "todo", items: [{ content: "Trace the seam", status: "in_progress" }, { content: "", status: "pending" }] });
   publishDriveDelta("drive-c", { kind: "child", parentToolUseId: "toolu_1", delta: { kind: "text", text: "subagent working" } });
+  publishDriveDelta("drive-c", {
+    kind: "nested-task",
+    task: { taskId: "route-audit", label: "Checking routes", taskKind: "workflow", status: "running", totalCount: 18, completedCount: 0 },
+  });
+  publishDriveDelta("drive-c", {
+    kind: "nested-task",
+    task: { taskId: "route-audit", completedCount: 6, totalTokens: 12_400, elapsedMs: 9_000 },
+  });
+  publishDriveDelta("drive-c", {
+    kind: "nested-task",
+    task: { taskId: "silent-child", parentToolUseId: "route-audit", label: "Internal relay", status: "running", hidden: true },
+  });
 
   const before = driveSnapshot("drive-c");
   assert.deepEqual(before.tool, { name: "Read", partialInput: '{"path":"routes' });
   assert.deepEqual(before.thinking, { state: "stop", durationMs: 4_200 }, "a thinking frame carries duration and never content");
   assert.deepEqual(before.todos, [{ content: "Trace the seam", status: "in_progress" }], "an empty plan item is dropped");
   assert.equal(before.children.toolu_1.text, "subagent working");
+  assert.deepEqual(before.nestedTasks["route-audit"], {
+    taskId: "route-audit",
+    label: "Checking routes",
+    taskKind: "workflow",
+    status: "running",
+    totalCount: 18,
+    completedCount: 6,
+    totalTokens: 12_400,
+    elapsedMs: 9_000,
+  }, "partial nested-task events merge without erasing the task identity or earlier facts");
+  assert.deepEqual(before.nestedTasks["silent-child"], {
+    taskId: "silent-child",
+    parentTaskId: "route-audit",
+    label: "Internal relay",
+    status: "running",
+    skipTranscript: true,
+  }, "provider parent and hidden aliases normalize into the neutral transcript contract");
 
   publishDriveDelta("drive-c", { kind: "tool-result", name: "Read", target: "brain/src/firm/routes.mjs", status: "ok", detail: "48 lines" });
   assert.equal(driveSnapshot("drive-c").tool, null, "a returned tool closes the call that was forming");

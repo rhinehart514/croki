@@ -5,9 +5,17 @@
 
 const { spawn } = require("node:child_process");
 const path = require("node:path");
+const { assertSourceLaunchAvailable } = require("./source-launch-policy.cjs");
 
 const DEV_SERVER_URL = "http://127.0.0.1:5173/";
 const repoRoot = path.join(__dirname, "..");
+
+try {
+  assertSourceLaunchAvailable();
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
 // Some coding-agent and Electron test environments set this globally so the Electron executable
 // behaves like Node. That mode cannot start a desktop app, so keep it out of Croki's real launch.

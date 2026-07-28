@@ -38,17 +38,25 @@ export function useWorkspaceNavigation({
   // Selecting a canvas object focuses it, opens the Canvas so its live detail is in view, and follows any
   // exact linked Thread into the always-present conversation spine.
   const selectObject = useCallback((object: SystemIndexObject | null, directThreadRef: string | null = null) => {
-    setSystemSelection(object?.objectRef ?? null);
-    if (!object) return;
+    if (!object) {
+      setSystemSelection(null);
+      return;
+    }
+    if (directThreadRef) {
+      openThread(directThreadRef);
+    } else {
+      const linkedRefs = [...new Set([
+        ...object.threadRefs,
+        ...(workIndex?.items ?? []).filter((item) => item.subjectRefs.includes(object.objectRef)).map((item) => item.threadRef),
+      ])];
+      const linked = latestLinkedThread(linkedRefs, workIndex);
+      if (linked) openThread(linked.threadRef);
+      else beginScopedThread(object.objectRef);
+    }
+    // Opening a linked Thread restores its remembered presentation. Apply the founder's direct Canvas
+    // selection afterward so that older Thread memory cannot erase the object they just chose.
+    setSystemSelection(object.objectRef);
     setCanvasOpen(true);
-    if (directThreadRef) return openThread(directThreadRef);
-    const linkedRefs = [...new Set([
-      ...object.threadRefs,
-      ...(workIndex?.items ?? []).filter((item) => item.subjectRefs.includes(object.objectRef)).map((item) => item.threadRef),
-    ])];
-    const linked = latestLinkedThread(linkedRefs, workIndex);
-    if (linked) openThread(linked.threadRef);
-    else beginScopedThread(object.objectRef);
   }, [beginScopedThread, openThread, setCanvasOpen, setSystemSelection, workIndex]);
 
   const assignAgentInSystem = useCallback((ref: string, subjectRef?: string) => {

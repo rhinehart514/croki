@@ -84,7 +84,7 @@ export function VisualMemo({ content, title, artifactRef, artifactAt = null, foc
   return (
     <article className="review-artifact review-visual-memo">
       <header className="review-visual-hero" data-untitled={memo.title ? undefined : "true"}>
-        <span>Product / GTM artifact</span>
+        <span>Document</span>
         {memo.title ? <h1>{memo.title}</h1> : null}
         {memo.intro.length ? <div>{memo.intro.map((block, index) => <Block key={index} block={block} />)}</div> : null}
       </header>
@@ -97,11 +97,11 @@ export function VisualMemo({ content, title, artifactRef, artifactAt = null, foc
             onFocusSection({ artifactRef, artifactTitle: memo.title ?? "Produced work", artifactAt, sectionId, sectionTitle: section.title, sectionIndex: index });
           };
           return (
-          <section key={sectionId} data-featured={index === 0 ? "true" : undefined} data-steerable={interactive ? "true" : undefined} data-selected={selected ? "true" : undefined} onClick={interactive ? focus : undefined}>
+          <section key={sectionId} data-featured={index === 0 ? "true" : undefined} data-steerable={interactive ? "true" : undefined} data-selected={selected ? "true" : undefined}>
             <header>
               <span>{String(index + 1).padStart(2, "0")}</span>
               <h2>{section.title}</h2>
-              {interactive ? <button type="button" className="review-visual-steer" aria-label={`${selected ? "Editing" : "Revise"} ${section.title}`} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); focus(); }}>{selected ? <Check aria-hidden="true" /> : <PencilLine aria-hidden="true" />}<span>{selected ? "Editing" : "Revise"}</span></button> : null}
+              {interactive ? <button type="button" className="review-visual-steer" aria-label={`${selected ? "Editing" : "Revise"} ${section.title}`} aria-pressed={selected} onClick={focus}>{selected ? <Check aria-hidden="true" /> : <PencilLine aria-hidden="true" />}<span>{selected ? "Editing" : "Revise"}</span></button> : null}
             </header>
             <div>{section.blocks.map((block, blockIndex) => <Block key={blockIndex} block={block} />)}</div>
           </section>

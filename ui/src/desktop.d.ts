@@ -6,6 +6,8 @@ type DroverRepositorySelection = {
 type DroverTerminalTarget = {
   ventureId: string;
   workspaceId: string;
+  terminalId?: string;
+  name?: string;
   cols: number;
   rows: number;
 };
@@ -17,12 +19,47 @@ type DroverTerminalExit = {
   signal?: number;
   terminal: "completed" | "failed" | "cancelled";
 };
-type DroverTerminalOpen = { sessionId: string; snapshot: string; exit: DroverTerminalExit | null };
+type DroverTerminalOpen = {
+  sessionId: string;
+  terminalId: string;
+  name: string;
+  snapshot: string;
+  exit: DroverTerminalExit | null;
+  lastExit: DroverTerminalExit | null;
+};
+type DroverTerminalInspection = {
+  sessionId: string;
+  terminalId: string;
+  name: string;
+  running: boolean;
+  exit: DroverTerminalExit | null;
+  lastExit: DroverTerminalExit | null;
+  transcriptBytes: number;
+};
 
 type DroverPreviewAnnotationEvent = {
   workspaceId: string;
   annotation: unknown;
   screenshot: { mimeType: string; data: string; size: number } | null;
+  control?: DroverPreviewControl | null;
+};
+
+type DroverPreviewControl = {
+  kind: "founder" | "run";
+  runId: string | null;
+  at: string;
+};
+
+type DroverPreviewInspection = {
+  workspaceId: string;
+  url: string | null;
+  title: string | null;
+  loading: boolean;
+  reachable: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  control: DroverPreviewControl | null;
+  suggestions: Array<{ port: number; url: string; label: string }>;
 };
 
 // The <webview> tag Electron adds to the renderer; the browser build never renders one.
@@ -31,6 +68,11 @@ type DroverWebviewElement = HTMLElement & {
   src: string;
   getWebContentsId: () => number;
   reload: () => void;
+  canGoBack: () => boolean;
+  canGoForward: () => boolean;
+  goBack: () => void;
+  goForward: () => void;
+  setZoomFactor: (factor: number) => void;
 };
 
 // One typed work delta — the safe factual shape of live work the brain pushes for a focused node
@@ -65,8 +107,69 @@ type DroverDriveStreamFrame =
   | { frame: "snapshot"; snapshot: Record<string, unknown> }
   | { frame: "delta"; delta: Record<string, unknown> };
 
+type DroverWorkSnapshot = {
+  ventureId: string;
+  cursor: number;
+  threadRevision: number;
+  workRevision: number;
+  thread: unknown;
+  work: unknown;
+};
+
+type DroverWorkFrame =
+  | {
+      frame: "handshake";
+      schemaVersion: number;
+      minSchemaVersion: number;
+      serverInstanceId: string;
+      ventureId: string;
+      cursor: number;
+      mode: "resume" | "snapshot";
+      projectionRevision: number;
+      snapshot?: DroverWorkSnapshot;
+    }
+  | {
+      frame: "push";
+      schemaVersion: number;
+      ventureId: string;
+      threadId?: string;
+      runId?: string;
+      sequence: number;
+      projection: "thread" | "work" | "bundle";
+      projectionRevision: number;
+      payload: unknown;
+    };
+
+type DroverEngineState = {
+  phase: "ui-ready" | "engine-starting" | "engine-ready" | "degraded" | "failed";
+  at: string;
+  attempt: number;
+  message: string | null;
+};
+
 type DroverDesktopBridge = {
   platform: "darwin" | "win32" | "linux";
+  engine: {
+    status: () => Promise<DroverEngineState>;
+    retry: () => Promise<DroverEngineState>;
+    onState: (listener: (state: DroverEngineState) => void) => () => void;
+  };
+  update: {
+    status: () => Promise<{
+      mode: "source" | "manual-download" | "coordinated";
+      channel: "development" | "production";
+      currentVersion: string;
+      canCheck: boolean;
+      automaticCheck: boolean;
+      automaticInstall: boolean;
+      configured: boolean;
+      reason: string | null;
+      lastCheckedAt: string | null;
+      requiresDeveloperIdForAutomaticInstall: boolean;
+      requiresHttpsFeed: boolean;
+      installBoundary: "durable-quiescence-or-explicit-founder-drain";
+    }>;
+  };
   api: {
     request: (input: { path: string; method: string; headers: Record<string, string>; body: string }) => Promise<{
       status: number;
@@ -79,10 +182,21 @@ type DroverDesktopBridge = {
       driveId: string,
       listener: (frame: DroverDriveStreamFrame) => void,
     ) => Promise<() => void>;
+    subscribeWork: (
+      input: {
+        ventureId: string;
+        threadId?: string;
+        runId?: string;
+        cursor?: number | null;
+        schemaVersion?: number | null;
+      },
+      listener: (frame: DroverWorkFrame) => void,
+    ) => Promise<() => void>;
   };
   selectRepository: () => Promise<DroverRepositorySelection | null>;
   terminal: {
     open: (target: DroverTerminalTarget) => Promise<DroverTerminalOpen>;
+    inspect: (ventureId: string, workspaceId: string) => Promise<DroverTerminalInspection[]>;
     write: (sessionId: string, data: string) => Promise<void>;
     resize: (sessionId: string, cols: number, rows: number) => Promise<void>;
     restart: (sessionId: string) => Promise<void>;
@@ -91,11 +205,19 @@ type DroverDesktopBridge = {
     onExit: (listener: (event: DroverTerminalExit) => void) => () => void;
   };
   preview: {
-    attach: (workspaceId: string, webContentsId: number) => Promise<{ attached: boolean }>;
+    attach: (ventureId: string, workspaceId: string, webContentsId: number) => Promise<{ attached: boolean }>;
     detach: (workspaceId: string) => Promise<{ detached: boolean }>;
+    inspect: (ventureId: string, workspaceId: string) => Promise<DroverPreviewInspection>;
+    control: (
+      ventureId: string,
+      workspaceId: string,
+      operation: "navigate" | "back" | "forward" | "reload" | "open_external" | "zoom" | "capture",
+      input?: { url?: string; zoom?: number },
+    ) => Promise<DroverPreviewInspection>;
     startPick: (workspaceId: string) => Promise<{ picking: boolean }>;
     cancelPick: (workspaceId: string) => Promise<{ picking: boolean }>;
     onOpenRequest: (listener: (event: { workspaceId: string; url: string }) => void) => () => void;
+    onState: (listener: (event: { workspaceId: string; url: string | null; control: DroverPreviewControl }) => void) => () => void;
     onAnnotation: (listener: (event: DroverPreviewAnnotationEvent) => void) => () => void;
   };
 };

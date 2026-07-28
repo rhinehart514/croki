@@ -31,24 +31,24 @@ export function VenturePicker({ onOpen }: {
     <div className={`firm-app-picker${hasVentures ? " firm-app-picker-returning" : ""}`}>
       {!hasVentures ? (
         <div className="firm-app-picker-head">
-          <span>Product + GTM development environment</span>
+          <span>Founder-native coding environment</span>
           <div className="firm-app-picker-lockup"><CrokiMark active={ventures === null} decorative /><h1>Croki</h1></div>
-          <p>Change the Product and every path to market. Let agents pursue the work while you keep current truth and outward action yours.</p>
+          <p>Code directly with Claude or Codex. Croki keeps each Thread, exact change, and the product context that should improve what you build next.</p>
           <div className="firm-app-picker-orbit" aria-hidden="true">
             <i /><i /><i />
-            <strong>{failed ? "Couldn’t reach the firm" : ventures === null ? "Opening the firm" : "No ventures yet"}</strong>
-            <small>connect a real Product</small>
+            <strong>{failed ? "Couldn’t reach Croki" : ventures === null ? "Opening Croki" : "No projects yet"}</strong>
+            <small>connect a repository</small>
           </div>
         </div>
       ) : null}
 
       <div className="firm-app-picker-content">
         {ventures === null ? (
-          <p className="firm-app-picker-loading" role="status">Loading your ventures…</p>
+          <p className="firm-app-picker-loading" role="status">Loading your projects…</p>
         ) : failed ? (
           <section className="firm-app-picker-section firm-app-picker-failed" role="alert" aria-labelledby="ventures-unavailable">
             <div className="firm-app-picker-section-head">
-              <h2 id="ventures-unavailable">Couldn’t read your ventures</h2>
+              <h2 id="ventures-unavailable">Couldn’t read your projects</h2>
               <p>Croki didn’t answer this local read. Nothing on this machine changed.</p>
             </div>
             <button type="button" className="firm-app-picker-retry" onClick={() => { setVentures(null); setFailed(false); load(); }}>Try again</button>
@@ -56,8 +56,8 @@ export function VenturePicker({ onOpen }: {
         ) : ventures.length === 0 ? (
           <section className="firm-app-picker-section" aria-labelledby="start-first-venture">
             <div className="firm-app-picker-section-head">
-              <h2 id="start-first-venture">Move from the real Product</h2>
-              <p>Choose its codebase. Croki reads it locally and opens Work.</p>
+              <h2 id="start-first-venture">Open a codebase</h2>
+              <p>Choose the repository you want to work in. Croki reads it locally and starts a Thread.</p>
             </div>
             <VentureCreateForm ventures={ventures} onCreated={onOpen} />
           </section>
@@ -67,7 +67,7 @@ export function VenturePicker({ onOpen }: {
             <header className="firm-app-picker-returning-head">
               <span className="firm-app-brand"><CrokiMark active={ventures === null} decorative />Croki</span>
               <h1 id="continue-venture">Resume work</h1>
-              <p>Return to a product to review what changed and keep moving.</p>
+              <p>Return to the exact Thread, model, and material you left.</p>
             </header>
             <ul className="firm-app-picker-list">
               {ventures.map((venture) => (
@@ -75,7 +75,7 @@ export function VenturePicker({ onOpen }: {
                   <button type="button" onClick={() => onOpen(venture)}>
                     <span>
                       <strong>{venture.name}</strong>
-                      <small>Product repository · {venture.repository.split("/").filter(Boolean).at(-1) ?? "connected"}</small>
+                      <small>Repository · {venture.repository.split("/").filter(Boolean).at(-1) ?? "connected"}</small>
                     </span>
                     <em>Resume work <ArrowRight aria-hidden="true" /></em>
                   </button>
@@ -95,7 +95,7 @@ export function VenturePicker({ onOpen }: {
               <Plus aria-hidden="true" />
               <span>
                 <strong id="start-another-venture">Add another codebase</strong>
-                <small>Each product keeps its work, evidence, and decisions separate.</small>
+                <small>Each project keeps its Threads, work, and decisions separate.</small>
               </span>
               <ChevronDown aria-hidden="true" />
             </button>

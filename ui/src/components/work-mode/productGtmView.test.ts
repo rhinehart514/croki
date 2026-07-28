@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { productGtmViewFromTimeline } from "./productGtmView";
+import { productGtmViewFromTimeline, productGtmViewNodeFocus } from "./productGtmView";
 
 describe("productGtmViewFromTimeline", () => {
   it("returns the latest branch-backed local Product and GTM view", () => {
@@ -22,5 +22,29 @@ describe("productGtmViewFromTimeline", () => {
   it("does not reinterpret a legacy workflow as the new local model contract", () => {
     const timeline = { ventureId: "v1", threadRef: "thread:one", agents: [], visuals: [], items: [{ kind: "artifact", id: "flow", ref: "work:flow", artifact: { content: { kind: "flow", purpose: "product-gtm-workflow", steps: [], edges: [] } } }] } as never;
     expect(productGtmViewFromTimeline(timeline)).toBeNull();
+  });
+
+  it("turns a selected intent node into an exact same-artifact correction target", () => {
+    const timeline = {
+      ventureId: "v1", threadRef: "thread:one", agents: [], visuals: [],
+      items: [{
+        kind: "artifact", id: "view", ref: "work:view-one", title: "Activation intent", at: "2026-07-21T10:00:00.000Z",
+        artifact: { id: "view-one", content: { kind: "model-view", purpose: "product-gtm-local-model", question: "How should activation feel?", branchRef: "model-branch:branch-one", nodes: [
+          { id: "outcome", label: "Reach first value", kind: "outcome", state: "provisional" },
+          { id: "unknown", label: "Founder confidence", kind: "unknown", state: "unresolved" },
+        ], edges: [] } },
+      }],
+    } as never;
+    const view = productGtmViewFromTimeline(timeline)!;
+
+    expect(productGtmViewNodeFocus(view, "unknown")).toEqual({
+      artifactRef: "work:view-one",
+      artifactTitle: "Activation intent",
+      artifactAt: "2026-07-21T10:00:00.000Z",
+      sectionId: "unknown",
+      sectionTitle: "Founder confidence",
+      sectionIndex: 1,
+    });
+    expect(productGtmViewNodeFocus(view, "missing")).toBeNull();
   });
 });

@@ -20,6 +20,7 @@ import { parkOutwardAtWall } from "./grant-stage-outward.mjs";
 import { extendDirectionThread } from "./semantic-model-store.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
 import { buildBrowserReadTools, buildExaReadTools } from "../connected-read-capabilities.mjs";
+import { isSupportedStagedArtifactContent, STAGED_ARTIFACT_CONTENT_SCHEMA } from "./staged-artifact-content.mjs";
 
 const MAX_EVENTS_PER_BET = 200;
 function genId(prefix) {
@@ -233,31 +234,12 @@ function makeForkBet({ ventureId, teammateRef, configurationRevision, architectu
 function makeStageArtifact({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, contributingRefs }) {
   return {
     name: "stage_artifact",
-    description: "Attach local work to a bet without releasing it. Arbitrary legacy content remains valid. For a provisional local Product/GTM view use { kind: 'model-view', purpose: 'product-gtm-local-model', question, branchRef, nodes: [{ id, label, detail?, kind, state, sourceRef? }], edges: [{ from, to, label?, kind? }] }. Use a flow only when the material truly has ordered mechanics. For a deliberate comparison use { kind: 'comparison', variant: 'before-after' | 'alternatives', columns: [{ id, title, items: [{ label, detail?, artifactRef? }] }] }.",
+    description: "Attach supported local material to a bet without releasing it. Use a plain string or document for prose, diff for code changes, image for a visual, flow only for genuinely ordered mechanics, comparison for deliberate alternatives, and model-view for a provisional Canvas relationship view. Never stage arbitrary objects or machine serialization.",
     input_schema: {
       type: "object",
       properties: {
         betId: { type: "string" },
-        content: {
-          anyOf: [
-            { type: "object", properties: { kind: { const: "model-view" }, purpose: { const: "product-gtm-local-model" }, question: { type: "string" }, branchRef: { type: "string" }, nodes: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, detail: { type: "string" }, kind: { enum: ["question", "truth", "proposal", "alternative", "unknown", "evidence", "action", "gate", "outcome"] }, state: { enum: ["current", "provisional", "unresolved"] }, sourceRef: { type: "string" } }, required: ["id", "label", "kind", "state"] } }, edges: { type: "array", items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" }, label: { type: "string" }, kind: { enum: ["relationship", "dependency", "alternative", "return"] } }, required: ["from", "to"] } } }, required: ["kind", "purpose", "question", "branchRef", "nodes", "edges"] },
-            {
-              type: "object", properties: {
-                kind: { const: "flow" }, purpose: { enum: ["product-gtm-workflow"] },
-                objective: { type: "string" },
-                steps: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, detail: { type: "string" }, type: { enum: ["trigger", "source", "agent-work", "tool", "condition", "wait", "founder-decision", "founder-gate", "external-action", "observation", "outcome"] } }, required: ["id", "label"] } },
-                edges: { type: "array", items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" }, label: { type: "string" } }, required: ["from", "to"] } },
-              }, required: ["kind", "purpose", "objective", "steps", "edges"],
-            },
-            {
-              type: "object", properties: {
-                kind: { const: "comparison" }, variant: { enum: ["before-after", "alternatives"] },
-                columns: { type: "array", items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, items: { type: "array", items: { type: "object", properties: { label: { type: "string" }, detail: { type: "string" }, artifactRef: { type: "string" } }, required: ["label"] } } }, required: ["id", "title", "items"] } },
-              }, required: ["kind", "variant", "columns"],
-            },
-            {},
-          ],
-        },
+        content: STAGED_ARTIFACT_CONTENT_SCHEMA,
         title: { type: "string" },
         workRef: { type: "string" },
         producedDraft: { type: "boolean" },
@@ -267,6 +249,11 @@ function makeStageArtifact({ ventureId, teammateRef, configurationRevision, arch
     },
     async run({ betId, content, title = null, workRef = null, producedDraft = true, producedVisual = false } = {}) {
       trackCall("stage_artifact");
+      if (!isSupportedStagedArtifactContent(content)) {
+        const error = new Error("Unsupported staged material. Use a document, diff, image, flow, comparison, or provisional Canvas model-view.");
+        error.code = "unsupported_staged_artifact";
+        throw error;
+      }
       const consult = assertMoatConsulted({ toolCalls: [...consultedNames], producedDraft, producedVisual });
       if (!consult.ok) {
         const error = new Error(consult.note);

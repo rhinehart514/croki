@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { MutableRefObject } from "react";
 import type { ThreadTimeline, VisualReference } from "@/api";
+import { requestWorkReview } from "@/components/work-mode/previewPresentation";
 
 export function useWorkspaceVisuals({
   timeline, openerRef, setCanvasOpen, setStage, setArtifactFocus,
@@ -17,14 +18,22 @@ export function useWorkspaceVisuals({
     );
     const artifact = timelineItem?.artifact as { kind?: string } | undefined;
     if (artifact?.kind === "native-code") {
-      // A hidden workbench has no changes tab yet; the reveal control reopens it, and React flushes
-      // that discrete click synchronously, so the tab exists by the next lookup.
-      if (!document.getElementById("work-tab-changes")) {
-        document.querySelector<HTMLButtonElement>(".work-workbench-reveal")?.click();
-      }
-      const changesTab = document.getElementById("work-tab-changes") as HTMLButtonElement | null;
-      changesTab?.click();
-      changesTab?.focus();
+      setCanvasOpen(false);
+      setStage(null);
+      requestWorkReview({
+        threadRef: visual.threadRef,
+        workspaceId: typeof (timelineItem?.artifact as { id?: unknown } | undefined)?.id === "string"
+          ? (timelineItem!.artifact as { id: string }).id
+          : visual.ref.startsWith("work:") ? visual.ref.slice(5) : undefined,
+        target: "changes",
+        source,
+      });
+      return;
+    }
+    if (timelineItem?.kind === "comparison" && visual.kind === "comparison") {
+      setCanvasOpen(false);
+      setStage(null);
+      requestWorkReview({ threadRef: visual.threadRef, target: "comparison", source });
       return;
     }
     if (visual.kind === "map") {

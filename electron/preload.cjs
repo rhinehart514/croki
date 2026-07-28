@@ -23,6 +23,14 @@ function subscription(channel) {
 /** @satisfies {DroverDesktopBridge} */
 const droverDesktopBridge = {
   platform: /** @type {DroverDesktopBridge["platform"]} */ (process.platform),
+  engine: {
+    status: () => ipcRenderer.invoke("drover:engine-status"),
+    retry: () => ipcRenderer.invoke("drover:engine-retry"),
+    onState: subscription("drover:engine-state"),
+  },
+  update: {
+    status: () => ipcRenderer.invoke("drover:update-status"),
+  },
   api: {
     request: (input) => ipcRenderer.invoke("drover:brain-request", input),
     subscribe: async (ventureId, listener) => {
@@ -74,10 +82,34 @@ const droverDesktopBridge = {
         void ipcRenderer.invoke("drover:events-unsubscribe", subscriptionId);
       };
     },
+    subscribeWork: async (input, listener) => {
+      const subscriptionId = `work:${Date.now()}:${++nextVentureSubscriptionId}`;
+      const handler = (
+        /** @type {unknown} */ _event,
+        /** @type {{ subscriptionId?: string, frame?: any }} */ payload,
+      ) => {
+        if (payload?.subscriptionId === subscriptionId) listener(payload.frame);
+      };
+      ipcRenderer.on("drover:work-frame", handler);
+      try {
+        await ipcRenderer.invoke("drover:work-subscribe", { ...input, subscriptionId });
+      } catch (error) {
+        ipcRenderer.removeListener("drover:work-frame", handler);
+        throw error;
+      }
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        ipcRenderer.removeListener("drover:work-frame", handler);
+        void ipcRenderer.invoke("drover:events-unsubscribe", subscriptionId);
+      };
+    },
   },
   selectRepository: () => ipcRenderer.invoke("drover:select-repository"),
   terminal: {
     open: (target) => ipcRenderer.invoke("drover:terminal-open", target),
+    inspect: (ventureId, workspaceId) => ipcRenderer.invoke("drover:terminal-inspect", ventureId, workspaceId),
     write: (sessionId, data) => ipcRenderer.invoke("drover:terminal-write", sessionId, data),
     resize: (sessionId, cols, rows) => ipcRenderer.invoke("drover:terminal-resize", sessionId, cols, rows),
     restart: (sessionId) => ipcRenderer.invoke("drover:terminal-restart", sessionId),
@@ -86,11 +118,19 @@ const droverDesktopBridge = {
     onExit: subscription("drover:terminal-exit"),
   },
   preview: {
-    attach: (workspaceId, webContentsId) => ipcRenderer.invoke("drover:preview-attach", { workspaceId, webContentsId }),
+    attach: (ventureId, workspaceId, webContentsId) => ipcRenderer.invoke("drover:preview-attach", { ventureId, workspaceId, webContentsId }),
     detach: (workspaceId) => ipcRenderer.invoke("drover:preview-detach", workspaceId),
+    inspect: (ventureId, workspaceId) => ipcRenderer.invoke("drover:preview-inspect", { ventureId, workspaceId }),
+    control: (ventureId, workspaceId, operation, input = {}) => ipcRenderer.invoke("drover:preview-control", {
+      ventureId,
+      workspaceId,
+      operation,
+      ...input,
+    }),
     startPick: (workspaceId) => ipcRenderer.invoke("drover:preview-start-pick", workspaceId),
     cancelPick: (workspaceId) => ipcRenderer.invoke("drover:preview-cancel-pick", workspaceId),
     onOpenRequest: subscription("drover:preview-open"),
+    onState: subscription("drover:preview-state"),
     onAnnotation: subscription("drover:preview-annotation"),
   },
 };

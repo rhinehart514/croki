@@ -17,6 +17,7 @@
 
 import { getVentureDoc, setVentureDoc, now } from "./venture-store.mjs";
 import { notePendingSteer } from "./active-drives.mjs";
+import { drainQueuedFounderTurns } from "./founder-turn-queue.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -87,4 +88,10 @@ export function drainSteer({ ventureId, betId } = {}, options = {}) {
   }, options);
   const lines = pending.map((note) => `- ${note.text}`).join("\n");
   return `The founder steered this work while it ran (applies from this step forward):\n${lines}`;
+}
+
+export function drainFounderContext({ ventureId, betId } = {}, options = {}) {
+  const steer = drainSteer({ ventureId, betId }, options);
+  const followUps = drainQueuedFounderTurns({ ventureId, betId }, options);
+  return [steer, followUps].filter(Boolean).join("\n\n") || null;
 }

@@ -33,13 +33,20 @@ describe("preview broker", () => {
     await invoke({ operation: "open", input: { port: 5173 } });
     await invoke({ operation: "click", input: { x: 1, y: 1 } });
     assert.deepEqual(calls.map((call) => call.operation), ["open", "click"]);
-    assert.deepEqual(calls[1], { operation: "click", workspaceId: "workspace-1", worktree: "/tmp/wt", input: { x: 1, y: 1 } });
+    assert.deepEqual(calls[1], {
+      operation: "click",
+      workspaceId: "workspace-1",
+      worktree: "/tmp/wt",
+      input: { x: 1, y: 1, control: { kind: "run", runId: "run-a" } },
+    });
   });
 
-  it("status needs no pin, so a run can look before opening", async () => {
+  it("status and worktree discovery need no pin, so a run can look before opening", async () => {
     registerHost();
     await invoke({ operation: "status" });
-    assert.equal(calls.length, 1);
+    await invoke({ operation: "discover" });
+    assert.deepEqual(calls.map((call) => call.operation), ["status", "discover"]);
+    assert.deepEqual(calls[1].input.control, { kind: "run", runId: "run-a" });
   });
 
   it("never lets a run touch another run's pinned preview", async () => {
@@ -94,7 +101,7 @@ describe("preview work-loop tools", () => {
   it("expose the full drive vocabulary with schemas and pass the tool-safety screen", () => {
     const tools = buildPreviewWorkLoopTools({ workspace, runId: "run-a", trackCall: () => {} });
     assert.deepEqual(tools.map((tool) => tool.name), [
-      "preview_open", "preview_navigate", "preview_click", "preview_type", "preview_press",
+      "preview_discover", "preview_open", "preview_navigate", "preview_click", "preview_type", "preview_press",
       "preview_scroll", "preview_snapshot", "preview_evaluate", "preview_wait_for",
     ]);
     for (const tool of tools) {
@@ -118,6 +125,10 @@ describe("preview work-loop tools", () => {
 
     const click = tools.find((tool) => tool.name === "preview_click");
     await click.run({ x: 1, y: 2 });
-    assert.deepEqual(requests[1].input, { x: 1, y: 2 });
+    assert.deepEqual(requests[1].input, {
+      x: 1,
+      y: 2,
+      control: { kind: "run", runId: "run-a" },
+    });
   });
 });

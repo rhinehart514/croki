@@ -4,6 +4,7 @@
 import { appendEvent, completeEventReceipt } from "./work-loop-tools.mjs";
 import { noteDriveBeat } from "./active-drives.mjs";
 import { workflowStageIdForEvent } from "./workflow-projection.mjs";
+import { recordFactualActivity } from "./work-journal-runtime.mjs";
 
 const TOOL_ACTIVITY = {
   read_truth: "Reading venture truth",
@@ -37,9 +38,12 @@ export function createWorkLoopReceipts({
   options,
   stepIndex,
   monotonicNow = () => performance.now(),
+  driveRun = null,
 }) {
   const driveStartedAt = monotonicNow();
   const pendingTools = new Map();
+  let localActivitySequence = 0;
+  let beatSequence = 0;
   let didReportCost = false;
   let reportedCostUsd = 0;
   let didReportUsage = false;
@@ -47,6 +51,21 @@ export function createWorkLoopReceipts({
 
   function record(event) {
     const stored = appendEvent(ventureId, betId, { ...event, stepIndex: stepIndex() }, options);
+    const usage = event.usage ? {
+      inputTokens: Number(event.usage.inputTokens) || 0,
+      outputTokens: Number(event.usage.outputTokens) || 0,
+      cachedInputTokens: (Number(event.usage.cachedInputTokens) || 0)
+        + (Number(event.usage.cacheReadInputTokens) || 0)
+        + (Number(event.usage.cacheCreationInputTokens) || 0),
+      costUsd: Number(event.costUsd) || 0,
+    } : null;
+    recordFactualActivity(driveRun, {
+      activityId: stored?.id ?? `runtime-event-${++localActivitySequence}`,
+      label: activityFor(event),
+      durationMs: Number.isFinite(event.durationMs) ? event.durationMs : null,
+      usage,
+      at: stored?.at,
+    });
     noteDriveBeat(activeDriveId, {
       ...(stored ? { currentStageId: workflowStageIdForEvent(betId, stored) } : {}),
       activity: activityFor(event),
@@ -59,6 +78,10 @@ export function createWorkLoopReceipts({
     record,
     beat(activity) {
       noteDriveBeat(activeDriveId, { activity });
+      recordFactualActivity(driveRun, {
+        activityId: `beat-${++beatSequence}`,
+        label: activity,
+      });
     },
     noteCost(usd) {
       const amount = Number(usd);
@@ -81,7 +104,7 @@ export function createWorkLoopReceipts({
       const event = record({ type: "tool_started", detail: name });
       if (!event) return;
       const pending = pendingTools.get(name) ?? [];
-      pending.push({ eventId: event.id, startedAt: monotonicNow() });
+      pending.push({ eventId: event.id, label: activityFor({ type: "tool_started", detail: name }), startedAt: monotonicNow() });
       pendingTools.set(name, pending);
     },
     takeTool(name) {
@@ -90,25 +113,61 @@ export function createWorkLoopReceipts({
       pendingTools.set(name, pending);
       return receipt;
     },
-    completeTool(receipt) {
+    completeTool(receipt, { sourceRefs = [] } = {}) {
       if (!receipt) return;
+      const durationMs = Math.max(0, monotonicNow() - receipt.startedAt);
       completeEventReceipt(
         ventureId,
         betId,
         receipt.eventId,
-        { durationMs: Math.max(0, monotonicNow() - receipt.startedAt) },
+        { durationMs },
         options,
       );
+      recordFactualActivity(driveRun, {
+        activityId: `${receipt.eventId}:settled`,
+        label: receipt.label,
+        durationMs,
+        sourceRefs,
+      });
+    },
+    settleNativeTool(result, { sourceRefs = [] } = {}) {
+      const pending = pendingTools.get(result?.name) ?? [];
+      const receipt = pending.shift() ?? null;
+      pendingTools.set(result?.name, pending);
+      if (receipt) {
+        const durationMs = Math.max(0, monotonicNow() - receipt.startedAt);
+        completeEventReceipt(
+          ventureId,
+          betId,
+          receipt.eventId,
+          { durationMs },
+          options,
+        );
+        recordFactualActivity(driveRun, {
+          activityId: `${receipt.eventId}:settled`,
+          label: receipt.label,
+          durationMs,
+          sourceRefs,
+        });
+        return;
+      }
+      if (!sourceRefs.length) return;
+      recordFactualActivity(driveRun, {
+        activityId: result?.toolUseId ?? `native-source-${++localActivitySequence}`,
+        label: result?.target
+          ? `${String(result.name ?? "Read")} ${String(result.target).slice(0, 240)}`
+          : "Read source evidence",
+        sourceRefs,
+      });
     },
     finishDrive() {
-      appendEvent(ventureId, betId, {
+      record({
         type: "drive_receipt",
         detail: adapter.label,
-        stepIndex: stepIndex(),
         durationMs: Math.max(0, monotonicNow() - driveStartedAt),
         ...(didReportCost ? { costUsd: reportedCostUsd } : {}),
         ...(didReportUsage ? { usage: { ...reportedUsage } } : {}),
-      }, options);
+      });
     },
   };
 }

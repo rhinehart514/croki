@@ -6,6 +6,7 @@ import type { ReviewArtifact } from "@/components/review";
 export type ResolvedArtifact =
   | { kind: "diff"; diff: string; stat: string | null }
   | { kind: "preview"; artifact: ReviewArtifact }
+  | { kind: "unsupported"; sourceKind: string | null }
   | null;
 
 function str(value: unknown): string | null {
@@ -35,10 +36,25 @@ export function resolveEffectArtifact(effect: Record<string, unknown>): Resolved
 /** A bet's staged artifact content is unknown-typed; coerce to a reviewable preview. */
 export function resolveStagedArtifact(content: unknown): ResolvedArtifact {
   if (content == null) return null;
-  if (typeof content === "object") {
-    return resolveEffectArtifact(content as Record<string, unknown>)
-      ?? { kind: "preview", artifact: { kind: "code", content: JSON.stringify(content, null, 2) } };
+  if (typeof content === "object" && !Array.isArray(content)) {
+    const value = content as Record<string, unknown>;
+    const kind = str(value.kind)?.toLowerCase() ?? null;
+    if (kind === "document") {
+      const format = str(value.format)?.toLowerCase();
+      const body = typeof value.content === "string" ? value.content : null;
+      if (body != null && ["markdown", "text", "html", "code"].includes(format ?? "")) {
+        return { kind: "preview", artifact: { kind: format as ReviewArtifact["kind"], content: body } };
+      }
+    }
+    if (kind && ["markdown", "text", "html", "code"].includes(kind) && typeof value.content === "string") {
+      return { kind: "preview", artifact: { kind: kind as ReviewArtifact["kind"], content: value.content } };
+    }
+    if (kind === "image" && str(value.src)) {
+      return { kind: "preview", artifact: { kind: "image", src: str(value.src)!, caption: str(value.caption) ?? undefined } };
+    }
+    return resolveEffectArtifact(value) ?? { kind: "unsupported", sourceKind: kind };
   }
+  if (typeof content !== "string") return { kind: "unsupported", sourceKind: null };
   const text = String(content).trim();
   if (!text) return null;
   if (text.includes("@@") || text.startsWith("diff --git")) return { kind: "diff", diff: text, stat: null };

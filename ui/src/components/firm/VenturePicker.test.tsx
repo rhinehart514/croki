@@ -46,7 +46,7 @@ describe("VenturePicker portfolio gate", () => {
   it("does not request or mention the portfolio frontier during first-venture onboarding", async () => {
     vi.mocked(listVentures).mockResolvedValue({ ventures: [] });
     render(<VenturePicker onOpen={vi.fn()} />);
-    expect(await screen.findByRole("heading", { name: "Move from the real Product" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Open a codebase" })).toBeTruthy();
     expect(getPortfolioWall).not.toHaveBeenCalled();
     expect(screen.queryByText(/portfolio|one wall/i)).toBeNull();
   });

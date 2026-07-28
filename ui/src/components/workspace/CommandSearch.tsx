@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SystemIndex, SystemIndexObject, WorkIndex, WorkIndexItem } from "@/api";
+import { requestWorkReview } from "@/components/work-mode/previewPresentation";
 import {
   filterSearchGroups, flattenSearchRows, moveHighlight, objectSearchRow,
   sortThreadsForSearch, threadSearchRow, type SearchGroup, type SearchRow,
@@ -26,10 +27,6 @@ function rowIcon(row: SearchRow) {
 
 function focusComposer() {
   document.querySelector<HTMLTextAreaElement>(".now-composer textarea")?.focus();
-}
-
-function clickWorkbenchTab(tab: "changes" | "preview") {
-  document.getElementById(`work-tab-${tab}`)?.click();
 }
 
 function openTerminalDrawer() {
@@ -68,7 +65,7 @@ export function CommandSearch({ canvasOpen, workIndex, systemIndex, onSelectThre
         setQuery("");
         setHighlight(0);
         // Workbench material only earns actions when it is actually on screen for the current Thread.
-        setHasWorkbench(document.getElementById("work-tab-changes") !== null);
+        setHasWorkbench(document.querySelector(".work-surface[data-has-attempts='true']") !== null);
         setOpen((value) => !value);
       } else {
         setOpen(false);
@@ -84,27 +81,27 @@ export function CommandSearch({ canvasOpen, workIndex, systemIndex, onSelectThre
     const actionRows: SearchRow[] = [];
     const addAction = (row: SearchRow, run: () => void) => { actionRows.push(row); runs.set(row.id, run); };
     addAction(
-      { id: "action:new-thread", title: "New Thread", detail: "Start a fresh direction", shortcut: `${mod}N`, searchTerms: ["new thread", "start", "direction", "create"] },
+      { id: "action:new-thread", title: "New Thread", detail: "Start a coding task", shortcut: `${mod}N`, searchTerms: ["new thread", "start", "task", "direction", "create"] },
       onNewThread,
     );
     addAction(
       canvasOpen
         ? { id: "action:toggle-canvas", title: "Hide Canvas", detail: "Return to conversation", shortcut: null, searchTerms: ["canvas", "hide", "map", "graph", "close"] }
-        : { id: "action:toggle-canvas", title: "Show Canvas", detail: "The venture map and plays", shortcut: null, searchTerms: ["canvas", "show", "product", "gtm", "map", "graph", "plays"] },
+        : { id: "action:toggle-canvas", title: "Show Canvas", detail: "Project relationships when they help", shortcut: null, searchTerms: ["canvas", "show", "product", "map", "graph", "relationships"] },
       onToggleCanvas,
     );
     addAction(
-      { id: "action:composer", title: "Write a direction", detail: "Jump to the message box", shortcut: null, searchTerms: ["write", "direction", "message", "prompt", "compose"] },
+      { id: "action:composer", title: "Write a prompt", detail: "Jump to the message box", shortcut: null, searchTerms: ["write", "direction", "message", "prompt", "compose"] },
       focusComposer,
     );
     if (hasWorkbench) {
       addAction(
         { id: "action:changes", title: "Show code changes", detail: "Exact diff for this Thread", shortcut: null, searchTerms: ["changes", "diff", "code", "review"] },
-        () => clickWorkbenchTab("changes"),
+        () => requestWorkReview({ target: "changes" }),
       );
       addAction(
         { id: "action:preview", title: "Show preview", detail: "Running app for this Thread", shortcut: null, searchTerms: ["preview", "app", "browser"] },
-        () => clickWorkbenchTab("preview"),
+        () => requestWorkReview({ target: "preview" }),
       );
       addAction(
         { id: "action:terminal", title: "Open terminal", detail: "Commands in this Thread's workspace", shortcut: null, searchTerms: ["terminal", "shell", "command"] },
@@ -170,7 +167,7 @@ export function CommandSearch({ canvasOpen, workIndex, systemIndex, onSelectThre
       <Dialog.Portal>
         <Dialog.Backdrop className="command-search-backdrop" />
         <Dialog.Viewport className="command-search-viewport">
-          <Dialog.Popup className="command-search" aria-label="Search this venture" initialFocus={inputRef}>
+          <Dialog.Popup className="command-search" aria-label="Search this project" initialFocus={inputRef}>
             <div className="command-search-field">
               <Search aria-hidden="true" />
               <input
@@ -180,7 +177,7 @@ export function CommandSearch({ canvasOpen, workIndex, systemIndex, onSelectThre
                 aria-expanded="true"
                 aria-controls="command-search-results"
                 aria-activedescendant={activeRow ? `command-search-option-${activeIndex}` : undefined}
-                aria-label="Search this venture"
+                aria-label="Search this project"
                 autoComplete="off"
                 spellCheck={false}
                 placeholder="Search Threads, the Canvas, and actions"
@@ -193,7 +190,7 @@ export function CommandSearch({ canvasOpen, workIndex, systemIndex, onSelectThre
               {flatRows.length === 0 ? (
                 <p className="command-search-empty">
                   <strong>No matches for “{query.trim()}”.</strong>
-                  <span>Search covers Threads, the Canvas, and actions in this venture.</span>
+                  <span>Search covers Threads, the Canvas, and actions in this project.</span>
                 </p>
               ) : (
                 visible.map((group, groupIndex) => {

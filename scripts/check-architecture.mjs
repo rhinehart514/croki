@@ -43,7 +43,38 @@ const failures = [];
 // 2026-07-23 re-baseline 149 → 150: firm/work-delta.mjs is the narrow payload firewall for focused-node
 // live detail. It normalizes the only factual payload allowed onto the otherwise data-free firm event bus,
 // preventing tool output, model prose, or secrets from leaking into venture-wide fan-out.
-const BRAIN_MODULE_CEILING = 150;
+// 2026-07-25 re-baseline 150 → 151: desktop-host-seams.mjs is the narrow child-side half of the
+// supervised Brain boundary. It keeps Electron-owned credential protection and preview execution behind
+// allowlisted host calls instead of importing native desktop capability into the engine process.
+// 2026-07-25 re-baseline 151 → 154: the ordered Work boundary is deliberately three feature-local
+// modules: protocol physics and durable cursor/idempotency state, the desktop Work projection bridge,
+// and the strict HTTP-shaped command classifier. Product/Canvas transport remains outside this seam.
+// 2026-07-25 re-baseline 154 → 156: the Work journal keeps persistence, migration, corruption, and
+// diagnostic authority separate from its pure deterministic projector so rebuild code cannot write
+// journal truth or smuggle storage state into public Thread/Run/Review identities.
+// 2026-07-25 re-baseline 156 → 157: runtimes/native-capabilities.mjs is the provider-owned discovery
+// seam for models, versions, skills, slash commands, and native interaction modes. It replaces static
+// composer assumptions without placing a Croki router or persona between the founder and the SDK.
+// 2026-07-25 re-baseline 157 → 158: work-journal-runtime.mjs is the bounded lifecycle adapter that
+// maps existing Work facts into journal events. Keeping it separate prevents the storage/hash-chain
+// core and pure projector from importing provider, workspace, intervention, or recovery services.
+// 2026-07-25 re-baseline 158 → 159: work-start-ack.mjs is the promise boundary that lets dialogue wait
+// for the founder-turn journal CAS without waiting for provider settlement or bloating the route service.
+// 2026-07-25 re-baseline 159 → 160: run-worker.mjs owns drainable per-Run/worktree ordering,
+// backpressure, and durable layer settlement without placing queue state in the journal authority.
+// 2026-07-25 re-baseline 160 → 163: founder-turn-queue.mjs owns the durable editable/tombstoned
+// provider-boundary queue; git-review-state.mjs owns exact source-control Review projection; and
+// work-recovery.mjs owns fail-closed recovery plans. Each removes continuity, Review, or recovery
+// policy from already-ceilinged provider/work-loop services and has a focused receipt.
+// 2026-07-27 re-baseline 163 → 164: staged-artifact-content.mjs is the typed disposition boundary for
+// generated material. It rejects arbitrary objects before storage and migrates legacy maps without
+// mixing schema/runtime validation into the already 455-line Thread timeline projector.
+// 2026-07-28 re-baseline 164 → 166: Codex app-server needs two provider-boundary modules:
+// codex-app-server.mjs owns bidirectional process/session/control transport, while
+// codex-app-server-events.mjs owns version-tolerant protocol decoding and safe child-task projection.
+// The split keeps the production adapter and both protocol services below the 500-line ceiling without
+// turning Codex's transient worker graph into firm or UI architecture.
+const BRAIN_MODULE_CEILING = 166;
 
 function files(directory, pattern) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

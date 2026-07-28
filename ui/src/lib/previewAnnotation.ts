@@ -28,6 +28,7 @@ export type PreviewAnnotationPayload = {
   strokes: unknown[];
   styleChanges: Array<{ property: string; value: string; previousValue?: string }>;
   createdAt: string;
+  sourceRef?: string;
 };
 
 export type PreviewAnnotationScreenshot = { mimeType: string; data: string; size: number };
@@ -60,6 +61,7 @@ export function buildPreviewAnnotationPrompt(annotation: PreviewAnnotationPayloa
   const title = annotation.pageTitle?.trim() || annotation.pageUrl.trim() || "Preview";
   lines.push(`Page: ${title}`);
   lines.push(`URL: ${annotation.pageUrl}`);
+  if (annotation.sourceRef) lines.push(`Source: ${annotation.sourceRef}`);
   if (annotation.comment.trim()) lines.push(`Comment: ${annotation.comment.trim()}`);
   const targets: string[] = [];
   if (annotation.elements.length > 0) targets.push(`${annotation.elements.length} selected element${annotation.elements.length === 1 ? "" : "s"}`);

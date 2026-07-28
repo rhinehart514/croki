@@ -7,9 +7,42 @@ import { createRootThread, ROOT_THREAD_ID } from "./thread.mjs";
 import { listVentureDocs } from "./venture-store.mjs";
 import { buildWorkIndex } from "./work-index.mjs";
 import { getFirmConfiguration } from "./configuration.mjs";
+import { createWorkJournal } from "./work-journal.mjs";
+import { projectLegacyRelationshipMap } from "./staged-artifact-content.mjs";
 
 const list = (value) => Array.isArray(value) ? value : [];
 const refId = (value, prefix) => String(value ?? "").replace(new RegExp(`^${prefix}:`), "");
+const bareRun = (value) => String(value ?? "").replace(/^run:/, "").trim();
+
+function codingReviewProjection(workspace, projection) {
+  const runIds = new Set(list(workspace.runRefs).map(bareRun).filter(Boolean));
+  const runs = list(projection?.runs).filter((run) => runIds.has(run.id));
+  const sessionsByRun = new Map(runs.filter((run) => run.providerSession).map((run) => [run.id, run.providerSession]));
+  const usage = list(projection?.usage?.byRun).filter((entry) => runIds.has(entry.id));
+  const sourceRefs = [...new Set(runs.flatMap((run) => list(run.activity).flatMap((activity) => list(activity.sourceRefs))))];
+  return {
+    ...workspace,
+    sourceRefs,
+    providerSessions: list(workspace.providerSessions).map((session) => {
+      const journal = sessionsByRun.get(bareRun(session.runRef));
+      return journal ? {
+        ...session,
+        provider: journal.provider ?? session.provider,
+        sessionId: journal.sessionId ?? session.sessionId,
+        model: journal.model ?? null,
+        effort: journal.effort ?? null,
+        interactionMode: journal.interactionMode ?? null,
+      } : session;
+    }),
+    reviewUsage: usage.length ? usage.reduce((total, entry) => ({
+      costUsd: total.costUsd + (Number(entry.costUsd) || 0),
+      inputTokens: total.inputTokens + (Number(entry.inputTokens) || 0),
+      outputTokens: total.outputTokens + (Number(entry.outputTokens) || 0),
+      cachedInputTokens: total.cachedInputTokens + (Number(entry.cachedInputTokens) || 0),
+      measured: true,
+    }), { costUsd: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, measured: true }) : null,
+  };
+}
 const TOOL_ACTIVITY = {
   read_truth: "Read venture truth",
   search_repository: "Searched the repository",
@@ -157,6 +190,24 @@ function agentState(drive) {
   return "working";
 }
 
+function terminalRunItem(run, participantLabel) {
+  const failedReceipt = list(run?.layerReceipts).find((receipt) => receipt?.status === "failed" && typeof receipt?.error?.message === "string");
+  const failure = run?.interruption?.recovery?.message?.trim() || failedReceipt?.error?.message?.trim() || "Provider work was interrupted.";
+  const canvasFailure = /canvas projection/i.test(failure);
+  const participantRef = run?.providerSession?.participantRef ?? run?.providerSession?.provider ?? null;
+  const settledAt = run.interruptedAt ?? run.failedAt ?? run.updatedAt ?? null;
+  return {
+    kind: "agent-status", id: `agent:${run.id}:failed`, ref: `run:${run.id}`, at: settledAt,
+    participantRef, participantLabel: participantLabel(participantRef), state: "failed",
+    summary: canvasFailure ? "Canvas return needs another pass" : "Provider turn interrupted",
+    recoveryLayer: canvasFailure ? "canvas" : "provider",
+    recovery: canvasFailure
+      ? "The provider return was not usable as a Canvas view. Send the direction again from this Thread."
+      : "Resume from this Thread when you are ready.",
+    startedAt: run.startedAt, updatedAt: settledAt, activitySteps: list(run.activity).slice(-8),
+  };
+}
+
 function legacyFamily(allBets, rootId) {
   const byId = new Map(allBets.map((bet) => [bet.id, bet]));
   const belongs = (bet) => {
@@ -176,6 +227,10 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
   const participantNames = new Map(list(configuration.agents).map((agent) => [agent.ref, agent.name ?? agent.label ?? agent.ref]));
   const participantLabel = (ref) => participantNames.get(ref) ?? ref ?? null;
   const model = getSemanticModel(ventureId, options);
+  const workJournalProjection = (() => {
+    try { return createWorkJournal(options).readProjections(ventureId); }
+    catch { return null; }
+  })();
   const allBets = listVentureDocs(ventureId, "bets", options);
   let thread = list(model.threads).find((entry) => entry.id === threadId);
   if (!thread && threadId === ROOT_THREAD_ID) thread = createRootThread(ventureId);
@@ -199,6 +254,12 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
   const codeWorkspaces = listVentureDocs(ventureId, "codeWorkspaces", options)
     .filter((workspace) => workspace.threadRef === threadRef || list(workspace.runRefs).some((ref) => runs.some((run) => ref === `run:${run.id}`)));
   const bets = allBets.filter((bet) => betIds.has(bet.id));
+  const interventions = decisions.filter((decision) => decision.decision == null && decision.betId && betIds.has(decision.betId));
+  const queuedFounderTurns = bets.flatMap((bet) => (
+    Array.isArray(bet.work?.queuedFounderTurns)
+      ? bet.work.queuedFounderTurns.filter((turn) => turn?.state === "queued").map((turn) => ({ ...turn, betId: bet.id }))
+      : []
+  ));
   const active = listActiveDrives(ventureId).filter((drive) => betIds.has(drive.betId) || runs.some((run) => run.id === drive.id));
   const isRoot = thread.id === ROOT_THREAD_ID;
   const deletedMessageRefs = new Set(list(model.threads).filter((entry) => entry.deletedAt).flatMap((entry) => list(entry.messageRefs)));
@@ -268,9 +329,26 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
     });
   }
 
+  // Live presence disappears when a drive settles. Non-coding failures have no workspace artifact
+  // to carry their terminal state, so project the exact durable Run in the same transcript position.
+  // Coding workspaces already own their richer interruption row and are excluded here.
+  const activeRunIds = new Set(active.map((drive) => drive.id));
+  const workspaceRunIds = new Set(codeWorkspaces.flatMap((workspace) => list(workspace.runRefs).map(bareRun)));
+  for (const run of list(workJournalProjection?.runs).filter((entry) => (
+    entry.threadId === thread.id
+    && ["interrupted", "failed"].includes(entry.status)
+    && !list(entry.layerReceipts).some((receipt) => receipt?.type === "timeline-settled" && receipt?.status === "succeeded")
+    && !activeRunIds.has(entry.id)
+    && !workspaceRunIds.has(entry.id)
+  ))) {
+    items.push(terminalRunItem(run, participantLabel));
+  }
+
   for (const bet of bets) {
     for (const artifact of list(bet.staged)) {
-      const kind = artifactKind(artifact);
+      const projectedContent = projectLegacyRelationshipMap(artifact?.content, { artifactId: artifact?.id, title: artifact?.title ?? bet.intent });
+      const projectedArtifact = projectedContent ? { ...artifact, content: projectedContent } : artifact;
+      const kind = artifactKind(projectedArtifact);
       const artifactRef = `work:${artifact.id}`;
       const title = artifact.title ?? bet.intent ?? "Visual work";
       const visualRef = visual(kind, artifactRef, threadRef, title, [`bet:${bet.id}`]);
@@ -281,7 +359,7 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
         ref: artifactRef,
         at: at(artifact, at(bet)),
         title,
-        artifact,
+        artifact: projectedArtifact,
         ownerLabels: list(artifact.ownerRefs).map(participantLabel).filter(Boolean),
         contributorLabels: list(artifact.contributorRefs).map(participantLabel).filter(Boolean),
         betRef: `bet:${bet.id}`,
@@ -307,7 +385,8 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
     }
   }
 
-  for (const workspace of codeWorkspaces) {
+  for (const storedWorkspace of codeWorkspaces) {
+    const workspace = codingReviewProjection(storedWorkspace, workJournalProjection);
     const artifactRef = `work:${workspace.id}`;
     const title = workspace.goal ?? "Native coding attempt";
     const visualRef = visual("diff", artifactRef, threadRef, title, list(workspace.runRefs));
@@ -403,6 +482,8 @@ export function buildThreadTimeline(ventureId, threadId, options = {}) {
     thread: indexItem ?? { threadRef, founderIntent: thread.name, lifecycle: thread.lifecycle, participantRefs: thread.participantRefs, activeParticipantRefs: [] },
     items,
     usage: threadUsage(bets),
+    interventions,
+    queuedFounderTurns,
     agents: active.map((drive) => ({ participantRef: drive.teammateRef, participantLabel: participantLabel(drive.teammateRef), state: agentState(drive), runRef: `run:${drive.id}`, betRef: drive.betId ? `bet:${drive.betId}` : null, activity: drive.activity ?? null, startedAt: drive.startedAt, updatedAt: drive.abortRequestedAt ?? drive.lastBeatAt ?? drive.startedAt })),
     visuals,
   };

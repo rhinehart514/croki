@@ -68,6 +68,18 @@ function resolveLoginShell(candidate, fallback = "/bin/zsh") {
   }
 }
 
+// The founder window may capture microphone audio for the existing chat composer. No other media
+// permission crosses this boundary: previews, camera capture, screen capture, and unknown requesters
+// remain denied.
+function isAllowedFounderMediaPermission({ isFounderWindow, permission, mediaTypes = [] }) {
+  return Boolean(
+    isFounderWindow
+    && permission === "media"
+    && mediaTypes.includes("audio")
+    && !mediaTypes.includes("video")
+  );
+}
+
 // Merge PATH-style lists in priority order, keeping the first appearance of each entry. The login
 // shell's PATH leads so the founder's tool versions win, the inherited PATH follows so nothing the
 // process already resolved disappears, and known CLI directories close the gaps.
@@ -85,4 +97,12 @@ function mergePathLists(lists, delimiter = ":") {
   return entries.join(delimiter);
 }
 
-module.exports = { externalHttpUrl, parseSafeExternalUrl, parseLoopbackDevServerUrl, isAllowedRendererNavigation, resolveLoginShell, mergePathLists };
+module.exports = {
+  externalHttpUrl,
+  parseSafeExternalUrl,
+  parseLoopbackDevServerUrl,
+  isAllowedRendererNavigation,
+  isAllowedFounderMediaPermission,
+  resolveLoginShell,
+  mergePathLists,
+};

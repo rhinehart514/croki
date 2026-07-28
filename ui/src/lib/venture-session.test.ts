@@ -5,7 +5,9 @@ import {
   rememberActiveVenture,
   rememberThreadSession,
   readWorkspaceSession,
+  readWorkspaceThreadPresentation,
   rememberWorkspaceSession,
+  validateWorkspaceDestination,
 } from "./venture-session";
 
 describe("venture return session", () => {
@@ -37,6 +39,90 @@ describe("venture return session", () => {
     const session = { railWidth: 280, canvasOpen: true, selectedThreadRef: "thread:one", selectedObjectRef: "object:product-one", systemCamera: { x: 1, y: 2, zoom: 0.8 }, chatScrollByThread: { "thread:one": 44 } };
     rememberWorkspaceSession("venture-2", session);
     expect(readWorkspaceSession("venture-2")).toEqual(session);
+  });
+
+  it("keeps exact Canvas presentation separate for each Project and Thread", () => {
+    rememberWorkspaceSession("venture-a", {
+      railWidth: 296,
+      canvasOpen: true,
+      selectedThreadRef: "thread:one",
+      selectedObjectRef: "object:one",
+      systemCamera: { x: 10, y: 20, zoom: 0.8 },
+      chatScrollByThread: { "thread:one": 120 },
+    });
+    rememberWorkspaceSession("venture-a", {
+      railWidth: 296,
+      canvasOpen: false,
+      selectedThreadRef: "thread:two",
+      selectedObjectRef: null,
+      systemCamera: null,
+      chatScrollByThread: { "thread:one": 120, "thread:two": 42 },
+    });
+    rememberWorkspaceSession("venture-b", {
+      railWidth: 320,
+      canvasOpen: true,
+      selectedThreadRef: "thread:other",
+      selectedObjectRef: "object:other",
+      systemCamera: { x: -4, y: 9, zoom: 1.1 },
+      chatScrollByThread: { "thread:other": 8 },
+    });
+
+    expect(readWorkspaceThreadPresentation("venture-a", "thread:one")).toEqual({
+      canvasOpen: true,
+      selectedObjectRef: "object:one",
+      systemCamera: { x: 10, y: 20, zoom: 0.8 },
+    });
+    expect(readWorkspaceThreadPresentation("venture-a", "thread:two")).toEqual({
+      canvasOpen: false,
+      selectedObjectRef: null,
+      systemCamera: null,
+    });
+    expect(readWorkspaceThreadPresentation("venture-b", "thread:other")?.selectedObjectRef).toBe("object:other");
+    expect(readWorkspaceThreadPresentation("venture-b", "thread:one")).toBeNull();
+  });
+
+  it("drops only invalid local addresses and keeps the nearest coherent Thread state", () => {
+    const session = {
+      railWidth: 280,
+      canvasOpen: true,
+      selectedThreadRef: "thread:one",
+      selectedObjectRef: "object:deleted",
+      systemCamera: { x: 1, y: 2, zoom: 0.9 },
+      chatScrollByThread: { "thread:one": 77 },
+    };
+    const restored = validateWorkspaceDestination(session, {
+      threadRefs: new Set(["thread:one"]),
+      objectRefs: new Set(["object:current"]),
+    });
+
+    expect(restored.session).toEqual({
+      ...session,
+      selectedObjectRef: null,
+      systemCamera: null,
+    });
+    expect(restored.breaks).toEqual([{
+      layer: "Canvas",
+      message: "The saved Canvas item is no longer available. The Thread and its draft were kept.",
+    }]);
+  });
+
+  it("rejects a cross-Project snapshot instead of painting it into the destination", () => {
+    window.localStorage.setItem("drover:workspace-session:v14:venture-b", JSON.stringify({
+      schemaVersion: 1,
+      ventureId: "venture-a",
+      activeThreadRef: "thread:a",
+      railWidth: 360,
+      chatScrollByThread: { "thread:a": 999 },
+      threads: { "thread:a": { canvasOpen: true, selectedObjectRef: "object:a", systemCamera: { x: 1, y: 2, zoom: 1 } } },
+    }));
+    expect(readWorkspaceSession("venture-b")).toEqual({
+      railWidth: 272,
+      canvasOpen: false,
+      selectedThreadRef: null,
+      selectedObjectRef: null,
+      systemCamera: null,
+      chatScrollByThread: {},
+    });
   });
 
   it("opens the canvas for a v12 record that was left on the retired Product/GTM surface", () => {

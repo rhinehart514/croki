@@ -5,11 +5,13 @@ import { CrewFace } from "@/components/crew/CrewFace";
 import { AgentCreateDialog } from "@/components/workspace/AgentCreateDialog";
 import {
   fileMentionEndingAt,
+  fileMentionSpans,
   fileMentionStartingAt,
   fileMentionTokenFor,
   pruneFileMentions,
   type ComposerFileMention,
 } from "./composerFileMentions";
+import { openComposerSourceReference } from "./composerSourceReference";
 
 const MAX_FILE_MATCHES = 6;
 
@@ -238,18 +240,39 @@ export function useAgentComposer({ ventureId, draft, setDraft, textareaRef, conf
     menu,
     dialog,
     onDraftChange,
-    onCaretChange: (position: number) => { setCaret(position); setActiveIndex(0); },
+    onCaretChange: (position: number) => {
+      setCaret(position);
+      setActiveIndex(0);
+      const source = fileMentionSpans(draft, fileMentions).find((span) => (
+        span.sourceRef
+        && span.scopeKey
+        && span.startLine
+        && span.endLine
+        && position >= span.start
+        && position <= span.end
+      ));
+      if (source?.sourceRef && source.scopeKey && source.startLine && source.endLine) {
+        openComposerSourceReference({
+          scopeKey: source.scopeKey,
+          path: source.path,
+          startLine: source.startLine,
+          endLine: source.endLine,
+          ref: source.sourceRef,
+        });
+      }
+    },
     onKeyDown,
     chipMentions: chips,
     mentionedAgentRefs: mentionedAgentRefs(draft, agents, mentions),
     clearMentions: () => setMentions([]),
     inputAria: visibleTrigger ? {
+      role: "combobox" as const,
       "aria-autocomplete": "list" as const,
       "aria-controls": "composer-agent-menu",
       "aria-expanded": true,
       "aria-activedescendant": selectedIndex < matches.length
         ? `composer-agent-${matches[selectedIndex].ref}`
         : selectedIndex < createIndex ? `composer-file-${selectedIndex - matches.length}` : "composer-agent-create",
-    } : { "aria-expanded": false },
+    } : { role: "combobox" as const, "aria-expanded": false },
   };
 }

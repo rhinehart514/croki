@@ -16,15 +16,21 @@ import {
   revertCodingWorkspaceApply,
   reviewCodingProductConsequence,
   reviewCodingWorkspace,
-  restoreCodingWorkspaceCheckpoint,
   settleCodingWorkspace,
   updateCodingSession,
 } from "../../src/firm/code-workspace.mjs";
+import {
+  addCodingReviewComment,
+  compareCodingWorkspaceCheckpoints,
+  restoreCodingWorkspaceCheckpoint,
+} from "../../src/firm/repository-files.mjs";
 import { captureCheckpoint, diffCheckpoints, restoreCheckpoint } from "../../src/native-code/t3-checkpoint-store.mjs";
-import { createVenture } from "../../src/firm/venture-store.mjs";
+import { createVenture, setVentureDoc } from "../../src/firm/venture-store.mjs";
 import { getSemanticModel } from "../../src/firm/semantic-model-store.mjs";
 import { driveTeammate } from "../../src/firm/work-loop.mjs";
 import { buildThreadTimeline } from "../../src/firm/thread-timeline.mjs";
+import { createWorkJournal } from "../../src/firm/work-journal.mjs";
+import { applyFirmConfiguration, getFirmConfiguration } from "../../src/firm/configuration.mjs";
 
 function git(cwd, args) { return execFileSync("git", args, { cwd, encoding: "utf8" }).trim(); }
 
@@ -87,19 +93,35 @@ describe("Run-linked coding workspace", () => {
 
   it("drives a provider inside the worktree and projects exact work beside the durable thread", async () => {
     const { repo, options, venture, cleanup } = fixture();
+    const initial = getFirmConfiguration(venture.id, options);
+    applyFirmConfiguration({
+      ventureId: venture.id,
+      expectedRevision: initial.revision,
+      configuration: { ...initial, agents: [{ ref: "product-strategist", name: "Product Strategist", activation: "direct" }] },
+      summary: "Configure Product / GTM outside direct Work",
+    }, options);
     const runtime = {
       id: "codex", label: "Codex", supportsAbort: true,
       async drive(ctx) {
         assert.match(ctx.cwd, /\.drover-worktrees\/code-/);
+        assert.deepEqual(ctx.tools, [], "ordinary repository-backed coding attaches no Croki MCP bridge");
         ctx.onRuntimeSession("provider-session-1");
         fs.writeFileSync(path.join(ctx.cwd, "product.txt"), "implemented in Croki\n");
+        ctx.onToolResult({
+          toolUseId: "native-edit-product",
+          name: "apply_patch",
+          target: path.join(ctx.cwd, "product.txt"),
+          status: "passed",
+          detail: "Updated",
+          source: { path: path.join(ctx.cwd, "product.txt") },
+        });
         ctx.onCommand({ command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "passed", verification: true });
         return { kind: "completed", summary: "Implemented and verified." };
       },
     };
     const result = await driveTeammate({
       ventureId: venture.id, teammateRef: "founding-teammate", goal: "Implement the real coding loop",
-      initiatedBy: "founder", options, deps: { runtime },
+      initiatedBy: "founder", directSdk: true, runtime: "codex", options, deps: { runtime },
     });
     assert.equal(result.codingWorkspace.status, "reviewable");
     const model = getSemanticModel(venture.id, options);
@@ -110,6 +132,47 @@ describe("Run-linked coding workspace", () => {
     const artifact = timeline.items.find((item) => item.ref === `work:${result.codingWorkspace.id}`);
     assert.equal(artifact.artifact.kind, "native-code");
     assert.match(artifact.artifact.diff, /implemented in Croki/);
+    const journalProjection = createWorkJournal(options).readProjections(venture.id);
+    const journalRun = journalProjection.runs[0];
+    const sourceRefs = journalRun.activity.flatMap((activity) => activity.sourceRefs);
+    assert.equal(sourceRefs.length, 1);
+    assert.match(sourceRefs[0], /^repository:product\.txt#L1-L2:[0-9a-f]{12}$/);
+    assert.deepEqual(artifact.artifact.sourceRefs, sourceRefs, "the exact native source reaches Review");
+    assert.equal(JSON.stringify(journalProjection).includes("implemented in Croki"), false, "the journal retains no source body");
+    let returnContext;
+    await driveTeammate({
+      ventureId: venture.id,
+      teammateRef: "founding-teammate",
+      goal: "Explain the exact implementation we just made",
+      initiatedBy: "founder",
+      directSdk: true,
+      runtime: "codex",
+      target: { threadRef: model.runs[0].threadRef },
+      options,
+      deps: {
+        runtime: {
+          id: "codex",
+          label: "Codex",
+          async drive(ctx) {
+            returnContext = ctx;
+            return { kind: "completed", summary: "The implementation remains grounded." };
+          },
+        },
+      },
+    });
+    assert.deepEqual(returnContext.tools, []);
+    assert.match(returnContext.system, new RegExp(sourceRefs[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "the next task receives the retained source pointer without a Croki read tool");
+    assert.deepEqual(journalRun.layerReceipts.map(({ type, status }) => [type, status]), [
+      ["provider-settled", "succeeded"],
+      ["checkpoint-captured", "succeeded"],
+      ["diff-finalized", "succeeded"],
+      ["commands-settled", "succeeded"],
+      ["verification-settled", "succeeded"],
+      ["timeline-settled", "succeeded"],
+      ["projection-persisted", "succeeded"],
+    ]);
+    assert.equal(journalRun.quiescence.status, "ready");
+    assert.equal(journalProjection.reviews.find((review) => review.id === result.codingWorkspace.id).ready, true);
     discardCodingWorkspace(venture.id, result.codingWorkspace.id, options);
     cleanup();
   });
@@ -119,7 +182,8 @@ describe("Run-linked coding workspace", () => {
     fs.writeFileSync(path.join(repo, "product.txt"), "founder in progress\n");
     const workspace = openCodingWorkspace({
       ventureId: venture.id, runId: "drive-1234567890", threadRef: "thread:direction-one",
-      participantRef: "codex", provider: "codex", repository: repo, goal: "Implement proof", workRef: null,
+      participantRef: "codex", provider: "codex", repository: repo, goal: "Implement proof",
+      originMessageRef: "conversation:direction-one", workRef: null,
     }, options);
     assert.equal(fs.readFileSync(path.join(workspace.worktree, "product.txt"), "utf8"), "founder in progress\n", "the isolated baseline includes exact founder dirt");
     fs.writeFileSync(path.join(workspace.worktree, "product.txt"), "founder in progress\nimplemented\n");
@@ -127,22 +191,42 @@ describe("Run-linked coding workspace", () => {
     updateCodingSession(venture.id, workspace.id, { runRef: "run:drive-1234567890", command: { command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "ok", verification: true } }, options);
     const settled = await settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-1234567890", outcome: { kind: "completed" } }, options);
     assert.equal(settled.status, "reviewable");
+    assert.equal(settled.checkpoints.at(-1).runRef, "run:drive-1234567890");
+    assert.equal(settled.checkpoints.at(-1).originMessageRef, "conversation:direction-one");
+    assert.equal(settled.checkpoints.at(-1).direction, "Implement proof");
     assert.match(settled.diff, /implemented/);
     assert.match(settled.diff, /proof\.txt/);
     assert.equal(fs.readFileSync(path.join(repo, "product.txt"), "utf8"), "founder in progress\n", "provider work never touches the source checkout");
     assert.equal(getSemanticModel(venture.id, options).objects.some((entry) => entry.id === `capability-${workspace.id}`), false, "a provisional interpretation does not silently change Product truth");
-    assert.deepEqual(settled.productConsequence.claims.map((claim) => claim.status), ["supported-by-implementation", "unsupported", "stale-not-identified"]);
-    const adopted = reviewCodingProductConsequence(venture.id, workspace.id, {
-      decision: "adopt",
-      capability: "Native coding works inside the founder thread",
-      releaseQuestion: "Which founders should receive this exact verified change first?",
-    }, { authority: "founder", id: "founder" }, options);
-    assert.equal(adopted.productConsequence.review.decision, "adopted");
-    const capability = getSemanticModel(venture.id, options).objects.find((entry) => entry.id === `capability-${workspace.id}`);
-    assert.equal(capability.name, "Native coding works inside the founder thread");
-    assert.equal(capability.assertion, "founder-asserted");
-    assert.equal(capability.properties.coding.releaseQuestion, "Which founders should receive this exact verified change first?");
-
+    assert.equal(settled.productConsequence, null, "a routine diff does not manufacture Product or market claims");
+    assert.deepEqual(settled.changeSummary, {
+      requestedOutcome: "Implement proof",
+      changedFiles: [{ status: "M", path: "product.txt" }, { status: "A", path: "proof.txt" }],
+      verification: [
+        { command: "npm test", kind: "provider-command", status: "passed", exitCode: 0, runRef: "run:drive-1234567890" },
+        { command: "git diff --check", kind: "host", status: "passed", exitCode: 0, runRef: "run:drive-1234567890" },
+      ],
+    });
+    const comment = addCodingReviewComment(venture.id, workspace.id, {
+      checkpointId: settled.checkpoints.at(-1).id,
+      path: "product.txt",
+      startLine: 2,
+      selectedText: "implemented",
+      body: "Keep this exact implementation.",
+      messageRef: "conversation:correction-one",
+    }, options);
+    assert.equal(comment.comment.anchor.path, "product.txt");
+    assert.equal(comment.comment.anchor.startLine, 2);
+    const compared = compareCodingWorkspaceCheckpoints(
+      venture.id,
+      workspace.id,
+      "baseline",
+      settled.checkpoints.at(-1).id,
+      options,
+    );
+    assert.equal(compared.to.runRef, "run:drive-1234567890");
+    assert.equal(compared.to.originMessageRef, "conversation:direction-one");
+    assert.equal(compared.to.direction, "Implement proof");
     reviewCodingWorkspace(venture.id, workspace.id, "approve", "Exact patch reviewed", options);
     const applied = applyCodingWorkspace(venture.id, workspace.id, options);
     assert.equal(applied.status, "applied");
@@ -155,12 +239,14 @@ describe("Run-linked coding workspace", () => {
     const restored = restoreCodingWorkspaceCheckpoint(venture.id, workspace.id, "baseline", options);
     assert.equal(restored.status, "no-change");
     assert.equal(restored.consequence, null, "restoring repository state invalidates prior review");
+    assert.equal(restored.checkpoints.length, settled.checkpoints.length + 1, "restore appends an audit receipt instead of rewriting checkpoint history");
     assert.equal(restored.checkpoints.at(-1).restoredFrom, "baseline");
+    assert.equal(restored.checkpoints.at(-1).restoredBy, "founder");
     discardCodingWorkspace(venture.id, workspace.id, options);
     cleanup();
   });
 
-  it("keeps revised and rejected coding interpretations outside canonical Product truth", async () => {
+  it("keeps an explicitly supplied coding interpretation provisional until founder adoption", async () => {
     const { repo, options, venture, cleanup } = fixture();
     const workspace = openCodingWorkspace({
       ventureId: venture.id, runId: "drive-product-review", threadRef: "thread:product-review",
@@ -168,7 +254,20 @@ describe("Run-linked coding workspace", () => {
     }, options);
     fs.writeFileSync(path.join(workspace.worktree, "product.txt"), "hello\nreviewable\n");
     updateCodingSession(venture.id, workspace.id, { runRef: "run:drive-product-review", command: { command: "npm test", status: "passed", exitCode: 0, completedAt: new Date().toISOString(), output: "ok", verification: true } }, options);
-    await settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-product-review", outcome: { kind: "completed" } }, options);
+    const settled = await settleCodingWorkspace(venture.id, workspace.id, { runRef: "run:drive-product-review", outcome: { kind: "completed" } }, options);
+    assert.equal(settled.productConsequence, null);
+    setVentureDoc(venture.id, "codeWorkspaces", workspace.id, {
+      ...settled,
+      productConsequence: {
+        capability: "Faster first value",
+        system: ["product.txt"],
+        claims: [{
+          status: "source-bearing-proposal",
+          statement: "The exact implementation may reduce the first-use delay; user evidence is still required.",
+        }],
+        releaseQuestion: "Who needs this proof?",
+      },
+    }, options);
     const revised = reviewCodingProductConsequence(venture.id, workspace.id, {
       decision: "revise", capability: "Faster first value", releaseQuestion: "Who needs this proof?",
     }, { authority: "founder", id: "founder" }, options);

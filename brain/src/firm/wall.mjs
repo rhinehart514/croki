@@ -31,6 +31,8 @@ import { stampDeployContract } from "./deploy-contract.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
 import { loadWork, saveWork } from "./work-loop-state.mjs";
 import { applyProviderInterventionDecision } from "./provider-interventions.mjs";
+import { recordInterventionTranscript } from "./founder-turn-queue.mjs";
+import { recordInterventionResolved } from "./work-journal-runtime.mjs";
 
 function genId(prefix) {
   const stamp = now().replace(/\D/g, "").slice(0, 14);
@@ -355,6 +357,10 @@ export function decide(
   }
 
   const decided = saveItem(ventureId, receipt, options);
+  recordInterventionResolved(ventureId, decided, options);
+  if (item.effect?.kind === "provider-question" || item.effect?.kind === "provider-permission") {
+    recordInterventionTranscript(ventureId, item, decision, normalizedNote, options);
+  }
   emitFirmEvent(trimOrNull(ventureId), "wall", { betId: item.betId });
   return decided;
 }

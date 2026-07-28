@@ -6,18 +6,19 @@ import type { FirmActiveDrive } from "@/api";
 import type { DriveReceipt } from "./driveReceipt";
 
 const EMPTY_SUGGESTIONS = [
-  "Find the strongest next move",
-  "Find the first 20 customers",
-  "Sharpen the pitch",
-  "Audit the first-run experience",
+  "Fix a bug in this project",
+  "Build a feature from this description",
+  "Review this repository",
+  "Explain how this code works",
 ];
 
 export function NowComposerFooter({
-  showChips, readOnly, readOnlyReason, busy, error, recording, submissionMode, route,
+  showChips, readOnly, readOnlyReason, busy, error, recording, voiceIssue, submissionMode, route,
   activeDrive, stopRequested, hasDraft = false, receipt, onPickSuggestion, onOpenResult,
 }: {
   showChips: boolean; readOnly: boolean; readOnlyReason?: string | null; busy: boolean;
-  error: string | null; recording: boolean; submissionMode: "auto" | "conversation" | "work" | "product-gtm";
+  error: string | null; recording: boolean; voiceIssue?: string | null;
+  submissionMode: "auto" | "conversation" | "work";
   route: string; activeDrive?: FirmActiveDrive | null; stopRequested: boolean; hasDraft?: boolean;
   receipt: DriveReceipt | null; onPickSuggestion: (intent: string) => void;
   onOpenResult?: (targetBetId: string | null) => void;
@@ -25,7 +26,7 @@ export function NowComposerFooter({
   return (
     <>
       <div className="now-composer-provenance" aria-hidden="true">
-        Croki chooses how to do the work. Nothing leaves without your decision.
+        Your selected Claude or Codex model works in this repository. You approve every outward action.
       </div>
 
       {showChips ? (
@@ -39,8 +40,9 @@ export function NowComposerFooter({
       ) : null}
 
       <div className="now-composer-feedback" aria-live="polite">
-        {recording ? <span role="status">Listening…</span> : null}
-        {busy ? <span role="status">{submissionMode === "work" ? "Starting coding work…" : submissionMode === "product-gtm" ? "Agents are shaping the workflow…" : submissionMode === "conversation" || route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
+        {recording ? <span className="now-composer-listening" role="status"><i aria-hidden="true" />Listening — speak naturally; your words appear above.</span> : null}
+        {!recording && voiceIssue && !error ? <span role="alert">{voiceIssue}</span> : null}
+        {busy ? <span role="status">{submissionMode === "work" ? "Starting work…" : submissionMode === "conversation" || route === "steer" ? "Sending…" : route === "correct" ? "Correcting…" : "Starting work…"}</span> : null}
         {!busy && activeDrive ? <span role="status">{stopRequested ? "Stopping at the next safe point…" : hasDraft ? "Your message will reach the running agent." : activeDrive.activity?.trim() || "Working… send a correction to steer, or stop the current step."}</span> : null}
         {error ? <span role="alert">{error}</span> : null}
         {readOnly && readOnlyReason && !error ? (

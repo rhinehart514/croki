@@ -1,19 +1,22 @@
-// Codex CLI adapter for teammate drives and isolated product changes. Both doors use the founder's
-// authenticated Codex subscription. Teammate drives are native resumable Codex sessions: they inherit
-// the founder's Codex configuration and receive the current direction's screened Croki tools as one
-// additional process-local MCP server. Product changes remain a narrower isolated-worktree capability.
-
+// Codex CLI adapter for native resumable drives and isolated product changes. It inherits founder
+// configuration and adds the current direction's screened Croki tools through a process-local MCP server.
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+import { runCodexAppServerTurn as runCodexAppServerProtocolTurn } from "./codex-app-server.mjs";
 import { findCodexBinary, hasCodexLogin } from "./codex-auth.mjs";
 import {
+  CODEX_NATIVE_FEATURES,
   codexFileChangeResults,
   createCodexTextStream,
   createCodexThinkingSpans,
   isVerificationCommand,
   notify,
   parseCodexEvent,
+  runCodexProductChange,
 } from "./codex-events.mjs";
 
 export {
@@ -23,17 +26,22 @@ export {
   hasCodexLogin,
 } from "./codex-auth.mjs";
 
-export { parseCodexEvent } from "./codex-events.mjs";
-
-export function buildCodexDriveArgs({ model, resumeId, mcpUrl, nativeCoding = false, effort = null, images = [] } = {}) {
+export {
+  buildCodexProductChangeArgs,
+  parseCodexEvent,
+  runCodexProductChange,
+} from "./codex-events.mjs";
+export {
+  buildCodexAppServerArgs,
+  createCodexAppServerClient,
+  decodeCodexAppServerNotification,
+  parseCodexAppServerMessage,
+} from "./codex-app-server.mjs";
+export function buildCodexDriveArgs({ model, resumeId, mcpUrl, nativeCoding = false, effort = null, images = [], outputSchemaPath = null } = {}) {
   const common = [
     "--json",
     "--skip-git-repo-check",
-    // Founder-selected reasoning effort, forwarded verbatim as a Codex config override. Croki stays
-    // model-agnostic here (it forwards the model slug the same way); the composer's model catalog owns
-    // which tier each model actually exposes — GPT-5.6 Sol reaches `max`, Terra/Luna top out at `xhigh` —
-    // so a level Codex would reject never leaves the picker. An unset choice omits the flag so Codex keeps
-    // its own configured default.
+    // Forward the founder-selected effort verbatim; omission preserves Codex's configured default.
     ...(effort ? ["-c", `model_reasoning_effort=${JSON.stringify(effort)}`] : []),
     ...(nativeCoding ? [
       "-s", "workspace-write",
@@ -45,6 +53,7 @@ export function buildCodexDriveArgs({ model, resumeId, mcpUrl, nativeCoding = fa
       "-c", "features.network_proxy.allow_upstream_proxy=false",
     ] : []),
     ...(mcpUrl ? ["-c", `mcp_servers.drover.url=${JSON.stringify(mcpUrl)}`] : []),
+    ...(outputSchemaPath ? ["--output-schema", outputSchemaPath] : []),
     ...images.flatMap((image) => ["--image", image]),
     ...(model ? ["-m", model] : []),
   ];
@@ -52,7 +61,6 @@ export function buildCodexDriveArgs({ model, resumeId, mcpUrl, nativeCoding = fa
     ? ["exec", "resume", ...common, resumeId, "-"]
     : ["exec", ...common, "-"];
 }
-
 function sendMcpJson(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
@@ -62,16 +70,12 @@ function sendMcpJson(res, status, payload) {
   });
   res.end(body);
 }
-
 async function readMcpBody(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
-
-// Codex receives Croki as one additional native MCP server. The bridge is process-local, binds only to
-// loopback on a random port, and uses an unguessable path. It exposes exactly the already-screened tools
-// from the current direction; it grants no founder decision or outward executor.
+// The loopback bridge uses an unguessable path and exposes only this direction's screened tools.
 export async function startCodexMcpBridge(ctx) {
   const toolMap = new Map((ctx.tools ?? []).map((tool) => [tool.name, tool]));
   let terminal = null;
@@ -158,6 +162,21 @@ export async function startCodexMcpBridge(ctx) {
 }
 
 function drivePrompt(ctx) {
+  if (ctx.directSdk) {
+    return [
+      ctx.system,
+      "",
+      "This is the founder's coding Thread inside the native Codex harness. Use your normal Codex configuration, project rules, tools, skills, apps, plugins, hooks, browser, and configured MCP servers.",
+      (ctx.tools ?? []).length
+        ? "Croki adds only the bounded tools exposed for this exact Thread and target. They grant no outward authority."
+        : "",
+      ctx.nativeCoding
+        ? "You are in a Croki-owned isolated worktree. Implement and verify here. Do not commit, merge, push, create a pull request, deploy, or apply changes to another workspace; Croki presents those exact consequences to the founder."
+        : "",
+      "",
+      `Founder's request: ${ctx.goal}`,
+    ].filter(Boolean).join("\n");
+  }
   return [
     ctx.system,
     "",
@@ -200,13 +219,27 @@ export async function runCodexDriveTurn({
   onToolResult = null,
   onThinking = null,
   onUsage = null,
+  outputSchema = null,
 } = {}) {
   const binary = findCodexBinary(env);
   if (!binary.ok) return { threadId: null, text: "", error: binary.reason };
   const bridge = tools.length && typeof runTool === "function"
     ? await startBridge({ tools, runTool, onToolStart, onToolError, onTurn, maxSteps })
     : null;
-  const args = buildCodexDriveArgs({ model, resumeId, mcpUrl: bridge?.url, nativeCoding, effort, images });
+  const schemaDirectory = outputSchema
+    ? fs.mkdtempSync(path.join(os.tmpdir(), "croki-canvas-output-"))
+    : null;
+  const outputSchemaPath = schemaDirectory ? path.join(schemaDirectory, "schema.json") : null;
+  if (outputSchemaPath) fs.writeFileSync(outputSchemaPath, `${JSON.stringify(outputSchema)}\n`, "utf8");
+  const args = buildCodexDriveArgs({
+    model,
+    resumeId,
+    mcpUrl: bridge?.url,
+    nativeCoding,
+    effort,
+    images,
+    outputSchemaPath,
+  });
   const effectiveTimeoutMs = Number(timeoutMs) || Number(env.GTM_IDE_CODEX_TIMEOUT_MS) || (nativeCoding ? 30 * 60_000 : 600_000);
   return new Promise((resolve) => {
     const child = spawnProcess(binary.path, args, {
@@ -220,6 +253,7 @@ export async function runCodexDriveTurn({
     const messages = createCodexTextStream();
     const thinking = createCodexThinkingSpans();
     let text = "";
+    let latestText = "";
     let terminalError = "";
     let settled = false;
     let timedOut = false;
@@ -242,8 +276,12 @@ export async function runCodexDriveTurn({
       if (forceKill) clearTimeout(forceKill);
       signal?.removeEventListener?.("abort", abortFromHost);
       const completed = { ...result, terminal: bridge?.terminal() ?? null };
-      if (!bridge) resolve(completed);
-      else bridge.close().then(() => resolve(completed), () => resolve(completed));
+      const settle = () => {
+        if (schemaDirectory) fs.rmSync(schemaDirectory, { recursive: true, force: true });
+        resolve(completed);
+      };
+      if (!bridge) settle();
+      else bridge.close().then(settle, settle);
     };
     const consume = (line) => {
       const event = parseCodexEvent(line);
@@ -257,7 +295,8 @@ export async function runCodexDriveTurn({
       if (event?.type === "text" && event.text) {
         const fold = messages.push(event);
         text = fold.text;
-        if (fold.delta) notify(onTextDelta, fold.delta);
+        latestText = event.text;
+        if (fold.delta && !outputSchema) notify(onTextDelta, fold.delta);
       }
       if (event?.type === "reasoning-start") for (const span of thinking.start(event.id)) notify(onThinking, span);
       if (event?.type === "reasoning-stop") for (const span of thinking.stop(event.id)) notify(onThinking, span);
@@ -303,6 +342,13 @@ export async function runCodexDriveTurn({
       if (cancelled || signal?.aborted || isCancelled()) finish({ threadId, text, error: "cancelled" });
       else if (timedOut) finish({ threadId, text, error: "Codex reached the teammate time limit." });
       else if (terminalError) finish({ threadId, text, error: terminalError });
+      else if (code === 0 && outputSchema) {
+        try {
+          finish({ threadId, text, structuredOutput: JSON.parse(latestText || text), error: null });
+        } catch {
+          finish({ threadId, text: "", structuredOutput: null, error: "Codex returned an invalid Canvas projection." });
+        }
+      }
       else if (code === 0) finish({ threadId, text, error: null });
       else finish({ threadId, text, error: stderr.trim().slice(-2_000) || `Codex exited with status ${code}.` });
     });
@@ -310,100 +356,31 @@ export async function runCodexDriveTurn({
   });
 }
 
-// Product changes use the same authenticated Codex adapter but a different, intentionally
-// tiny door from the teammate MCP runtime: the isolated worktree is writable, while shell,
-// apps, network, inherited MCP servers, hooks, and approvals are disabled. Codex can use its
-// built-in patch tool; it cannot execute generated code or reach an outward action.
-export function buildCodexProductChangeArgs({ prompt, model }) {
-  return [
-    "exec",
-    "--json",
-    "--ephemeral",
-    "--ignore-user-config",
-    "--ignore-rules",
-    "--strict-config",
-    "-s", "workspace-write",
-    "-c", 'approval_policy="never"',
-    "-c", "features.shell_tool=false",
-    "-c", "features.unified_exec=false",
-    "-c", "features.apps=false",
-    "-c", "features.hooks=false",
-    "-c", "features.plugin_sharing=false",
-    "-c", "features.computer_use=false",
-    "-c", "features.browser_use=false",
-    "-c", "features.in_app_browser=false",
-    "-c", "features.network_proxy.enabled=false",
-    ...(model ? ["-m", model] : []),
-    prompt,
-  ];
-}
-
-export async function runCodexProductChange({
-  prompt,
-  cwd,
-  model,
-  env = process.env,
-  spawnProcess = spawn,
-  timeoutMs = Number(env.GTM_IDE_CODEX_TIMEOUT_MS) || 600_000,
+// The interactive app-server provider door reuses the exact screened MCP bridge and founder wall.
+// Product changes keep their intentionally narrower exec door below.
+export async function runCodexAppServerTurn({
+  tools = [],
+  runTool,
+  onToolStart,
+  onToolError,
+  onTurn,
+  maxSteps,
+  startBridge = startCodexMcpBridge,
+  ...input
 } = {}) {
-  const binary = findCodexBinary(env);
-  if (!binary.ok) return { text: "", error: { kind: "unavailable", message: binary.reason } };
-  const args = buildCodexProductChangeArgs({ prompt, model });
-  return new Promise((resolve) => {
-    const child = spawnProcess(binary.path, args, {
-      cwd,
-      env: { ...env },
-      stdio: ["ignore", "pipe", "pipe"],
+  const bridge = tools.length && typeof runTool === "function"
+    ? await startBridge({ tools, runTool, onToolStart, onToolError, onTurn, maxSteps })
+    : null;
+  try {
+    const result = await runCodexAppServerProtocolTurn({
+      ...input,
+      mcpUrl: bridge?.url ?? null,
+      onToolStart,
     });
-    let stdout = "";
-    let stderr = "";
-    const messages = createCodexTextStream();
-    let text = "";
-    let terminalError = "";
-    let settled = false;
-    let timedOut = false;
-    let forceKill = null;
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (forceKill) clearTimeout(forceKill);
-      resolve(result);
-    };
-    const consume = (line) => {
-      const event = parseCodexEvent(line);
-      // The product-change door has no live channel, but it has the same several-message turn: the
-      // change note the founder reads is the whole turn, not whichever message happened to be last.
-      if (event?.type === "text" && event.text) text = messages.push(event).text;
-      if (event?.type === "completed" && event.summary) text ||= String(event.summary);
-      if (event?.type === "error") terminalError = String(event.message || "Codex failed.");
-    };
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      child.kill?.("SIGTERM");
-      // Do not hand the worktree back to feature-builder while the writer may still be alive.
-      // A resistant child gets a bounded grace period, then SIGKILL; settlement happens on close.
-      forceKill = setTimeout(() => child.kill?.("SIGKILL"), 2_000);
-      if (typeof forceKill.unref === "function") forceKill.unref();
-    }, timeoutMs);
-    child.stdout?.setEncoding?.("utf8");
-    child.stdout?.on?.("data", (chunk) => {
-      stdout += chunk;
-      const lines = stdout.split("\n");
-      stdout = lines.pop() ?? "";
-      for (const line of lines) consume(line);
-    });
-    child.stderr?.setEncoding?.("utf8");
-    child.stderr?.on?.("data", (chunk) => { stderr += chunk; });
-    child.on("error", (error) => finish({ text, error: { kind: "error", message: error.message } }));
-    child.on("close", (code) => {
-      if (stdout.trim()) consume(stdout);
-      if (timedOut) finish({ text, error: { kind: "budget", message: "Codex reached the product-change time limit and was stopped before the worktree was inspected." } });
-      else if (terminalError) finish({ text, error: { kind: "error", message: terminalError } });
-      else if (code === 0) finish({ text, error: null });
-      else finish({ text, error: { kind: "error", message: stderr.trim().slice(-2_000) || `Codex exited with status ${code}.` } });
-    });
-  });
+    return { ...result, terminal: bridge?.terminal() ?? null };
+  } finally {
+    if (bridge) await bridge.close();
+  }
 }
 
 function unavailableReason(env, probe) {
@@ -418,16 +395,19 @@ export const codexRuntime = {
   id: "codex",
   label: "Codex",
   supportsAbort: true,
+  nativeFeatures: CODEX_NATIVE_FEATURES,
 
   async runProductChange(input) {
     return runCodexProductChange(input);
   },
 
   async drive(ctx) {
-    const runTurn = ctx.runCodexTurn ?? runCodexDriveTurn;
+    // Tests and explicit compatibility callers can still inject the JSONL exec turn. Native
+    // interactive Work uses app-server so child threads, steering, and interrupt remain first-class.
+    const runTurn = ctx.runCodexTurn ?? runCodexAppServerTurn;
     let resumeId = ctx.runtimeSessionId ?? null;
     let prompt = resumeId ? (ctx.resumePrompt || "Continue from where you left off.") : drivePrompt(ctx);
-    let coldRetryAvailable = Boolean(resumeId);
+    let coldRetryAvailable = Boolean(resumeId) && ctx.exactResumeOnly !== true;
 
     while (true) {
       if (ctx.isCancelled()) return { kind: "cancelled" };
@@ -458,6 +438,9 @@ export const codexRuntime = {
         onToolResult: ctx.onToolResult,
         onThinking: ctx.onThinking,
         onUsage: ctx.onUsage,
+        onNestedTask: ctx.onNestedTask,
+        onControl: ctx.onRunHandle,
+        outputSchema: ctx.outputSchema ?? null,
         images: (ctx.attachments ?? []).map((attachment) => attachment.path),
       });
       if (turn.error === "cancelled") return { kind: "cancelled" };
@@ -477,9 +460,15 @@ export const codexRuntime = {
       }
       if (turn.terminal === "paused") return { kind: "paused" };
       if (turn.terminal === "budget") return { kind: "budget" };
-      const summary = String(turn.text ?? "").trim() || "Codex finished the session.";
-      ctx.onText?.(summary);
-      return { kind: "completed", summary };
+      const summary = ctx.outputSchema
+        ? String(turn.structuredOutput?.summary ?? "").trim() || "Canvas view prepared."
+        : String(turn.text ?? "").trim() || "Codex finished the session.";
+      if (!ctx.outputSchema) ctx.onText?.(summary);
+      return {
+        kind: "completed",
+        summary,
+        ...(ctx.outputSchema ? { structuredOutput: turn.structuredOutput ?? null } : {}),
+      };
     }
   },
 

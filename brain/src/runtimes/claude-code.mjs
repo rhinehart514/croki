@@ -1,22 +1,10 @@
-// Preferred local Claude Agent SDK adapter. Claude retains its native agent loop, tools,
-// configuration, skills, agents, plugins, and MCP servers; Croki owns durable state, cancellation,
-// recovery, and founder authority. The bundled executable uses the founder's existing Claude login
-// or API key, with GTM_IDE_CLAUDE_CODE_PATH retained as an explicit override.
-
-import {
-  createSdkMcpServer,
-  query as agentQuery,
-  tool as sdkTool,
-} from "@anthropic-ai/claude-agent-sdk";
+// Native Claude Agent SDK adapter. Claude retains its loop, tools, configuration, and extensions;
+// Croki owns durable state, cancellation, recovery, and founder authority.
+import { createSdkMcpServer, query as agentQuery, tool as sdkTool } from "@anthropic-ai/claude-agent-sdk";
 import { runClaudeQuery } from "../model-query.mjs";
 import { z } from "zod";
-import {
-  authModeLabel,
-  detectClaudeAuth,
-  findClaudeBinary,
-  hasStoredClaudeLogin,
-} from "./claude-code-auth.mjs";
-import { createPartialDispatch, createPromptQueue, liveRunHandle, parseStreamLine, reportDriveUsage, reportTodoWrite, reportToolResult, sdkUserMessage, toolSummary, toolTarget } from "./claude-stream.mjs";
+import { authModeLabel, detectClaudeAuth, findClaudeBinary, hasStoredClaudeLogin } from "./claude-code-auth.mjs";
+import { CLAUDE_NATIVE_FEATURES, conciseProcessError, createNestedTaskDispatch, createPartialDispatch, createPromptQueue, liveRunHandle, nativeSourceRequest, parseStreamLine, reportDriveUsage, reportTodoWrite, reportToolResult, sdkUserMessage, toolSummary, toolTarget } from "./claude-stream.mjs";
 
 export {
   authModeLabel,
@@ -25,29 +13,38 @@ export {
   hasStoredClaudeLogin,
 } from "./claude-code-auth.mjs";
 export { parseStreamLine } from "./claude-stream.mjs";
-
 const BRIDGE_SERVER = "drover-firm";
-
-// Firm tools are all read/patch/run/ask/complete — none send, publish, or
-// clear the wall. We still funnel the allow-list through one builder so the
-// safety property is asserted in one place.
+// Firm tools never send, publish, or clear the wall.
 export function firmAllowedTools(toolNames, server = BRIDGE_SERVER) {
   return toolNames.map((name) => `mcp__${server}__${name}`);
 }
-
-// The composer IS the Claude harness (founder decision, 2026-07-01). Full mode is a real native
-// Claude Code session, not a hand-picked imitation: the default toolset (including Bash, Write,
-// and Edit), all normal user/project/local settings, CLAUDE.md files, skills, agents, plugins, and
-// configured MCP servers remain available. Croki adds its screened MCP server to that harness.
-// Those Croki tools keep founder-only outward authority; the founder's own Claude Code policy
-// remains authoritative for native tools and integrations. GTM_FIRM_HARNESS=caged (or
-// ctx.options.harness === "caged") retains the prior bridge-only compatibility mode.
-
+// Full mode is the native Claude Code harness plus Croki's screened MCP server; founder policy remains
+// authoritative. GTM_FIRM_HARNESS=caged retains the bridge-only compatibility mode.
 export function firmHarnessMode(ctx = {}, env = process.env) {
   const explicit = ctx.options?.harness ?? env.GTM_FIRM_HARNESS;
   return explicit === "caged" ? "caged" : "full";
 }
-
+function fullHarnessSystemPrompt(ctx) {
+  if (!ctx.directSdk) {
+    return `${ctx.system}\n\nThis is a Croki teammate session inside the founder's full native Claude Code harness. Use the native tools, settings, skills, agents, plugins, and configured MCP servers normally. Use the added Croki MCP tools for Croki venture truth, durable work, and any Croki-owned outward staging. Those tools cannot approve, send, or publish on the founder's behalf; only the founder resolves a Croki wall.${ctx.nativeCoding ? " You are in a Croki-owned isolated worktree. Implement and verify here, but do not commit, merge, push, create a pull request, deploy, or apply changes elsewhere; Croki presents those consequences to the founder. For local UI and browser verification, use Croki's preview_open, preview_navigate, preview_click, preview_type, preview_press, preview_scroll, preview_snapshot, preview_evaluate, and preview_wait_for tools. They drive the preview visible in this Work thread; do not launch a separate browser or browser-automation session." : " Native tools and integrations remain governed by the founder's own Claude Code policy."}`;
+  }
+  const toolNames = new Set((ctx.tools ?? []).map((tool) => tool.name));
+  const hasPreview = [...toolNames].some((name) => name.startsWith("preview_"));
+  return [
+    ctx.system,
+    "",
+    "This is the founder's coding Thread inside the full native Claude Code harness. Use your normal tools, project instructions, settings, skills, agents, plugins, and configured MCP servers.",
+    toolNames.size
+      ? "Croki adds only the bounded tools exposed for this exact Thread and target. They grant no outward authority."
+      : "",
+    ctx.nativeCoding
+      ? "You are in a Croki-owned isolated worktree. Implement and verify here, but do not commit, merge, push, create a pull request, deploy, or apply changes elsewhere; Croki presents those exact consequences to the founder."
+      : "",
+    hasPreview
+      ? "For local UI verification, use the provided preview tools when they are useful; they drive the preview visible in this Thread."
+      : "",
+  ].filter(Boolean).join("\n");
+}
 // Build the headless `claude` argument vector. Isolated so the exact flags are
 // trivially auditable and adjustable against the installed CLI version.
 export function buildClaudeArgs({ mcpConfigPath, allowedTools, model, maxTurns, harness = "full" }) {
@@ -64,23 +61,13 @@ export function buildClaudeArgs({ mcpConfigPath, allowedTools, model, maxTurns, 
   if (maxTurns) args.push("--max-turns", String(maxTurns));
   return args;
 }
-
-// The MODEL's per-drive turn budget — decoupled from the teammate step budget (Wave 6). Generous by
-// default so a real multi-step drive can think, and floored at 8 on a resume so a wall-resume re-draft
-// always has room. Overridable via env for tuning. Never derived from maxSteps/stepCount — that
-// coupling was the "max turns (2)" leak; the teammate's own step guard is the cross-cycle throttle.
+// Per-drive model turns are independent of the teammate step budget; resumes retain room to re-draft.
 export function modelMaxTurns(ctx, isResume) {
   const base = Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_TURNS) || 40;
   const floor = isResume ? 8 : 1;
   return Math.max(floor, base);
 }
-
-// The per-drive dollar cap, made session-total-aware. Each drive may spend up to the per-drive cap, but
-// never more than what remains of the session's total budget (sessionBudget − spentSoFar, both in USD).
-// spentSoFar is the cumulative cost prior drives reported back through ctx.onCost; 0 on the first drive.
-// This makes ONE real dollar figure the throttle for a whole multi-drive run, instead of an unbounded
-// fresh $5 every drive. A configured participant rail may narrow it further; work-loop rejects a drive
-// before this adapter when nothing remains.
+// Cap each drive by both remaining session spend and the configured participant rail.
 export function driveBudgetUsd(ctx) {
   const perDrive = Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_BUDGET_USD) || 5;
   const sessionCap = Number(process.env.GTM_IDE_CLAUDE_CODE_SESSION_BUDGET_USD) || 25;
@@ -91,25 +78,9 @@ export function driveBudgetUsd(ctx) {
     : Number.POSITIVE_INFINITY;
   return Math.min(perDrive, remaining, configuredRemaining);
 }
-
-function conciseProcessError(raw) {
-  const clean = String(raw ?? "").trim();
-  if (!clean) return "";
-  const marker = clean.lastIndexOf("\nerror:");
-  const relevant = marker >= 0 ? clean.slice(marker + 1) : clean.slice(-1_200);
-  return relevant.split("\n").slice(0, 7).join("\n").slice(0, 1_200);
-}
-
-// Every status that must HALT the subprocess drive. The adapter polls ctx.currentStatus()
-// after each SDK message because MCP tools execute out-of-band, so a wall the founder must
-// resolve has to appear here or the model keeps talking past it and the turn-end is misread
-// as "completed" (which then clobbers the pending wall). waiting_for_proposal is a wall:
-// a staged change waits for the founder's accept/discard at the wall.
+// Halt after an out-of-band MCP tool parks at the founder wall.
 export const PAUSE_STATUSES = new Set(["paused"]);
-
-// A resume can fail when the prior on-disk transcript is gone — cleared, expired, or the session
-// was created on another machine/cwd. Detect that narrowly so we only fall back to a cold start
-// for a genuine missing-session error, not for an unrelated failure we should surface.
+// Only a genuinely missing prior transcript may fall back from resume.
 export function isResumeFailure(error) {
   const message = (error instanceof Error ? error.message : String(error || "")).toLowerCase();
   return /resume|session/.test(message) && /not found|no longer|does not exist|missing|unknown|no conversation|cannot/.test(message);
@@ -182,6 +153,7 @@ export const claudeCodeRuntime = {
   label: "Claude Code (Agent SDK)",
   costReporting: "usd",
   supportsAbort: true,
+  nativeFeatures: CLAUDE_NATIVE_FEATURES,
 
   // A deliberately smaller capability than `drive`: edit inert files inside one isolated
   // worktree and return prose. The host owns the worktree, receipt, git checks, and wall.
@@ -248,7 +220,7 @@ export const claudeCodeRuntime = {
   async drive(ctx) {
     const harness = firmHarnessMode(ctx);
     const allowedTools = firmAllowedTools((ctx.tools ?? []).map((tool) => tool.name));
-    const sdkServer = createFirmSdkServer(ctx);
+    const sdkServer = (ctx.tools ?? []).length ? createFirmSdkServer(ctx) : null;
     const runQuery = ctx.query || agentQuery;
     const reportSession = typeof ctx.onRuntimeSession === "function" ? ctx.onRuntimeSession : () => {};
 
@@ -302,8 +274,18 @@ export const claudeCodeRuntime = {
       const promptText = resumeId
         ? (ctx.resumePrompt || "Continue from where you left off.")
         : ctx.goal;
-      queue.push(sdkUserMessage(promptText, ctx.attachments ?? []));
-      const dispatchPartial = createPartialDispatch(ctx);
+      // A fresh goal and an ordinary directed resume are founder-authored. A mechanical exact
+      // recovery or our generated "continue" fallback is not; leaving origin absent prevents those
+      // provider/system continuations from accidentally opting into a keyword-triggered workflow.
+      const humanOrigin = !resumeId || (Boolean(ctx.resumePrompt) && ctx.exactResumeOnly !== true);
+      queue.push(sdkUserMessage(promptText, ctx.attachments ?? [], { human: humanOrigin }));
+      const dispatchPartial = createPartialDispatch(
+        ctx.outputSchema ? { ...ctx, onTextDelta: null } : ctx,
+      );
+      const nestedTasks = createNestedTaskDispatch(ctx);
+      const maybeClosePrompt = () => {
+        if (terminalResult && queue.size === 0 && nestedTasks.activeTaskIds.size === 0) queue.close();
+      };
 
       try {
         const stream = runQuery({
@@ -329,16 +311,20 @@ export const claudeCodeRuntime = {
             // reported back via ctx.onCost). So a long multi-drive run is bounded by ONE real dollar cap
             // instead of an unbounded per-drive $5 each time.
             maxBudgetUsd: driveBudgetUsd(ctx),
+            ...(ctx.outputSchema
+              ? { outputFormat: { type: "json_schema", schema: ctx.outputSchema } }
+              : {}),
             systemPrompt: harness === "full"
               ? {
                   type: "preset",
                   preset: "claude_code",
-                  append: `${ctx.system}\n\nThis is a Croki teammate session inside the founder's full native Claude Code harness. Use the native tools, settings, skills, agents, plugins, and configured MCP servers normally. Use the added Croki MCP tools for Croki venture truth, durable work, and any Croki-owned outward staging. Those tools cannot approve, send, or publish on the founder's behalf; only the founder resolves a Croki wall.${ctx.nativeCoding ? " You are in a Croki-owned isolated worktree. Implement and verify here, but do not commit, merge, push, create a pull request, deploy, or apply changes elsewhere; Croki presents those consequences to the founder. For local UI and browser verification, use Croki's preview_open, preview_navigate, preview_click, preview_type, preview_press, preview_scroll, preview_snapshot, preview_evaluate, and preview_wait_for tools. They drive the preview visible in this Work thread; do not launch a separate browser or browser-automation session." : " Native tools and integrations remain governed by the founder's own Claude Code policy."}`,
+                  append: fullHarnessSystemPrompt(ctx),
                 }
               : ctx.system,
             tools: harness === "full" ? { type: "preset", preset: "claude_code" } : [],
             allowedTools,
-            permissionMode: harness === "full" ? "auto" : "dontAsk",
+            permissionMode: ctx.interactionMode === "plan" ? "plan"
+              : harness === "full" ? "auto" : "dontAsk",
             ...(ctx.canUseTool || ctx.nativeCoding || ctx.onProviderIntervention
               ? { canUseTool: claudePermissionHandler(ctx) }
               : {}),
@@ -362,9 +348,7 @@ export const claudeCodeRuntime = {
             ...(resumeId && ctx.resumeSessionAt ? { resumeSessionAt: ctx.resumeSessionAt } : {}),
             pathToClaudeCodeExecutable: ctx.env?.GTM_IDE_CLAUDE_CODE_PATH || undefined,
             env: childEnv,
-            mcpServers: {
-              [BRIDGE_SERVER]: sdkServer,
-            },
+            ...(sdkServer ? { mcpServers: { [BRIDGE_SERVER]: sdkServer } } : {}),
             stderr: (line) => stderr.push(line),
           },
         });
@@ -372,7 +356,11 @@ export const claudeCodeRuntime = {
         // Live controls for the duration of this turn: steer (same-turn prompt-queue push),
         // interrupt, setModel, setPermissionMode. The host registers/unregisters it so a founder
         // message into this Thread can reach the run while it is genuinely live.
-        ctx.onRunHandle?.(liveRunHandle({ queue, stream }));
+        ctx.onRunHandle?.(liveRunHandle({
+          queue,
+          stream,
+          activeTaskIds: nestedTasks.activeTaskIds,
+        }));
 
         for await (const message of stream) {
           // Capture the session id from the first message that carries one and
@@ -389,6 +377,7 @@ export const claudeCodeRuntime = {
           }
 
           dispatchPartial(message);
+          nestedTasks.dispatch(message);
 
           if (message.type === "assistant" && message.message?.content) {
             // The resume cursor's second half: remember the last assistant uuid so the next resume
@@ -397,7 +386,7 @@ export const claudeCodeRuntime = {
               ctx.onResumeCursor?.({ resumeSessionAt: message.uuid });
             }
             const parsed = parseStreamLine(JSON.stringify(message));
-            if (parsed?.text) ctx.onText(parsed.text);
+            if (parsed?.text && !ctx.outputSchema) ctx.onText(parsed.text);
             if (parsed?.toolUses?.length) {
               ctx.onTurn();
               for (const tool of parsed.toolUses) {
@@ -408,7 +397,13 @@ export const claudeCodeRuntime = {
                 // Track every tool that names a real subject, not just Bash, so its result comes
                 // back as a receipt carrying that exact target instead of vanishing.
                 const target = toolTarget(tool);
-                if (target && tool.id) pendingTools.set(tool.id, { name: tool.name, target, startedAt: new Date().toISOString() });
+                if (target && tool.id) pendingTools.set(tool.id, {
+                  id: tool.id,
+                  name: tool.name,
+                  target,
+                  source: nativeSourceRequest(tool),
+                  startedAt: new Date().toISOString(),
+                });
               }
             }
           }
@@ -424,11 +419,12 @@ export const claudeCodeRuntime = {
 
           if (message.type === "result") {
             terminalResult = message;
-            // The turn is answered. Close the long-lived queue so the agent loop can end — unless a
-            // steer is still queued locally, in which case the SDK pulls it next and this turn
-            // continues to its own terminal result.
-            if (queue.size === 0) queue.close();
+            // The main answer does not settle an attached background task. Leave input open until
+            // every nested task reaches a terminal SDK event, while still preserving same-turn
+            // steering already queued or pulled by the SDK.
+            maybeClosePrompt();
           }
+          if (message.type === "system") maybeClosePrompt();
 
           // MCP tool execution completes before the following SDK message is
           // yielded. Check every message so the wall reached by the bridge stops
@@ -477,7 +473,10 @@ export const claudeCodeRuntime = {
       }
       return {
         kind: "completed",
-        summary: terminalResult.result || "Claude Code finished the session.",
+        summary: terminalResult.structured_output?.summary
+          || (ctx.outputSchema ? "Canvas view prepared." : terminalResult.result)
+          || "Claude Code finished the session.",
+        ...(ctx.outputSchema ? { structuredOutput: terminalResult.structured_output ?? null } : {}),
       };
     };
 
@@ -488,7 +487,7 @@ export const claudeCodeRuntime = {
       // Resume failed because the prior transcript is gone — don't strand the
       // founder. Fall back ONCE to a fresh session that re-inspects from the
       // goal. Any other failure surfaces unchanged.
-      if (priorSessionId && isResumeFailure(error)) {
+      if (priorSessionId && isResumeFailure(error) && ctx.exactResumeOnly !== true) {
         ctx.onText?.("Previous conversation memory was unavailable, so the teammate is starting a fresh pass and re-inspecting from the goal.");
         return await attempt(null);
       }

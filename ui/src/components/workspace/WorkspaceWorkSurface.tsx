@@ -35,17 +35,24 @@ export function WorkspaceWorkSurface({
         readOnlyReason={readOnlyReason}
         renderPreview={(workspace) => (
           <WorkPreview
+            key={workspace.id}
+            ventureId={ventureId}
             workspaceId={workspace.id}
+            threadRef={workspace.threadRef}
             disabledReason={readOnlyReason}
             unavailableReason={unavailableReason(workspace)}
           />
         )}
-        renderTerminal={(workspace) => (
+        renderTerminal={(workspace, onStatus) => (
           <WorkTerminal
             ventureId={ventureId}
             workspaceId={workspace.id}
+            threadRef={workspace.threadRef}
+            betId={workspace.betId}
+            worktree={workspace.worktree}
             disabledReason={readOnlyReason}
             unavailableReason={unavailableReason(workspace)}
+            onStatus={onStatus}
           />
         )}
         onWorkspaceChanged={onChanged}

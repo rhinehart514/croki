@@ -222,8 +222,12 @@ const { beginActiveDrive, listActiveDrives } = await import("../../src/firm/acti
 const { appendConversationMessage } = await import("../../src/firm/conversation.mjs");
 const { driveTeammate } = await import("../../src/firm/work-loop.mjs");
 const { ensureDirectionThread, getSemanticModel, recordRun } = await import("../../src/firm/semantic-model-store.mjs");
-const { createVenture } = await import("../../src/firm/venture-store.mjs");
+const { createVenture, getVentureDoc, setVentureDoc } = await import("../../src/firm/venture-store.mjs");
 const { createWorkScope, listWorkScopes } = await import("../../src/firm/work-scopes.mjs");
+const { createBet } = await import("../../src/firm/bet.mjs");
+const { listQueuedFounderTurns, queueFounderTurn } = await import("../../src/firm/founder-turn-queue.mjs");
+const { recordAcceptedRun } = await import("../../src/firm/work-journal-runtime.mjs");
+const { createWorkJournal } = await import("../../src/firm/work-journal.mjs");
 
 async function call(method, pathname, body = {}, headers = {}) {
   const req = Readable.from([JSON.stringify(body)]);
@@ -317,16 +321,47 @@ test("rename changes the thread label without rewriting the founder message", as
   assert.equal(empty.status, 400);
 });
 
+test("queued founder turns are editable and removable only through their exact Thread", async () => {
+  const venture = createVenture({ name: "Edit queued turn" });
+  const bet = createBet({ ventureId: venture.id, intent: "Continue after permission", teammateRef: "codex" });
+  setVentureDoc(venture.id, "bets", bet.id, bet);
+  const message = appendConversationMessage({ ventureId: venture.id, role: "founder", content: "Start the work" });
+  const direction = ensureDirectionThread(venture.id, {
+    name: "Continue after permission",
+    identityKey: message.id,
+    originMessageRef: `conversation:${message.id}`,
+    subjectRefs: [`bet:${bet.id}`],
+  });
+  const turn = queueFounderTurn({ ventureId: venture.id, betId: bet.id, text: "Original follow-up", fromMessageId: message.id });
+  const threadId = direction.threadRef.replace(/^thread:/, "");
+  const restored = await call("GET", `/api/ventures/${venture.id}/threads/${threadId}/timeline`);
+  assert.deepEqual(restored.body.timeline.queuedFounderTurns.map((entry) => entry.text), ["Original follow-up"]);
+  const turnId = encodeURIComponent(turn.id);
+  const edited = await call("PUT", `/api/ventures/${venture.id}/threads/${threadId}/follow-ups/${turnId}`, {
+    betId: bet.id,
+    text: "Edited follow-up",
+  });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.body.turn.text, "Edited follow-up");
+  const removed = await call("DELETE", `/api/ventures/${venture.id}/threads/${threadId}/follow-ups/${turnId}?betId=${encodeURIComponent(bet.id)}`);
+  assert.equal(removed.status, 200);
+  assert.deepEqual(listQueuedFounderTurns(venture.id, bet.id), []);
+});
+
 test("deleting a chat stops its live runs, revokes continuing work, and removes the chat from Work", async () => {
   const venture = createVenture({ name: "Delete active chat" });
+  const bet = createBet({ ventureId: venture.id, intent: "Keep improving activation", teammateRef: "codex" });
+  setVentureDoc(venture.id, "bets", bet.id, bet);
   const message = appendConversationMessage({ ventureId: venture.id, role: "founder", content: "Keep improving activation" });
   const direction = ensureDirectionThread(venture.id, {
     name: "Improve activation",
     originMessageRef: `conversation:${message.id}`,
     identityKey: message.id,
+    subjectRefs: [`bet:${bet.id}`],
   });
-  const drive = beginActiveDrive({ ventureId: venture.id, teammateRef: "codex", runtime: "codex", abortSupported: true });
-  recordRun(venture.id, { id: drive.id, threadRef: direction.threadRef, originMessageRef: `conversation:${message.id}` });
+  queueFounderTurn({ ventureId: venture.id, betId: bet.id, text: "Must not run after deletion" });
+  const drive = beginActiveDrive({ ventureId: venture.id, teammateRef: "codex", betId: bet.id, runtime: "codex", abortSupported: true });
+  recordRun(venture.id, { id: drive.id, threadRef: direction.threadRef, originMessageRef: `conversation:${message.id}`, betRefs: [`bet:${bet.id}`] });
   const scope = createWorkScope({
     ventureId: venture.id,
     originThreadRef: direction.threadRef,
@@ -334,6 +369,14 @@ test("deleting a chat stops its live runs, revokes continuing work, and removes 
     objective: "Keep improving activation",
     resumeOnRestart: true,
     actor: { authority: "founder", id: "founder" },
+  });
+  recordAcceptedRun({
+    ventureId: venture.id,
+    runId: drive.id,
+    threadRef: direction.threadRef,
+  }, {
+    originMessageRef: `conversation:${message.id}`,
+    workScopeRef: `work-scope:${scope.id}`,
   });
 
   const threadId = direction.threadRef.replace(/^thread:/, "");
@@ -346,6 +389,14 @@ test("deleting a chat stops its live runs, revokes continuing work, and removes 
   assert.ok(listActiveDrives(venture.id).find((entry) => entry.id === drive.id)?.abortRequestedAt);
   assert.ok(listWorkScopes(venture.id).find((entry) => entry.id === scope.id)?.revokedAt);
   assert.ok(getSemanticModel(venture.id).threads.find((entry) => `thread:${entry.id}` === direction.threadRef)?.deletedAt);
+  assert.deepEqual(listQueuedFounderTurns(venture.id, bet.id), []);
+  assert.equal(getVentureDoc(venture.id, "bets", bet.id).work.queuedFounderTurns[0].state, "tombstoned");
+  assert.deepEqual(
+    createWorkJournal().events(venture.id)
+      .filter((event) => event.runId === drive.id && event.kind === "run-tombstoned")
+      .map((event) => event.payload.reasonCode),
+    ["thread-deleted", "scope-revoked"],
+  );
 
   const timeline = await call("GET", `/api/ventures/${venture.id}/threads/${threadId}/timeline`);
   assert.equal(timeline.status, 404);

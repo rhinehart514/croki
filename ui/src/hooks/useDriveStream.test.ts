@@ -127,13 +127,63 @@ describe("useDriveStream", () => {
     const { result } = open();
     act(() => connections[0].frame({
       frame: "snapshot",
-      snapshot: { seq: 4, text: "so far", thinking: { state: "start", durationMs: null }, tool: { name: "Read", partialInput: "{" }, todos: [{ content: "Ship it", status: "pending" }], children: { toolu_1: { text: "child text", tool: null, todos: [], children: {} } } },
+      snapshot: {
+        seq: 4,
+        text: "so far",
+        thinking: { state: "start", durationMs: null },
+        tool: { name: "Read", partialInput: "{" },
+        todos: [{ content: "Ship it", status: "pending" }],
+        children: { toolu_1: { text: "child text", tool: null, todos: [], children: {} } },
+        nestedTasks: { audit: { taskId: "audit", label: "Checking routes", status: "running", completedCount: 6, totalCount: 18 } },
+      },
     }));
     paint();
     expect(result.current.thinking?.active).toBe(true);
     expect(result.current.tool).toEqual({ name: "Read", partialInput: "{" });
     expect(result.current.todos).toEqual([{ content: "Ship it", status: "pending" }]);
     expect(result.current.children).toEqual([{ parentToolUseId: "toolu_1", text: "child text", tool: null, steps: [] }]);
+    expect(result.current.nestedTasks).toEqual([{ taskId: "audit", label: "Checking routes", status: "running", completedCount: 6, totalCount: 18 }]);
+  });
+
+  it("folds partial nested-work updates by task id without erasing earlier facts", () => {
+    const { result } = open();
+    delta(connections[0], {
+      seq: 1,
+      kind: "nested-task",
+      task: { taskId: "audit", label: "Checking routes", taskKind: "workflow", status: "running", completedCount: 0, totalCount: 18 },
+    });
+    delta(connections[0], {
+      seq: 2,
+      kind: "nested-task",
+      task: { taskId: "audit", completedCount: 6, totalTokens: 12_400, elapsedMs: 9_000 },
+    });
+    delta(connections[0], {
+      seq: 3,
+      kind: "nested-task",
+      task: { taskId: "review", parentToolUseId: "audit", label: "Verify permissions", status: "paused", error: "Waiting for approval", hidden: true },
+    });
+    paint();
+
+    expect(result.current.nestedTasks).toEqual([
+      {
+        taskId: "audit",
+        label: "Checking routes",
+        taskKind: "workflow",
+        status: "running",
+        completedCount: 6,
+        totalCount: 18,
+        totalTokens: 12_400,
+        elapsedMs: 9_000,
+      },
+      {
+        taskId: "review",
+        parentTaskId: "audit",
+        label: "Verify permissions",
+        status: "paused",
+        error: "Waiting for approval",
+        skipTranscript: true,
+      },
+    ]);
   });
 
   it("carries thinking as shape only, a forming tool call, settled steps, a plan, and subagent work", () => {

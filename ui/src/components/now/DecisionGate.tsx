@@ -166,7 +166,9 @@ export function DecisionGate({
       ) : null}
 
       <div className="now-gate-note">
-        Nothing changes until you decide here. Croki records the exact decision.
+        {isProviderPermission
+          ? "This permits only the named provider tool request. It never approves an outward action."
+          : "Nothing changes until you decide here. Croki records the exact decision."}
         {isDeploy ? " A deploy needs two acts: authorize it, then deploy." : ""}
       </div>
 

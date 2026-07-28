@@ -1,13 +1,46 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ThreadTimelineItem } from "@/api";
 import { ThreadMessage } from "./ThreadMessage";
+import { OPEN_TERMINAL_REFERENCE_EVENT, formatTerminalReference } from "@/components/work-mode/terminalReference";
+import { WORK_REVIEW_REQUEST_EVENT, type WorkReviewRequest } from "@/components/work-mode/previewPresentation";
 
 const open = vi.fn();
 const openThread = vi.fn();
 const item = (kind: ThreadTimelineItem["kind"], extra: Record<string, unknown> = {}): ThreadTimelineItem => ({ kind, id: `${kind}:one`, ref: `${kind}:one`, at: null, ...extra });
 
 describe("thread material grammar", () => {
+  it("opens a historic repository citation in contextual Review while leaving web links to Streamdown safety", async () => {
+    const requested = vi.fn();
+    window.addEventListener(WORK_REVIEW_REQUEST_EVENT, requested);
+    render(<ThreadMessage
+      surface="work"
+      repository="/Users/jacob/Projects/drover"
+      threadRef="thread:one"
+      item={item("message", {
+        role: "teammate",
+        participantRef: "codex",
+        content: "Read [the exact state](/Users/jacob/Projects/drover/docs/STATE.md:37) and [the website](https://example.com).",
+      })}
+      onOpenVisual={open}
+      onOpenThread={openThread}
+    />);
+
+    const citation = await screen.findByRole("link", { name: "the exact state" });
+    fireEvent.click(citation);
+    const detail = (requested.mock.calls[0]?.[0] as CustomEvent<WorkReviewRequest>).detail;
+    expect(detail).toMatchObject({
+      threadRef: "thread:one",
+      target: "repository",
+      repository: { path: "docs/STATE.md", startLine: 37, endLine: 37 },
+    });
+
+    fireEvent.click(screen.getByRole("link", { name: "the website" }));
+    expect(requested).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Open external link?")).toBeVisible();
+    window.removeEventListener(WORK_REVIEW_REQUEST_EVENT, requested);
+  });
+
   it("renders an observed journey attachment as exact Thread context, never as an image", () => {
     render(<ThreadMessage
       item={item("message", {
@@ -54,15 +87,30 @@ describe("thread material grammar", () => {
     expect(screen.getByText(prose.trim())).toBeInTheDocument();
   });
 
-  it("marks a streaming teammate turn as responding, but never a founder turn", () => {
+  it("animates only the arriving text in a streaming teammate turn", async () => {
     const { container, rerender } = render(<ThreadMessage item={item("message", { role: "teammate", participantRef: "codex", content: "Tracing the setup flow", streaming: true })} surface="work" onOpenVisual={open} onOpenThread={openThread} />);
-    expect(screen.getByText("Tracing the setup flow")).toBeInTheDocument();
+    await waitFor(() => expect(container.querySelector("[data-sd-animate]")).not.toBeNull());
+    expect(container.querySelector(".firm-app-message-response")).toHaveTextContent("Tracing the setup flow");
     expect(container.querySelector('.thread-message[data-streaming="true"]')).not.toBeNull();
     expect(container.querySelector(".thread-message-caret")).not.toBeNull();
     rerender(<ThreadMessage item={item("message", { role: "teammate", participantRef: "codex", content: "Done." })} surface="work" onOpenVisual={open} onOpenThread={openThread} />);
     expect(container.querySelector(".thread-message-caret")).toBeNull();
+    expect(container.querySelector("[data-sd-animate]")).toBeNull();
     rerender(<ThreadMessage item={item("message", { role: "founder", content: "Do it", streaming: true })} surface="work" onOpenVisual={open} onOpenThread={openThread} />);
     expect(container.querySelector('.thread-message[data-streaming="true"]')).toBeNull();
+    expect(container.querySelector("[data-sd-animate]")).toBeNull();
+  });
+
+  it("animates the forming reply carried by an active drive", async () => {
+    const { container } = render(<ThreadMessage surface="work" item={item("agent-status", {
+      participantRef: "codex",
+      state: "working",
+      summary: "Answering in this Thread",
+      startedAt: new Date().toISOString(),
+      liveText: "The response is forming here.",
+    })} onOpenVisual={open} onOpenThread={openThread} />);
+    await waitFor(() => expect(container.querySelector("[data-sd-animate]")).not.toBeNull());
+    expect(container.querySelector('.thread-message[data-streaming="true"]')).toHaveTextContent("The response is forming here.");
   });
 
   it("shows a live participant beat and elapsed work time", () => {
@@ -76,6 +124,21 @@ describe("thread material grammar", () => {
     render(<ThreadMessage surface="work" item={item("agent-status", { participantRef: "codex", state: "working", summary: "Thinking through the direction", startedAt: new Date(Date.now() - 4 * 60_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
     expect(screen.getByText(/Taking longer than usual · 4m/)).toBeInTheDocument();
     expect(screen.getByText("The work is still active. You can leave this thread and return when it finishes.")).toBeInTheDocument();
+  });
+
+  it("settles an invalid Canvas return with retained context and a frozen duration", () => {
+    render(<ThreadMessage surface="work" item={item("agent-status", {
+      participantRef: "codex",
+      state: "failed",
+      recoveryLayer: "canvas",
+      startedAt: "2026-07-19T10:04:00.000Z",
+      updatedAt: "2026-07-19T10:05:29.000Z",
+      recovery: "The provider return was not usable as a Canvas view. Send the direction again from this Thread.",
+    })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.getByText("Canvas return needs another pass")).toBeVisible();
+    expect(screen.getByText(/Failed · 1m 29s/)).toBeVisible();
+    expect(screen.getByText(/Your Thread and last Canvas were kept/)).toBeVisible();
+    expect(screen.queryByText(/The work is still active/)).toBeNull();
   });
 
   it("keeps Work progress in the response flow without presenting a Croki persona", () => {
@@ -160,8 +223,26 @@ describe("thread material grammar", () => {
     expect(screen.queryByRole("button", { name: "Copy message as Markdown" })).not.toBeInTheDocument();
   });
 
-  it("identifies the participating agent inside Product and GTM chat", () => {
-    render(<ThreadMessage surface="work" chatMode="product-gtm" item={item("agent-status", { participantRef: "founding-teammate", participantLabel: "Mara", state: "working", summary: "Shaping the evidence loop", startedAt: new Date(Date.now() - 12_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
+  it("reopens the exact selected terminal range from the founder turn", () => {
+    const reference = {
+      ref: "terminal:workspace-one:tests:range",
+      ventureId: "v1", workspaceId: "workspace-one", threadRef: "thread:one",
+      terminalId: "tests", terminalName: "Tests", text: "FAIL src/client.test.ts:42",
+      start: { x: 0, y: 4 }, end: { x: 26, y: 4 },
+    };
+    const reopened = vi.fn();
+    window.addEventListener(OPEN_TERMINAL_REFERENCE_EVENT, reopened, { once: true });
+    render(<ThreadMessage surface="work" item={item("message", {
+      role: "founder",
+      content: `${formatTerminalReference(reference)}\nFix this failure`,
+    })} onOpenVisual={open} onOpenThread={openThread} />);
+    expect(screen.queryByText(/terminal-ref:/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Tests · selected terminal output" }));
+    expect(reopened).toHaveBeenCalledTimes(1);
+  });
+
+  it("identifies an explicitly invoked specialist in contextual conversation", () => {
+    render(<ThreadMessage surface="context" item={item("agent-status", { participantRef: "founding-teammate", participantLabel: "Mara", state: "working", summary: "Shaping the evidence loop", startedAt: new Date(Date.now() - 12_000).toISOString() })} onOpenVisual={open} onOpenThread={openThread} />);
     expect(screen.getByText("Mara")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveAccessibleName(/^Mara: Shaping the evidence loop/);
   });

@@ -18,6 +18,13 @@ const { applyFirmConfiguration, getFirmConfiguration } = await import("../../src
 const { beginActiveDrive, noteDriveBeat, noteDriveText, noteDriveToolInput, __resetActiveDrives } = await import("../../src/firm/active-drives.mjs");
 const { appendEvent } = await import("../../src/firm/work-loop-tools.mjs");
 const { createWorkLoopReceipts } = await import("../../src/firm/work-loop-receipts.mjs");
+const {
+  persistRunJournalProjection,
+  recordAcceptedRun,
+  recordFactualActivity,
+  recordProviderSession,
+  recordRunInterrupted,
+} = await import("../../src/firm/work-journal-runtime.mjs");
 
 const options = { root };
 
@@ -61,6 +68,31 @@ describe("thread timeline projection", () => {
     assert.ok(timeline.items.some((item) => item.kind === "evidence"));
     assert.ok(timeline.visuals.some((item) => item.kind === "flow" && item.ref === `work:${fx.staged.id}`));
     assert.ok(timeline.visuals.some((item) => item.kind === "map"));
+  });
+
+  it("routes a stored project map through the provisional Canvas projection", () => {
+    const fx = fixture();
+    const legacy = {
+      id: "legacy-project-map",
+      title: "Repository shape",
+      content: {
+        kind: "project-map",
+        summary: "A client talks to one coordinating server.",
+        layers: [
+          { layer: "Clients", nodes: [{ name: "apps/web", role: "React client", source: "AGENTS.md#L19" }] },
+          { layer: "Server", nodes: [{ name: "apps/server", role: "Coordinator", source: "docs/architecture.md#L1" }] },
+        ],
+      },
+      stagedAt: "2026-07-19T10:03:00.000Z",
+    };
+    setVentureDoc(fx.venture.id, "bets", fx.bet.id, { ...fx.bet, staged: [legacy] }, options);
+
+    const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
+    const item = timeline.items.find((candidate) => candidate.ref === "work:legacy-project-map");
+    assert.equal(item.visual.kind, "model-view");
+    assert.equal(item.artifact.content.kind, "model-view");
+    assert.deepEqual(item.artifact.content.nodes.map((node) => node.label), ["apps/web", "apps/server"]);
+    assert.equal(JSON.stringify(item).includes('"kind":"project-map"'), false, "the founder projection never carries raw map serialization");
   });
 
   it("projects exact durable changes on a work handoff", () => {
@@ -235,6 +267,46 @@ describe("thread timeline projection", () => {
     } finally {
       __resetActiveDrives();
     }
+  });
+
+  it("replaces a failed Canvas drive with one durable recoverable terminal row", () => {
+    const fx = fixture();
+    const handle = {
+      ventureId: fx.venture.id,
+      runId: "canvas-failure",
+      threadRef: fx.thread.threadRef,
+      options,
+    };
+    recordAcceptedRun(handle, {
+      originMessageRef: `conversation:${fx.returned.id}`,
+      participantRef: "participant:codex",
+      at: "2026-07-19T10:04:00.000Z",
+    });
+    recordProviderSession(handle, {
+      provider: "codex",
+      sessionId: "codex-session",
+      participantRef: "codex",
+      at: "2026-07-19T10:04:00.100Z",
+    });
+    recordFactualActivity(handle, {
+      activityId: "read",
+      label: "Reading project source",
+      durationMs: 89_000,
+      at: "2026-07-19T10:05:29.000Z",
+    });
+    recordRunInterrupted(handle, new Error("Codex returned an invalid Canvas projection."), {
+      at: "2026-07-19T10:05:29.000Z",
+    });
+    persistRunJournalProjection(handle);
+
+    const timeline = buildThreadTimeline(fx.venture.id, fx.thread.threadRef.replace(/^thread:/, ""), options);
+    const status = timeline.items.find((item) => item.ref === "run:canvas-failure");
+    assert.equal(status.state, "failed");
+    assert.equal(status.summary, "Canvas return needs another pass");
+    assert.equal(status.recoveryLayer, "canvas");
+    assert.match(status.recovery, /Send the direction again from this Thread/);
+    assert.deepEqual(status.activitySteps.map((step) => step.label), ["Reading project source"]);
+    assert.equal(timeline.agents.length, 0, "a terminal Canvas row never remains an active participant");
   });
 
   it("compares coding attempts with the facts needed for founder judgment", () => {

@@ -40,10 +40,9 @@ export default async function handle({ req, res, url }) {
         // no permanent AI staff). It opens with connected Claude/Codex runtime capability and no persistent
         // specialist; the first founder direction forms the first participant explicitly.
         const venture = createVenture({ name: body?.name, repository: body?.repository }, { seedFoundingCrew: false });
-        // First run (Phase 7): read the bound product back on the canvas as a correctable working theory
-        // and offer concrete repo-derived directions in the conversation. It never sends anything outward.
-        // A first-run failure must not fail the create — the venture still opens; the read-back is a
-        // convenience the founder can trigger by asking, not a gate on entry.
+        // Repository binding derives only silent source-backed page context. It never inserts strategy,
+        // Canvas theory, or suggested work into the first coding Thread. A grounding failure cannot fail
+        // project creation; the founder can still direct the selected SDK against the repository.
         try {
           runFirstRun({ ventureId: venture.id, repository: venture.repository, ventureName: venture.name });
         } catch {

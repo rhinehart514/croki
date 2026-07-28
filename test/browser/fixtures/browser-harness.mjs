@@ -239,20 +239,19 @@ export async function openFixtureVenture(drover, { viewport = { width: 1920, hei
   return chrome;
 }
 
-// One shell: conversation is the permanent spine and the Canvas (the venture graph) is an auxiliary panel.
-// Its only standing toggle is the spine composer's participation switch: choosing Canvas opens the graph
-// and directs Drover agents on Product / GTM; choosing Code hides it and returns to the coding spine,
-// which never left. The graph is a read projection of venture truth: pan/zoom and route focus are
-// presentation, never a second source of business truth.
+// One shell: conversation is the permanent spine and the Canvas (the venture graph) is an auxiliary
+// workbench panel. Its toggle changes presentation only; the selected SDK and Thread stay intact.
+// The graph is a read projection of venture truth: pan/zoom and route focus are presentation, never a
+// second source of business truth.
 export async function openCanvas(client) {
-  const found = await client.evaluate(`(() => { const toggle = [...document.querySelectorAll('.work-chat-mode button')].find((entry) => entry.getAttribute('aria-label') === 'Canvas'); if (!toggle) return false; if (toggle.getAttribute('aria-pressed') !== 'true') toggle.click(); return true; })()`);
-  assert.equal(found, true, "the Canvas participation switch was unavailable");
+  const found = await client.evaluate(`(() => { const toggle = document.querySelector('.work-composer-bar button[aria-label="Canvas"]'); if (!toggle) return false; if (toggle.getAttribute('aria-pressed') !== 'true') toggle.click(); return true; })()`);
+  assert.equal(found, true, "the Canvas view toggle was unavailable");
   await waitForDom(client, `document.querySelector('button[aria-label="Canvas"]')?.getAttribute('aria-pressed') === 'true' && Boolean(document.querySelector('.workspace-canvas .product-gtm-surface'))`, "the Canvas did not open beside the spine");
 }
 
 export async function hideCanvas(client) {
-  const found = await client.evaluate(`(() => { const group = document.querySelector('.work-chat-mode'); const code = group && [...group.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Code'); if (!code) return false; if (code.getAttribute('aria-pressed') !== 'true') code.click(); return true; })()`);
-  assert.equal(found, true, "the Canvas participation switch was unavailable");
+  const found = await client.evaluate(`(() => { const toggle = document.querySelector('.work-composer-bar button[aria-label="Canvas"]'); if (!toggle) return false; if (toggle.getAttribute('aria-pressed') === 'true') toggle.click(); return true; })()`);
+  assert.equal(found, true, "the Canvas view toggle was unavailable");
   await waitForDom(client, `document.querySelector('button[aria-label="Canvas"]')?.getAttribute('aria-pressed') === 'false'`, "the Canvas did not hide");
 }
 
@@ -260,9 +259,9 @@ export async function hideCanvas(client) {
 // This replaces the retired product-rail object search; the rail is now Threads-only.
 export async function selectCanvasObject(client, name) {
   await client.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))`);
-  await waitForDom(client, `!!document.querySelector('[role="combobox"][aria-label="Search this venture"]')`, "the ⌘K search did not open");
+  await waitForDom(client, `!!document.querySelector('[role="combobox"][aria-label="Search this project"]')`, "the ⌘K search did not open");
   await client.evaluate(`(() => {
-    const input = document.querySelector('[role="combobox"][aria-label="Search this venture"]');
+    const input = document.querySelector('[role="combobox"][aria-label="Search this project"]');
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     setter.call(input, ${JSON.stringify(name)});
     input.dispatchEvent(new Event('input', { bubbles: true }));

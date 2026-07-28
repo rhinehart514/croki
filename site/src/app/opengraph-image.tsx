@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Croki. You built it. Now get people using it.";
+export const alt = "Croki. Code with Claude and Codex without losing the thread.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -92,10 +92,10 @@ export default function OpenGraphImage() {
                   lineHeight: 0.92,
                 }}
               >
-                You built it. Now get people using it.
+                Code without losing the thread.
               </div>
               <div style={{ marginTop: 26, color: "#4e4b44", fontSize: 23 }}>
-                Croki takes what you shipped to its first real users. You approve every send.
+                Direct Claude or Codex, review exact work, and keep useful product context across every change.
               </div>
             </div>
             <div
@@ -111,9 +111,9 @@ export default function OpenGraphImage() {
               }}
             >
               <span style={{ color: "#a9791a", fontWeight: 700 }}>
-                Needs you
+                Exact Review
               </span>
-              Nothing leaves until you approve it.
+              Your selected model works. You stay oriented.
             </div>
           </div>
         </div>

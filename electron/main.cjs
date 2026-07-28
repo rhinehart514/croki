@@ -1,17 +1,31 @@
 // Croki desktop shell (code identifier: gtm-ide). The renderer is a local application asset and
-// the Brain runs in this desktop process. Renderer requests cross Electron's isolated IPC bridge;
-// normal and packaged app launches never bind a web port.
+// the supervised Brain runs in a separate child process. Renderer requests cross Electron's
+// isolated IPC bridge; normal and packaged app launches never bind a web port.
 
-const { app, BrowserWindow, shell, dialog, ipcMain, safeStorage, screen, session, webContents } = require("electron");
+const { app, BrowserWindow, Menu, MenuItem, shell, dialog, ipcMain, safeStorage, screen, session, webContents } = require("electron");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const windowState = require("./window-state.cjs");
+const { createBrainSupervisor } = require("./brain-supervisor.cjs");
+const { createDesktopHostHandler } = require("./desktop-host-seams.cjs");
 const { createTerminalRuntime } = require("./terminal-runtime.cjs");
+const { createTerminalStateStore } = require("./terminal-state-store.cjs");
 const { createPreviewSessions, hardenPreviewWebview } = require("./preview-sessions.cjs");
-const { parseSafeExternalUrl, parseLoopbackDevServerUrl, isAllowedRendererNavigation, resolveLoginShell, mergePathLists } = require("./security.cjs");
+const { createUpdateChecker } = require("./update-check.cjs");
+const { installUpdateMenu } = require("./update-menu.cjs");
+const { currentUpdatePosture } = require("./update-policy.cjs");
+const { buildIdentity } = require("./build-identity.cjs");
+const {
+  parseSafeExternalUrl,
+  parseLoopbackDevServerUrl,
+  isAllowedRendererNavigation,
+  isAllowedFounderMediaPermission,
+  resolveLoginShell,
+  mergePathLists,
+} = require("./security.cjs");
 
 app.setName("Croki");
 
@@ -19,7 +33,45 @@ let mainWindow = null;
 let founderCapability = null;
 let brainRuntime = null;
 let windowStateTracker = null;
+let updateChecker = null;
+let quietUpdateTimer = null;
+const forbiddenPreviewOrigins = new Set();
 const ventureSubscriptions = new Map();
+let engineState = {
+  phase: "ui-ready",
+  at: new Date().toISOString(),
+  attempt: 0,
+  message: null,
+};
+
+function publicEngineState(readiness = {}) {
+  const phase = {
+    "engine-starting": "engine-starting",
+    "engine-ready": "engine-ready",
+    degraded: "degraded",
+    failed: "failed",
+  }[readiness.state] || "ui-ready";
+  const fallbackMessage = phase === "engine-starting"
+    ? "The work engine is starting. Your last coherent work remains visible."
+    : phase === "degraded"
+      ? "The work engine stopped unexpectedly and is reconnecting. Your last coherent work remains visible."
+      : phase === "failed"
+        ? "The work engine could not reconnect. Retry without losing the visible Thread or Review."
+        : null;
+  return {
+    phase,
+    at: new Date().toISOString(),
+    attempt: Number(readiness.generation) || 0,
+    message: readiness.error?.message || fallbackMessage,
+  };
+}
+
+function publishEngineState(readiness) {
+  engineState = publicEngineState(readiness);
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send("drover:engine-state", engineState);
+  }
+}
 
 function stopVentureSubscription(ownerId, subscriptionId) {
   const subscriptions = ventureSubscriptions.get(ownerId);
@@ -79,6 +131,9 @@ const terminalRuntime = createTerminalRuntime({
   pty,
   resolveWorkspace: resolveCodingWorkspace,
   send: sendToRenderer,
+  stateStore: createTerminalStateStore(process.env.GTM_IDE_HOME
+    ? path.join(path.resolve(process.env.GTM_IDE_HOME), ".runtime", "terminal-state")
+    : path.join(app.getPath("userData"), "terminal-state")),
 });
 const previewSessions = createPreviewSessions({
   electronSession: session,
@@ -87,6 +142,8 @@ const previewSessions = createPreviewSessions({
   broadcast: (channel, payload) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(`drover:${channel}`, payload);
   },
+  openExternal: (url) => shell.openExternal(url),
+  forbiddenOrigins: forbiddenPreviewOrigins,
 });
 
 function owner(event) {
@@ -95,12 +152,27 @@ function owner(event) {
 }
 
 ipcMain.handle("drover:terminal-open", (event, target) => terminalRuntime.open(owner(event), target));
+ipcMain.handle("drover:terminal-inspect", (event, ventureId, workspaceId) => terminalRuntime.inspect(owner(event), ventureId, workspaceId));
 ipcMain.handle("drover:terminal-write", (event, sessionId, data) => terminalRuntime.write(owner(event), sessionId, data));
 ipcMain.handle("drover:terminal-resize", (event, sessionId, cols, rows) => terminalRuntime.resize(owner(event), sessionId, cols, rows));
 ipcMain.handle("drover:terminal-restart", (event, sessionId) => terminalRuntime.restart(owner(event), sessionId));
 ipcMain.handle("drover:terminal-close", (event, sessionId) => terminalRuntime.close(owner(event), sessionId));
-ipcMain.handle("drover:preview-attach", (event, input) => previewSessions.attach(owner(event), input));
+ipcMain.handle("drover:preview-attach", async (event, input = {}) => {
+  const ownerId = owner(event);
+  const resolved = await resolveCodingWorkspace(input.ventureId, input.workspaceId);
+  return previewSessions.attach(ownerId, { ...input, workspace: resolved.workspace });
+});
 ipcMain.handle("drover:preview-detach", (event, workspaceId) => previewSessions.detach(owner(event), workspaceId));
+ipcMain.handle("drover:preview-inspect", async (event, input = {}) => {
+  const ownerId = owner(event);
+  const resolved = await resolveCodingWorkspace(input.ventureId, input.workspaceId);
+  return previewSessions.inspect(ownerId, { ...input, workspace: resolved.workspace });
+});
+ipcMain.handle("drover:preview-control", async (event, input = {}) => {
+  const ownerId = owner(event);
+  const resolved = await resolveCodingWorkspace(input.ventureId, input.workspaceId);
+  return previewSessions.founderControl(ownerId, { ...input, workspace: resolved.workspace });
+});
 ipcMain.handle("drover:preview-start-pick", (event, workspaceId) => previewSessions.startPick(owner(event), workspaceId));
 ipcMain.handle("drover:preview-cancel-pick", (event, workspaceId) => previewSessions.cancelPick(owner(event), workspaceId));
 // Element picks arrive from preview guests, not the main window; the sessions registry matches the
@@ -109,12 +181,41 @@ ipcMain.on("drover-preview:element-picked", (event, annotation, rect) => {
   void previewSessions.handleElementPicked(event.sender.id, annotation, rect);
 });
 
+ipcMain.handle("drover:engine-status", (event) => {
+  owner(event);
+  return engineState;
+});
+
+ipcMain.handle("drover:engine-retry", async (event) => {
+  owner(event);
+  if (!brainRuntime) throw new Error("The work engine has not been prepared.");
+  await brainRuntime.start();
+  return engineState;
+});
+ipcMain.handle("drover:update-status", (event) => {
+  if (!rendererWindow(owner(event))) throw new Error("Update status belongs to the main Croki window.");
+  return updateChecker?.status() ?? currentUpdatePosture({
+    packaged: app.isPackaged,
+    currentVersion: app.getVersion(),
+    supported: app.isPackaged && process.platform === "darwin" && process.arch === "arm64",
+  });
+});
+
 ipcMain.handle("drover:brain-request", async (event, input = {}) => {
   owner(event);
   const requestPath = String(input.path ?? "");
   const method = String(input.method ?? "GET").toUpperCase();
   if (!requestPath.startsWith("/api/") || requestPath.length > 8_192) throw new Error("Invalid Croki request path.");
   if (!["GET", "POST", "PUT", "DELETE"].includes(method)) throw new Error("Invalid Croki request method.");
+  const readiness = brainRuntime?.readiness?.();
+  if (
+    readiness?.state === "engine-starting"
+    || readiness?.state === "stopped"
+    || readiness?.state === "failed"
+    || (readiness?.state === "degraded" && !readiness.pid)
+  ) {
+    await brainRuntime.start();
+  }
   const headers = { ...(input.headers ?? {}) };
   headers["x-drover-founder-capability"] = signFounderRequest(method, requestPath);
   return brainRuntime.invokeBrain({ path: requestPath, method, headers, body: String(input.body ?? "") });
@@ -171,6 +272,33 @@ ipcMain.handle("drover:drive-stream-subscribe", (event, input = {}) => {
   if (!ventureSubscriptions.has(ownerId)) ventureSubscriptions.set(ownerId, subscriptions);
   subscriptions.set(subscriptionId, brainRuntime.subscribeToDriveStream(exactVentureId, exactDriveId, (payload) => {
     sendToRenderer(ownerId, "drive-delta", { subscriptionId, frame: payload });
+  }));
+  return { subscribed: true };
+});
+
+ipcMain.handle("drover:work-subscribe", (event, input = {}) => {
+  const ownerId = owner(event);
+  const exactVentureId = String(input.ventureId ?? "").trim();
+  const subscriptionId = String(input.subscriptionId ?? "").trim();
+  if (!exactVentureId) throw new Error("A venture is required for Work synchronization.");
+  if (!/^[a-zA-Z0-9:._-]{1,128}$/.test(subscriptionId)) {
+    throw new Error("A valid Work subscription is required.");
+  }
+  let subscriptions = ventureSubscriptions.get(ownerId);
+  if (!subscriptions) {
+    subscriptions = new Map();
+    ventureSubscriptions.set(ownerId, subscriptions);
+  }
+  stopVentureSubscription(ownerId, subscriptionId);
+  if (!ventureSubscriptions.has(ownerId)) ventureSubscriptions.set(ownerId, subscriptions);
+  subscriptions.set(subscriptionId, brainRuntime.subscribeToWork({
+    ventureId: exactVentureId,
+    ...(input.threadId ? { threadId: String(input.threadId) } : {}),
+    ...(input.runId ? { runId: String(input.runId) } : {}),
+    cursor: Number.isInteger(input.cursor) ? input.cursor : null,
+    schemaVersion: Number.isInteger(input.schemaVersion) ? input.schemaVersion : null,
+  }, (frame) => {
+    sendToRenderer(ownerId, "work-frame", { subscriptionId, frame });
   }));
   return { subscribed: true };
 });
@@ -253,8 +381,31 @@ async function createWindow() {
     },
   });
 
+  // Voice belongs to the founder's one composer. Grant microphone-only capture to this exact
+  // BrowserWindow while keeping camera/media access denied everywhere else, including previews.
+  const founderSession = mainWindow.webContents.session;
+  founderSession.setPermissionCheckHandler((requestingWebContents, permission, _origin, details = {}) => (
+    isAllowedFounderMediaPermission({
+      isFounderWindow: requestingWebContents?.id === mainWindow?.webContents.id,
+      permission,
+      mediaTypes: details.mediaType ? [details.mediaType] : details.mediaTypes ?? [],
+    })
+  ));
+  founderSession.setPermissionRequestHandler((requestingWebContents, permission, callback, details = {}) => {
+    callback(isAllowedFounderMediaPermission({
+      isFounderWindow: requestingWebContents?.id === mainWindow?.webContents.id,
+      permission,
+      mediaTypes: details.mediaTypes ?? [],
+    }));
+  });
+
   mainWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
-    if (!hardenPreviewWebview(webPreferences, params, path.join(__dirname, "preview-pick-preload.cjs"))) {
+    if (!hardenPreviewWebview(
+      webPreferences,
+      params,
+      path.join(__dirname, "preview-pick-preload.cjs"),
+      { forbiddenOrigins: forbiddenPreviewOrigins },
+    )) {
       event.preventDefault();
     }
   });
@@ -289,6 +440,7 @@ async function createWindow() {
   const devServerUrl = app.isPackaged ? null : parseLoopbackDevServerUrl(process.env.DROVER_DEV_SERVER);
   const applicationDocument = path.join(__dirname, "..", "ui", "dist", "index.html");
   const applicationUrl = devServerUrl ?? pathToFileURL(applicationDocument).href;
+  if (devServerUrl) forbiddenPreviewOrigins.add(new URL(applicationUrl).origin);
   mainWindow.webContents.on("will-navigate", (event, url) => {
     if (isAllowedRendererNavigation(applicationUrl, url)) return;
     event.preventDefault();
@@ -313,14 +465,45 @@ async function createWindow() {
 
 function recoverDesktopWorkAfterWindow() {
   // Repository recovery is useful background work, not a condition for showing the founder their
-  // last coherent project. Yield once so the loaded renderer can paint before today's in-process
-  // Brain performs any synchronous repository inspection. Full responsiveness still requires the
-  // planned Brain process boundary.
+  // last coherent project. Yield once so the loaded renderer can paint before the supervised Brain
+  // performs repository inspection in its own process.
   setImmediate(() => {
     void brainRuntime.recoverDesktopWork().catch((err) => {
       process.stderr.write(`[desktop] Unfinished-work recovery failed: ${err?.stack || err?.message || err}\n`);
     });
   });
+}
+
+function prepareUpdateChecking() {
+  const identity = buildIdentity({
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    root: path.join(__dirname, ".."),
+  });
+  updateChecker = createUpdateChecker({
+    packaged: app.isPackaged,
+    platform: process.platform,
+    arch: process.arch,
+    currentVersion: app.getVersion(),
+    statePath: path.join(app.getPath("userData"), "update-check.json"),
+    automaticCheck: process.env.GTM_IDE_DISABLE_RELEASE_CHECK !== "1",
+    openExternal: (url) => shell.openExternal(url),
+    showMessage: (options) => (
+      mainWindow && !mainWindow.isDestroyed()
+        ? dialog.showMessageBox(mainWindow, options)
+        : dialog.showMessageBox(options)
+    ),
+  });
+  installUpdateMenu({ app, Menu, MenuItem, checker: updateChecker, developmentIdentity: identity });
+}
+
+function scheduleQuietUpdateCheck() {
+  if (!updateChecker?.status().automaticCheck) return;
+  quietUpdateTimer = setTimeout(() => {
+    quietUpdateTimer = null;
+    void updateChecker?.check({ interactive: false });
+  }, 30_000);
+  quietUpdateTimer.unref?.();
 }
 
 async function boot() {
@@ -335,27 +518,31 @@ async function boot() {
   let stage = "preparing founder authority";
   try {
     founderCapability = crypto.randomBytes(32).toString("base64url");
-    process.env.GTM_IDE_FOUNDER_CAPABILITY = founderCapability;
-    stage = "protecting stored credentials";
-    const protectionModule = await import(path.join(__dirname, "..", "brain", "src", "credential-protection.mjs"));
-    protectionModule.configureCredentialProtection(
-      protectionModule.createElectronSafeStorageProtection(safeStorage),
-    );
-    stage = "starting the work engine";
-    brainRuntime = await import(path.join(__dirname, "..", "brain", "src", "desktop-runtime.mjs"));
-    // The brain runs in this process, so the preview broker and this desktop host share one module
-    // instance: work-loop preview tools reach the sessions registry directly, with no port bound.
-    const previewBroker = await import(path.join(__dirname, "..", "brain", "src", "firm", "preview-broker.mjs"));
-    previewBroker.registerPreviewHost((request) => previewSessions.execute(request));
+    stage = "preparing the work engine";
+    const hostCall = createDesktopHostHandler({ safeStorage, previewSessions });
+    brainRuntime = createBrainSupervisor({
+      env: { GTM_IDE_FOUNDER_CAPABILITY: founderCapability },
+      hostCall,
+    });
+    brainRuntime.subscribeReadiness(publishEngineState);
     stage = "opening the window";
     await createWindow();
+    prepareUpdateChecking();
+    stage = "starting the work engine";
+    await brainRuntime.start();
     recoverDesktopWorkAfterWindow();
+    scheduleQuietUpdateCheck();
   } catch (err) {
     process.stderr.write(`[desktop] Startup failed while ${stage}: ${err?.stack || err?.message || err}\n`);
-    dialog.showErrorBox(
-      "Croki failed to start",
-      `Croki stopped while ${stage}.\n\n${err?.stack || err?.message || err}`
-    );
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      publishEngineState({
+        state: "failed",
+        generation: brainRuntime?.readiness?.().generation ?? 0,
+        error: { message: err?.message || String(err) },
+      });
+      return;
+    }
+    dialog.showErrorBox("Croki failed to start", `Croki stopped while ${stage}.\n\n${err?.stack || err?.message || err}`);
     app.quit();
   }
 }
@@ -403,6 +590,8 @@ if (!gotLock) {
     event.preventDefault();
     teardownComplete = true;
     app.isQuiting = true;
+    if (quietUpdateTimer) clearTimeout(quietUpdateTimer);
+    quietUpdateTimer = null;
     windowStateTracker?.flush();
     terminalRuntime.stopAll();
     previewSessions.stopAll();

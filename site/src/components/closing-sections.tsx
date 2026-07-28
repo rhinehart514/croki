@@ -50,8 +50,8 @@ export function ClosingSections() {
     <section className="final-cta" aria-labelledby="final-title">
       <InView>
         <CrokiWordmark />
-        <h2 id="final-title">Get what you built in front of people.</h2>
-        <p>You did the hard part. Let Claude and Codex find its first users and bring back what they do. You approve every send.</p>
+        <h2 id="final-title">Keep building without losing the product.</h2>
+        <p>Direct Claude or Codex in the real repository, review the exact work, and let useful product context compound across every Thread.</p>
         <Button className="final-button" size="lg" render={<a href={`${githubUrl}#run-locally`} />}>
           <GitFork data-icon="inline-start" /> Run from source <ArrowRight data-icon="inline-end" />
         </Button>

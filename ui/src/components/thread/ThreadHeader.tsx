@@ -1,6 +1,6 @@
-import { Check, Ellipsis, Map, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
+import { Check, Ellipsis, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { ThreadTimeline, VisualReference, WorkIndexItem } from "@/api";
+import type { ThreadTimeline, WorkIndexItem } from "@/api";
 
 function tokensLabel(count: number) {
   if (count < 1_000) return `${count}`;
@@ -39,11 +39,10 @@ function status(item: WorkIndexItem | null) {
   return item.lifecycle === "closed" ? "Closed" : "Ready to continue";
 }
 
-export function ThreadHeader({ item, ventureName, timeline, onOpenVisual, onTogglePin, onRename, onDelete, renameDisabledReason }: {
+export function ThreadHeader({ item, ventureName, timeline, onTogglePin, onRename, onDelete, renameDisabledReason }: {
   item: WorkIndexItem | null;
   ventureName: string;
   timeline: ThreadTimeline | null;
-  onOpenVisual: (visual: VisualReference, origin: HTMLElement) => void;
   onTogglePin: () => void;
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
@@ -63,8 +62,6 @@ export function ThreadHeader({ item, ventureName, timeline, onOpenVisual, onTogg
   const deleting = currentDeleteState?.phase === "deleting";
   const deleteError = currentDeleteState?.error ?? null;
   const usage = usageReadout(timeline);
-  const map = timeline?.visuals.find((visual) => visual.kind === "map")
-    ?? (item ? { kind: "map" as const, ref: `${item.threadRef}#venture-map`, threadRef: item.threadRef, title: "Venture map" } : null);
   const jumpToAgent = (participantRef: string) => document.getElementById(`agent-update-${participantRef}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
 
   useEffect(() => {
@@ -123,14 +120,13 @@ export function ThreadHeader({ item, ventureName, timeline, onOpenVisual, onTogg
         {timeline?.agents.map((agent) => <button type="button" key={agent.runRef} onClick={() => jumpToAgent(agent.participantRef)}><span aria-hidden="true" />{agent.participantLabel ?? agent.participantRef}<small>{agent.state}</small></button>)}
       </div>
       <div className="thread-header-actions">
-        {map ? <button type="button" aria-label="Open venture map beside chat" onClick={(event) => onOpenVisual(map, event.currentTarget)}><Map aria-hidden="true" /><span>Map</span></button> : null}
         {item && !isRoot && !isLegacy ? (
           <details className="thread-actions-menu">
             <summary aria-label="Thread actions"><Ellipsis aria-hidden="true" /></summary>
             <div data-confirming-delete={confirmingDelete ? "true" : undefined}>
               {confirmingDelete ? <div className="thread-delete-confirmation">
                 <strong>Delete this thread?</strong>
-                <small>Any active work will stop. Product changes and receipts stay.</small>
+                <small>Any active work will stop. Applied changes and receipts stay.</small>
                 {deleteError ? <small role="alert">{deleteError}</small> : null}
                 <span>
                   <button type="button" disabled={deleting} onClick={() => { setDeleteState(null); }}>Cancel</button>

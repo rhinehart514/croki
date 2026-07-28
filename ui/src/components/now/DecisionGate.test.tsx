@@ -174,6 +174,8 @@ describe("DecisionGate", () => {
     expect(screen.getByText("npm --prefix ui run test:unit")).toBeVisible();
     expect(screen.getByRole("button", { name: "Allow once" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Deny" })).toBeVisible();
+    expect(screen.getByText(/permits only the named provider tool request/i)).toBeVisible();
+    expect(screen.getByText(/never approves an outward action/i)).toBeVisible();
   });
 
   it("shows a persisted failed send with retry and a working reconnect affordance", () => {

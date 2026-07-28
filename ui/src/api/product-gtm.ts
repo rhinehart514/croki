@@ -200,7 +200,7 @@ export const getImageAttachment = (ventureId: string, imageId: string) =>
 // existing seams server-side. `betId` scopes the reply to the effort it answers. INTEGRATION POINT:
 // added to the shared api.ts; a conversation component calls this instead of a per-purpose button set.
 export type ConversationReplyResult = {
-  act: "steer" | "answer" | "stop-run" | "involve-participant" | "parallel-attempts" | "critique" | "approve" | "approve-standing" | "close-thread" | "close" | "new-direction" | "observe";
+  act: "steer" | "answer" | "queued-follow-up" | "stop-run" | "involve-participant" | "parallel-attempts" | "critique" | "approve" | "approve-standing" | "close-thread" | "close" | "new-direction" | "observe";
   betId?: string | null;
   messageId?: string;
   applied?: string;
@@ -217,13 +217,14 @@ export type ConversationReplyResult = {
   evidence?: { polled?: number; ingested?: unknown[]; reason?: string };
   outcome?: { kind?: string; summary?: string };
   messages?: FirmConversationMessage[];
+  queuedTurn?: { id: string; text: string; state: "queued"; queuedAt: string };
 };
 
 export type ComposerImageInput = { name: string; mediaType: string; data: string };
 
 export const replyInConversation = (
   ventureId: string,
-  body: { message: string; images?: ComposerImageInput[]; journeyImportRef?: string; threadRef?: string | null; betId?: string | null; workRef?: string | null; modelBranchRef?: string | null; subjectRefs?: string[]; teammateRefs?: string[]; mode?: "work" | "context"; runtime?: string | null; model?: string | null; effort?: string | null; productGtmView?: boolean; workflowSketch?: boolean; artifactSection?: { title: string; index: number }; workflowStep?: { id: string; label: string; position: number } },
+  body: { message: string; images?: ComposerImageInput[]; journeyImportRef?: string; threadRef?: string | null; betId?: string | null; workRef?: string | null; modelBranchRef?: string | null; subjectRefs?: string[]; teammateRefs?: string[]; mode?: "work" | "context"; runtime?: string | null; model?: string | null; effort?: string | null; interactionMode?: "plan" | null; productGtmView?: boolean; workflowSketch?: boolean; artifactSection?: { title: string; index: number }; workflowStep?: { id: string; label: string; position: number } },
 ) => guardedPost<ConversationReplyResult>(
   `/api/ventures/${encodeURIComponent(ventureId)}/conversation/reply`,
   body,
@@ -471,6 +472,7 @@ export const driveTeammate = (
     runtime?: string | null;
     model?: string | null;
     effort?: string | null;
+    interactionMode?: "plan" | null;
     images?: ComposerImageInput[];
   },
 ) => guardedPost<DriveTeammateResult>(

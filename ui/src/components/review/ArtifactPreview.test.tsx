@@ -23,7 +23,7 @@ describe("ArtifactPreview", () => {
   it("renders markdown as a visual artifact instead of a document body", () => {
     render(<ArtifactPreview artifact={{ kind: "markdown", content: "# Heading" }} />);
     expect(screen.getByRole("heading", { level: 1, name: "Heading" })).toBeVisible();
-    expect(screen.getByText("Product / GTM artifact")).toBeVisible();
+    expect(screen.getByText("Document")).toBeVisible();
   });
 
   it("lets the founder target one visual section for revision", () => {

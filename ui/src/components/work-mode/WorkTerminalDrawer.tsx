@@ -1,10 +1,18 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, TerminalSquare } from "lucide-react";
 import type { WorkTerminalStatus } from "./WorkTerminal";
+import { OPEN_TERMINAL_REFERENCE_EVENT, type TerminalReference } from "./terminalReference";
 
-export function WorkTerminalDrawer({ status = null, children }: { status?: WorkTerminalStatus | null; children: ReactNode }) {
+export function WorkTerminalDrawer({ workspaceId, status = null, children }: { workspaceId: string; status?: WorkTerminalStatus | null; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const reopen = (event: Event) => {
+      if ((event as CustomEvent<TerminalReference>).detail?.workspaceId === workspaceId) setOpen(true);
+    };
+    window.addEventListener(OPEN_TERMINAL_REFERENCE_EVENT, reopen);
+    return () => window.removeEventListener(OPEN_TERMINAL_REFERENCE_EVENT, reopen);
+  }, [workspaceId]);
   return (
     <section className="work-terminal" data-open={open ? "true" : undefined}>
       <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
@@ -17,4 +25,3 @@ export function WorkTerminalDrawer({ status = null, children }: { status?: WorkT
     </section>
   );
 }
-

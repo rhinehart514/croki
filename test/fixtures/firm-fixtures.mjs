@@ -278,6 +278,19 @@ export function createOvernightVentureFixture({ root, repository } = {}) {
   };
 }
 
+/** Two isolated Projects for exact return and warm A→B→A presentation receipts. */
+export function createReturnContinuityFixture({ root, repository } = {}) {
+  const primary = createOvernightVentureFixture({ root, repository });
+  const otherVenture = createVenture({
+    id: "fixture-return-project-b",
+    name: "Return project B",
+    repository: fixtureRepository(repository),
+    createdAt: at(300),
+    updatedAt: at(300),
+  }, { root, seedFoundingCrew: false });
+  return { ...primary, otherVenture };
+}
+
 /** A scale fixture for browser review and deterministic acceptance only. */
 export function createDenseVentureFixture({ root, repository, ventureId, ventureName, betEventMinute } = {}) {
   // Hand-built deterministic fixture crew: opt out of the founding-crew seed so crew counts stay exact.

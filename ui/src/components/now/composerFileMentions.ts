@@ -4,9 +4,16 @@
 // as one unit, and expands to the exact repo-relative path only at send — the coding agent still reads
 // a literal path; the founder reads a short name. Pure string logic so it tests without a DOM.
 
-export type ComposerFileMention = { path: string; token: string };
+export type ComposerFileMention = {
+  path: string;
+  token: string;
+  startLine?: number;
+  endLine?: number;
+  sourceRef?: string;
+  scopeKey?: string;
+};
 
-export type FileMentionSpan = { start: number; end: number; path: string; token: string };
+export type FileMentionSpan = ComposerFileMention & { start: number; end: number };
 
 const boundedBefore = (text: string, index: number) => index === 0 || /\s/.test(text[index - 1]);
 const boundedAfter = (text: string, index: number) => index >= text.length || /\s/.test(text[index]);
@@ -53,7 +60,10 @@ export function expandFileMentions(draft: string, mentions: ComposerFileMention[
   let out = "";
   let cursor = 0;
   for (const span of fileMentionSpans(draft, mentions)) {
-    out += draft.slice(cursor, span.start) + span.path;
+    const lines = span.startLine && span.endLine
+      ? `#L${span.startLine}${span.endLine === span.startLine ? "" : `-L${span.endLine}`}`
+      : "";
+    out += draft.slice(cursor, span.start) + span.path + lines;
     cursor = span.end;
   }
   return out + draft.slice(cursor);

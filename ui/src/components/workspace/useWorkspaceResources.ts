@@ -12,6 +12,7 @@ import {
   type WorkIndex,
 } from "@/api";
 import { useFirmConnection } from "@/hooks/use-firm-connection";
+import { useWorkProtocol } from "@/hooks/useWorkProtocol";
 
 export type WorkspaceResource<T> = {
   data: T | null;
@@ -71,6 +72,8 @@ export function useWorkspaceResources({
   settingsConnection: "gmail" | null | undefined;
 }) {
   const firm = useFirmConnection(venture.id);
+  const orderedWork = useWorkProtocol(venture.id);
+  const { seedWork } = orderedWork;
   const { resource: systemResource, load: loadSystem, setData: setSystemIndex } = useLoadedResource<SystemIndex>();
   const [searchWork, setSearchWork] = useState<WorkIndex | null>(null);
   const [searchStatus, setSearchStatus] = useState<"idle" | "searching" | "ready" | "error">("idle");
@@ -94,6 +97,9 @@ export function useWorkspaceResources({
     void reloadSystem();
   }, [firm.workIndex?.revision, reloadSystem]);
   useEffect(() => {
+    if (firm.workIndex) seedWork(firm.workIndex);
+  }, [firm.workIndex, seedWork]);
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!search.trim()) { setSearchWork(null); setSearchStatus("idle"); return; }
       void getWorkIndex(venture.id, search)
@@ -112,10 +118,22 @@ export function useWorkspaceResources({
     };
   }, [firm.connection.message, firm.connection.phase]);
 
+  const coherentWorkIndex = orderedWork.work
+    && orderedWork.work.revision >= (firm.workIndex?.revision ?? -1)
+    ? orderedWork.work.value
+    : firm.workIndex;
+
   return useMemo(() => ({
     ...firm,
+    workIndex: coherentWorkIndex,
     lensResource: connectionResource(firm.lens),
-    workIndexResource: connectionResource(firm.workIndex),
+    workIndexResource: connectionResource(coherentWorkIndex),
+    sync: {
+      transport: orderedWork.transportSync,
+      thread: orderedWork.threadSync,
+      work: orderedWork.workSync,
+      canvas: orderedWork.canvasSync,
+    },
     systemResource,
     setSystemIndex,
     reloadSystem,
@@ -124,6 +142,7 @@ export function useWorkspaceResources({
     ventures,
     credentials,
     capabilities,
-  }), [connectionResource, credentials, firm, reloadSystem, searchWork, searchStatus,
-    setSystemIndex, systemResource, ventures, capabilities]);
+  }), [capabilities, coherentWorkIndex, connectionResource, credentials, firm, orderedWork.canvasSync,
+    orderedWork.threadSync, orderedWork.transportSync, orderedWork.workSync, reloadSystem, searchWork,
+    searchStatus, setSystemIndex, systemResource, ventures]);
 }

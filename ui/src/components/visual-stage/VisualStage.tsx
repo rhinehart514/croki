@@ -15,7 +15,7 @@ export function VisualStage({ visual, timeline, workIndex, directions, lens, rea
   lens: FirmLens | null;
   readOnlyReason: string | null;
   artifactFocus?: ArtifactSectionFocus | null;
-  onArtifactFocus?: (focus: ArtifactSectionFocus) => void;
+  onArtifactFocus?: (focus: ArtifactSectionFocus | null) => void;
   onClose: () => void;
   onOpenThread: (threadRef: string) => void;
   onChanged: () => void;

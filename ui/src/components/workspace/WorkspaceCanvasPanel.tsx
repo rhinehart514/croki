@@ -1,16 +1,20 @@
 import { ChevronLeft, ChevronRight, Footprints, LoaderCircle, Map, Play, X } from "lucide-react";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { getJourneyMappingProposals, getJourneyObservations, getMarketMovement, replyInConversation, type JourneyMappingProposalRecord, type JourneyObservationSnapshot, type SystemIndex, type SystemIndexObject, type WorkIndex } from "@/api";
 import type { FirmPlacement, MarketMovementIndex } from "@/types";
 import type { FirmConfiguration, FirmCrewMember } from "@/types";
 import { JourneyMappingReview } from "@/components/product-gtm/JourneyMappingReview";
-import { ProductGtmSurface } from "@/components/product-gtm/ProductGtmSurface";
 import { parseProductGtmWorkflowNodeId, playRunStates, productGtmWorkflowGraph, productGtmWorkflowNodeId, deriveWorkflowRegister, walkthroughStepFor, type ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 import type { WorkModelChoice } from "@/components/work-mode/WorkComposerBar";
 import { ProductPalette } from "./ProductPalette";
 import type { WorkspaceResource } from "./useWorkspaceResources";
 import type { WorkflowCapability } from "./workflowCapabilities";
+
+const ProductGtmSurface = lazy(async () => {
+  const module = await import("@/components/product-gtm/ProductGtmSurface");
+  return { default: module.ProductGtmSurface };
+});
 
 function ResourceNotice({ resource }: { resource: WorkspaceResource<unknown> }) {
   if (!resource.error) return null;
@@ -166,7 +170,7 @@ export function WorkspaceCanvasPanel({
     } finally { setMappingProduct(false); }
   }, [mappingProduct, modelChoice, onChanged, onOpenWork, readOnlyReason, ventureId]);
   const mapProduct = useCallback(() => directCanvas(
-    "Map the product from the current codebase as the actual pages a user walks through. Read the routes and source, preserve exact citations, connect the proven page-to-page journey, and return an adoptable venture map. Do not invent pages or behavior the repository does not prove.",
+    "Map the product from the current codebase as the actual pages a user walks through. Read the routes and source, preserve exact citations, connect the proven page-to-page journey, and return an adoptable Canvas map. Do not invent pages or behavior the repository does not prove.",
     "Product mapping could not start. Nothing on the canvas changed.",
   ), [directCanvas]);
   const draftPlay = useCallback(() => directCanvas(
@@ -174,8 +178,9 @@ export function WorkspaceCanvasPanel({
     "The play draft could not start. Nothing on the canvas changed.",
     true,
   ), [directCanvas]);
-  const scope = walkStep ? `Drafted play · Step ${walkStep.position} of ${walkStep.count}` : selectedPlay ? (playRegister === "established" ? "Established play" : "Drafted play") : "Canvas";
-  const title = walkStep ? walkStep.label : selectedPlay?.name ?? "Whole venture";
+  const selectedPage = selectedObject?.type.toLowerCase() === "page" ? selectedObject : null;
+  const scope = walkStep ? `Drafted play · Step ${walkStep.position} of ${walkStep.count}` : selectedPlay ? (playRegister === "established" ? "Established play" : "Drafted play") : selectedPage ? "Page intent" : "Canvas";
+  const title = walkStep ? walkStep.label : selectedPlay?.name ?? selectedPage?.name ?? "Whole venture";
   return <motion.aside className="workspace-canvas" aria-label="Venture Canvas" {...motionProps}>
     <header className="workspace-canvas-bar">
       <div className="workspace-canvas-scope"><span>{scope}</span><strong>{title}</strong></div>
@@ -195,23 +200,26 @@ export function WorkspaceCanvasPanel({
     {journeyProposal ? <JourneyMappingReview ventureId={ventureId} proposal={journeyProposal} readOnlyReason={readOnlyReason} onAdopted={adoptJourneyObservation} /> : null}
     <div className="workspace-canvas-graph">
       <ResourceNotice resource={systemResource} />
-      <ProductGtmSurface
-        index={systemIndex}
-        ventureId={ventureId}
-        workIndex={workIndex}
-        selectedRef={selectedRef}
-        camera={camera}
-        placement={placement}
-        journeyObservations={journeyObservations}
-        readOnlyReason={readOnlyReason}
-        onCameraChange={onCameraChange}
-        onFocus={onFocus}
-        onUseAgent={onUseAgent}
-        onOpenWork={onOpenWork}
-        onAskAgent={askAgent}
-        onDraftPlay={draftPlay}
-        onChanged={onChanged}
-      />
+      <Suspense fallback={<div className="product-gtm-loading" role="status">Loading current Canvas…</div>}>
+        <ProductGtmSurface
+          index={systemIndex}
+          ventureId={ventureId}
+          workIndex={workIndex}
+          selectedRef={selectedRef}
+          camera={camera}
+          placement={placement}
+          modelChoice={modelChoice}
+          journeyObservations={journeyObservations}
+          readOnlyReason={readOnlyReason}
+          onCameraChange={onCameraChange}
+          onFocus={onFocus}
+          onUseAgent={onUseAgent}
+          onOpenWork={onOpenWork}
+          onAskAgent={askAgent}
+          onDraftPlay={draftPlay}
+          onChanged={onChanged}
+        />
+      </Suspense>
       <ProductPalette ventureId={ventureId} objects={systemIndex?.objects ?? []} crew={crew} configuration={configuration} capabilities={capabilities} selectedObject={selectedObject} readOnlyReason={readOnlyReason} onUseAgent={onUseAgent} onConfigurationChanged={onConfigurationChanged} />
     </div>
   </motion.aside>;

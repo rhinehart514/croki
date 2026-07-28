@@ -70,7 +70,7 @@ export function AgentCreateDialog({ ventureId, configuration, initialName = "", 
     <Dialog.Portal><Dialog.Backdrop className="agent-purpose-backdrop" /><Dialog.Viewport className="agent-purpose-viewport">
       <Dialog.Popup className="workspace-dialog agent-create-dialog">
         <header><div><span>New specialist</span><Dialog.Title>Create an agent</Dialog.Title></div><Dialog.Close aria-label="Close agent creator"><X aria-hidden="true" /></Dialog.Close></header>
-        <p className="workspace-dialog-note">This specialist appears in Product / GTM with a visible purpose, runtime, capabilities, authority, and workflow assignments. It does not replace the Claude or Codex model you talk to in Work.</p>
+        <p className="workspace-dialog-note">This specialist appears in Canvas with a visible purpose, runtime, capabilities, authority, and workflow assignments. It does not replace the Claude or Codex model you talk to in this Thread.</p>
         <label><span>Name</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Product strategist" /></label>
         <label><span>Purpose</span><textarea value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder="Develop the product mechanism and the decisions needed to prove it." /></label>
         <label><span>Standing context <small>Optional</small></span><textarea value={instructions} onChange={(event) => setInstructions(event.target.value)} placeholder="What this agent should consistently consider, protect, or refuse." /></label>

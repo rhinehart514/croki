@@ -77,7 +77,7 @@ export function WorkGraphSketch({ sketch, adoptionState, busy, error, onOpen, on
         <div><span>{adoptionState === "current" ? "Adopted workflow" : adoptionState === "changed" ? "Workflow changes" : "Provisional workflow"}</span><strong>{sketch.title}</strong><small>{sketch.steps.length} {sketch.steps.length === 1 ? "step" : "steps"} · correct it in this conversation</small></div>
         <div>
           {sketch.item.visual ? <button type="button" onClick={(event) => onOpen(sketch.item.visual!, event.currentTarget)}><Maximize2 aria-hidden="true" />Review full graph</button> : null}
-          <button type="button" className="work-graph-adopt" disabled={busy} onClick={onAdopt}>{busy ? "Adopting…" : adoptionState === "current" ? "Open in Product / GTM" : adoptionState === "changed" ? "Adopt changes" : "Adopt in Product / GTM"}</button>
+          <button type="button" className="work-graph-adopt" disabled={busy} onClick={onAdopt}>{busy ? "Adopting…" : adoptionState === "current" ? "Open in Canvas" : adoptionState === "changed" ? "Adopt changes" : "Adopt in Canvas"}</button>
           <button type="button" className="work-graph-collapse" aria-label={collapsed ? "Expand workflow sketch" : "Collapse workflow sketch"} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>{collapsed ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}</button>
         </div>
       </header>

@@ -37,6 +37,9 @@ function publicDrive(entry) {
     liveToolResults: entry.liveToolResults ?? [],
     liveThinking: entry.liveThinking ?? null,
     liveTodos: entry.liveTodos ?? [],
+    // Nested provider work is temporary Run presence, not another Croki work model. The keyed map
+    // stays process-local; clients receive a bounded factual array that can disappear with the drive.
+    liveNestedTasks: [...(entry.liveNestedTasks?.values?.() ?? [])],
     // A process-local presence pointer: true when a founder steer arrived for this effort while the
     // drive is running. The durable queue (work-loop-steer.mjs, on the effort's work record) is the
     // truth the resume reads; this only lets a live drive/UI honestly say "a steer will apply next step."
@@ -44,10 +47,20 @@ function publicDrive(entry) {
   };
 }
 
-export function beginActiveDrive({ ventureId, teammateRef, betId = null, runtime, abortSupported, architectureRevision = null }) {
+export function beginActiveDrive({
+  id = null,
+  ventureId,
+  teammateRef,
+  betId = null,
+  runtime,
+  abortSupported,
+  architectureRevision = null,
+}) {
   const controller = new AbortController();
+  const driveId = String(id ?? "").trim() || `drive-${crypto.randomUUID()}`;
+  if (active.has(driveId)) throw new Error(`Drive ${driveId} is already active.`);
   const entry = {
-    id: `drive-${crypto.randomUUID()}`,
+    id: driveId,
     ventureId,
     teammateRef,
     betId,
@@ -64,6 +77,7 @@ export function beginActiveDrive({ ventureId, teammateRef, betId = null, runtime
     liveToolResults: [],
     liveThinking: null,
     liveTodos: [],
+    liveNestedTasks: new Map(),
     steerPending: false,
     // Correlates a tool-step's started/finished work deltas and measures its duration. Process-local
     // presence like every other live field; a restart drops it and the durable receipt is the truth.
@@ -224,6 +238,57 @@ export function noteDriveTodos(driveId, items, { now = Date.now } = {}) {
     .slice(0, TODO_CAP);
   entry.lastBeatAt = new Date().toISOString();
   publishDriveDelta(driveId, { kind: "todo", items: entry.liveTodos });
+  pingDriveFallback(entry, now());
+  return publicDrive(entry);
+}
+
+const NESTED_TASK_CAP = 100;
+const TERMINAL_NESTED_STATUSES = new Set(["completed", "failed", "cancelled", "stopped", "skipped"]);
+
+// Provider-native subagents and workflows arrive as partial lifecycle facts. Merge them by the
+// provider's task id so progress never creates duplicate rows, then publish the same shaped fact to
+// the drive stream. Prompts, transcripts, and model reasoning are deliberately absent.
+export function noteDriveNestedTask(driveId, event = {}, { now = Date.now } = {}) {
+  const entry = active.get(driveId);
+  const taskId = String(event.taskId ?? event.task_id ?? "").trim();
+  if (!entry || !taskId) return entry ? publicDrive(entry) : null;
+  const patch = event.patch && typeof event.patch === "object" ? event.patch : {};
+  const previous = entry.liveNestedTasks.get(taskId) ?? { taskId };
+  const status = String(
+    event.status
+      ?? patch.status
+      ?? (event.kind === "started" ? "running" : event.kind === "settled" ? "completed" : previous.status ?? "running"),
+  ).trim();
+  const usage = event.usage && typeof event.usage === "object" ? event.usage : {};
+  const next = {
+    ...previous,
+    taskId,
+    parentTaskId: String(event.parentTaskId ?? event.parentId ?? event.parentToolUseId ?? previous.parentTaskId ?? "").trim() || null,
+    label: String(event.label ?? event.description ?? patch.description ?? previous.label ?? "").trim().slice(0, 480) || null,
+    taskKind: String(event.taskKind ?? event.taskType ?? event.subagentType ?? previous.taskKind ?? "").trim().slice(0, 120) || null,
+    status: status || "running",
+    completedCount: Number.isFinite(Number(event.completedCount)) ? Math.max(0, Number(event.completedCount)) : (previous.completedCount ?? null),
+    totalCount: Number.isFinite(Number(event.totalCount)) ? Math.max(0, Number(event.totalCount)) : (previous.totalCount ?? null),
+    inputTokens: Number.isFinite(Number(event.inputTokens ?? usage.inputTokens)) ? Math.max(0, Number(event.inputTokens ?? usage.inputTokens)) : (previous.inputTokens ?? null),
+    outputTokens: Number.isFinite(Number(event.outputTokens ?? usage.outputTokens)) ? Math.max(0, Number(event.outputTokens ?? usage.outputTokens)) : (previous.outputTokens ?? null),
+    totalTokens: Number.isFinite(Number(event.totalTokens ?? usage.totalTokens))
+      ? Math.max(0, Number(event.totalTokens ?? usage.totalTokens))
+      : (previous.totalTokens ?? null),
+    costUsd: Number.isFinite(Number(event.costUsd ?? usage.costUsd)) ? Math.max(0, Number(event.costUsd ?? usage.costUsd)) : (previous.costUsd ?? null),
+    elapsedMs: Number.isFinite(Number(event.elapsedMs ?? usage.durationMs ?? usage.duration_ms))
+      ? Math.max(0, Number(event.elapsedMs ?? usage.durationMs ?? usage.duration_ms))
+      : (previous.elapsedMs ?? null),
+    error: String(event.error ?? patch.error ?? previous.error ?? "").trim().slice(0, 2_000) || null,
+    skipTranscript: event.skipTranscript === true || event.hidden === true || previous.skipTranscript === true,
+  };
+  entry.liveNestedTasks.delete(taskId);
+  entry.liveNestedTasks.set(taskId, next);
+  while (entry.liveNestedTasks.size > NESTED_TASK_CAP) {
+    const settled = [...entry.liveNestedTasks].find(([, task]) => TERMINAL_NESTED_STATUSES.has(task.status));
+    entry.liveNestedTasks.delete(settled?.[0] ?? entry.liveNestedTasks.keys().next().value);
+  }
+  entry.lastBeatAt = new Date().toISOString();
+  publishDriveDelta(driveId, { kind: "nested-task", task: next });
   pingDriveFallback(entry, now());
   return publicDrive(entry);
 }

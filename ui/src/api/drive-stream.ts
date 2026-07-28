@@ -14,6 +14,22 @@
 
 export type DriveStreamTodo = { content: string; status: string };
 export type DriveStreamTool = { name: string; partialInput: string };
+export type DriveStreamNestedTask = {
+  taskId: string;
+  parentTaskId?: string | null;
+  label?: string | null;
+  taskKind?: string | null;
+  status?: string | null;
+  completedCount?: number | null;
+  totalCount?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  costUsd?: number | null;
+  elapsedMs?: number | null;
+  error?: string | null;
+  skipTranscript?: boolean;
+};
 
 // One live delta. `child` nests another delta under the subagent tool call that produced it, so a
 // subagent's activity stays attributed instead of being merged into the parent's forming reply.
@@ -23,6 +39,7 @@ export type DriveStreamDelta =
   | { seq?: number; kind: "tool-result"; name: string; target?: string | null; status?: string | null; detail?: string | null }
   | { seq?: number; kind: "thinking"; state: "start" | "stop"; durationMs?: number | null }
   | { seq?: number; kind: "todo"; items: DriveStreamTodo[] }
+  | { seq?: number; kind: "nested-task"; task: DriveStreamNestedTask }
   | { seq?: number; kind: "child"; parentToolUseId: string; delta: DriveStreamDelta };
 
 export type DriveStreamSnapshot = {
@@ -32,6 +49,7 @@ export type DriveStreamSnapshot = {
   thinking?: { state?: "start" | "stop"; durationMs?: number | null } | null;
   todos?: DriveStreamTodo[] | null;
   children?: unknown;
+  nestedTasks?: DriveStreamNestedTask[] | Record<string, DriveStreamNestedTask> | null;
 };
 
 export type DriveStreamFrame =

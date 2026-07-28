@@ -1,9 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ThreadTimelineItem } from "@/api";
 import { MessageResponse } from "@/components/ai-elements/message";
-import type { WorkChatMode } from "@/components/work-mode/WorkComposerBar";
-import { useDriveStream, type DriveStreamStep, type DriveStreamThinking } from "@/hooks/useDriveStream";
+import {
+  useDriveStream,
+  type DriveStreamStep,
+  type DriveStreamThinking,
+} from "@/hooks/useDriveStream";
 import { readActiveVentureId } from "@/lib/venture-session";
+import { recoveryPresentation } from "@/lib/recovery-presentation";
+
+const ThreadNestedWork = lazy(() => import("./ThreadNestedWork").then((module) => ({
+  default: module.ThreadNestedWork,
+})));
 
 const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
 const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -39,7 +47,7 @@ const thinkingSecondsLabel = (ms: number | null) => `Thinking · ${Math.max(1, M
 
 // Live timers write their own text node once a second. A working turn must never commit a React
 // render just to advance "2m 3s" — on a long thread that per-second commit is real jank.
-function AgentState({ prefix, startedAt, active }: { prefix: string; startedAt: unknown; active: boolean }) {
+function AgentState({ prefix, startedAt, endedAt, active }: { prefix: string; startedAt: unknown; endedAt?: unknown; active: boolean }) {
   const node = useRef<HTMLSpanElement | null>(null);
   // Render stays pure: the clock is read once at mount, then only the interval advances the text.
   const [mountedAt] = useState(() => Date.now());
@@ -53,7 +61,8 @@ function AgentState({ prefix, startedAt, active }: { prefix: string; startedAt: 
     const timer = window.setInterval(tick, 1_000);
     return () => window.clearInterval(timer);
   }, [active, prefix, startedAt]);
-  const label = elapsedLabel(startedAt, mountedAt);
+  const ended = Date.parse(text(endedAt));
+  const label = elapsedLabel(startedAt, !active && Number.isFinite(ended) ? ended : mountedAt);
   return <span className="thread-agent-state" ref={node}>{label ? `${prefix} · ${label}` : prefix}</span>;
 }
 
@@ -106,7 +115,7 @@ function liveStep(step: DriveStreamStep): Step {
   };
 }
 
-export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code" }: { item: ThreadTimelineItem; surface?: "work" | "context"; chatMode?: WorkChatMode }) {
+export function ThreadAgentUpdate({ item, surface = "context" }: { item: ThreadTimelineItem; surface?: "work" | "context" }) {
   const [showEarlier, setShowEarlier] = useState(false);
   const participantRef = text(item.participantRef, "agent");
   const participant = text(item.participantLabel, participantRef);
@@ -133,7 +142,9 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
     const timer = window.setTimeout(() => setLongWaitReached(true), remaining);
     return () => window.clearTimeout(timer);
   }, [state, item.startedAt, longWaitReached]);
-  const summary = text(item.summary, "Working in this thread");
+  const recoveryLayer = item.recoveryLayer === "canvas" ? "canvas" : "provider";
+  const providerRecovery = recoveryPresentation(recoveryLayer);
+  const summary = state === "failed" ? providerRecovery.title : text(item.summary, "Working in this thread");
   const summaryTone = text(item.summaryTone);
   const durableSteps: Step[] = Array.isArray(item.activitySteps) ? item.activitySteps.flatMap((entry) => {
     if (!entry || typeof entry !== "object") return [];
@@ -161,7 +172,7 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
   const stateText = longWait ? "Taking longer than usual" : `${state.charAt(0).toUpperCase()}${state.slice(1)}`;
   const elapsedNow = elapsedLabel(item.startedAt, observedAt);
   const stateLabel = `${stateText}${elapsedNow ? ` · ${elapsedNow}` : ""}`;
-  const showParticipant = surface === "context" || chatMode === "product-gtm";
+  const showParticipant = surface === "context";
   const accessibleLabel = showParticipant ? `${participant}: ${summary}. ${stateLabel}` : `${summary}. ${stateLabel}`;
   return (
     <>
@@ -171,10 +182,14 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
           <div className="thread-agent-line">
             {showParticipant ? <strong>{participant}</strong> : null}
             <p data-tone={summaryTone || undefined}>{summary}</p>
-            <AgentState prefix={stateText} startedAt={item.startedAt} active={active} />
+            <AgentState prefix={stateText} startedAt={item.startedAt} endedAt={item.updatedAt} active={active} />
             <ThinkingState thinking={live.thinking} />
           </div>
           {longWait ? <p className="thread-agent-wait-note">The work is still active. You can leave this thread and return when it finishes.</p> : null}
+          {state === "failed" ? <p className="thread-agent-wait-note">{providerRecovery.retained} {text(item.recovery, "Resume from this Thread when you are ready.")}</p> : null}
+          {live.nestedTasks.length ? <Suspense fallback={null}>
+            <ThreadNestedWork tasks={live.nestedTasks} runId={driveId ?? "active"} />
+          </Suspense> : null}
           {live.todos.length ? <div className="thread-agent-steps" aria-label="Plan">
             <ol>
               {live.todos.map((todo) => (
@@ -216,7 +231,7 @@ export function ThreadAgentUpdate({ item, surface = "context", chatMode = "code"
         <article className="thread-message" data-role="teammate" data-streaming="true">
           <header>{participant}</header>
           <div className="thread-message-body">
-            <MessageResponse>{replyText}</MessageResponse>
+            <MessageResponse isAnimating={active}>{replyText}</MessageResponse>
             <span className="thread-message-caret" aria-label="Responding…" />
           </div>
         </article>

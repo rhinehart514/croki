@@ -1,11 +1,15 @@
 import { AnimatePresence } from "motion/react";
-import type { MutableRefObject } from "react";
+import { lazy, Suspense, type MutableRefObject } from "react";
 import type { FirmVenture, VisualReference, WorkIndex } from "@/api";
-import { FirmSettings } from "@/components/firm/FirmSettings";
 import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 import { VisualStage } from "@/components/visual-stage/VisualStage";
 import type { FirmLens } from "@/types";
 import type { directionsFromWorkIndex } from "./workIndexModel";
+
+const FirmSettings = lazy(async () => {
+  const module = await import("@/components/firm/FirmSettings");
+  return { default: module.FirmSettings };
+});
 
 export function WorkspaceOverlays({
   venture, stage, timeline, workIndex, directions, lens, readOnly, readOnlyReason,
@@ -51,15 +55,17 @@ export function WorkspaceOverlays({
     </AnimatePresence>
     <AnimatePresence initial={false}>
       {settingsConnection !== undefined ? (
-        <FirmSettings
-          key={settingsConnection ?? "settings"}
-          venture={venture}
-          readOnly={readOnly}
-          readOnlyReason={readOnlyReason}
-          initialConnection={settingsConnection}
-          onCapabilitiesChanged={onCapabilitiesChanged}
-          onClose={() => onSettingsConnection(undefined)}
-        />
+        <Suspense fallback={<div className="firm-settings-loading" role="status">Opening settings…</div>}>
+          <FirmSettings
+            key={settingsConnection ?? "settings"}
+            venture={venture}
+            readOnly={readOnly}
+            readOnlyReason={readOnlyReason}
+            initialConnection={settingsConnection}
+            onCapabilitiesChanged={onCapabilitiesChanged}
+            onClose={() => onSettingsConnection(undefined)}
+          />
+        </Suspense>
       ) : null}
     </AnimatePresence>
   </>;

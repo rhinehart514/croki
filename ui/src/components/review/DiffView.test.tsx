@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DiffView } from "./DiffView";
 
@@ -50,5 +50,42 @@ describe("DiffView", () => {
     render(<DiffView diff={twoFiles} path="src/other.ts" />);
     expect(screen.getByText("src/other.ts")).toBeInTheDocument();
     expect(screen.queryByText("src/hello.ts")).not.toBeInTheDocument();
+  });
+
+  it("collapses a large diff until the founder opens its exact file", async () => {
+    const additions = Array.from({ length: 201 }, (_, index) => `+line ${index}`).join("\n");
+    const large = `diff --git a/src/large.ts b/src/large.ts
+--- a/src/large.ts
++++ b/src/large.ts
+@@ -0,0 +1,201 @@
+${additions}
+`;
+    render(<DiffView diff={large} />);
+
+    const toggle = screen.getByRole("button", { name: "Show diff for src/large.ts" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector("diffs-container")).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Hide diff for src/large.ts" })).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(document.querySelector("diffs-container")).not.toBeNull());
+  });
+
+  it("can expand and collapse every changed file together", async () => {
+    const files = Array.from({ length: 6 }, (_, index) => `diff --git a/src/${index}.ts b/src/${index}.ts
+--- a/src/${index}.ts
++++ b/src/${index}.ts
+@@ -0,0 +1 @@
++line ${index}
+`).join("\n");
+    render(<DiffView diff={files} />);
+
+    expect(screen.getByRole("button", { name: "Expand all files" })).toBeInTheDocument();
+    expect(document.querySelectorAll("diffs-container")).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand all files" }));
+    await waitFor(() => expect(document.querySelectorAll("diffs-container")).toHaveLength(6));
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all files" }));
+    expect(document.querySelectorAll("diffs-container")).toHaveLength(0);
   });
 });

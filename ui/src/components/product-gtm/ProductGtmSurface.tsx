@@ -6,6 +6,7 @@ import {
 import { LocateFixed } from "lucide-react";
 import { getCurrentModel, getMarketMovement } from "@/api";
 import type { SystemIndex, WorkIndex } from "@/api";
+import type { WorkModelChoice } from "@/components/work-mode/WorkComposerBar";
 import type { FirmPlacement, FirmSemanticModel, MarketMovementIndex } from "@/types";
 import { ModelBranchReview } from "./ModelBranchReview";
 import { OutwardActionReview } from "./OutwardActionReview";
@@ -44,11 +45,11 @@ function selectedNodeId(ref: string | null): string | null {
 }
 
 export function ProductGtmSurface({
-  ventureId, index, workIndex, selectedRef, camera, readOnlyReason,
+  ventureId, index, workIndex, selectedRef, camera, modelChoice, readOnlyReason,
   journeyObservations = [], selectedJourneyOverlayRef, onJourneyOverlayChange,
   onCameraChange, onFocus, onOpenWork, onAskAgent, onDraftPlay, onUseAgent, onChanged,
 }: {
-  ventureId: string; index: SystemIndex | null; workIndex: WorkIndex | null; selectedRef: string | null; camera: Viewport | null; placement: FirmPlacement; readOnlyReason: string | null;
+  ventureId: string; index: SystemIndex | null; workIndex: WorkIndex | null; selectedRef: string | null; camera: Viewport | null; placement: FirmPlacement; modelChoice: WorkModelChoice; readOnlyReason: string | null;
   organizeRequest?: number;
   journeyObservations?: ProductGtmJourneyObservation[];
   selectedJourneyOverlayRef?: string | null;
@@ -132,7 +133,7 @@ export function ProductGtmSurface({
         : node.data.action
           ? <OutwardActionReview ventureId={ventureId} action={node.data.action} readOnly={Boolean(readOnlyReason)} onChanged={() => { refresh(); onChanged(); }} />
           : node.data.role === "page" && node.data.page
-            ? <ProductPagePanel ventureId={ventureId} name={node.data.name} summary={node.data.detail} pageRef={node.data.ref} page={node.data.page} readOnly={Boolean(readOnlyReason)} onOpenWork={onOpenWork} />
+            ? <ProductPagePanel ventureId={ventureId} name={node.data.name} summary={node.data.detail} pageRef={node.data.ref} page={node.data.page} modelChoice={modelChoice} readOnly={Boolean(readOnlyReason)} onOpenWork={onOpenWork} />
             // Decision 28: only the focused node carries live detail, and only while it is actually running.
             // A quiet or finished node shows its resting detail; nothing animates ambiently across the canvas.
             : isWork && node.data.active
@@ -148,7 +149,7 @@ export function ProductGtmSurface({
         onCollapse: () => select(null),
       },
     };
-  }), [branchId, projectedNodes, onAskAgent, onChanged, onOpenWork, readOnlyReason, refresh, select, selected, ventureId]);
+  }), [branchId, modelChoice, projectedNodes, onAskAgent, onChanged, onOpenWork, readOnlyReason, refresh, select, selected, ventureId]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<ProductGtmFlowNode>([]);
   const reconcileKey = `${selected ?? ""}:${interactiveNodes.map((node) => `${node.id}:${node.position.x}:${node.position.y}:${node.data.name}:${node.data.detail}:${node.data.meta}:${node.data.focus}:${node.data.active}:${node.data.journeyCountLabel}`).join("|")}`;
@@ -249,7 +250,7 @@ export function ProductGtmSurface({
     }
   }, [onCameraChange, onFocus, onJourneyOverlayChange]);
 
-  if (!visibleModel || !graph || projectedNodes.length === 0) return <main className="product-gtm-empty"><div><span>Product / GTM</span><h1>What are you trying to make true?</h1><p>State the direction once. Claude or Codex can ground the repository, pursue several approaches, and materialize Product and go-to-market alternatives here.</p><button type="button" onClick={() => onAskAgent()}>Begin real work</button>{error ? <small role="status">Croki could not read the local model yet. Your direction is still available.</small> : null}</div></main>;
+  if (!visibleModel || !graph || projectedNodes.length === 0) return <main className="product-gtm-empty"><div><span>Canvas</span><h1>See what the code is becoming.</h1><p>Ask Claude or Codex to map the product, a dependency, or a decision when seeing the relationships will improve the next change.</p><button type="button" onClick={() => onAskAgent()}>Ask in this Thread</button>{error ? <small role="status">Croki could not read the Canvas yet. Your Thread and draft are still available.</small> : null}</div></main>;
   return <main className="product-gtm-surface" data-projection={graph.projection.kind} data-has-selection={selectedNode ? "true" : undefined} data-has-focus={graph.projection.kind !== "product-walk" ? "true" : undefined} data-drop-active={dropActive ? "true" : undefined} data-zoom={zoomLevel < 0.78 ? "overview" : "detail"}>
     {readOnlyReason || error ? <div className="product-gtm-state"><span role="status">{readOnlyReason ?? "Showing the last current venture model. Reconnecting locally."}</span>{!readOnlyReason && error ? <button type="button" onClick={refresh}>Try again</button> : null}</div> : null}
     {dropNotice ? <p className="product-gtm-drop-status" role="status">{dropNotice}</p> : null}
@@ -278,15 +279,16 @@ export function ProductGtmSurface({
         onCameraChange(viewport);
         if (event && focalViewport.current) setCameraAway(productGtmViewportIsAway(viewport, focalViewport.current));
       }} proOptions={{ hideAttribution: true }}
-      aria-label="Product and go-to-market canvas, contextually composed around the current Product walk, consequence, play, or evidence return"
+      aria-label="Canvas, contextually composed around the current product walk, consequence, play, or evidence return"
     >
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
       <Controls position="bottom-left" showInteractive={false} />
       <MiniMap position="bottom-right" pannable zoomable nodeStrokeWidth={2} />
-    </ReactFlow>{dropChoice ? <div className="product-gtm-drop-choice-scrim" role="presentation" onClick={dismissChoice}>
-      <div className="product-gtm-drop-choice" style={{ left: dropChoice.x, top: dropChoice.y }} role="group" aria-label={dropChoice.prompt} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") dismissChoice(); }}>
+    </ReactFlow>{dropChoice ? <div className="product-gtm-drop-choice-scrim" role="dialog" aria-modal="true" aria-label={dropChoice.prompt} onKeyDown={(event) => { if (event.key === "Escape") dismissChoice(); }}>
+      <div className="product-gtm-drop-choice" style={{ left: dropChoice.x, top: dropChoice.y }} role="group">
         <p>{dropChoice.prompt}</p>
         {dropChoice.options.map((option, index) => <button key={option.label} type="button" autoFocus={index === 0} onClick={() => resolveChoice(option.run)}>{option.label}</button>)}
+        <button type="button" onClick={dismissChoice}>Cancel</button>
       </div>
     </div> : null}</div>
   </main>;

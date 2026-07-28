@@ -12,6 +12,7 @@ const WORKSPACE_V10_PREFIX = "drover:workspace-session:v10:";
 const WORKSPACE_V11_PREFIX = "drover:workspace-session:v11:";
 const WORKSPACE_V12_PREFIX = "drover:workspace-session:v12:";
 const WORKSPACE_V13_PREFIX = "drover:workspace-session:v13:";
+const WORKSPACE_V14_PREFIX = "drover:workspace-session:v14:";
 
 // The one-shell session. Conversation is always present; the Canvas is a collapsible panel beside it,
 // so a single `canvasOpen` boolean replaces the retired two-surface `mode` and its contextual-chat flag.
@@ -23,6 +24,22 @@ export type WorkspaceSession = {
   systemCamera: { x: number; y: number; zoom: number } | null;
   chatScrollByThread: Record<string, number>;
 };
+
+type WorkspaceThreadPresentation = Pick<
+  WorkspaceSession,
+  "canvasOpen" | "selectedObjectRef" | "systemCamera"
+>;
+
+type StoredWorkspaceV14 = {
+  schemaVersion: 1;
+  ventureId: string;
+  activeThreadRef: string | null;
+  railWidth: number;
+  chatScrollByThread: Record<string, number>;
+  threads: Record<string, WorkspaceThreadPresentation>;
+};
+
+const MAX_THREAD_PRESENTATIONS = 48;
 
 export type ThreadSessionVisual = {
   kind: "preview" | "diff" | "flow" | "model-view" | "comparison" | "map" | "evidence" | "consequence";
@@ -135,6 +152,21 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
   const fallback = defaultWorkspaceSession();
   if (!ventureId.trim()) return fallback;
   try {
+    const v14 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V14_PREFIX}${ventureId}`) ?? "null") as Partial<StoredWorkspaceV14> | null;
+    if (v14?.schemaVersion === 1 && v14.ventureId === ventureId) {
+      const selectedThreadRef = stringOrNull(v14.activeThreadRef);
+      const thread = selectedThreadRef && v14.threads && typeof v14.threads === "object"
+        ? v14.threads[selectedThreadRef]
+        : null;
+      return {
+        railWidth: safeRailWidth(v14.railWidth),
+        canvasOpen: thread?.canvasOpen === true,
+        selectedThreadRef,
+        selectedObjectRef: stringOrNull(thread?.selectedObjectRef),
+        systemCamera: cameraOrNull(thread?.systemCamera),
+        chatScrollByThread: scrollsOrEmpty(v14.chatScrollByThread),
+      };
+    }
     const v13 = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V13_PREFIX}${ventureId}`) ?? "null") as Partial<WorkspaceSession> | null;
     if (v13) {
       return {
@@ -187,7 +219,74 @@ export function readWorkspaceSession(ventureId: string): WorkspaceSession {
 
 export function rememberWorkspaceSession(ventureId: string, session: WorkspaceSession) {
   if (!ventureId.trim()) return;
-  try { window.localStorage.setItem(`${WORKSPACE_V13_PREFIX}${ventureId}`, JSON.stringify({ ...session, railWidth: safeRailWidth(session.railWidth) })); } catch { /* presentation memory is disposable */ }
+  try {
+    const prior = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V14_PREFIX}${ventureId}`) ?? "null") as Partial<StoredWorkspaceV14> | null;
+    const threads = prior?.schemaVersion === 1 && prior.ventureId === ventureId && prior.threads && typeof prior.threads === "object"
+      ? prior.threads
+      : {};
+    const selectedThreadRef = stringOrNull(session.selectedThreadRef);
+    const nextThreads = selectedThreadRef ? {
+      ...threads,
+      [selectedThreadRef]: {
+        canvasOpen: session.canvasOpen,
+        selectedObjectRef: stringOrNull(session.selectedObjectRef),
+        systemCamera: cameraOrNull(session.systemCamera),
+      },
+    } : threads;
+    const bounded = Object.fromEntries(Object.entries(nextThreads).slice(-MAX_THREAD_PRESENTATIONS));
+    const stored: StoredWorkspaceV14 = {
+      schemaVersion: 1,
+      ventureId,
+      activeThreadRef: selectedThreadRef,
+      railWidth: safeRailWidth(session.railWidth),
+      chatScrollByThread: scrollsOrEmpty(session.chatScrollByThread),
+      threads: bounded,
+    };
+    window.localStorage.setItem(`${WORKSPACE_V14_PREFIX}${ventureId}`, JSON.stringify(stored));
+  } catch { /* presentation memory is disposable */ }
+}
+
+export function readWorkspaceThreadPresentation(
+  ventureId: string,
+  threadRef: string,
+): WorkspaceThreadPresentation | null {
+  if (!ventureId.trim() || !threadRef.trim()) return null;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(`${WORKSPACE_V14_PREFIX}${ventureId}`) ?? "null") as Partial<StoredWorkspaceV14> | null;
+    if (stored?.schemaVersion !== 1 || stored.ventureId !== ventureId || !stored.threads || typeof stored.threads !== "object") return null;
+    const thread = stored.threads[threadRef];
+    if (!thread || typeof thread !== "object") return null;
+    return {
+      canvasOpen: thread.canvasOpen === true,
+      selectedObjectRef: stringOrNull(thread.selectedObjectRef),
+      systemCamera: cameraOrNull(thread.systemCamera),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function validateWorkspaceDestination(
+  session: WorkspaceSession,
+  identities: { threadRefs: ReadonlySet<string>; objectRefs: ReadonlySet<string> },
+): { session: WorkspaceSession; breaks: Array<{ layer: "Thread" | "Canvas"; message: string }> } {
+  const breaks: Array<{ layer: "Thread" | "Canvas"; message: string }> = [];
+  const threadValid = session.selectedThreadRef == null
+    || session.selectedThreadRef === "thread:venture-root"
+    || identities.threadRefs.has(session.selectedThreadRef);
+  const objectValid = session.selectedObjectRef == null
+    || identities.objectRefs.has(session.selectedObjectRef);
+  if (!threadValid) breaks.push({ layer: "Thread", message: "The saved Thread is no longer available. Croki opened the nearest current Thread." });
+  if (!objectValid) breaks.push({ layer: "Canvas", message: "The saved Canvas item is no longer available. The Thread and its draft were kept." });
+  return {
+    session: {
+      ...session,
+      selectedThreadRef: threadValid ? session.selectedThreadRef : null,
+      selectedObjectRef: objectValid ? session.selectedObjectRef : null,
+      systemCamera: objectValid ? session.systemCamera : null,
+    },
+    breaks,
+  };
 }
 
 const WORKBENCH_PREFIX = "drover:work-workbench:v1:";

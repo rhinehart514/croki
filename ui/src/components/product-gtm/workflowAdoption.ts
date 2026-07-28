@@ -26,7 +26,7 @@ export async function adoptWorkflowSketch(ventureId: string, index: SystemIndex,
   const authority = sketch.steps.find((step) => ["founder-gate", "founder-decision"].includes(step.type ?? ""))?.label ?? "Founder decision unresolved";
   const evidence = sketch.steps.find((step) => ["observation", "outcome"].includes(step.type ?? ""))?.label ?? "Evidence return unresolved";
   const id = existing?.id ?? `mechanism-${crypto.randomUUID()}`;
-  const statement = first?.detail ?? "A founder-adopted reusable Product / GTM mechanism.";
+  const statement = first?.detail ?? "A founder-adopted reusable Canvas mechanism.";
   const properties = {
     trigger, intendedOutcome: outcome, authority, evidence,
     workflowGraph: {

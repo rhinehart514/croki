@@ -4,10 +4,9 @@
 // founder intent → run → returned evidence, joined to the venture root Thread so the whole drive becomes
 // inspectable history. This module is the two seams work-loop.mjs calls — begin (before provider dispatch)
 // and finish (after terminal completion) — lifted out so the work loop stays under its LOC ceiling and so
-// EVERY run-recording call is wrapped in the same fail-safe: a run-recording error degrades honestly and
-// NEVER aborts or changes a drive (the same discipline runFirstRun uses in lens-routes.mjs). An interrupted
-// or cancelled drive never reaches finish, so its run stays completedAt:null — historical-unknown, never a
-// false completion.
+// Canonical semantic-model recording keeps its historical fail-safe. The Work journal is different:
+// corruption or an incompatible schema deliberately holds provider dispatch at a read-only recovery
+// boundary, because continuing would create work the durable continuity record cannot represent.
 //
 // The run id is the activeDrive.id, so a run is 1:1 with the drive that produced it and never collides.
 // Legacy drives are not backfilled: only a drive that begins a run here can complete one.
@@ -17,6 +16,9 @@ import { setVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { createWorkflowExecutionReceipt } from "./workflow-execution-receipt.mjs";
 import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
 import { emitFirmEvent } from "./firm-events.mjs";
+import { recordAcceptedRun, recordRunTerminal } from "./work-journal-runtime.mjs";
+import { bindAgentDailySpendReservation } from "./work-loop-budget.mjs";
+import { recoveryMachineRef } from "./work-recovery.mjs";
 
 // Join a run to its durable settlement receipt by receipt.runRef, not by storage key. A receipt is
 // STORED under its own content-addressed .id (workflow-execution-receipt.mjs) so the doc's id IS its
@@ -44,8 +46,8 @@ export function driveRecordsRun(initiatedBy) {
 
 // begin — form/resume a child direction thread and persist the canonical run BEFORE provider dispatch, after all
 // input/config/runtime validation. Returns a handle the finish seam completes, or null when this drive
-// does not record (not founder-authorized) or when recording failed. A failure here is swallowed: the
-// drive proceeds untouched, exactly as if no run substrate existed.
+// does not record (not founder-authorized) or when canonical recording failed. Legacy canonical-model
+// failures still degrade; journal corruption/incompatibility fails closed before provider dispatch.
 export function beginDriveRun({
   ventureId,
   runId,
@@ -84,12 +86,96 @@ export function beginDriveRun({
       betRefs,
       ...(originMessageRef ? { originMessageRef } : {}),
     }, { at: at ?? undefined }, options);
+    const handle = { ventureId, runId, betId, architectureRef, threadRef: direction.threadRef, originMessageRef, options };
+    // This single founder-turn event also establishes the Run in the rebuildable projection. It lands
+    // before provider invocation, so a process death cannot recover the accepted turn without its Run.
+    recordAcceptedRun(handle, {
+      originMessageRef,
+      workScopeRef: target?.workScopeRef ?? null,
+      at,
+    });
     emitFirmEvent(ventureId, "timeline", { threadRef: direction.threadRef });
-    return { ventureId, runId, betId, architectureRef, threadRef: direction.threadRef, options };
-  } catch {
+    return handle;
+  } catch (error) {
+    // Journal corruption/incompatibility is an explicit read-only recovery state, not an optional
+    // historical enhancement. Refuse provider dispatch until the founder can preserve/repair it.
+    if (String(error?.code ?? "").startsWith("work_journal_")) throw error;
     // Honest degrade: the drive must never be aborted or changed by a run-recording error.
     return null;
   }
+}
+
+export function beginOrRecoverDriveRun(input, {
+  recovery = null,
+  teammateRef,
+  spendAvailability,
+  nowMs,
+} = {}) {
+  const handle = recovery ? {
+    ventureId: input.ventureId,
+    runId: recovery.runId,
+    betId: recovery.betId,
+    threadRef: recovery.threadRef,
+    options: input.options,
+  } : beginDriveRun(input);
+  if (handle && spendAvailability.reservation) {
+    spendAvailability.reservation = bindAgentDailySpendReservation({
+      ventureId: input.ventureId,
+      teammateRef,
+      reservation: spendAvailability.reservation,
+      runRef: `run:${handle.runId}`,
+      machineRef: recoveryMachineRef(input.options),
+      options: input.options,
+      nowMs,
+    });
+  }
+  return handle;
+}
+
+// The active drive and durable Run are accepted as one boundary. Recovery binding, journal refusal,
+// cleanup on failure, and the caller's acceptance acknowledgement cannot drift across call sites.
+export function acceptDriveRun({
+  activeDrive,
+  ventureId,
+  initiatedBy,
+  betId,
+  originMessageId,
+  threadName,
+  target,
+  options,
+  recovery,
+  teammateRef,
+  spendAvailability,
+  nowMs,
+  onAccepted,
+} = {}) {
+  let handle;
+  try {
+    handle = beginOrRecoverDriveRun({
+      ventureId,
+      runId: activeDrive.id,
+      initiatedBy,
+      betId,
+      originMessageId,
+      threadName,
+      threadRef: target?.threadRef ?? null,
+      target,
+      options,
+    }, { recovery, teammateRef, spendAvailability, nowMs });
+  } catch (error) {
+    activeDrive.finish();
+    throw error;
+  }
+  if (typeof onAccepted !== "function") return handle;
+  if (!handle) {
+    activeDrive.finish();
+    throw Object.assign(new Error("Croki could not durably accept this Run."), {
+      code: "work_run_acceptance_failed",
+      status: 409,
+    });
+  }
+  onAccepted({ runRef: `run:${handle.runId}`, threadRef: handle.threadRef });
+  return handle;
 }
 
 export function joinDriveRunToWork(handle, { workRef, participantRef, provider, repository, branch, worktree }, options = {}) {
@@ -178,6 +264,7 @@ export function finishDriveRun(handle, {
     // findReceiptForRun, never by storage key. Inside the fail-safe try: a persistence error degrades to
     // historical-unknown, never aborts the drive.
     setVentureDoc(ventureId, "receipts", receipt.id, receipt, options);
+    recordRunTerminal(handle, outcome, receipt, { at });
     // Returned messages and newly revealed subjects belong to the same direction. This enrichment is
     // best-effort after settlement: a bad optional ref must never erase an otherwise valid terminal receipt.
     try {

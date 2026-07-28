@@ -1,7 +1,6 @@
 // One durable coding workspace per implementation approach. A Thread owns continuity, Runs append
 // execution attempts, and this record owns only isolated filesystem lineage, checkpoints, proof, and
 // founder-held local consequences. Provider events remain runtime input translated into this record.
-
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -14,11 +13,15 @@ import { listVentures, getVentureDoc, listVentureDocs, now, setVentureDoc } from
 import { recordCodingProductConsequence } from "./semantic-model-store.mjs";
 import { normalizeWorkflowOutcome } from "./workflow-outcome.mjs";
 import { hostProjectCheck } from "./code-workspace-verification.mjs";
+import { recordCodingSettlement } from "./work-journal-runtime.mjs";
 import { prepareCodingWorkspaceFilesystem } from "./code-workspace-setup.mjs";
-
+import {
+  appendRunDirection,
+  attributeCheckpoint,
+  reconcileReviewComments,
+} from "./git-review-state.mjs";
 export const CODE_WORKSPACE_COLLECTION = "codeWorkspaces";
 const ACTIVE = new Set(["preparing", "running", "interrupted", "reviewable", "needs-verification", "failed-verification"]);
-
 function git(cwd, args, { input, allowDifference = false } = {}) {
   try {
     return execFileSync("git", args, {
@@ -32,13 +35,11 @@ function git(cwd, args, { input, allowDifference = false } = {}) {
     throw new Error(detail || `git ${args.join(" ")} failed.`);
   }
 }
-
 function realRepository(repository) {
   const repo = fs.realpathSync(path.resolve(String(repository ?? "")));
   if (git(repo, ["rev-parse", "--show-toplevel"]) !== repo) throw new Error("Native coding requires the venture repository root.");
   return repo;
 }
-
 function assertInsideWorkspaceRoot(repo, worktree) {
   const root = path.join(repo, ".drover-worktrees");
   const resolved = fs.realpathSync(worktree);
@@ -46,11 +47,9 @@ function assertInsideWorkspaceRoot(repo, worktree) {
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("The coding workspace is outside this venture repository.");
   return resolved;
 }
-
 function checkpointRef(id, name) {
   return `refs/drover/checkpoints/${id}/${name}`;
 }
-
 function save(record, options = {}) {
   const updated = { ...record, updatedAt: now() };
   setVentureDoc(updated.ventureId, CODE_WORKSPACE_COLLECTION, updated.id, updated, options);
@@ -72,11 +71,11 @@ function reusableWorkspace(ventureId, { threadRef, betId, workRef, goal }, optio
   return candidates[0] ?? null;
 }
 
-export function openCodingWorkspace({ ventureId, runId, threadRef, betId = null, participantRef, provider, repository, goal, workRef = null }, options = {}) {
+export function openCodingWorkspace({ ventureId, runId, threadRef, betId = null, participantRef, provider, repository, goal, originMessageRef = null, workRef = null }, options = {}) {
   const reusable = reusableWorkspace(ventureId, { threadRef, betId, workRef, goal }, options);
   if (reusable) {
     assertCodingWorkspaceIdentity(reusable);
-    return save({
+    const resumed = appendRunDirection({
       ...reusable,
       status: "running",
       runRefs: [...new Set([...(reusable.runRefs ?? []), `run:${runId}`])],
@@ -86,7 +85,8 @@ export function openCodingWorkspace({ ventureId, runId, threadRef, betId = null,
       interruption: null,
       decisions: reusable.consequence ? [...(reusable.decisions ?? []), reusable.consequence] : reusable.decisions ?? [],
       consequence: null,
-    }, options);
+    }, { runRef: `run:${runId}`, originMessageRef, direction: goal, at: now() });
+    return save(resumed, options);
   }
 
   const repo = realRepository(repository);
@@ -106,7 +106,7 @@ export function openCodingWorkspace({ ventureId, runId, threadRef, betId = null,
   const guardHooks = prepareCodingWorkspaceFilesystem(repo, worktree, git);
   const baseline = captureCheckpoint({ worktree, ref: checkpointRef(id, "baseline"), message: `Croki coding baseline for ${id}` });
   const timestamp = now();
-  const settled = save({
+  const reviewAttributed = appendRunDirection({
     id, kind: "native-code", ventureId, threadRef, betId, goal,
     repository: repo, sourceHead, sourcePatchHash, branch, worktree, guardHooks,
     workspaceHead: git(worktree, ["rev-parse", "HEAD"]),
@@ -118,7 +118,8 @@ export function openCodingWorkspace({ ventureId, runId, threadRef, betId = null,
     consequence: null, decisions: [], productConsequence: null,
     hostVerification: options.nativeCodingHostVerification !== false,
     createdAt: timestamp, updatedAt: timestamp,
-  }, options);
+  }, { runRef: `run:${runId}`, originMessageRef, direction: goal, at: timestamp });
+  const settled = save(reviewAttributed, options);
   return settled;
 }
 
@@ -139,13 +140,39 @@ export function assertCodingWorkspaceIdentity(record) {
   return { repo, worktree };
 }
 
+export function resumeCodingWorkspace(
+  ventureId, id, { runRef, participantRef, provider } = {}, options = {},
+) {
+  const record = getVentureDoc(ventureId, CODE_WORKSPACE_COLLECTION, id, options);
+  if (!record) throw new Error(`No such coding workspace: ${id}`);
+  assertCodingWorkspaceIdentity(record);
+  if (!(record.runRefs ?? []).includes(runRef) || !(record.participantRefs ?? []).includes(participantRef)) {
+    throw new Error("The interrupted coding workspace no longer matches its Run and participant.");
+  }
+  const session = (record.providerSessions ?? []).find((entry) => entry.runRef === runRef && entry.provider === provider);
+  if (!session?.sessionId) throw new Error("The interrupted coding workspace has no exact native provider session.");
+  if (!["running", "interrupted", "preparing"].includes(record.status)) {
+    throw new Error(`Coding workspace ${id} is already settled as ${record.status}.`);
+  }
+  return save({
+    ...record,
+    status: "running",
+    currentActivity: "Resuming the exact interrupted provider session",
+    interruption: null,
+  }, options);
+}
+
 export function updateCodingSession(ventureId, id, { runRef, sessionId = null, activity = null, command = null }, options = {}) {
   const record = getVentureDoc(ventureId, CODE_WORKSPACE_COLLECTION, id, options);
   if (!record) throw new Error(`No such coding workspace: ${id}`);
   let sessions = record.providerSessions ?? [];
   if (sessionId) sessions = sessions.map((entry) => entry.runRef === runRef ? { ...entry, sessionId } : entry);
-  const commands = command ? [...(record.commands ?? []), { kind: "provider-command", ...command }] : record.commands ?? [];
-  const verification = command?.verification === true ? [...(record.verification ?? []), { kind: "provider-command", ...command }] : record.verification ?? [];
+  // One isolated workspace may carry several sequential Runs in the same durable Thread. Stamp every
+  // provider receipt with the Run that produced it so a later turn never reattributes earlier commands
+  // while projecting its own settlement into the append-only Work journal.
+  const attributedCommand = command ? { kind: "provider-command", ...command, runRef } : null;
+  const commands = attributedCommand ? [...(record.commands ?? []), attributedCommand] : record.commands ?? [];
+  const verification = command?.verification === true ? [...(record.verification ?? []), attributedCommand] : record.verification ?? [];
   return save({ ...record, providerSessions: sessions, commands, verification, ...(activity ? { currentActivity: activity } : {}) }, options);
 }
 
@@ -158,19 +185,30 @@ function changedFiles(worktree, fromRef, toRef) {
 }
 
 function verificationReadiness(record) {
+  const latestRunRef = record.checkpoints?.at(-1)?.runRef ?? record.runRefs?.at(-1) ?? null;
+  const verification = record.verification ?? [];
+  const attributed = latestRunRef
+    ? verification.filter((entry) => entry.runRef === latestRunRef)
+    : verification;
+  // Older records predate Run attribution. Preserve their proof until the next settlement writes
+  // exact Run refs, but never let a prior attributed Run verify a newer checkpoint.
+  const candidates = attributed.length || !latestRunRef
+    ? attributed
+    : verification.filter((entry) => !entry.runRef);
   const latestByCommand = new Map();
-  for (const entry of record.verification ?? []) {
+  for (const entry of candidates) {
     if (!entry.completedAt) continue;
     latestByCommand.set(`${entry.kind}:${entry.command}`, entry);
   }
   const latest = [...latestByCommand.values()];
   const host = latest.filter((entry) => entry.kind === "host-project" || entry.kind === "host");
   const provider = latest.filter((entry) => entry.kind === "provider-command");
-  const authoritative = host.some((entry) => entry.kind === "host-project") ? host : provider;
-  const failed = authoritative.some((entry) => entry.status === "failed");
+  const project = host.filter((entry) => entry.kind === "host-project");
+  const authoritative = project.length ? project : provider;
+  const failed = latest.some((entry) => entry.status === "failed");
   return {
     ready: authoritative.some((entry) => entry.status === "passed") && !failed,
-    completed: authoritative,
+    completed: latest,
     failed,
   };
 }
@@ -189,7 +227,7 @@ export async function settleCodingWorkspace(ventureId, id, { runRef, outcome, er
   const checkpoint = captureCheckpoint({ worktree, ref: checkpointRef(id, `turn-${sequence}`), message: `Croki run ${runRef} checkpoint` });
   const diff = diffCheckpoints({ worktree, fromRef: baseline.ref, toRef: checkpoint.ref });
   const checkStartedAt = now();
-  let diffCheck = { command: "git diff --check", kind: "host", status: "passed", exitCode: 0, startedAt: checkStartedAt, completedAt: now(), output: "No whitespace errors." };
+  let diffCheck = { command: "git diff --check", kind: "host", status: "passed", exitCode: 0, startedAt: checkStartedAt, completedAt: now(), output: "No whitespace errors.", runRef };
   try { git(worktree, ["diff", "--check", baseline.ref, checkpoint.ref, "--"]); }
   catch (checkError) { diffCheck = { ...diffCheck, status: "failed", exitCode: 1, output: checkError.message, completedAt: now() }; }
   if (record.hostVerification !== false && !error && outcome?.kind === "completed") {
@@ -198,8 +236,12 @@ export async function settleCodingWorkspace(ventureId, id, { runRef, outcome, er
   const projectCheck = record.hostVerification !== false && !error && outcome?.kind === "completed"
     ? await hostProjectCheck(worktree, options.hostProjectCheckDeps)
     : null;
-  const verification = [...(record.verification ?? []), diffCheck, ...(projectCheck ? [projectCheck] : [])];
-  const proof = verificationReadiness({ verification });
+  const verification = [...(record.verification ?? []), diffCheck, ...(projectCheck ? [{ ...projectCheck, runRef }] : [])];
+  const proof = verificationReadiness({
+    ...record,
+    verification,
+    checkpoints: [...(record.checkpoints ?? []), { runRef }],
+  });
   const patchHash = patchDigest(diff);
   const runTerminal = normalizeWorkflowOutcome(error ? { kind: "failed", reason: error } : (outcome ?? { kind: "completed" })).kind;
   const terminal = error || runTerminal === "failed" ? "interrupted"
@@ -209,25 +251,32 @@ export async function settleCodingWorkspace(ventureId, id, { runRef, outcome, er
           : proof.ready ? "reviewable" : "needs-verification";
   const completedAt = now();
   const sessions = (record.providerSessions ?? []).map((entry) => entry.runRef === runRef ? { ...entry, completedAt, terminal: runTerminal } : entry);
+  const attributedCheckpoint = attributeCheckpoint(record, { id: `turn-${sequence}`, ...checkpoint }, runRef);
+  const reviewComments = reconcileReviewComments(record, {
+    runRef,
+    checkpointId: attributedCheckpoint.id,
+    diff,
+    at: completedAt,
+  });
+  const exactChangedFiles = changedFiles(worktree, baseline.ref, checkpoint.ref);
+  const changeSummary = diff ? {
+    requestedOutcome: record.goal,
+    changedFiles: exactChangedFiles,
+    verification: proof.completed.map(({ command, kind, status, exitCode = null, runRef: attributedRunRef = null }) => ({
+      command, kind, status, exitCode, runRef: attributedRunRef,
+    })),
+  } : null;
   const settled = save({
     ...record, status: terminal, currentActivity: null, providerSessions: sessions,
-    checkpoints: [...(record.checkpoints ?? []), { id: `turn-${sequence}`, runRef, ...checkpoint }],
+    checkpoints: [...(record.checkpoints ?? []), attributedCheckpoint],
     diff, diffStat: git(worktree, ["diff", "--stat", baseline.ref, checkpoint.ref, "--"]),
-    changedFiles: changedFiles(worktree, baseline.ref, checkpoint.ref), patchHash, verification,
+    changedFiles: exactChangedFiles, patchHash, verification, reviewComments, changeSummary,
     interruption: error ? { message: String(error), at: completedAt, recovery: "Resume this thread to continue in the retained workspace, or inspect and discard it." } : null,
-    productConsequence: diff ? {
-      capability: record.goal,
-      system: changedFiles(worktree, baseline.ref, checkpoint.ref).map((entry) => entry.path),
-      claims: [
-        terminal === "reviewable"
-          ? { status: "supported-by-implementation", statement: "The isolated repository state and recorded checks support that the requested capability was implemented." }
-          : { status: "unsupported", statement: "The changed repository state has not met the selected implementation proof." },
-        { status: "unsupported", statement: "Customer impact and distribution effectiveness remain unsupported until a release returns attributable evidence." },
-        { status: "stale-not-identified", statement: "No existing Product claim was marked stale automatically; founder review or returned evidence must make that judgment." },
-      ],
-      releaseQuestion: `Which release should carry “${record.goal}”, and how will returned evidence change the Product or its distribution?`,
-    } : null,
+    // A repository diff proves only repository state. Product or market meaning must arrive as an
+    // explicit, source-bearing interpretation; routine coding never manufactures one.
+    productConsequence: record.productConsequence ?? null,
   }, options);
+  recordCodingSettlement(ventureId, settled, runRef, options);
   return settled;
 }
 
@@ -377,32 +426,6 @@ export function prepareCodingPullRequest(ventureId, id, options = {}) {
     preparedAt: now(),
   };
   return save({ ...record, consequence: { ...record.consequence, action: "pull-request-prepared", preparation, actedAt: preparation.preparedAt, reversible: true } }, options);
-}
-
-export function restoreCodingWorkspaceCheckpoint(ventureId, id, checkpointId, options = {}) {
-  const record = getVentureDoc(ventureId, CODE_WORKSPACE_COLLECTION, id, options);
-  const checkpoint = record?.checkpoints?.find((entry) => entry.id === checkpointId);
-  if (!checkpoint) throw new Error(`No such checkpoint on this coding workspace: ${checkpointId}`);
-  const { worktree } = assertCodingWorkspaceIdentity(record);
-  restoreCheckpoint({ worktree, ref: checkpoint.ref });
-  const baseline = record.checkpoints.find((entry) => entry.id === "baseline");
-  const diff = diffCheckpoints({ worktree, fromRef: baseline.ref, toRef: checkpoint.ref });
-  const restoredAt = now();
-  const restorationId = `restore-${(record.checkpoints ?? []).filter((entry) => entry.id.startsWith("restore-")).length + 1}`;
-  return save({
-    ...record,
-    status: diff ? "needs-verification" : "no-change",
-    checkpoints: [...record.checkpoints, { ...checkpoint, id: restorationId, restoredFrom: checkpointId, capturedAt: restoredAt }],
-    changedFiles: changedFiles(worktree, baseline.ref, checkpoint.ref),
-    diff,
-    diffStat: git(worktree, ["diff", "--stat", baseline.ref, checkpoint.ref, "--"]),
-    patchHash: patchDigest(diff),
-    verification: [],
-    decisions: record.consequence ? [...(record.decisions ?? []), record.consequence] : record.decisions ?? [],
-    consequence: null,
-    interruption: null,
-    restoration: { checkpointId, restoredAt, note: "The exact repository snapshot was restored. Verification and founder review are required again." },
-  }, options);
 }
 
 export function discardCodingWorkspace(ventureId, id, options = {}) {

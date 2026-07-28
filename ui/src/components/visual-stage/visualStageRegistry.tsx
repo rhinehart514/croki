@@ -58,16 +58,16 @@ export function renderVisualStage({ visual, timeline, lens, readOnlyReason, arti
   lens: FirmLens | null;
   readOnlyReason: string | null;
   artifactFocus?: ArtifactSectionFocus | null;
-  onArtifactFocus?: (focus: ArtifactSectionFocus) => void;
+  onArtifactFocus?: (focus: ArtifactSectionFocus | null) => void;
   onOpenThread: (threadRef: string) => void;
   onChanged: () => void;
 }) {
-  if (visual.kind === "map") return <div className="visual-stage-empty"><strong>The living venture moved to Product / GTM.</strong><p>Use Product / GTM to review current truth, provisional alternatives, outward actions, and returned evidence in one causal surface.</p></div>;
+  if (visual.kind === "map") return <div className="visual-stage-empty"><strong>This legacy map is no longer a separate destination.</strong><p>Open Canvas beside this conversation to review current relationships without leaving the Thread.</p></div>;
   const item = timeline?.items.find((candidate) => candidate.ref === visual.ref || candidate.visual?.ref === visual.ref) ?? null;
   if (!item) return <div className="visual-stage-empty"><strong>This material is no longer in the current view.</strong><p>The conversation remains intact. Close this view and reopen the latest visual from chat.</p></div>;
   if (visual.kind === "model-view") {
     const view = productGtmViewFromItem(item);
-    return view ? <ProductGtmViewGraph view={view} full /> : <div className="visual-stage-empty"><strong>This provisional view is incomplete.</strong><p>The conversation remains intact. Continue in the Thread to revise it in place.</p></div>;
+    return view ? <ProductGtmViewGraph view={view} full artifactFocus={artifactFocus} onArtifactFocus={onArtifactFocus} /> : <div className="visual-stage-empty"><strong>This provisional view is incomplete.</strong><p>The conversation remains intact. Continue in the Thread to revise it in place.</p></div>;
   }
   if (visual.kind === "flow") return <FlowStage item={item} />;
   if (visual.kind === "comparison") return <ComparisonStage item={item} />;
@@ -88,5 +88,5 @@ export function renderVisualStage({ visual, timeline, lens, readOnlyReason, arti
         ? <DecisionReceipt decision={decision} fallbackTitle={text(item.title, "This review was decided.")} />
         : <div className="visual-stage-empty"><strong>This review is no longer available.</strong><p>The conversation remains the governing record of what was decided here.</p></div>}</div>;
   }
-  return <pre className="visual-stage-json">{JSON.stringify(item, null, 2)}</pre>;
+  return <div className="visual-stage-empty"><strong>This material does not have a supported view.</strong><p>The conversation remains intact. Close Review and ask the agent to recreate the material as a document, diff, comparison, flow, or Canvas view.</p></div>;
 }

@@ -1,21 +1,34 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageSquarePlus } from "lucide-react";
-import { replyInConversation, type CodingWorkspace } from "@/api";
+import { Link2, MessageSquarePlus } from "lucide-react";
+import {
+  addCodingReviewComment,
+  replyInConversation,
+  type CodingWorkspace,
+} from "@/api";
+import {
+  addComposerSourceReference,
+} from "@/components/now/composerSourceReference";
+import type { DiffLineSelection } from "@/components/review/DiffView";
 
 function basename(path: string) {
   const cut = path.lastIndexOf("/");
   return cut >= 0 ? path.slice(cut + 1) : path;
 }
 
-/**
- * Anchor a written comment to the file open in the diff and send it as a correction into the same
- * Work Thread. When the workspace has a live drive (betId), the comment steers the current work and
- * lands on the next step; otherwise it opens the next direction. The comment is honest about that —
- * it never claims a token-level edit.
- */
-export function WorkChangeComment({ workspace, path, readOnlyReason, onSteered }: {
+function exactRef(workspaceId: string, line: DiffLineSelection) {
+  return `diff:${workspaceId}:${line.path}#L${line.line}:${line.side}`;
+}
+
+export function WorkChangeComment({
+  workspace,
+  line,
+  sourceScopeKey,
+  readOnlyReason,
+  onSteered,
+}: {
   workspace: CodingWorkspace;
-  path: string | null;
+  line: DiffLineSelection | null;
+  sourceScopeKey: string;
   readOnlyReason: string | null;
   onSteered: () => void;
 }) {
@@ -29,27 +42,52 @@ export function WorkChangeComment({ workspace, path, readOnlyReason, onSteered }
     if (open) textareaRef.current?.focus();
   }, [open]);
 
-  if (!path) return null;
+  if (!line) {
+    return <p className="work-change-comment-held">Select a line number to reference or correct that exact line.</p>;
+  }
+  const checkpoint = workspace.checkpoints.at(-1);
+  const sourceRef = exactRef(workspace.id, line);
+  const label = `${basename(line.path)}:${line.line}`;
 
-  const steers = Boolean(workspace.betId);
+  const reference = () => addComposerSourceReference({
+    scopeKey: sourceScopeKey,
+    path: line.path,
+    startLine: line.line,
+    endLine: line.line,
+    ref: sourceRef,
+  });
 
   const send = async () => {
     const body = comment.trim();
-    if (!body || sending) return;
+    if (!body || sending || !checkpoint) return;
     setSending(true);
     setError(null);
     try {
-      await replyInConversation(workspace.ventureId, {
-        message: `Re \`${path}\`:\n\n${body}`,
+      const reply = await replyInConversation(workspace.ventureId, {
+        message: `Review correction for \`${line.path}:${line.line}\` (${line.side}):\n\n${body}`,
         threadRef: workspace.threadRef,
         betId: workspace.betId,
+        workRef: workspace.id,
         mode: "work",
+      });
+      const rawMessageRef = reply.messageId ?? null;
+      await addCodingReviewComment(workspace.ventureId, workspace.id, {
+        checkpointId: checkpoint.id,
+        path: line.path,
+        startLine: line.line,
+        endLine: line.line,
+        selectedText: line.selectedText,
+        sourceRef,
+        body,
+        messageRef: rawMessageRef
+          ? `conversation:${String(rawMessageRef).replace(/^conversation:/, "")}`
+          : null,
       });
       setComment("");
       setOpen(false);
       onSteered();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Croki could not send that comment.");
+      setError(cause instanceof Error ? cause.message : "Croki could not attach that exact review correction.");
     } finally {
       setSending(false);
     }
@@ -60,21 +98,26 @@ export function WorkChangeComment({ workspace, path, readOnlyReason, onSteered }
   }
 
   if (!open) {
-    return (
+    return <div className="work-change-comment-entry">
       <button type="button" className="work-change-comment-open" onClick={() => setOpen(true)}>
         <MessageSquarePlus aria-hidden="true" />
-        <span>Comment on {basename(path)}</span>
+        <span>Comment on {label}</span>
       </button>
-    );
+      <button type="button" className="work-change-comment-open" onClick={reference}>
+        <Link2 aria-hidden="true" />
+        <span>Reference {label}</span>
+      </button>
+    </div>;
   }
 
   return (
     <div className="work-change-comment">
+      <strong>Correction on {label}</strong>
       <textarea
         ref={textareaRef}
         value={comment}
         rows={2}
-        placeholder={steers ? `Steer the work on ${basename(path)}…` : `Direct the next change to ${basename(path)}…`}
+        placeholder={`What should change at ${label}?`}
         onChange={(event) => { setComment(event.target.value); setError(null); }}
         onKeyDown={(event) => {
           if (event.key === "Escape") { setOpen(false); setComment(""); setError(null); }
@@ -82,11 +125,11 @@ export function WorkChangeComment({ workspace, path, readOnlyReason, onSteered }
         }}
       />
       <div className="work-change-comment-foot">
-        <small>{steers ? "Lands as a correction on the next step." : "Opens the next direction in this Thread."}</small>
+        <small>The correction continues this exact attempt and remains attached to this checkpoint.</small>
         <div className="work-change-comment-actions">
           <button type="button" className="work-change-comment-cancel" onClick={() => { setOpen(false); setComment(""); setError(null); }}>Cancel</button>
-          <button type="button" className="work-change-comment-send" onClick={() => void send()} disabled={sending || !comment.trim()}>
-            {sending ? "Sending…" : steers ? "Steer" : "Send"}
+          <button type="button" className="work-change-comment-send" onClick={() => void send()} disabled={sending || !comment.trim() || !checkpoint}>
+            {sending ? "Sending…" : "Send correction"}
           </button>
         </div>
       </div>

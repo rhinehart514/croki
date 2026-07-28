@@ -7,6 +7,7 @@ const {
   parseSafeExternalUrl,
   parseLoopbackDevServerUrl,
   isAllowedRendererNavigation,
+  isAllowedFounderMediaPermission,
   resolveLoginShell,
   mergePathLists,
 } = require("./security.cjs");
@@ -90,4 +91,21 @@ test("PATH merge keeps login-shell priority, deduplicates, and drops empty entri
   ]);
   assert.equal(merged, "/opt/homebrew/bin:/usr/bin:/bin:/Users/founder/.claude/local");
   assert.equal(mergePathLists([null, undefined, ""]), "");
+});
+
+test("voice grants only microphone media to the exact founder window", () => {
+  assert.equal(isAllowedFounderMediaPermission({
+    isFounderWindow: true,
+    permission: "media",
+    mediaTypes: ["audio"],
+  }), true);
+  for (const input of [
+    { isFounderWindow: false, permission: "media", mediaTypes: ["audio"] },
+    { isFounderWindow: true, permission: "media", mediaTypes: ["video"] },
+    { isFounderWindow: true, permission: "media", mediaTypes: ["audio", "video"] },
+    { isFounderWindow: true, permission: "display-capture", mediaTypes: ["audio"] },
+    { isFounderWindow: true, permission: "media", mediaTypes: [] },
+  ]) {
+    assert.equal(isAllowedFounderMediaPermission(input), false);
+  }
 });

@@ -80,8 +80,8 @@ describe("Codex live stream", () => {
     await turn;
 
     assert.deepEqual(results, [
-      { name: "apply_patch", target: "/tmp/work/hello.txt", status: "passed", detail: "Added" },
-      { name: "apply_patch", target: "/tmp/work/notes.md", status: "passed", detail: "Updated" },
+      { toolUseId: "item_1", name: "apply_patch", target: "/tmp/work/hello.txt", status: "passed", detail: "Added", source: { path: "/tmp/work/hello.txt" } },
+      { toolUseId: "item_1", name: "apply_patch", target: "/tmp/work/notes.md", status: "passed", detail: "Updated", source: { path: "/tmp/work/notes.md" } },
     ]);
   });
 

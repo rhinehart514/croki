@@ -97,21 +97,21 @@ function safeCwd(ventureId) {
 
 const MODE_INTENT = {
   work: "The founder is directing coding work — the intents should move toward concrete builds or changes to the product.",
-  "product-gtm": "The founder is shaping Product / go-to-market — the intents should move toward workflows, branches, gates, capabilities, or evidence loops.",
-  conversation: "The founder is directing the venture — the intents should be concrete, actionable directions.",
-  auto: "The founder is directing the venture — the intents should be concrete, actionable directions.",
+  "product-gtm": "The founder is using Canvas context — suggest concrete coding or product-understanding tasks that the selected model can pursue in this Thread.",
+  conversation: "The founder is working in a software project — the intents should be concrete, actionable coding or repository directions.",
+  auto: "The founder is working in a software project — the intents should be concrete, actionable coding or repository directions.",
 };
 
 function buildIntentPrompt(draft, mode, context) {
   const seed = draft.trim();
   const lines = [
-    "You read a founder's intent inside Croki, an agentic venture-building product.",
+    "You read a founder's draft inside Croki, a coding environment for direct Claude and Codex work.",
     MODE_INTENT[mode] ?? MODE_INTENT.auto,
     "",
     "Infer the DISTINCT things the founder might actually be trying to do — their candidate intents — from",
-    "what they have typed and their venture's real state. These are different intents, not rephrasings of the",
-    "same one. Ground each in the product truth and open work below; prefer intents that reference something",
-    "real about this venture over generic advice.",
+    "what they have typed and their project's real state. These are different intents, not rephrasings of the",
+    "same one. Ground each in repository truth and open work below; prefer a task that references something",
+    "real about this project over generic advice.",
     "",
     `Return ONLY a JSON array of at most ${MAX_OPTIONS} objects, each {"label": a short intent name of at most six words, "direction": a full first-person direction the founder could send as-is}.`,
     "No prose, no markdown, no code fences — JSON only.",
@@ -122,9 +122,9 @@ function buildIntentPrompt(draft, mode, context) {
   }
   const openThreads = context?.work?.openThreads;
   if (openThreads?.length) {
-    lines.push("", "Open work in this venture:", ...openThreads.map((intent) => `- ${intent}`));
+    lines.push("", "Open work in this project:", ...openThreads.map((intent) => `- ${intent}`));
   }
-  lines.push("", "The founder has typed so far:", seed || "(nothing yet — read intent from the venture state)", "", "JSON:");
+  lines.push("", "The founder has typed so far:", seed || "(nothing yet — read intent from the project state)", "", "JSON:");
   return lines.join("\n");
 }
 

@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 
 const MAX_INPUT_BYTES = 64 * 1024;
 const MAX_TRANSCRIPT_BYTES = 256 * 1024;
+const DEFAULT_TERMINAL_ID = "main";
 
 function text(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -26,9 +27,13 @@ function validateTarget(target) {
   const ventureId = text(target?.ventureId);
   const workspaceId = text(target?.workspaceId);
   if (!ventureId || !workspaceId) throw new Error("Terminal requires a venture and coding workspace.");
+  const terminalId = text(target?.terminalId) || DEFAULT_TERMINAL_ID;
+  if (!/^[a-zA-Z0-9_.:-]{1,96}$/.test(terminalId)) throw new Error("Terminal identity is invalid.");
   return {
     ventureId,
     workspaceId,
+    terminalId,
+    name: text(target?.name).slice(0, 48) || "Terminal",
     cols: dimension(target?.cols, 100, 500),
     rows: dimension(target?.rows, 28, 200),
   };
@@ -45,13 +50,25 @@ function availableWorkspace(target, resolved) {
   return workspace;
 }
 
-function createTerminalRuntime({ pty, resolveWorkspace, send, platform = process.platform, env = process.env, shell = defaultShell(platform, env) }) {
+function createTerminalRuntime({ pty, resolveWorkspace, send, stateStore = null, platform = process.platform, env = process.env, shell = defaultShell(platform, env) }) {
   const sessionsById = new Map();
   const sessionsByWorkspace = new Map();
-  const workspaceKey = (ownerId, target) => `${ownerId}:${target.ventureId}:${target.workspaceId}`;
+  const workspaceKey = (ownerId, target) => `${ownerId}:${target.ventureId}:${target.workspaceId}:${target.terminalId}`;
 
   function emit(session, channel, payload) {
     send(session.ownerId, channel, { sessionId: session.id, ...payload });
+  }
+
+  function persist(session) {
+    stateStore?.save?.(session.target, {
+      transcript: session.transcript,
+      exit: session.exit,
+      lastExit: session.lastExit ?? null,
+      running: Boolean(session.process),
+      name: session.target.name,
+      cols: session.target.cols,
+      rows: session.target.rows,
+    });
   }
 
   function appendTranscript(session, data) {
@@ -59,9 +76,11 @@ function createTerminalRuntime({ pty, resolveWorkspace, send, platform = process
     while (Buffer.byteLength(session.transcript, "utf8") > MAX_TRANSCRIPT_BYTES) {
       session.transcript = session.transcript.slice(Math.ceil(session.transcript.length / 4));
     }
+    persist(session);
   }
 
   function spawn(session, workspace, size) {
+    session.target = { ...session.target, cols: size.cols, rows: size.rows };
     session.generation += 1;
     const generation = session.generation;
     const processHandle = pty.spawn(shell.file, shell.args, {
@@ -72,6 +91,7 @@ function createTerminalRuntime({ pty, resolveWorkspace, send, platform = process
       env: { ...env, TERM: "xterm-256color", COLORTERM: "truecolor" },
     });
     session.process = processHandle;
+    persist(session);
     processHandle.onData((data) => {
       if (session.generation !== generation) return;
       appendTranscript(session, data);
@@ -81,6 +101,7 @@ function createTerminalRuntime({ pty, resolveWorkspace, send, platform = process
       if (session.generation !== generation) return;
       session.process = null;
       session.exit = { exitCode, signal, terminal: terminalOutcome(exitCode, signal) };
+      persist(session);
       emit(session, "terminal-exit", session.exit);
     });
   }
@@ -92,21 +113,53 @@ function createTerminalRuntime({ pty, resolveWorkspace, send, platform = process
     const existing = sessionsByWorkspace.get(key);
     if (existing) {
       if (existing.process) existing.process.resize(target.cols, target.rows);
-      return { sessionId: existing.id, snapshot: existing.transcript, exit: existing.exit };
+      existing.target = { ...existing.target, cols: target.cols, rows: target.rows, name: target.name };
+      persist(existing);
+      return {
+        sessionId: existing.id,
+        terminalId: target.terminalId,
+        name: target.name,
+        snapshot: existing.transcript,
+        exit: existing.exit,
+        lastExit: existing.lastExit ?? null,
+      };
     }
+    const saved = stateStore?.load?.(target);
     const session = {
-      id: crypto.randomUUID(), ownerId, target, process: null, generation: 0, transcript: "", exit: null,
+      id: crypto.randomUUID(),
+      ownerId,
+      target: {
+        ...target,
+        cols: dimension(saved?.cols, target.cols, 500),
+        rows: dimension(saved?.rows, target.rows, 200),
+      },
+      process: null,
+      generation: 0,
+      transcript: typeof saved?.transcript === "string" ? saved.transcript : "",
+      exit: saved?.exit ?? null,
+      lastExit: saved?.lastExit ?? null,
     };
     sessionsById.set(session.id, session);
     sessionsByWorkspace.set(key, session);
     try {
-      spawn(session, workspace, target);
+      if (!session.exit) {
+        if (saved?.running) appendTranscript(session, "\r\n\u001b[2m— Croki restarted; previous PTY ended —\u001b[0m\r\n");
+        spawn(session, workspace, session.target);
+      }
     } catch (error) {
       sessionsById.delete(session.id);
       sessionsByWorkspace.delete(key);
       throw error;
     }
-    return { sessionId: session.id, snapshot: "", exit: null };
+    persist(session);
+    return {
+      sessionId: session.id,
+      terminalId: target.terminalId,
+      name: target.name,
+      snapshot: session.transcript,
+      exit: session.exit,
+      lastExit: session.lastExit,
+    };
   }
 
   function owned(ownerId, sessionId) {
@@ -126,7 +179,10 @@ function createTerminalRuntime({ pty, resolveWorkspace, send, platform = process
 
   function resize(ownerId, sessionId, cols, rows) {
     const session = owned(ownerId, sessionId);
-    session.process?.resize(dimension(cols, 100, 500), dimension(rows, 28, 200));
+    const size = { cols: dimension(cols, 100, 500), rows: dimension(rows, 28, 200) };
+    session.target = { ...session.target, ...size };
+    session.process?.resize(size.cols, size.rows);
+    persist(session);
   }
 
   async function restart(ownerId, sessionId) {
@@ -135,30 +191,52 @@ function createTerminalRuntime({ pty, resolveWorkspace, send, platform = process
     session.generation += 1;
     try { session.process?.kill(); } catch { /* already exited */ }
     session.process = null;
+    if (session.exit) session.lastExit = session.exit;
     session.exit = null;
-    session.transcript = "";
+    appendTranscript(session, "\r\n\u001b[2m— terminal restarted —\u001b[0m\r\n");
     spawn(session, workspace, session.target);
+  }
+
+  function dispose(session, forget) {
+    session.generation += 1;
+    persist(session);
+    try { session.process?.kill(); } catch { /* already exited */ }
+    sessionsById.delete(session.id);
+    sessionsByWorkspace.delete(workspaceKey(session.ownerId, session.target));
+    if (forget) stateStore?.remove?.(session.target);
   }
 
   function close(ownerId, sessionId) {
     const session = owned(ownerId, sessionId);
-    session.generation += 1;
-    try { session.process?.kill(); } catch { /* already exited */ }
-    sessionsById.delete(session.id);
-    sessionsByWorkspace.delete(workspaceKey(ownerId, session.target));
+    dispose(session, true);
   }
 
   function stopOwner(ownerId) {
     for (const session of [...sessionsById.values()]) {
-      if (session.ownerId === ownerId) close(ownerId, session.id);
+      if (session.ownerId === ownerId) dispose(session, false);
     }
   }
 
   function stopAll() {
-    for (const session of [...sessionsById.values()]) close(session.ownerId, session.id);
+    for (const session of [...sessionsById.values()]) dispose(session, false);
+    stateStore?.flush?.();
   }
 
-  return { open, write, resize, restart, close, stopOwner, stopAll };
+  function inspect(ownerId, ventureId, workspaceId) {
+    return [...sessionsById.values()]
+      .filter((session) => session.ownerId === ownerId && session.target.ventureId === text(ventureId) && session.target.workspaceId === text(workspaceId))
+      .map((session) => ({
+        sessionId: session.id,
+        terminalId: session.target.terminalId,
+        name: session.target.name,
+        running: Boolean(session.process),
+        exit: session.exit,
+        lastExit: session.lastExit ?? null,
+        transcriptBytes: Buffer.byteLength(session.transcript, "utf8"),
+      }));
+  }
+
+  return { open, write, resize, restart, close, inspect, stopOwner, stopAll };
 }
 
-module.exports = { createTerminalRuntime, defaultShell, terminalOutcome, validateTarget };
+module.exports = { MAX_TRANSCRIPT_BYTES, createTerminalRuntime, defaultShell, terminalOutcome, validateTarget };

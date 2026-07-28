@@ -1,60 +1,88 @@
-import { useState } from "react";
-import type { CodingWorkspace } from "@/api";
+import type { CodingReviewComment, CodingWorkspace } from "@/api";
 import { WorkChangesPane } from "./WorkChangesPane";
+import { WorkReviewSummary } from "./WorkReviewSummary";
 import { workStatusLabel } from "./workStatusLabel";
 import { attemptLabel } from "./workspaceProjection";
 
-// Side-by-side comparison of two coding attempts on the same direction (DESIGN.md: "the founder can
-// compare … exact attempts"). Each column reuses WorkChangesPane so the diff primitives stay single-source.
-// Comparison is read-only by design: applying, steering, and continuing an attempt remain the founder-held
-// actions in the single workbench, reached with "Focus this attempt" — this view never duplicates those
-// mutations, it only lets the founder decide which attempt to carry forward.
-export function WorkAttemptsCompare({ attempts, primaryId, onFocusAttempt, onExit }: {
+function carriedComment(comment: CodingReviewComment) {
+  const anchor = comment.currentAnchor ?? comment.anchor;
+  return `${anchor.path}:${anchor.startLine} — ${comment.body}`;
+}
+
+export function WorkAttemptsCompare({
+  attempts,
+  primaryId,
+  leftId,
+  rightId,
+  onPairChange,
+  onFocusAttempt,
+  onContinueAttempt,
+  onCarryComment,
+  onExit,
+}: {
   attempts: CodingWorkspace[];
   primaryId: string;
+  leftId: string | null;
+  rightId: string | null;
+  onPairChange: (leftId: string, rightId: string) => void;
   onFocusAttempt: (id: string) => void;
+  onContinueAttempt: (id: string) => void;
+  onCarryComment: (id: string, comment: string) => void;
   onExit: () => void;
 }) {
-  const otherId = attempts.find((attempt) => attempt.id !== primaryId)?.id ?? primaryId;
-  const [leftId, setLeftId] = useState(primaryId);
-  const [rightId, setRightId] = useState(otherId);
-  const left = attempts.find((attempt) => attempt.id === leftId) ?? attempts[0];
-  const right = attempts.find((attempt) => attempt.id === rightId) ?? attempts[1] ?? attempts[0];
+  const fallbackOther = attempts.find((attempt) => attempt.id !== primaryId)?.id ?? primaryId;
+  const exactLeftId = attempts.some((attempt) => attempt.id === leftId) ? leftId! : primaryId;
+  const exactRightId = attempts.some((attempt) => attempt.id === rightId) && rightId !== exactLeftId
+    ? rightId!
+    : attempts.find((attempt) => attempt.id !== exactLeftId)?.id ?? fallbackOther;
+  const left = attempts.find((attempt) => attempt.id === exactLeftId) ?? attempts[0];
+  const right = attempts.find((attempt) => attempt.id === exactRightId) ?? attempts[1] ?? attempts[0];
   const columns = [
-    { side: "left", workspace: left, value: left.id, onSelect: setLeftId },
-    { side: "right", workspace: right, value: right.id, onSelect: setRightId },
+    { side: "left", workspace: left, value: exactLeftId },
+    { side: "right", workspace: right, value: exactRightId },
   ] as const;
 
   return (
     <section className="work-compare" aria-label="Compare coding attempts">
       <header className="work-compare-head">
-        <strong>Comparing attempts</strong>
+        <div><strong>Compare attempts</strong><span>Read-only until you focus, continue, or carry a comment.</span></div>
         <button type="button" className="work-compare-done" onClick={onExit}>Done comparing</button>
       </header>
       <div className="work-compare-columns">
-        {columns.map((column) => {
-          const { workspace } = column;
-          const stat = workspace.diffStat || `${workspace.changedFiles.length} ${workspace.changedFiles.length === 1 ? "file" : "files"}`;
-          return (
-            <div className="work-compare-column" key={column.side} aria-label={`${column.side === "left" ? "Left" : "Right"} attempt`}>
-              <header className="work-compare-column-head">
-                <label className="work-compare-pick">
-                  <span className="sr-only">Choose {column.side} attempt</span>
-                  <select value={column.value} onChange={(event) => column.onSelect(event.target.value)}>
-                    {attempts.map((attempt) => (
-                      <option key={attempt.id} value={attempt.id}>{attemptLabel(attempts, attempt)} · {workStatusLabel(attempt.status)}</option>
-                    ))}
-                  </select>
-                </label>
-                <span className="work-compare-stat" title={workspace.branch}>{stat}</span>
-                <button type="button" className="work-compare-focus" onClick={() => onFocusAttempt(workspace.id)}>Focus this attempt</button>
-              </header>
-              <div className="work-compare-column-body">
-                <WorkChangesPane workspace={workspace} />
-              </div>
+        {columns.map(({ side, workspace, value }) => (
+          <article className="work-compare-column" key={side} aria-label={`${side === "left" ? "Left" : "Right"} attempt`}>
+            <header className="work-compare-column-head">
+              <label className="work-compare-pick">
+                <span className="sr-only">Choose {side} attempt</span>
+                <select
+                  value={value}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    onPairChange(
+                      side === "left" ? next : next === exactLeftId ? exactRightId : exactLeftId,
+                      side === "right" ? next : next === exactRightId ? exactLeftId : exactRightId,
+                    );
+                  }}
+                >
+                  {attempts.map((attempt) => (
+                    <option key={attempt.id} value={attempt.id}>{attemptLabel(attempts, attempt)} · {workStatusLabel(attempt.status)}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="work-compare-focus" onClick={() => onFocusAttempt(workspace.id)}>Focus</button>
+              <button type="button" className="work-compare-focus" onClick={() => onContinueAttempt(workspace.id)}>Continue</button>
+            </header>
+            <div className="work-compare-column-body">
+              <WorkReviewSummary
+                workspace={workspace}
+                attempts={attempts}
+                compact
+                onCarryComment={(comment) => onCarryComment(workspace.id, carriedComment(comment))}
+              />
+              <WorkChangesPane workspace={workspace} />
             </div>
-          );
-        })}
+          </article>
+        ))}
       </div>
     </section>
   );

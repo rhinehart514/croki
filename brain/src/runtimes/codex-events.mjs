@@ -1,9 +1,12 @@
-// codex-events.mjs — JSONL decoding and live-signal shaping for the Codex CLI adapter.
+// codex-events.mjs — JSONL exec decoding, shaping, and the narrow product-change door.
 //
 // Split out of codex.mjs when Codex reached the Claude adapter's live behaviour: the decoder plus the
 // three shaping helpers around it (whole-turn text, thinking spans, measured usage) pushed that file
-// past its service ceiling. codex.mjs keeps the process, the MCP bridge, and the sandbox posture; this
-// module owns only the translation from Codex's event families into Croki's own signals.
+// past its service ceiling. codex.mjs keeps interactive process, MCP, and sandbox orchestration. This
+// module owns the legacy JSONL wire format and the intentionally isolated product-change exec client
+// that consumes it.
+import { spawn } from "node:child_process";
+import { findCodexBinary } from "./codex-auth.mjs";
 //
 // Shapes observed against codex-cli 0.145.0 (`codex exec --json`, 2026-07-23), not inferred:
 //   {"type":"thread.started","thread_id":"019f…"}
@@ -104,10 +107,12 @@ export function codexFileChangeResults(event) {
   return (Array.isArray(event?.changes) ? event.changes : [])
     .filter((change) => change?.path)
     .map((change) => ({
+      toolUseId: event?.id ?? null,
       name: "apply_patch",
       target: String(change.path),
       status,
       detail: status === "failed" ? "Failed" : fileChangeDetail(change.kind),
+      ...(status === "passed" ? { source: { path: String(change.path) } } : {}),
     }));
 }
 
@@ -175,3 +180,99 @@ export function parseCodexEvent(line) {
   }
   return null;
 }
+
+// Product changes use the authenticated Codex binary through an intentionally tiny door: the
+// isolated worktree is writable while shell, network, apps, hooks, and inherited config stay off.
+export function buildCodexProductChangeArgs({ prompt, model }) {
+  return [
+    "exec",
+    "--json",
+    "--ephemeral",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "--strict-config",
+    "-s", "workspace-write",
+    "-c", 'approval_policy="never"',
+    "-c", "features.shell_tool=false",
+    "-c", "features.unified_exec=false",
+    "-c", "features.apps=false",
+    "-c", "features.hooks=false",
+    "-c", "features.plugin_sharing=false",
+    "-c", "features.computer_use=false",
+    "-c", "features.browser_use=false",
+    "-c", "features.in_app_browser=false",
+    "-c", "features.network_proxy.enabled=false",
+    ...(model ? ["-m", model] : []),
+    prompt,
+  ];
+}
+
+export async function runCodexProductChange({
+  prompt,
+  cwd,
+  model,
+  env = process.env,
+  spawnProcess = spawn,
+  timeoutMs = Number(env.GTM_IDE_CODEX_TIMEOUT_MS) || 600_000,
+} = {}) {
+  const binary = findCodexBinary(env);
+  if (!binary.ok) return { text: "", error: { kind: "unavailable", message: binary.reason } };
+  const args = buildCodexProductChangeArgs({ prompt, model });
+  return new Promise((resolve) => {
+    const child = spawnProcess(binary.path, args, {
+      cwd,
+      env: { ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    const messages = createCodexTextStream();
+    let text = "";
+    let terminalError = "";
+    let settled = false;
+    let timedOut = false;
+    let forceKill = null;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (forceKill) clearTimeout(forceKill);
+      resolve(result);
+    };
+    const consume = (line) => {
+      const event = parseCodexEvent(line);
+      if (event?.type === "text" && event.text) text = messages.push(event).text;
+      if (event?.type === "completed" && event.summary) text ||= String(event.summary);
+      if (event?.type === "error") terminalError = String(event.message || "Codex failed.");
+    };
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill?.("SIGTERM");
+      // Settlement waits for the writer. A resistant child gets one bounded grace period.
+      forceKill = setTimeout(() => child.kill?.("SIGKILL"), 2_000);
+      forceKill.unref?.();
+    }, timeoutMs);
+    child.stdout?.setEncoding?.("utf8");
+    child.stdout?.on?.("data", (chunk) => {
+      stdout += chunk;
+      const lines = stdout.split("\n");
+      stdout = lines.pop() ?? "";
+      for (const line of lines) consume(line);
+    });
+    child.stderr?.setEncoding?.("utf8");
+    child.stderr?.on?.("data", (chunk) => { stderr += chunk; });
+    child.on("error", (error) => finish({ text, error: { kind: "error", message: error.message } }));
+    child.on("close", (code) => {
+      if (stdout.trim()) consume(stdout);
+      if (timedOut) finish({ text, error: { kind: "budget", message: "Codex reached the product-change time limit and was stopped before the worktree was inspected." } });
+      else if (terminalError) finish({ text, error: { kind: "error", message: terminalError } });
+      else if (code === 0) finish({ text, error: null });
+      else finish({ text, error: { kind: "error", message: stderr.trim().slice(-2_000) || `Codex exited with status ${code}.` } });
+    });
+  });
+}
+
+export const CODEX_NATIVE_FEATURES = Object.freeze({
+  partialStreaming: true, nativeQuestions: true, nativeTools: true, sessionResume: true,
+  sameTurnSteer: true, liveModelSwitch: false, livePermissionMode: false, nestedTasks: true,
+});
