@@ -4,9 +4,19 @@
 them natively, so a streaming change has a before/after number instead of an impression.
 
 ```
+npm run test:parity
 node scripts/parity-baseline.mjs --legs claude,codex,croki --brain http://127.0.0.1:4317
 node scripts/parity-baseline.mjs --help    # usage; spawns nothing
 ```
+
+`npm run test:parity` is the deterministic release contract. It drives both real adapter boundaries
+with provider doubles through start, stream, question, tool, stop, resume, checkpoint, verification,
+and settlement, then prints one pass/fail matrix. It spends no provider credits and names unsupported
+native controls. The live baseline command below is the optional, credit-spending latency comparison.
+Its Croki leg records request acceptance, durable founder-turn persistence, provider startup, and first
+factual activity as separate phases. Renderer acknowledgement is measured where the pending turn actually
+commits to the transcript: the private local `founder_turn_acknowledged` UX receipt records that elapsed
+time without storing prompt content.
 
 Each leg runs the same short prompt once (`--runs N` to repeat; every run spends provider credits, and the
 command prints what it is about to spend before it starts). Output is a markdown table on stdout plus a
@@ -26,6 +36,9 @@ frame-level trace at `artifacts/parity/<iso-timestamp>.json`. Exit code is 1 whe
 ## Metrics
 
 - **TTFT ms** — first frame that moved readable assistant text forward.
+- **Accepted / Persisted / Provider / Activity** — separate Croki timings for request acceptance,
+  exact founder-turn persistence, provider startup, and first factual activity. Native CLI rows show
+  `—` because those Croki-owned boundaries do not exist on a direct CLI invocation.
 - **Gap p50 / p95 / max** — distribution between *visible* frames. Protocol chatter between two visible
   updates is not motion a founder perceives; a stall between them is exactly what "not native" feels like.
 - **Frames / Visible / Bytes** — every observation the client had to read, and how many were worth reading.

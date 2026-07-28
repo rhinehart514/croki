@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, WifiOff } from "lucide-react";
 import type { FirmConnectionState } from "@/hooks/use-firm-connection";
+import { recoveryPresentation } from "@/lib/recovery-presentation";
 import "@/styles/freshness.css";
 
 function ageLabel(timestamp: number | null, now: number) {
@@ -31,14 +32,15 @@ export function FirmFreshness({ connection, onRetry }: { connection: FirmConnect
   }
 
   const offline = connection.phase === "offline";
+  const recovery = recoveryPresentation(connection.layer ?? "transport");
   return (
     <div className="firm-freshness firm-freshness-warning" role="status" aria-live="polite">
       {offline ? <WifiOff aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
       <span>
-        <strong>{offline ? "Offline" : "Reconnecting"}</strong>
-        <small>{`${ageLabel(connection.lastUpdatedAt, now)} · consequential changes are held`}</small>
+        <strong>{offline ? "Connection offline" : recovery.title}</strong>
+        <small>{`${recovery.retained} ${ageLabel(connection.lastUpdatedAt, now)} · consequential changes are held`}</small>
       </span>
-      <button type="button" onClick={onRetry} aria-label="Retry connection">Retry</button>
+      <button type="button" onClick={onRetry} aria-label={recovery.action}>{recovery.action}</button>
     </div>
   );
 }

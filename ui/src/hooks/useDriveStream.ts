@@ -4,6 +4,7 @@ import {
   subscribeDriveStream,
   type DriveStreamDelta,
   type DriveStreamFrame,
+  type DriveStreamNestedTask as DriveStreamNestedTaskPayload,
   type DriveStreamSnapshot,
   type DriveStreamTodo,
   type DriveStreamTool,
@@ -25,6 +26,7 @@ import {
 export type DriveStreamStep = { id: string; name: string; target: string | null; status: string | null; detail: string | null };
 export type DriveStreamThinking = { active: boolean; durationMs: number | null; startedAt: number | null };
 export type DriveStreamChild = { parentToolUseId: string; text: string; tool: DriveStreamTool | null; steps: DriveStreamStep[] };
+export type DriveStreamNestedTask = DriveStreamNestedTaskPayload;
 
 type LiveState = {
   text: string;
@@ -33,11 +35,12 @@ type LiveState = {
   todos: DriveStreamTodo[];
   steps: DriveStreamStep[];
   children: DriveStreamChild[];
+  nestedTasks: DriveStreamNestedTask[];
 };
 
 export type DriveStreamValue = LiveState & { connected: boolean };
 
-const EMPTY: LiveState = { text: "", tool: null, thinking: null, todos: [], steps: [], children: [] };
+const EMPTY: LiveState = { text: "", tool: null, thinking: null, todos: [], steps: [], children: [], nestedTasks: [] };
 
 // `retry: 3000` on the server side; a route that is not answering yet backs off instead of hammering.
 const RECONNECT_MS = 3_000;
@@ -60,6 +63,55 @@ const todos = (value: unknown): DriveStreamTodo[] => Array.isArray(value)
     return content ? [{ content, status: text(item.status, "pending") }] : [];
   })
   : [];
+
+function nestedTask(value: unknown, fallbackId = ""): DriveStreamNestedTask | null {
+  if (!value || typeof value !== "object") return null;
+  const source = value as Record<string, unknown>;
+  const taskId = text(source.taskId ?? source.id ?? fallbackId).trim();
+  if (!taskId) return null;
+  const task: DriveStreamNestedTask = { taskId };
+  const assignText = (key: keyof DriveStreamNestedTask, aliases: string[] = [key]) => {
+    const alias = aliases.find((name) => Object.hasOwn(source, name));
+    if (!alias) return;
+    const value = source[alias];
+    (task as Record<string, unknown>)[key] = value == null ? null : text(value).trim() || null;
+  };
+  const assignNumber = (key: keyof DriveStreamNestedTask) => {
+    if (!Object.hasOwn(source, key)) return;
+    const value = source[key];
+    (task as Record<string, unknown>)[key] = typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, value)
+      : null;
+  };
+  assignText("parentTaskId", ["parentTaskId", "parentId", "parentToolUseId"]);
+  assignText("label");
+  assignText("taskKind");
+  assignText("status");
+  assignNumber("completedCount");
+  assignNumber("totalCount");
+  assignNumber("inputTokens");
+  assignNumber("outputTokens");
+  assignNumber("totalTokens");
+  assignNumber("costUsd");
+  assignNumber("elapsedMs");
+  assignText("error");
+  if (Object.hasOwn(source, "skipTranscript")) task.skipTranscript = source.skipTranscript === true;
+  else if (Object.hasOwn(source, "hidden")) task.skipTranscript = source.hidden === true;
+  return task;
+}
+
+function mergeNestedTask(tasks: DriveStreamNestedTask[], task: DriveStreamNestedTask): DriveStreamNestedTask[] {
+  const existing = tasks.find((entry) => entry.taskId === task.taskId);
+  return existing
+    ? tasks.map((entry) => entry.taskId === task.taskId ? { ...entry, ...task } : entry)
+    : [...tasks, task];
+}
+
+function snapshotNestedTasks(value: unknown): DriveStreamNestedTask[] {
+  if (Array.isArray(value)) return value.flatMap((entry) => nestedTask(entry) ?? []);
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([taskId, entry]) => nestedTask(entry, taskId) ?? []);
+}
 
 function pushStep(steps: DriveStreamStep[], delta: Extract<DriveStreamDelta, { kind: "tool-result" }>): DriveStreamStep[] {
   const name = text(delta.name).trim();
@@ -110,6 +162,10 @@ function applyDelta(state: LiveState, delta: DriveStreamDelta, now: number): Liv
         };
     case "todo":
       return { ...state, todos: todos(delta.items) };
+    case "nested-task": {
+      const task = nestedTask(delta.task);
+      return task ? { ...state, nestedTasks: mergeNestedTask(state.nestedTasks, task) } : state;
+    }
     case "child":
       return delta.delta && text(delta.parentToolUseId)
         ? { ...state, children: applyChild(state.children, delta.parentToolUseId, delta.delta, now) }
@@ -150,6 +206,8 @@ function applySnapshot(state: LiveState, snapshot: DriveStreamSnapshot, now: num
       startedAt: thinkingActive ? now - (typeof thinkingState.durationMs === "number" ? thinkingState.durationMs : 0) : null,
     }
     : null;
+  const nestedTasks = snapshotNestedTasks(snapshot.nestedTasks)
+    .reduce((tasks, task) => mergeNestedTask(tasks, task), state.nestedTasks);
   return {
     text: mergeText(state.text, text(snapshot.text)),
     tool: tool(snapshot.tool),
@@ -163,6 +221,7 @@ function applySnapshot(state: LiveState, snapshot: DriveStreamSnapshot, now: num
         ? [{ parentToolUseId, text: text(child.text), tool: tool(child.tool), steps: [] as DriveStreamStep[] }]
         : [];
     }),
+    nestedTasks,
   };
 }
 

@@ -118,7 +118,7 @@ describe("Product/GTM causal projection", () => {
   });
 
   it("uses founder language instead of compatibility taxonomy", () => {
-    expect(productGtmTypeLabel("pipeline")).toBe("Product / GTM path");
+    expect(productGtmTypeLabel("pipeline")).toBe("Canvas path");
     expect(productGtmTypeLabel("campaign")).toBe("Market test");
     expect(productGtmTypeLabel("channel")).toBe("Route to market");
     expect(productGtmTypeLabel("signal")).toBe("Market reality");

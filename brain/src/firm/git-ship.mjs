@@ -26,6 +26,7 @@ import {
   draftShipContent,
   mergeShipDrafts,
 } from "./git-ship-prompts.mjs";
+import { readGitHubPullRequest, repositoryReviewState } from "./git-review-state.mjs";
 
 function git(cwd, args, { input, env } = {}) {
   try {
@@ -52,6 +53,12 @@ function count(value) {
 export function listLocalBranchNames(cwd) {
   const output = tryGit(cwd, ["for-each-ref", "refs/heads", "--format=%(refname:short)"]);
   return output ? output.split("\n").filter(Boolean) : [];
+}
+
+function listKnownBranchNames(cwd) {
+  const output = tryGit(cwd, ["for-each-ref", "refs/heads", "refs/remotes/origin", "--format=%(refname:short)"]);
+  return [...new Set(String(output ?? "").split("\n")
+    .map((name) => name.replace(/^origin\//, "")).filter((name) => name && name !== "HEAD"))];
 }
 
 // The base the repository ships against: the origin default branch when one is known, otherwise the
@@ -188,7 +195,7 @@ function exactRecord(ventureId, id, options) {
 export function prepareShipDrafts(ventureId, id, drafts = {}, options = {}) {
   const record = exactRecord(ventureId, id, options);
   const prepared = mergeShipDrafts(
-    draftShipContent(record, { existingBranchNames: listLocalBranchNames(record.repository) }),
+    draftShipContent(record, { existingBranchNames: listKnownBranchNames(record.repository) }),
     drafts,
   );
   save({ ...record, ship: { ...(record.ship ?? {}), drafts: prepared, preparedAt: now() } }, options);
@@ -200,7 +207,7 @@ export function prepareShipDrafts(ventureId, id, drafts = {}, options = {}) {
 export function inspectShip(ventureId, id, options = {}) {
   const record = exactRecord(ventureId, id, options);
   const drafts = mergeShipDrafts(
-    draftShipContent(record, { existingBranchNames: listLocalBranchNames(record.repository) }),
+    draftShipContent(record, { existingBranchNames: listKnownBranchNames(record.repository) }),
     record.ship?.drafts ?? {},
   );
   let drift = null;
@@ -210,11 +217,21 @@ export function inspectShip(ventureId, id, options = {}) {
     }
   } catch { /* drift is informative, never blocking */ }
   const baseRef = drift?.baseRef ?? resolveDefaultBranchRef(record.repository);
+  const gh = ghAvailability(record.repository, options.shipGh);
+  const repository = repositoryReviewState(record, {
+    drift,
+    baseBranch: baseRef ? baseRef.replace(/^origin\//, "") : null,
+    drafts,
+    gh: options.shipGitHubRead === false ? { ...gh, authenticated: false } : gh,
+    ghExec: options.shipGh,
+  });
   return {
     drafts,
     drift,
     baseBranch: baseRef ? baseRef.replace(/^origin\//, "") : null,
-    gh: ghAvailability(record.repository, options.shipGh),
+    gh,
+    repository,
+    plan: repository.plan,
     attempt: record.ship?.attempt ?? null,
     receipts: record.shipReceipts ?? [],
   };
@@ -243,7 +260,7 @@ function assertShippableBranchName(repo, branch) {
   if (!name) throw new Error("Shipping needs a branch name.");
   try { git(repo, ["check-ref-format", "--branch", name]); }
   catch { throw new Error(`"${name}" is not a valid git branch name.`); }
-  const taken = new Set(listLocalBranchNames(repo).map((entry) => entry.toLowerCase()));
+  const taken = new Set(listKnownBranchNames(repo).map((entry) => entry.toLowerCase()));
   if (taken.has(name.toLowerCase())) throw new Error(`The branch "${name}" already exists. Pick another name.`);
   return name;
 }
@@ -265,33 +282,52 @@ export async function runShipAction(ventureId, id, input = {}, actor, options = 
   if (!readiness.verified) throw new Error("Shipping requires successful, failure-free project verification of the exact checkpoint.");
   if (!readiness.exact) throw new Error("The coding workspace moved after its exact checkpoint; resume it to capture a new revision before shipping.");
   if (!record.diff) throw new Error("There is no repository change to ship.");
+  if (record.status === "preparing" || record.status === "running") {
+    throw new Error("Source-control changes wait until the active Run releases this workspace.");
+  }
 
   const dryRun = input.dryRun === true;
+  if (!dryRun && input.confirm !== true) throw new Error("Shipping needs the founder's explicit confirmation.");
   const repo = record.repository;
   const drafts = mergeShipDrafts(
-    draftShipContent(record, { existingBranchNames: listLocalBranchNames(repo) }),
+    draftShipContent(record, { existingBranchNames: listKnownBranchNames(repo) }),
     { ...(record.ship?.drafts ?? {}), ...input },
   );
-  // A ship that failed only at the pull request phase left a real pushed branch on origin. Retrying
-  // with the same branch resumes at the PR phase — reusing the pushed commit instead of pretending
-  // the push never happened or pushing a duplicate.
+  const gh = ghAvailability(repo, options.shipGh, { fresh: true });
+  const baseRef = resolveDefaultBranchRef(repo);
+  const baseBranch = baseRef ? baseRef.replace(/^origin\//, "") : null;
+  const reviewedState = repositoryReviewState(record, {
+    drift: worktreeDriftFacts({ worktree: record.worktree, sourceHead: record.sourceHead }),
+    baseBranch,
+    drafts,
+    gh: { ...gh, authenticated: false },
+    ghExec: options.shipGh,
+    freshGitHub: true,
+  });
+  if (!dryRun && (!input.planFingerprint || input.planFingerprint !== reviewedState.plan.fingerprint)) {
+    throw Object.assign(
+      new Error("Repository state changed after this ship plan was reviewed. Refresh the exact plan before confirming."),
+      { code: "ship_plan_stale", status: 409 },
+    );
+  }
+  // A push/PR failure keeps the exact local commit. Retrying the same reviewed plan resumes at the
+  // failed outward phase instead of recreating prior successful phases or pushing twice.
   const prior = record.ship?.attempt;
   const resuming = Boolean(
-    prior && prior.outcome === "failed" && prior.failedPhase === "pr" && prior.pushed && prior.commitSha
+    prior && prior.outcome === "failed" && ["push", "pr"].includes(prior.failedPhase) && prior.commitSha
     && drafts.branch === prior.branch
     && tryGit(repo, ["rev-parse", "--verify", "--quiet", `refs/heads/${prior.branch}`]) === prior.commitSha,
   );
   const branch = resuming ? prior.branch : assertShippableBranchName(repo, drafts.branch);
-  const gh = ghAvailability(repo, options.shipGh, { fresh: true });
-  const baseRef = resolveDefaultBranchRef(repo);
-  const baseBranch = baseRef ? baseRef.replace(/^origin\//, "") : null;
   const startedAt = now();
   const attemptId = `ship-${(record.shipReceipts ?? []).length + 1}`;
   let attempt = {
     id: attemptId, dryRun, startedAt, completedAt: null, outcome: "running", error: null, failedPhase: null,
     branch, baseBranch, commitSha: null, pushed: false, prUrl: null, prNote: null,
+    planFingerprint: reviewedState.plan.fingerprint,
+    reviewedPlan: reviewedState.plan,
     content: { commitMessage: drafts.commitMessage, prTitle: drafts.prTitle, prBody: drafts.prBody },
-    phases: ["branch", "commit", "push", "pr"].map((phase) => ({ phase, status: "pending", detail: null, at: null })),
+    phases: ["fetch", "branch", "commit", "push", "pr"].map((phase) => ({ phase, status: "pending", detail: null, at: null })),
   };
   let current = record;
   const persist = () => {
@@ -307,21 +343,47 @@ export async function runShipAction(ventureId, id, input = {}, actor, options = 
     current = save({ ...current, shipReceipts: receipts, ship: { ...(current.ship ?? {}), drafts, attempt } }, options);
   };
   persist();
-  let createdRef = null;
-
   try {
+    phase("fetch", { status: "running" });
+    const origin = tryGit(repo, ["remote", "get-url", "origin"]);
+    if (dryRun) {
+      phase("fetch", { status: origin ? "ready" : "skipped", detail: origin ? "Would safely refresh origin before any branch or commit changes." : "No origin remote is configured." });
+    } else if (origin) {
+      try { git(repo, ["fetch", "--prune", "origin"]); }
+      catch (error) { throw Object.assign(new Error(`Fetch failed: ${error.message}`), { shipPhase: "fetch" }); }
+      phase("fetch", { status: "done", detail: "Refreshed origin before changing source control." });
+      const refreshedDrift = worktreeDriftFacts({ worktree: record.worktree, sourceHead: record.sourceHead });
+      const refreshedBase = refreshedDrift.baseRef?.replace(/^origin\//, "") ?? baseBranch;
+      const refreshed = repositoryReviewState(record, {
+        drift: refreshedDrift, baseBranch: refreshedBase, drafts,
+        gh: { ...gh, authenticated: false },
+        ghExec: options.shipGh,
+      });
+      if (refreshed.plan.fingerprint !== reviewedState.plan.fingerprint) {
+        throw Object.assign(
+          new Error("Fetch found branch drift after review. No branch, commit, push, or pull request changed; refresh the exact plan."),
+          { shipPhase: "fetch", code: "ship_plan_stale", status: 409 },
+        );
+      }
+    } else {
+      phase("fetch", { status: "skipped", detail: "No origin remote is configured." });
+    }
+
     phase("branch", { status: "running" });
-    if (!resuming) buildPatchCommit(repo, { baseCommit: record.sourceHead, patch: record.diff, message: drafts.commitMessage, check: true });
+    if (!resuming) {
+      try { buildPatchCommit(repo, { baseCommit: record.sourceHead, patch: record.diff, message: drafts.commitMessage, check: true }); }
+      catch (error) { throw Object.assign(error, { shipPhase: "commit" }); }
+    }
     phase("branch", {
-      status: dryRun ? "ready" : "done",
+      status: dryRun || !resuming ? "ready" : "done",
       detail: resuming
         ? `Reusing ${branch}, already created and pushed by the previous attempt`
         : `${dryRun ? "Would create" : "Will create"} ${branch} from ${shortSha(record.sourceHead)}`,
     });
 
     if (dryRun) {
-      phase("commit", { status: "ready", detail: resuming ? `Would reuse commit ${shortSha(prior.commitSha)}, already on origin` : `The exact reviewed patch applies cleanly; would commit "${drafts.commitSubject}"` });
-      phase("push", { status: "skipped", detail: resuming ? `${branch} is already on origin; nothing would be pushed twice` : `Would run: git push -u origin ${branch}` });
+      phase("commit", { status: "ready", detail: resuming ? `Would reuse commit ${shortSha(prior.commitSha)}` : `The exact reviewed patch applies cleanly; would commit "${drafts.commitSubject}"` });
+      phase("push", { status: "skipped", detail: resuming && prior.pushed ? `${branch} is already on origin; nothing would be pushed twice` : `Would run: git push -u origin ${branch}` });
       phase("pr", {
         status: "skipped",
         detail: gh.available && gh.authenticated
@@ -335,15 +397,24 @@ export async function runShipAction(ventureId, id, input = {}, actor, options = 
     let commitSha;
     if (resuming) {
       commitSha = prior.commitSha;
-      attempt = { ...attempt, commitSha, pushed: true };
+      attempt = { ...attempt, commitSha, pushed: prior.pushed === true };
       phase("commit", { status: "done", detail: `Reusing commit ${shortSha(commitSha)} on ${branch}` });
-      phase("push", { status: "done", detail: `${branch} is already on origin; nothing pushed twice` });
+      if (prior.pushed) {
+        phase("push", { status: "done", detail: `${branch} is already on origin; nothing pushed twice` });
+      } else {
+        phase("push", { status: "running" });
+        try { git(repo, ["push", "-u", "origin", branch]); }
+        catch (error) { throw Object.assign(new Error(`Push failed: ${error.message}`), { shipPhase: "push" }); }
+        attempt = { ...attempt, pushed: true };
+        phase("push", { status: "done", detail: `Pushed retained commit ${shortSha(commitSha)} to origin` });
+      }
     } else {
       phase("commit", { status: "running" });
-      commitSha = buildPatchCommit(repo, { baseCommit: record.sourceHead, patch: record.diff, message: drafts.commitMessage });
+      try { commitSha = buildPatchCommit(repo, { baseCommit: record.sourceHead, patch: record.diff, message: drafts.commitMessage }); }
+      catch (error) { throw Object.assign(error, { shipPhase: "commit" }); }
       git(repo, ["update-ref", `refs/heads/${branch}`, commitSha, ""]);
-      createdRef = commitSha;
       attempt = { ...attempt, commitSha };
+      phase("branch", { status: "done", detail: `Created ${branch} at ${shortSha(commitSha)}` });
       phase("commit", { status: "done", detail: `Committed ${shortSha(commitSha)} on ${branch}` });
 
       phase("push", { status: "running" });
@@ -364,6 +435,15 @@ export async function runShipAction(ventureId, id, input = {}, actor, options = 
       attempt = { ...attempt, prNote: gh.reason };
       phase("pr", { status: "skipped", detail: gh.reason });
     } else {
+      const existing = resuming && prior.failedPhase === "pr"
+        ? readGitHubPullRequest(repo, branch, gh, options.shipGh ?? defaultGh, { fresh: true })
+        : null;
+      if (existing?.pullRequest) {
+        attempt = { ...attempt, prUrl: existing.pullRequest.url };
+        phase("pr", { status: "done", detail: `${existing.pullRequest.url ?? `PR #${existing.pullRequest.number}`} already exists; nothing created twice` });
+        settle({ outcome: "completed" });
+        return { workspace: current, attempt };
+      }
       const bodyFile = path.join(os.tmpdir(), `drover-pr-body-${process.pid}-${crypto.randomUUID()}.md`);
       fs.writeFileSync(bodyFile, drafts.prBody ?? "");
       try {
@@ -385,9 +465,6 @@ export async function runShipAction(ventureId, id, input = {}, actor, options = 
     settle({ outcome: "completed" });
     return { workspace: current, attempt };
   } catch (error) {
-    // If nothing reached the remote, remove the branch this attempt created so a retry can run the
-    // same plan and the founder's repository keeps no stray branch from a failed ship.
-    if (createdRef && !attempt.pushed) tryGit(repo, ["update-ref", "-d", `refs/heads/${branch}`, createdRef]);
     const failedPhase = error?.shipPhase ?? attempt.phases.find((entry) => entry.status === "running")?.phase ?? null;
     if (failedPhase) phase(failedPhase, { status: "failed", detail: error.message });
     settle({ outcome: "failed", error: error.message, failedPhase });

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThreadTimeline, WorkIndexItem } from "@/api";
+import { readUxMetrics } from "@/lib/ux-metrics";
 import { ThreadConversation } from "./ThreadConversation";
 
 let composerProps: Record<string, unknown> = {};
@@ -56,6 +57,12 @@ function props(currentTimeline: ThreadTimeline, onWorkRouted: (ref: string) => v
 
 describe("ThreadConversation contextual work handoff", () => {
   beforeEach(() => { composerProps = {}; });
+
+  it("preserves exact Canvas subject context into the Work composer", () => {
+    render(<ThreadConversation {...props(timeline([]), vi.fn())} surface="work" canvasOpen canvasSubjectContext />);
+    expect(composerProps.canvasOpen).toBe(true);
+    expect(composerProps.canvasSubjectContext).toBe(true);
+  });
 
   it("moves a submitted contextual turn into its Thread when durable work lands", async () => {
     const onWorkRouted = vi.fn();
@@ -143,7 +150,10 @@ describe("ThreadConversation contextual work handoff", () => {
 });
 
 describe("ThreadConversation founder-turn continuity", () => {
-  beforeEach(() => { composerProps = {}; });
+  beforeEach(() => {
+    composerProps = {};
+    localStorage.clear();
+  });
 
   it("rebinds the immediate draft turn to the exact accepted Thread until its durable message arrives", async () => {
     const onThreadAccepted = vi.fn();
@@ -163,6 +173,11 @@ describe("ThreadConversation founder-turn continuity", () => {
       (composerProps.onSubmitStart as (content: string) => void)(message);
     });
     expect(view.getByText(message)).toBeInTheDocument();
+    expect(readUxMetrics()).toContainEqual(expect.objectContaining({
+      event: "founder_turn_acknowledged",
+      ventureId: "v1",
+      durationMs: expect.any(Number),
+    }));
 
     await act(async () => {
       (composerProps.onSubmitAccepted as (content: string, result: {

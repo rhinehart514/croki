@@ -21,6 +21,8 @@ async function openGate(client, intent) {
   const selected = await client.evaluate(`(() => { const row = [...document.querySelectorAll('.thread-rail-row, .thread-rail-card')].find((entry) => entry.textContent.includes(${JSON.stringify(intent)})); row?.click(); return Boolean(row); })()`);
   assert.equal(selected, true, `thread was unavailable: ${intent}`);
   await waitForDom(client, `document.querySelector('.thread-header-copy h1')?.textContent?.includes(${JSON.stringify(intent)})`, `thread did not open: ${intent}`);
+  await waitForDom(client, `!!document.querySelector('.thread-composer > .thread-interventions .now-gate')`, `founder gate did not stay directly above the composer: ${intent}`);
+  assert.equal(await client.evaluate(`(() => { const gate=document.querySelector('.thread-composer > .thread-interventions'); const composer=document.querySelector('.thread-composer > .now-composer'); return Boolean(gate && composer && (gate.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING) && composer.querySelector('textarea')); })()`), true, "the inline gate displaced or hid the anchored composer");
   await waitForDom(client, `!!document.querySelector('.thread-material[data-kind="consequence"] button')`, `consequence did not appear in: ${intent}`);
   await client.evaluate(`document.querySelector('.thread-material[data-kind="consequence"] button')?.click()`);
   await waitForDom(client, `!!document.querySelector('.visual-stage .now-gate')`, `exact founder gate did not open beside chat: ${intent}`);

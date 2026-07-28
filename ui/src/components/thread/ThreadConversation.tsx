@@ -12,9 +12,11 @@ import { WorkGraphSketch } from "@/components/work-mode/WorkGraphSketch";
 import { workflowSketchFromTimeline, type WorkflowSketch } from "@/components/work-mode/workflowSketch";
 import { WorkProductGtmView } from "@/components/work-mode/WorkProductGtmView";
 import { productGtmViewFromTimeline } from "@/components/work-mode/productGtmView";
-import type { WorkChatMode, WorkModelChoice } from "@/components/work-mode/WorkComposerBar";
+import type { WorkModelChoice } from "@/components/work-mode/WorkComposerBar";
 import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
+import { recordUxMetric } from "@/lib/ux-metrics";
+import { recoveryPresentation } from "@/lib/recovery-presentation";
 
 function workHandoffIds(timeline: ThreadTimeline | null): string[] {
   return (timeline?.items ?? []).filter((entry) => {
@@ -37,7 +39,7 @@ function activeDriveIds(timeline: ThreadTimeline | null): string[] {
     .map((entry) => entry.id);
 }
 
-export function ThreadConversation({ ventureId, ventureName, repository, surface = "context", contextKind = null, item, timeline, lens, connection, loading, error, draft, draftSession, subjectRefs = [], scopeLabel, targetAgentRef = null, workflowStep = null, artifactFocus = null, artifactFocusRequest = 0, onClearArtifactFocus, adoptedWorkflowVersions, activeDrives = [], modelChoice, workChatMode = "code", canvasAttention = 0, onWorkChatModeChange, initialScrollTop, onScrollChange, onOpenVisual, onOpenThread, onTogglePin, onRename, onDelete, renameDisabledReason = null, onDriven, onThreadAccepted, onModelChoice, onWorkRouted, onAdoptWorkflow, onReviewModelBranch }: {
+export function ThreadConversation({ ventureId, ventureName, repository, surface = "context", contextKind = null, item, timeline, lens, connection, loading, error, draft, draftSession, subjectRefs = [], scopeLabel, targetAgentRef = null, workflowStep = null, artifactFocus = null, artifactFocusRequest = 0, onClearArtifactFocus, adoptedWorkflowVersions, activeDrives = [], modelChoice, canvasOpen = false, canvasSubjectContext = false, canvasAttention = 0, onCanvasOpenChange, initialScrollTop, onScrollChange, onOpenVisual, onOpenThread, onTogglePin, onRename, onDelete, renameDisabledReason = null, onDriven, onThreadAccepted, onModelChoice, onWorkRouted, onAdoptWorkflow, onReviewModelBranch }: {
   ventureId: string;
   ventureName: string;
   repository?: string;
@@ -61,9 +63,10 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
   adoptedWorkflowVersions?: ReadonlyMap<string, string | null>;
   activeDrives?: FirmActiveDrive[];
   modelChoice: WorkModelChoice;
-  workChatMode?: WorkChatMode;
+  canvasOpen?: boolean;
+  canvasSubjectContext?: boolean;
   canvasAttention?: number;
-  onWorkChatModeChange?: (mode: WorkChatMode) => void;
+  onCanvasOpenChange?: (open: boolean) => void;
   initialScrollTop: number | null;
   onScrollChange: (threadRef: string, scrollTop: number) => void;
   onOpenVisual: (visual: VisualReference, origin: HTMLElement) => void;
@@ -91,8 +94,8 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
   const currentRef = item?.threadRef ?? null;
   const pendingOwner = draft ? `draft:${draftSession}` : currentRef ? `thread:${currentRef}` : null;
   const hasTranscript = surface === "work";
-  // Product / GTM and Releases never accumulate a transcript. A clear contextual question answers
-  // in place with one dissolvable reply; substantive direction leaves for its Work Thread instead.
+  // Contextual Canvas conversation never accumulates a competing transcript. A clear question answers
+  // in place with one dissolvable reply; substantive direction follows its exact Thread into the spine.
   const contextAnswer = surface === "context"
     ? [...(timeline?.items ?? [])].reverse().find((entry) => entry.kind === "agent-status" || (entry.kind === "message" && entry.role !== "founder")) ?? null
     : null;
@@ -109,11 +112,14 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
     content: string;
     knownMessageIds: string[];
   } | null>(null);
+  const founderTurnStartedAt = useRef<{ id: string; at: number } | null>(null);
   const beginFounderTurn = (content: string) => {
     const knownMessageIds = timeline?.items
       .filter((entry) => entry.kind === "message" && entry.role === "founder")
       .map((entry) => entry.id) ?? [];
-    setPendingFounderTurn({ id: `pending-founder-${Date.now()}`, owner: pendingOwner, messageId: null, content, knownMessageIds });
+    const id = `pending-founder-${Date.now()}`;
+    founderTurnStartedAt.current = { id, at: performance.now() };
+    setPendingFounderTurn({ id, owner: pendingOwner, messageId: null, content, knownMessageIds });
   };
   const acceptFounderTurn = (content: string, result: ConversationReplyResult) => {
     if (!result.threadRef) return;
@@ -155,6 +161,12 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
       && typeof entry.content === "string"
       && entry.content.trim() === pendingFounderTurn.content;
   }) ? pendingFounderTurn : null;
+  useEffect(() => {
+    const started = founderTurnStartedAt.current;
+    if (!visiblePendingFounderTurn || started?.id !== visiblePendingFounderTurn.id) return;
+    founderTurnStartedAt.current = null;
+    recordUxMetric("founder_turn_acknowledged", ventureId, performance.now() - started.at);
+  }, [ventureId, visiblePendingFounderTurn]);
   const adoptWorkflow = async () => {
     if (!workflowSketch || !onAdoptWorkflow || adopting) return;
     setAdopting(true); setAdoptionError(null);
@@ -189,10 +201,11 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
   const workEmpty = draft || (timeline ? timeline.items.length === 0 : isHome);
   const workAtRest = surface === "work" && workEmpty && !error && !productGtmView && !workflowSketch
     && !visiblePendingFounderTurn && (Boolean(draft) || !loading);
-  const composer = <ThreadComposer ventureId={ventureId} ventureName={ventureName} repository={repository} surface={surface} contextKind={contextKind} item={item} lens={lens} draft={draft} isHome={isHome} readOnly={readOnly} readOnlyReason={readOnlyReason} subjectRefs={subjectRefs} scopeLabel={scopeLabel} targetAgentRef={targetAgentRef} workflowStep={workflowStep} workRef={productGtmView?.workId ?? workflowSketch?.workId ?? null} productGtmView={Boolean(productGtmView)} workflowSketch={Boolean(workflowSketch)} modelBranchRef={productGtmView?.branchRef ?? null} artifactFocus={artifactFocus} artifactFocusRequest={artifactFocusRequest} onClearArtifactFocus={onClearArtifactFocus} workChatMode={workChatMode} canvasAttention={canvasAttention} onWorkChatModeChange={onWorkChatModeChange} modelChoice={modelChoice} onModelChoice={onModelChoice} activeDrives={activeDrives} onSubmitStart={surface === "work" ? beginFounderTurn : beginContextTurn} onSubmitAccepted={surface === "work" ? acceptFounderTurn : acceptContextTurn} onSubmitFailed={surface === "work" ? failFounderTurn : failContextTurn} onDriven={onDriven} onWorkRouted={onWorkRouted} />;
+  const composer = <ThreadComposer ventureId={ventureId} ventureName={ventureName} repository={repository} surface={surface} contextKind={contextKind} item={item} timeline={timeline} lens={lens} draft={draft} isHome={isHome} readOnly={readOnly} readOnlyReason={readOnlyReason} subjectRefs={subjectRefs} scopeLabel={scopeLabel} targetAgentRef={targetAgentRef} workflowStep={workflowStep} workRef={productGtmView?.workId ?? workflowSketch?.workId ?? null} productGtmView={Boolean(productGtmView)} canvasSubjectContext={canvasSubjectContext} workflowSketch={Boolean(workflowSketch)} modelBranchRef={productGtmView?.branchRef ?? null} artifactFocus={artifactFocus} artifactFocusRequest={artifactFocusRequest} onClearArtifactFocus={onClearArtifactFocus} canvasOpen={canvasOpen} canvasAttention={canvasAttention} onCanvasOpenChange={onCanvasOpenChange} modelChoice={modelChoice} onModelChoice={onModelChoice} activeDrives={activeDrives} onSubmitStart={surface === "work" ? beginFounderTurn : beginContextTurn} onSubmitAccepted={surface === "work" ? acceptFounderTurn : acceptContextTurn} onSubmitFailed={surface === "work" ? failFounderTurn : failContextTurn} onDriven={onDriven} onWorkRouted={onWorkRouted} />;
+  const threadRecovery = recoveryPresentation("thread-sync");
   return (
-    <section className="thread-conversation" data-surface={surface} data-chat-mode={surface === "work" ? workChatMode : undefined} data-has-transcript={hasTranscript ? "true" : "false"} data-rest={workAtRest ? "true" : "false"} aria-label={item?.founderIntent ?? (draft ? "New thread" : "Venture conversation")}>
-      {surface === "work" ? <ThreadHeader item={draft ? null : item} ventureName={ventureName} timeline={timeline} onOpenVisual={onOpenVisual} onTogglePin={onTogglePin} onRename={onRename} onDelete={onDelete} renameDisabledReason={renameDisabledReason} /> : null}
+    <section className="thread-conversation" data-surface={surface} data-has-transcript={hasTranscript ? "true" : "false"} data-rest={workAtRest ? "true" : "false"} aria-label={item?.founderIntent ?? (draft ? "New thread" : "Venture conversation")}>
+      {surface === "work" ? <ThreadHeader item={draft ? null : item} ventureName={ventureName} timeline={timeline} onTogglePin={onTogglePin} onRename={onRename} onDelete={onDelete} renameDisabledReason={renameDisabledReason} /> : null}
       <FirmFreshness connection={connection} onRetry={onDriven} />
       {workAtRest ? (
         <div className="thread-rest">
@@ -203,9 +216,9 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
       {hasTranscript ? <ThreadTranscript
         key={currentRef ?? `draft:${draftSession}`}
         threadRef={currentRef}
+        repository={repository}
         items={timeline?.items ?? []}
         pendingContent={visiblePendingFounderTurn?.content ?? null}
-        chatMode={workChatMode}
         initialScrollTop={initialScrollTop}
         onScrollChange={onScrollChange}
         onOpenVisual={onOpenVisual}
@@ -222,7 +235,7 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
               </div>
             </div>
           ) : null}
-          {!draft && error ? <div className="thread-stale" role="status">{error} The last coherent thread remains unchanged.</div> : null}
+          {!draft && error ? <div className="thread-stale" role="status"><strong>{threadRecovery.title}</strong> {threadRecovery.retained}</div> : null}
           {!draft && timeline?.items.length === 0 ? <ThreadHome attention={0} active={timeline.agents.length} /> : null}
         </>}
       /> : null}
@@ -230,9 +243,9 @@ export function ThreadConversation({ ventureId, ventureName, repository, surface
         (!timeline && loading) ? (
           <div className="thread-context-answer" role="status"><p className="thread-context-note">Connecting to Work…</p></div>
         ) : error ? (
-          <div className="thread-context-answer" role="alert"><p className="thread-context-note">{error} The last coherent reply remains unchanged.</p></div>
+          <div className="thread-context-answer" role="alert"><p className="thread-context-note">{threadRecovery.title}. The last coherent reply remains unchanged.</p></div>
         ) : contextAnswer ? (
-          <div className="thread-context-answer"><ThreadMessage item={contextAnswer} surface="context" onOpenVisual={onOpenVisual} onOpenThread={onOpenThread} /></div>
+          <div className="thread-context-answer"><ThreadMessage item={contextAnswer} surface="context" repository={repository} threadRef={currentRef} onOpenVisual={onOpenVisual} onOpenThread={onOpenThread} /></div>
         ) : null
       ) : null}
       {productGtmView ? <WorkProductGtmView view={productGtmView} onOpen={onOpenVisual} onReview={(branchRef) => onReviewModelBranch?.(branchRef)} /> : null}

@@ -29,7 +29,7 @@ export function MachineCanvas() {
     <div
       className="machine-shell"
       role="img"
-      aria-label="Croki taking a shipped product to its first users: Claude and Codex draft the outreach, a send waits for the founder's approval, and replies return as real signal"
+      aria-label="A Croki coding Thread: Claude changes an isolated worktree, exact checks pass, the founder reviews the diff, and useful product context remains available in Canvas"
     >
       <div className="machine-topbar">
         <div className="machine-product">
@@ -38,12 +38,12 @@ export function MachineCanvas() {
           </span>
           <span>
             Buffalo Projects
-            <small>live · few users yet</small>
+            <small>signup-fix · isolated worktree</small>
           </span>
         </div>
         <div className="machine-mode">
-          <span>Work</span>
-          <span className="machine-mode-active">Product / GTM</span>
+          <span className="machine-mode-active">Thread</span>
+          <span>Canvas available</span>
         </div>
         <span className="machine-status">
           <span /> illustrative scenario
@@ -58,20 +58,20 @@ export function MachineCanvas() {
                 <FileCode2 />
               </span>
               <span>
-                <small>From your repo</small>
-                <strong>What you shipped</strong>
+                <small>Founder direction</small>
+                <strong>Fix the signup handoff</strong>
               </span>
             </div>
             <div className="evidence-line">
               <span>README.md:55</span>
-              <p>Croki read the real product you built, not a description of it.</p>
+              <p>New users lose their invitation after signing in.</p>
             </div>
             <div className="evidence-line">
-              <span>Usage</span>
-              <p>Visitors leave before they sign up.</p>
+              <span>src/auth/return.ts:42</span>
+              <p>The return path drops the pending invitation.</p>
             </div>
             <div className="node-foot">
-              <ScanSearch /> read from your code
+              <ScanSearch /> grounded in the repository
             </div>
           </article>
 
@@ -81,44 +81,44 @@ export function MachineCanvas() {
                 <Sparkles />
               </span>
               <span>
-                <small>Who it's for · a guess</small>
-                <strong>People who starred your repo</strong>
+                <small>Retained product context</small>
+                <strong>Invitation acceptance is the first-run promise</strong>
               </span>
             </div>
             <p>
-              These 8 already showed interest. A short, personal note might earn
-              the first real conversation.
+              A prior Thread established that successful onboarding ends with the
+              invited workspace open, not the account home.
             </p>
-            <span className="uncertainty">A guess · not fact</span>
+            <span className="uncertainty">Founder-adopted · source-backed</span>
           </article>
         </div>
 
         <article className="machine-node crew-node">
           <div className="crew-node-head">
             <span>
-                <small>Drafting outreach</small>
-              <strong>8 personal intros</strong>
+                <small>Working in this Thread</small>
+              <strong>Repair the return path</strong>
             </span>
             <span className="run-state">Moving</span>
           </div>
           <div className="crew-list">
-            <RunLine runtime="Claude Code" task="drafted a note to each person" />
-            <RunLine runtime="Codex" task="checked every claim is true" />
+            <RunLine runtime="Claude Code" task="updated the callback and state restore" />
+            <RunLine runtime="Verification" task="unit checks and browser journey passed" />
           </div>
           <div className="artifact-row">
             <span className="artifact-icon">
               <FileCode2 />
             </span>
             <span>
-              <strong>8 messages, ready to read</strong>
-              <small>One real detail in each. Nothing sent yet.</small>
+              <strong>3 files changed</strong>
+              <small>Exact diff and checkpoint ready to inspect.</small>
             </span>
-            <span className="artifact-count">8</span>
+            <span className="artifact-count">3</span>
           </div>
         </article>
 
         <div className="founder-wall-line" aria-hidden="true">
-          <span>Needs you</span>
+          <span>Review</span>
         </div>
 
         <div className="machine-result-column">
@@ -128,14 +128,14 @@ export function MachineCanvas() {
                 <LockKeyhole />
               </span>
               <span>
-                <small>Needs your hand</small>
-                <strong>Send 8 intros</strong>
+                <small>Exact founder review</small>
+                <strong>Apply the signup fix</strong>
               </span>
             </div>
-            <p>Read all 8 before any of them send. Nothing goes out until you say so.</p>
+            <p>Inspect the diff, preview, and attributed checks before changing the project.</p>
             <div className="gate-actions" aria-hidden="true">
-              <span>Keep staged</span>
-              <span className="approve-action">Send 8</span>
+              <span>Keep working</span>
+              <span className="approve-action">Apply change</span>
             </div>
           </article>
 
@@ -145,19 +145,19 @@ export function MachineCanvas() {
                 <Flag />
               </span>
               <span>
-                <small>What came back</small>
-                <strong>3 replied. 1 wants a call.</strong>
+                <small>Exact result</small>
+                <strong>Checks passed. Thread ready.</strong>
               </span>
             </div>
-            <p>Real replies, in their own words. This is what to build next.</p>
+            <p>The next dependent task can reuse the accepted first-run context without another briefing.</p>
           </article>
         </div>
       </div>
 
       <div className="machine-caption">
-        <span>It reads what you built.</span>
-        <span>You approve who it reaches.</span>
-        <span>What they say is your next move.</span>
+        <span>Direct the selected model.</span>
+        <span>Review the exact work.</span>
+        <span>Return with product context intact.</span>
       </div>
     </div>
   );

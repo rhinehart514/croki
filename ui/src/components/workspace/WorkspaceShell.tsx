@@ -4,8 +4,17 @@ import { type FirmVenture } from "@/api";
 import { directionsFromWorkIndex } from "@/components/workspace/workIndexModel";
 import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/productGtmWorkflow";
 import { readWorkModelChoice, type WorkModelChoice } from "@/components/work-mode/work-models";
-import type { WorkChatMode } from "@/components/work-mode/WorkComposerBar";
-import { readWorkspaceSession, rememberWorkspaceSession } from "@/lib/venture-session";
+import {
+  WORK_REVIEW_REQUEST_EVENT,
+  type WorkReviewRequest,
+} from "@/components/work-mode/previewPresentation";
+import {
+  readWorkspaceSession,
+  readWorkspaceThreadPresentation,
+  rememberWorkspaceSession,
+} from "@/lib/venture-session";
+import { finishWarmReturn } from "@/lib/warm-return";
+import { recordUxMetric } from "@/lib/ux-metrics";
 import { surfaceMotion } from "@/lib/motion";
 import { useWorkspaceResources } from "./useWorkspaceResources";
 import { WorkspaceCanvasPanel } from "./WorkspaceCanvasPanel";
@@ -60,7 +69,14 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
     newThread: beginNewConversation,
     rememberThreadScroll,
   } = useWorkspaceConversation({ ventureId: venture.id, initialThreadRef: initial.selectedThreadRef, initialScrolls: initial.chatScrollByThread, workIndex, systemIndex: systemIndexAll });
-  const openThread = useCallback((ref: string) => { openConversationThread(ref); setRailOpen(false); }, [openConversationThread]);
+  const openThread = useCallback((ref: string) => {
+    const remembered = readWorkspaceThreadPresentation(venture.id, ref);
+    setCanvasOpen(remembered?.canvasOpen ?? false);
+    setSystemSelection(remembered?.selectedObjectRef ?? null);
+    setSystemCamera(remembered?.systemCamera ?? null);
+    openConversationThread(ref);
+    setRailOpen(false);
+  }, [openConversationThread, venture.id]);
   const beginScopedThread = useCallback((ref: string, related: string[] = []) => { beginConversationThread(ref, related); setRailOpen(false); }, [beginConversationThread]);
   const newThread = useCallback(() => { beginNewConversation(); setRailOpen(false); }, [beginNewConversation]);
   // The Canvas and an opened review both claim the pane beside the spine. Standing them side by side
@@ -72,19 +88,44 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
     if (open) setStage(null);
     setCanvasOpen(open);
   }, [setStage]);
+  useEffect(() => {
+    const openRepositoryReview = (event: Event) => {
+      const request = (event as CustomEvent<WorkReviewRequest>).detail;
+      if (request?.target !== "repository" || !request.threadRef || request.threadRef !== resolvedThreadRef) return;
+      // Canvas, a staged overlay, and exact Review all claim the pane beside the conversation spine.
+      // The citation's direct reference wins without changing Thread identity or durable selection.
+      setStage(null);
+      setCanvasOpen(false);
+    };
+    window.addEventListener(WORK_REVIEW_REQUEST_EVENT, openRepositoryReview);
+    return () => window.removeEventListener(WORK_REVIEW_REQUEST_EVENT, openRepositoryReview);
+  }, [resolvedThreadRef, setStage]);
   const openCanvas = useCallback(() => showCanvas(true), [showCanvas]);
   const toggleCanvas = useCallback((source?: HTMLElement) => {
     openerRef.current = source ?? null;
     showCanvas(!canvasOpen);
   }, [canvasOpen, openerRef, showCanvas]);
-  // The Canvas is the Product / GTM participation register itself: the composer switch is the only
-  // standing toggle, so one state carries both. Opening the Canvas from anywhere (⌘K, a canvas object,
-  // an adopted workflow) puts the spine composer into Product / GTM, and returning to Code hides it.
-  const workChatMode: WorkChatMode = canvasOpen ? "product-gtm" : "code";
-  const chooseWorkChatMode = useCallback((mode: WorkChatMode) => showCanvas(mode === "product-gtm"), [showCanvas]);
-
+  const restoredThreadMissing = Boolean(
+    workIndex
+    && initial.selectedThreadRef
+    && initial.selectedThreadRef !== "thread:venture-root"
+    && !workIndex.items.some((entry) => entry.threadRef === initial.selectedThreadRef),
+  );
+  const restoredObjectMissing = Boolean(
+    systemIndexAll
+    && systemSelection
+    && systemSelection.startsWith("object:")
+    && !systemIndexAll.objects.some((entry) => entry.objectRef === systemSelection),
+  );
+  const validSystemSelection = restoredObjectMissing ? null : systemSelection;
+  const validSystemCamera = restoredObjectMissing ? null : systemCamera;
+  const restoreNotice = restoredObjectMissing
+    ? "Canvas return · The saved Canvas item is no longer available. The Thread and its draft were kept."
+    : restoredThreadMissing
+      ? "Thread return · The saved Thread is no longer available. Croki opened the nearest current Thread."
+      : null;
   const directions = useMemo(() => (workIndex && lens ? directionsFromWorkIndex(workIndex, lens) : []), [lens, workIndex]);
-  const selectedObject = systemIndexAll?.objects.find((entry) => entry.objectRef === systemSelection) ?? null;
+  const selectedObject = systemIndexAll?.objects.find((entry) => entry.objectRef === validSystemSelection) ?? null;
   const configuration = lens?.configuration ?? DEFAULT_CONFIGURATION;
   const canvasCapabilities = useMemo(() => workflowCapabilities(credentials, lens?.configuration?.agents ?? [], capabilityInventory), [capabilityInventory, credentials, lens?.configuration?.agents]);
   const readOnly = ["stale", "offline", "read-only"].includes(connection.phase);
@@ -94,9 +135,14 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
 
   useEffect(() => rememberWorkspaceSession(venture.id, {
     railWidth, canvasOpen,
-    selectedThreadRef: resolvedThreadRef, selectedObjectRef: systemSelection,
-    systemCamera, chatScrollByThread: scrolls,
-  }), [canvasOpen, railWidth, resolvedThreadRef, scrolls, systemCamera, systemSelection, venture.id]);
+    selectedThreadRef: resolvedThreadRef, selectedObjectRef: validSystemSelection,
+    systemCamera: validSystemCamera, chatScrollByThread: scrolls,
+  }), [canvasOpen, railWidth, resolvedThreadRef, scrolls, validSystemCamera, validSystemSelection, venture.id]);
+
+  useEffect(() => {
+    const duration = finishWarmReturn(venture.id);
+    if (duration != null) recordUxMetric("warm_destination_painted", venture.id, duration);
+  }, [venture.id]);
 
   const { selectThread, selectObject, assignAgentInSystem } = useWorkspaceNavigation({
     ventureId: venture.id, workIndex, selectedObject, readOnly, openerRef, stage,
@@ -116,8 +162,8 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
     artifactFocusRequest={artifactFocusRequest} systemIndex={systemIndexAll}
     resolvedThreadRef={resolvedThreadRef} scrolls={scrolls}
     modelChoice={modelChoice}
-    workChatMode={workChatMode} canvasAttention={systemIndexAll?.counts.attention ?? 0}
-    onWorkChatModeChange={chooseWorkChatMode}
+    canvasOpen={canvasOpen} canvasAttention={systemIndexAll?.counts.attention ?? 0}
+    onCanvasOpenChange={showCanvas}
     onArtifactFocus={setArtifactFocus} onScrollChange={rememberThreadScroll}
     onOpenVisual={openVisual} onOpenThread={openThread} onWorkIndex={setWorkIndex}
     onRefresh={refresh}
@@ -150,6 +196,7 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
         onSettings={() => setSettingsConnection(null)}
       />
       <div className="workspace-body">
+        {restoreNotice ? <div className="workspace-return-break" role="status">{restoreNotice}</div> : null}
         <WorkspaceWorkSurface
           ventureId={venture.id}
           timeline={timeline.timeline}
@@ -166,9 +213,9 @@ export function WorkspaceShell({ venture, onOpenVenture }: { venture: FirmVentur
               motionProps={surfaceMotion(canvasMotion)}
               systemIndex={systemIndexAll}
               workIndex={workIndex}
-              selectedRef={systemSelection}
+              selectedRef={validSystemSelection}
               selectedObject={selectedObject}
-              camera={systemCamera}
+              camera={validSystemCamera}
               placement={lens?.placement ?? EMPTY_PLACEMENT}
               modelChoice={modelChoice}
               threadRef={resolvedThreadRef}

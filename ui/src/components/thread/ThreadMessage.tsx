@@ -1,5 +1,5 @@
 import { Check, Copy, FileChartColumnIncreasing } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
 import type { ThreadTimelineItem, VisualReference } from "@/api";
 import { MessageResponse } from "@/components/ai-elements/message";
 import {
@@ -9,13 +9,15 @@ import {
   EvidenceMessage,
 } from "./RichThreadItems";
 import { ThreadAgentUpdate } from "./ThreadAgentUpdate";
-import type { WorkChatMode } from "@/components/work-mode/WorkComposerBar";
 import { ThreadImage } from "./ThreadImage";
+import { ThreadMarkdownLink } from "./ThreadMarkdownLink";
+import { openTerminalReference, terminalReferenceIn } from "@/components/work-mode/terminalReference";
 
 type Props = {
   item: ThreadTimelineItem;
   surface?: "work" | "context";
-  chatMode?: WorkChatMode;
+  repository?: string;
+  threadRef?: string | null;
   onOpenVisual: (visual: VisualReference, origin: HTMLElement) => void;
   onOpenThread: (threadRef: string) => void;
 };
@@ -29,11 +31,17 @@ const MAX_COLLAPSED_FOUNDER_LINES = 8;
 
 function FounderMessageBody({ content }: { content: string }) {
   const [expanded, setExpanded] = useState(false);
-  const collapsible = content.length > MAX_COLLAPSED_FOUNDER_CHARS || content.split("\n").length > MAX_COLLAPSED_FOUNDER_LINES;
-  if (!collapsible) return <p>{content}</p>;
+  const parsed = terminalReferenceIn(content);
+  const visible = parsed.content;
+  const reference = parsed.reference;
+  const source = reference ? <button type="button" className="thread-terminal-reference" onClick={() => openTerminalReference(reference)}>
+    {reference.terminalName} · selected terminal output
+  </button> : null;
+  const collapsible = visible.length > MAX_COLLAPSED_FOUNDER_CHARS || visible.split("\n").length > MAX_COLLAPSED_FOUNDER_LINES;
+  if (!collapsible) return <>{source}<p>{visible}</p></>;
   return (
     <div className="thread-founder-collapse" data-expanded={expanded ? "true" : undefined}>
-      <p>{content}</p>
+      {source}<p>{visible}</p>
       <button type="button" className="thread-message-expand" aria-expanded={expanded} onClick={() => setExpanded((open) => !open)}>
         {expanded ? "Show less" : "Show full message"}
       </button>
@@ -61,7 +69,23 @@ function CopyTurnButton({ content }: { content: string }) {
   );
 }
 
-export function ThreadMessage({ item, surface = "context", chatMode = "code", onOpenVisual, onOpenThread }: Props) {
+function AgentMessageBody({ content, repository, streaming, threadRef }: {
+  content: string;
+  repository?: string;
+  streaming: boolean;
+  threadRef?: string | null;
+}) {
+  const components = useMemo(() => ({
+    a: (value: ComponentPropsWithoutRef<"a"> & { node?: unknown }) => {
+      const { node, ...props } = value;
+      void node;
+      return <ThreadMarkdownLink {...props} repository={repository} threadRef={threadRef} />;
+    },
+  }), [repository, threadRef]);
+  return <MessageResponse components={components} isAnimating={streaming}>{content}</MessageResponse>;
+}
+
+export function ThreadMessage({ item, surface = "context", repository, threadRef, onOpenVisual, onOpenThread }: Props) {
   if (item.kind === "artifact") return <ArtifactMessage item={item} onOpenVisual={onOpenVisual} />;
   if (item.kind === "comparison") return <ComparisonMessage item={item} onOpenVisual={onOpenVisual} />;
   if (item.kind === "evidence") return <EvidenceMessage item={item} onOpenVisual={onOpenVisual} />;
@@ -69,7 +93,7 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
   if (item.kind === "activity-summary") return null;
 
   if (item.kind === "agent-status") {
-    return <ThreadAgentUpdate item={item} surface={surface} chatMode={chatMode} />;
+    return <ThreadAgentUpdate item={item} surface={surface} />;
   }
 
   if (item.kind === "message" && item.messageKind === "handoff") {
@@ -96,7 +120,7 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
         <h2>Since you left</h2>
         <p>{counts?.attention ? `${counts.attention} ${counts.attention === 1 ? "thread needs" : "threads need"} your judgment.` : counts?.active ? `${counts.active} ${counts.active === 1 ? "agent is" : "agents are"} still working.` : "There are no new consequences waiting for review."}</p>
         {actions.length ? <div>{actions.map((action) => <button type="button" key={text(action.threadRef)} onClick={() => onOpenThread(text(action.threadRef))}>{text(action.label, "Review thread")}</button>)}</div> : <p>Ask Croki what matters most, or start a new direction.</p>}
-        <h3>What do you want to work on?</h3>
+        <h3>What do you want to build?</h3>
       </section>
     );
   }
@@ -131,7 +155,7 @@ export function ThreadMessage({ item, surface = "context", chatMode = "code", on
         </div> : null}
         {role === "founder"
           ? <FounderMessageBody content={content} />
-          : <MessageResponse>{content}</MessageResponse>}
+          : <AgentMessageBody content={content} repository={repository} streaming={streaming} threadRef={threadRef} />}
         {streaming ? <span className="thread-message-caret" aria-label="Responding…" /> : null}
       </div>
       {!streaming && content.trim() ? <CopyTurnButton content={content} /> : null}

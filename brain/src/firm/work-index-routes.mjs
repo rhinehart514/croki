@@ -9,6 +9,8 @@ import { deleteDirectionThread, getSemanticModel, markDirectionThreadReviewed, s
 import { buildThreadTimeline } from "./thread-timeline.mjs";
 import { buildWorkIndex } from "./work-index.mjs";
 import { listWorkScopes, revokeWorkScope } from "./work-scopes.mjs";
+import { editQueuedFounderTurn, removeQueuedFounderTurn, tombstoneQueuedFounderTurns } from "./founder-turn-queue.mjs";
+import { recordMatchingRunTombstones } from "./work-journal-runtime.mjs";
 
 function statusFor(error) {
   if (error?.code === "venture_not_found" || error?.code === "semantic_model_missing_ref") return 404;
@@ -77,6 +79,35 @@ export default async function handle({ req, res, url }) {
     return true;
   }
 
+  const followUpMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/threads\/([^/]+)\/follow-ups\/([^/]+)$/);
+  if ((req.method === "PUT" || req.method === "DELETE") && followUpMatch) {
+    try {
+      authorizeFounderWriteForRequest(req, req.method === "PUT" ? "Editing a queued founder turn" : "Removing a queued founder turn");
+      const ventureId = decodeURIComponent(followUpMatch[1]);
+      const threadId = decodeURIComponent(followUpMatch[2]);
+      const turnId = decodeURIComponent(followUpMatch[3]);
+      const body = await readBody(req);
+      const threadRef = `thread:${threadId}`;
+      const model = getSemanticModel(ventureId);
+      const thread = model.threads.find((entry) => entry.id === threadId && !entry.deletedAt);
+      if (!thread) throw Object.assign(new Error(`No such direction thread: ${threadId}`), { status: 404 });
+      const betIds = [...new Set([
+        ...(thread.subjectRefs ?? []),
+        ...model.runs.filter((run) => run.threadRef === threadRef).flatMap((run) => run.betRefs ?? []),
+      ].filter((ref) => String(ref).startsWith("bet:")).map((ref) => String(ref).replace(/^bet:/, "")))];
+      const betId = String(body?.betId ?? url.searchParams.get("betId") ?? "");
+      if (!betId || !betIds.includes(betId)) throw Object.assign(new Error("That queued turn does not belong to this Thread."), { status: 404 });
+      const turn = req.method === "PUT"
+        ? editQueuedFounderTurn({ ventureId, betId, turnId, text: body?.text })
+        : removeQueuedFounderTurn({ ventureId, betId, turnId, reason: "removed-by-founder" });
+      emitFirmEvent(ventureId, "timeline", { threadRef, queuedFounderTurn: turn.id });
+      json(res, 200, { turn });
+    } catch (error) {
+      json(res, statusFor(error), { error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
   const deleteMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/threads\/([^/]+)$/);
   if (req.method === "DELETE" && deleteMatch) {
     try {
@@ -104,7 +135,17 @@ export default async function handle({ req, res, url }) {
 
       // Tombstone first: no new continuation may target this Thread once deletion begins. Existing live
       // transports are then cancelled and every restartable authority rooted here is revoked.
+      recordMatchingRunTombstones(ventureId, {
+        threadRef,
+        reasonCode: "thread-deleted",
+        authorityRef: threadRef,
+      });
       deleteDirectionThread(ventureId, threadRef, { actor: { authority: "founder", id: "founder" } });
+      for (const betId of betIds) tombstoneQueuedFounderTurns({
+        ventureId,
+        betId,
+        reason: "thread-deleted",
+      });
       const revokedWorkScopeRefs = [];
       for (const scope of listWorkScopes(ventureId).filter((entry) => entry.originThreadRef === threadRef && !entry.revokedAt)) {
         revokeWorkScope({

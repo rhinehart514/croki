@@ -109,7 +109,7 @@ export function ArtifactMessage({ item, onOpenVisual }: { item: ThreadTimelineIt
   const codeFiles = nativeCode ? cardChangedFiles(artifact?.changedFiles) : [];
   if (nativeCode && codeFiles.length) return <NativeCodeChanges item={item} onOpenVisual={onOpenVisual} receipt={receipt} files={codeFiles} />;
   const action = nativeCode ? "Show changes" : modelView.length ? "Open view" : flow.length ? "Open flow" : "Open";
-  return <MaterialReference item={item} onOpenVisual={onOpenVisual} kind={nativeCode ? "Code" : modelView.length ? "Product / GTM" : flow.length ? "Flow" : "Artifact"} materialKind={nativeCode ? "native-code" : modelView.length ? "model-view" : flow.length ? "flow" : "artifact"} title={text(item.title, "Visual work")} detail={receipt || (modelView.length ? `${modelView.length} connected ${modelView.length === 1 ? "item" : "items"}` : flow.length ? `${flow.length} ${flow.length === 1 ? "step" : "steps"}` : null)} action={action} />;
+  return <MaterialReference item={item} onOpenVisual={onOpenVisual} kind={nativeCode ? "Code" : modelView.length ? "Canvas" : flow.length ? "Flow" : "Artifact"} materialKind={nativeCode ? "native-code" : modelView.length ? "model-view" : flow.length ? "flow" : "artifact"} title={text(item.title, "Visual work")} detail={receipt || (modelView.length ? `${modelView.length} connected ${modelView.length === 1 ? "item" : "items"}` : flow.length ? `${flow.length} ${flow.length === 1 ? "step" : "steps"}` : null)} action={action} />;
 }
 
 export function ComparisonMessage({ item, onOpenVisual }: { item: ThreadTimelineItem; onOpenVisual: OpenVisual }) {
@@ -160,6 +160,9 @@ export function ExactArtifact({ item, artifactRef, artifactFocus, onArtifactFocu
       focusedSectionId={artifactFocus && artifactFocus.artifactRef === artifactRef ? artifactFocus.sectionId : null}
       onFocusSection={onArtifactFocus}
     /></div>;
+  }
+  if (resolved?.kind === "unsupported") {
+    return <div className="visual-stage-empty"><strong>This saved material needs a supported view.</strong><p>The original data is still preserved. Ask the agent to recreate it as a document, diff, comparison, flow, or Canvas view.</p></div>;
   }
   // Reached only when the item carries no artifact content at all. The founder opened this expecting
   // exact material; the honest answer is that there is none, not the timeline record as JSON.

@@ -1,0 +1,85 @@
+{
+  "upstream": "https://github.com/pingdotgg/t3code.git",
+  "license": "../../licenses/t3code-MIT.txt",
+  "lastReviewedCommit": "38cfc25e5422e468303f2010f639cf3de9ad89ba",
+  "lastReviewedAt": "2026-07-24",
+  "decisions": [
+    {
+      "upstreamCommit": "c14a5ca4",
+      "status": "adapted",
+      "capability": "Close the initial snapshot and live-event handoff window",
+      "crokiFiles": [
+        "ui/src/hooks/use-firm-connection.ts",
+        "ui/src/components/thread/useThreadTimeline.ts"
+      ],
+      "note": "Croki keeps venture HTTP routes as durable truth and re-reads on stream open or reconnect."
+    },
+    {
+      "upstreamCommit": "51672b6e",
+      "status": "adapted",
+      "capability": "Collapse large diffs by default",
+      "crokiFiles": [
+        "ui/src/components/review/DiffView.tsx",
+        "ui/src/components/review/diffRendering.ts"
+      ],
+      "note": "Patches over five files or 200 changed lines stay exact but open per file on demand."
+    },
+    {
+      "upstreamCommit": "38cfc25e54",
+      "status": "adapted",
+      "capability": "Expand or collapse every file in one Review",
+      "crokiFiles": [
+        "ui/src/components/review/DiffView.tsx"
+      ],
+      "note": "The shared control stays inside the exact diff projection and does not create another review surface."
+    },
+    {
+      "upstreamCommit": "2d31cb02",
+      "status": "already-covered",
+      "capability": "Prevent silent branch drift",
+      "crokiFiles": [
+        "brain/src/firm/git-ship.mjs",
+        "brain/src/firm/git-review-state.mjs",
+        "ui/src/components/work-mode/WorkShipPanel.tsx",
+        "ui/src/components/work-mode/WorkShipFacts.tsx"
+      ],
+      "note": "Croki projects exact branch, upstream, default-branch and prepared-remote-branch drift into Review; the reviewed fingerprint blocks stale execution after fetch, while durable phased receipts preserve scoped retry."
+    },
+    {
+      "upstreamCommit": "6f34ad3e",
+      "status": "already-covered",
+      "capability": "Handle complete Claude SDK stream activity",
+      "crokiFiles": [
+        "brain/src/runtimes/claude-stream.mjs",
+        "brain/src/firm/drive-stream.mjs"
+      ],
+      "note": "Croki projects factual text, tools, results, plan shape, measured thinking duration, and attributable child activity."
+    },
+    {
+      "upstreamCommit": "a135f2c2",
+      "status": "already-covered",
+      "capability": "Show complete provider approval details",
+      "crokiFiles": [
+        "ui/src/components/now/DecisionGate.tsx"
+      ],
+      "note": "Native permissions remain exact allow-once founder decisions and never grant outward release authority."
+    },
+    {
+      "upstreamCommit": "8ca4eec9",
+      "status": "study",
+      "capability": "Drag repository files into the composer",
+      "crokiFiles": [
+        "ui/src/components/now/composerFileMentions.ts",
+        "ui/src/components/now/useAgentComposer.tsx"
+      ],
+      "note": "Exact file mentions already exist through the composer picker; drag remains optional evidence, not a required new surface."
+    },
+    {
+      "upstreamCommit": "fbd77420",
+      "status": "rejected",
+      "capability": "Automatic AI-reviewed approvals",
+      "crokiFiles": [],
+      "note": "Conflicts with founder-only outward authority."
+    }
+  ]
+}

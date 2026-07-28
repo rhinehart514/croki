@@ -19,6 +19,10 @@ import { createBet } from "../../src/firm/bet.mjs";
 import { listConversation } from "../../src/firm/conversation.mjs";
 import { applyFirmConfiguration, getFirmConfiguration } from "../../src/firm/configuration.mjs";
 import { getArchitectureState } from "../../src/firm/architecture.mjs";
+import { buildThreadTimeline } from "../../src/firm/thread-timeline.mjs";
+import { getSemanticModel } from "../../src/firm/semantic-model-store.mjs";
+import { directSdkTools } from "../../src/firm/work-loop-direct-sdk.mjs";
+import { subscribeFirmEvents } from "../../src/firm/firm-events.mjs";
 
 // The work-loop tests drive named teammates and assert first-participant formation from an empty roster,
 // so they opt out of the founding-crew roster seed (createVenture's default). Phase-8 seeding is proven in
@@ -54,6 +58,19 @@ function text(t) {
 }
 
 describe("driveTeammate — conversation is the real drive, not a parallel authority", () => {
+  it("attaches preview only to an explicitly preview-bearing direct turn", () => {
+    const tools = [
+      { name: "read_truth" },
+      { name: "preview_open" },
+      { name: "preview_snapshot" },
+    ];
+    assert.deepEqual(directSdkTools(tools), []);
+    assert.deepEqual(
+      directSdkTools(tools, { previewRequested: true }).map((tool) => tool.name),
+      ["preview_open", "preview_snapshot"],
+    );
+  });
+
   it("drives Work through the selected SDK without adding it to the Product / GTM crew", async () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Direct SDK Work" }, options);
@@ -77,10 +94,171 @@ describe("driveTeammate — conversation is the real drive, not a parallel autho
       deps: { runtime },
     });
 
-    assert.match(received.system, /SDK model the founder selected/);
+    assert.match(received.system, /model the founder selected for this coding Thread/);
+    assert.match(received.system, /normal coding workflow/);
     assert.doesNotMatch(received.system, /Product Strategist/);
+    assert.doesNotMatch(received.system, /fork_bet|fork genuinely|consult taste|stage_artifact|stage_outward|use speak|GTM system|venture architecture/i);
+    assert.deepEqual(received.tools, [], "ordinary direct SDK Work uses the provider's native tools without a Croki MCP bridge");
+    assert.doesNotMatch(received.system, /read_truth|search_repository|read_repository_excerpt|Croki MCP/i);
     assert.deepEqual(getFirmConfiguration(venture.id, options).agents.map((agent) => agent.ref), ["product-strategist"]);
     assert.equal(listCrew(venture.id, options).some((entry) => entry.ref === "codex"), false);
+  });
+
+  it("persists direct Canvas output natively without exposing Croki MCP tools", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Canvas-grounded coding" }, options);
+    const initial = getFirmConfiguration(venture.id, options);
+    applyFirmConfiguration({
+      ventureId: venture.id,
+      expectedRevision: initial.revision,
+      configuration: { ...initial, agents: [{ ref: "product-strategist", name: "Product Strategist", activation: "direct" }] },
+      summary: "Keep a Canvas specialist outside Work",
+    }, options);
+    let received;
+    const structuredOutput = {
+      title: "Checkout relationship",
+      summary: "Mapped the checkout relationship beside this Thread.",
+      question: "How does checkout connect to activation?",
+      nodes: [
+        { id: "checkout", label: "Checkout", detail: "Current page", kind: "truth", state: "current", sourceRef: "ui/src/checkout.tsx" },
+        { id: "activation", label: "Activation", detail: "Relationship to prove", kind: "unknown", state: "unresolved", sourceRef: "" },
+      ],
+      edges: [
+        { from: "checkout", to: "activation", label: "may enable", kind: "relationship" },
+      ],
+    };
+    let providerOutput = structuredOutput;
+    const runtime = {
+      id: "codex",
+      label: "Codex",
+      async drive(context) {
+        received = context;
+        return { kind: "completed", summary: "done", structuredOutput: providerOutput };
+      },
+    };
+
+    await driveTeammate({
+      ventureId: venture.id,
+      teammateRef: "codex",
+      goal: "Correct this product relationship",
+      runtime: "codex",
+      directSdk: true,
+      initiatedBy: "founder",
+      target: {
+        productGtmView: true,
+        modelBranchRef: "model-branch:checkout",
+      },
+      options,
+      deps: { runtime },
+    });
+
+    assert.match(received.system, /originated from Canvas/);
+    assert.match(received.system, /progressive intent clarity/);
+    assert.match(received.system, /must not dominate it/);
+    assert.match(received.system, /only around that question/);
+    assert.match(received.system, /host-required structured response/);
+    assert.match(received.system, /Do not call MCP or Croki tools/);
+    assert.doesNotMatch(received.system, /Product Strategist|fork_bet|fork genuinely|consult taste|stage_outward|use speak|GTM system/i);
+    assert.deepEqual(received.tools, [], "Canvas persistence is host-native, not a Croki MCP tool call");
+    assert.equal(received.outputSchema.properties.nodes.type, "array");
+
+    const [canvasBet] = listVentureDocs(venture.id, "bets", options);
+    assert.equal(canvasBet.staged.length, 1);
+    assert.equal(canvasBet.staged[0].title, "Checkout relationship");
+    assert.equal(canvasBet.staged[0].content.kind, "model-view");
+    assert.equal(canvasBet.staged[0].content.branchRef, "");
+    assert.equal(canvasBet.staged[0].content.nodes[0].sourceRef, "ui/src/checkout.tsx");
+    const canvasThread = getSemanticModel(venture.id, options).threads.find((thread) => (
+      thread.subjectRefs.includes(`bet:${canvasBet.id}`)
+    ));
+    assert.equal(
+      buildThreadTimeline(venture.id, canvasThread.id, options).visuals.some((visual) => visual.kind === "model-view"),
+      true,
+      "the native artifact projects into Canvas beside the originating Thread",
+    );
+    assert.equal(
+      listConversation(venture.id, options).some((message) => message.content === structuredOutput.summary),
+      true,
+      "the Thread receives a compact summary instead of serialized Canvas data",
+    );
+
+    providerOutput = {
+      ...structuredOutput,
+      summary: "Corrected the activation relationship.",
+      nodes: structuredOutput.nodes.map((node) => (
+        node.id === "activation" ? { ...node, label: "First value", detail: "Founder correction" } : node
+      )),
+    };
+    await driveTeammate({
+      ventureId: venture.id,
+      teammateRef: "codex",
+      goal: "Activation should be first value",
+      betId: canvasBet.id,
+      runtime: "codex",
+      directSdk: true,
+      initiatedBy: "founder",
+      target: {
+        threadRef: `thread:${canvasThread.id}`,
+        productGtmView: true,
+        betId: canvasBet.id,
+        workRef: canvasBet.staged[0].id,
+      },
+      options,
+      deps: { runtime },
+    });
+
+    assert.match(received.system, /Current selected Canvas material/);
+    const [revisedBet] = listVentureDocs(venture.id, "bets", options);
+    assert.equal(revisedBet.staged.length, 1, "a correction revises the exact Canvas work");
+    assert.equal(revisedBet.staged[0].id, canvasBet.staged[0].id);
+    assert.equal(revisedBet.staged[0].content.nodes[1].label, "First value");
+  });
+
+  it("replaces a rejected Canvas return only after its terminal projection is durable", async () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Recoverable Canvas failure" }, options);
+    const initial = getFirmConfiguration(venture.id, options);
+    applyFirmConfiguration({
+      ventureId: venture.id,
+      expectedRevision: initial.revision,
+      configuration: { ...initial, agents: [{ ref: "product-strategist", name: "Product Strategist", activation: "direct" }] },
+      summary: "Keep Canvas work on the selected SDK",
+    }, options);
+    const events = [];
+    const unsubscribe = subscribeFirmEvents(venture.id, (event) => events.push(event));
+    const runtime = {
+      id: "codex",
+      label: "Codex",
+      async drive() {
+        throw new Error("Codex returned an invalid Canvas projection.");
+      },
+    };
+
+    try {
+      await assert.rejects(() => driveTeammate({
+        ventureId: venture.id,
+        teammateRef: "codex",
+        goal: "Map this project in Canvas",
+        runtime: "codex",
+        directSdk: true,
+        initiatedBy: "founder",
+        target: { productGtmView: true },
+        options,
+        deps: { runtime },
+      }), /invalid Canvas projection/);
+    } finally {
+      unsubscribe();
+    }
+
+    const thread = getSemanticModel(venture.id, options).threads.at(-1);
+    const timeline = buildThreadTimeline(venture.id, thread.id, options);
+    const terminal = timeline.items.find((item) => item.kind === "agent-status");
+    assert.equal(terminal.state, "failed");
+    assert.equal(terminal.recoveryLayer, "canvas");
+    assert.ok(
+      events.some((event) => event.kind === "timeline" && event.threadRef === `thread:${thread.id}`),
+      "the final invalidation names the exact Thread after failure settlement",
+    );
   });
 
   it("forms the first participant even when the untouched configuration was read before the first drive", async () => {

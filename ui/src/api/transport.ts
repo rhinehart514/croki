@@ -16,6 +16,61 @@ export type ApiConnectionObservation = {
 
 type ApiConnectionListener = (observation: ApiConnectionObservation) => void;
 const connectionListeners = new Set<ApiConnectionListener>();
+let nextCommandId = 0;
+const ambiguousCommandKeys = new Map<string, string>();
+const workProjectionRevisions = new Map<string, number>();
+
+function commandIdempotencyKey() {
+  const random = globalThis.crypto?.randomUUID?.();
+  return random || `command-${Date.now()}-${++nextCommandId}`;
+}
+
+export function noteWorkProjectionRevision(ventureId: string, revision: number) {
+  if (!ventureId || !Number.isSafeInteger(revision) || revision < 0) return;
+  const current = workProjectionRevisions.get(ventureId) ?? -1;
+  if (revision >= current) workProjectionRevisions.set(ventureId, revision);
+}
+
+function workCommandHeaders(path: string, method: string, body: BodyInit | null | undefined) {
+  if (method.toUpperCase() === "GET") return { headers: {}, fingerprint: null };
+  const ventureId = path.match(/^\/api\/ventures\/([^/?]+)/)?.[1];
+  const threadId = path.match(/\/threads\/([^/?]+)/)?.[1];
+  const runId = path.match(/\/(?:runs|drives)\/([^/?]+)/)?.[1];
+  let parsedBody: Record<string, unknown> = {};
+  if (typeof body === "string" && body) {
+    try {
+      const value = JSON.parse(body);
+      if (value && typeof value === "object" && !Array.isArray(value)) parsedBody = value;
+    } catch {
+      // The route remains responsible for rejecting malformed JSON.
+    }
+  }
+  // Product/Canvas and workspace routes may carry their own `baseRevision`/`expectedRevision`.
+  // Those are not the ordered Work projection revision and must never be substituted for it.
+  const revision = Number.isInteger(parsedBody.expectedProjectionRevision)
+    ? parsedBody.expectedProjectionRevision
+    : null;
+  const decodedVentureId = ventureId ? decodeURIComponent(ventureId) : null;
+  const fingerprint = JSON.stringify([method.toUpperCase(), path, typeof body === "string" ? body : ""]);
+  const idempotencyKey = ambiguousCommandKeys.get(fingerprint) ?? commandIdempotencyKey();
+  ambiguousCommandKeys.set(fingerprint, idempotencyKey);
+  return {
+    fingerprint,
+    headers: {
+    "x-drover-idempotency-key": idempotencyKey,
+    ...(ventureId ? { "x-drover-venture-id": decodeURIComponent(ventureId) } : {}),
+    ...(threadId ? { "x-drover-thread-id": decodeURIComponent(threadId) } : {}),
+    ...(runId ? { "x-drover-run-id": decodeURIComponent(runId) } : {}),
+    ...(decodedVentureId
+      ? {
+        "x-drover-expected-projection-revision": String(
+          Number.isInteger(revision) ? revision : (workProjectionRevisions.get(decodedVentureId) ?? 0),
+        ),
+      }
+      : {}),
+    },
+  };
+}
 
 export function subscribeApiConnection(listener: ApiConnectionListener) {
   connectionListeners.add(listener);
@@ -58,10 +113,12 @@ export type DroverHealth = {
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = init.method ?? "GET";
   let response: Response;
+  const command = workCommandHeaders(path, method, init.body);
   try {
     const headers = {
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...identityHeaders(),
+      ...command.headers,
       ...init.headers,
     } as Record<string, string>;
     if (window.droverDesktop?.api) {
@@ -83,6 +140,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
     });
     throw new ApiError(message, null, "network_error");
   }
+  if (command.fingerprint) ambiguousCommandKeys.delete(command.fingerprint);
   const payload = (await response.json().catch(() => ({}))) as T & ErrorPayload;
   const message = response.ok ? null : (payload.error || `${path} failed (${response.status}).`);
   observeConnection({

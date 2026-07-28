@@ -10,6 +10,7 @@
 import crypto from "node:crypto";
 import { getVentureDoc } from "./venture-store.mjs";
 import { findLiveRun } from "./work-loop-stream.mjs";
+import { recordInterventionOpened } from "./work-journal-runtime.mjs";
 
 // The founder's exact allow answer on a permission item (permissionEffect's first option). One string,
 // used by both halves of the seam so an in-place allow and a resumed grant can never drift apart.
@@ -259,6 +260,7 @@ export function createProviderInterventionHandler({
       : `Waiting for the founder to decide whether to ${effect.exactAction}.`;
     const decisionRef = `decision:${queueItem.id}`;
     putWork({ ...getWork(), pausedFor, pendingProviderIntervention: { key, decisionRef } });
+    recordInterventionOpened(ventureId, queueItem, options);
     appendEvent?.(isQuestion ? effect.question : effect.title);
     // The park above already happened; only now does the callback choose how to wait for it. Without a
     // live run holding this drive's prompt queue there is nothing to keep warm, so the turn ends as before.
@@ -319,6 +321,7 @@ export function buildWorkLoopProviderIntervention({
 }) {
   const continuation = {
     teammateRef,
+    runId: driveRun?.runId ?? activeDrive?.id ?? null,
     runtime: selection.adapter.id,
     model: effectiveModel,
     effort: effectiveEffort,

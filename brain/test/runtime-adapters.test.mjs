@@ -109,6 +109,19 @@ describe("reasoning effort reaches each runtime", () => {
     assert.equal(Object.hasOwn(await capture(null), "effort"), false);
   });
 
+  it("passes the founder-selected native plan mode to the resumed Claude SDK session", async () => {
+    let invocation;
+    await claudeCodeRuntime.drive(baseContext({
+      interactionMode: "plan",
+      runtimeSessionId: "claude-session-plan",
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      query: (input) => { invocation = input; return (async function* () { yield { type: "result", subtype: "success", is_error: false, result: "Planned." }; })(); },
+    }));
+    assert.equal(invocation.options.permissionMode, "plan");
+    assert.equal(invocation.options.resume, "claude-session-plan");
+  });
+
   it("streams multiple images into the Claude Agent SDK user turn", async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "claude-sdk-images-"));
     const paths = [path.join(directory, "one.png"), path.join(directory, "two.jpg")];
@@ -140,9 +153,9 @@ describe("reasoning effort reaches each runtime", () => {
     assert.ok(args.includes("/tmp/two.jpg"));
   });
 
-  it("forwards the max tier to Codex verbatim (GPT-5.6 Sol reaches max)", () => {
-    const args = buildCodexDriveArgs({ model: "gpt-5.6-sol", effort: "max" });
-    assert.ok(args.includes("model_reasoning_effort=\"max\""), "codex forwards the founder-selected tier unchanged");
+  it("forwards the ultra tier to Codex verbatim when the live model advertises it", () => {
+    const args = buildCodexDriveArgs({ model: "gpt-5.6-sol", effort: "ultra" });
+    assert.ok(args.includes("model_reasoning_effort=\"ultra\""), "codex forwards the founder-selected tier unchanged");
   });
 });
 
@@ -165,6 +178,14 @@ describe("runtime selection by capability", () => {
 });
 
 describe("subscription adapter boundaries", () => {
+  it("reports native feature gaps instead of silently omitting them", () => {
+    assert.equal(claudeCodeRuntime.nativeFeatures.sameTurnSteer, true);
+    assert.equal(claudeCodeRuntime.nativeFeatures.liveModelSwitch, true);
+    assert.equal(codexRuntime.nativeFeatures.sameTurnSteer, true);
+    assert.equal(codexRuntime.nativeFeatures.nestedTasks, true);
+    assert.equal(codexRuntime.nativeFeatures.liveModelSwitch, false);
+  });
+
   it("advertises abort only on adapters whose live transport is wired to it", () => {
     assert.equal(anthropicRuntime.supportsAbort, true);
     assert.equal(claudeCodeRuntime.supportsAbort, true);
@@ -217,6 +238,45 @@ describe("subscription adapter boundaries", () => {
     assert.deepEqual(signals, ["SIGTERM"]);
   });
 
+  it("writes, consumes, and removes Codex's native Canvas schema without opening an MCP bridge", async () => {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.stdin = { end() {} };
+    child.kill = () => {};
+    const outputSchema = {
+      type: "object",
+      properties: { summary: { type: "string" } },
+      required: ["summary"],
+    };
+    const structuredOutput = { summary: "Mapped the project." };
+    let args;
+    let writtenSchema;
+    const resultPromise = runCodexDriveTurn({
+      prompt: "Map this project",
+      cwd: process.cwd(),
+      env: { GTM_IDE_CODEX_PATH: process.execPath },
+      outputSchema,
+      spawnProcess: (_binary, invocationArgs) => {
+        args = invocationArgs;
+        const schemaPath = args[args.indexOf("--output-schema") + 1];
+        writtenSchema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
+        queueMicrotask(() => {
+          child.stdout.write(`${JSON.stringify({ type: "item.completed", item: { id: "canvas-output", type: "agent_message", text: JSON.stringify(structuredOutput) } })}\n`);
+          child.emit("close", 0);
+        });
+        return child;
+      },
+    });
+
+    const result = await resultPromise;
+    const schemaPath = args[args.indexOf("--output-schema") + 1];
+    assert.deepEqual(writtenSchema, outputSchema);
+    assert.deepEqual(result.structuredOutput, structuredOutput);
+    assert.equal(args.some((value) => String(value).startsWith("mcp_servers.drover")), false);
+    assert.equal(fs.existsSync(schemaPath), false, "the host schema file is bounded to one provider turn");
+  });
+
   it("detects Claude authentication OAuth-first", () => {
     assert.equal(detectClaudeAuth({ CLAUDE_CODE_OAUTH_TOKEN: "token", ANTHROPIC_API_KEY: "key" }, () => true).mode, "oauth-token");
     assert.equal(detectClaudeAuth({ ANTHROPIC_API_KEY: "key" }, () => true).mode, "oauth-login");
@@ -225,6 +285,44 @@ describe("subscription adapter boundaries", () => {
 
   it("gives a resumed Claude drive enough turns to act after the wall", () => {
     assert.ok(modelMaxTurns({}, true) >= 8);
+  });
+
+  it("never cold-starts Claude when crash recovery requires the exact native session", async () => {
+    let invocations = 0;
+    await assert.rejects(
+      claudeCodeRuntime.drive(baseContext({
+        runtimeSessionId: "claude-session-before-crash",
+        resumePrompt: "Continue the exact interrupted turn.",
+        exactResumeOnly: true,
+        currentStatus: () => "running",
+        env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+        query: () => {
+          invocations += 1;
+          return (async function* missingSession() {
+            throw new Error("Resume session not found.");
+          })();
+        },
+      })),
+      /Resume session not found/,
+    );
+    assert.equal(invocations, 1);
+  });
+
+  it("never cold-starts Codex when crash recovery requires the exact native thread", async () => {
+    let invocations = 0;
+    await assert.rejects(
+      codexRuntime.drive(baseContext({
+        runtimeSessionId: "codex-thread-before-crash",
+        resumePrompt: "Continue the exact interrupted turn.",
+        exactResumeOnly: true,
+        runCodexTurn: async () => {
+          invocations += 1;
+          return { error: "resume thread not found" };
+        },
+      })),
+      /resume thread not found/,
+    );
+    assert.equal(invocations, 1);
   });
 
   it("narrows Claude's provider-side budget to the configured participant remainder", () => {
@@ -251,6 +349,30 @@ describe("subscription adapter boundaries", () => {
     assert.equal(interventions.length, 1, "a native question cannot grant commit authority");
   });
 
+  it("keeps every native provider behind founder-held source-control and publishing consequences", async () => {
+    const claude = claudePermissionHandler({ nativeCoding: true });
+    for (const command of [
+      "git commit -am ship",
+      "git merge feature/work",
+      "git push origin feature/work",
+      "gh pr create --fill",
+      "gh pr merge 42",
+      "vercel deploy --prod",
+      "npm publish",
+    ]) {
+      const decision = await claude("Bash", { command });
+      assert.equal(decision.behavior, "deny", `Claude could bypass the founder gate with: ${command}`);
+    }
+
+    const codex = buildCodexDriveArgs({ nativeCoding: true });
+    const sandboxIndex = codex.indexOf("-s");
+    assert.equal(codex[sandboxIndex + 1], "workspace-write");
+    assert.ok(codex.includes('approval_policy="never"'));
+    assert.ok(codex.includes('features.network_proxy.domains={ "localhost" = "allow", "127.0.0.1" = "allow" }'));
+    assert.ok(!codex.includes("danger-full-access"), "Codex must not receive a sandbox that can write repository metadata or reach outward systems");
+    assert.ok(!codex.some((arg) => /github\.com|npmjs\.com|vercel\.com/.test(String(arg))), "Codex's native coding network allowlist must stay loopback-only");
+  });
+
   it("directs native UI verification into the visible Croki preview", async () => {
     let invocation;
     await claudeCodeRuntime.drive(baseContext({
@@ -267,6 +389,121 @@ describe("subscription adapter boundaries", () => {
     assert.match(invocation.options.systemPrompt.append, /preview_open/);
     assert.match(invocation.options.systemPrompt.append, /do not launch a separate browser/);
     assert.equal(typeof invocation.options.canUseTool, "function");
+  });
+
+  it("does not reintroduce firm orchestration around direct Claude or Codex Work", async () => {
+    const directSystem = [
+      "You are Claude, the model the founder selected for this coding Thread.",
+      "The founder retains outward authority.",
+    ].join("\n");
+    let claudeInvocation;
+    await claudeCodeRuntime.drive(baseContext({
+      directSdk: true,
+      nativeCoding: true,
+      system: directSystem,
+      goal: "Repair the login form",
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      query: (input) => {
+        claudeInvocation = input;
+        return (async function* completedQuery() {
+          yield { type: "result", subtype: "success", is_error: false, result: "Done." };
+        })();
+      },
+    }));
+    assert.match(claudeInvocation.options.systemPrompt.append, /founder's coding Thread/);
+    assert.doesNotMatch(claudeInvocation.options.systemPrompt.append, /Croki teammate|venture truth|outward staging|Croki wall/i);
+
+    let codexPrompt;
+    await codexRuntime.drive(baseContext({
+      directSdk: true,
+      nativeCoding: true,
+      system: directSystem.replace("Claude", "Codex"),
+      goal: "Repair the login form",
+      runCodexTurn: async (input) => {
+        codexPrompt = input.prompt;
+        return { threadId: "thread-direct", text: "Done.", error: null, terminal: null };
+      },
+    }));
+    assert.match(codexPrompt, /Founder's request: Repair the login form/);
+    assert.doesNotMatch(codexPrompt, /Croki adds a native MCP server named drover|venture truth|durable work|park an outward consequence/i);
+  });
+
+  it("returns Claude Canvas structure natively without a Croki MCP server or transcript JSON", async () => {
+    let invocation;
+    const transcript = [];
+    const structuredOutput = {
+      title: "Project map",
+      summary: "Mapped the project.",
+      question: "How does it fit together?",
+      nodes: [],
+      edges: [],
+    };
+    const outputSchema = {
+      type: "object",
+      properties: { summary: { type: "string" } },
+      required: ["summary"],
+    };
+    const result = await claudeCodeRuntime.drive(baseContext({
+      directSdk: true,
+      outputSchema,
+      currentStatus: () => "running",
+      env: { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+      onText: (text) => transcript.push(text),
+      onTextDelta: (text) => transcript.push(text),
+      query: (input) => {
+        invocation = input;
+        return (async function* completedQuery() {
+          yield { type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "{\"title\":" } } };
+          yield { type: "assistant", message: { content: [{ type: "text", text: JSON.stringify(structuredOutput) }] } };
+          yield {
+            type: "result",
+            subtype: "success",
+            is_error: false,
+            result: JSON.stringify(structuredOutput),
+            structured_output: structuredOutput,
+          };
+        })();
+      },
+    }));
+
+    assert.deepEqual(invocation.options.outputFormat, { type: "json_schema", schema: outputSchema });
+    assert.equal(Object.hasOwn(invocation.options, "mcpServers"), false);
+    assert.deepEqual(transcript, []);
+    assert.deepEqual(result, {
+      kind: "completed",
+      summary: "Mapped the project.",
+      structuredOutput,
+    });
+  });
+
+  it("returns Codex Canvas structure without narrating its serialization", async () => {
+    let invocation;
+    const transcript = [];
+    const outputSchema = {
+      type: "object",
+      properties: { summary: { type: "string" } },
+      required: ["summary"],
+    };
+    const structuredOutput = { summary: "Mapped the project." };
+    const result = await codexRuntime.drive(baseContext({
+      directSdk: true,
+      outputSchema,
+      onText: (text) => transcript.push(text),
+      runCodexTurn: async (input) => {
+        invocation = input;
+        return { threadId: "thread-canvas", text: JSON.stringify(structuredOutput), structuredOutput, error: null, terminal: null };
+      },
+    }));
+
+    assert.equal(invocation.outputSchema, outputSchema);
+    assert.deepEqual(invocation.tools, []);
+    assert.deepEqual(transcript, []);
+    assert.deepEqual(result, {
+      kind: "completed",
+      summary: "Mapped the project.",
+      structuredOutput,
+    });
   });
 
   it("runs the default Claude teammate in the full native Claude Code harness", async () => {
@@ -434,6 +671,16 @@ describe("subscription adapter boundaries", () => {
     ]) {
       assert.ok(!args.includes(removed), `native drive still carries ${removed}`);
     }
+  });
+
+  it("uses Codex native output schema without adding the Croki MCP server", () => {
+    const args = buildCodexDriveArgs({ outputSchemaPath: "/tmp/croki-canvas-schema.json" });
+    const schemaIndex = args.indexOf("--output-schema");
+    assert.deepEqual(
+      args.slice(schemaIndex, schemaIndex + 2),
+      ["--output-schema", "/tmp/croki-canvas-schema.json"],
+    );
+    assert.equal(args.some((value) => String(value).startsWith("mcp_servers.drover")), false);
   });
 
   it("exposes screened Croki tools through the native Codex MCP contract", async () => {
@@ -719,7 +966,7 @@ describe("Claude working texture", () => {
       query: () => (async function* toolQuery() {
         yield { type: "assistant", session_id: "s1", message: { content: [
           { type: "tool_use", id: "t-todo", name: "TodoWrite", input: { todos: [{ content: "Map the seam", status: "in_progress", activeForm: "Mapping the seam" }, { content: "  ", status: "pending" }] } },
-          { type: "tool_use", id: "t-read", name: "Read", input: { file_path: "/repo/brain/src/server.mjs" } },
+          { type: "tool_use", id: "t-read", name: "Read", input: { file_path: "/repo/brain/src/server.mjs", offset: 4, limit: 3 } },
           { type: "tool_use", id: "t-grep", name: "Grep", input: { pattern: "onToolStart" } },
           { type: "tool_use", id: "t-bash", name: "Bash", input: { command: "npm test" } },
         ] } };
@@ -740,9 +987,9 @@ describe("Claude working texture", () => {
       ["Bash", "Running npm test"],
     ], "the plan is projected, never narrated as another tool step");
     assert.deepEqual(receipts, [
-      { name: "Read", target: "/repo/brain/src/server.mjs", status: "passed", detail: "3 lines" },
-      { name: "Grep", target: "onToolStart", status: "failed", detail: "No matches found" },
-      { name: "Bash", target: "npm test", status: "passed", detail: "3 tests passed" },
+      { toolUseId: "t-read", name: "Read", target: "/repo/brain/src/server.mjs", status: "passed", detail: "3 lines", source: { path: "/repo/brain/src/server.mjs", startLine: 4, endLine: 6 } },
+      { toolUseId: "t-grep", name: "Grep", target: "onToolStart", status: "failed", detail: "No matches found" },
+      { toolUseId: "t-bash", name: "Bash", target: "npm test", status: "passed", detail: "3 tests passed" },
     ]);
     assert.equal(commands.length, 1, "only Bash still earns the full command receipt");
     assert.equal(commands[0].command, "npm test");

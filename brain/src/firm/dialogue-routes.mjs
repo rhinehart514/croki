@@ -20,7 +20,6 @@
 //   GET /api/ventures/:id/events · GET /api/ventures/:id/drives/:driveId/stream  (text/event-stream)
 //     Two live pushes behind the same venture-scoped guard: a data-free "something changed" signal (the
 //     900 ms poll is its fallback), and one drive's payload deltas so a reply streams without a refetch.
-//
 import { json, readBody } from "../routes/util.mjs";
 import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { getFirmConfiguration } from "./configuration.mjs";
@@ -43,6 +42,9 @@ import { journeyImportProfile, publicJourneyImportAttachment } from "./journey-i
 import { handleDialogueEventStream } from "./dialogue-event-stream.mjs";
 import { handleDriveDeltaStream } from "./drive-stream.mjs";
 import imageAttachmentRoutes from "./image-attachment-routes.mjs";
+import { launchAcceptedWork } from "./work-start-ack.mjs";
+import { captureProviderBoundaryFollowUp, tombstoneQueuedFounderTurns } from "./founder-turn-queue.mjs";
+import { recordMatchingRunTombstones } from "./work-journal-runtime.mjs";
 const trimOrNull = (value) => String(value ?? "").trim() || null;
 function statusFor(err) {
   if (err?.code === "venture_not_found") return 404;
@@ -69,28 +71,12 @@ function appendThreadReply({ ventureId, threadRef, betId, teammateRef = null, co
   return reply;
 }
 function launchDrive({ drive, input, ventureId, threadRef, betId, teammateRef, options }) {
-  let task;
-  try {
-    task = Promise.resolve(drive(input));
-  } catch (error) {
-    task = Promise.reject(error);
-  }
-  task.catch((error) => {
+  return launchAcceptedWork(drive, input, (error) => {
     try {
       const detail = error instanceof Error ? error.message : String(error);
-      appendThreadReply({
-        ventureId,
-        threadRef,
-        betId,
-        teammateRef,
-        content: `${teammateRef ?? "Croki"} could not continue this work: ${detail}`,
-        options,
-      });
-    } catch {
-      // The original drive failure is already terminal; reporting it must never create an unhandled rejection.
-    }
+      appendThreadReply({ ventureId, threadRef, betId, teammateRef, content: `${teammateRef ?? "Croki"} could not continue this work: ${detail}`, options });
+    } catch { /* the original failure is already terminal */ }
   });
-  return task;
 }
 
 function latestArtifactRef(ventureId, betId) {
@@ -131,7 +117,7 @@ async function dispatchParticipantCommand({ ventureId, configuration, message, b
       return attempt;
     });
     appendThreadReply({ ventureId, threadRef, betId, content: `${participants.join(" and ")} are trying this independently in the same thread.`, options: deps.appendOptions });
-    for (const attempt of attempts) launchDrive({
+    const starts = attempts.map((attempt) => launchDrive({
       drive,
       input: {
         ventureId, teammateRef: attempt.teammateRef, betId: attempt.id, goal: message, initiatedBy: "founder",
@@ -139,8 +125,9 @@ async function dispatchParticipantCommand({ ventureId, configuration, message, b
         attachments, options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
       },
       ventureId, threadRef, betId: attempt.id, teammateRef: attempt.teammateRef, options: deps.appendOptions,
-    });
-    json(res, 202, { act: "parallel-attempts", accepted: true, messageId: founderMessageId, threadRef, attempts: attempts.map((attempt) => ({ betId: attempt.id, teammateRef: attempt.teammateRef })) });
+    }).accepted);
+    const runReceipts = await Promise.all(starts);
+    json(res, 202, { act: "parallel-attempts", accepted: true, messageId: founderMessageId, threadRef, attempts: attempts.map((attempt, index) => ({ betId: attempt.id, teammateRef: attempt.teammateRef, ...(runReceipts[index]?.runRef ? { runRef: runReceipts[index].runRef } : {}) })) });
     return true;
   }
 
@@ -153,7 +140,7 @@ async function dispatchParticipantCommand({ ventureId, configuration, message, b
     return true;
   }
   appendThreadReply({ ventureId, threadRef, betId, teammateRef, content: `${teammateRef} is ${critique ? "critiquing the returned work" : "joining this thread"}.`, options: deps.appendOptions });
-  launchDrive({
+  const started = await launchDrive({
     drive,
     input: {
       ventureId, teammateRef, betId, goal: message, initiatedBy: "founder", recordInitiation: false,
@@ -161,8 +148,8 @@ async function dispatchParticipantCommand({ ventureId, configuration, message, b
       attachments, options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
     },
     ventureId, threadRef, betId, teammateRef, options: deps.appendOptions,
-  });
-  json(res, 202, { act: critique ? "critique" : "involve-participant", accepted: true, messageId: founderMessageId, threadRef, teammateRef, workRef });
+  }).accepted;
+  json(res, 202, { act: critique ? "critique" : "involve-participant", accepted: true, messageId: founderMessageId, threadRef, teammateRef, workRef, ...(started?.runRef ? { runRef: started.runRef } : {}) });
   return true;
 }
 
@@ -204,6 +191,7 @@ async function handleReply(ventureId, req, res, deps) {
   const runtime = workTurn ? trimOrNull(body?.runtime) : null;
   const model = workTurn ? trimOrNull(body?.model) : null;
   const effort = workTurn ? trimOrNull(body?.effort) : null;
+  const interactionMode = workTurn && body?.interactionMode === "plan" ? "plan" : null;
   const workRef = trimOrNull(body?.workRef);
   const productGtmView = body?.productGtmView === true;
   const workflowSketch = body?.workflowSketch === true;
@@ -233,7 +221,6 @@ async function handleReply(ventureId, req, res, deps) {
     throw Object.assign(new Error(`These participants are not configured for this venture: ${unknownTeammateRefs.join(", ")}.`), { status: 409 });
   }
   if (threadRef) {
-    if (subjectRefs.length) throw Object.assign(new Error("subjectRefs are only accepted when forming a new contextual thread."), { status: 400 });
     const threadId = threadRef.replace(/^thread:/, "");
     const ownsThread = getSemanticModel(ventureId).threads.some((thread) => thread.id === threadId && thread.id !== "venture-root");
     if (!ownsThread) throw Object.assign(new Error(`No such direction thread: ${threadId}`), { status: 404 });
@@ -252,12 +239,18 @@ async function handleReply(ventureId, req, res, deps) {
       ...publicImageAttachments(attachments),
       ...(journeyProfile ? [publicJourneyImportAttachment(journeyProfile)] : []),
     ],
-    ...((threadRef || teammateRefs.length) ? { target: { threadRef, teammateRefs } } : {}),
+    ...((threadRef || subjectRefs.length || teammateRefs.length) ? { target: { threadRef, subjectRefs, teammateRefs } } : {}),
   }, deps.appendOptions);
-  const journeyMaterial = journeyProfile
-    ? { journeyImportRef, journeyImportProfile: journeyProfile }
-    : {};
+  const journeyMaterial = {
+    ...(journeyProfile ? { journeyImportRef, journeyImportProfile: journeyProfile } : {}),
+    ...(interactionMode ? { interactionMode } : {}),
+  };
   if (threadRef) extendDirectionThread(ventureId, threadRef, { messageRefs: [`conversation:${founderMessage.id}`], actor: { authority: "founder", id: "founder" } }, deps.appendOptions);
+
+  // At a non-steerable provider boundary, transcript persistence above precedes the durable queue
+  // write; no provider dispatch below may see this later founder turn.
+  const queued = captureProviderBoundaryFollowUp({ ventureId, betId, threadRef, mode: body?.mode, message, founderMessageId: founderMessage.id }, deps.appendOptions);
+  if (queued) { json(res, 202, queued); return; }
 
   // Observation is founder-invoked work, too. Keep reply capture on the conversation surface instead
   // of reviving an ambient scheduler or hiding it behind a GTM dashboard. The poll is read-only until
@@ -291,6 +284,11 @@ async function handleReply(ventureId, req, res, deps) {
       json(res, 200, { act: "stop-run", betId, messageId: founderMessage.id, note, needsFounderJudgment: true });
       return;
     }
+    if (matches[0].betId) tombstoneQueuedFounderTurns({ ventureId, betId: matches[0].betId, reason: "run-stopped" });
+    recordMatchingRunTombstones(ventureId, {
+      runIds: [matches[0].id],
+      reasonCode: "founder-stopped",
+    }, deps.appendOptions);
     const stopped = abortActiveDrive({ ventureId, driveId: matches[0].id });
     appendThreadReply({ ventureId, threadRef, teammateRef: stopped.teammateRef, betId: stopped.betId, content: `Stop requested for ${participantName(configuration, stopped.teammateRef)}. The rest of this thread is still active.`, options: deps.appendOptions });
     json(res, 200, { act: "stop-run", betId: stopped.betId, messageId: founderMessage.id, stoppedRunRef: `run:${stopped.id}` });
@@ -408,7 +406,7 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
   // duplicate transcript chrome between the founder turn and the model's real response.
   if (why) appendThreadReply({ ventureId, threadRef: exactThreadRef, betId: null, teammateRef, content: why, options: deps.appendOptions });
   const drive = deps.driveTeammate ?? driveTeammate;
-  launchDrive({
+  const started = await launchDrive({
     drive,
     input: {
       ventureId, teammateRef, goal: direction, initiatedBy: "founder",
@@ -427,6 +425,7 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
         ...(material.modelBranchRef ? { modelBranchRef: material.modelBranchRef } : {}),
         ...(material.artifactSection ? { artifactSection: material.artifactSection } : {}),
         ...(material.workflowStep ? { workflowStep: material.workflowStep } : {}),
+        ...((material.previewRequested || direction.includes("<preview_annotation>")) ? { previewRequested: true } : {}),
         ...(material.teammateRefs?.length ? { teammateRefs: material.teammateRefs } : {}),
         ...(material.journeyImportRef ? { journeyImportRef: material.journeyImportRef } : {}),
         ...(material.journeyImportProfile ? { journeyImportProfile: material.journeyImportProfile } : {}),
@@ -434,12 +433,13 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
       ...(runtime ? { runtime } : {}),
       ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),
+      ...(material.interactionMode ? { interactionMode: material.interactionMode } : {}),
       ...(directSdk ? { directSdk: true } : {}),
       attachments: material.attachments ?? [],
       options: deps.appendOptions ?? {}, deps: deps.workLoopDeps ?? {},
     },
     ventureId, threadRef: exactThreadRef, betId: null, teammateRef, options: deps.appendOptions,
-  });
+  }).accepted;
   json(res, 202, {
     act: responseAct,
     accepted: true,
@@ -449,9 +449,9 @@ async function dispatchNewDirection(ventureId, configuration, direction, res, de
     messageId: fromMessageId,
     // Compatibility for older clients that consumed the work-loop origin name.
     fromMessageId,
+    ...(started?.runRef ? { runRef: started.runRef } : {}),
   });
 }
-
 export default async function handle({ req, res, url, deps = {} }) {
   if (imageAttachmentRoutes({ req, res, url, options: deps.appendOptions })) return true;
   const replyMatch = url.pathname.match(/^\/api\/ventures\/([^/]+)\/conversation\/reply$/);

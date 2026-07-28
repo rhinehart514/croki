@@ -24,7 +24,7 @@ export function SiteHeader() {
 
       <nav className="desktop-nav" aria-label="Primary navigation">
         <a href="#machine">How it works</a>
-        <a href="#wall">Needs you</a>
+        <a href="#wall">Exact review</a>
         <a href="#local">Run locally</a>
         <a href="#pricing">Pricing</a>
       </nav>
@@ -61,12 +61,12 @@ export function SiteHeader() {
               <CrokiWordmark />
             </SheetTitle>
             <SheetDescription>
-              You built it. Croki gets it used.
+              Code with Claude and Codex without losing the thread.
             </SheetDescription>
           </SheetHeader>
           <nav className="mobile-nav" aria-label="Mobile navigation">
             <SheetClose render={<a href="#machine" />}>How it works</SheetClose>
-            <SheetClose render={<a href="#wall" />}>Needs you</SheetClose>
+            <SheetClose render={<a href="#wall" />}>Exact review</SheetClose>
             <SheetClose render={<a href="#local" />}>Run locally</SheetClose>
             <SheetClose render={<a href="#pricing" />}>Pricing</SheetClose>
           </nav>

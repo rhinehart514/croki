@@ -7,6 +7,8 @@ import { parsePatchFiles } from "@pierre/diffs";
 import type { FileDiffMetadata } from "@pierre/diffs";
 
 export const DIFF_THEME_NAME = "pierre-dark";
+export const DIFF_AUTO_EXPAND_FILE_LIMIT = 5;
+export const DIFF_AUTO_EXPAND_LINE_LIMIT = 200;
 
 const FNV_OFFSET_BASIS_32 = 0x811c9dc5;
 const FNV_PRIME_32 = 0x01000193;
@@ -106,4 +108,16 @@ export function fileDiffStats(fileDiff: FileDiffMetadata): { additions: number; 
     deletions += hunk.deletionLines;
   }
   return { additions, deletions };
+}
+
+/** Keep exact review available without making a large patch take over the conversation on open. */
+export function shouldCollapseDiff(files: readonly FileDiffMetadata[]): boolean {
+  if (files.length > DIFF_AUTO_EXPAND_FILE_LIMIT) return true;
+  let changedLines = 0;
+  for (const file of files) {
+    const { additions, deletions } = fileDiffStats(file);
+    changedLines += additions + deletions;
+    if (changedLines > DIFF_AUTO_EXPAND_LINE_LIMIT) return true;
+  }
+  return false;
 }

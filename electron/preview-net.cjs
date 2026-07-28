@@ -3,6 +3,8 @@
 // Portions Copyright (c) 2026 T3 Tools Inc. Licensed under MIT (github.com/pingdotgg/t3code).
 
 const net = require("node:net");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 
 const CONNECT_PROBE_TIMEOUT_MS = 250;
 
@@ -42,6 +44,67 @@ async function findListeningPort(candidatePorts) {
   return null;
 }
 
+function parseListeningProcesses(output) {
+  const listeners = new Map();
+  let pid = null;
+  for (const line of String(output ?? "").split(/\r?\n/)) {
+    if (line.startsWith("p")) {
+      pid = Number(line.slice(1));
+      if (Number.isInteger(pid)) listeners.set(pid, listeners.get(pid) ?? new Set());
+      continue;
+    }
+    if (!pid || !line.startsWith("n")) continue;
+    const match = line.match(/(?:127\.0\.0\.1|localhost|\[::1\]|\*):(\d+)(?:\s|$)/);
+    const port = Number(match?.[1]);
+    if (Number.isInteger(port) && port > 0 && port < 65_536) listeners.get(pid)?.add(port);
+  }
+  return listeners;
+}
+
+function processCwd(pid, run = execFileSync) {
+  try {
+    const output = run("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"], {
+      encoding: "utf8",
+      timeout: 1_000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return String(output).split(/\r?\n/).find((line) => line.startsWith("n"))?.slice(1) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function insideWorktree(worktree, candidate) {
+  if (!candidate) return false;
+  const relative = path.relative(path.resolve(worktree), path.resolve(candidate));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+/** Exact loopback listeners whose owning process has its cwd inside this isolated worktree. */
+function discoverWorktreeListeners(worktree, { run = execFileSync } = {}) {
+  if (!path.isAbsolute(String(worktree ?? ""))) return [];
+  let output;
+  try {
+    output = run("lsof", ["-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn"], {
+      encoding: "utf8",
+      timeout: 2_000,
+      maxBuffer: 4 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return [];
+  }
+  const ports = new Set();
+  for (const [pid, candidates] of parseListeningProcesses(output)) {
+    if (!insideWorktree(worktree, processCwd(pid, run))) continue;
+    for (const port of candidates) ports.add(port);
+  }
+  return [...ports].sort((left, right) => left - right).map((port) => ({
+    port,
+    url: `http://127.0.0.1:${port}/`,
+  }));
+}
+
 /**
  * Polls GET `baseUrl` until any HTTP response arrives (a dev server that answers 404/500 is still
  * up — the page decides what it renders) or `timeoutMs` elapses. Each probe is bounded by
@@ -68,4 +131,11 @@ async function waitForHttpReady({ baseUrl, timeoutMs = 30_000, intervalMs = 100,
   throw new Error(`The dev server at ${baseUrl} did not answer within ${Math.round(timeoutMs / 1000)}s${lastFailure ? ` (${lastFailure})` : ""}.`);
 }
 
-module.exports = { hasListenerOnHost, hasLoopbackListener, findListeningPort, waitForHttpReady };
+module.exports = {
+  hasListenerOnHost,
+  hasLoopbackListener,
+  findListeningPort,
+  waitForHttpReady,
+  parseListeningProcesses,
+  discoverWorktreeListeners,
+};

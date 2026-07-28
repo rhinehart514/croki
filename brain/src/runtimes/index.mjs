@@ -19,6 +19,7 @@
 import { anthropicRuntime } from "./anthropic.mjs";
 import { authModeLabel as claudeAuthModeLabel, claudeCodeRuntime } from "./claude-code.mjs";
 import { codexAuthModeLabel, codexRuntime } from "./codex.mjs";
+import { discoverNativeCapabilities, nativeCapabilities } from "./native-capabilities.mjs";
 
 export { anthropicRuntime, claudeCodeRuntime, codexRuntime };
 
@@ -50,7 +51,7 @@ export function runtimeForModel(model) {
   return null;
 }
 
-export function runtimeStatuses({ env = process.env } = {}) {
+export function runtimeStatuses({ env = process.env, cwd = null, capabilityDeps = {} } = {}) {
   return FOUNDER_RUNTIME_CHOICES.map((adapter) => {
     const availability = adapter.isAvailable({ env });
     return {
@@ -61,8 +62,17 @@ export function runtimeStatuses({ env = process.env } = {}) {
       authLabel: availability.ok ? authModeLabel(availability.auth) : null,
       reason: availability.ok ? null : availability.reason ?? "Not available.",
       abortSupported: adapter.supportsAbort === true,
+      nativeFeatures: { ...(adapter.nativeFeatures ?? {}) },
+      capabilities: nativeCapabilities(adapter.id, { cwd, env, ...capabilityDeps }),
     };
   });
+}
+
+export async function runtimeStatusesLive({ env = process.env, cwd = null, capabilityDeps = {} } = {}) {
+  return Promise.all(runtimeStatuses({ env, cwd, capabilityDeps }).map(async (status) => ({
+    ...status,
+    capabilities: await discoverNativeCapabilities(status.id, { cwd, env, ...capabilityDeps }),
+  })));
 }
 
 // Decide which runtime drives this session.

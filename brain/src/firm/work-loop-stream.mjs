@@ -15,8 +15,9 @@
 //      (resumeSessionAt — the last assistant uuid) checkpoints onto the SAME work record that already
 //      carries runtimeSessionId, so { sessionId, resumeSessionAt } persist as one pair per Thread.
 
-import { noteDriveText, noteDriveThinking, noteDriveTodos, noteDriveToolInput, noteDriveToolResult } from "./active-drives.mjs";
+import { noteDriveNestedTask, noteDriveText, noteDriveThinking, noteDriveTodos, noteDriveToolInput, noteDriveToolResult } from "./active-drives.mjs";
 import { publishDriveDelta } from "./drive-stream.mjs";
+import { recordFactualActivity, recordFormingReplyCheckpoint } from "./work-journal-runtime.mjs";
 
 const liveRuns = new Map(); // driveId -> { driveId, ventureId, betId, threadRef, handle }
 
@@ -68,19 +69,40 @@ export function __resetLiveRuns() {
 // buildStreamSeam — the streaming ctx callbacks for one drive. getWork/putWork are the drive's own
 // single-writer checkpoint accessors, so the resume cursor persists through the exact same seam every
 // other work checkpoint uses.
-export function buildStreamSeam({ activeDrive, receipts, narration, ventureId, betId = null, threadRef = null, getWork, putWork }) {
+export function buildStreamSeam({ activeDrive, receipts, narration, ventureId, betId = null, threadRef = null, getWork, putWork, driveRun = null, onSettledToolResult = null }) {
   let streamed = false;
+  let formingReply = "";
+  let receivedLength = 0;
+  let checkpointedLength = 0;
+  let checkpoint = 0;
+  const nestedTasks = new Map();
+  const terminalNested = new Set(["completed", "failed", "cancelled", "stopped", "skipped"]);
+  const replyId = `reply:${activeDrive.id}`;
+  const checkpointReply = (force = false) => {
+    if (!formingReply || (!force && checkpoint > 0 && receivedLength - checkpointedLength < 512)) return;
+    checkpointedLength = receivedLength;
+    checkpoint += 1;
+    recordFormingReplyCheckpoint(driveRun, { replyId, boundedText: formingReply, checkpoint });
+  };
   return {
     onTextDelta: (delta) => {
       const text = String(delta ?? "");
       if (!text) return;
       streamed = true;
+      receivedLength += text.length;
+      formingReply = `${formingReply}${text}`.slice(-12 * 1024);
+      checkpointReply();
       noteDriveText(activeDrive.id, text);
     },
     onText: (text) => {
       receipts.record({ type: "text", detail: text });
       const line = String(text ?? "").trim();
       if (line) narration.push(line);
+      if (!streamed && line) {
+        formingReply = line.slice(-12 * 1024);
+        receivedLength = line.length;
+      }
+      checkpointReply(true);
       // Deltas already streamed this reply into the live drive presence; appending the complete
       // message again would double it. A non-streaming adapter keeps the whole-message path.
       if (!streamed) noteDriveText(activeDrive.id, text);
@@ -94,11 +116,77 @@ export function buildStreamSeam({ activeDrive, receipts, narration, ventureId, b
     // These three route through active-drives rather than straight to the stream so the drive record
     // and the delta stream never disagree: a client with no stream open reads the same texture off the
     // thread timeline. onChildDelta has no drive-record half — a subagent's deltas are stream-only.
-    onToolResult: (result) => noteDriveToolResult(activeDrive.id, result),
+    onToolResult: (result) => {
+      noteDriveToolResult(activeDrive.id, result);
+      onSettledToolResult?.(result);
+    },
     onThinking: (span) => noteDriveThinking(activeDrive.id, span),
     onTodos: (items) => noteDriveTodos(activeDrive.id, items),
     onChildDelta: ({ parentToolUseId, delta } = {}) =>
       publishDriveDelta(activeDrive.id, { kind: "child", parentToolUseId, delta }),
+    onNestedTask: (event = {}) => {
+      const taskId = String(event.taskId ?? event.task_id ?? "").trim();
+      if (!taskId) return;
+      const prior = nestedTasks.get(taskId) ?? { taskId };
+      const patch = event.patch && typeof event.patch === "object" ? event.patch : {};
+      const status = String(
+        event.status
+          ?? patch.status
+          ?? (event.kind === "started" ? "running" : event.kind === "settled" ? "completed" : prior.status ?? "running"),
+      ).trim();
+      const task = {
+        ...prior,
+        ...event,
+        taskId,
+        parentTaskId: event.parentTaskId ?? event.parentId ?? event.parentToolUseId ?? prior.parentTaskId ?? null,
+        label: event.label ?? event.description ?? patch.description ?? prior.label ?? null,
+        taskKind: event.taskKind ?? event.taskType ?? event.subagentType ?? prior.taskKind ?? null,
+        skipTranscript: event.skipTranscript === true || event.hidden === true || prior.skipTranscript === true,
+        status,
+      };
+      nestedTasks.set(taskId, task);
+      noteDriveNestedTask(activeDrive.id, task);
+
+      // Only unfinished identities need restart recovery. Completed children belong in their
+      // provider's final synthesis; keeping thousands of settled workers in the hot work record
+      // would turn execution machinery into a second durable model.
+      const unfinished = [...nestedTasks.values()]
+        .filter((candidate) => !terminalNested.has(candidate.status))
+        .slice(-64)
+        .map((candidate) => ({
+          taskId: candidate.taskId,
+          label: String(candidate.label ?? "").slice(0, 480) || null,
+          taskKind: String(candidate.taskKind ?? "").slice(0, 120) || null,
+          status: candidate.status,
+        }));
+      const work = getWork();
+      putWork({
+        ...work,
+        nativeNestedTasks: unfinished,
+        nestedTaskReceiptCount: (Number(work?.nestedTaskReceiptCount) || 0) + (event.kind === "settled" ? 1 : 0),
+      });
+
+      // A root workflow/task is a useful durable receipt; its individual workers are not. Failures
+      // also survive so Review and recovery never hide a broken branch.
+      const root = !task.parentTaskId;
+      if (event.kind === "settled" && (root || task.status === "failed")) {
+        const usage = event.usage && typeof event.usage === "object" ? event.usage : null;
+        recordFactualActivity(driveRun, {
+          activityId: `nested:${taskId}`,
+          label: String(task.label ?? task.taskKind ?? "Nested work").slice(0, 480),
+          tone: task.status === "failed" ? "attention" : "tool",
+          durationMs: Number.isFinite(Number(event.elapsedMs ?? usage?.durationMs ?? usage?.duration_ms))
+            ? Math.max(0, Number(event.elapsedMs ?? usage?.durationMs ?? usage?.duration_ms))
+            : null,
+          usage: usage ? {
+            inputTokens: Math.max(0, Number(usage.inputTokens ?? 0) || 0),
+            outputTokens: Math.max(0, Number(usage.outputTokens ?? 0) || 0),
+            cachedInputTokens: Math.max(0, Number(usage.cachedInputTokens ?? 0) || 0),
+            costUsd: Math.max(0, Number(usage.costUsd ?? 0) || 0),
+          } : null,
+        });
+      }
+    },
     onResumeCursor: ({ resumeSessionAt } = {}) => {
       const at = String(resumeSessionAt ?? "").trim();
       if (!at || getWork().resumeSessionAt === at) return;

@@ -174,6 +174,16 @@ describe("staged work — stable identity and participant attribution", () => {
     assert.deepEqual(work.ownerRefs, ["outreach-writer"]);
     assert.deepEqual(work.contributorRefs, ["buyer-researcher"]);
   });
+
+  it("rejects arbitrary structured output instead of storing a future raw-JSON fallback", async () => {
+    const options = freshRoot();
+    const { bet, stageArtifact } = await setup(options);
+    await assert.rejects(
+      () => stageArtifact.run({ betId: bet.id, content: { kind: "project-map", layers: [] } }),
+      (error) => error?.code === "unsupported_staged_artifact" && /Canvas model-view/.test(error.message),
+    );
+    assert.deepEqual(getVentureDoc(bet.ventureId, "bets", bet.id, options).staged, []);
+  });
 });
 
 describe("Product / GTM local-model work tools", () => {

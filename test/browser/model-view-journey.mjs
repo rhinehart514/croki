@@ -49,7 +49,7 @@ function createLocalModelViewFixture(options = {}) {
   return fixture;
 }
 
-test("Product / GTM conversation keeps a flexible local model view above the composer", async () => {
+test("Canvas context keeps a flexible local model view above the composer", async () => {
   const drover = await bootFixture(createLocalModelViewFixture);
   const chrome = await openFixtureVenture(drover, { viewport: { width: 1440, height: 900 } });
   try {
@@ -66,10 +66,23 @@ test("Product / GTM conversation keeps a flexible local model view above the com
         proposed: shell?.querySelectorAll('.react-flow__node.is-provisional').length,
         unresolved: shell?.querySelectorAll('.react-flow__node.is-unresolved').length,
         sequentialLanguage: /steps|workflow/i.test(shell?.querySelector('header small')?.textContent || ''),
+        intent: shell?.querySelector('.work-graph-intent')?.textContent,
         contained: Boolean(rect && rect.left >= 0 && rect.right <= innerWidth && rect.bottom <= composer.getBoundingClientRect().top),
       };
     })()`);
-    assert.deepEqual(state, { title: "Ecosystem distribution after proof", label: "Provisional Product / GTM view", proposed: 4, unresolved: 1, sequentialLanguage: false, contained: true });
+    assert.deepEqual(state, { title: "Ecosystem distribution after proof", label: "Provisional Canvas view", proposed: 4, unresolved: 1, sequentialLanguage: false, intent: "IntentWhen should ecosystem distribution begin?", contained: true });
+
+    assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.work-graph-sketch[data-kind="model-view"] button')].find((entry) => /Review full view/.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
+    await waitForDom(client, `/When should ecosystem distribution begin/.test(document.querySelector('.visual-flow-intent')?.textContent || '')`, "the full Canvas view lost the founder's governing intent");
+    assert.equal(await client.evaluate(`(() => { const node = document.querySelector('.visual-flow[data-kind="model-view"] .react-flow__node[data-id="unknown"]'); node?.click(); return Boolean(node); })()`), true);
+    await waitForDom(client, `/Now clarifying One external story/.test(document.querySelector('.visual-flow-intent')?.textContent || '')`, "digging into the Canvas did not clarify the selected intent");
+    await waitForDom(client, `document.querySelector('.thread-composer textarea')?.getAttribute('placeholder') === 'Change “One external story”…'`, "the selected intent did not target the same Thread composer");
+    assert.equal(await client.evaluate(`document.querySelector('.now-composer-artifact-target strong')?.textContent`), "One external story");
+    await waitForDom(client, `(document.querySelector('.visual-flow .react-flow__node.selected')?.getBoundingClientRect().width ?? 0) >= 160`, "the selected intent did not settle into a readable working depth");
+    const selectedWidth = await client.evaluate(`document.querySelector('.visual-flow .react-flow__node.selected')?.getBoundingClientRect().width ?? 0`);
+    assert.ok(selectedWidth >= 160, `the selected intent stayed overview-sized instead of becoming readable (${selectedWidth}px)`);
+    await client.evaluate(`document.querySelector('.visual-stage-header button[aria-label="Close Review"]')?.click()`);
+    await waitForDom(client, `!document.querySelector('.visual-stage')`, "the Canvas Review did not close");
 
     assert.equal(await client.evaluate(`(() => { const button = [...document.querySelectorAll('.work-graph-sketch[data-kind="model-view"] button')].find((entry) => /Review changes/.test(entry.textContent)); button?.click(); return Boolean(button); })()`), true);
     await waitForDom(client, `document.querySelector('.workspace-shell')?.getAttribute('data-canvas-open') === 'true' && !!document.querySelector('.workspace-canvas .product-gtm-review[data-inline="true"]')`, "review did not open the exact provisional branch on the Canvas");

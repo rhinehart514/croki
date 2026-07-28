@@ -82,7 +82,10 @@ const uiOrphans = uiProduction.filter((file) => !uiReachable.has(file));
 
 const brainRoot = path.join(repository, "brain/src");
 const brainProduction = walk(brainRoot, (file) => file.endsWith(".mjs"));
-const brainReachable = reachable(["desktop-runtime.mjs", "server.mjs", "mcp.mjs"].map((file) => path.join(brainRoot, file)));
+const brainEntries = ["desktop-runtime.mjs", "server.mjs", "mcp.mjs"].map((file) => path.join(brainRoot, file));
+const desktopBrainChild = path.join(repository, "electron", "brain-child.mjs");
+if (fs.existsSync(desktopBrainChild)) brainEntries.push(desktopBrainChild);
+const brainReachable = reachable(brainEntries);
 const allowedBrainOrphans = new Set([path.join(brainRoot, "firm/founding-crew.mjs")]);
 const brainOrphans = brainProduction.filter((file) => !brainReachable.has(file) && !allowedBrainOrphans.has(file));
 

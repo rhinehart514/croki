@@ -1,11 +1,17 @@
 export type UxMetricName =
+  // Historical compatibility only. A citation proved grounding, not user value, so current code no
+  // longer emits this event.
   | "first_grounded_value"
+  | "first_exact_reviewable_material"
+  | "first_verified_result"
+  | "founder_turn_acknowledged"
   | "return_first_decision"
   | "proof_opened"
   | "correction_sent"
   | "wall_released"
   | "wall_rejected"
   | "wall_left_pending"
+  | "warm_destination_painted"
   | "stale_incident";
 
 export type UxMetric = {
@@ -47,9 +53,21 @@ export function recordUxMetric(event: UxMetricName, ventureId: string, durationM
 
 export function recordUxMetricOnce(event: UxMetricName, ventureId: string, durationMs: number | null = null) {
   const key = `${ventureId}:${event}`;
-  if (onceKeys.has(key)) return;
+  if (onceKeys.has(key) || readUxMetrics().some((entry) => entry.ventureId === ventureId && entry.event === event)) {
+    onceKeys.add(key);
+    return;
+  }
   onceKeys.add(key);
   recordUxMetric(event, ventureId, durationMs);
+}
+
+export function recordCodingValueMilestones(
+  ventureId: string,
+  state: { exactReviewableMaterial: boolean; verified: boolean },
+) {
+  if (!state.exactReviewableMaterial) return;
+  recordUxMetricOnce("first_exact_reviewable_material", ventureId);
+  if (state.verified) recordUxMetricOnce("first_verified_result", ventureId);
 }
 
 export function startUxTimer(event: UxMetricName, ventureId: string) {

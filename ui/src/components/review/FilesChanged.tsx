@@ -20,11 +20,15 @@ export function FilesChanged({
   onSelectFile,
   selectedPath,
   hideSummary = false,
+  statusByPath,
+  unreadPaths,
 }: {
   diff: string;
   onSelectFile?: (path: string) => void;
   selectedPath?: string | null;
   hideSummary?: boolean;
+  statusByPath?: ReadonlyMap<string, string>;
+  unreadPaths?: ReadonlySet<string>;
 }) {
   const files = useMemo(() => parseUnifiedDiff(diff), [diff]);
   const stat = useMemo(() => diffStat(files), [files]);
@@ -50,6 +54,10 @@ export function FilesChanged({
           <li key={`${file.path}-${i}`}>
             {onSelectFile ? (
               <button type="button" className="review-file-row" aria-current={selectedPath === file.path ? "true" : undefined} onClick={() => onSelectFile(file.path)}>
+                <span className="review-file-state" aria-label={`${statusByPath?.get(file.path) ?? "Changed"}${unreadPaths?.has(file.path) ? ", unread" : ""}`}>
+                  {unreadPaths?.has(file.path) ? <i aria-hidden="true" /> : null}
+                  {statusByPath?.get(file.path) ?? "M"}
+                </span>
                 <span className="review-file-path" title={file.path}>
                   {file.path}
                 </span>

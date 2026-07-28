@@ -3,7 +3,6 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ArrowDownIcon } from "lucide-react";
 import type { ThreadTimelineItem, VisualReference } from "@/api";
 import { Button } from "@/components/ui/button";
-import type { WorkChatMode } from "@/components/work-mode/WorkComposerBar";
 import { ThreadMessage } from "./ThreadMessage";
 
 // ThreadTranscript — the Work transcript's single scroll owner, virtualized.
@@ -42,12 +41,12 @@ const TranscriptScroller = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElem
 
 const COMPONENTS = { Header: TranscriptHeader, Footer: TranscriptFooter, Item: TranscriptItem, Scroller: TranscriptScroller };
 
-export function ThreadTranscript({ threadRef, items, pendingContent, lead, chatMode, initialScrollTop, onScrollChange, onOpenVisual, onOpenThread }: {
+export function ThreadTranscript({ threadRef, repository, items, pendingContent, lead, initialScrollTop, onScrollChange, onOpenVisual, onOpenThread }: {
   threadRef: string | null;
+  repository?: string;
   items: ThreadTimelineItem[];
   pendingContent: string | null;
   lead: ReactNode;
-  chatMode: WorkChatMode;
   initialScrollTop: number | null;
   onScrollChange: (threadRef: string, scrollTop: number) => void;
   onOpenVisual: (visual: VisualReference, origin: HTMLElement) => void;
@@ -110,7 +109,7 @@ export function ThreadTranscript({ threadRef, items, pendingContent, lead, chatM
             ? { initialScrollTop }
             : rows.length ? { initialTopMostItemIndex: rows.length - 1 } : {})}
         itemContent={(_, row) => row.kind === "item"
-          ? <ThreadMessage item={row.item} surface="work" chatMode={chatMode} onOpenVisual={onOpenVisual} onOpenThread={onOpenThread} />
+          ? <ThreadMessage item={row.item} surface="work" repository={repository} threadRef={threadRef} onOpenVisual={onOpenVisual} onOpenThread={onOpenThread} />
           : (
             <article className="thread-message thread-message-pending" data-role="founder" data-pending="true">
               <header>You</header>

@@ -11,7 +11,7 @@ const DISPLAY_TYPE: Record<string, string> = {
   signal: "Market reality",
   campaign: "Market test",
   channel: "Route to market",
-  pipeline: "Product / GTM path",
+  pipeline: "Canvas path",
   open: "Evidence gap",
   capability: "Product capability",
   feature: "Product feature",

@@ -21,10 +21,10 @@ export function buildWorkHandoff({ beforeBets, afterBets, beforeWallItems, after
   const changes = { openedBetIds, stagedBetIds, wallBetIds };
   if (![...openedBetIds, ...stagedBetIds, ...wallBetIds].length) return null;
   const parts = [];
-  if (openedBetIds.length) parts.push(`${openedBetIds.length} ${openedBetIds.length === 1 ? "bet" : "bets"} opened`);
-  if (stagedBetIds.length) parts.push(`work staged on ${stagedBetIds.length}`);
-  if (wallBetIds.length) parts.push(`${wallBetIds.length} waiting at the wall`);
-  return { content: `Work landed on the canvas — ${parts.join(" · ")}.`, changes };
+  if (openedBetIds.length) parts.push(`${openedBetIds.length} ${openedBetIds.length === 1 ? "approach" : "approaches"} opened`);
+  if (stagedBetIds.length) parts.push(`exact work prepared on ${stagedBetIds.length}`);
+  if (wallBetIds.length) parts.push(`${wallBetIds.length} ${wallBetIds.length === 1 ? "decision needs" : "decisions need"} you`);
+  return { content: `Work is ready — ${parts.join(" · ")}.`, changes };
 }
 
 // settleDriveIntoConversation — everything a settled drive owes the Thread, in one place.
@@ -47,7 +47,7 @@ export function settleDriveIntoConversation({
     ));
   if (!newTeammateMessages.length) {
     const directAnswer = narration.at(-1)
-      ?? (outcome.kind === "completed" ? String(outcome.summary ?? "").trim() : "");
+      ?? (outcome.kind !== "cancelled" ? String(outcome.summary ?? "").trim() : "");
     if (directAnswer) {
       newTeammateMessages = [appendConversationMessage({
         ventureId,

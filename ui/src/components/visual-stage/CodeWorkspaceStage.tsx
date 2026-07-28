@@ -2,7 +2,6 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   applyCodingWorkspace,
-  commitCodingWorkspace,
   discardCodingWorkspace,
   revertCodingWorkspaceApply,
   restoreCodingCheckpoint,
@@ -20,13 +19,12 @@ const activityLabel: Record<string, string> = {
   reject: "Rejecting checkpoint…",
   apply: "Applying checkpoint to the source workspace…",
   revert: "Reversing the applied change…",
-  commit: "Committing in the isolated branch…",
   restore: "Restoring the selected checkpoint…",
   discard: "Discarding the isolated workspace…",
   "product-consequence": "Updating the Product consequence…",
 };
 
-export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onChanged, variant = "full" }: {
+export function CodeWorkspaceStage({ ventureId, workspace: sourceWorkspace, readOnlyReason, onChanged, variant = "full" }: {
   ventureId: string;
   workspace: CodingWorkspace;
   readOnlyReason: string | null;
@@ -36,16 +34,38 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
-  const [commitMessage, setCommitMessage] = useState("");
+  const [settledWorkspace, setSettledWorkspace] = useState<CodingWorkspace | null>(null);
+  const workspace = settledWorkspace?.id === sourceWorkspace.id
+    && settledWorkspace.updatedAt >= sourceWorkspace.updatedAt
+    ? settledWorkspace
+    : sourceWorkspace;
 
   const act = async (name: string, operation: () => Promise<unknown>) => {
     setBusy(name); setError(null);
-    try { await operation(); setConfirm(null); onChanged(); }
+    try {
+      const result = await operation();
+      const returned = (result as { workspace?: CodingWorkspace } | null)?.workspace;
+      if (returned?.id === workspace.id) setSettledWorkspace(returned);
+      setConfirm(null); onChanged();
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(null); }
   };
   const disabled = Boolean(readOnlyReason || busy);
   const reviewed = workspace.consequence?.review;
+  const latestRunRef = workspace.checkpoints.at(-1)?.runRef ?? workspace.runRefs.at(-1) ?? null;
+  const attributedCommands = latestRunRef
+    ? (workspace.commands ?? []).filter((entry) => entry.runRef === latestRunRef)
+    : (workspace.commands ?? []);
+  const commands = attributedCommands.length || !latestRunRef
+    ? attributedCommands
+    : (workspace.commands ?? []).filter((entry) => !entry.runRef);
+  const attributedVerification = latestRunRef
+    ? workspace.verification.filter((entry) => entry.runRef === latestRunRef)
+    : workspace.verification;
+  const verification = attributedVerification.length || !latestRunRef
+    ? attributedVerification
+    : workspace.verification.filter((entry) => !entry.runRef);
   const founderActions = workspace.diff && workspace.status !== "discarded" ? <section className="code-workspace-section code-workspace-actions">
     <header><span>Founder consequence</span><strong>{reviewed ? `Checkpoint ${reviewed}` : "Review the checkpoint first"}</strong></header>
     {readOnlyReason ? <p>{readOnlyReason}</p> : null}
@@ -58,10 +78,6 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
         {workspace.consequence?.action === "applied"
           ? confirm === "revert" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("revert", () => revertCodingWorkspaceApply(ventureId, workspace.id))}>Confirm reverse applied change</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("revert")}>Reverse applied change</button>
           : confirm === "apply" ? <button type="button" data-danger="true" disabled={disabled} onClick={() => void act("apply", () => applyCodingWorkspace(ventureId, workspace.id))}>Confirm apply to source workspace</button> : <button type="button" disabled={disabled} onClick={() => setConfirm("apply")}>Apply to source workspace</button>}
-      </div>
-      <div className="code-workspace-commit">
-        <input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Commit message" aria-label="Commit message" disabled={disabled} />
-        <button type="button" disabled={disabled || !commitMessage.trim()} onClick={() => void act("commit", () => commitCodingWorkspace(ventureId, workspace.id, commitMessage))}>Commit in isolated branch</button>
       </div>
       <div className="code-workspace-action-row">
         {workspace.checkpoints.slice(0, -1).map((checkpoint) => confirm === `restore:${checkpoint.id}`
@@ -101,10 +117,10 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
         {workspace.diff ? <><FilesChanged diff={workspace.diff} /><DiffView diff={workspace.diff} /></> : <p>No repository change is captured at the latest checkpoint.</p>}
       </section> : null}
 
-      {workspace.commands?.length ? <section className="code-workspace-section">
-        <header><span>Command activity</span><strong>{workspace.commands.length} captured</strong></header>
+      {commands.length ? <section className="code-workspace-section">
+        <header><span>Command activity</span><strong>{commands.length} captured</strong></header>
         <div className="code-workspace-checks">
-          {workspace.commands.map((entry, index) => <details key={`${entry.command}:${index}`}>
+          {commands.map((entry, index) => <details key={`${entry.command}:${index}`}>
             <summary data-status={entry.status}><code>{entry.command}</code><span>{entry.status}{Number.isInteger(entry.exitCode) ? ` · exit ${entry.exitCode}` : ""}</span></summary>
             {entry.output ? <pre>{entry.output}</pre> : <p>No output was recorded.</p>}
           </details>)}
@@ -112,13 +128,13 @@ export function CodeWorkspaceStage({ ventureId, workspace, readOnlyReason, onCha
       </section> : null}
 
       <section className="code-workspace-section">
-        <header><span>Verification</span><strong>{workspace.verification.filter((entry) => entry.status === "passed").length} passed · {workspace.verification.filter((entry) => entry.status === "failed").length} failed</strong></header>
+        <header><span>Verification</span><strong>{verification.filter((entry) => entry.status === "passed").length} passed · {verification.filter((entry) => entry.status === "failed").length} failed</strong></header>
         <div className="code-workspace-checks">
-          {workspace.verification.map((entry, index) => <details key={`${entry.command}:${index}`}>
+          {verification.map((entry, index) => <details key={`${entry.command}:${index}`}>
             <summary data-status={entry.status}><code>{entry.command}</code><span>{entry.status}{Number.isInteger(entry.exitCode) ? ` · exit ${entry.exitCode}` : ""}</span></summary>
             {entry.output ? <pre>{entry.output}</pre> : <p>No output was recorded.</p>}
           </details>)}
-          {!workspace.verification.length ? <p>No verification was attributed to this attempt.</p> : null}
+          {!verification.length ? <p>No verification was attributed to this attempt.</p> : null}
         </div>
       </section>
 

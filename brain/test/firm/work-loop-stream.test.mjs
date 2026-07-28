@@ -113,6 +113,68 @@ test("the resume cursor checkpoints once per fresh assistant uuid onto the same 
   activeDrive.finish();
 });
 
+test("nested provider work is merged into live presence and only unfinished identities stay recoverable", () => {
+  const { activeDrive, seam, getWork } = seamFixture();
+  seam.onNestedTask({
+    kind: "started",
+    taskId: "workflow-1",
+    label: "Audit every route",
+    taskKind: "local_workflow",
+    status: "running",
+    hidden: true,
+    parentToolUseId: "tool-parent",
+  });
+  seam.onNestedTask({
+    kind: "progress",
+    taskId: "workflow-1",
+    completedCount: 6,
+    totalCount: 18,
+    elapsedMs: 42_000,
+    usage: { totalTokens: 12_400 },
+  });
+
+  const running = listActiveDrives("v1").find((entry) => entry.id === activeDrive.id);
+  assert.deepEqual(running.liveNestedTasks.map((task) => ({
+    taskId: task.taskId,
+    label: task.label,
+    status: task.status,
+    completedCount: task.completedCount,
+    totalCount: task.totalCount,
+    parentTaskId: task.parentTaskId,
+    skipTranscript: task.skipTranscript,
+    totalTokens: task.totalTokens,
+  })), [{
+    taskId: "workflow-1",
+    label: "Audit every route",
+    status: "running",
+    completedCount: 6,
+    totalCount: 18,
+    parentTaskId: "tool-parent",
+    skipTranscript: true,
+    totalTokens: 12_400,
+  }]);
+  assert.deepEqual(getWork().nativeNestedTasks, [{
+    taskId: "workflow-1",
+    label: "Audit every route",
+    taskKind: "local_workflow",
+    status: "running",
+  }]);
+
+  seam.onNestedTask({
+    kind: "settled",
+    taskId: "workflow-1",
+    status: "completed",
+    usage: { durationMs: 48_000, inputTokens: 200, outputTokens: 40 },
+  });
+  assert.deepEqual(getWork().nativeNestedTasks, []);
+  assert.equal(getWork().nestedTaskReceiptCount, 1);
+  assert.equal(
+    listActiveDrives("v1").find((entry) => entry.id === activeDrive.id).liveNestedTasks[0].status,
+    "completed",
+  );
+  activeDrive.finish();
+});
+
 test("the run handle is live exactly while the adapter holds its turn open", () => {
   const { activeDrive, seam } = seamFixture();
   const handle = fakeHandle();

@@ -28,6 +28,9 @@ const { beginActiveDrive, listActiveDrives } = await import("../../src/firm/acti
 const { registerLiveRun, __resetLiveRuns } = await import("../../src/firm/work-loop-stream.mjs");
 const { driveTeammate: driveThroughWorkLoop } = await import("../../src/firm/work-loop.mjs");
 const { stageJourneyImport } = await import("../../src/firm/journey-import.mjs");
+const { listQueuedFounderTurns } = await import("../../src/firm/founder-turn-queue.mjs");
+const { recordAcceptedRun } = await import("../../src/firm/work-journal-runtime.mjs");
+const { createWorkJournal } = await import("../../src/firm/work-journal.mjs");
 const { AGENT_HEADERS } = { AGENT_HEADERS: { "x-gtm-actor": "agent" } };
 
 const options = { root };
@@ -68,6 +71,27 @@ function configuredThread(name) {
 }
 
 describe("POST conversation/reply — dialogue dispatch", () => {
+  it("persists a founder turn and queues it before any dispatch at a provider boundary", async () => {
+    const { venture, bet, threadRef } = configuredThread("provider boundary queue");
+    const current = getVentureDoc(venture.id, "bets", bet.id, options);
+    setVentureDoc(venture.id, "bets", bet.id, {
+      ...current,
+      work: { ...(current.work ?? {}), pendingProviderIntervention: { key: "permission:test", decisionRef: "decision:one" } },
+    }, options);
+    let dispatched = false;
+    const response = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
+      message: "After that, update the empty state", betId: bet.id, threadRef, mode: "work",
+    }, { deps: { driveTeammate: () => { dispatched = true; } } });
+    assert.equal(response.status, 202);
+    assert.equal(response.body.act, "queued-follow-up");
+    assert.equal(dispatched, false);
+    const founder = listConversation(venture.id, options).find((message) => message.content === "After that, update the empty state");
+    const queued = listQueuedFounderTurns(venture.id, bet.id, options);
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].fromMessageId, founder.id);
+    assert.equal(queued[0].text, founder.content);
+  });
+
   it("an ambiguous reply steers the effort's next run and records the founder message", async () => {
     const { venture, bet } = ventureWithEffort("reply steer");
     const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
@@ -211,6 +235,7 @@ describe("POST conversation/reply — dialogue dispatch", () => {
       model: "gpt-5.6-sol",
       effort: "xhigh",
       productGtmView: true,
+      subjectRefs: ["object:onboarding"],
     }, { deps: {
       driveTeammate: async (input) => { driven = input; return { outcome: { kind: "completed" } }; },
     } });
@@ -222,6 +247,9 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     assert.equal(driven.effort, "xhigh");
     assert.equal(driven.directSdk, true);
     assert.equal(driven.target.threadRef, threadRef);
+    assert.deepEqual(driven.target.subjectRefs, ["object:onboarding"]);
+    const founderTurn = listConversation(venture.id, options).findLast((entry) => entry.role === "founder");
+    assert.deepEqual(founderTurn.target.subjectRefs, ["object:onboarding"]);
     assert.equal(res.body.threadRef, threadRef);
   });
 
@@ -408,8 +436,9 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     let driveFinished = false;
     const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, {
       message: "inspect the return flow",
-    }, { deps: { driveTeammate: async () => {
+    }, { deps: { driveTeammate: async (input) => {
       driveStarted = true;
+      input.deps.onRunAccepted({ runRef: "run:accepted-before-settlement", threadRef: "thread:accepted" });
       await new Promise((resolve) => setTimeout(resolve, 30));
       driveFinished = true;
       return { outcome: { kind: "completed" } };
@@ -500,6 +529,8 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     const claude = beginActiveDrive({ ventureId: venture.id, teammateRef: "claude", betId: bet.id, runtime: "claude-code", abortSupported: true });
     recordRun(venture.id, { id: codex.id, threadRef, betRefs: [`bet:${bet.id}`] }, {}, options);
     recordRun(venture.id, { id: claude.id, threadRef, betRefs: [`bet:${bet.id}`] }, {}, options);
+    recordAcceptedRun({ ventureId: venture.id, runId: codex.id, threadRef, options });
+    recordAcceptedRun({ ventureId: venture.id, runId: claude.id, threadRef, options });
     const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, { message: "Stop Codex.", betId: bet.id, threadRef });
     assert.equal(res.status, 200);
     assert.equal(res.body.act, "stop-run");
@@ -507,6 +538,9 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     const active = listActiveDrives(venture.id);
     assert.ok(active.find((drive) => drive.id === codex.id).abortRequestedAt);
     assert.equal(active.find((drive) => drive.id === claude.id).abortRequestedAt, null);
+    const journalRuns = createWorkJournal(options).readProjections(venture.id).runs;
+    assert.equal(journalRuns.find((run) => run.id === codex.id).tombstone.reasonCode, "founder-stopped");
+    assert.equal(journalRuns.find((run) => run.id === claude.id).tombstone, null);
     assert.equal(getSemanticModel(venture.id, options).threads.find((thread) => `thread:${thread.id}` === threadRef).lifecycle, "open");
     codex.finish(); claude.finish();
   });
@@ -523,10 +557,15 @@ describe("POST conversation/reply — dialogue dispatch", () => {
     const { threadRef } = ensureDirectionThread(venture.id, { name: "Audit the shell", identityKey: "betless-stop" }, options);
     const claude = beginActiveDrive({ ventureId: venture.id, teammateRef: "claude", betId: null, runtime: "claude-code", abortSupported: true });
     recordRun(venture.id, { id: claude.id, threadRef, betRefs: [] }, {}, options);
+    recordAcceptedRun({ ventureId: venture.id, runId: claude.id, threadRef, options });
     const res = await call("POST", `/api/ventures/${venture.id}/conversation/reply`, { message: "Stop Claude.", threadRef });
     assert.equal(res.status, 200);
     assert.equal(res.body.act, "stop-run");
     assert.ok(listActiveDrives(venture.id).find((drive) => drive.id === claude.id).abortRequestedAt);
+    assert.equal(
+      createWorkJournal(options).readProjections(venture.id).runs.find((run) => run.id === claude.id).tombstone.reasonCode,
+      "founder-stopped",
+    );
     claude.finish();
   });
 });

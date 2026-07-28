@@ -1,10 +1,11 @@
 import { json, readBody } from "./util.mjs";
 import { reportFriction, listFrictionQueue } from "../friction.mjs";
 import { enqueueFeatureRequest } from "../feature-builder.mjs";
-import { runtimeStatuses } from "../runtimes/index.mjs";
+import { runtimeStatusesLive } from "../runtimes/index.mjs";
 import { capabilityInventory } from "../connected-read-capabilities.mjs";
 import crypto from "node:crypto";
 import { authorizeFounderWriteForRequest, founderAuthorityStatus } from "./founder-authority.mjs";
+import { openVenture } from "../firm/venture-store.mjs";
 
 const startedAt = new Date().toISOString();
 const instanceId = crypto.randomUUID();
@@ -26,7 +27,9 @@ export default async function handle({ req, res, url }) {
   }
 
   if (url.pathname === "/api/runtimes" && req.method === "GET") {
-    json(res, 200, { runtimes: runtimeStatuses() });
+    const ventureId = String(url.searchParams.get("ventureId") ?? "").trim();
+    const venture = ventureId ? openVenture(ventureId) : null;
+    json(res, 200, { runtimes: await runtimeStatusesLive({ cwd: venture?.repository ?? null }) });
     return true;
   }
 

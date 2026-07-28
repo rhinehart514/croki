@@ -16,24 +16,24 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://scaffoldweb.com"),
-  title: "Croki | You built it. Now get people using it.",
+  title: "Croki | Code with Claude and Codex without losing the thread.",
   description:
-    "You can already build. Croki takes the app you shipped to its first real users, works on your real Claude or Codex repo, and brings back what they do so you know what to build next. You approve every send.",
+    "A local, founder-native coding environment that keeps your selected Claude or Codex model, exact work, and source-backed product context connected across every change.",
   applicationName: "Croki",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     url: "/",
     siteName: "Croki",
-    title: "Croki | You built it. Now get people using it.",
+    title: "Croki | Code with Claude and Codex without losing the thread.",
     description:
-      "The build tools stop at 'it's live.' Croki starts there: it gets what you shipped in front of real users, and nothing goes out without your say-so.",
+      "Direct Claude or Codex in the real repository, review exact work, and return with the product context that should improve the next change.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Croki | You built it. Now get people using it.",
+    title: "Croki | Code with Claude and Codex without losing the thread.",
     description:
-      "The build tools stop at 'it's live.' Croki starts there: it gets what you shipped in front of real users, and nothing goes out without your say-so.",
+      "Direct Claude or Codex in the real repository, review exact work, and return with the product context that should improve the next change.",
   },
 };
 

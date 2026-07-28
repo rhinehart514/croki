@@ -54,14 +54,19 @@ export async function invokePreview({ runId, workspaceId, worktree = null, opera
   }
   if (operation === "open") {
     pinsByRun.set(run, { workspaceId: workspace, expiresAt: at + PIN_TTL_MS });
-  } else if (operation !== "status") {
+  } else if (operation !== "status" && operation !== "discover") {
     const pin = pinsByRun.get(run);
     if (!pin || pin.expiresAt <= at || pin.workspaceId !== workspace) {
       throw new Error("Open the preview first with preview_open.");
     }
     pin.expiresAt = at + PIN_TTL_MS;
   }
-  return host({ operation, workspaceId: workspace, worktree, input });
+  return host({
+    operation,
+    workspaceId: workspace,
+    worktree,
+    input: { ...input, control: { kind: "run", runId: run } },
+  });
 }
 
 /** A finished run releases its pin so the next run on this Thread can drive the preview. */

@@ -30,6 +30,13 @@ export function buildPreviewWorkLoopTools({ workspace, runId, trackCall }) {
 
   return [
     tool(
+      "preview_discover",
+      "Find exact loopback dev-server URLs started from this run's isolated worktree.",
+      {},
+      [],
+      "discover",
+    ),
+    tool(
       "preview_open",
       "Open this run's own dev server in the desktop preview pane. Start the server in the worktree first (for example via the terminal), then pass its port. Waits until the server answers HTTP.",
       { port: { type: "integer", minimum: 1, maximum: 65535 }, path: { type: "string", description: "Optional path starting with /." }, timeoutMs: { type: "integer", minimum: 1000, maximum: 120000 } },

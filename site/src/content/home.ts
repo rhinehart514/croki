@@ -7,37 +7,37 @@ export const loopSteps = [
   {
     number: "01",
     icon: ScanSearch,
-    title: "Bring what you shipped",
-    body: "Point Croki at the real repo you build with Claude or Codex. It reads the actual product you made, not a description of it.",
-    detail: "Real product",
+    title: "Open the real repository",
+    body: "Start with the codebase you already use. Croki keeps the project, worktree, selected model, and exact Thread together.",
+    detail: "Exact project",
   },
   {
     number: "02",
     icon: MousePointer2,
-    title: "Find who it's for",
-    body: "Croki drafts one grounded way to reach real users of this specific product. Outreach, a landing cut, a post. Not a generic growth checklist.",
-    detail: "Grounded, not generic",
+    title: "Direct Claude or Codex",
+    body: "Talk directly to the model you selected. Inspect its progress, correct the work in place, and keep the conversation as the permanent spine.",
+    detail: "Native agent",
   },
   {
     number: "03",
     icon: LockKeyhole,
-    title: "Nothing leaves without you",
-    body: "Every message, deploy, and publish stops at your hand. You see exactly what goes where, and to whom, before it goes.",
-    detail: "You decide",
+    title: "Review the exact change",
+    body: "Diffs, files, previews, commands, and checks appear beside the Thread when they exist. Nothing is flattened into a status card or raw JSON.",
+    detail: "Exact material",
   },
   {
     number: "04",
     icon: Sparkles,
-    title: "See what came back",
-    body: "Replies and real usage return as signal you can act on. Who did what, in their own words, one click away.",
-    detail: "Real signal",
+    title: "See the relationships when useful",
+    body: "Open Canvas when product structure, dependencies, decisions, or evidence will improve the next change. Close it without losing your place.",
+    detail: "Optional Canvas",
   },
   {
     number: "05",
     icon: CheckCircle2,
-    title: "Ship the next thing",
-    body: "What you learn becomes the next change to the product, and Croki helps you build it, back where you started.",
-    detail: "Back to build",
+    title: "Return without re-briefing",
+    body: "Come back to the same Thread, model, worktree, Review, and adopted product context. The next dependent task starts better grounded.",
+    detail: "Context compounds",
   },
 ];
 
@@ -45,20 +45,20 @@ export const principles = [
   {
     number: "I",
     icon: FileCheck2,
-    title: "Every claim traces back to something real.",
-    body: "Outreach and posts are grounded in your actual product and what users actually did. A guess is always marked as a guess.",
+    title: "The repository stays authoritative.",
+    body: "Product context cites the code, founder decisions, and exact returned evidence. A generated interpretation stays provisional until you adopt it.",
   },
   {
     number: "II",
     icon: ShieldCheck,
-    title: "The agent keeps working. You stay in control.",
-    body: "Give one direction and Croki can keep the safe work moving, even across a restart, without ever sending or spending on its own.",
+    title: "The selected model remains the participant.",
+    body: "Each Run stays attached to its exact Thread, model, worktree, and founder direction. Croki adds continuity without replacing Claude or Codex.",
   },
   {
     number: "III",
     icon: Sparkles,
-    title: "Nothing reaches the world without your say-so.",
-    body: "Research and drafts move fast. Sending, publishing, deploying, and spending stop and wait for your call, every time.",
+    title: "Consequential actions remain yours.",
+    body: "Applying, sending, publishing, deploying, and spending stop at an exact founder-visible gate. Preparation can move quickly; authority does not move.",
   },
 ];
 
@@ -90,22 +90,22 @@ export const faqs = [
   {
     question: "What is Croki, exactly?",
     answer:
-      "Croki is where the app you already built gets its first real users. It reads your actual repo, drafts grounded ways to reach the people it's for, sends only what you approve, and brings back what they do so you know what to build next. The build tools stop at 'it's live.' Croki starts there.",
+      "Croki is a local coding environment for founders who work directly with Claude or Codex. It keeps every project, Thread, Run, exact Review, and useful product decision connected so the next change needs less explanation.",
   },
   {
-    question: "How is this different from Lovable, Bolt, or Replit?",
+    question: "How is this different from another coding-agent client?",
     answer:
-      "Those get you to a live app. Croki assumes you already have one. Your problem was never building it, it's that nobody's using it yet. Croki works on your real Claude or Codex repo and owns the part after launch: reaching users, keeping it trustworthy in front of them, and turning what comes back into your next move.",
+      "Croki has to be just as capable and immediate for ordinary repository work. Its advantage appears across tasks: source-backed product intent, founder corrections, decisions, and evidence stay available when they materially improve the next coding Thread.",
   },
   {
     question: "What does local-first mean here?",
     answer:
-      "Croki runs on your machine. Your product, your repo, and the people you reach stay with you. It works on your local repository and uses the model subscription you already have.",
+      "Croki runs on your machine, works on your local repository, and uses the Claude Code or Codex subscription you already have. Project and working state stay local.",
   },
   {
     question: "Does it send things on its own?",
     answer:
-      "No. One direction lets Croki keep the safe work moving, research, drafting, preparing, even after a restart. Every send, publish, deploy, and dollar spent stops and waits for you. You approve it, or it doesn't happen.",
+      "No. Croki can research, draft, code, and prepare inside an exact Run. Every send, publish, deploy, and dollar spent stops and waits for you. You approve it, or it doesn't happen.",
   },
   {
     question: "Is this a hosted product?",

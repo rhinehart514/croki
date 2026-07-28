@@ -426,7 +426,10 @@
 .now-icon-btn svg { width: 16px; height: 16px; }
 .now-icon-btn:hover:not(:disabled) { background: var(--n-hover); color: var(--n-ink); }
 .now-icon-btn:disabled { opacity: 0.4; }
-.now-icon-btn[data-recording="true"] { color: var(--danger); }
+.now-icon-btn[data-recording="true"] {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
 .now-composer-send {
   width: 30px; height: 30px; border: none; border-radius: var(--r-tool);
   background: var(--n-ink); color: var(--n-app); cursor: pointer;
@@ -469,6 +472,11 @@
 .now-chip:hover { background: var(--n-hover); border-color: var(--n-ink-4); color: var(--n-ink); }
 .now-composer-feedback { min-height: 1.1em; padding: 0 var(--space-1); font-size: var(--text-sm); color: var(--n-ink-3); }
 .now-composer-feedback [role="alert"] { color: var(--danger); }
+.now-composer-listening { display: inline-flex; align-items: center; gap: 7px; }
+.now-composer-listening > i {
+  width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%;
+  background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 12%, transparent);
+}
 /* The held-composer line (stale/offline): a quiet honest reason under the disabled field, not an alarm. */
 .now-composer-held { color: var(--n-ink-3); }
 

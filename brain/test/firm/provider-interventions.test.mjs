@@ -18,6 +18,9 @@ import { loadWork, saveWork } from "../../src/firm/work-loop-state.mjs";
 import { driveTeammate } from "../../src/firm/work-loop.mjs";
 import { __resetLiveRuns, registerLiveRun } from "../../src/firm/work-loop-stream.mjs";
 import { founderRequest } from "../helpers/founder-capability.mjs";
+import { createWorkJournal } from "../../src/firm/work-journal.mjs";
+import { appendConversationMessage, listConversation } from "../../src/firm/conversation.mjs";
+import { ensureDirectionThread } from "../../src/firm/semantic-model-store.mjs";
 
 const freshRoot = () => ({ root: fs.mkdtempSync(path.join(os.tmpdir(), "provider-intervention-")) });
 
@@ -73,6 +76,19 @@ describe("provider interventions", () => {
     assert.ok(waiting[0].effect.continuation.target.threadRef);
     const { work } = loadWork({ ventureId: venture.id, teammateRef: "founder", options });
     assert.match(work.pausedFor, /Which customer/);
+    const openedProjection = createWorkJournal(options).readProjections(venture.id);
+    assert.equal(openedProjection.attention[0].kind, "intervention");
+    assert.equal(openedProjection.runs[0].interventions[0].status, "open");
+
+    decide(
+      { ventureId: venture.id, itemId: waiting[0].id, decision: "answer", note: "Teams" },
+      { req: founderRequest() },
+      {},
+      options,
+    );
+    const resolvedProjection = createWorkJournal(options).readProjections(venture.id);
+    assert.equal(resolvedProjection.runs[0].interventions[0].status, "answer");
+    assert.equal(resolvedProjection.attention.length, 0);
   });
 
   it("parks Claude's structured question and pauses durable work", async () => {
@@ -266,7 +282,9 @@ describe("provider interventions", () => {
     __resetProviderInterventions();
     const options = freshRoot();
     const venture = createVenture({ name: "Live question" }, options);
-    const live = liveDrive({ ventureId: venture.id });
+    const origin = appendConversationMessage({ ventureId: venture.id, role: "founder", content: "Choose a segment" }, options);
+    const direction = ensureDirectionThread(venture.id, { name: "Choose a segment", identityKey: origin.id, originMessageRef: `conversation:${origin.id}` }, options);
+    const live = liveDrive({ ventureId: venture.id, threadRef: direction.threadRef });
     let work = { };
     const handler = createProviderInterventionHandler({
       ventureId: venture.id,
@@ -288,6 +306,8 @@ describe("provider interventions", () => {
     // Croki never synthesizes a selection: the founder's exact words ride back on the denial channel.
     assert.equal(reply.behavior, "deny");
     assert.match(reply.message, /^The founder answered: Teams/);
+    assert.ok(listConversation(venture.id, options).some((message) => message.role === "founder" && message.content === "Teams"));
+    assert.equal(listConversation(venture.id, options).some((message) => /AskUserQuestion|pendingProviderIntervention/.test(message.content)), false);
     assert.equal(work.pendingProviderIntervention, null);
     // The same answer is marked as already delivered, keyed exactly the way driveTeammate reads it, so
     // wall.decide()'s continuation cannot fork a second run over this Thread.

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { Readable } from "node:stream";
 import { describe, it } from "node:test";
 
 import {
@@ -31,6 +32,7 @@ import {
 } from "../../src/firm/git-ship.mjs";
 import { projectWorkIndex } from "../../src/firm/work-index.mjs";
 import { createVenture } from "../../src/firm/venture-store.mjs";
+import codeWorkspaceRoutes from "../../src/firm/code-workspace-routes.mjs";
 
 function git(cwd, args) { return execFileSync("git", args, { cwd, encoding: "utf8" }).trim(); }
 
@@ -70,6 +72,11 @@ async function reviewableWorkspace({ repo, options, venture }, { runId = "drive-
 
 const founder = { authority: "founder", id: "founder" };
 const ghUnavailable = () => { throw Object.assign(new Error("spawn gh ENOENT"), { code: "ENOENT" }); };
+const confirmedPlan = (context, workspace, input = {}) => ({
+  ...input,
+  confirm: true,
+  planFingerprint: inspectShip(context.venture.id, workspace.id, { ...context.options, shipGitHubRead: false }).plan.fingerprint,
+});
 
 describe("lifted branch and message shaping", () => {
   it("sanitizes arbitrary text into safe branch fragments and unique feature branches", () => {
@@ -138,6 +145,24 @@ describe("drift facts", () => {
 });
 
 describe("founder-gated ship action", () => {
+  it("refuses agent-stamped commit and ship requests at the HTTP authority boundary", async () => {
+    for (const action of ["commit", "ship"]) {
+      const pathname = `/api/ventures/venture-forged/coding-workspaces/workspace-forged/${action}`;
+      const req = Readable.from([JSON.stringify({ confirm: true, message: "forged" })]);
+      Object.assign(req, {
+        method: "POST",
+        url: pathname,
+        headers: { "content-type": "application/json", "x-gtm-actor": "agent" },
+      });
+      let status;
+      let raw = "";
+      const res = { writeHead(value) { status = value; }, setHeader() {}, end(value) { raw += value ?? ""; } };
+      assert.equal(await codeWorkspaceRoutes({ req, res, url: new URL(pathname, "http://local") }), true);
+      assert.equal(status, 403);
+      assert.match(JSON.parse(raw).error, /founder-only/i);
+    }
+  });
+
   it("refuses agents outright: preparation is allowed, execution is founder-only", async () => {
     const context = fixture();
     const workspace = await reviewableWorkspace(context);
@@ -163,9 +188,9 @@ describe("founder-gated ship action", () => {
       return "https://github.com/example/repo/pull/7";
     };
 
-    const { attempt } = await runShipAction(venture.id, workspace.id, { confirm: true }, founder, options);
+    const { attempt } = await runShipAction(venture.id, workspace.id, confirmedPlan(context, workspace), founder, options);
     assert.equal(attempt.outcome, "completed");
-    assert.deepEqual(attempt.phases.map((phase) => [phase.phase, phase.status]), [["branch", "done"], ["commit", "done"], ["push", "done"], ["pr", "done"]]);
+    assert.deepEqual(attempt.phases.map((phase) => [phase.phase, phase.status]), [["fetch", "done"], ["branch", "done"], ["commit", "done"], ["push", "done"], ["pr", "done"]]);
     assert.equal(attempt.branch, "feature/implement-the-ship-pipeline");
     assert.equal(attempt.prUrl, "https://github.com/example/repo/pull/7");
     assert.ok(ghCalls.some((args) => args[0] === "pr" && args.includes("--head") && args.includes(attempt.branch)));
@@ -193,9 +218,9 @@ describe("founder-gated ship action", () => {
 
     const { attempt } = await runShipAction(venture.id, workspace.id, { dryRun: true }, founder, options);
     assert.equal(attempt.outcome, "dry-run");
-    assert.deepEqual(attempt.phases.map((phase) => phase.status), ["ready", "ready", "skipped", "skipped"]);
-    assert.match(attempt.phases[2].detail, /git push -u origin feature\/implement-the-ship-pipeline/);
-    assert.match(attempt.phases[3].detail, /gh pr create --head feature\/implement-the-ship-pipeline/);
+    assert.deepEqual(attempt.phases.map((phase) => phase.status), ["ready", "ready", "ready", "skipped", "skipped"]);
+    assert.match(attempt.phases[3].detail, /git push -u origin feature\/implement-the-ship-pipeline/);
+    assert.match(attempt.phases[4].detail, /gh pr create --head feature\/implement-the-ship-pipeline/);
     assert.equal(ghCalls.filter((args) => args[0] === "pr").length, 0, "a dry run never opens a pull request");
     assert.equal(git(origin, ["for-each-ref", "refs/heads", "--format=%(refname:short)"]), "main");
     assert.equal(git(repo, ["for-each-ref", "refs/heads/feature", "--format=%(refname:short)"]), "", "a dry run creates no branch");
@@ -208,10 +233,10 @@ describe("founder-gated ship action", () => {
     const workspace = await reviewableWorkspace(context);
     options.shipGh = ghUnavailable;
 
-    const { attempt } = await runShipAction(venture.id, workspace.id, { confirm: true }, founder, options);
+    const { attempt } = await runShipAction(venture.id, workspace.id, confirmedPlan(context, workspace), founder, options);
     assert.equal(attempt.outcome, "completed");
     assert.equal(attempt.pushed, true);
-    assert.equal(attempt.phases[3].status, "skipped");
+    assert.equal(attempt.phases[4].status, "skipped");
     assert.match(attempt.prNote, /gh.*not installed/i);
     assert.equal(git(origin, ["rev-parse", `refs/heads/${attempt.branch}`]), attempt.commitSha);
     assert.equal(ghAvailability(origin, ghUnavailable).available, false);
@@ -226,18 +251,19 @@ describe("founder-gated ship action", () => {
     git(repo, ["remote", "remove", "origin"]);
 
     await assert.rejects(
-      () => runShipAction(venture.id, workspace.id, { confirm: true }, founder, options),
+      () => runShipAction(venture.id, workspace.id, confirmedPlan(context, workspace), founder, options),
       /no origin remote/,
     );
     const failed = inspectShip(venture.id, workspace.id, options);
     assert.equal(failed.receipts.at(-1).outcome, "failed");
     assert.equal(failed.receipts.at(-1).failedPhase, "push");
-    assert.equal(git(repo, ["for-each-ref", "refs/heads/feature", "--format=%(refname:short)"]), "", "a failed ship leaves no stray branch behind");
+    const retained = failed.receipts.at(-1);
+    assert.equal(git(repo, ["rev-parse", `refs/heads/${retained.branch}`]), retained.commitSha, "a failed push preserves the exact local commit for scoped retry");
 
     const origin2 = fs.mkdtempSync(path.join(os.tmpdir(), "drover-git-ship-origin2-"));
     git(origin2, ["init", "-q", "--bare"]);
     git(repo, ["remote", "add", "origin", origin2]);
-    const { attempt } = await runShipAction(venture.id, workspace.id, { confirm: true }, founder, options);
+    const { attempt } = await runShipAction(venture.id, workspace.id, confirmedPlan(context, workspace), founder, options);
     assert.equal(attempt.outcome, "completed");
     assert.equal(attempt.branch, failed.receipts.at(-1).branch, "the retry runs the same plan the founder already read");
     assert.equal(git(origin2, ["rev-parse", `refs/heads/${attempt.branch}`]), attempt.commitSha);
@@ -251,18 +277,23 @@ describe("founder-gated ship action", () => {
     const { repo, origin, options, venture, cleanup } = context;
     const workspace = await reviewableWorkspace(context);
     let prCalls = 0;
+    let prReads = 0;
     options.shipGh = (cwd, args) => {
       if (args[0] === "auth") return "Logged in";
+      if (args[1] === "view") {
+        prReads += 1;
+        throw new Error("no pull requests found for branch");
+      }
       prCalls += 1;
       if (prCalls === 1) throw new Error("GraphQL: something went wrong");
       return "https://github.com/example/repo/pull/9";
     };
 
     await assert.rejects(
-      () => runShipAction(venture.id, workspace.id, { confirm: true }, founder, options),
+      () => runShipAction(venture.id, workspace.id, confirmedPlan(context, workspace), founder, options),
       /push succeeded but opening the pull request failed/,
     );
-    const receipt = inspectShip(venture.id, workspace.id, options).receipts.at(-1);
+    const receipt = inspectShip(venture.id, workspace.id, { ...options, shipGitHubRead: false }).receipts.at(-1);
     assert.equal(receipt.outcome, "failed");
     assert.equal(receipt.failedPhase, "pr");
     assert.equal(receipt.pushed, true, "the receipt admits the push landed");
@@ -271,16 +302,162 @@ describe("founder-gated ship action", () => {
     assert.equal(git(repo, ["rev-parse", `refs/heads/${receipt.branch}`]), receipt.commitSha);
 
     // Shipping again with the same branch resumes at the PR phase: nothing pushes twice.
-    const { attempt } = await runShipAction(venture.id, workspace.id, { confirm: true }, founder, options);
+    const { attempt } = await runShipAction(venture.id, workspace.id, confirmedPlan(context, workspace), founder, options);
     assert.equal(attempt.outcome, "completed");
     assert.equal(attempt.branch, receipt.branch);
     assert.equal(attempt.commitSha, receipt.commitSha, "the retry reuses the pushed commit");
-    assert.deepEqual(attempt.phases.map((phase) => phase.status), ["done", "done", "done", "done"]);
-    assert.match(attempt.phases[2].detail, /already on origin/);
+    assert.deepEqual(attempt.phases.map((phase) => phase.status), ["done", "done", "done", "done", "done"]);
+    assert.match(attempt.phases[3].detail, /already on origin/);
     assert.equal(attempt.prUrl, "https://github.com/example/repo/pull/9");
     assert.equal(prCalls, 2, "the retry runs gh pr create exactly once more");
+    assert.equal(prReads, 1, "the retry first verifies that the failed response did not already create a pull request");
     assert.equal(git(origin, ["rev-parse", `refs/heads/${attempt.branch}`]), receipt.commitSha, "origin still carries exactly one commit for this ship");
     cleanup();
+  });
+
+  it("reconciles an ambiguously failed PR response without creating a duplicate pull request", async () => {
+    const context = fixture();
+    const workspace = await reviewableWorkspace(context);
+    let creates = 0;
+    context.options.shipGh = (_cwd, args) => {
+      if (args[0] === "auth") return "Logged in";
+      if (args[1] === "view") return JSON.stringify({
+        url: "https://github.com/example/repo/pull/10", number: 10, state: "OPEN",
+        headRefName: "feature/implement-the-ship-pipeline", baseRefName: "main",
+        mergeable: "UNKNOWN", reviewRequests: [], statusCheckRollup: [],
+      });
+      creates += 1;
+      throw new Error("connection closed after GitHub accepted the request");
+    };
+    await assert.rejects(
+      () => runShipAction(context.venture.id, workspace.id, confirmedPlan(context, workspace), founder, context.options),
+      /opening the pull request failed/,
+    );
+    const { attempt } = await runShipAction(
+      context.venture.id,
+      workspace.id,
+      confirmedPlan(context, workspace),
+      founder,
+      context.options,
+    );
+    assert.equal(attempt.outcome, "completed");
+    assert.equal(attempt.prUrl, "https://github.com/example/repo/pull/10");
+    assert.equal(creates, 1, "the reconciled retry never calls gh pr create twice");
+    context.cleanup();
+  });
+
+  it("projects exact repository, verification, GitHub checks, reviews, and mergeability into Review", async () => {
+    const context = fixture();
+    const workspace = await reviewableWorkspace(context);
+    context.options.shipGh = (_cwd, args) => {
+      if (args[0] === "auth") return "Logged in";
+      assert.deepEqual(args.slice(0, 3), ["pr", "view", "feature/implement-the-ship-pipeline"]);
+      return JSON.stringify({
+        url: "https://github.com/example/repo/pull/12",
+        number: 12,
+        state: "OPEN",
+        isDraft: false,
+        mergeable: "MERGEABLE",
+        reviewDecision: "REVIEW_REQUIRED",
+        reviewRequests: [{ login: "octocat" }],
+        statusCheckRollup: [{ name: "test", status: "COMPLETED", conclusion: "SUCCESS", detailsUrl: "https://checks/12" }],
+        headRefName: "feature/implement-the-ship-pipeline",
+        baseRefName: "main",
+      });
+    };
+    const info = inspectShip(context.venture.id, workspace.id, context.options);
+    assert.equal(info.repository.baseRef, "origin/main");
+    assert.equal(info.repository.currentBranch, workspace.branch);
+    assert.equal(info.repository.dirty, true, "the reviewed patch is named as dirty worktree state");
+    assert.equal(info.repository.dirtyCount, 1);
+    assert.equal(info.repository.commitCount, info.repository.commits.length);
+    assert.ok(info.repository.verification.length >= 1);
+    assert.ok(info.repository.verification.every((entry) => entry.status === "passed"));
+    assert.equal(info.repository.remote.url, context.origin);
+    assert.equal(info.repository.github.pullRequest.mergeable, "mergeable");
+    assert.deepEqual(info.repository.github.pullRequest.reviewRequests, ["octocat"]);
+    assert.equal(info.repository.github.pullRequest.checks[0].conclusion, "success");
+    assert.match(info.plan.fingerprint, /^[0-9a-f]{64}$/);
+    context.cleanup();
+  });
+
+  it("blocks a stale reviewed plan after safe fetch discovers remote drift and refreshes the plan", async () => {
+    const context = fixture();
+    const workspace = await reviewableWorkspace(context);
+    context.options.shipGh = ghUnavailable;
+    const reviewed = inspectShip(context.venture.id, workspace.id, context.options).plan;
+
+    const remoteWriter = fs.mkdtempSync(path.join(os.tmpdir(), "drover-git-ship-drift-writer-"));
+    git(remoteWriter, ["clone", "-q", context.origin, "."]);
+    git(remoteWriter, ["config", "user.email", "drift@example.com"]);
+    git(remoteWriter, ["config", "user.name", "Drift"]);
+    fs.writeFileSync(path.join(remoteWriter, "remote-drift.txt"), "new base\n");
+    git(remoteWriter, ["add", "remote-drift.txt"]);
+    git(remoteWriter, ["commit", "-qm", "advance main after review"]);
+    git(remoteWriter, ["push", "-q", "origin", "main"]);
+
+    await assert.rejects(
+      () => runShipAction(context.venture.id, workspace.id, {
+        confirm: true,
+        planFingerprint: reviewed.fingerprint,
+      }, founder, context.options),
+      (error) => error.code === "ship_plan_stale" && /Fetch found branch drift/.test(error.message),
+    );
+    const refreshed = inspectShip(context.venture.id, workspace.id, context.options);
+    assert.notEqual(refreshed.plan.fingerprint, reviewed.fingerprint);
+    assert.equal(refreshed.receipts.at(-1).failedPhase, "fetch");
+    assert.equal(refreshed.receipts.at(-1).phases[0].status, "failed");
+    assert.equal(git(context.origin, ["for-each-ref", "refs/heads/feature", "--format=%(refname:short)"]), "", "stale execution never created a branch");
+    fs.rmSync(remoteWriter, { recursive: true, force: true });
+    context.cleanup();
+  });
+
+  it("blocks before branch creation when fetch discovers the prepared branch now exists remotely", async () => {
+    const context = fixture();
+    const workspace = await reviewableWorkspace(context);
+    context.options.shipGh = ghUnavailable;
+    const reviewed = inspectShip(context.venture.id, workspace.id, context.options).plan;
+
+    const remoteWriter = fs.mkdtempSync(path.join(os.tmpdir(), "drover-git-ship-branch-writer-"));
+    git(remoteWriter, ["clone", "-q", context.origin, "."]);
+    git(remoteWriter, ["config", "user.email", "branch@example.com"]);
+    git(remoteWriter, ["config", "user.name", "Branch"]);
+    git(remoteWriter, ["switch", "-qc", reviewed.branch]);
+    fs.writeFileSync(path.join(remoteWriter, "claimed-branch.txt"), "already claimed\n");
+    git(remoteWriter, ["add", "claimed-branch.txt"]);
+    git(remoteWriter, ["commit", "-qm", "claim prepared branch"]);
+    git(remoteWriter, ["push", "-q", "-u", "origin", reviewed.branch]);
+    const remoteCommit = git(remoteWriter, ["rev-parse", "HEAD"]);
+
+    await assert.rejects(
+      () => runShipAction(context.venture.id, workspace.id, {
+        confirm: true,
+        planFingerprint: reviewed.fingerprint,
+      }, founder, context.options),
+      (error) => error.code === "ship_plan_stale" && /Fetch found branch drift/.test(error.message),
+    );
+    const refreshed = inspectShip(context.venture.id, workspace.id, context.options);
+    assert.equal(refreshed.repository.remote.preparedBranchCommit, remoteCommit);
+    assert.equal(refreshed.receipts.at(-1).failedPhase, "fetch");
+    assert.equal(git(workspace.worktree, ["for-each-ref", `refs/heads/${reviewed.branch}`, "--format=%(refname)"]), "");
+    fs.rmSync(remoteWriter, { recursive: true, force: true });
+    context.cleanup();
+  });
+
+  it("requires the founder to confirm the exact reviewed plan fingerprint", async () => {
+    const context = fixture();
+    const workspace = await reviewableWorkspace(context);
+    const plan = inspectShip(context.venture.id, workspace.id, context.options).plan;
+    await assert.rejects(
+      () => runShipAction(context.venture.id, workspace.id, { planFingerprint: plan.fingerprint }, founder, context.options),
+      /explicit confirmation/,
+    );
+    await assert.rejects(
+      () => runShipAction(context.venture.id, workspace.id, { confirm: true }, founder, context.options),
+      (error) => error.code === "ship_plan_stale",
+    );
+    assert.equal(git(context.origin, ["for-each-ref", "refs/heads", "--format=%(refname:short)"]), "main");
+    context.cleanup();
   });
 
   it("refuses to ship an unapproved checkpoint", async () => {

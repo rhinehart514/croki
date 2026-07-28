@@ -12,6 +12,7 @@ import { CrokiMark } from "@/components/brand/CrokiMark";
 import { VenturePicker } from "@/components/firm/VenturePicker";
 import { VentureWorkspace } from "@/components/workspace/VentureWorkspace";
 import { readActiveVentureId, rememberActiveVenture } from "@/lib/venture-session";
+import { startWarmReturn } from "@/lib/warm-return";
 import "@/styles/firm-app.css";
 
 export default function FirmApp() {
@@ -58,6 +59,7 @@ export default function FirmApp() {
   // A portfolio wall item opens its owning venture; VentureWorkspace resolves the wall context from its
   // own lens poll, so this shell only needs the venture itself.
   const openVenture = useCallback((nextVenture: FirmVenture) => {
+    startWarmReturn(nextVenture.id);
     rememberActiveVenture(nextVenture.id);
     setVenture(nextVenture);
   }, []);

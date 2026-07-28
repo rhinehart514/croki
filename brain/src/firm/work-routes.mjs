@@ -29,6 +29,8 @@ import { getSemanticModel } from "./semantic-model-store.mjs";
 import { requireActiveWorkScope } from "./work-scopes.mjs";
 import { persistImageAttachments } from "./image-attachments.mjs";
 import { listRepositoryFiles } from "./repository-files.mjs";
+import { tombstoneQueuedFounderTurns } from "./founder-turn-queue.mjs";
+import { recordMatchingRunTombstones } from "./work-journal-runtime.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -76,6 +78,12 @@ export default async function handle({ req, res, url, deps = {} }) {
     try {
       authorizeFounderWriteForRequest(req, "Stopping current work");
       getFirmConfiguration(ventureId);
+      const drive = listActiveDrives(ventureId).find((entry) => entry.id === driveId);
+      if (drive?.betId) tombstoneQueuedFounderTurns({ ventureId, betId: drive.betId, reason: "run-stopped" });
+      if (drive) recordMatchingRunTombstones(ventureId, {
+        runIds: [drive.id],
+        reasonCode: "founder-stopped",
+      });
       json(res, 200, { drive: abortActiveDrive({ ventureId, driveId }) });
     } catch (err) {
       const status = err?.code === "venture_not_found" ? 404 : (Number.isInteger(err?.status) ? err.status : 400);
@@ -297,6 +305,7 @@ export default async function handle({ req, res, url, deps = {} }) {
       runtime: body?.runtime ?? null,
       model: body?.model ?? null,
       effort: body?.effort ?? null,
+      interactionMode: body?.interactionMode === "plan" ? "plan" : null,
       initiatedBy: initiatedByAgent ? "agent" : "founder",
       target: {
         betId,

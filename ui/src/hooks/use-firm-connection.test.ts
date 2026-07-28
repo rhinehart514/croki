@@ -1,9 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getActiveDrives, getConversation, getHealth, getLens, getWorkIndex } from "@/api";
+import { getActiveDrives, getConversation, getHealth, getLens, getWorkIndex, subscribeVentureEvents } from "@/api";
 import { requireFreshConnection } from "@/lib/freshness";
-import type { FirmConversationMessage, FirmLens } from "@/types";
-import { hasGroundedValue, useFirmConnection } from "./use-firm-connection";
+import { useFirmConnection } from "./use-firm-connection";
 
 vi.mock("@/api", () => ({
   getConversation: vi.fn(),
@@ -19,6 +18,7 @@ const getConversationMock = vi.mocked(getConversation);
 const getActiveDrivesMock = vi.mocked(getActiveDrives);
 const getHealthMock = vi.mocked(getHealth);
 const getWorkIndexMock = vi.mocked(getWorkIndex);
+const subscribeVentureEventsMock = vi.mocked(subscribeVentureEvents);
 
 const lens = {
   ventureId: "v1", crew: [], bets: [], outcomes: [], wallItems: [],
@@ -29,6 +29,7 @@ describe("firm connection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    delete window.droverDesktop;
     getLensMock.mockResolvedValue({ lens });
     getConversationMock.mockResolvedValue({ messages: [] });
     getActiveDrivesMock.mockResolvedValue({ drives: [] });
@@ -74,6 +75,68 @@ describe("firm connection", () => {
     expect(result.current.lens).toEqual(lens);
   });
 
+  it("holds the last coherent view while the desktop engine restarts, then refreshes", async () => {
+    let emitEngineState: ((state: DroverEngineState) => void) | null = null;
+    Object.assign(window, {
+      droverDesktop: {
+        engine: {
+          status: vi.fn().mockResolvedValue({
+            phase: "engine-ready",
+            at: "2026-07-25T12:00:00.000Z",
+            attempt: 1,
+            message: null,
+          }),
+          onState: (listener: (state: DroverEngineState) => void) => {
+            emitEngineState = listener;
+            return () => { emitEngineState = null; };
+          },
+        },
+      },
+    });
+    const { result } = renderHook(() => useFirmConnection("v1"));
+    await waitFor(() => expect(result.current.connection.phase).toBe("fresh"));
+    const readsBeforeRestart = getLensMock.mock.calls.length;
+
+    act(() => emitEngineState?.({
+      phase: "degraded",
+      at: "2026-07-25T12:00:01.000Z",
+      attempt: 2,
+      message: "The work engine is reconnecting.",
+    }));
+    expect(result.current.connection.phase).toBe("stale");
+    expect(result.current.lens).toEqual(lens);
+    expect(() => requireFreshConnection()).toThrow(/reconnecting/i);
+
+    act(() => emitEngineState?.({
+      phase: "engine-ready",
+      at: "2026-07-25T12:00:02.000Z",
+      attempt: 2,
+      message: null,
+    }));
+    await waitFor(() => expect(getLensMock.mock.calls.length).toBeGreaterThan(readsBeforeRestart));
+    await waitFor(() => expect(result.current.connection.phase).toBe("fresh"));
+  });
+
+  it("queues one authoritative refresh when the live stream opens during the initial read", async () => {
+    let openStream: ((state: "open" | "closed") => void) | undefined;
+    let finishInitialRead: ((value: { lens: typeof lens }) => void) | undefined;
+    getLensMock
+      .mockImplementationOnce(() => new Promise((resolve) => { finishInitialRead = resolve; }))
+      .mockResolvedValue({ lens: { ...lens, wall: { count: 1, oldestParkedAt: "now" } } });
+    subscribeVentureEventsMock.mockImplementation((_ventureId, _onEvent, onStateChange) => {
+      openStream = onStateChange;
+      return () => {};
+    });
+
+    const { result } = renderHook(() => useFirmConnection("v1"));
+    await waitFor(() => expect(getLensMock).toHaveBeenCalledTimes(1));
+    act(() => openStream?.("open"));
+    act(() => finishInitialRead?.({ lens }));
+
+    await waitFor(() => expect(getLensMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.lens?.wall.count).toBe(1));
+  });
+
   it("keeps reads current but holds writes outside the desktop host", async () => {
     getHealthMock.mockResolvedValueOnce({
       ok: true,
@@ -91,29 +154,5 @@ describe("firm connection", () => {
     await waitFor(() => expect(result.current.connection.phase).toBe("read-only"));
     expect(result.current.lens).toEqual(lens);
     expect(() => requireFreshConnection()).toThrow(/reconnecting/i);
-  });
-
-  it("records grounded value only for repository proof, not generic runtime speech or outcomes", () => {
-    const teammateMessage = (content: string) => ({
-      role: "teammate",
-      content,
-    }) as FirmConversationMessage;
-    const withEvidence = (evidence: unknown[]) => ({
-      ...lens,
-      bets: [{ evidence }],
-    }) as FirmLens;
-
-    expect(hasGroundedValue(
-      withEvidence([{ type: "outcome", id: "market-return" }]),
-      [teammateMessage("I read the product and have a direction.")],
-    )).toBe(false);
-    expect(hasGroundedValue(
-      withEvidence([{ type: "repository-citation", path: "src/handoff.ts", excerpt: "prepareWeeklyHandoff" }]),
-      [],
-    )).toBe(true);
-    expect(hasGroundedValue(
-      withEvidence([]),
-      [teammateMessage("The narrow claim is supported by src/handoff.ts:42.")],
-    )).toBe(true);
   });
 });

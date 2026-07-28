@@ -17,13 +17,14 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 const partitionFor = (workspaceId) => `${PARTITION_PREFIX}${workspaceId}`;
 
 /** Preview pages may only be a worktree's own loopback dev server. */
-function loopbackPreviewUrl(rawUrl) {
+function loopbackPreviewUrl(rawUrl, { forbiddenOrigins = null } = {}) {
   let url;
   try { url = new URL(String(rawUrl || "")); }
   catch { throw new Error("Enter a valid preview URL."); }
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Preview URLs must use HTTP or HTTPS.");
   if (url.username || url.password) throw new Error("Preview URLs cannot contain credentials.");
   if (!LOOPBACK_HOSTS.has(url.hostname)) throw new Error("The preview only opens local dev servers (127.0.0.1 or localhost).");
+  if (forbiddenOrigins?.has(url.origin)) throw new Error("The preview cannot navigate the Croki renderer.");
   return url;
 }
 
@@ -32,12 +33,12 @@ function loopbackPreviewUrl(rawUrl) {
  * forces every security-relevant preference regardless of what the renderer requested. Returns
  * false when the attachment must be prevented.
  */
-function hardenPreviewWebview(webPreferences, params, pickPreloadPath) {
+function hardenPreviewWebview(webPreferences, params, pickPreloadPath, options = {}) {
   const partition = String(params?.partition ?? "");
   if (!partition.startsWith(PARTITION_PREFIX) || partition.length <= PARTITION_PREFIX.length) return false;
   const src = String(params?.src ?? "");
   if (src && src !== "about:blank") {
-    try { loopbackPreviewUrl(src); } catch { return false; }
+    try { loopbackPreviewUrl(src, options); } catch { return false; }
   }
   delete webPreferences.preloadURL;
   delete params?.preload;
@@ -52,9 +53,10 @@ function hardenPreviewWebview(webPreferences, params, pickPreloadPath) {
   return true;
 }
 
-function createPreviewSessions({ electronSession, webContentsById, getFocusedWebContents, broadcast, net = previewNet, platform = process.platform, installExpression = playwrightInstallExpression, writeFile = null }) {
+function createPreviewSessions({ electronSession, webContentsById, getFocusedWebContents, broadcast, net = previewNet, platform = process.platform, installExpression = playwrightInstallExpression, writeFile = null, openExternal = null, forbiddenOrigins = new Set(), now = Date.now }) {
   const guests = new Map(); // workspaceId -> { guest, ownerId, driver }
   const attachWaiters = new Map(); // workspaceId -> [{ resolve, reject, timer }]
+  const previewUrl = (value) => loopbackPreviewUrl(value, { forbiddenOrigins });
 
   function entryFor(workspaceId) {
     const entry = guests.get(workspaceId);
@@ -65,8 +67,23 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
     return entry;
   }
 
+  function exactWorkspace(input = {}) {
+    const workspace = input.workspace;
+    if (
+      !workspace
+      || workspace.id !== String(input.workspaceId ?? "").trim()
+      || !String(workspace.ventureId ?? "").trim()
+      || !path.isAbsolute(String(workspace.worktree ?? ""))
+      || workspace.status === "discarded"
+    ) {
+      throw new Error("Croki could not verify this preview's isolated coding workspace.");
+    }
+    return workspace;
+  }
+
   function attach(ownerId, input = {}) {
     const workspaceId = String(input.workspaceId ?? "").trim();
+    const workspace = input.workspace ? exactWorkspace(input) : null;
     const webContentsId = Number(input.webContentsId);
     if (!workspaceId || !Number.isInteger(webContentsId)) throw new Error("Preview attachment needs a workspace and its webview.");
     const guest = webContentsById(webContentsId);
@@ -82,7 +99,7 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
     // The guest never opens windows and never leaves loopback; anything else is refused.
     guest.setWindowOpenHandler(() => ({ action: "deny" }));
     guest.on("will-navigate", (event, url) => {
-      try { loopbackPreviewUrl(url); } catch { event.preventDefault(); }
+      try { previewUrl(url); } catch { event.preventDefault(); }
     });
     guest.once("destroyed", () => {
       const current = guests.get(workspaceId);
@@ -95,7 +112,14 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
       platform,
       getFocusedWebContents,
     });
-    guests.set(workspaceId, { guest, ownerId, driver });
+    guests.set(workspaceId, {
+      guest,
+      ownerId,
+      driver,
+      ventureId: workspace?.ventureId ?? null,
+      worktree: workspace?.worktree ?? null,
+      control: { kind: "founder", runId: null, at: new Date(now()).toISOString() },
+    });
     for (const waiter of attachWaiters.get(workspaceId) ?? []) {
       clearTimeout(waiter.timer);
       waiter.resolve(guests.get(workspaceId));
@@ -136,19 +160,33 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
     });
   }
 
+  function controlFor(entry, kind, runId = null) {
+    entry.control = { kind, runId, at: new Date(now()).toISOString() };
+    broadcast("preview-state", {
+      workspaceId: [...guests].find(([, candidate]) => candidate === entry)?.[0] ?? null,
+      url: entry.guest.getURL() || null,
+      control: entry.control,
+    });
+  }
+
   async function open(workspaceId, input = {}) {
     const port = Number(input.port);
     if (!Number.isInteger(port) || port <= 0 || port >= 65_536) {
       throw new Error("preview_open needs the dev server port your run started (for example 5173).");
     }
     const pathname = typeof input.path === "string" && input.path.startsWith("/") ? input.path : "/";
-    const url = loopbackPreviewUrl(`http://127.0.0.1:${port}${pathname}`).toString();
+    const url = previewUrl(`http://127.0.0.1:${port}${pathname}`).toString();
     if (!(await net.hasLoopbackListener(port))) {
       throw new Error(`Nothing is listening on port ${port}. Start the dev server in the worktree first.`);
     }
     await net.waitForHttpReady({ baseUrl: url, timeoutMs: Number(input.timeoutMs) || 30_000 });
-    broadcast("preview-open", { workspaceId, url });
+    broadcast("preview-open", {
+      workspaceId,
+      url,
+      ...(input.control ? { control: input.control } : {}),
+    });
     const entry = await waitForAttach(workspaceId);
+    if (input.control?.kind === "run") controlFor(entry, "run", input.control.runId);
     await loadInGuest(entry, url);
     return { opened: true, url, title: entry.guest.getTitle() || null };
   }
@@ -156,10 +194,102 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
   async function navigate(workspaceId, input = {}) {
     const entry = entryFor(workspaceId);
     const current = new URL(entry.guest.getURL() || "http://127.0.0.1/");
-    const url = loopbackPreviewUrl(input.url ?? new URL(String(input.path ?? "/"), current.origin).toString());
+    const url = previewUrl(input.url ?? new URL(String(input.path ?? "/"), current.origin).toString());
     await loadInGuest(entry, url.toString());
-    broadcast("preview-open", { workspaceId, url: url.toString() });
+    broadcast("preview-open", {
+      workspaceId,
+      url: url.toString(),
+      ...(input.control ? { control: input.control } : {}),
+    });
     return { navigated: true, url: url.toString() };
+  }
+
+  async function discover(workspaceId, worktree) {
+    const suggestions = await Promise.resolve(net.discoverWorktreeListeners?.(worktree) ?? []);
+    return {
+      workspaceId,
+      suggestions: suggestions.map((entry) => ({ ...entry, label: `Local server · ${entry.port}` })),
+    };
+  }
+
+  async function reachable(url) {
+    if (!url) return false;
+    try {
+      await net.waitForHttpReady({ baseUrl: url, timeoutMs: 500, intervalMs: 100, probeTimeoutMs: 250 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function inspect(ownerId, input = {}) {
+    const workspace = exactWorkspace(input);
+    const entry = guests.get(workspace.id);
+    if (entry && entry.ownerId !== ownerId) throw new Error("This preview belongs to another window.");
+    const url = entry && !entry.guest.isDestroyed() ? entry.guest.getURL() || null : null;
+    const found = await discover(workspace.id, workspace.worktree);
+    return {
+      workspaceId: workspace.id,
+      url,
+      title: entry?.guest.getTitle?.() || null,
+      loading: Boolean(entry?.guest.isLoading?.()),
+      reachable: await reachable(url),
+      canGoBack: Boolean(entry?.guest.canGoBack?.()),
+      canGoForward: Boolean(entry?.guest.canGoForward?.()),
+      control: entry?.control ?? null,
+      suggestions: found.suggestions,
+    };
+  }
+
+  async function founderControl(ownerId, input = {}) {
+    const workspace = exactWorkspace(input);
+    const entry = entryFor(workspace.id);
+    if (entry.ownerId !== ownerId) throw new Error("This preview belongs to another window.");
+    const operation = String(input.operation ?? "");
+    if (operation === "navigate") {
+      const url = previewUrl(input.url).toString();
+      await loadInGuest(entry, url);
+    } else if (operation === "back") {
+      if (entry.guest.canGoBack?.()) entry.guest.goBack();
+    } else if (operation === "forward") {
+      if (entry.guest.canGoForward?.()) entry.guest.goForward();
+    } else if (operation === "reload") {
+      entry.guest.reload();
+    } else if (operation === "open_external") {
+      const url = previewUrl(input.url ?? entry.guest.getURL()).toString();
+      if (typeof openExternal !== "function") throw new Error("The system browser is unavailable.");
+      await openExternal(url);
+    } else if (operation === "zoom") {
+      const zoom = Number(input.zoom);
+      if (!Number.isFinite(zoom) || zoom < 0.5 || zoom > 2) throw new Error("Preview zoom must stay between 50% and 200%.");
+      entry.guest.setZoomFactor?.(zoom);
+    } else if (operation === "capture") {
+      const page = await entry.driver.snapshot();
+      const image = await entry.guest.capturePage();
+      const png = image.toPNG();
+      const id = `capture-${now()}`;
+      broadcast("preview-annotation", {
+        workspaceId: workspace.id,
+        annotation: {
+          id,
+          pageUrl: page.url || entry.guest.getURL(),
+          pageTitle: page.title || entry.guest.getTitle() || null,
+          comment: "Founder captured this exact preview state.",
+          elements: [],
+          regions: [],
+          strokes: [],
+          styleChanges: [],
+          createdAt: new Date(now()).toISOString(),
+          sourceRef: `preview:${workspace.id}:${page.url || entry.guest.getURL()}#${id}`,
+        },
+        screenshot: { mimeType: "image/png", data: png.toString("base64"), size: png.length },
+        control: entry.control,
+      });
+    } else {
+      throw new Error(`Unknown founder preview operation: ${operation}`);
+    }
+    controlFor(entry, "founder");
+    return inspect(ownerId, { workspaceId: workspace.id, workspace });
   }
 
   async function snapshot(workspaceId, worktree) {
@@ -176,18 +306,25 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
       await write(file, image.toPNG());
       screenshotFile = file;
     }
-    return { ...page, screenshotFile };
+    return {
+      ...page,
+      screenshotFile,
+      sourceRef: `preview:${workspaceId}:${page.url || entry.guest.getURL() || "about:blank"}#snapshot`,
+    };
   }
 
   /** The work-loop broker's host executor: one operation against one workspace's own preview. */
   async function execute({ operation, workspaceId, worktree = null, input = {} }) {
+    const entry = guests.get(workspaceId);
+    if (entry && input.control?.kind === "run") controlFor(entry, "run", input.control.runId);
     switch (operation) {
       case "status": {
         const entry = guests.get(workspaceId);
         return entry && !entry.guest.isDestroyed()
-          ? { open: true, url: entry.guest.getURL() || null, title: entry.guest.getTitle() || null, loading: entry.guest.isLoading() }
+          ? { open: true, url: entry.guest.getURL() || null, title: entry.guest.getTitle() || null, loading: entry.guest.isLoading(), control: entry.control }
           : { open: false };
       }
+      case "discover": return discover(workspaceId, worktree);
       case "open": return open(workspaceId, input);
       case "navigate": return navigate(workspaceId, input);
       case "click": return entryFor(workspaceId).driver.click(input);
@@ -233,7 +370,14 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
           screenshot = { mimeType: "image/png", data: png.toString("base64"), size: png.length };
         }
       }
-      broadcast("preview-annotation", { workspaceId, annotation, screenshot });
+      const pageUrl = annotation?.pageUrl ?? (entry.guest.getURL() || "about:blank");
+      const sourceRef = `preview:${workspaceId}:${pageUrl}#${annotation?.id ?? "element"}`;
+      broadcast("preview-annotation", {
+        workspaceId,
+        annotation: { ...annotation, sourceRef },
+        screenshot,
+        control: entry.control,
+      });
       return;
     }
   }
@@ -247,7 +391,18 @@ function createPreviewSessions({ electronSession, webContentsById, getFocusedWeb
     attachWaiters.clear();
   }
 
-  return { attach, detach, execute, startPick, cancelPick, handleElementPicked, stopAll, partitionFor };
+  return {
+    attach,
+    detach,
+    execute,
+    inspect,
+    founderControl,
+    startPick,
+    cancelPick,
+    handleElementPicked,
+    stopAll,
+    partitionFor,
+  };
 }
 
 module.exports = { createPreviewSessions, hardenPreviewWebview, loopbackPreviewUrl, partitionFor, PARTITION_PREFIX };

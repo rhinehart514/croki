@@ -1,4 +1,5 @@
 import type { RichArtifactPayload, ThreadTimeline, ThreadTimelineItem } from "@/api";
+import type { ArtifactSectionFocus } from "@/components/review/artifactSectionFocus";
 
 export type ProductGtmViewNode = Extract<RichArtifactPayload, { kind: "model-view" }>["nodes"][number];
 export type ProductGtmViewEdge = Extract<RichArtifactPayload, { kind: "model-view" }>["edges"][number];
@@ -31,7 +32,7 @@ export function productGtmViewFromItem(item: ThreadTimelineItem | null | undefin
     workRef: item.ref,
     workId: typeof artifact?.id === "string" ? artifact.id : item.ref.replace(/^work:/, ""),
     betId: typeof item.betRef === "string" ? item.betRef.replace(/^bet:/, "") : null,
-    title: typeof item.title === "string" ? item.title : "Product / GTM view",
+    title: typeof item.title === "string" ? item.title : "Canvas view",
     question: typeof content.question === "string" ? content.question : "What changes if this direction is right?",
     branchRef,
     branchId: branchRef.replace(/^model-branch:/, ""),
@@ -47,4 +48,17 @@ export function productGtmViewFromTimeline(timeline: ThreadTimeline | null): Pro
     return content?.kind === "model-view" && content.purpose === "product-gtm-local-model";
   });
   return productGtmViewFromItem(item);
+}
+
+export function productGtmViewNodeFocus(view: ProductGtmView, nodeId: string): ArtifactSectionFocus | null {
+  const sectionIndex = view.nodes.findIndex((node) => node.id === nodeId);
+  if (sectionIndex < 0) return null;
+  return {
+    artifactRef: view.workRef,
+    artifactTitle: view.title,
+    artifactAt: typeof view.item.at === "string" ? view.item.at : null,
+    sectionId: nodeId,
+    sectionTitle: view.nodes[sectionIndex].label,
+    sectionIndex,
+  };
 }

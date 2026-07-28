@@ -1,5 +1,9 @@
 import type { FirmLens } from "@/types";
 import { get, guardedDelete, guardedPost, guardedPut } from "./transport";
+import type { WallQueueItemView } from "./product-gtm";
+import type { QueuedFounderTurn } from "./interventions";
+import type { CodingReviewComment } from "./coding-review";
+import type { ShipAttempt, ShipDrafts, ShipInfo, ShipRequest } from "./git-shipping";
 export type FirmVenture = {
   id: string;
   name: string;
@@ -27,9 +31,31 @@ export type FirmRuntimeStatus = {
   auth: string | null;
   authLabel: string | null;
   reason: string | null;
+  abortSupported?: boolean;
+  nativeFeatures?: Record<string, boolean>;
+  capabilities?: {
+    version: string | null;
+    models: Array<{
+      id: string;
+      label: string;
+      description: string;
+      maxEffort: "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
+      efforts?: Array<"low" | "medium" | "high" | "xhigh" | "max" | "ultra">;
+      contextWindow: number | null;
+    }>;
+    skills: Array<{ name: string; description: string | null; reference: string }>;
+    slashCommands: Array<{ name: string; description: string | null; reference: string }>;
+    interactionModes: Array<{ id: "default" | "plan"; label: string; description?: string }>;
+    planSupported: boolean;
+    update: { state: "current" | "available" | "unknown"; detail: string | null };
+    discovery: { state: "complete" | "partial" | "unavailable"; detail: string | null };
+  };
 };
 
-export const getRuntimeStatuses = () => get<{ runtimes: FirmRuntimeStatus[] }>("/api/runtimes");
+export const getRuntimeStatuses = (ventureId?: string) =>
+  get<{ runtimes: FirmRuntimeStatus[] }>(
+    `/api/runtimes${ventureId ? `?ventureId=${encodeURIComponent(ventureId)}` : ""}`,
+  );
 
 export type RuntimeCapabilityInventoryItem = {
   id: string;
@@ -193,33 +219,6 @@ export type SystemMutation =
 export const getSystemIndex = (ventureId: string, scope = "system", query = "") => get<{ systemIndex: SystemIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/system-index?scope=${encodeURIComponent(scope)}${query ? `&q=${encodeURIComponent(query)}` : ""}`);
 export const mutateSystem = (ventureId: string, baseRevision: number, mutations: SystemMutation[]) => guardedPost<{ systemIndex: SystemIndex }>(`/api/ventures/${encodeURIComponent(ventureId)}/system/mutations`, { baseRevision, mutations });
 
-export const setThreadPinned = (ventureId: string, threadRef: string, pinned: boolean) => {
-  const threadId = threadRef.replace(/^thread:/, "");
-  return guardedPut<{ item: WorkIndexItem; workIndex: WorkIndex }>(
-    `/api/ventures/${encodeURIComponent(ventureId)}/threads/${encodeURIComponent(threadId)}/pin`,
-    { pinned },
-  );
-};
-
-export const setThreadName = (ventureId: string, threadRef: string, name: string) => {
-  const threadId = threadRef.replace(/^thread:/, "");
-  return guardedPut<{ item: WorkIndexItem; workIndex: WorkIndex }>(
-    `/api/ventures/${encodeURIComponent(ventureId)}/threads/${encodeURIComponent(threadId)}/name`,
-    { name },
-  );
-};
-
-export const deleteThread = (ventureId: string, threadRef: string) => {
-  const threadId = threadRef.replace(/^thread:/, "");
-  return guardedDelete<{
-    deleted: true;
-    threadRef: string;
-    stoppedRunRefs: string[];
-    revokedWorkScopeRefs: string[];
-    workIndex: WorkIndex;
-  }>(`/api/ventures/${encodeURIComponent(ventureId)}/threads/${encodeURIComponent(threadId)}`);
-};
-
 export type VisualReference = {
   kind: "preview" | "diff" | "flow" | "model-view" | "comparison" | "map" | "evidence" | "consequence";
   ref: string;
@@ -302,6 +301,8 @@ export type ThreadTimeline = {
   thread: WorkIndexItem;
   items: ThreadTimelineItem[];
   usage?: ThreadUsage | null;
+  interventions?: WallQueueItemView[];
+  queuedFounderTurns?: Array<QueuedFounderTurn & { betId: string }>;
   agents: ThreadAgentStatus[];
   visuals: VisualReference[];
 };
@@ -319,11 +320,32 @@ export type CodingWorkspace = {
   worktree: string | null;
   runRefs: string[];
   participantRefs: string[];
-  providerSessions: Array<{ runRef: string; provider: string; sessionId: string | null; startedAt: string; completedAt: string | null; terminal?: string }>;
-  checkpoints: Array<{ id: string; ref: string; commit: string; capturedAt: string; runRef?: string }>;
-  commands?: Array<{ command: string; kind: string; status: "passed" | "failed" | "running"; exitCode?: number; startedAt?: string | null; completedAt?: string | null; output?: string }>;
-  verification: Array<{ command: string; kind: string; status: "passed" | "failed" | "running"; exitCode?: number; startedAt?: string | null; completedAt?: string | null; output?: string }>;
+  providerSessions: Array<{
+    runRef: string;
+    provider: string;
+    sessionId: string | null;
+    startedAt: string;
+    completedAt: string | null;
+    terminal?: string;
+    model?: string | null;
+    effort?: string | null;
+    interactionMode?: string | null;
+  }>;
+  checkpoints: Array<{
+    id: string;
+    ref: string;
+    commit: string;
+    capturedAt: string;
+    runRef?: string | null;
+    originMessageRef?: string | null;
+    direction?: string | null;
+    restoredFrom?: string | null;
+    sourceRunRef?: string | null;
+  }>;
+  commands?: Array<{ command: string; kind: string; status: "passed" | "failed" | "running"; exitCode?: number; startedAt?: string | null; completedAt?: string | null; output?: string; runRef?: string | null }>;
+  verification: Array<{ command: string; kind: string; status: "passed" | "failed" | "running"; exitCode?: number; startedAt?: string | null; completedAt?: string | null; output?: string; runRef?: string | null }>;
   changedFiles: Array<{ status: string; path: string }>;
+  sourceRefs?: string[];
   diff: string;
   diffStat: string;
   patchHash: string;
@@ -332,6 +354,26 @@ export type CodingWorkspace = {
   interruption?: { message: string; recovery: string; at: string } | null;
   consequence?: { review?: "approved" | "rejected"; note?: string; action?: string; commit?: string; preparation?: { pushCommand: string; pullRequestCommand: string; note: string } } | null;
   restoration?: { checkpointId: string; restoredAt: string; note: string } | null;
+  reviewDirections?: Array<{ runRef: string; originMessageRef: string | null; direction: string; at: string }>;
+  reviewComments?: CodingReviewComment[];
+  reviewUsage?: {
+    costUsd: number;
+    inputTokens: number;
+    outputTokens: number;
+    cachedInputTokens: number;
+    measured: boolean;
+  } | null;
+  changeSummary?: {
+    requestedOutcome: string;
+    changedFiles: Array<{ status: string; path: string }>;
+    verification: Array<{
+      command: string;
+      kind: string;
+      status: "passed" | "failed" | "running";
+      exitCode: number | null;
+      runRef: string | null;
+    }>;
+  } | null;
   ship?: { drafts?: ShipDrafts; preparedAt?: string; attempt?: ShipAttempt | null } | null;
   shipReceipts?: ShipAttempt[];
   productConsequence?: {
@@ -347,49 +389,6 @@ export type CodingWorkspace = {
 
 export type CodingReadiness = { ready: boolean; approved: boolean; verified: boolean; exact: boolean; source: { head: string; patchHash: string; unchanged: boolean }; reasons: string[] };
 
-export type ShipDrafts = {
-  branch: string;
-  commitSubject: string;
-  commitBody: string;
-  commitMessage: string;
-  prTitle: string;
-  prBody: string;
-};
-
-export type ShipPhase = {
-  phase: "branch" | "commit" | "push" | "pr";
-  status: "pending" | "running" | "ready" | "done" | "skipped" | "failed";
-  detail: string | null;
-  at: string | null;
-};
-
-export type ShipAttempt = {
-  id: string;
-  dryRun: boolean;
-  startedAt: string;
-  completedAt: string | null;
-  outcome: "running" | "completed" | "dry-run" | "failed";
-  error: string | null;
-  failedPhase: string | null;
-  branch: string;
-  baseBranch: string | null;
-  commitSha: string | null;
-  pushed: boolean;
-  prUrl: string | null;
-  prNote: string | null;
-  content: { commitMessage: string; prTitle: string; prBody: string };
-  phases: ShipPhase[];
-};
-
-export type ShipInfo = {
-  drafts: ShipDrafts;
-  drift: ShipDrift | null;
-  baseBranch: string | null;
-  gh: { available: boolean; authenticated: boolean; reason: string | null };
-  attempt: ShipAttempt | null;
-  receipts: ShipAttempt[];
-};
-
 const codingAction = (ventureId: string, id: string, action: string, body: Record<string, unknown>) =>
   guardedPost<{ workspace: CodingWorkspace; readiness: CodingReadiness | null; ship?: ShipInfo | null }>(
     `/api/ventures/${encodeURIComponent(ventureId)}/coding-workspaces/${encodeURIComponent(id)}/${action}`,
@@ -400,8 +399,6 @@ export const getCodingWorkspaceShip = (ventureId: string, id: string) =>
   get<{ workspace: CodingWorkspace; readiness: CodingReadiness | null; ship: ShipInfo | null }>(
     `/api/ventures/${encodeURIComponent(ventureId)}/coding-workspaces/${encodeURIComponent(id)}`,
   );
-
-export type ShipRequest = { dryRun?: boolean; branch?: string; commitMessage?: string; prTitle?: string; prBody?: string };
 
 export const shipCodingWorkspace = (ventureId: string, id: string, body: ShipRequest = {}) =>
   codingAction(ventureId, id, "ship", body.dryRun ? { ...body } : { ...body, confirm: true });
@@ -423,7 +420,6 @@ export const commitCodingWorkspace = (ventureId: string, id: string, message: st
 export const prepareCodingPullRequest = (ventureId: string, id: string) => codingAction(ventureId, id, "prepare-pull-request", {});
 export const restoreCodingCheckpoint = (ventureId: string, id: string, checkpointId: string) => codingAction(ventureId, id, "restore", { confirm: true, checkpointId });
 export const discardCodingWorkspace = (ventureId: string, id: string) => codingAction(ventureId, id, "discard", { confirm: true });
-
 export const getThreadTimeline = (ventureId: string, threadRef: string) => {
   const threadId = threadRef.replace(/^thread:/, "");
   return get<{ timeline: ThreadTimeline }>(

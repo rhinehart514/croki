@@ -13,6 +13,19 @@
 
 import { imageUserContent } from "./image-input.mjs";
 
+export const CLAUDE_NATIVE_FEATURES = Object.freeze({
+  partialStreaming: true, nativeQuestions: true, nativeTools: true, sessionResume: true,
+  sameTurnSteer: true, liveModelSwitch: true, livePermissionMode: true, nestedTasks: true,
+});
+
+export function conciseProcessError(raw) {
+  const clean = String(raw ?? "").trim();
+  if (!clean) return "";
+  const marker = clean.lastIndexOf("\nerror:");
+  const relevant = marker >= 0 ? clean.slice(marker + 1) : clean.slice(-1_200);
+  return relevant.split("\n").slice(0, 7).join("\n").slice(0, 1_200);
+}
+
 // An unbounded push queue exposed as the AsyncIterable the SDK consumes as its prompt. push() after
 // close() returns false so a racing steer falls back to the durable queue instead of vanishing.
 export function createPromptQueue() {
@@ -43,24 +56,147 @@ export function createPromptQueue() {
   };
 }
 
-// One streaming-input user message, with any founder images as native vision blocks.
-export function sdkUserMessage(text, attachments = []) {
+// One streaming-input user message, with any founder images as native vision blocks. Origin is
+// explicit because Claude only treats a human-origin message as keyword authorization for native
+// workflows; callers must not stamp provider-generated continuations as founder input.
+export function sdkUserMessage(text, attachments = [], { human = false } = {}) {
   return {
     type: "user",
     message: { role: "user", content: imageUserContent(String(text ?? ""), attachments) },
     parent_tool_use_id: null,
+    ...(human ? { origin: { kind: "human" } } : {}),
   };
 }
 
 // The live controls a running query exposes while its turn is open. steer() pushes onto this run's
 // own prompt queue (same turn, no restart); the other three are the SDK's streaming-mode control
 // requests. Every control is best-effort against a run that just finished.
-export function liveRunHandle({ queue, stream }) {
+export function liveRunHandle({ queue, stream, activeTaskIds = new Set() }) {
   return {
-    steer: (text, attachments = []) => queue.push(sdkUserMessage(text, attachments)),
+    steer: (text, attachments = []) => queue.push(sdkUserMessage(text, attachments, { human: true })),
     interrupt: async () => { await stream.interrupt?.(); },
     setModel: async (model) => { await stream.setModel?.(model || undefined); },
     setPermissionMode: async (mode) => { await stream.setPermissionMode?.(mode); },
+    stopTask: async (taskId) => {
+      const id = String(taskId ?? "").trim();
+      if (!id || !activeTaskIds.has(id) || typeof stream.stopTask !== "function") return false;
+      await stream.stopTask(id);
+      return true;
+    },
+    stopAllNested: async () => {
+      const ids = [...activeTaskIds];
+      if (!ids.length || typeof stream.stopTask !== "function") return [];
+      await Promise.all(ids.map((id) => stream.stopTask(id)));
+      return ids;
+    },
+  };
+}
+
+function measuredTaskUsage(usage) {
+  if (!usage || typeof usage !== "object") return null;
+  return {
+    totalTokens: Number(usage.total_tokens) || 0,
+    toolUses: Number(usage.tool_uses) || 0,
+    durationMs: Number(usage.duration_ms) || 0,
+  };
+}
+
+function taskStatus(status) {
+  if (status === "killed") return "stopped";
+  return status ?? null;
+}
+
+// Claude emits nested subagents and local workflows as system messages. Keep that provider wire
+// format at this seam: consumers receive one neutral task event and never need to understand SDK
+// subtypes, snake_case fields, or Claude's "local_workflow" implementation name.
+export function shapeNestedTaskEvent(message) {
+  if (message?.type !== "system") return null;
+  const taskId = String(message.task_id ?? "").trim();
+  if (!taskId) return null;
+  if (message.subtype === "task_started") {
+    const taskKind = message.task_type === "local_workflow"
+      ? "workflow"
+      : String(message.subagent_type ?? message.task_type ?? "task");
+    return {
+      kind: "started",
+      taskId,
+      status: "running",
+      description: String(message.description ?? "").trim(),
+      taskKind,
+      ...(message.tool_use_id ? { parentToolUseId: message.tool_use_id } : {}),
+      ...(message.subagent_type ? { workerType: message.subagent_type } : {}),
+      ...(message.workflow_name ? { workflowName: message.workflow_name } : {}),
+      ...(message.skip_transcript === true ? { hidden: true } : {}),
+    };
+  }
+  if (message.subtype === "task_progress") {
+    return {
+      kind: "progress",
+      taskId,
+      status: "running",
+      description: String(message.description ?? "").trim(),
+      ...(message.summary ? { summary: String(message.summary) } : {}),
+      ...(message.tool_use_id ? { parentToolUseId: message.tool_use_id } : {}),
+      ...(message.subagent_type ? { workerType: message.subagent_type } : {}),
+      ...(message.subagent_type ? { taskKind: message.subagent_type } : {}),
+      ...(message.last_tool_name ? { lastToolName: message.last_tool_name } : {}),
+      ...(measuredTaskUsage(message.usage) ? { usage: measuredTaskUsage(message.usage) } : {}),
+    };
+  }
+  if (message.subtype === "task_updated") {
+    const patch = message.patch && typeof message.patch === "object" ? message.patch : {};
+    return {
+      kind: "updated",
+      taskId,
+      ...(patch.status ? { status: taskStatus(patch.status) } : {}),
+      ...(patch.description != null ? { description: String(patch.description) } : {}),
+      ...(Number.isFinite(Number(patch.end_time)) ? { endedAtMs: Number(patch.end_time) } : {}),
+      ...(Number.isFinite(Number(patch.total_paused_ms)) ? { pausedMs: Number(patch.total_paused_ms) } : {}),
+      ...(patch.error ? { error: String(patch.error) } : {}),
+      ...(typeof patch.is_backgrounded === "boolean" ? { backgrounded: patch.is_backgrounded } : {}),
+    };
+  }
+  if (message.subtype === "task_notification") {
+    return {
+      kind: "settled",
+      taskId,
+      status: taskStatus(message.status),
+      summary: String(message.summary ?? "").trim(),
+      ...(message.tool_use_id ? { parentToolUseId: message.tool_use_id } : {}),
+      ...(message.output_file ? { outputRef: message.output_file } : {}),
+      ...(measuredTaskUsage(message.usage) ? { usage: measuredTaskUsage(message.usage) } : {}),
+      ...(message.skip_transcript === true ? { hidden: true } : {}),
+    };
+  }
+  return null;
+}
+
+const TERMINAL_TASK_STATUSES = new Set(["completed", "failed", "stopped"]);
+
+// Track task liveness independently of partial child text. A resumed stream can begin with progress
+// or an update rather than task_started, so every non-terminal event is sufficient evidence that
+// the task remains attached to this Run.
+export function createNestedTaskDispatch(ctx = {}) {
+  const activeTaskIds = new Set();
+  const settledTaskIds = new Set();
+  return {
+    activeTaskIds,
+    dispatch(message) {
+      const event = shapeNestedTaskEvent(message);
+      if (!event) return null;
+      if (TERMINAL_TASK_STATUSES.has(event.status)) {
+        activeTaskIds.delete(event.taskId);
+        settledTaskIds.add(event.taskId);
+      } else if (event.status || !settledTaskIds.has(event.taskId)) {
+        // An explicit non-terminal status can reopen a paused/retried task. A status-less update
+        // arriving after settlement cannot resurrect it and hold the prompt queue open forever.
+        if (event.status) settledTaskIds.delete(event.taskId);
+        activeTaskIds.add(event.taskId);
+      }
+      const shaped = { ...event, activeCount: activeTaskIds.size };
+      ctx.onNestedTask?.(shaped);
+      return shaped;
+    },
   };
 }
 
@@ -225,6 +361,23 @@ export function toolTarget(tool) {
   return target || null;
 }
 
+export function nativeSourceRequest(tool) {
+  const name = tool?.name;
+  const input = tool?.input ?? {};
+  const file = String(input.file_path ?? input.path ?? "").trim();
+  if (!file || !["Read", "Edit", "Write"].includes(name)) return null;
+  if (name !== "Read") return { path: file };
+  const startLine = Number.isSafeInteger(Number(input.offset)) && Number(input.offset) > 0
+    ? Number(input.offset)
+    : 1;
+  const limit = Number(input.limit);
+  return {
+    path: file,
+    startLine,
+    ...(Number.isSafeInteger(limit) && limit > 0 ? { endLine: startLine + limit - 1 } : {}),
+  };
+}
+
 // The one-line activity label for a starting tool call: the tool's own verb against its real
 // subject, falling back to the prior "Using {name}" when the tool names no subject.
 export function toolSummary(tool) {
@@ -270,10 +423,12 @@ export function reportToolResult(ctx, pending, block) {
   const output = typeof block?.content === "string" ? block.content : JSON.stringify(block?.content ?? "");
   const status = block?.is_error ? "failed" : "passed";
   ctx.onToolResult?.({
+    toolUseId: pending.id ?? block?.tool_use_id ?? null,
     name: pending.name,
     target: pending.target,
     status,
     detail: resultDetail(pending.name, output, block?.is_error === true),
+    ...(status === "passed" && pending.source ? { source: pending.source } : {}),
   });
   if (pending.name !== "Bash") return;
   ctx.onCommand?.({

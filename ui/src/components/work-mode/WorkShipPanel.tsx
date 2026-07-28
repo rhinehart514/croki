@@ -6,8 +6,10 @@ import {
   type ShipAttempt,
   type ShipInfo,
 } from "@/api";
+import { WorkShipFacts } from "./WorkShipFacts";
 
 const phaseLabel: Record<string, string> = {
+  fetch: "Refresh remote state",
   branch: "Create branch",
   commit: "Commit the reviewed change",
   push: "Push to GitHub",
@@ -29,9 +31,9 @@ function driftSentences(info: ShipInfo): string[] {
   const drift = info.drift;
   if (!base || !drift) return lines;
   if (drift.behindDefaultCount > 0) {
-    lines.push(`${base} gained ${drift.behindDefaultCount} ${drift.behindDefaultCount === 1 ? "commit" : "commits"} while this work ran. The new branch starts from the exact code you reviewed, so the pull request will show that gap.`);
+    lines.push(`The last fetched ${base} reference gained ${drift.behindDefaultCount} ${drift.behindDefaultCount === 1 ? "commit" : "commits"} while this work ran. The new branch starts from the exact code you reviewed, so the pull request will show that gap.`);
   } else {
-    lines.push(`${base} has not moved since this work began.`);
+    lines.push(`The last fetched ${base} reference has not moved since this work began. Confirmation refreshes it before changing source control.`);
   }
   if (drift.aheadOfDefaultCount > 0) {
     lines.push(`This work started from code that already carries ${drift.aheadOfDefaultCount} ${drift.aheadOfDefaultCount === 1 ? "commit" : "commits"} ${base} does not have yet.`);
@@ -59,7 +61,9 @@ function AttemptResult({ attempt }: { attempt: ShipAttempt }) {
           {attempt.error}{" "}
           {attempt.failedPhase === "pr" && attempt.pushed
             ? `The branch ${attempt.branch} and its commit are already on GitHub and were kept. Ship again with the same branch to retry only the pull request.`
-            : "Nothing partial was kept — fix the cause and ship again."}
+            : attempt.failedPhase === "push" && attempt.commitSha
+              ? `The exact commit ${attempt.commitSha.slice(0, 8)} remains on ${attempt.branch}. Retry only the push after fixing the remote.`
+              : "No outward phase completed — fix the cause and retry from the failed phase."}
         </p>
       ) : null}
     </div>
@@ -123,7 +127,11 @@ export function WorkShipPanel({ ventureId, workspaceId, disabled, onChanged }: {
     setError(null);
     setConfirm(false);
     try {
-      const result = await shipCodingWorkspace(ventureId, workspaceId, { ...fields, dryRun });
+      const result = await shipCodingWorkspace(ventureId, workspaceId, {
+        ...fields,
+        dryRun,
+        planFingerprint: info?.plan.fingerprint,
+      });
       if (result.ship) setInfo(result.ship);
       onChanged();
     } catch (reason) {
@@ -140,6 +148,7 @@ export function WorkShipPanel({ ventureId, workspaceId, disabled, onChanged }: {
   const ghBlocked = !info.gh.available || !info.gh.authenticated;
   const locked = disabled || busy !== null;
   const drift = driftSentences(info);
+  const retryPhase = info.attempt?.outcome === "failed" ? info.attempt.failedPhase : null;
   // Any edit after arming disarms the confirmation: the confirm button names staged content only.
   const edit = (patch: Partial<typeof fields>) => {
     setConfirm(false);
@@ -150,10 +159,11 @@ export function WorkShipPanel({ ventureId, workspaceId, disabled, onChanged }: {
     <div className="ship-panel">
       <header className="ship-panel-header">
         <strong>Ship this change</strong>
-        <span>One action: branch, commit, push, pull request</span>
+        <span>One reviewed action: refresh, branch, commit, push, pull request</span>
       </header>
       {drift.map((line) => <p key={line} className="ship-drift">{line}</p>)}
       {ghBlocked ? <p className="ship-gh-note">{info.gh.reason} The branch will still be pushed.</p> : null}
+      <WorkShipFacts info={info} />
 
       <div className="ship-fields">
         <label>
@@ -179,8 +189,8 @@ export function WorkShipPanel({ ventureId, workspaceId, disabled, onChanged }: {
           {busy === "dry-run" ? "Previewing…" : "Preview without shipping"}
         </button>
         {confirm
-          ? <button type="button" data-danger="true" disabled={locked} onClick={() => void run(false)}>Confirm: push {fields.branch || info.drafts.branch} and open the pull request</button>
-          : <button type="button" disabled={locked} onClick={() => void arm()}>{busy === "ship" ? "Shipping…" : busy === "prepare" ? "Preparing…" : "Ship"}</button>}
+          ? <button type="button" data-danger="true" disabled={locked} onClick={() => void run(false)}>Confirm: {retryPhase === "push" ? "retry push" : retryPhase === "pr" ? "retry pull request" : "push"} {fields.branch || info.drafts.branch}{retryPhase ? " from its preserved receipt" : " and open the pull request"}</button>
+          : <button type="button" disabled={locked} onClick={() => void arm()}>{busy === "ship" ? "Shipping…" : busy === "prepare" ? "Preparing…" : retryPhase ? `Retry ${retryPhase} only` : "Ship"}</button>}
       </div>
 
       {error ? <p className="ship-error" role="alert">{error}</p> : null}

@@ -21,7 +21,7 @@
 
 import { getFirmConfiguration } from "./configuration.mjs";
 
-const KINDS = new Set(["text", "tool", "tool-result", "thinking", "todo", "child"]);
+const KINDS = new Set(["text", "tool", "tool-result", "thinking", "todo", "child", "nested-task"]);
 
 // Caps mirror the live-presence caps in active-drives.mjs: a very long reply, a runaway tool argument, a
 // huge plan, or a fan-out of subagents can never grow this process-local state without bound. Only the
@@ -30,6 +30,7 @@ const TEXT_CAP = 64_000;
 const TOOL_INPUT_CAP = 2_000;
 const TODO_CAP = 100;
 const CHILD_CAP = 8;
+const NESTED_TASK_CAP = 1_000;
 // The replay window a `?since=` reconnect is served from. Anything older gets a full snapshot instead —
 // correct, just less economical than replay.
 const RETAINED_DELTAS = 512;
@@ -37,7 +38,7 @@ const RETAINED_DELTAS = 512;
 const streams = new Map(); // driveId -> { seq, state, retained, listeners, nextListenerId }
 
 function emptyState() {
-  return { text: "", tool: null, thinking: null, todos: [], children: {} };
+  return { text: "", tool: null, thinking: null, todos: [], children: {}, nestedTasks: {} };
 }
 
 function streamFor(driveId) {
@@ -88,6 +89,38 @@ function normalize(delta) {
         .filter((item) => item.content),
     };
   }
+  if (kind === "nested-task") {
+    const source = delta.task && typeof delta.task === "object" ? delta.task : {};
+    const taskId = String(source.taskId ?? source.id ?? "").trim().slice(0, 240);
+    if (!taskId) return null;
+    const task = { taskId };
+    const assignText = (key, aliases = [key], cap = 480) => {
+      const alias = aliases.find((name) => Object.hasOwn(source, name));
+      if (!alias) return;
+      const value = source[alias];
+      task[key] = value == null ? null : String(value).trim().slice(0, cap) || null;
+    };
+    const assignNumber = (key) => {
+      if (!Object.hasOwn(source, key)) return;
+      const value = Number(source[key]);
+      task[key] = Number.isFinite(value) ? Math.max(0, value) : null;
+    };
+    assignText("parentTaskId", ["parentTaskId", "parentId", "parentToolUseId"], 240);
+    assignText("label");
+    assignText("taskKind", ["taskKind"], 120);
+    assignText("status", ["status"], 80);
+    assignNumber("completedCount");
+    assignNumber("totalCount");
+    assignNumber("inputTokens");
+    assignNumber("outputTokens");
+    assignNumber("totalTokens");
+    assignNumber("costUsd");
+    assignNumber("elapsedMs");
+    assignText("error", ["error"], 2_000);
+    if (Object.hasOwn(source, "skipTranscript")) task.skipTranscript = source.skipTranscript === true;
+    else if (Object.hasOwn(source, "hidden")) task.skipTranscript = source.hidden === true;
+    return { kind, task };
+  }
   // A subagent's nested delta. It is normalized through the same path, and it may not nest again — one
   // level of children is the whole model, so a bad adapter cannot build an unbounded tree here.
   const parentToolUseId = String(delta.parentToolUseId ?? "").trim();
@@ -103,6 +136,14 @@ function applyDelta(state, delta) {
   else if (delta.kind === "tool-result") state.tool = null;
   else if (delta.kind === "thinking") state.thinking = { state: delta.state, durationMs: delta.durationMs };
   else if (delta.kind === "todo") state.todos = delta.items;
+  else if (delta.kind === "nested-task") {
+    const taskId = delta.task.taskId;
+    if (state.nestedTasks[taskId]) {
+      state.nestedTasks[taskId] = { ...state.nestedTasks[taskId], ...delta.task };
+    } else if (Object.keys(state.nestedTasks).length < NESTED_TASK_CAP) {
+      state.nestedTasks[taskId] = { ...delta.task };
+    }
+  }
   else if (delta.kind === "child") {
     const known = state.children[delta.parentToolUseId];
     const child = known ?? (Object.keys(state.children).length < CHILD_CAP ? (state.children[delta.parentToolUseId] = emptyState()) : null);
@@ -119,6 +160,7 @@ function publicState(state) {
     thinking: state.thinking ? { ...state.thinking } : null,
     todos: state.todos.map((item) => ({ ...item })),
     children: Object.fromEntries(Object.entries(state.children).map(([id, child]) => [id, publicState(child)])),
+    nestedTasks: Object.fromEntries(Object.entries(state.nestedTasks).map(([id, task]) => [id, { ...task }])),
   };
 }
 

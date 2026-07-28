@@ -22,6 +22,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Verify workflow dependency paths
+        run: node scripts/check-workflow-lockfiles.mjs
+
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
@@ -29,15 +32,21 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            brain/package-lock.json
-            ui/package-lock.json
-            design-system/package-lock.json
+            site/package-lock.json
 
       - name: Install application dependencies
         run: npm ci
 
-      - name: Install design-system dependencies
-        run: npm --prefix design-system ci
+      - name: Install site dependencies
+        run: npm --prefix site ci
 
       - name: Run complete readiness gate
-        run: npm run test:acceptance
+        run: npm run test:acceptance 2>&1 | tee acceptance.log
+
+      - name: Preserve the readiness receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: croki-readiness-${{ github.run_id }}
+          path: acceptance.log
+          if-no-files-found: warn

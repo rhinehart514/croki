@@ -126,7 +126,7 @@ test("cutover: opening a venture lands the one-shell founder workspace", async (
   try {
     const { client } = chrome;
     await client.send("Emulation.setDeviceMetricsOverride", { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
-    await waitForDom(client, `/Move from the real Product/i.test(document.body.textContent)`, "direct codebase-first path did not render");
+    await waitForDom(client, `/Open a codebase/i.test(document.body.textContent)`, "direct codebase-first path did not render");
     await waitForDom(
       client,
       `(() => { const button = [...document.querySelectorAll('button')].find((entry) => entry.getAttribute('aria-label') === 'Add acme-saas codebase'); return Boolean(button && !button.disabled); })()`,
@@ -144,7 +144,7 @@ test("cutover: opening a venture lands the one-shell founder workspace", async (
     assert.equal(await client.evaluate(`!document.querySelector('[data-testid="venture-workbench"]')`), true, "the retired workbench leaked into the default shell");
     assert.equal(await client.evaluate(`(() => { const toggle = [...document.querySelectorAll('button')].find((entry) => entry.getAttribute('aria-label') === 'Canvas'); return Boolean(toggle) && toggle.getAttribute('aria-pressed') === 'false' && ![...document.querySelectorAll('button')].some((entry) => /Releases/.test(entry.textContent)); })()`), true, "the one shell did not mount a single closed Canvas toggle without a Releases destination");
     assert.equal(await client.evaluate(`!document.querySelector('.workspace-shell[data-canvas-open]')`), true, "the Canvas opened before the founder asked for it");
-    assert.equal(await client.evaluate(`(() => { const group = document.querySelector('.work-chat-mode[role="group"]'); const code = group && [...group.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Code'); return Boolean(code) && code.getAttribute('aria-pressed') === 'true'; })()`), true, "the always-present composer did not default to Code participation");
+    assert.equal(await client.evaluate(`(() => { const bar = document.querySelector('.work-composer-bar'); const canvas = bar?.querySelector('button[aria-label="Canvas"]'); const model = bar?.querySelector('[aria-label="SDK model"]'); return Boolean(canvas && model) && canvas.getAttribute('aria-pressed') === 'false' && ![...bar.querySelectorAll('button')].some((entry) => entry.textContent.trim() === 'Code'); })()`), true, "the composer did not keep the selected SDK beside a presentation-only Canvas toggle");
     assert.equal(await client.evaluate(`(() => { const bar = document.querySelector('.work-composer-bar'); const model = bar?.querySelector('[aria-label="SDK model"]'); const text = bar?.textContent || ''; return Boolean(model && text.includes('acme-saas') && text.includes('Isolated worktree') && text.includes('Guarded')); })()`), true, "Work did not expose repository, worktree, founder guard, and model context");
     assert.equal(await client.evaluate(`(() => {
       const bar = document.querySelector('.work-composer-bar');
@@ -154,7 +154,7 @@ test("cutover: opening a venture lands the one-shell founder workspace", async (
         const rect = child.getBoundingClientRect();
         return rect.left >= boundary.left - 1 && rect.right <= boundary.right + 1;
       });
-    })()`), true, "Work participation controls escaped the composer width");
+    })()`), true, "Thread controls escaped the composer width");
 
     // A fresh thread stays local until the founder sends its first direction.
     const durableThreadsBeforeDraft = await client.evaluate(`document.querySelectorAll('.thread-rail-row').length`);

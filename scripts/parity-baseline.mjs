@@ -125,6 +125,10 @@ function summarize(run) {
     gapMaxMs: gaps.length ? gaps[gaps.length - 1] : null,
     timelineRefetches: run.timelineRefetches ?? null, streamEvents: run.streamEvents ?? null,
     deltaFrames: run.deltaFrames ?? null, replyChars: run.replyChars ?? null,
+    requestAcceptedMs: run.phases?.requestAcceptedMs ?? null,
+    founderPersistedMs: run.phases?.founderPersistedMs ?? null,
+    providerStartedMs: run.phases?.providerStartedMs ?? null,
+    firstFactualActivityMs: run.phases?.firstFactualActivityMs ?? null,
   };
 }
 
@@ -289,6 +293,12 @@ async function runCrokiLeg({ base, prompt, ventureId, runtime, model, timeoutMs 
   const frames = [];
   let streamEvents = 0;
   let timelineRefetches = 0;
+  const phases = {
+    requestAcceptedMs: null,
+    founderPersistedMs: null,
+    providerStartedMs: null,
+    firstFactualActivityMs: null,
+  };
 
   const ventures = await brainRequest(base, { route: "/api/ventures" }).catch((error) => {
     throw new Error(`No brain answered at ${base}. Start one (npm run app, or PORT=4317 node brain/src/server.mjs) before the croki leg. ${error.message}`);
@@ -317,6 +327,7 @@ async function runCrokiLeg({ base, prompt, ventureId, runtime, model, timeoutMs 
     const detail = send.body?.error ?? send.text.slice(0, 200);
     if (send.status === 403 || send.status === 503) throw new Error(`The brain refused the founder write (${send.status}: ${detail}). Restart it with DROVER_DEV_FOUNDER=1, or export GTM_IDE_FOUNDER_CAPABILITY from the desktop host.`);
     if (send.status !== 200 && send.status !== 202) throw new Error(`POST /api/ventures/${venture.id}/conversation/reply returned ${send.status}: ${detail}`);
+    phases.requestAcceptedMs = Math.round(performance.now() - startedAt);
     const threadRef = send.body?.threadRef ?? null;
     if (!threadRef) throw new Error(`The reply was accepted as act "${send.body?.act ?? "unknown"}" but returned no threadRef, so there is no Thread timeline to measure. Try --runtime claude-code (or codex) so the turn dispatches as a new direction.`);
     const threadId = String(threadRef).replace(/^thread:/, "");
@@ -367,14 +378,24 @@ async function runCrokiLeg({ base, prompt, ventureId, runtime, model, timeoutMs 
           return;
         }
         const timeline = response.body?.timeline ?? null;
+        const items = Array.isArray(timeline?.items) ? timeline.items : [];
+        if (phases.founderPersistedMs == null && items.some((item) => item.kind === "message" && item.role === "founder" && item.content === prompt)) {
+          phases.founderPersistedMs = Math.round(performance.now() - startedAt);
+        }
         const chars = assistantChars(timeline);
         const grew = seeded && chars > maxChars;
         maxChars = Math.max(maxChars, chars);
         seeded = true;
         frames.push(frame({ startedAt, bytes: response.bytes, visible: grew, kind: "timeline-refetch" }));
         const agents = Array.isArray(timeline?.agents) ? timeline.agents : [];
+        if (phases.providerStartedMs == null && agents.length) {
+          phases.providerStartedMs = Math.round(performance.now() - startedAt);
+        }
+        if (phases.firstFactualActivityMs == null && items.some((item) => ["agent-status", "activity-summary"].includes(item.kind))) {
+          phases.firstFactualActivityMs = Math.round(performance.now() - startedAt);
+        }
         await followDrive(agents.find((agent) => agent.runRef)?.runRef ?? null);
-        const durableReply = (timeline?.items ?? []).some((item) => item.kind === "message" && item.role === "teammate" && item.streaming !== true);
+        const durableReply = items.some((item) => item.kind === "message" && item.role === "teammate" && item.streaming !== true);
         if (agents.length === 0 && durableReply) settle({ ok: true, error: null });
       } catch (error) {
         settle({ ok: false, error: error.message });
@@ -402,6 +423,7 @@ async function runCrokiLeg({ base, prompt, ventureId, runtime, model, timeoutMs 
       frames, streamEvents, timelineRefetches, deltaFrames,
       deltaStream: driveStream ? "open" : "unavailable",
       replyChars: Math.max(maxChars, deltaChars),
+      phases,
       totalMs: Math.round(performance.now() - startedAt), ...outcome,
     };
   } finally {
@@ -415,8 +437,8 @@ async function runCrokiLeg({ base, prompt, ventureId, runtime, model, timeoutMs 
 const cell = (value) => (value === null || value === undefined ? "—" : String(value));
 
 function markdownTable(rows) {
-  const header = ["Leg", "Run", "OK", "TTFT ms", "Total ms", "Frames", "Visible", "Gap p50", "Gap p95", "Gap max", "Bytes", "Refetches", "SSE", "Deltas", "Reply chars"];
-  const columns = ["ttftMs", "totalMs", "frames", "visibleFrames", "gapP50Ms", "gapP95Ms", "gapMaxMs", "bytes", "timelineRefetches", "streamEvents", "deltaFrames", "replyChars"];
+  const header = ["Leg", "Run", "OK", "Accepted", "Persisted", "Provider", "Activity", "TTFT ms", "Total ms", "Frames", "Visible", "Gap p50", "Gap p95", "Gap max", "Bytes", "Refetches", "SSE", "Deltas", "Reply chars"];
+  const columns = ["requestAcceptedMs", "founderPersistedMs", "providerStartedMs", "firstFactualActivityMs", "ttftMs", "totalMs", "frames", "visibleFrames", "gapP50Ms", "gapP95Ms", "gapMaxMs", "bytes", "timelineRefetches", "streamEvents", "deltaFrames", "replyChars"];
   return [
     `| ${header.join(" | ")} |`,
     `| ${header.map(() => "---").join(" | ")} |`,

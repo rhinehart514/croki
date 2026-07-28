@@ -1,20 +1,100 @@
 import { teammateSoulStore } from "../teammate-soul-store.mjs";
 import { architectureContextPrompt, workingTheoryContextPrompt } from "./architecture-context.mjs";
 
+function buildDirectSdkTargetContext({ target, architectureContext, theoryContext, canvasContext, retainedSourceRefs, steerBrief }) {
+  return [
+    target?.workRef
+      ? `The founder explicitly targeted work ${target.workRef}. Keep the response attached to that exact work${target.betId ? ` in ${target.betId}` : ""}.`
+      : "",
+    target?.productGtmView
+      ? [
+          "This direction originated from Canvas. Canvas is context inside this same coding Thread, not another agent or workflow.",
+          "Treat the Canvas projection as progressive intent clarity, not an exhaustive knowledge or repository map. Its question must preserve the founder's exact governing intent; every node should make the next useful direction clearer.",
+          "Inspect the repository with your native provider tools. Preserve source-backed current truth, keep inferred relationships provisional, and answer the founder's exact request.",
+          "Current truth supports the intent and must not dominate it. Begin with the smallest useful set of relationships; deepen into the user outcome, present burden, boundaries, assumptions, alternatives, evidence, and unknown decisions only where they distinguish what the founder could direct next.",
+          "Show architecture only when the founder's question turns on architecture, and only around that question. When one exact section is selected, deepen or correct that same intent section while preserving the rest.",
+          "Return the Canvas projection through the host-required structured response. Croki validates and saves that response directly after this turn.",
+          "Do not call MCP or Croki tools to save, capture, stage, or persist Canvas. Never print the structured response as prose; the founder sees the rendered Canvas, not its serialization.",
+          target.workRef
+            ? `Revise Canvas work ${target.workRef} in place; do not create a duplicate.`
+            : "Return one focused provisional Canvas projection.",
+          "Use source-bearing relationships. Put exact bounded code or document material in the normal coding response instead of forcing it into the Canvas projection.",
+        ].join("\n")
+      : "",
+    target?.workflowSketch
+      ? [
+          "The founder explicitly targeted a Canvas play. Inspect relevant repository truth with your native provider tools.",
+          "Return the complete play through the host-required structured response. Croki validates and saves it directly after this turn.",
+          "Do not call MCP or Croki tools to save, capture, stage, or persist Canvas. Never print the structured response as prose.",
+          "Revise the same provisional play when exact work is targeted, preserve its step identities and uncertainty, and represent rather than execute every outward action.",
+        ].join("\n")
+      : "",
+    target?.artifactSection
+      ? `The founder selected section ${target.artifactSection.index + 1}, “${target.artifactSection.title}.” Revise that section in place and preserve the rest unless the correction creates a necessary contradiction.`
+      : "",
+    target?.workflowStep
+      ? `The founder selected step ${target.workflowStep.position}, “${target.workflowStep.label}” (${target.workflowStep.id}). Revise that exact step and only the other steps the correction necessarily changes.`
+      : "",
+    target?.previewRequested
+      ? "The founder supplied exact preview context. Use the provided preview capability when it helps verify the requested correction in this Thread."
+      : "",
+    target?.journeyImportProfile
+      ? `The founder attached a sanitized journey profile: ${JSON.stringify(target.journeyImportProfile)}. Treat observed counts and transitions as facts, preserve uncertainty about causes, and propose only source-preserving Canvas relationships.`
+      : "",
+    architectureContext ? architectureContextPrompt(architectureContext) : "",
+    theoryContext ? workingTheoryContextPrompt(theoryContext) : "",
+    canvasContext
+      ? `Current selected Canvas material, supplied directly by the Croki host: ${JSON.stringify(canvasContext)}`
+      : "",
+    retainedSourceRefs?.length
+      ? `Recent source references retained from earlier work in this same Thread: ${retainedSourceRefs.join(", ")}. These are bounded pointers, not guaranteed current truth; resolve relevant files with your native tools before relying on them.`
+      : "",
+    steerBrief || "",
+  ].filter(Boolean).join("\n");
+}
+
+function buildDirectSdkSystem({ agent, teammateRef, target, architectureContext, theoryContext, canvasContext, retainedSourceRefs, steerBrief }) {
+  const name = agent.name || teammateRef;
+  const targetContext = buildDirectSdkTargetContext({
+    target,
+    architectureContext,
+    theoryContext,
+    canvasContext,
+    retainedSourceRefs,
+    steerBrief,
+  });
+  return [
+    `You are ${name}, the Claude or Codex model the founder selected for this coding Thread.`,
+    "Respond directly with your native coding judgment. Croki supplies continuity and bounded context; it does not replace your normal coding workflow, tools, project instructions, or reasoning.",
+    "The founder retains authority over outward consequences. Do not commit, merge, push, publish, deploy, spend, or send on the founder's behalf.",
+    targetContext,
+  ].filter(Boolean).join("\n");
+}
+
 // Provider-neutral participant instructions remain separate from execution plumbing so runtime and
 // repository isolation can evolve without silently changing Croki's durable firm behavior.
-export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, configuration, agent, coordination, firstDirection, target, architectureContext, theoryContext, workingTheoryDrive, steerBrief, directSdk = false }) {
-  const soul = directSdk ? {} : teammateSoulStore.ensure(ventureId, teammateRef, {}, options);
-  const brief = directSdk ? {} : teammateSoulStore.voiceBriefFor(ventureId, teammateRef, {}, options) ?? {};
+export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, configuration, agent, coordination, firstDirection, target, architectureContext, theoryContext, canvasContext, retainedSourceRefs = [], workingTheoryDrive, steerBrief, directSdk = false }) {
+  if (directSdk) {
+    return buildDirectSdkSystem({
+      agent,
+      teammateRef,
+      target,
+      architectureContext,
+      theoryContext,
+      canvasContext,
+      retainedSourceRefs,
+      steerBrief,
+    });
+  }
+  const soul = teammateSoulStore.ensure(ventureId, teammateRef, {}, options);
+  const brief = teammateSoulStore.voiceBriefFor(ventureId, teammateRef, {}, options) ?? {};
   const name = agent.name || brief.name || soul.name || teammateRef;
   const participantLabel = configuration.presentation.participantLabel || "teammate";
   const peers = configuration.agents
     .filter((candidate) => candidate.ref !== teammateRef)
     .map((candidate) => `${candidate.name} (${candidate.ref}; ${candidate.activation})${candidate.perspective ? ` — ${candidate.perspective}` : ""}`);
   return [
-    directSdk
-      ? `You are ${name}, the SDK model the founder selected for this Work thread. Respond directly as ${name}; do not adopt a Croki-created persona or route the founder through a Product / GTM specialist.`
-      : `You are ${name}, a ${participantLabel} in this venture's ${configuration.presentation.collectiveLabel}.`,
+    `You are ${name}, a ${participantLabel} in this venture's ${configuration.presentation.collectiveLabel}.`,
     agent.perspective ? `Your perspective: ${agent.perspective}` : "",
     agent.temperament.length ? `Your temperament: ${agent.temperament.join("; ")}` : "",
     agent.contributes.length ? `You contribute: ${agent.contributes.join("; ")}` : "",
@@ -46,7 +126,7 @@ export function buildWorkLoopSystem({ ventureId, teammateRef, goal, options, con
     target?.workflowSketch
       ? `This direction is revising an ambitious GTM play. Treat the play as an executable theory of market movement, not a small automation or generic strategy diagram. Preserve its full operational length. Return one flow artifact with purpose "product-gtm-workflow", a concrete objective, and exact nodes for triggers, sources, agent work, tools, conditions, waits, founder gates, outward actions, observations, outcomes, branches, loops, and evidence returns wherever the real mechanics require them. This is a drafted play: an intended workflow, not yet run. Do not self-declare it established or imply an outward action ran; whether it later reads as established is derived from real market movement, never asserted here. Draft from capability composition, not the tool inventory: ask what becomes possible when the connected capabilities combine, what founder coordination disappears, and what outcome the play could own rather than assist. Before choosing the first safe step, understand the full ladder from assisting through preparing, executing, verifying, and adapting to owning the outcome, and say where on that ladder this play sits and why. A play is too small when it maps to one tool, merely accelerates an existing task, or leaves every judgment and handoff with the founder; ambition never moves the gate — outward steps still stage for the founder. Correct the existing work in place when target work exists.`
       : target?.productGtmView
-      ? `This direction came from Product / GTM and must return one inspectable provisional local model view. Read the founder's direction at three altitudes: the exact request, which stays verbatim and controls this task; the outcome it is trying to make true; and the largest outcome the product could eventually own here. When the direction names only a screen, a feature, or a workflow improvement, also represent the reality in which that burden no longer exists — eliminating the work outranks improving it — as provisional proposals beside the requested change, never in place of it. When a proposal introduces new capability, name the object the founder would live in and the loop it creates, and name which existing concept becomes subordinate; do not force it into a chat, dashboard, or list shape the material has outgrown. A workflow is not the default: represent the question, nearby current truth, proposed changes, real alternatives, evidence, and unresolved unknowns that the material actually supports. Add causal direction only when it is established; use ordered workflow mechanics only when they are genuinely present. First read_current_model. ${target.modelBranchRef ? `Read ${target.modelBranchRef} and revise that same branch; do not create a duplicate.` : "Create one provisional model branch for the focal question."} Propose exact source-bearing model changes only where the work supports them. ${target.workRef ? `Revise ${target.workRef} in place with stage_artifact.` : "Fork one focused bet, then stage one model-view artifact."} Use kind \"model-view\" and purpose \"product-gtm-local-model\". The artifact must name its branchRef and use plain-business nodes with kind question, truth, proposal, alternative, unknown, evidence, action, gate, or outcome and state current, provisional, or unresolved. Preserve uncertainty instead of inventing truth. The founder will selectively review exact branch changes before anything becomes current.`
+      ? `This direction came from Product / GTM and must return one inspectable provisional local model view. Treat the view as progressive intent clarity, not an exhaustive knowledge or repository map. The artifact question preserves the founder's exact governing intent, and every node must make the next useful direction clearer. Read the founder's direction at three altitudes: the exact request, which stays verbatim and controls this task; the outcome it is trying to make true; and the largest outcome the product could eventually own here. When the direction names only a screen, a feature, or a workflow improvement, also represent the reality in which that burden no longer exists — eliminating the work outranks improving it — as provisional proposals beside the requested change, never in place of it. When a proposal introduces new capability, name the object the founder would live in and the loop it creates, and name which existing concept becomes subordinate; do not force it into a chat, dashboard, or list shape the material has outgrown. Begin with the smallest useful set of relationships. Current truth supports the intent and must not dominate it; deepen into the user outcome, present burden, boundaries, assumptions, alternatives, evidence, and unknown decisions only where they distinguish what the founder could direct next. Show architecture only when the founder's question turns on architecture, and only around that question. A workflow is not the default: represent the question, nearby current truth, proposed changes, real alternatives, evidence, and unresolved unknowns that the material actually supports. Add causal direction only when it is established; use ordered workflow mechanics only when they are genuinely present. First read_current_model. ${target.modelBranchRef ? `Read ${target.modelBranchRef} and revise that same branch; do not create a duplicate.` : "Create one provisional model branch for the focal question."} Propose exact source-bearing model changes only where the work supports them. ${target.workRef ? `Revise ${target.workRef} in place with stage_artifact.` : "Fork one focused bet, then stage one model-view artifact."} Use kind \"model-view\" and purpose \"product-gtm-local-model\". The artifact must name its branchRef and use plain-business nodes with kind question, truth, proposal, alternative, unknown, evidence, action, gate, or outcome and state current, provisional, or unresolved. Preserve uncertainty instead of inventing truth. The founder will selectively review exact branch changes before anything becomes current.`
       : "",
     target?.artifactSection
       ? `The founder selected section ${target.artifactSection.index + 1}, “${target.artifactSection.title},” inside the targeted artifact. Treat the founder's message as a local correction: revise that section in place and preserve the rest unless the requested change creates a necessary contradiction. Return the revision through the same durable work identity; do not create a sibling artifact.`

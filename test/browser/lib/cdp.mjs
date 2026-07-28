@@ -59,7 +59,11 @@ export async function launchChrome({ port, url, beforeNavigate = null }) {
       ? path.resolve(import.meta.dirname, "../fixtures/electron-cdp.cjs")
       : "about:blank",
   ];
-  const child = spawn(executable, browserArgs, { stdio: ["ignore", "pipe", "pipe"] });
+  const browserEnv = { ...process.env };
+  // Codex/T3 shells may export this so Electron-backed Node commands behave like plain Node.
+  // The portable browser fallback needs the actual Electron host and Chromium flags instead.
+  if (electron) delete browserEnv.ELECTRON_RUN_AS_NODE;
+  const child = spawn(executable, browserArgs, { env: browserEnv, stdio: ["ignore", "pipe", "pipe"] });
 
   let stderr = "";
   child.stderr.on("data", (chunk) => { stderr += chunk; });

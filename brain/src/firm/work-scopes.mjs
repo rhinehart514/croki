@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import { getSemanticModel, mutateSemanticModel } from "./semantic-model-store.mjs";
 import { now } from "./venture-store.mjs";
+import { recordMatchingRunTombstones } from "./work-journal-runtime.mjs";
 
 const text = (value) => String(value ?? "").trim() || null;
 const list = (value) => Array.isArray(value) ? value : [];
@@ -74,7 +75,13 @@ export function revokeWorkScope({ ventureId, scopeId, reason, actor } = {}, opti
     if (scope.revokedAt) return [{ op: "update-record", family: "workScopes", id: scope.id, record: scope }];
     return [{ op: "update-record", family: "workScopes", id: scope.id, record: { ...scope, revokedAt, revokedBy: founder, revokeReason: text(reason) } }];
   }, founder, options);
-  return structuredClone(model.workScopes.find((scope) => scope.id === scopeId));
+  const revoked = structuredClone(model.workScopes.find((scope) => scope.id === scopeId));
+  recordMatchingRunTombstones(ventureId, {
+    workScopeRef: `work-scope:${scopeId}`,
+    reasonCode: "scope-revoked",
+    authorityRef: `work-scope:${scopeId}`,
+  }, options);
+  return revoked;
 }
 
 export function restartableWorkScopes(ventureId, evidenceRefs = [], options = {}) {
@@ -83,4 +90,3 @@ export function restartableWorkScopes(ventureId, evidenceRefs = [], options = {}
     returned.size === 0 || scope.wakeOnEvidenceRefs.some((ref) => returned.has(ref))
   ));
 }
-

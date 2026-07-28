@@ -1,22 +1,21 @@
 # Croki
 
-**A Product and GTM Development Environment for founders building with agents.**
+**The coding environment for founders building products with Claude and Codex.**
 
-Croki lets one founder run Product and go-to-market as one fast, changing system. Direct Claude and Codex,
-pursue several routes to growth, change the Product when reality demands it, and compound every useful result
-into faster next moves.
-
-The durable product contract is [`docs/FIRM-SPEC.md`](docs/FIRM-SPEC.md), intended desktop experience is
-[`DESIGN.md`](DESIGN.md), and honest current proof is [`docs/STATE.md`](docs/STATE.md).
+Croki is designed to be the place a founder prefers to code: direct native Claude and Codex, inspect and steer
+exact work, verify and ship it, then return without rebuilding context. Its advantage over an otherwise strong
+coding-agent client is accumulated Product understanding—source-backed intent, corrections, verified behavior,
+decisions, and evidence that make the next coding move better.
 
 ## Product shape
 
-The Electron desktop has two founder surfaces over one local venture model:
+The Electron desktop has one founder surface over one local project model. Conversation is the permanent
+Thread spine; exact material opens beside it as a contextual workbench:
 
-- **Work** — direct Claude/Codex conversation, isolated Runs, code, terminal, preview, tests, artifacts, evidence,
-  and exact founder review.
-- **Product / GTM** — current Product truth, several motions, durable provisional alternatives, attached live
-  work, outward actions, evidence returns, conflicts, and selective founder merge.
+- **Thread spine** — direct Claude/Codex conversation, isolated Runs, code, terminal, preview, tests, artifacts,
+  evidence, and exact founder Review.
+- **Canvas** — an optional contextual view that earns space only when seeing Product truth, relationships, live
+  work, consequences, or evidence materially improves the next coding direction, correction, Review, or return.
 
 Product truth, promise, offer, pricing, audience, experience, capability, and business model may all change.
 PLG, outbound, inbound, partnerships, manual onboarding, bespoke customer work, and unusual experiments may
@@ -36,8 +35,8 @@ npm install
 npm start
 ```
 
-`npm start` builds and launches Electron with an in-process Brain. The browser build is a deterministic test
-harness, not another production surface.
+`npm start` builds and launches the Electron desktop product. The browser build is a deterministic test harness,
+not another production surface.
 
 ## Verification
 
@@ -59,5 +58,3 @@ connect repository → state what should become true → exact agent work
 → provisional Product change → founder-gated outward action → evidence return
 → selective merge → faster next move
 ```
-
-See [`RUN.md`](RUN.md) for the resume order and verification contract.

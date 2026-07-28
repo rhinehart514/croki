@@ -32,7 +32,7 @@ export function workflowSketchFromTimeline(timeline: ThreadTimeline | null): Wor
     workRef: item.ref,
     workId: typeof artifact.id === "string" ? artifact.id : item.ref.replace(/^work:/, ""),
     betId: typeof item.betRef === "string" ? item.betRef.replace(/^bet:/, "") : null,
-    title: typeof item.title === "string" ? item.title : "Product / GTM workflow",
+    title: typeof item.title === "string" ? item.title : "Canvas workflow",
     steps,
     edges,
   };

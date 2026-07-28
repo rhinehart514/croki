@@ -17,7 +17,7 @@ export type NowComposerProps = {
   autoFocus?: boolean;
   focusRequest?: number;
   placeholder?: string;
-  submissionMode?: "auto" | "conversation" | "work" | "product-gtm";
+  submissionMode?: "auto" | "conversation" | "work";
   onClearScope?: () => void;
   onSubmitStart?: (message: string) => void;
   onSubmitAccepted?: (message: string, result: ConversationReplyResult) => void;
@@ -29,9 +29,12 @@ export type NowComposerProps = {
   runtimeOverride?: string | null;
   modelOverride?: string | null;
   effortOverride?: string | null;
+  interactionModeOverride?: "plan" | null;
   composerControls?: ReactNode;
   configuration?: FirmConfiguration | null;
   productGtmView?: boolean;
+  canvasOpen?: boolean;
+  canvasSubjectContext?: boolean;
   workflowSketch?: boolean;
   modelBranchRef?: string | null;
   artifactSection?: ArtifactSectionFocus | null;

@@ -72,8 +72,32 @@ export function agentDailySpendAvailability({ ventureId, teammateRef, cap, costR
   return { cap, spentUsd: ledger.spentUsd, reservedUsd: ledger.reservedUsd, remainingUsd };
 }
 
-export function reserveAgentDailySpend({ ventureId, teammateRef, cap, costReporting, options, nowMs }) {
+export function reserveAgentDailySpend({
+  ventureId,
+  teammateRef,
+  cap,
+  costReporting,
+  options,
+  nowMs,
+  recoveryReservationId = null,
+}) {
   if (cap == null) return { cap: null, spentUsd: 0, remainingUsd: null, reservation: null };
+  if (recoveryReservationId) {
+    const ledger = getAgentDailySpend(ventureId, teammateRef, { nowMs, options });
+    const reservation = ledger.reservations.find((entry) => entry.id === recoveryReservationId);
+    if (!reservation) {
+      const error = new Error(`Recovery spend reservation ${recoveryReservationId} is no longer active.`);
+      error.code = "agent_spend_reservation_missing";
+      throw error;
+    }
+    return {
+      cap,
+      spentUsd: ledger.spentUsd,
+      reservedUsd: ledger.reservedUsd,
+      remainingUsd: reservation.usd,
+      reservation,
+    };
+  }
   let result = null;
   updateLedger(ventureId, teammateRef, { nowMs, options }, (ledger) => {
     const remainingUsd = Math.max(0, cap - ledger.spentUsd - ledger.reservedUsd);
@@ -90,6 +114,34 @@ export function reserveAgentDailySpend({ ventureId, teammateRef, cap, costReport
     return { day: ledger.day, spentUsd: ledger.spentUsd, reservations: [...ledger.reservations, reservation] };
   });
   return result;
+}
+
+export function bindAgentDailySpendReservation({
+  ventureId,
+  teammateRef,
+  reservation,
+  runRef,
+  machineRef,
+  options,
+  nowMs,
+}) {
+  if (!reservation) return null;
+  let bound = null;
+  updateLedger(ventureId, teammateRef, { nowMs, options }, (ledger) => ({
+    day: ledger.day,
+    spentUsd: ledger.spentUsd,
+    reservations: ledger.reservations.map((entry) => {
+      if (entry.id !== reservation.id) return entry;
+      bound = { ...entry, runRef, machineRef };
+      return bound;
+    }),
+  }));
+  if (!bound) {
+    const error = new Error(`Daily spend reservation ${reservation.id} is no longer active.`);
+    error.code = "agent_spend_reservation_missing";
+    throw error;
+  }
+  return bound;
 }
 
 export function settleAgentDailySpend({ ventureId, teammateRef, reservation, usd, options, nowMs }) {

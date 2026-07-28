@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SystemIndex, WorkIndex, WorkIndexItem } from "@/api";
 import { CommandSearch } from "./CommandSearch";
+import { WORK_REVIEW_REQUEST_EVENT } from "@/components/work-mode/previewPresentation";
 
 const item = (threadRef: string, founderIntent: string, updatedAt: string): WorkIndexItem => ({
   threadRef, ventureRef: "venture:v", parentThreadRef: null, originMessageRef: null, subjectRefs: [],
@@ -44,9 +45,9 @@ beforeEach(() => {
 describe("CommandSearch", () => {
   it("stays out of the way until ⌘K, then opens focused search with actions and recent Threads", async () => {
     renderSearch();
-    expect(screen.queryByRole("combobox", { name: "Search this venture" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Search this project" })).not.toBeInTheDocument();
     openSearch();
-    const input = await screen.findByRole("combobox", { name: "Search this venture" });
+    const input = await screen.findByRole("combobox", { name: "Search this project" });
     await waitFor(() => expect(input).toHaveFocus());
     expect(screen.getByRole("option", { name: /New Thread/ })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /Show Canvas/ })).toBeInTheDocument();
@@ -57,7 +58,7 @@ describe("CommandSearch", () => {
   it("filters Threads by query and jumps with full keyboard traversal", async () => {
     const handlers = renderSearch();
     openSearch();
-    const input = await screen.findByRole("combobox", { name: "Search this venture" });
+    const input = await screen.findByRole("combobox", { name: "Search this project" });
     fireEvent.change(input, { target: { value: "pricing" } });
     expect(screen.getByRole("option", { name: /Pricing page rework/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("option", { name: /Improve onboarding/ })).not.toBeInTheDocument();
@@ -68,7 +69,7 @@ describe("CommandSearch", () => {
   it("moves the highlight with arrow keys and wraps", async () => {
     renderSearch();
     openSearch();
-    const input = await screen.findByRole("combobox", { name: "Search this venture" });
+    const input = await screen.findByRole("combobox", { name: "Search this project" });
     const options = screen.getAllByRole("option");
     expect(options[0]).toHaveAttribute("aria-selected", "true");
     fireEvent.keyDown(input, { key: "ArrowUp" });
@@ -80,16 +81,16 @@ describe("CommandSearch", () => {
   it("shows an honest empty state naming the surface's search scope", async () => {
     renderSearch();
     openSearch();
-    const input = await screen.findByRole("combobox", { name: "Search this venture" });
+    const input = await screen.findByRole("combobox", { name: "Search this project" });
     fireEvent.change(input, { target: { value: "zebra" } });
     expect(screen.getByText("No matches for “zebra”.")).toBeInTheDocument();
-    expect(screen.getByText("Search covers Threads, the Canvas, and actions in this venture.")).toBeInTheDocument();
+    expect(screen.getByText("Search covers Threads, the Canvas, and actions in this project.")).toBeInTheDocument();
   });
 
   it("reaches Canvas objects and keeps them query-only at rest", async () => {
     const handlers = renderSearch();
     openSearch();
-    const input = await screen.findByRole("combobox", { name: "Search this venture" });
+    const input = await screen.findByRole("combobox", { name: "Search this project" });
     // The Canvas map is query-only at rest: no object rows until the founder types.
     expect(screen.queryByRole("option", { name: /Founder-led sales/ })).not.toBeInTheDocument();
     fireEvent.change(input, { target: { value: "founder-led" } });
@@ -100,17 +101,18 @@ describe("CommandSearch", () => {
   it("toggles the Canvas from search, honestly labeled by its current state", async () => {
     const handlers = renderSearch({ canvasOpen: true });
     openSearch();
-    await screen.findByRole("combobox", { name: "Search this venture" });
+    await screen.findByRole("combobox", { name: "Search this project" });
     fireEvent.click(screen.getByRole("option", { name: /Hide Canvas/ }));
     await waitFor(() => expect(handlers.onToggleCanvas).toHaveBeenCalledTimes(1));
   });
 
-  it("offers exact workbench material only when it is on screen, and drives the real tabs", async () => {
-    const clicked = vi.fn();
-    const changesTab = document.createElement("button");
-    changesTab.id = "work-tab-changes";
-    changesTab.addEventListener("click", clicked);
-    document.body.appendChild(changesTab);
+  it("offers exact Review material only when a coding attempt exists, without relying on tabs", async () => {
+    const requested = vi.fn();
+    const workSurface = document.createElement("div");
+    workSurface.className = "work-surface";
+    workSurface.dataset.hasAttempts = "true";
+    document.body.appendChild(workSurface);
+    window.addEventListener(WORK_REVIEW_REQUEST_EVENT, requested);
     const composer = document.createElement("section");
     composer.className = "now-composer";
     const textarea = document.createElement("textarea");
@@ -119,17 +121,18 @@ describe("CommandSearch", () => {
     try {
       renderSearch();
       openSearch();
-      await screen.findByRole("combobox", { name: "Search this venture" });
+      await screen.findByRole("combobox", { name: "Search this project" });
       expect(screen.getByRole("option", { name: /Show preview/ })).toBeInTheDocument();
       expect(screen.getByRole("option", { name: /Open terminal/ })).toBeInTheDocument();
       fireEvent.click(screen.getByRole("option", { name: /Show code changes/ }));
-      await waitFor(() => expect(clicked).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(requested).toHaveBeenCalledTimes(1));
       openSearch();
-      await screen.findByRole("combobox", { name: "Search this venture" });
-      fireEvent.click(screen.getByRole("option", { name: /Write a direction/ }));
+      await screen.findByRole("combobox", { name: "Search this project" });
+      fireEvent.click(screen.getByRole("option", { name: /Write a prompt/ }));
       await waitFor(() => expect(textarea).toHaveFocus());
     } finally {
-      changesTab.remove();
+      window.removeEventListener(WORK_REVIEW_REQUEST_EVENT, requested);
+      workSurface.remove();
       composer.remove();
     }
   });
@@ -138,15 +141,15 @@ describe("CommandSearch", () => {
     const handlers = renderSearch();
     fireEvent.keyDown(window, { key: "n", metaKey: true });
     expect(handlers.onNewThread).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("combobox", { name: "Search this venture" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Search this project" })).not.toBeInTheDocument();
   });
 
   it("closes on Escape without running anything", async () => {
     const handlers = renderSearch();
     openSearch();
-    const input = await screen.findByRole("combobox", { name: "Search this venture" });
+    const input = await screen.findByRole("combobox", { name: "Search this project" });
     fireEvent.keyDown(input, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("combobox", { name: "Search this venture" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("combobox", { name: "Search this project" })).not.toBeInTheDocument());
     expect(handlers.onSelectThread).not.toHaveBeenCalled();
     expect(handlers.onNewThread).not.toHaveBeenCalled();
   });

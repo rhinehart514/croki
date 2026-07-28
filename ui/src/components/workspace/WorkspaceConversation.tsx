@@ -17,7 +17,7 @@ import type { ProductGtmWalkthroughStep } from "@/components/product-gtm/product
 import { ThreadConversation } from "@/components/thread/ThreadConversation";
 import type { useThreadTimeline } from "@/components/thread/useThreadTimeline";
 import type { WorkflowSketch } from "@/components/work-mode/workflowSketch";
-import type { WorkChatMode, WorkModelChoice } from "@/components/work-mode/WorkComposerBar";
+import type { WorkModelChoice } from "@/components/work-mode/WorkComposerBar";
 import type { FirmConnectionState } from "@/hooks/use-firm-connection";
 import { ROOT_THREAD_REF } from "./useWorkspaceConversation";
 
@@ -25,9 +25,9 @@ export function WorkspaceConversation({
   venture, item, timeline, lens, connection, activeDrives, activeDraft, draftSession,
   draftSubjectRef, draftRelatedRefs, workflowStep, selectedObject, selectedAgentRef,
   artifactFocus, artifactFocusRequest, systemIndex, resolvedThreadRef, scrolls,
-  modelChoice, workChatMode, canvasAttention,
+  modelChoice, canvasOpen, canvasAttention,
   onArtifactFocus, onScrollChange, onOpenVisual, onOpenThread, onWorkIndex,
-  onRefresh, onDriven, onThreadAccepted, onModelChoice, onWorkChatModeChange, onWorkRouted, onWorkflowAdopted,
+  onRefresh, onDriven, onThreadAccepted, onModelChoice, onCanvasOpenChange, onWorkRouted, onWorkflowAdopted,
   onReviewModelBranch, onThreadDeleted,
 }: {
   venture: FirmVenture;
@@ -49,9 +49,9 @@ export function WorkspaceConversation({
   resolvedThreadRef: string | null;
   scrolls: Record<string, number>;
   modelChoice: WorkModelChoice;
-  workChatMode: WorkChatMode;
+  canvasOpen: boolean;
   canvasAttention: number;
-  onWorkChatModeChange: (mode: WorkChatMode) => void;
+  onCanvasOpenChange: (open: boolean) => void;
   onArtifactFocus: (focus: ArtifactSectionFocus | null) => void;
   onScrollChange: (ref: string, top: number) => void;
   onOpenVisual: (visual: VisualReference, source: HTMLElement) => void;
@@ -86,14 +86,19 @@ export function WorkspaceConversation({
       error={timeline.error}
       draft={activeDraft}
       draftSession={draftSession}
-      subjectRefs={activeDraft && draftSubjectRef ? [draftSubjectRef, ...draftRelatedRefs] : []}
+      subjectRefs={canvasOpen && selectedObject
+        ? [selectedObject.objectRef]
+        : activeDraft && draftSubjectRef ? [draftSubjectRef, ...draftRelatedRefs] : []}
       workflowStep={workflowStep}
-      scopeLabel={draftSubjectRef === selectedObject?.objectRef ? selectedObject.name : null}
+      scopeLabel={canvasOpen && selectedObject
+        ? selectedObject.name
+        : draftSubjectRef === selectedObject?.objectRef ? selectedObject.name : null}
       targetAgentRef={activeDraft ? selectedAgentRef : null}
       modelChoice={modelChoice}
-      workChatMode={workChatMode}
+      canvasOpen={canvasOpen}
+      canvasSubjectContext={canvasOpen && Boolean(selectedObject)}
       canvasAttention={canvasAttention}
-      onWorkChatModeChange={onWorkChatModeChange}
+      onCanvasOpenChange={onCanvasOpenChange}
       artifactFocus={artifactFocus}
       artifactFocusRequest={artifactFocusRequest}
       onClearArtifactFocus={() => onArtifactFocus(null)}

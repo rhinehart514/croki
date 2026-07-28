@@ -103,9 +103,9 @@ describe("FirmApp", () => {
     removeCredential.mockReset();
   });
 
-  it("explains the venture model and makes starting the first venture the primary path", async () => {
+  it("explains the coding environment and makes opening a codebase the primary path", async () => {
     render(<FirmApp />);
-    expect(await screen.findByRole("heading", { name: /move from the real product/i })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: /open a codebase/i })).toBeTruthy();
     expect(screen.getByText(/folder name becomes the product name/i)).toHaveTextContent(/start directing work as soon as it opens/i);
     expect(screen.getByRole("region", { name: /add a codebase/i })).toBeTruthy();
   });
@@ -151,7 +151,7 @@ describe("FirmApp", () => {
 
     // A failed read must not masquerade as a fresh firm.
     expect(await screen.findByRole("heading", { name: /couldn.t reach your ventures/i })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: /move from the real product/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /open a codebase/i })).toBeNull();
 
     // Retry recovers into the real venture, not the empty picker.
     listVentures.mockResolvedValue({
@@ -164,7 +164,7 @@ describe("FirmApp", () => {
   it("starting a new venture creates it and opens it directly", async () => {
     createVenture.mockResolvedValue({ venture: { id: "v2", name: "new", repository: "/products/new", createdAt: "now", updatedAt: "now" } });
     render(<FirmApp />);
-    await screen.findByRole("heading", { name: /move from the real product/i });
+    await screen.findByRole("heading", { name: /open a codebase/i });
 
     fireEvent.click(await screen.findByRole("button", { name: /add new codebase/i }));
 
@@ -197,7 +197,7 @@ describe("FirmApp", () => {
     window.droverDesktop = { selectRepository };
     createVenture.mockResolvedValue({ venture: { id: "v2", name: "chosen", repository: "/products/chosen", createdAt: "now", updatedAt: "now" } });
     render(<FirmApp />);
-    await screen.findByRole("heading", { name: /move from the real product/i });
+    await screen.findByRole("heading", { name: /open a codebase/i });
 
     expect(screen.queryByLabelText(/product repository path/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /choose a codebase/i }));
