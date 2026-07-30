@@ -21,10 +21,10 @@ context format, and recovery record.
 
 ### Windows
 
-Croki has a dedicated Windows x64 installer build:
+Every push to `croki/main` produces a Windows x64 installer:
 
 1. Open **Actions → Build Croki for Windows** in this repository.
-2. Choose **Run workflow**.
+2. Open the latest successful run.
 3. Download the `croki-windows-x64-<version>` artifact.
 4. Extract it and run the `Croki-<version>-x64.exe` installer.
 
