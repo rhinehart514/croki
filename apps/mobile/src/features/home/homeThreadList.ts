@@ -9,6 +9,7 @@ import {
   sortThreads,
   toSortableTimestamp,
 } from "@croki/client-runtime/state/thread-sort";
+import { threadSearchMatchKey } from "@croki/client-runtime/state/thread-search";
 import type {
   EnvironmentId,
   ScopedProjectRef,
@@ -251,6 +252,7 @@ export function buildHomeThreadGroups(input: {
   readonly pendingTasks?: ReadonlyArray<PendingNewTask>;
   readonly environmentId: EnvironmentId | null;
   readonly searchQuery: string;
+  readonly matchedThreadKeys?: ReadonlySet<string>;
   readonly projectSortOrder: HomeProjectSortOrder;
   readonly threadSortOrder: SidebarThreadSortOrder;
   readonly projectGroupingMode: SidebarProjectGroupingMode;
@@ -347,7 +349,16 @@ export function buildHomeThreadGroups(input: {
       group.projects.some((project) => project.title.toLocaleLowerCase().includes(query));
     const matchingThreads = groupMatches
       ? group.threads
-      : group.threads.filter((thread) => thread.title.toLocaleLowerCase().includes(query));
+      : group.threads.filter(
+          (thread) =>
+            thread.title.toLocaleLowerCase().includes(query) ||
+            input.matchedThreadKeys?.has(
+              threadSearchMatchKey({
+                environmentId: thread.environmentId,
+                threadId: thread.id,
+              }),
+            ) === true,
+        );
     const matchingPendingTasks = groupMatches
       ? group.pendingTasks
       : group.pendingTasks.filter((pendingTask) =>
