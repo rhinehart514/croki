@@ -162,22 +162,12 @@ const config: ExpoConfig = {
   platforms: ["ios", "android"],
   scheme: variant.scheme,
   version: "0.4.0",
-  runtimeVersion: {
-    // Fingerprint (not appVersion) so an OTA only reaches binaries whose native
-    // project — native deps, config plugins, AND patches/ — matches the update.
-    // With appVersion, every 0.4.0 build shares a runtime version, so a JS update
-    // could land on a binary missing the native changes it needs and crash.
-    policy: process.env.MOBILE_VERSION_POLICY ?? "fingerprint",
-  },
   orientation: "portrait",
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
-  updates: {
-    enabled: true,
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    checkAutomatically: "ON_LOAD",
-    fallbackToCacheTimeout: 0,
-  },
+  // Croki has no founder-approved OTA release destination yet. Native builds
+  // must never check or publish against the inherited upstream EAS project.
+  updates: { enabled: false },
   ios: {
     icon: variant.assets.iosIcon,
     supportsTablet: true,
@@ -275,10 +265,12 @@ const config: ExpoConfig = {
       "expo-camera",
       {
         cameraPermission: "Allow Croki to access your camera so you can scan pairing QR codes.",
+        microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
       },
     ],
+    ["expo-image-picker", { photosPermission: false, microphonePermission: false }],
     [
       "expo-splash-screen",
       {
@@ -343,9 +335,6 @@ const config: ExpoConfig = {
       tracesUrl: repoEnv.EXPO_PUBLIC_OTLP_TRACES_URL ?? "https://api.axiom.co/v1/traces",
       tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
-    },
-    eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
     },
   },
   owner: "rhinehart514",
