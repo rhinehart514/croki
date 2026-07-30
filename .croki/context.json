@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "product": "Croki is a coding environment for founders building products with Codex and other coding agents. Threads are the durable spine; Canvas holds optional, repository-owned product truth that survives individual conversations.",
+  "updatedAt": "2026-07-29T20:10:00.000Z",
+  "nodes": [
+    {
+      "id": "intent-durable-product-understanding",
+      "kind": "intent",
+      "status": "current",
+      "title": "Accumulate product understanding",
+      "body": "Keep intent, decisions, evidence, and consequential work durable across threads without turning Canvas into a required project-management workflow.",
+      "updatedAt": "2026-07-29T20:10:00.000Z"
+    },
+    {
+      "id": "decision-t3-native-fork",
+      "kind": "decision",
+      "status": "current",
+      "title": "Croki is a product fork of T3 Code",
+      "body": "Keep main as a clean upstream mirror. Develop Croki on croki/main and prefer T3-native threads, providers, worktrees, checkpoints, review, terminal, preview, and project-file RPCs over porting the standalone runtime.",
+      "updatedAt": "2026-07-29T20:10:00.000Z"
+    },
+    {
+      "id": "decision-thread-spine-canvas-context",
+      "kind": "decision",
+      "status": "current",
+      "title": "Threads are the spine; Canvas is contextual",
+      "body": "Threads remain the permanent record of work. Canvas is a compact view of product truth and relationships, stored in .croki/context.json and supplied to every supported provider.",
+      "updatedAt": "2026-07-29T20:10:00.000Z"
+    },
+    {
+      "id": "evidence-standalone-preserved",
+      "kind": "evidence",
+      "status": "current",
+      "title": "Standalone Croki is recoverably archived",
+      "body": "The final standalone branch, refs, unreachable history, worktree proofs, runtime data, checksums, verified bundle, and restore-check mirror are preserved outside this repository under the dated croki-transition-archive.",
+      "updatedAt": "2026-07-29T20:10:00.000Z"
+    },
+    {
+      "id": "work-upstream-discipline",
+      "kind": "work",
+      "status": "current",
+      "title": "Preserve upstream compatibility",
+      "body": "Keep internal package names, storage keys, URL schemes, bundle identifiers, and service contracts stable unless a Croki requirement truly needs to diverge. Make visible product identity and product behavior explicit at narrow seams.",
+      "updatedAt": "2026-07-29T20:10:00.000Z"
+    }
+  ],
+  "edges": [
+    {
+      "from": "decision-t3-native-fork",
+      "to": "intent-durable-product-understanding",
+      "relation": "implements"
+    },
+    {
+      "from": "decision-thread-spine-canvas-context",
+      "to": "intent-durable-product-understanding",
+      "relation": "implements"
+    },
+    {
+      "from": "evidence-standalone-preserved",
+      "to": "decision-t3-native-fork",
+      "relation": "de-risks"
+    },
+    {
+      "from": "work-upstream-discipline",
+      "to": "decision-t3-native-fork",
+      "relation": "constrains"
+    }
+  ]
+}

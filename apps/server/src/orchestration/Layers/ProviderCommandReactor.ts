@@ -12,6 +12,12 @@ import {
   type RuntimeMode,
   type TurnId,
 } from "@t3tools/contracts";
+import {
+  buildCrokiAgentContext,
+  CROKI_CONTEXT_RELATIVE_PATH,
+  parseCrokiContext,
+  prependCrokiAgentContext,
+} from "@t3tools/shared/crokiContext";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -19,8 +25,10 @@ import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
@@ -63,6 +71,21 @@ type ProviderIntentEvent = Extract<
 function toNonEmptyProviderInput(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+export function loadCrokiAgentContext(cwd: string | undefined) {
+  if (!cwd) return Effect.succeed(null);
+  return Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const contents = yield* fileSystem.readFileString(path.join(cwd, CROKI_CONTEXT_RELATIVE_PATH));
+    if (contents.length > 256_000) return null;
+    return yield* Effect.try(() => buildCrokiAgentContext(parseCrokiContext(contents)));
+  }).pipe(
+    // Product context is an optional repository capability. A missing or
+    // temporarily invalid file must never prevent a user turn from starting.
+    Effect.orElseSucceed(() => null),
+  );
 }
 
 function mapProviderSessionStatusToOrchestrationStatus(
@@ -634,6 +657,13 @@ const make = Effect.gen(function* () {
     }
     const normalizedInput = toNonEmptyProviderInput(input.messageText);
     const normalizedAttachments = input.attachments ?? [];
+    const project = yield* resolveProject(thread.projectId);
+    const workspaceCwd = resolveThreadWorkspaceCwd({
+      thread,
+      projects: project ? [project] : [],
+    });
+    const crokiContext = yield* loadCrokiAgentContext(workspaceCwd);
+    const providerInput = prependCrokiAgentContext(crokiContext, normalizedInput);
     const activeSession = yield* providerService
       .listSessions()
       .pipe(
@@ -664,7 +694,7 @@ const make = Effect.gen(function* () {
 
     return {
       threadId: input.threadId,
-      ...(normalizedInput ? { input: normalizedInput } : {}),
+      ...(providerInput ? { input: providerInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),

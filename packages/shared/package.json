@@ -91,6 +91,10 @@
       "types": "./src/projectScripts.ts",
       "import": "./src/projectScripts.ts"
     },
+    "./crokiContext": {
+      "types": "./src/crokiContext.ts",
+      "import": "./src/crokiContext.ts"
+    },
     "./t3ProjectFile": {
       "types": "./src/t3ProjectFile.ts",
       "import": "./src/t3ProjectFile.ts"

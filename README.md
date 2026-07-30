@@ -1,4 +1,15 @@
-# T3 Code
+# Croki
+
+Croki is Jacob's product fork of T3 Code: a coding environment for founders
+building products with Codex and other coding agents. It keeps T3's durable
+thread, provider, worktree, checkpoint, review, terminal, preview, and remote
+environment architecture, and adds a repository-owned Canvas for product truth
+that survives individual conversations.
+
+See [Croki on T3 Code](./docs/croki.md) for the product model, branch contract,
+context format, and standalone recovery record.
+
+## Upstream foundation
 
 T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
 
