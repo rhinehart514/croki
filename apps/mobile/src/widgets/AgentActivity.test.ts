@@ -64,6 +64,14 @@ const lightEnvironment = {
 } as const;
 
 describe("AgentActivity widget layout", () => {
+  it("uses the Croki mark in every branded presentation", () => {
+    const layout = AgentActivity(props, environment as never);
+    const serializedLayout = JSON.stringify(layout);
+
+    expect(serializedLayout).toContain('"assetName":"CrokiMark"');
+    expect(serializedLayout).not.toContain('"assetName":"T3Mark"');
+  });
+
   it("tints each row by its own phase using the web sidebar's dark palette", () => {
     const layout = AgentActivity(
       {

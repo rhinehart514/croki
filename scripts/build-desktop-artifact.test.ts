@@ -379,6 +379,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "t3code",
       );
       assert.equal((win.win as Record<string, unknown>).icon, "icon.ico");
+      assert.equal((win.win as Record<string, unknown>).executableName, "Croki");
+      assert.deepStrictEqual(win.nsis, {
+        shortcutName: "Croki (Alpha)",
+        uninstallDisplayName: "Croki (Alpha)",
+        installerIcon: "icon.ico",
+        uninstallerIcon: "icon.ico",
+        installerHeaderIcon: "icon.ico",
+      });
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 

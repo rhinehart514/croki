@@ -1,30 +1,17 @@
 # Croki
 
-Croki is Jacob's product fork of T3 Code: a coding environment for founders
-building products with Codex and other coding agents. It keeps T3's durable
-thread, provider, worktree, checkpoint, review, terminal, preview, and remote
-environment architecture, and adds a repository-owned Canvas for product truth
-that survives individual conversations.
+Croki is a coding environment for founders building products with Codex and
+other coding agents. Threads are the durable spine. Canvas holds optional,
+repository-owned product truth that survives individual conversations.
 
-See [Croki on T3 Code](./docs/croki.md) for the product model, branch contract,
-context format, and standalone recovery record.
-
-## Upstream foundation
-
-T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
-
-Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and OpenCode. If they're set up on your computer, T3 Code can control them.
-
-## "Wait, what are you selling me?"
-
-Nothing. We built T3 Code because we wanted the best possible development experience with agents. We were inspired by existing solutions like the Codex desktop app, Conductor, Claude Desktop and Cursor Glass, but none met our bar.
-
-We wanted something performant, remote-ready, and truly open. If we ever go the wrong direction, we want you to have everything you need to fork and build the editor that you want.
+See [Croki architecture](./docs/croki.md) for the product model, branch contract,
+context format, and recovery record.
 
 ## Installation
 
 > [!WARNING]
-> T3 Code currently supports Codex, Claude, Cursor, Grok Build and OpenCode. Install and authenticate at least one provider before use:
+> Croki currently supports Codex, Claude, Cursor, Grok Build, and OpenCode.
+> Install and authenticate at least one provider before use:
 >
 > - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
 > - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
@@ -32,63 +19,33 @@ We wanted something performant, remote-ready, and truly open. If we ever go the 
 > - Grok Build: install [Grok Build CLI](https://x.ai/cli) and run `grok login`
 > - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
 
-### Try it out (install-free)
+### Windows
 
-The easiest way to test T3 Code is to run the server in your terminal:
+Croki has a dedicated Windows x64 installer build:
 
-```bash
-npx t3@latest
-```
+1. Open **Actions → Build Croki for Windows** in this repository.
+2. Choose **Run workflow**.
+3. Download the `croki-windows-x64-<version>` artifact.
+4. Extract it and run the `Croki-<version>-x64.exe` installer.
 
-This will launch T3 Code's backend on your machine as well as the local web app to control your agents.
-
-Tip: Use `npx t3@latest --help` for the full CLI reference.
-
-### Desktop app
-
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
-
-#### Windows (`winget`)
-
-```bash
-winget install T3Tools.T3Code
-```
-
-#### macOS (Homebrew)
-
-```bash
-brew install --cask t3-code
-```
-
-#### Arch Linux (AUR)
-
-```bash
-yay -S t3code-bin
-```
-
-## Some notes
-
-We are very very early in this project. Expect bugs.
-
-We are (mostly) not accepting contributions yet. Small fixes may be considered. Big features will not be.
-
-There's no public docs site yet, checkout the miscellaneous markdown files in [docs](./docs).
+Manual workflow builds are unsigned until Croki's Windows signing credentials
+are configured, so Windows may show a SmartScreen warning.
 
 ## Documentation
 
 - [Getting started](./docs/getting-started/quick-start.md)
 - [Remote access](./docs/user/remote-access.md)
-- [Keeping T3 Code in sync](./docs/user/server-updates.md)
+- [Keeping Croki in sync](./docs/user/server-updates.md)
 - [Architecture overview](./docs/architecture/overview.md)
 - [Provider guides](./docs/providers/codex.md)
 - [Operations](./docs/operations/ci.md)
 - [Reference](./docs/reference/encyclopedia.md)
 
-## If you REALLY want to contribute still.... read this first
+## Development
 
 ### Install `vp`
 
-T3 Code uses Vite+ so you'll need to install the global `vp` command-line tool.
+Croki uses Vite+, so install the global `vp` command-line tool.
 
 #### macOS / Linux
 
@@ -102,8 +59,6 @@ curl -fsSL https://vite.plus | bash
 irm https://vite.plus/ps1 | iex
 ```
 
-Checkout their getting started guide for more information: https://viteplus.dev/guide/
-
 ### Install dependencies
 
 ```bash
@@ -111,5 +66,3 @@ vp i
 ```
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
-
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).

@@ -69,8 +69,8 @@ export function RelayClientInstallDialog() {
           </DialogTitle>
           <DialogDescription>
             {isInstalling
-              ? "Croki is preparing this environment for secure access through T3 Connect."
-              : "Croki needs the relay client to make this environment available through T3 Connect."}
+              ? "Croki is preparing this environment for secure access through Croki Connect."
+              : "Croki needs the relay client to make this environment available through Croki Connect."}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel scrollFade={false}>

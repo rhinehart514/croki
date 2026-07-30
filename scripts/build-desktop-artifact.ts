@@ -1543,9 +1543,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       }
     | undefined,
 ) {
+  const productName = resolveDesktopProductName(version);
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
-    productName: resolveDesktopProductName(version),
+    productName,
     artifactName: CROKI_VISIBLE_BRAND.desktopArtifactName,
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS],
@@ -1613,6 +1614,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const winConfig: Record<string, unknown> = {
       target: [target],
       icon: "icon.ico",
+      executableName: CROKI_VISIBLE_BRAND.baseName,
       // Resource editing applies the product metadata and icon independently
       // of code signing. Disabling it for local unsigned builds leaves the
       // packaged executable with Electron's stock icon.
@@ -1622,6 +1624,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       winConfig.azureSignOptions = yield* AzureTrustedSigningOptionsConfig;
     }
     buildConfig.win = winConfig;
+    buildConfig.nsis = {
+      shortcutName: productName,
+      uninstallDisplayName: productName,
+      installerIcon: "icon.ico",
+      uninstallerIcon: "icon.ico",
+      installerHeaderIcon: "icon.ico",
+    };
   }
 
   return buildConfig;
