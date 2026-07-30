@@ -98,25 +98,29 @@ describe("mobile Croki Canvas presentation", () => {
         isPending: false,
       }).status,
     ).toBe("malformed");
-    expect(
-      selectCrokiCanvasLoadState({
-        data: fileResult(
-          JSON.stringify({
-            ...CONTEXT,
-            nodes: [
-              {
-                ...CONTEXT.nodes[0],
-                references: [{ kind: "file", path: "../outside.txt" }],
-              },
-            ],
-            edges: [],
-          }),
-        ),
-        error: null,
-        failure: null,
-        isPending: false,
-      }),
-    ).toEqual({ status: "malformed", code: "invalid-reference-path" });
+    const partial = selectCrokiCanvasLoadState({
+      data: fileResult(
+        JSON.stringify({
+          ...CONTEXT,
+          nodes: [
+            CONTEXT.nodes[0],
+            {
+              ...CONTEXT.nodes[1],
+              references: [{ kind: "file", path: "../outside.txt" }],
+            },
+          ],
+          edges: [],
+        }),
+      ),
+      error: null,
+      failure: null,
+      isPending: false,
+    });
+    expect(partial.status).toBe("partial");
+    if (partial.status === "partial") {
+      expect(partial.issueCount).toBe(1);
+      expect(partial.context.nodes.map((node) => node.id)).toEqual(["intent"]);
+    }
     expect(
       selectCrokiCanvasLoadState({
         data: { ...fileResult("{}"), byteLength: 256_001 },

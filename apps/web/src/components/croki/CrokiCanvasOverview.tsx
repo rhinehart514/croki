@@ -8,15 +8,16 @@ import { Archive, Check, ChevronRight, Sparkles, X } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
+import {
+  crokiDomainForView,
+  crokiNodeDomain,
+  crokiNodeKindLabel,
+  crokiNodeMatchesView,
+  crokiViewEmptyCopy,
+  type CrokiCanvasView,
+} from "./crokiCanvasLanguage";
 import { groupCrokiNodes } from "./crokiCanvasModel";
 import { CrokiCanvasRelationships } from "./CrokiCanvasRelationships";
-
-const KIND_LABEL: Record<CrokiNodeKind, string> = {
-  intent: "Intent",
-  decision: "Decision",
-  evidence: "Evidence",
-  work: "Work",
-};
 
 interface CrokiCanvasOverviewProps {
   readonly context: CrokiContext;
@@ -34,22 +35,35 @@ interface CrokiCanvasOverviewProps {
   readonly onReject: (id: string) => void;
   readonly onRetire: (id: string) => void;
   readonly onSelect: (id: string) => void;
+  readonly view?: CrokiCanvasView;
 }
 
 export function CrokiCanvasOverview(props: CrokiCanvasOverviewProps) {
-  const groups = groupCrokiNodes(props.context);
-  const names = new Map(props.context.nodes.map((node) => [node.id, node.title]));
+  const view = props.view ?? "product";
+  const visibleNodes = props.context.nodes.filter((node) => crokiNodeMatchesView(node, view));
+  const visibleIds = new Set(visibleNodes.map((node) => node.id));
+  const visibleContext: CrokiContext = {
+    ...props.context,
+    nodes: visibleNodes,
+    edges: props.context.edges.filter(
+      (edge) => visibleIds.has(edge.from) && visibleIds.has(edge.to),
+    ),
+  };
+  const groups = groupCrokiNodes(visibleContext);
+  const names = new Map(visibleNodes.map((node) => [node.id, node.title]));
+  const isReview = view === "review";
+  const domain = crokiDomainForView(view);
 
   return (
     <div className="space-y-5">
-      {props.context.nodes.length === 0 && props.onBuildFromRepository ? (
+      {view === "product" && props.context.nodes.length === 0 && props.onBuildFromRepository ? (
         <section
           aria-label="Build Canvas from repository"
           className="border-y border-border/60 py-3"
         >
           <p className="text-sm font-medium">Start from the repository</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Generated items arrive as provisional suggestions for founder review.
+            The agent proposes understanding. You decide what becomes canon.
           </p>
           <Button
             className="mt-2"
@@ -62,57 +76,77 @@ export function CrokiCanvasOverview(props: CrokiCanvasOverviewProps) {
           </Button>
         </section>
       ) : null}
-      <section aria-label="Founder-approved canon">
-        <h3 className="mb-2 text-xs font-semibold tracking-wide uppercase">
-          Founder-approved canon
-        </h3>
-        <NodeList
-          empty="No approved product truth yet."
-          nodes={groups.current}
-          onRetire={props.onRetire}
-          onSelect={props.onSelect}
-        />
-      </section>
 
-      <section aria-label="Provisional review queue">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold tracking-wide uppercase">
-            Review queue
-            {groups.provisional.length > 0 ? (
-              <span className="ml-1.5 text-muted-foreground">{groups.provisional.length}</span>
-            ) : null}
+      {!isReview ? (
+        <section aria-label="Founder-approved understanding">
+          <h3 className="mb-2 text-xs font-semibold tracking-wide uppercase">
+            Current understanding
           </h3>
-          <div className="flex items-center gap-1" role="group" aria-label="Add Canvas item">
-            {(["intent", "decision", "evidence", "work"] as const).map((kind) => (
-              <Button
-                key={kind}
-                className="h-7 px-1.5 text-[10px]"
-                size="sm"
-                variant="ghost"
-                aria-label={`Add ${KIND_LABEL[kind].toLowerCase()}`}
-                title={`Add ${KIND_LABEL[kind].toLowerCase()}`}
-                onClick={() => props.onAddNode(kind)}
-              >
-                {KIND_LABEL[kind]}
-              </Button>
-            ))}
+          <NodeList
+            empty={crokiViewEmptyCopy(view)}
+            nodes={groups.current}
+            onRetire={props.onRetire}
+            onSelect={props.onSelect}
+          />
+        </section>
+      ) : null}
+
+      <section aria-label={isReview ? "Semantic review" : "Proposals in this area"}>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div>
+            <h3 className="text-xs font-semibold tracking-wide uppercase">
+              {isReview ? "Semantic review" : "Proposals"}
+              {groups.provisional.length > 0 ? (
+                <span className="ml-1.5 text-muted-foreground">{groups.provisional.length}</span>
+              ) : null}
+            </h3>
+            {isReview ? (
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Adoption changes the context future agent turns receive.
+              </p>
+            ) : null}
           </div>
+          {!isReview ? (
+            <div className="flex items-center gap-1" role="group" aria-label="Add Canvas item">
+              {(["intent", "decision", "evidence", "work"] as const).map((kind) => (
+                <Button
+                  key={kind}
+                  className="h-7 px-1.5 text-[10px]"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Add ${crokiNodeKindLabel(kind, domain).toLowerCase()}`}
+                  title={`Add ${crokiNodeKindLabel(kind, domain).toLowerCase()}`}
+                  onClick={() => props.onAddNode(kind)}
+                >
+                  {crokiNodeKindLabel(kind, domain)}
+                </Button>
+              ))}
+            </div>
+          ) : null}
         </div>
         <NodeList
-          empty="No suggestions waiting for review."
+          empty={isReview ? crokiViewEmptyCopy("review") : "No proposals in this area."}
           nodes={groups.provisional}
           onAdopt={props.onAdopt}
           onReject={props.onReject}
           onSelect={props.onSelect}
+          showProvenance={isReview}
         />
       </section>
 
-      {props.context.nodes.length > 1 ? (
-        <CrokiCanvasRelationships names={names} {...props} />
+      {!isReview && visibleNodes.length > 1 ? (
+        <details>
+          <summary className="cursor-pointer text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+            Relationships · {visibleContext.edges.length}
+          </summary>
+          <div className="mt-2">
+            <CrokiCanvasRelationships names={names} {...props} context={visibleContext} />
+          </div>
+        </details>
       ) : null}
 
       {groups.retired.length > 0 ? (
-        <details className="group">
+        <details>
           <summary className="cursor-pointer text-xs font-semibold tracking-wide uppercase text-muted-foreground">
             Retired · {groups.retired.length}
           </summary>
@@ -132,6 +166,7 @@ interface NodeListProps {
   readonly onReject?: (id: string) => void;
   readonly onRetire?: (id: string) => void;
   readonly onSelect: (id: string) => void;
+  readonly showProvenance?: boolean;
 }
 
 function NodeList(props: NodeListProps) {
@@ -152,7 +187,10 @@ function NodeList(props: NodeListProps) {
             onClick={() => props.onSelect(node.id)}
           >
             <span className="block text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-              {KIND_LABEL[node.kind]}
+              {crokiNodeKindLabel(node.kind, crokiNodeDomain(node))}
+              {props.showProvenance
+                ? ` · ${crokiNodeDomain(node)} · ${node.origin ?? "agent"}`
+                : ""}
             </span>
             <span
               className={cn(
@@ -179,7 +217,7 @@ function NodeList(props: NodeListProps) {
               size="icon-xs"
               variant="ghost"
               aria-label={`Reject ${node.title}`}
-              title="Reject suggestion"
+              title="Reject proposal"
               onClick={() => props.onReject?.(node.id)}
             >
               <X className="size-3" aria-hidden />

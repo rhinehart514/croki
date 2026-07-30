@@ -1,5 +1,9 @@
 import type { EnvironmentId, ProjectReadFileResult } from "@t3tools/contracts";
-import { CROKI_CONTEXT_RELATIVE_PATH, type CrokiContextNode } from "@t3tools/shared/crokiContext";
+import {
+  CROKI_CONTEXT_RELATIVE_PATH,
+  type CrokiContextNode,
+  type CrokiNodeDomain,
+} from "@t3tools/shared/crokiContext";
 import { useMemo } from "react";
 import {
   ActivityIndicator,
@@ -22,11 +26,11 @@ import {
   type CrokiCanvasPresentation,
 } from "./crokiCanvasPresentation";
 
-const KIND_LABEL: Record<CrokiContextNode["kind"], string> = {
-  intent: "Intent",
-  decision: "Decision",
-  evidence: "Evidence",
-  work: "Work",
+const KIND_LABEL: Record<CrokiNodeDomain, Record<CrokiContextNode["kind"], string>> = {
+  product: { intent: "Intent", decision: "Decision", evidence: "Evidence", work: "Consequence" },
+  gtm: { intent: "Audience", decision: "Claim", evidence: "Signal", work: "Experiment" },
+  workflow: { intent: "Outcome", decision: "Gate", evidence: "Result", work: "Assignment" },
+  shared: { intent: "Intent", decision: "Decision", evidence: "Evidence", work: "Work" },
 };
 
 function CanvasNode(props: {
@@ -37,7 +41,8 @@ function CanvasNode(props: {
   return (
     <View className="border-b border-border py-3">
       <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
-        {KIND_LABEL[props.node.kind]}
+        {KIND_LABEL[props.node.domain ?? "product"][props.node.kind]} ·{" "}
+        {props.node.domain ?? "product"}
       </Text>
       <Text className="mt-1 text-sm font-t3-bold text-foreground" selectable>
         {props.node.title}
@@ -105,12 +110,22 @@ function CanvasSection(props: {
 }
 
 function CanvasReady(props: {
+  readonly issueCount?: number;
   readonly model: CrokiCanvasPresentation;
   readonly product: string;
   readonly onOpenFile: (path: string, line: number | null) => void;
 }) {
   return (
     <>
+      {props.issueCount ? (
+        <View className="mb-4 border-y border-border py-3">
+          <Text className="text-sm font-t3-bold text-foreground">Canvas partially recovered</Text>
+          <Text className="mt-1 text-xs text-foreground-muted">
+            {props.issueCount} invalid entr{props.issueCount === 1 ? "y was" : "ies were"} omitted.
+            Repair from desktop or web.
+          </Text>
+        </View>
+      ) : null}
       <View className="border-b border-border pb-4">
         <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
           Product
@@ -197,7 +212,10 @@ export function CrokiCanvasPane(props: {
     [query.data, query.error, query.failure, query.isPending],
   );
   const model = useMemo(
-    () => (state.status === "ready" ? buildCrokiCanvasPresentation(state.context) : null),
+    () =>
+      state.status === "ready" || state.status === "partial"
+        ? buildCrokiCanvasPresentation(state.context)
+        : null,
     [state],
   );
 
@@ -258,7 +276,7 @@ export function CrokiCanvasPane(props: {
   })();
 
   return (
-    <View className="flex-1 border-l border-border bg-sheet">
+    <View className="flex-1 border-l border-border bg-black">
       <View
         className="min-h-12 justify-center border-b border-border px-4 py-2"
         style={{ paddingTop: (props.headerInset ?? 0) + 8 }}
@@ -275,12 +293,13 @@ export function CrokiCanvasPane(props: {
         >
           {statusContent}
         </ScrollView>
-      ) : state.status === "ready" && model !== null ? (
+      ) : (state.status === "ready" || state.status === "partial") && model !== null ? (
         <ScrollView
           contentContainerClassName="px-4 pb-12 pt-4"
           refreshControl={<RefreshControl refreshing={query.isPending} onRefresh={query.refresh} />}
         >
           <CanvasReady
+            {...(state.status === "partial" ? { issueCount: state.issueCount } : {})}
             model={model}
             product={state.context.product || props.projectName}
             onOpenFile={props.onOpenFile}

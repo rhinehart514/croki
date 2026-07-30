@@ -1,7 +1,7 @@
 import * as NodeCrypto from "node:crypto";
 
 import {
-  buildCrokiAgentContext,
+  compileCrokiAgentContext,
   CROKI_CONTEXT_LIMITS,
   CROKI_CONTEXT_PARSE_ERROR_CODES,
   CROKI_CONTEXT_RELATIVE_PATH,
@@ -13,6 +13,7 @@ import {
   isCrokiAgentContextTruncated,
   parseCrokiContext,
 } from "@t3tools/shared/crokiContext";
+import { recoverCrokiContext } from "@t3tools/shared/crokiContextRecovery";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -42,39 +43,74 @@ const emptyReceipt = (
 const sha256 = (contents: string): string =>
   NodeCrypto.createHash("sha256").update(contents, "utf8").digest("hex");
 
-function parseLoadedContext(contents: string, fingerprint: string): LoadedCrokiAgentContext {
+function parseLoadedContext(
+  contents: string,
+  fingerprint: string,
+  query: string | undefined,
+): LoadedCrokiAgentContext {
   try {
     const context = parseCrokiContext(contents);
-    const prompt = buildCrokiAgentContext(context);
-    const currentCount = context.nodes.filter((node) => node.status === "current").length;
-    const provisionalCount = context.nodes.filter((node) => node.status === "provisional").length;
-    return {
-      prompt,
-      receipt: emptyReceipt("loaded", {
-        version: context.version,
-        sha256: fingerprint,
-        updatedAt: context.updatedAt,
-        activeCount: currentCount + provisionalCount,
-        currentCount,
-        provisionalCount,
-        renderedChars: prompt?.length ?? 0,
-        truncated: isCrokiAgentContextTruncated(prompt),
-      }),
-    };
+    return loadedContext(context, fingerprint, query, "loaded");
   } catch (error) {
-    const errorCode: CrokiContextParseErrorCode =
-      error instanceof CrokiContextParseError ? error.code : "malformed";
-    return {
-      prompt: null,
-      receipt: emptyReceipt("invalid", {
-        sha256: fingerprint,
-        errorCode,
-      }),
-    };
+    try {
+      const recovery = recoverCrokiContext(contents);
+      if (recovery.issues.length > 0) {
+        return loadedContext(recovery.context, fingerprint, query, "partial", {
+          errorCode: recovery.issues[0]!.code,
+          issueCount: recovery.issues.length,
+        });
+      }
+    } catch {
+      // The strict error below is the authoritative envelope failure.
+    }
+    return invalidContext(error, fingerprint);
   }
 }
 
-export function loadCrokiAgentContext(cwd: string | undefined) {
+function loadedContext(
+  context: ReturnType<typeof parseCrokiContext>,
+  fingerprint: string,
+  query: string | undefined,
+  status: "loaded" | "partial",
+  recovery: Pick<CrokiContextReceipt, "errorCode" | "issueCount"> = {},
+): LoadedCrokiAgentContext {
+  const compilation = compileCrokiAgentContext(context, {
+    ...(query !== undefined ? { query } : {}),
+  });
+  const currentCount = context.nodes.filter((node) => node.status === "current").length;
+  const provisionalCount = context.nodes.filter((node) => node.status === "provisional").length;
+  return {
+    prompt: compilation.prompt,
+    receipt: emptyReceipt(status, {
+      version: context.version,
+      sha256: fingerprint,
+      updatedAt: context.updatedAt,
+      activeCount: currentCount + provisionalCount,
+      currentCount,
+      provisionalCount,
+      renderedChars: compilation.prompt?.length ?? 0,
+      truncated: isCrokiAgentContextTruncated(compilation.prompt),
+      includedCount: compilation.includedCount,
+      omittedCount: compilation.omittedCount,
+      selectionMode: compilation.selectionMode,
+      ...recovery,
+    }),
+  };
+}
+
+function invalidContext(error: unknown, fingerprint: string): LoadedCrokiAgentContext {
+  const errorCode: CrokiContextParseErrorCode =
+    error instanceof CrokiContextParseError ? error.code : "malformed";
+  return {
+    prompt: null,
+    receipt: emptyReceipt("invalid", {
+      sha256: fingerprint,
+      errorCode,
+    }),
+  };
+}
+
+export function loadCrokiAgentContext(cwd: string | undefined, query?: string) {
   if (!cwd) {
     return Effect.succeed<LoadedCrokiAgentContext>({
       prompt: null,
@@ -102,7 +138,7 @@ export function loadCrokiAgentContext(cwd: string | undefined) {
       } satisfies LoadedCrokiAgentContext;
     }
 
-    return parseLoadedContext(contents, fingerprint);
+    return parseLoadedContext(contents, fingerprint, query);
   }).pipe(
     // Product context is optional. Filesystem failures must never block a turn.
     Effect.orElseSucceed(
@@ -151,10 +187,26 @@ export function isCrokiContextAppliedActivityPayload(
   const errorCodeIsValid =
     receipt.errorCode === undefined ||
     CROKI_CONTEXT_PARSE_ERROR_CODES.includes(receipt.errorCode as CrokiContextParseErrorCode);
+  const issueCountIsValid =
+    receipt.status === "partial"
+      ? isNonNegativeInteger(receipt.issueCount) && receipt.issueCount > 0
+      : receipt.issueCount === undefined;
+  const selectionIsValid =
+    receipt.includedCount === undefined &&
+    receipt.omittedCount === undefined &&
+    receipt.selectionMode === undefined
+      ? true
+      : isNonNegativeInteger(receipt.includedCount) &&
+        isNonNegativeInteger(receipt.omittedCount) &&
+        receipt.includedCount + receipt.omittedCount === receipt.activeCount &&
+        (receipt.selectionMode === "full" ||
+          receipt.selectionMode === "focused" ||
+          receipt.selectionMode === "bounded");
   return (
     promptIsBounded &&
     receipt.relativePath === CROKI_CONTEXT_RELATIVE_PATH &&
     (receipt.status === "loaded" ||
+      receipt.status === "partial" ||
       receipt.status === "absent" ||
       receipt.status === "invalid" ||
       receipt.status === "oversized") &&
@@ -166,7 +218,9 @@ export function isCrokiContextAppliedActivityPayload(
     receipt.renderedChars === (prompt?.length ?? 0) &&
     typeof receipt.truncated === "boolean" &&
     receipt.truncated === isCrokiAgentContextTruncated(prompt) &&
-    errorCodeIsValid
+    errorCodeIsValid &&
+    issueCountIsValid &&
+    selectionIsValid
   );
 }
 

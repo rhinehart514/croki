@@ -1,5 +1,6 @@
 import type {
   OrchestrationEvent,
+  OrchestrationReadModel,
   OrchestrationThreadActivity,
   OrchestrationThreadDetailSnapshot,
 } from "@t3tools/contracts";
@@ -159,6 +160,15 @@ export function projectActivityPayload(
   activity: OrchestrationThreadActivity,
 ): OrchestrationThreadActivity {
   const payload = asRecord(activity.payload);
+  if (activity.kind === "croki.context.applied" && payload) {
+    return {
+      ...activity,
+      payload: {
+        ...("messageId" in payload ? { messageId: payload.messageId } : {}),
+        ...("receipt" in payload ? { receipt: payload.receipt } : {}),
+      },
+    };
+  }
   const data = asRecord(payload?.data);
   if (!payload || !data || payload.itemType === "mcp_tool_call") {
     return activity;
@@ -258,6 +268,16 @@ export function projectThreadDetailSnapshot(
         projectActivityPayload,
       ),
     },
+  };
+}
+
+export function projectReadModelSnapshot(snapshot: OrchestrationReadModel): OrchestrationReadModel {
+  return {
+    ...snapshot,
+    threads: snapshot.threads.map((thread) => ({
+      ...thread,
+      activities: dropStaleContextWindowActivities(thread.activities).map(projectActivityPayload),
+    })),
   };
 }
 

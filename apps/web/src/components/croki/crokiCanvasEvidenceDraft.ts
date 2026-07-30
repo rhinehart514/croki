@@ -25,6 +25,7 @@ export function addProvisionalCrokiEvidence(input: {
   if (
     state.sourceState === "loading" ||
     state.sourceState === "malformed" ||
+    (state.sourceState === "partial" && !state.repairInProgress) ||
     state.sourceState === "read-error"
   ) {
     return "unavailable";
@@ -71,6 +72,8 @@ export function addProvisionalCrokiEvidence(input: {
         id: `evidence-${randomHex(16)}`,
         kind: "evidence",
         status: "provisional",
+        domain: "product",
+        origin: reference.kind === "file" ? "repository" : "external",
         title,
         body: "",
         updatedAt: now,

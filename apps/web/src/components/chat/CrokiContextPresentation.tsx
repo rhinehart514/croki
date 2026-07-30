@@ -46,9 +46,10 @@ export function CrokiAppliedContextReceipt(props: {
   if (!props.receipt) return null;
   const { receipt } = props;
   const parts = [appliedStatusLabel(receipt)];
-  if (receipt.status === "loaded") {
+  if (receipt.status === "loaded" || receipt.status === "partial") {
     parts.push(`${receipt.currentCount} current`, `${receipt.provisionalCount} proposed`);
     if (receipt.truncated) parts.push("partial");
+    if (receipt.selectionMode === "focused") parts.push("turn-focused");
   }
   if (receipt.sha256) parts.push(receipt.sha256.slice(0, 8));
   if (receipt.updatedAt) parts.push(formatUpdatedAt(receipt.updatedAt));
@@ -58,6 +59,9 @@ export function CrokiAppliedContextReceipt(props: {
     `Current: ${receipt.currentCount}`,
     `Provisional: ${receipt.provisionalCount}`,
     `Truncated: ${receipt.truncated ? "yes" : "no"}`,
+    receipt.issueCount !== undefined ? `Omitted invalid entries: ${receipt.issueCount}` : null,
+    receipt.includedCount !== undefined ? `Included: ${receipt.includedCount}` : null,
+    receipt.omittedCount !== undefined ? `Context omitted: ${receipt.omittedCount}` : null,
     receipt.sha256 ? `SHA-256: ${receipt.sha256}` : null,
     receipt.updatedAt ? `Updated: ${receipt.updatedAt}` : null,
   ]
@@ -82,6 +86,18 @@ function composerPresentation(
   compact: boolean,
 ): { readonly description: string; readonly label: string; readonly problem: boolean } {
   switch (state.status) {
+    case "partial": {
+      const counts = compact
+        ? `${state.currentCount}/${state.provisionalCount}`
+        : `${state.currentCount} current · ${state.provisionalCount} proposed`;
+      return {
+        label: `Canvas ${counts} · ${state.issueCount} invalid`,
+        description: `The next turn will use the valid Canvas entries. ${state.issueCount} invalid entr${
+          state.issueCount === 1 ? "y was" : "ies were"
+        } omitted. Open Canvas to review and repair.`,
+        problem: true,
+      };
+    }
     case "loaded": {
       if (!state.included) {
         return {
@@ -147,6 +163,10 @@ function appliedStatusLabel(receipt: CrokiContextReceipt): string {
   switch (receipt.status) {
     case "loaded":
       return "Canvas applied";
+    case "partial":
+      return `Canvas applied with ${receipt.issueCount ?? 0} omitted issue${
+        receipt.issueCount === 1 ? "" : "s"
+      }`;
     case "absent":
       return "No Canvas applied";
     case "invalid":

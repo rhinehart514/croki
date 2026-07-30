@@ -241,8 +241,10 @@ import {
   deriveCrokiContextReceiptsByMessageId,
 } from "./chat/CrokiContextPresentation.logic";
 import {
+  buildCrokiGtmExplorationPrompt,
   buildCrokiRepositoryBootstrapPrompt,
   buildCrokiTurnUpdatePrompt,
+  buildCrokiWorkflowCompositionPrompt,
   mergePreparedComposerPrompt,
 } from "./chat/CrokiProposalPrompts.logic";
 import { useProjectFileQuery } from "./files/projectFilesQueryState";
@@ -2422,15 +2424,16 @@ function ChatViewContent(props: ChatViewProps) {
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
+  const crokiWorkspaceRoot = activeProjectCwd ?? undefined;
   const crokiContextFileQuery = useProjectFileQuery(
     activeProject?.environmentId ?? environmentId,
-    activeWorkspaceRoot ?? ".",
+    crokiWorkspaceRoot ?? ".",
     CROKI_CONTEXT_RELATIVE_PATH,
-    activeProject !== null && activeWorkspaceRoot !== undefined,
+    activeProject !== null && crokiWorkspaceRoot !== undefined,
   );
   const crokiComposerContext = useMemo(
     () =>
-      activeProject && activeWorkspaceRoot
+      activeProject && crokiWorkspaceRoot
         ? deriveCrokiComposerContextState({
             data: crokiContextFileQuery.data,
             error: crokiContextFileQuery.error,
@@ -2440,7 +2443,7 @@ function ChatViewContent(props: ChatViewProps) {
         : null,
     [
       activeProject,
-      activeWorkspaceRoot,
+      crokiWorkspaceRoot,
       crokiContextFileQuery.data,
       crokiContextFileQuery.error,
       crokiContextFileQuery.failure,
@@ -2452,8 +2455,8 @@ function ChatViewContent(props: ChatViewProps) {
       ? `${activeProject.environmentId}:${activeWorkspaceRoot}`
       : null;
   const crokiCanvasWorkspaceKey =
-    activeProject && activeWorkspaceRoot
-      ? makeCrokiCanvasWorkspaceKey(activeProject.environmentId, activeWorkspaceRoot)
+    activeProject && crokiWorkspaceRoot
+      ? makeCrokiCanvasWorkspaceKey(activeProject.environmentId, crokiWorkspaceRoot)
       : "__no-active-croki-workspace__";
   const crokiCanvasDraftSummary = useCrokiCanvasDraftSummary(
     crokiCanvasWorkspaceKey,
@@ -2637,16 +2640,26 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const prepareTurnCanvasUpdate = useCallback(
     (turn: Pick<TurnDiffSummary, "turnId" | "files">) => {
-      prepareCrokiComposerRequest(buildCrokiTurnUpdatePrompt(turn));
+      if (!crokiWorkspaceRoot) return;
+      prepareCrokiComposerRequest(buildCrokiTurnUpdatePrompt(turn, crokiWorkspaceRoot));
     },
-    [prepareCrokiComposerRequest],
+    [crokiWorkspaceRoot, prepareCrokiComposerRequest],
   );
   const prepareCanvasFromRepository = useCallback(() => {
-    prepareCrokiComposerRequest(buildCrokiRepositoryBootstrapPrompt());
+    if (!crokiWorkspaceRoot) return;
+    prepareCrokiComposerRequest(buildCrokiRepositoryBootstrapPrompt(crokiWorkspaceRoot));
     if (activeThreadRef) {
       useRightPanelStore.getState().close(activeThreadRef);
     }
-  }, [activeThreadRef, prepareCrokiComposerRequest]);
+  }, [activeThreadRef, crokiWorkspaceRoot, prepareCrokiComposerRequest]);
+  const prepareCanvasGtmExploration = useCallback(() => {
+    if (!crokiWorkspaceRoot) return;
+    prepareCrokiComposerRequest(buildCrokiGtmExplorationPrompt(crokiWorkspaceRoot));
+  }, [crokiWorkspaceRoot, prepareCrokiComposerRequest]);
+  const prepareCanvasWorkflow = useCallback(() => {
+    if (!crokiWorkspaceRoot) return;
+    prepareCrokiComposerRequest(buildCrokiWorkflowCompositionPrompt(crokiWorkspaceRoot));
+  }, [crokiWorkspaceRoot, prepareCrokiComposerRequest]);
   const addTerminalContextToDraft = useCallback(
     (selection: TerminalContextSelection) => {
       composerRef.current?.addTerminalContext(selection);
@@ -3159,20 +3172,20 @@ function ChatViewContent(props: ChatViewProps) {
     useRightPanelStore.getState().open(activeThreadRef, "files");
   }, [activeProject, activeThreadRef]);
   const addCanvasSurface = useCallback(() => {
-    if (!activeThreadRef || !activeProject || !activeWorkspaceRoot) return;
+    if (!activeThreadRef || !activeProject || !crokiWorkspaceRoot) return;
     useRightPanelStore.getState().open(activeThreadRef, "canvas");
-  }, [activeProject, activeThreadRef, activeWorkspaceRoot]);
+  }, [activeProject, activeThreadRef, crokiWorkspaceRoot]);
   useRegisterCanvasCommand({
-    onOpenCanvas: activeProject && activeWorkspaceRoot ? addCanvasSurface : undefined,
+    onOpenCanvas: activeProject && crokiWorkspaceRoot ? addCanvasSurface : undefined,
     unavailableReason:
-      activeProject && activeWorkspaceRoot ? undefined : "Open a project workspace to use Canvas.",
+      activeProject && crokiWorkspaceRoot ? undefined : "Open a project workspace to use Canvas.",
   });
   const captureCanvasEvidence = useCallback(
     (reference: CrokiContextReference, title: string) => {
-      if (!activeProject || !activeWorkspaceRoot) return;
+      if (!activeProject || !crokiWorkspaceRoot) return;
       const result = addProvisionalCrokiEvidence({
         environmentId: activeProject.environmentId,
-        workspaceRoot: activeWorkspaceRoot,
+        workspaceRoot: crokiWorkspaceRoot,
         productName: activeProject.title,
         reference,
         title,
@@ -3200,8 +3213,8 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [
       activeProject,
-      activeWorkspaceRoot,
       addCanvasSurface,
+      crokiWorkspaceRoot,
       crokiCanvasDraftSummary.sourceState,
       crokiCanvasWorkspaceKey,
     ],
@@ -3216,14 +3229,14 @@ function ChatViewContent(props: ChatViewProps) {
     }
     if (
       !activeProject ||
-      !activeWorkspaceRoot ||
+      !crokiWorkspaceRoot ||
       crokiCanvasDraftSummary.sourceState === "loading"
     ) {
       return;
     }
     const result = addProvisionalCrokiEvidence({
       environmentId: activeProject.environmentId,
-      workspaceRoot: activeWorkspaceRoot,
+      workspaceRoot: crokiWorkspaceRoot,
       productName: activeProject.title,
       reference: queuedCanvasEvidence.reference,
       title: queuedCanvasEvidence.title,
@@ -3239,7 +3252,7 @@ function ChatViewContent(props: ChatViewProps) {
     );
   }, [
     activeProject,
-    activeWorkspaceRoot,
+    crokiWorkspaceRoot,
     crokiCanvasDraftSummary.sourceState,
     crokiCanvasWorkspaceKey,
     queuedCanvasEvidence,
@@ -5863,14 +5876,17 @@ function ChatViewContent(props: ChatViewProps) {
           onAddCanvasEvidence={captureFileCanvasEvidence}
         />
       </Suspense>
-    ) : activeRightPanelSurface?.kind === "canvas" && activeProject && activeWorkspaceRoot ? (
+    ) : activeRightPanelSurface?.kind === "canvas" && activeProject && crokiWorkspaceRoot ? (
       <CrokiCanvas
+        activePlan={activePlan}
         environmentId={activeProject.environmentId}
-        workspaceRoot={activeWorkspaceRoot}
+        workspaceRoot={crokiWorkspaceRoot}
         productName={activeProject.title}
         onPendingChange={handleCanvasPendingChange}
         onBuildFromRepository={prepareCanvasFromRepository}
         onOpenReference={openCanvasReference}
+        onPrepareGtm={prepareCanvasGtmExploration}
+        onPrepareWorkflow={prepareCanvasWorkflow}
       />
     ) : activeRightPanelSurface?.kind === "plan" ? (
       <PlanSidebar
@@ -6138,8 +6154,8 @@ function ChatViewContent(props: ChatViewProps) {
                             activeThreadModelSelection={activeThread?.modelSelection}
                             activeThreadActivities={activeThread?.activities}
                             canvasContext={crokiComposerContext}
-                            canvasWorkspaceKind={activeThreadWorktreePath ? "worktree" : "project"}
-                            canvasWorkspaceRoot={activeWorkspaceRoot}
+                            canvasWorkspaceKind="project"
+                            canvasWorkspaceRoot={crokiWorkspaceRoot}
                             resolvedTheme={resolvedTheme}
                             settings={settings}
                             keybindings={keybindings}

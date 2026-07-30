@@ -268,6 +268,7 @@ const make = Effect.gen(function* () {
     readonly contextRoot: string | undefined;
     readonly sourceEventId: string;
     readonly messageId: string;
+    readonly query?: string;
     readonly createdAt: string;
   }) {
     const existing = input.thread.activities.find(
@@ -280,7 +281,7 @@ const make = Effect.gen(function* () {
       return existing.payload;
     }
 
-    const loaded = yield* loadCrokiAgentContext(input.contextRoot);
+    const loaded = yield* loadCrokiAgentContext(input.contextRoot, input.query);
     const payload: CrokiContextAppliedActivityPayload = {
       sourceEventId: input.sourceEventId,
       messageId: input.messageId,
@@ -300,7 +301,7 @@ const make = Effect.gen(function* () {
         tone: "info",
         kind: "croki.context.applied",
         summary:
-          loaded.receipt.status === "loaded"
+          loaded.receipt.status === "loaded" || loaded.receipt.status === "partial"
             ? `Applied Canvas context (${loaded.receipt.activeCount} active)`
             : `Canvas context ${loaded.receipt.status}`,
         payload,
@@ -703,6 +704,7 @@ const make = Effect.gen(function* () {
       contextRoot: project?.workspaceRoot ?? workspaceCwd,
       sourceEventId: input.sourceEventId,
       messageId: input.messageId,
+      ...(normalizedInput !== undefined ? { query: normalizedInput } : {}),
       createdAt: input.createdAt,
     });
     const providerInput = prependCrokiAgentContext(crokiContext.prompt, normalizedInput);

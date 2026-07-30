@@ -78,7 +78,10 @@ export function useCrokiCanvasController(props: CrokiCanvasControllerProps) {
   );
 
   const updateNode = useCallback(
-    (id: string, patch: Partial<Pick<CrokiContextNode, "title" | "body" | "kind" | "status">>) => {
+    (
+      id: string,
+      patch: Partial<Pick<CrokiContextNode, "title" | "body" | "kind" | "status" | "domain">>,
+    ) => {
       applyTransition(updateCrokiNode(state.context, id, patch, new Date().toISOString()));
     },
     [applyTransition, state.context],
@@ -87,7 +90,8 @@ export function useCrokiCanvasController(props: CrokiCanvasControllerProps) {
   const save = useCallback(() => {
     if (
       validationErrors.length > 0 ||
-      (state.sourceState === "malformed" && !state.repairInProgress)
+      ((state.sourceState === "malformed" || state.sourceState === "partial") &&
+        !state.repairInProgress)
     ) {
       return;
     }

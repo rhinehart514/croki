@@ -208,6 +208,29 @@ describe("Croki context presentation", () => {
     expect(markup).toContain("partial");
     expect(markup).toContain("Truncated: yes");
   });
+
+  it("renders partial recovery only when the receipt declares omitted issues", () => {
+    const partial = {
+      ...loadedReceipt(),
+      status: "partial" as const,
+      errorCode: "malformed" as const,
+      issueCount: 2,
+    };
+    const receipts = deriveCrokiContextReceiptsByMessageId([
+      activity({ messageId: "partial", receipt: partial }),
+      activity({
+        messageId: "invalid-partial",
+        receipt: { ...partial, issueCount: undefined },
+      }),
+    ]);
+    const markup = renderToStaticMarkup(
+      <CrokiAppliedContextReceipt receipt={receipts.get("partial") ?? null} />,
+    );
+
+    expect(receipts.has("partial")).toBe(true);
+    expect(receipts.has("invalid-partial")).toBe(false);
+    expect(markup).toContain("Canvas applied with 2 omitted issues");
+  });
 });
 
 function queryForContents(contents: string): {

@@ -83,6 +83,26 @@ describe("CrokiCanvasSourceNotice", () => {
     expect(onConfirmRepair).toHaveBeenCalledOnce();
   });
 
+  it("offers to preserve recovered items when only some entries are invalid", () => {
+    const onConfirmRepair = vi.fn();
+    const markup = renderToStaticMarkup(
+      <CrokiCanvasSourceNotice
+        {...callbacks()}
+        onConfirmRepair={onConfirmRepair}
+        state={snapshot({
+          repairConfirmation: true,
+          sourceMessage: "1 invalid Canvas entry was omitted. Valid items are preserved.",
+          sourceState: "partial",
+        })}
+      />,
+    );
+
+    expect(markup).toContain("Canvas partially recovered");
+    expect(markup).toContain("preserve the recovered items");
+    findButton("Use recovered copy").onClick?.();
+    expect(onConfirmRepair).toHaveBeenCalledOnce();
+  });
+
   it("keeps read errors retryable and protects dirty drafts", () => {
     const onRetry = vi.fn();
     const cleanMarkup = renderToStaticMarkup(

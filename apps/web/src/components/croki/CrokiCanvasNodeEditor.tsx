@@ -1,11 +1,11 @@
 import {
   CROKI_CONTEXT_LIMITS,
+  CROKI_NODE_DOMAINS,
   CROKI_NODE_KINDS,
-  CROKI_NODE_STATUSES,
   type CrokiContextNode,
   type CrokiContextReference,
+  type CrokiNodeDomain,
   type CrokiNodeKind,
-  type CrokiNodeStatus,
 } from "@t3tools/shared/crokiContext";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
@@ -14,13 +14,14 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { CrokiCanvasReferences } from "./CrokiCanvasReferences";
+import { crokiNodeDomain, crokiNodeKindLabel } from "./crokiCanvasLanguage";
 import type { CrokiCanvasModelError } from "./crokiCanvasModel";
 
-const KIND_LABEL: Record<CrokiNodeKind, string> = {
-  intent: "Intent",
-  decision: "Decision",
-  evidence: "Evidence",
-  work: "Work",
+const DOMAIN_LABEL: Record<CrokiNodeDomain, string> = {
+  product: "Product",
+  gtm: "GTM",
+  workflow: "Workflow",
+  shared: "Shared",
 };
 
 interface CrokiCanvasNodeEditorProps {
@@ -32,7 +33,7 @@ interface CrokiCanvasNodeEditorProps {
   readonly onRemoveReference: (reference: CrokiContextReference) => void;
   readonly onUpdate: (
     id: string,
-    patch: Partial<Pick<CrokiContextNode, "title" | "body" | "kind" | "status">>,
+    patch: Partial<Pick<CrokiContextNode, "title" | "body" | "kind" | "status" | "domain">>,
   ) => void;
 }
 
@@ -42,6 +43,7 @@ export function CrokiCanvasNodeEditor(props: CrokiCanvasNodeEditorProps) {
   const titleInvalid =
     !props.node.title.trim() || props.node.title.length > CROKI_CONTEXT_LIMITS.nodeTitleChars;
   const bodyInvalid = props.node.body.length > CROKI_CONTEXT_LIMITS.nodeBodyChars;
+  const domain = crokiNodeDomain(props.node);
 
   return (
     <article
@@ -67,6 +69,20 @@ export function CrokiCanvasNodeEditor(props: CrokiCanvasNodeEditorProps) {
         </div>
       </div>
 
+      <div className="border-y border-border/60 py-2 text-xs">
+        <span className="font-medium">
+          {props.node.status === "current"
+            ? "Founder-approved"
+            : props.node.status === "provisional"
+              ? "Proposed"
+              : "Retired"}
+        </span>
+        <span className="text-muted-foreground">
+          {" "}
+          · origin {props.node.origin ?? (props.node.status === "current" ? "founder" : "agent")}
+        </span>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1">
           <span className="text-xs text-muted-foreground">Kind</span>
@@ -82,26 +98,26 @@ export function CrokiCanvasNodeEditor(props: CrokiCanvasNodeEditorProps) {
           >
             {CROKI_NODE_KINDS.map((kind) => (
               <option key={kind} value={kind}>
-                {KIND_LABEL[kind]}
+                {crokiNodeKindLabel(kind, domain)}
               </option>
             ))}
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-muted-foreground">Status</span>
+          <span className="text-xs text-muted-foreground">Area</span>
           <select
-            aria-label="Status"
+            aria-label="Area"
             className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-            value={props.node.status}
+            value={domain}
             onChange={(event) =>
               props.onUpdate(props.node.id, {
-                status: event.target.value as CrokiNodeStatus,
+                domain: event.target.value as CrokiNodeDomain,
               })
             }
           >
-            {CROKI_NODE_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
+            {CROKI_NODE_DOMAINS.map((nodeDomain) => (
+              <option key={nodeDomain} value={nodeDomain}>
+                {DOMAIN_LABEL[nodeDomain]}
               </option>
             ))}
           </select>

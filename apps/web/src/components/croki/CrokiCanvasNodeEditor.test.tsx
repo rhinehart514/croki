@@ -28,7 +28,10 @@ describe("CrokiCanvasNodeEditor", () => {
 
     expect(markup).toContain('aria-label="Back to Canvas overview"');
     expect(markup).toContain('aria-label="Kind"');
-    expect(markup).toContain('aria-label="Status"');
+    expect(markup).toContain('aria-label="Area"');
+    expect(markup).not.toContain('aria-label="Status"');
+    expect(markup).toContain("Proposed");
+    expect(markup).toContain("origin agent");
     expect(markup).toContain(">Title</span>");
     expect(markup).toContain(">Details</span>");
     expect(markup).toContain("Delete item");

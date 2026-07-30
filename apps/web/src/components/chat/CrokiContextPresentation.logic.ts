@@ -11,6 +11,7 @@ import {
   type CrokiContextParseErrorCode,
   type CrokiContextReceipt,
 } from "@t3tools/shared/crokiContext";
+import { recoverCrokiContext } from "@t3tools/shared/crokiContextRecovery";
 
 const OMITTED_CONTEXT_MARKER = "[additional context omitted due to size limit]";
 
@@ -21,6 +22,15 @@ export type CrokiComposerContextState =
   | { readonly status: "oversized" }
   | { readonly status: "truncated" }
   | { readonly status: "invalid"; readonly errorCode: CrokiContextParseErrorCode }
+  | {
+      readonly status: "partial";
+      readonly currentCount: number;
+      readonly provisionalCount: number;
+      readonly included: boolean;
+      readonly issueCount: number;
+      readonly promptTruncated: boolean;
+      readonly updatedAt: string;
+    }
   | {
       readonly status: "loaded";
       readonly currentCount: number;
@@ -57,6 +67,24 @@ export function deriveCrokiComposerContextState(
         updatedAt: context.updatedAt,
       };
     } catch (error) {
+      try {
+        const recovery = recoverCrokiContext(query.data.contents);
+        if (recovery.issues.length > 0) {
+          const prompt = buildCrokiAgentContext(recovery.context);
+          return {
+            status: "partial",
+            currentCount: recovery.context.nodes.filter((node) => node.status === "current").length,
+            provisionalCount: recovery.context.nodes.filter((node) => node.status === "provisional")
+              .length,
+            included: prompt !== null,
+            issueCount: recovery.issues.length,
+            promptTruncated: prompt?.includes(OMITTED_CONTEXT_MARKER) ?? false,
+            updatedAt: recovery.context.updatedAt,
+          };
+        }
+      } catch {
+        // The strict parse error below remains the source-level diagnosis.
+      }
       return {
         status: "invalid",
         errorCode: error instanceof CrokiContextParseError ? error.code : "malformed",
@@ -111,6 +139,26 @@ function parseCrokiContextReceipt(value: unknown): CrokiContextReceipt | null {
   if (value.errorCode !== undefined && !isCrokiContextParseErrorCode(value.errorCode)) {
     return null;
   }
+  if (
+    value.status === "partial"
+      ? !isNonNegativeInteger(value.issueCount) || value.issueCount === 0
+      : value.issueCount !== undefined
+  ) {
+    return null;
+  }
+  const hasSelection =
+    value.includedCount !== undefined ||
+    value.omittedCount !== undefined ||
+    value.selectionMode !== undefined;
+  if (
+    hasSelection &&
+    (!isNonNegativeInteger(value.includedCount) ||
+      !isNonNegativeInteger(value.omittedCount) ||
+      value.includedCount + value.omittedCount !== value.activeCount ||
+      !isCrokiContextSelectionMode(value.selectionMode))
+  ) {
+    return null;
+  }
   return {
     status: value.status,
     relativePath: CROKI_CONTEXT_RELATIVE_PATH,
@@ -123,6 +171,14 @@ function parseCrokiContextReceipt(value: unknown): CrokiContextReceipt | null {
     renderedChars: value.renderedChars,
     truncated: value.truncated,
     ...(value.errorCode ? { errorCode: value.errorCode } : {}),
+    ...(value.issueCount !== undefined ? { issueCount: value.issueCount as number } : {}),
+    ...(hasSelection
+      ? {
+          includedCount: value.includedCount as number,
+          omittedCount: value.omittedCount as number,
+          selectionMode: value.selectionMode as NonNullable<CrokiContextReceipt["selectionMode"]>,
+        }
+      : {}),
   };
 }
 
@@ -145,6 +201,12 @@ function isCrokiContextReceiptStatus(value: unknown): value is CrokiContextRecei
       value as (typeof CROKI_CONTEXT_RECEIPT_STATUSES)[number],
     )
   );
+}
+
+function isCrokiContextSelectionMode(
+  value: unknown,
+): value is NonNullable<CrokiContextReceipt["selectionMode"]> {
+  return value === "full" || value === "focused" || value === "bounded";
 }
 
 function isCrokiContextParseErrorCode(value: unknown): value is CrokiContextParseErrorCode {

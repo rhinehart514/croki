@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   buildCrokiAgentContext,
+  compileCrokiAgentContext,
   CROKI_CONTEXT_LIMITS,
+  CROKI_CONTEXT_TRUNCATION_MARKER,
   CrokiContextParseError,
   createEmptyCrokiContext,
   isCrokiAgentContextTruncated,
@@ -19,6 +21,59 @@ describe("Croki product context", () => {
   it("round trips the repository format", () => {
     const empty = createEmptyCrokiContext("Croki");
     expect(parseCrokiContext(serializeCrokiContext(empty))).toEqual(empty);
+  });
+
+  it("preserves optional Product, GTM, workflow, and origin metadata", () => {
+    const parsed = parseCrokiContext(
+      JSON.stringify({
+        version: 1,
+        product: "Croki",
+        updatedAt: "2026-07-30T00:00:00.000Z",
+        nodes: [
+          {
+            id: "claim-1",
+            kind: "decision",
+            status: "provisional",
+            domain: "gtm",
+            origin: "external",
+            title: "Founders value product coherence",
+            body: "A market claim that still needs founder review.",
+            updatedAt: "2026-07-30T00:00:00.000Z",
+          },
+        ],
+        edges: [],
+      }),
+    );
+
+    expect(parsed.nodes[0]).toMatchObject({
+      domain: "gtm",
+      origin: "external",
+    });
+    expect(buildCrokiAgentContext(parsed)).toContain('"domain":"gtm"');
+    expect(buildCrokiAgentContext(parsed)).toContain('"origin":"external"');
+  });
+
+  it("rejects unknown domains and origins", () => {
+    const context = {
+      version: 1,
+      product: "Croki",
+      updatedAt: "2026-07-30T00:00:00.000Z",
+      nodes: [
+        {
+          id: "claim-1",
+          kind: "decision",
+          status: "provisional",
+          domain: "sales",
+          origin: "oracle",
+          title: "Unknown metadata",
+          body: "",
+          updatedAt: "2026-07-30T00:00:00.000Z",
+        },
+      ],
+      edges: [],
+    };
+
+    expect(() => parseCrokiContext(JSON.stringify(context))).toThrow(CrokiContextParseError);
   });
 
   it("rejects relationships to missing nodes", () => {
@@ -148,6 +203,45 @@ describe("Croki product context", () => {
     expect(prompt).toContain("[additional context omitted due to size limit]");
     expect(prompt?.endsWith("</croki_product_context>")).toBe(true);
     expect(isCrokiAgentContextTruncated(prompt)).toBe(true);
+  });
+
+  it("focuses bounded context on the current turn without changing durable canon", () => {
+    const context = {
+      version: 1 as const,
+      product: "Croki",
+      updatedAt: "2026-07-29T00:00:00.000Z",
+      nodes: [
+        ...Array.from({ length: 8 }, (_, index) => ({
+          id: `unrelated-${index}`,
+          kind: "work" as const,
+          status: "current" as const,
+          title: `Unrelated repository detail ${index}`,
+          body: "Repository architecture notes. ".repeat(12),
+          updatedAt: "2026-07-29T00:00:00.000Z",
+        })),
+        {
+          id: "billing-position",
+          kind: "decision" as const,
+          status: "provisional" as const,
+          domain: "gtm" as const,
+          title: "Billing teams are the first audience",
+          body: "Test the billing workflow positioning with founder-led outreach.",
+          updatedAt: "2026-07-29T00:00:00.000Z",
+        },
+      ],
+      edges: [],
+    };
+
+    const compilation = compileCrokiAgentContext(context, {
+      maxChars: 1_100,
+      query: "How should we position the billing workflow?",
+    });
+
+    expect(compilation.selectionMode).toBe("focused");
+    expect(compilation.omittedCount).toBeGreaterThan(0);
+    expect(compilation.prompt).toContain("Billing teams are the first audience");
+    expect(compilation.prompt).toContain(CROKI_CONTEXT_TRUNCATION_MARKER);
+    expect(context.nodes).toHaveLength(9);
   });
 
   it("reports an untruncated prompt without inspecting Canvas content", () => {

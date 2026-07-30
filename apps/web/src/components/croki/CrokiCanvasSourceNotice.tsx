@@ -28,6 +28,38 @@ export function CrokiCanvasSourceNotice(props: CrokiCanvasSourceNoticeProps) {
     );
   }
 
+  if (props.state.sourceState === "partial") {
+    return (
+      <Notice icon={<Wrench className="size-4" aria-hidden />} role="alert">
+        <p className="text-xs font-medium">
+          {props.state.repairInProgress ? "Recovered Canvas ready" : "Canvas partially recovered"}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {props.state.repairInProgress
+            ? "Save to replace the exact source with the valid recovered items."
+            : props.state.sourceMessage}
+        </p>
+        {props.state.repairInProgress ? null : props.state.repairConfirmation ? (
+          <div className="mt-2 flex items-center gap-2">
+            <p className="min-w-0 flex-1 text-xs">
+              Remove invalid entries and preserve the recovered items?
+            </p>
+            <Button size="sm" variant="ghost" onClick={props.onCancelRepair}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={props.onConfirmRepair}>
+              Use recovered copy
+            </Button>
+          </div>
+        ) : (
+          <Button className="mt-2" size="sm" variant="outline" onClick={props.onRequestRepair}>
+            Review recovered copy
+          </Button>
+        )}
+      </Notice>
+    );
+  }
+
   if (props.state.sourceState === "malformed") {
     return (
       <Notice icon={<Wrench className="size-4" aria-hidden />} role="alert">
@@ -120,7 +152,7 @@ function Notice(props: {
   return (
     <div
       role={props.role ?? "status"}
-      className="flex gap-2 border-y border-border/70 bg-background/60 px-3 py-2"
+      className="flex gap-2 border-y border-border/70 bg-black px-3 py-2"
     >
       <span className="mt-0.5 text-muted-foreground">{props.icon}</span>
       <div className="min-w-0 flex-1">{props.children}</div>

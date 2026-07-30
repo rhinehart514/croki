@@ -85,6 +85,49 @@ describe("crokiCanvasDraftStore", () => {
     expect(getCrokiCanvasDraft(KEY).dirty).toBe(true);
   });
 
+  it("recovers valid canon and requires confirmation before removing invalid entries", () => {
+    acceptCrokiCanvasFile(
+      KEY,
+      JSON.stringify({
+        version: 1,
+        product: "Croki",
+        updatedAt: "2026-07-30T00:00:00.000Z",
+        nodes: [
+          {
+            id: "durable-canon",
+            kind: "decision",
+            status: "current",
+            title: "Threads remain the spine",
+            body: "",
+            updatedAt: "2026-07-30T00:00:00.000Z",
+          },
+          {
+            id: "broken-proposal",
+            kind: "unknown",
+            status: "provisional",
+            title: "Invalid proposal",
+            body: "",
+            updatedAt: "2026-07-30T00:00:00.000Z",
+          },
+        ],
+        edges: [],
+      }),
+      "Croki",
+    );
+
+    const recovered = getCrokiCanvasDraft(KEY);
+    expect(recovered.sourceState).toBe("partial");
+    expect(recovered.context.nodes.map((node) => node.id)).toEqual(["durable-canon"]);
+    expect(recovered.dirty).toBe(false);
+    expect(recovered.sourceMessage).toContain("1 invalid Canvas entry");
+
+    confirmCrokiCanvasRepair(KEY, "Croki");
+    const repair = getCrokiCanvasDraft(KEY);
+    expect(repair.context.nodes.map((node) => node.id)).toEqual(["durable-canon"]);
+    expect(repair.repairInProgress).toBe(true);
+    expect(repair.dirty).toBe(true);
+  });
+
   it("captures deduplicated evidence as provisional only", () => {
     acceptCrokiCanvasMissing(KEY, "Croki");
     const input = {
@@ -108,6 +151,8 @@ describe("crokiCanvasDraftStore", () => {
     expect(state.context.nodes[0]).toMatchObject({
       kind: "evidence",
       status: "provisional",
+      domain: "product",
+      origin: "repository",
       title: "Canvas implementation",
       references: [input.reference, { kind: "url", url: "https://example.com/evidence" }],
     });

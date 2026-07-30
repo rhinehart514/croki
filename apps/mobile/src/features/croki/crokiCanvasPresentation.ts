@@ -7,6 +7,7 @@ import {
   type CrokiContextEdge,
   type CrokiContextNode,
 } from "@t3tools/shared/crokiContext";
+import { recoverCrokiContext } from "@t3tools/shared/crokiContextRecovery";
 
 export type CrokiCanvasLoadState =
   | { readonly status: "loading" }
@@ -14,6 +15,7 @@ export type CrokiCanvasLoadState =
   | { readonly status: "malformed"; readonly code: string }
   | { readonly status: "oversized" }
   | { readonly status: "read-error"; readonly detail: string }
+  | { readonly status: "partial"; readonly context: CrokiContext; readonly issueCount: number }
   | { readonly status: "ready"; readonly context: CrokiContext };
 
 export interface CrokiCanvasPresentation {
@@ -66,6 +68,18 @@ export function selectCrokiCanvasLoadState(input: {
   try {
     return { status: "ready", context: parseCrokiContext(input.data.contents) };
   } catch (cause) {
+    try {
+      const recovery = recoverCrokiContext(input.data.contents);
+      if (recovery.issues.length > 0) {
+        return {
+          status: "partial",
+          context: recovery.context,
+          issueCount: recovery.issues.length,
+        };
+      }
+    } catch {
+      // Preserve the strict source-level diagnosis below.
+    }
     if (cause instanceof CrokiContextParseError) {
       return cause.code === "limit-exceeded"
         ? { status: "oversized" }

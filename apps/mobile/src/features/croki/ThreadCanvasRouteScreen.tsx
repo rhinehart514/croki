@@ -7,7 +7,6 @@ import { EmptyState } from "../../components/EmptyState";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useThreadSelection } from "../../state/use-thread-selection";
-import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useAdaptiveWorkspacePaneRole } from "../layout/AdaptiveWorkspaceLayout";
 import { CrokiCanvasPane } from "./CrokiCanvasPane";
 
@@ -24,7 +23,6 @@ export function ThreadCanvasRouteScreen(props: ThreadCanvasRouteScreenProps) {
   useAdaptiveWorkspacePaneRole("inspector");
   const navigation = useNavigation();
   const { selectedThread, selectedThreadProject } = useThreadSelection();
-  const { selectedThreadCwd } = useSelectedThreadWorktree();
   const environmentIdRaw = firstRouteParam(props.route.params.environmentId);
   const threadIdRaw = firstRouteParam(props.route.params.threadId);
   const environmentId = environmentIdRaw === null ? null : EnvironmentId.make(environmentIdRaw);
@@ -35,7 +33,7 @@ export function ThreadCanvasRouteScreen(props: ThreadCanvasRouteScreenProps) {
     threadId !== null &&
     selectedThread.environmentId === environmentId &&
     selectedThread.id === threadId;
-  const cwd = selectedThreadCwd ?? selectedThreadProject?.workspaceRoot ?? null;
+  const cwd = selectedThreadProject?.workspaceRoot ?? null;
   const handleOpenFile = useCallback(
     (path: string, line: number | null) => {
       if (environmentId === null || threadId === null) return;
@@ -54,7 +52,7 @@ export function ThreadCanvasRouteScreen(props: ThreadCanvasRouteScreenProps) {
   }
   if (cwd === null || environmentId === null) {
     return (
-      <View className="flex-1 items-center justify-center bg-sheet px-6">
+      <View className="flex-1 items-center justify-center bg-black px-6">
         <NativeStackScreenOptions options={{ title: "Canvas" }} />
         <EmptyState
           title="Canvas unavailable"
@@ -65,7 +63,7 @@ export function ThreadCanvasRouteScreen(props: ThreadCanvasRouteScreenProps) {
   }
 
   return (
-    <View className="flex-1 bg-sheet">
+    <View className="flex-1 bg-black">
       <NativeStackScreenOptions options={{ title: "Canvas" }} />
       <CrokiCanvasPane
         cwd={cwd}

@@ -95,6 +95,50 @@ it.layer(NodeServices.layer)("Croki provider context", (it) => {
       assert.isNull(oversized.prompt);
     }),
   );
+
+  it.effect("applies valid canon when an individual proposal is malformed", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "croki-context-" });
+      const contextDirectory = path.join(cwd, ".croki");
+      yield* fileSystem.makeDirectory(contextDirectory);
+      yield* fileSystem.writeFileString(
+        path.join(contextDirectory, "context.json"),
+        `{
+          "version": 1,
+          "product": "Croki",
+          "updatedAt": "2026-07-29T00:00:00.000Z",
+          "nodes": [
+            {
+              "id": "founder-canon",
+              "kind": "decision",
+              "status": "current",
+              "title": "Threads remain the spine",
+              "body": "Canvas is contextual.",
+              "updatedAt": "2026-07-29T00:00:00.000Z"
+            },
+            {
+              "id": "broken-proposal",
+              "kind": "unknown",
+              "status": "provisional",
+              "title": "Malformed agent proposal",
+              "body": "",
+              "updatedAt": "2026-07-29T00:00:00.000Z"
+            }
+          ],
+          "edges": []
+        }`,
+      );
+
+      const context = yield* loadCrokiAgentContext(cwd);
+      assert.equal(context.receipt.status, "partial");
+      assert.equal(context.receipt.issueCount, 1);
+      assert.equal(context.receipt.activeCount, 1);
+      assert.include(context.prompt ?? "", "Threads remain the spine");
+      assert.notInclude(context.prompt ?? "", "Malformed agent proposal");
+    }),
+  );
 });
 
 it("accepts only bounded, internally consistent persisted activity payloads", () => {
@@ -138,6 +182,23 @@ it("accepts only bounded, internally consistent persisted activity payloads", ()
     isCrokiContextAppliedActivityPayload({
       ...payload,
       receipt: { ...payload.receipt, renderedChars: prompt.length - 1 },
+    }),
+  );
+  assert.isFalse(
+    isCrokiContextAppliedActivityPayload({
+      ...payload,
+      receipt: { ...payload.receipt, status: "partial" },
+    }),
+  );
+  assert.isTrue(
+    isCrokiContextAppliedActivityPayload({
+      ...payload,
+      receipt: {
+        ...payload.receipt,
+        status: "partial",
+        errorCode: "malformed",
+        issueCount: 1,
+      },
     }),
   );
 });

@@ -3,6 +3,7 @@ import type {
   CrokiContextEdge,
   CrokiContextNode,
   CrokiContextReference,
+  CrokiNodeDomain,
   CrokiNodeKind,
 } from "@t3tools/shared/crokiContext";
 import { CROKI_CONTEXT_LIMITS, parseCrokiContextReference } from "@t3tools/shared/crokiContext";
@@ -29,6 +30,7 @@ export interface CrokiCanvasTransition {
 interface NewNodeInput {
   readonly id: string;
   readonly kind: CrokiNodeKind;
+  readonly domain?: CrokiNodeDomain;
   readonly now: string;
 }
 
@@ -47,6 +49,8 @@ export function addCrokiNode(context: CrokiContext, input: NewNodeInput): CrokiC
     id: input.id,
     kind: input.kind,
     status: "provisional",
+    domain: input.domain ?? "product",
+    origin: "founder",
     title: `New ${input.kind}`,
     body: "",
     updatedAt: input.now,
@@ -60,7 +64,7 @@ export function addCrokiNode(context: CrokiContext, input: NewNodeInput): CrokiC
 export function updateCrokiNode(
   context: CrokiContext,
   id: string,
-  patch: Partial<Pick<CrokiContextNode, "title" | "body" | "kind" | "status">>,
+  patch: Partial<Pick<CrokiContextNode, "title" | "body" | "kind" | "status" | "domain">>,
   now: string,
 ): CrokiCanvasTransition {
   if (!context.nodes.some((node) => node.id === id)) {

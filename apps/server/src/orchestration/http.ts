@@ -7,7 +7,10 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
-import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
+import {
+  projectReadModelSnapshot,
+  projectThreadDetailSnapshot,
+} from "./ActivityPayloadProjection.ts";
 import { normalizeDispatchCommand } from "./Normalizer.ts";
 import {
   annotateEnvironmentRequest,
@@ -32,13 +35,12 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.snapshot")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationReadScope);
-          return yield* projectionSnapshotQuery
-            .getSnapshot()
-            .pipe(
-              Effect.catch((cause) =>
-                failEnvironmentInternal("orchestration_snapshot_failed", cause),
-              ),
-            );
+          return yield* projectionSnapshotQuery.getSnapshot().pipe(
+            Effect.map(projectReadModelSnapshot),
+            Effect.catch((cause) =>
+              failEnvironmentInternal("orchestration_snapshot_failed", cause),
+            ),
+          );
         }),
       )
       .handle(

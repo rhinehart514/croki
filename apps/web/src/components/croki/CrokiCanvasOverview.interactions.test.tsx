@@ -121,8 +121,8 @@ describe("CrokiCanvasOverview interactions", () => {
       />,
     );
 
-    expect(markup).toContain('<section aria-label="Founder-approved canon">');
-    expect(markup).toContain('<section aria-label="Provisional review queue">');
+    expect(markup).toContain('<section aria-label="Founder-approved understanding">');
+    expect(markup).toContain('<section aria-label="Proposals in this area">');
     expect(markup).toContain('<section aria-label="Relationships">');
     expect(markup).toContain('aria-label="Edit Add the review loop"');
     expect(markup).toContain('aria-label="Relationship source"');
@@ -152,7 +152,7 @@ describe("CrokiCanvasOverview interactions", () => {
       />,
     );
 
-    expect(markup).toContain("Generated items arrive as provisional suggestions");
+    expect(markup).toContain("The agent proposes understanding");
     findButtonText("Build from repository").onClick?.();
     expect(onBuildFromRepository).toHaveBeenCalledOnce();
   });

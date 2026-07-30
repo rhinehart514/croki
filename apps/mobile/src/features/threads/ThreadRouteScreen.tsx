@@ -463,22 +463,16 @@ function ThreadRouteContent(
   );
   const CanvasInspector = useCallback(
     () =>
-      selectedThread !== null && selectedThreadCwd !== null ? (
+      selectedThread !== null && selectedThreadProject !== null ? (
         <CrokiCanvasPane
-          cwd={selectedThreadCwd}
+          cwd={selectedThreadProject.workspaceRoot}
           environmentId={selectedThread.environmentId}
           headerInset={inspectorHeaderInset}
           onOpenFile={handleSelectInspectorFile}
           projectName={selectedThreadProject?.title ?? "Canvas"}
         />
       ) : null,
-    [
-      handleSelectInspectorFile,
-      inspectorHeaderInset,
-      selectedThread,
-      selectedThreadCwd,
-      selectedThreadProject?.title,
-    ],
+    [handleSelectInspectorFile, inspectorHeaderInset, selectedThread, selectedThreadProject],
   );
   const RouteInspector = useCallback(
     () => props.renderInspector?.(inspectorHeaderInset),

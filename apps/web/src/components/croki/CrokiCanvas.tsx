@@ -3,17 +3,25 @@ import {
   CROKI_CONTEXT_LIMITS,
   type CrokiContextEdge,
   type CrokiContextReference,
+  type CrokiNodeDomain,
   type CrokiNodeKind,
 } from "@t3tools/shared/crokiContext";
 import { CircleDot, Save } from "lucide-react";
 import { useState } from "react";
 
 import { randomHex } from "~/lib/utils";
+import type { ActivePlanState } from "~/session-logic";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ScrollArea } from "../ui/scroll-area";
 import { CrokiCanvasNodeEditor } from "./CrokiCanvasNodeEditor";
 import { CrokiCanvasOverview } from "./CrokiCanvasOverview";
+import {
+  CROKI_CANVAS_VIEWS,
+  crokiDomainForView,
+  type CrokiCanvasView,
+} from "./crokiCanvasLanguage";
+import { CrokiCanvasRunProjection } from "./CrokiCanvasRunProjection";
 import { CrokiCanvasSourceNotice } from "./CrokiCanvasSourceNotice";
 import {
   cancelCrokiCanvasRepair,
@@ -38,9 +46,12 @@ import { useCrokiCanvasController } from "./useCrokiCanvasController";
 
 interface CrokiCanvasProps {
   readonly environmentId: EnvironmentId;
+  readonly activePlan?: ActivePlanState | null;
   readonly onBuildFromRepository?: () => void;
   readonly onOpenReference?: (reference: CrokiContextReference) => void;
   readonly onPendingChange?: (pending: boolean) => void;
+  readonly onPrepareGtm?: () => void;
+  readonly onPrepareWorkflow?: () => void;
   readonly productName: string;
   readonly workspaceRoot: string;
 }
@@ -59,9 +70,10 @@ export function CrokiCanvas(props: CrokiCanvasProps) {
   const [edgeFrom, setEdgeFrom] = useState("");
   const [edgeTo, setEdgeTo] = useState("");
   const [edgeRelation, setEdgeRelation] = useState("supports");
+  const [view, setView] = useState<CrokiCanvasView>("product");
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-card/35" aria-label="Croki Canvas">
+    <section className="flex h-full min-h-0 flex-col bg-black text-white" aria-label="Croki Canvas">
       <header className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border/60 px-3">
         <CircleDot className="size-4 text-primary" aria-hidden />
         <div className="min-w-0 flex-1">
@@ -78,13 +90,38 @@ export function CrokiCanvas(props: CrokiCanvasProps) {
             state.isSaving ||
             !state.dirty ||
             validationErrors.length > 0 ||
-            (state.sourceState === "malformed" && !state.repairInProgress)
+            ((state.sourceState === "malformed" || state.sourceState === "partial") &&
+              !state.repairInProgress)
           }
         >
           <Save className="size-3.5" aria-hidden />
           {state.isSaving ? "Saving…" : "Save"}
         </Button>
       </header>
+
+      <nav
+        aria-label="Canvas views"
+        className="flex shrink-0 items-center gap-4 overflow-x-auto border-b border-border/60 px-3"
+      >
+        {CROKI_CANVAS_VIEWS.map((candidate) => (
+          <button
+            key={candidate.id}
+            type="button"
+            aria-current={view === candidate.id ? "page" : undefined}
+            className={
+              view === candidate.id
+                ? "border-b border-foreground py-2 text-xs text-foreground"
+                : "border-b border-transparent py-2 text-xs text-muted-foreground hover:text-foreground"
+            }
+            onClick={() => {
+              setView(candidate.id);
+              selectCrokiCanvasNode(workspaceKey, null);
+            }}
+          >
+            {candidate.label}
+          </button>
+        ))}
+      </nav>
 
       <CrokiCanvasSourceNotice
         state={state}
@@ -139,24 +176,46 @@ export function CrokiCanvas(props: CrokiCanvasProps) {
             />
           ) : (
             <>
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">Product</span>
-                <Input
-                  aria-invalid={state.context.product.length > CROKI_CONTEXT_LIMITS.productChars}
-                  value={state.context.product}
-                  placeholder={props.productName}
-                  onChange={(event) =>
-                    replaceCrokiCanvasDraft(
-                      workspaceKey,
-                      replaceCrokiProduct(
-                        state.context,
-                        event.target.value,
-                        new Date().toISOString(),
-                      ),
-                    )
-                  }
+              {view === "product" ? (
+                <label className="block space-y-1">
+                  <span className="text-xs text-muted-foreground">Product</span>
+                  <Input
+                    aria-invalid={state.context.product.length > CROKI_CONTEXT_LIMITS.productChars}
+                    value={state.context.product}
+                    placeholder={props.productName}
+                    onChange={(event) =>
+                      replaceCrokiCanvasDraft(
+                        workspaceKey,
+                        replaceCrokiProduct(
+                          state.context,
+                          event.target.value,
+                          new Date().toISOString(),
+                        ),
+                      )
+                    }
+                  />
+                </label>
+              ) : null}
+              {view === "gtm" && props.onPrepareGtm ? (
+                <section className="border-y border-border/60 py-3">
+                  <p className="text-sm font-medium">Reason from the founder perspective</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Ask the current agent to connect product truth to audiences, claims, signals,
+                    and experiments.
+                  </p>
+                  <Button className="mt-2" size="sm" variant="outline" onClick={props.onPrepareGtm}>
+                    Explore in Thread
+                  </Button>
+                </section>
+              ) : null}
+              {view === "workflow" ? (
+                <CrokiCanvasRunProjection
+                  activePlan={props.activePlan ?? null}
+                  {...(props.onPrepareWorkflow
+                    ? { onPrepareWorkflow: props.onPrepareWorkflow }
+                    : {})}
                 />
-              </label>
+              ) : null}
               <CrokiCanvasOverview
                 context={state.context}
                 edgeFrom={edgeFrom}
@@ -175,10 +234,12 @@ export function CrokiCanvas(props: CrokiCanvasProps) {
                 }}
                 onAddNode={(kind: CrokiNodeKind) => {
                   const id = `${kind}-${randomHex(16)}`;
+                  const domain: CrokiNodeDomain = crokiDomainForView(view);
                   applyTransition(
                     addCrokiNode(state.context, {
                       id,
                       kind,
+                      domain,
                       now: new Date().toISOString(),
                     }),
                   );
@@ -206,6 +267,7 @@ export function CrokiCanvas(props: CrokiCanvasProps) {
                   applyTransition(retireCrokiNode(state.context, id, new Date().toISOString()))
                 }
                 onSelect={(id) => selectCrokiCanvasNode(workspaceKey, id)}
+                view={view}
               />
             </>
           )}

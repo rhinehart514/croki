@@ -4,13 +4,22 @@ import {
   serializeCrokiContext,
   type CrokiContext,
 } from "@t3tools/shared/crokiContext";
+import { recoverCrokiContext } from "@t3tools/shared/crokiContextRecovery";
 import { useSyncExternalStore } from "react";
 
+import {
+  loadPersistedCrokiCanvasDraft,
+  persistCrokiCanvasDraft,
+} from "./crokiCanvasDraftPersistence";
 import { isCrokiContextDirty } from "./crokiCanvasModel";
 
-const STORAGE_PREFIX = "croki:canvas-draft:v1:";
-
-export type CrokiCanvasSourceState = "loading" | "valid" | "missing" | "malformed" | "read-error";
+export type CrokiCanvasSourceState =
+  | "loading"
+  | "valid"
+  | "partial"
+  | "missing"
+  | "malformed"
+  | "read-error";
 
 export interface CrokiCanvasDraftSnapshot {
   readonly context: CrokiContext;
@@ -30,14 +39,6 @@ export interface CrokiCanvasDraftSnapshot {
 export interface CrokiCanvasDraftSummary {
   readonly dirty: boolean;
   readonly pending: boolean;
-  readonly sourceState: CrokiCanvasSourceState;
-}
-
-interface PersistedDraft {
-  readonly context: CrokiContext;
-  readonly baseline: CrokiContext;
-  readonly baselineContents: string | null;
-  readonly repairInProgress: boolean;
   readonly sourceState: CrokiCanvasSourceState;
 }
 
@@ -98,17 +99,24 @@ export function cancelCrokiCanvasRepair(key: string): void {
 }
 
 export function confirmCrokiCanvasRepair(key: string, productName: string): void {
-  update(key, (state) => ({
-    ...state,
-    context: createEmptyCrokiContext(productName),
-    conflictContents: null,
-    dirty: true,
-    modelError: null,
-    repairConfirmation: false,
-    repairInProgress: true,
-    selectedNodeId: null,
-    sourceMessage: null,
-  }));
+  update(key, (state) => {
+    const context =
+      state.sourceState === "partial" ? state.context : createEmptyCrokiContext(productName);
+    return {
+      ...state,
+      context,
+      conflictContents: null,
+      dirty: true,
+      modelError: null,
+      repairConfirmation: false,
+      repairInProgress: true,
+      selectedNodeId:
+        state.sourceState === "partial"
+          ? selectedNodeStillExists(state.selectedNodeId, context)
+          : null,
+      sourceMessage: null,
+    };
+  });
 }
 
 export function acceptCrokiCanvasFile(key: string, contents: string, productName: string): void {
@@ -116,6 +124,21 @@ export function acceptCrokiCanvasFile(key: string, contents: string, productName
   try {
     parsed = parseCrokiContext(contents);
   } catch (error) {
+    try {
+      const recovery = recoverCrokiContext(contents);
+      if (recovery.issues.length > 0) {
+        acceptRecoveredCrokiCanvasFile(
+          key,
+          contents,
+          recovery.context,
+          recovery.issues.length,
+          productName,
+        );
+        return;
+      }
+    } catch {
+      // Fall through to the strict source failure.
+    }
     acceptSourceFailure(
       key,
       "malformed",
@@ -208,6 +231,15 @@ export function reloadConflictingCrokiCanvasFile(key: string, productName: strin
   try {
     parsed = parseCrokiContext(contents);
   } catch {
+    try {
+      const recovery = recoverCrokiContext(contents);
+      if (recovery.issues.length > 0) {
+        set(key, recoveredDraft(current, contents, recovery.context, recovery.issues.length));
+        return;
+      }
+    } catch {
+      // Keep the malformed workspace state below.
+    }
     set(key, {
       ...current,
       baselineContents: contents,
@@ -234,6 +266,57 @@ export function reloadConflictingCrokiCanvasFile(key: string, productName: strin
     sourceMessage: null,
     sourceState: "valid",
   });
+}
+
+function acceptRecoveredCrokiCanvasFile(
+  key: string,
+  contents: string,
+  recovered: CrokiContext,
+  issueCount: number,
+  productName: string,
+): void {
+  const current = getCrokiCanvasDraft(key, productName);
+  if (contents === current.baselineContents) {
+    if (current.sourceState === "partial") return;
+    set(key, recoveredDraft(current, contents, recovered, issueCount));
+    return;
+  }
+  if (current.dirty) {
+    update(key, (state) => ({
+      ...state,
+      conflictContents: contents,
+      sourceMessage: recoveredSourceMessage(issueCount),
+      sourceState: "partial",
+    }));
+    return;
+  }
+  set(key, recoveredDraft(current, contents, recovered, issueCount));
+}
+
+function recoveredDraft(
+  current: CrokiCanvasDraftSnapshot,
+  contents: string,
+  recovered: CrokiContext,
+  issueCount: number,
+): CrokiCanvasDraftSnapshot {
+  return {
+    ...current,
+    baseline: recovered,
+    baselineContents: contents,
+    conflictContents: null,
+    context: recovered,
+    dirty: false,
+    modelError: null,
+    repairConfirmation: false,
+    repairInProgress: false,
+    selectedNodeId: selectedNodeStillExists(current.selectedNodeId, recovered),
+    sourceMessage: recoveredSourceMessage(issueCount),
+    sourceState: "partial",
+  };
+}
+
+function recoveredSourceMessage(issueCount: number): string {
+  return `${issueCount} invalid Canvas entr${issueCount === 1 ? "y was" : "ies were"} omitted. Valid items are preserved.`;
 }
 
 export function markCrokiCanvasSaved(
@@ -344,70 +427,18 @@ function update(
 
 function set(key: string, state: CrokiCanvasDraftSnapshot): void {
   drafts.set(key, state);
-  persistDraft(key, state);
+  persistCrokiCanvasDraft(key, state);
   for (const listener of listeners.get(key) ?? []) listener();
 }
 
-function persistDraft(key: string, state: CrokiCanvasDraftSnapshot): void {
-  const storage = getStorage();
-  if (!storage) return;
-  const storageKey = `${STORAGE_PREFIX}${encodeURIComponent(key)}`;
-  try {
-    if (!state.dirty) {
-      storage.removeItem(storageKey);
-      return;
-    }
-    const persisted: PersistedDraft = {
-      context: state.context,
-      baseline: state.baseline,
-      baselineContents: state.baselineContents,
-      repairInProgress: state.repairInProgress,
-      sourceState: state.sourceState,
-    };
-    storage.setItem(storageKey, JSON.stringify(persisted));
-  } catch {
-    // In-memory drafts remain available when browser storage is blocked or full.
-  }
-}
-
 function hydrateDraft(key: string): CrokiCanvasDraftSnapshot | null {
-  const storage = getStorage();
-  if (!storage) return null;
-  try {
-    const value = storage.getItem(`${STORAGE_PREFIX}${encodeURIComponent(key)}`);
-    if (!value) return null;
-    const parsed = JSON.parse(value) as Partial<PersistedDraft>;
-    const context = parsePersistedContext(parsed.context);
-    const baseline = parsePersistedContext(parsed.baseline);
-    if (!context || !baseline) return null;
-    return {
-      ...initialDraft(context.product, parsed.sourceState ?? "loading"),
-      context,
-      baseline,
-      baselineContents:
-        typeof parsed.baselineContents === "string" ? parsed.baselineContents : null,
-      dirty: true,
-      repairInProgress: parsed.repairInProgress === true,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function parsePersistedContext(value: unknown): CrokiContext | null {
-  try {
-    return parseCrokiContext(JSON.stringify(value));
-  } catch {
-    return null;
-  }
-}
-
-function getStorage(): Storage | null {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage;
-  } catch {
-    return null;
-  }
+  const persisted = loadPersistedCrokiCanvasDraft(key);
+  if (!persisted) return null;
+  return {
+    ...initialDraft(persisted.context.product, persisted.sourceState),
+    ...persisted,
+    dirty: true,
+  };
 }
 
 export function resetCrokiCanvasDraftStoreForTests(): void {
