@@ -112,7 +112,7 @@ jobs:
         shell: bash
         run: |
           # Manual artifacts are not an update channel. Omit inherited repository metadata.
-          GITHUB_REPOSITORY="" vp run dist:desktop:artifact -- \
+          GITHUB_REPOSITORY="" vp run dist:desktop:artifact \
             --platform win \
             --target nsis \
             --arch x64 \
