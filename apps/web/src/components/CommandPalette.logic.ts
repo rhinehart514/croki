@@ -56,6 +56,28 @@ export interface CommandPaletteView {
   readonly initialQuery?: string;
 }
 
+export function buildOpenCanvasAction(input: {
+  readonly icon: ReactNode;
+  readonly onOpenCanvas?: (() => void) | undefined;
+  readonly unavailableReason?: string | undefined;
+}): CommandPaletteActionItem {
+  const unavailableReason =
+    input.unavailableReason ?? "Open a project workspace to make Canvas available.";
+  return {
+    kind: "action",
+    value: "action:open-canvas",
+    searchTerms: ["open canvas", "canvas", "product context", "product canon"],
+    title: "Open Canvas",
+    description: input.onOpenCanvas ? "View product context" : unavailableReason,
+    icon: input.icon,
+    disabled: input.onOpenCanvas === undefined,
+    shortcutCommand: "canvas.open",
+    run: async () => {
+      input.onOpenCanvas?.();
+    },
+  };
+}
+
 export function enumerateCommandPaletteItems(
   items: ReadonlyArray<CommandPaletteActionItem>,
 ): CommandPaletteActionItem[] {

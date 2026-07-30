@@ -67,6 +67,7 @@ function compactMenuStatus(gitStatus: VcsStatusResult | null): string {
 type HeaderItem = Record<string, unknown>;
 type HeaderItems = HeaderItem[];
 type ThreadGitHeaderActionItems = {
+  readonly canvas: HeaderItem;
   readonly terminal: HeaderItem;
   readonly files: HeaderItem;
   readonly git: HeaderItem;
@@ -84,6 +85,7 @@ export type ThreadGitMenuProps = {
   readonly currentBranch: string | null;
   readonly gitStatus: VcsStatusResult | null;
   readonly gitOperationLabel: string | null;
+  readonly onOpenCanvasInspector?: () => void;
   readonly onOpenFilesInspector?: () => void;
   readonly onOpenGitInspector?: () => void;
   readonly onPull: () => Promise<void>;
@@ -95,6 +97,7 @@ type ThreadGitControlsProps = ThreadGitMenuProps & {
     readonly accessibilityLabel: string;
     readonly onPress: () => void;
   };
+  readonly canOpenCanvas: boolean;
   readonly canOpenTerminal: boolean;
   readonly canOpenFiles: boolean;
   readonly projectScripts: ReadonlyArray<ProjectScript>;
@@ -215,6 +218,17 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
     });
   }, [environmentId, props.onOpenFilesInspector, navigation, threadId]);
 
+  const openCanvas = useCallback(() => {
+    if (props.onOpenCanvasInspector) {
+      props.onOpenCanvasInspector();
+      return;
+    }
+    navigation.navigate("ThreadCanvas", {
+      environmentId: String(environmentId),
+      threadId: String(threadId),
+    });
+  }, [environmentId, navigation, props.onOpenCanvasInspector, threadId]);
+
   const openReview = useCallback(() => {
     navigation.navigate("ThreadReview", {
       environmentId: EnvironmentId.make(String(environmentId)),
@@ -236,6 +250,7 @@ function useThreadGitControlModel(props: ThreadGitMenuProps) {
   return {
     currentBranchLabel,
     isRepo,
+    openCanvas,
     openFiles,
     openGitInspector,
     openReview,
@@ -251,6 +266,17 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
 
   return useMemo(
     () => ({
+      canvas: {
+        accessibilityLabel: "Open Canvas",
+        disabled: !props.canOpenCanvas,
+        icon: { name: "point.3.connected.trianglepath.dotted", type: "sfSymbol" },
+        identifier: "thread-right-canvas",
+        label: "Canvas",
+        onPress: model.openCanvas,
+        sharesBackground: true,
+        type: "button",
+        variant: "plain",
+      },
       terminal: {
         accessibilityLabel: "Open terminal",
         disabled: !props.canOpenTerminal,
@@ -370,6 +396,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
     [
       model.currentBranchLabel,
       model.isRepo,
+      model.openCanvas,
       model.openFiles,
       model.openGitInspector,
       model.openReview,
@@ -378,6 +405,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
       model.quickActionHint,
       model.quickActionIcon,
       model.runQuickAction,
+      props.canOpenCanvas,
       props.canOpenFiles,
       props.canOpenTerminal,
       props.gitStatus,
@@ -393,7 +421,8 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
 export function useThreadGitRightHeaderItems(props: ThreadGitControlsProps): HeaderItems {
   const actionItems = useThreadGitHeaderActionItems(props);
   return useMemo(
-    () => [actionItems.git, actionItems.files, actionItems.terminal] as HeaderItems,
+    () =>
+      [actionItems.git, actionItems.canvas, actionItems.files, actionItems.terminal] as HeaderItems,
     [actionItems],
   );
 }
@@ -401,7 +430,8 @@ export function useThreadGitRightHeaderItems(props: ThreadGitControlsProps): Hea
 export function useThreadGitCenterHeaderItems(props: ThreadGitControlsProps): HeaderItems {
   const actionItems = useThreadGitHeaderActionItems(props);
   return useMemo(
-    () => [actionItems.files, actionItems.git, actionItems.terminal] as HeaderItems,
+    () =>
+      [actionItems.canvas, actionItems.files, actionItems.git, actionItems.terminal] as HeaderItems,
     [actionItems],
   );
 }
@@ -479,6 +509,15 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
             <NativeHeaderToolbar.Label>Open new terminal</NativeHeaderToolbar.Label>
           </NativeHeaderToolbar.MenuAction>
         </NativeHeaderToolbar.Menu>
+      ) : null}
+      {showActionControls && props.showDirectFileControl ? (
+        <NativeHeaderToolbar.Button
+          accessibilityLabel="Open Canvas"
+          disabled={!props.canOpenCanvas}
+          icon="point.3.connected.trianglepath.dotted"
+          onPress={model.openCanvas}
+          separateBackground
+        />
       ) : null}
       {showActionControls && props.showDirectFileControl ? (
         <NativeHeaderToolbar.Button

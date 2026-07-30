@@ -1,4 +1,4 @@
-import { MessageCircle, Trash2 } from "lucide-react";
+import { CircleDot, MessageCircle, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -11,6 +11,7 @@ interface LocalCommentAnnotationProps {
   onCancel: () => void;
   onComment: (text: string) => void;
   onDelete: () => void;
+  onAddCanvasEvidence?: (() => void) | undefined;
 }
 
 export function LocalCommentAnnotation({
@@ -20,6 +21,7 @@ export function LocalCommentAnnotation({
   onCancel,
   onComment,
   onDelete,
+  onAddCanvasEvidence,
 }: LocalCommentAnnotationProps) {
   const [text, setText] = useState("");
 
@@ -78,6 +80,12 @@ export function LocalCommentAnnotation({
         }}
       />
       <div className="mt-3 flex justify-end gap-2">
+        {onAddCanvasEvidence ? (
+          <Button variant="outline" size="sm" onClick={onAddCanvasEvidence}>
+            <CircleDot className="size-3.5" />
+            Add to Canvas
+          </Button>
+        ) : null}
         <Button variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>

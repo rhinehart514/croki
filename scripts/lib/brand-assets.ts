@@ -1,10 +1,7 @@
-export const BRAND_ASSET_PATHS = {
-  crokiIconPng: "assets/croki/croki-mark-1024.png",
-  crokiWindowsIconIco: "assets/croki/croki-mark.ico",
-  crokiWebFavicon16Png: "assets/croki/croki-mark-16.png",
-  crokiWebFavicon32Png: "assets/croki/croki-mark-32.png",
-  crokiWebAppleTouchIconPng: "assets/croki/croki-mark-180.png",
+import { CROKI_BRAND_ASSET_PATHS } from "./brand-policy.ts";
 
+export const BRAND_ASSET_PATHS = {
+  ...CROKI_BRAND_ASSET_PATHS,
   developmentIconComposerProject: "assets/dev/app-icon.icon",
   developmentIosIconPng: "assets/dev/blueprint-ios-1024.png",
   developmentUniversalIconPng: "assets/dev/blueprint-universal-1024.png",

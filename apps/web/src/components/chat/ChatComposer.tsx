@@ -103,6 +103,8 @@ import {
   renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
+import { CrokiComposerContextIndicator } from "./CrokiContextPresentation";
+import type { CrokiComposerContextState } from "./CrokiContextPresentation.logic";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
@@ -572,6 +574,9 @@ export interface ChatComposerProps {
 
   // Context window
   activeThreadActivities: Thread["activities"] | undefined;
+  canvasContext: CrokiComposerContextState | null;
+  canvasWorkspaceKind?: "project" | "worktree" | undefined;
+  canvasWorkspaceRoot?: string | null | undefined;
 
   // Misc
   resolvedTheme: "light" | "dark";
@@ -612,6 +617,7 @@ export interface ChatComposerProps {
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
   togglePlanSidebar: () => void;
+  onOpenCanvas: () => void;
 
   focusComposer: () => void;
   scheduleComposerFocus: () => void;
@@ -665,6 +671,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeProjectDefaultModelSelection,
     activeThreadModelSelection,
     activeThreadActivities,
+    canvasContext,
+    canvasWorkspaceKind,
+    canvasWorkspaceRoot,
     resolvedTheme,
     settings,
     keybindings,
@@ -689,6 +698,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     handleRuntimeModeChange,
     handleInteractionModeChange,
     togglePlanSidebar,
+    onOpenCanvas,
     focusComposer,
     scheduleComposerFocus,
     setThreadError,
@@ -3100,6 +3110,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     onInstanceModelChange={onProviderModelSelect}
                   />
                 )}
+
+                {canvasContext ? (
+                  <>
+                    <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+                    <CrokiComposerContextIndicator
+                      compact={isComposerFooterCompact}
+                      state={canvasContext}
+                      onOpenCanvas={onOpenCanvas}
+                      workspaceKind={canvasWorkspaceKind}
+                      workspaceRoot={canvasWorkspaceRoot}
+                    />
+                  </>
+                ) : null}
 
                 {isComposerFooterCompact ? (
                   <CompactComposerControlsMenu

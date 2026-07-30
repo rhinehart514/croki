@@ -5,8 +5,62 @@ on:
   push:
     branches:
       - main
+      - croki/main
 
 jobs:
+  croki:
+    name: Croki Overlay
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Resolve overlay base
+        id: base
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          base="$PR_BASE_SHA"
+          if [[ -z "$base" ]]; then
+            base="$PUSH_BEFORE_SHA"
+          fi
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          git cat-file -e "$base^{commit}"
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Check Croki overlay policy
+        run: npm run check:croki -- --base "${{ steps.base.outputs.sha }}"
+
+      - name: Test Croki seams
+        run: |
+          set -euo pipefail
+          (cd packages/contracts && vp test run src/project.test.ts src/keybindings.test.ts)
+          (cd packages/shared && vp test run src/crokiContext.test.ts)
+          (cd apps/server && vp test run src/orchestration/Layers/CrokiContext.test.ts src/orchestration/Layers/CrokiContext.runtime.test.ts src/orchestration/Layers/ProviderCommandReactor.test.ts src/workspace/WorkspaceFileSystem.test.ts)
+          (cd apps/web && vp test run --project unit src/branding.test.ts src/components/croki src/components/chat/CrokiContextPresentation.test.tsx src/components/chat/CrokiProposalPrompts.logic.test.ts)
+          (cd scripts && vp test run lib/brand-policy.test.ts lib/brand-assets.test.ts check-croki-overlay.test.ts report-croki-overlay.test.ts croki-release-plan.test.ts)
+          npm run release:smoke
+
+      - name: Record Croki check summary
+        if: always()
+        run: |
+          echo "Croki overlay base: \`${{ steps.base.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "CI summaries and artifacts must contain receipt metadata only, never raw Canvas context." >> "$GITHUB_STEP_SUMMARY"
+
   check:
     name: Check
     runs-on: blacksmith-8vcpu-ubuntu-2404

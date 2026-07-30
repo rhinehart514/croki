@@ -10,6 +10,7 @@ import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   ChevronRightIcon,
+  CircleDotIcon,
   FileDiffIcon,
   FolderIcon,
   FolderClosedIcon,
@@ -37,6 +38,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   onExpandedChange: (expanded: boolean) => void;
   onToggleAllDirectories: () => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onUpdateCanvas?: (() => void) | undefined;
 }) {
   const {
     turnId,
@@ -48,6 +50,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
     onExpandedChange,
     onToggleAllDirectories,
     onOpenTurnDiff,
+    onUpdateCanvas,
   } = props;
   const summaryStat = useMemo(() => summarizeTurnDiffStats(files), [files]);
   const scopeSummary = useMemo(() => summarizeChangedFileScopes(files), [files]);
@@ -100,6 +103,25 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
           </span>
         </button>
         <div className="flex items-center gap-1.5">
+          {onUpdateCanvas ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    aria-label="Update Canvas"
+                    onClick={onUpdateCanvas}
+                  />
+                }
+              >
+                <CircleDotIcon className="size-3" />
+                <span className="hidden sm:inline">Update Canvas</span>
+              </TooltipTrigger>
+              <TooltipPopup side="top">Prepare a provisional Canvas update</TooltipPopup>
+            </Tooltip>
+          ) : null}
           {expanded ? (
             <Tooltip>
               <TooltipTrigger

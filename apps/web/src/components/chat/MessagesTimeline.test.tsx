@@ -3,6 +3,10 @@ import { createRef, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
+import {
+  CROKI_CONTEXT_RELATIVE_PATH,
+  type CrokiContextReceipt,
+} from "@t3tools/shared/crokiContext";
 
 vi.mock("@legendapp/list/react", async () => {
   const legendListTestId = "legend-list";
@@ -239,6 +243,33 @@ describe("MessagesTimeline", () => {
     expect(fadedMarkup).toContain("chat-timeline-scroll-fade");
   });
 
+  it("attaches a content-free Canvas receipt to the matching sent message", () => {
+    const receipt: CrokiContextReceipt = {
+      status: "loaded",
+      relativePath: CROKI_CONTEXT_RELATIVE_PATH,
+      version: 1,
+      sha256: "b".repeat(64),
+      updatedAt: "2026-07-30T14:00:00.000Z",
+      activeCount: 2,
+      currentCount: 1,
+      provisionalCount: 1,
+      renderedChars: 420,
+      truncated: false,
+    };
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[buildUserTimelineEntry("Keep this text unchanged")]}
+        crokiContextReceiptsByMessageId={new Map([["message-1", receipt]])}
+      />,
+    );
+
+    expect(markup).toContain("Keep this text unchanged");
+    expect(markup).toContain('data-croki-context-receipt="loaded"');
+    expect(markup).toContain("Canvas applied");
+    expect(markup).toContain("bbbbbbbb");
+  });
+
   it("keeps assistant changed-files headers sticky below the thread header", () => {
     const assistantMessageId = MessageId.make("message-assistant-with-files");
     const turnId = TurnId.make("turn-with-files");
@@ -283,6 +314,7 @@ describe("MessagesTimeline", () => {
             ],
           ])
         }
+        onPrepareCanvasUpdate={() => {}}
       />,
     );
 
@@ -293,6 +325,7 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("size-3");
     expect(markup).toContain('aria-label="Collapse all folders"');
     expect(markup).toContain('aria-label="Open diff"');
+    expect(markup).toContain('aria-label="Update Canvas"');
     expect(markup).toContain("1 changed file");
   });
 

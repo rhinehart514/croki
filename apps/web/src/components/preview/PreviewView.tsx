@@ -60,6 +60,7 @@ interface Props {
   tabId?: string | null;
   configuredUrls?: ReadonlyArray<string> | undefined;
   visible: boolean;
+  onAddCanvasEvidence?: ((url: string) => void) | undefined;
 }
 
 const localApi = typeof window === "undefined" ? null : ensureLocalApi();
@@ -68,7 +69,13 @@ const localApi = typeof window === "undefined" ? null : ensureLocalApi();
  * Single-tab preview surface: chrome row on top, one webview below, empty
  * state when no session exists for the thread.
  */
-export function PreviewView({ threadRef, tabId: requestedTabId, configuredUrls, visible }: Props) {
+export function PreviewView({
+  threadRef,
+  tabId: requestedTabId,
+  configuredUrls,
+  visible,
+  onAddCanvasEvidence,
+}: Props) {
   const [focusUrlNonce, setFocusUrlNonce] = useState<number | undefined>(undefined);
   const [pickActive, setPickActive] = useState(false);
   const activeRecordingTabIds = useActiveBrowserRecordingTabIds();
@@ -623,6 +630,9 @@ export function PreviewView({ threadRef, tabId: requestedTabId, configuredUrls, 
         onRefresh={handleRefresh}
         onSubmit={(next) => void handleSubmitUrl(next)}
         onOpenInBrowser={tabId ? handleOpenInBrowser : undefined}
+        onAddCanvasEvidence={
+          url && onAddCanvasEvidence ? () => onAddCanvasEvidence(url) : undefined
+        }
         onCapture={previewBridge && tabId ? handleCapture : undefined}
         captureDisabled={!desktopOverlay || isUnreachable}
         recording={recordingRuntimeTabId !== null}

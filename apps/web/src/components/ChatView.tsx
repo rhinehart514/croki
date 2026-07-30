@@ -41,6 +41,10 @@ import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import { truncate } from "@t3tools/shared/String";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
+import {
+  CROKI_CONTEXT_RELATIVE_PATH,
+  type CrokiContextReference,
+} from "@t3tools/shared/crokiContext";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -140,6 +144,12 @@ import {
 } from "../previewMiniPlayerStore";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { CrokiCanvas } from "./croki/CrokiCanvas";
+import { addProvisionalCrokiEvidence } from "./croki/crokiCanvasEvidenceDraft";
+import {
+  makeCrokiCanvasWorkspaceKey,
+  useCrokiCanvasDraftSummary,
+} from "./croki/crokiCanvasDraftStore";
+import { useRegisterCanvasCommand } from "./CommandPalette";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -226,6 +236,16 @@ import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
+import {
+  deriveCrokiComposerContextState,
+  deriveCrokiContextReceiptsByMessageId,
+} from "./chat/CrokiContextPresentation.logic";
+import {
+  buildCrokiRepositoryBootstrapPrompt,
+  buildCrokiTurnUpdatePrompt,
+  mergePreparedComposerPrompt,
+} from "./chat/CrokiProposalPrompts.logic";
+import { useProjectFileQuery } from "./files/projectFilesQueryState";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
@@ -391,7 +411,7 @@ const PreviewPanel = lazy(() =>
 );
 const DiffPanel = lazy(() => import("./DiffPanel"));
 const FilePreviewPanel = lazy(() => import("./files/FilePreviewPanel"));
-const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
+const EMPTY_PENDING_SURFACE_IDS: ReadonlySet<string> = new Set();
 const TYPE_TO_FOCUS_EDITABLE_SELECTOR = [
   "input",
   "textarea",
@@ -1611,33 +1631,6 @@ function ChatViewContent(props: ChatViewProps) {
     activeThread ? environmentShell.stateAtom(activeThread.environmentId) : null,
   );
   const activeEnvironmentBootstrapComplete = activeEnvironmentShell.data?.snapshot._tag === "Some";
-  const activeProjectKey = activeProject
-    ? `${activeProject.environmentId}:${activeProject.workspaceRoot}`
-    : null;
-  const [pendingFileSurfaceIdsByProject, setPendingFileSurfaceIdsByProject] = useState<
-    ReadonlyMap<string, ReadonlySet<string>>
-  >(() => new Map());
-  const pendingFileSurfaceIds = activeProjectKey
-    ? (pendingFileSurfaceIdsByProject.get(activeProjectKey) ?? EMPTY_PENDING_FILE_SURFACE_IDS)
-    : EMPTY_PENDING_FILE_SURFACE_IDS;
-  const handleFilePendingChange = useCallback(
-    (relativePath: string, pending: boolean) => {
-      if (!activeProjectKey) return;
-      setPendingFileSurfaceIdsByProject((currentByProject) => {
-        const current = currentByProject.get(activeProjectKey) ?? EMPTY_PENDING_FILE_SURFACE_IDS;
-        const surfaceId = `file:${relativePath}`;
-        if (current.has(surfaceId) === pending) return currentByProject;
-        const next = new Set(current);
-        if (pending) next.add(surfaceId);
-        else next.delete(surfaceId);
-        const nextByProject = new Map(currentByProject);
-        if (next.size === 0) nextByProject.delete(activeProjectKey);
-        else nextByProject.set(activeProjectKey, next);
-        return nextByProject;
-      });
-    },
-    [activeProjectKey],
-  );
   const configuredPreviewUrls = useMemo(
     () => getConfiguredPreviewUrls(activeProject?.scripts),
     [activeProject?.scripts],
@@ -1645,7 +1638,9 @@ function ChatViewContent(props: ChatViewProps) {
 
   useEffect(() => {
     if (!activeThreadRef || !activeEnvironmentBootstrapComplete) return;
-    useRightPanelStore.getState().reconcileFileSurfaces(activeThreadRef, activeProject !== null);
+    useRightPanelStore
+      .getState()
+      .reconcileWorkspaceSurfaces(activeThreadRef, activeProject !== null);
   }, [activeEnvironmentBootstrapComplete, activeProject, activeThreadRef]);
 
   // Compute the list of environments this logical project spans, used to
@@ -1976,6 +1971,10 @@ function ChatViewContent(props: ChatViewProps) {
   const phase = derivePhase(activeThread?.session ?? null);
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
   const workLogEntries = useMemo(() => deriveWorkLogEntries(threadActivities), [threadActivities]);
+  const crokiContextReceiptsByMessageId = useMemo(
+    () => deriveCrokiContextReceiptsByMessageId(threadActivities),
+    [threadActivities],
+  );
   const pendingApprovals = useMemo(
     () => derivePendingApprovals(threadActivities),
     [threadActivities],
@@ -2423,6 +2422,83 @@ function ChatViewContent(props: ChatViewProps) {
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
+  const crokiContextFileQuery = useProjectFileQuery(
+    activeProject?.environmentId ?? environmentId,
+    activeWorkspaceRoot ?? ".",
+    CROKI_CONTEXT_RELATIVE_PATH,
+    activeProject !== null && activeWorkspaceRoot !== undefined,
+  );
+  const crokiComposerContext = useMemo(
+    () =>
+      activeProject && activeWorkspaceRoot
+        ? deriveCrokiComposerContextState({
+            data: crokiContextFileQuery.data,
+            error: crokiContextFileQuery.error,
+            failure: crokiContextFileQuery.failure,
+            isPending: crokiContextFileQuery.isPending,
+          })
+        : null,
+    [
+      activeProject,
+      activeWorkspaceRoot,
+      crokiContextFileQuery.data,
+      crokiContextFileQuery.error,
+      crokiContextFileQuery.failure,
+      crokiContextFileQuery.isPending,
+    ],
+  );
+  const activeWorkspaceKey =
+    activeProject && activeWorkspaceRoot
+      ? `${activeProject.environmentId}:${activeWorkspaceRoot}`
+      : null;
+  const crokiCanvasWorkspaceKey =
+    activeProject && activeWorkspaceRoot
+      ? makeCrokiCanvasWorkspaceKey(activeProject.environmentId, activeWorkspaceRoot)
+      : "__no-active-croki-workspace__";
+  const crokiCanvasDraftSummary = useCrokiCanvasDraftSummary(
+    crokiCanvasWorkspaceKey,
+    activeProject?.title ?? "",
+  );
+  const [queuedCanvasEvidence, setQueuedCanvasEvidence] = useState<{
+    readonly reference: CrokiContextReference;
+    readonly title: string;
+    readonly workspaceKey: string;
+  } | null>(null);
+  const [pendingSurfaceIdsByWorkspace, setPendingSurfaceIdsByWorkspace] = useState<
+    ReadonlyMap<string, ReadonlySet<string>>
+  >(() => new Map());
+  const pendingSurfaceIds = activeWorkspaceKey
+    ? (pendingSurfaceIdsByWorkspace.get(activeWorkspaceKey) ?? EMPTY_PENDING_SURFACE_IDS)
+    : EMPTY_PENDING_SURFACE_IDS;
+  const handleSurfacePendingChange = useCallback(
+    (surfaceId: string, pending: boolean) => {
+      if (!activeWorkspaceKey) return;
+      setPendingSurfaceIdsByWorkspace((currentByWorkspace) => {
+        const current = currentByWorkspace.get(activeWorkspaceKey) ?? EMPTY_PENDING_SURFACE_IDS;
+        if (current.has(surfaceId) === pending) return currentByWorkspace;
+        const next = new Set(current);
+        if (pending) next.add(surfaceId);
+        else next.delete(surfaceId);
+        const nextByWorkspace = new Map(currentByWorkspace);
+        if (next.size === 0) nextByWorkspace.delete(activeWorkspaceKey);
+        else nextByWorkspace.set(activeWorkspaceKey, next);
+        return nextByWorkspace;
+      });
+    },
+    [activeWorkspaceKey],
+  );
+  const handleFilePendingChange = useCallback(
+    (relativePath: string, pending: boolean) => {
+      handleSurfacePendingChange(`file:${relativePath}`, pending);
+    },
+    [handleSurfacePendingChange],
+  );
+  const handleCanvasPendingChange = useCallback(
+    (pending: boolean) => {
+      handleSurfacePendingChange("canvas", pending);
+    },
+    [handleSurfacePendingChange],
+  );
   const activeTerminalLaunchContext =
     terminalUiLaunchContext?.threadId === activeThreadId ? terminalUiLaunchContext : null;
   // Default true while loading to avoid toolbar flicker.
@@ -2547,6 +2623,30 @@ function ChatViewContent(props: ChatViewProps) {
       focusComposer();
     });
   }, [focusComposer]);
+  const prepareCrokiComposerRequest = useCallback(
+    (request: string) => {
+      const storedPrompt =
+        useComposerDraftStore.getState().getComposerDraft(composerDraftTarget)?.prompt ??
+        promptRef.current;
+      const nextPrompt = mergePreparedComposerPrompt(storedPrompt, request);
+      promptRef.current = nextPrompt;
+      setComposerDraftPrompt(composerDraftTarget, nextPrompt);
+      scheduleComposerFocus();
+    },
+    [composerDraftTarget, scheduleComposerFocus, setComposerDraftPrompt],
+  );
+  const prepareTurnCanvasUpdate = useCallback(
+    (turn: Pick<TurnDiffSummary, "turnId" | "files">) => {
+      prepareCrokiComposerRequest(buildCrokiTurnUpdatePrompt(turn));
+    },
+    [prepareCrokiComposerRequest],
+  );
+  const prepareCanvasFromRepository = useCallback(() => {
+    prepareCrokiComposerRequest(buildCrokiRepositoryBootstrapPrompt());
+    if (activeThreadRef) {
+      useRightPanelStore.getState().close(activeThreadRef);
+    }
+  }, [activeThreadRef, prepareCrokiComposerRequest]);
   const addTerminalContextToDraft = useCallback(
     (selection: TerminalContextSelection) => {
       composerRef.current?.addTerminalContext(selection);
@@ -3059,9 +3159,147 @@ function ChatViewContent(props: ChatViewProps) {
     useRightPanelStore.getState().open(activeThreadRef, "files");
   }, [activeProject, activeThreadRef]);
   const addCanvasSurface = useCallback(() => {
-    if (!activeThreadRef || !activeProject) return;
+    if (!activeThreadRef || !activeProject || !activeWorkspaceRoot) return;
     useRightPanelStore.getState().open(activeThreadRef, "canvas");
-  }, [activeProject, activeThreadRef]);
+  }, [activeProject, activeThreadRef, activeWorkspaceRoot]);
+  useRegisterCanvasCommand({
+    onOpenCanvas: activeProject && activeWorkspaceRoot ? addCanvasSurface : undefined,
+    unavailableReason:
+      activeProject && activeWorkspaceRoot ? undefined : "Open a project workspace to use Canvas.",
+  });
+  const captureCanvasEvidence = useCallback(
+    (reference: CrokiContextReference, title: string) => {
+      if (!activeProject || !activeWorkspaceRoot) return;
+      const result = addProvisionalCrokiEvidence({
+        environmentId: activeProject.environmentId,
+        workspaceRoot: activeWorkspaceRoot,
+        productName: activeProject.title,
+        reference,
+        title,
+      });
+      if (result === "unavailable") {
+        if (crokiCanvasDraftSummary.sourceState === "loading") {
+          setQueuedCanvasEvidence({
+            reference,
+            title,
+            workspaceKey: crokiCanvasWorkspaceKey,
+          });
+          addCanvasSurface();
+          return;
+        }
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Unable to add Canvas evidence",
+            description: "Open or repair the Canvas before capturing this reference.",
+          }),
+        );
+        return;
+      }
+      addCanvasSurface();
+    },
+    [
+      activeProject,
+      activeWorkspaceRoot,
+      addCanvasSurface,
+      crokiCanvasDraftSummary.sourceState,
+      crokiCanvasWorkspaceKey,
+    ],
+  );
+  useEffect(() => {
+    if (!queuedCanvasEvidence) {
+      return;
+    }
+    if (queuedCanvasEvidence.workspaceKey !== crokiCanvasWorkspaceKey) {
+      setQueuedCanvasEvidence(null);
+      return;
+    }
+    if (
+      !activeProject ||
+      !activeWorkspaceRoot ||
+      crokiCanvasDraftSummary.sourceState === "loading"
+    ) {
+      return;
+    }
+    const result = addProvisionalCrokiEvidence({
+      environmentId: activeProject.environmentId,
+      workspaceRoot: activeWorkspaceRoot,
+      productName: activeProject.title,
+      reference: queuedCanvasEvidence.reference,
+      title: queuedCanvasEvidence.title,
+    });
+    setQueuedCanvasEvidence(null);
+    if (result !== "unavailable") return;
+    toastManager.add(
+      stackedThreadToast({
+        type: "error",
+        title: "Unable to add Canvas evidence",
+        description: "Repair the Canvas before capturing this reference.",
+      }),
+    );
+  }, [
+    activeProject,
+    activeWorkspaceRoot,
+    crokiCanvasDraftSummary.sourceState,
+    crokiCanvasWorkspaceKey,
+    queuedCanvasEvidence,
+  ]);
+  const captureFileCanvasEvidence = useCallback(
+    (relativePath: string, line: number) => {
+      captureCanvasEvidence(
+        { kind: "file", path: relativePath, line },
+        `Evidence from ${relativePath}:${line}`,
+      );
+    },
+    [captureCanvasEvidence],
+  );
+  const capturePreviewCanvasEvidence = useCallback(
+    (rawUrl: string) => {
+      try {
+        const url = new URL(rawUrl);
+        if (url.protocol !== "http:" && url.protocol !== "https:") return;
+        captureCanvasEvidence({ kind: "url", url: url.href }, `Evidence from ${url.hostname}`);
+      } catch {
+        // Canvas URL references intentionally accept HTTP(S) URLs only.
+      }
+    },
+    [captureCanvasEvidence],
+  );
+  const openCanvasReference = useCallback(
+    (reference: CrokiContextReference) => {
+      if (!activeThreadRef) return;
+      if (reference.kind === "file") {
+        useRightPanelStore.getState().openFile(activeThreadRef, reference.path, reference.line);
+        return;
+      }
+      let url: URL;
+      try {
+        url = new URL(reference.url);
+      } catch {
+        return;
+      }
+      if (url.protocol !== "http:" && url.protocol !== "https:") return;
+      const existing = Object.values(activePreviewState.sessions).find((session) => {
+        if (session.navStatus._tag === "Idle") return false;
+        try {
+          return new URL(session.navStatus.url).href === url.href;
+        } catch {
+          return false;
+        }
+      });
+      if (existing) {
+        setActivePreviewTab(activeThreadRef, existing.tabId);
+        useRightPanelStore.getState().openBrowser(activeThreadRef, existing.tabId);
+        return;
+      }
+      void addBrowserSurface({
+        threadRef: activeThreadRef,
+        openPreview,
+        url: url.href,
+      });
+    },
+    [activePreviewState.sessions, activeThreadRef, openPreview],
+  );
   const openFileSurface = useCallback(
     (relativePath: string) => {
       if (!activeThreadRef || !activeProject) return;
@@ -5594,6 +5832,7 @@ function ChatViewContent(props: ChatViewProps) {
           tabId={activeRightPanelSurface.resourceId}
           configuredUrls={configuredPreviewUrls}
           visible
+          onAddCanvasEvidence={capturePreviewCanvasEvidence}
         />
       </Suspense>
     ) : activeRightPanelSurface?.kind === "terminal" ? (
@@ -5621,6 +5860,7 @@ function ChatViewContent(props: ChatViewProps) {
           mode="embedded"
           composerDraftTarget={composerDraftTarget}
           initialGitScope={initialDiffPanelGitScope}
+          onAddCanvasEvidence={captureFileCanvasEvidence}
         />
       </Suspense>
     ) : activeRightPanelSurface?.kind === "canvas" && activeProject && activeWorkspaceRoot ? (
@@ -5628,6 +5868,9 @@ function ChatViewContent(props: ChatViewProps) {
         environmentId={activeProject.environmentId}
         workspaceRoot={activeWorkspaceRoot}
         productName={activeProject.title}
+        onPendingChange={handleCanvasPendingChange}
+        onBuildFromRepository={prepareCanvasFromRepository}
+        onOpenReference={openCanvasReference}
       />
     ) : activeRightPanelSurface?.kind === "plan" ? (
       <PlanSidebar
@@ -5661,6 +5904,7 @@ function ChatViewContent(props: ChatViewProps) {
           revealRequestId={activeFileSurface?.revealRequestId ?? 0}
           onOpenFile={openFileSurface}
           onPendingChange={handleFilePendingChange}
+          onAddCanvasEvidence={captureFileCanvasEvidence}
         />
       </Suspense>
     ) : null
@@ -5750,8 +5994,10 @@ function ChatViewContent(props: ChatViewProps) {
                 }
                 turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
                 activeThreadEnvironmentId={activeThread.environmentId}
+                crokiContextReceiptsByMessageId={crokiContextReceiptsByMessageId}
                 routeThreadKey={routeThreadKey}
                 onOpenTurnDiff={onOpenTurnDiff}
+                onPrepareCanvasUpdate={prepareTurnCanvasUpdate}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
                 isRevertingCheckpoint={isRevertingCheckpoint}
@@ -5891,6 +6137,9 @@ function ChatViewContent(props: ChatViewProps) {
                             }
                             activeThreadModelSelection={activeThread?.modelSelection}
                             activeThreadActivities={activeThread?.activities}
+                            canvasContext={crokiComposerContext}
+                            canvasWorkspaceKind={activeThreadWorktreePath ? "worktree" : "project"}
+                            canvasWorkspaceRoot={activeWorkspaceRoot}
                             resolvedTheme={resolvedTheme}
                             settings={settings}
                             keybindings={keybindings}
@@ -5920,6 +6169,7 @@ function ChatViewContent(props: ChatViewProps) {
                             handleRuntimeModeChange={handleRuntimeModeChange}
                             handleInteractionModeChange={handleInteractionModeChange}
                             togglePlanSidebar={togglePlanSidebar}
+                            onOpenCanvas={addCanvasSurface}
                             focusComposer={focusComposer}
                             scheduleComposerFocus={scheduleComposerFocus}
                             setThreadError={setThreadError}
@@ -6059,7 +6309,7 @@ function ChatViewContent(props: ChatViewProps) {
           maximized={rightPanelMaximized}
           surfaces={rightPanelState.surfaces}
           activeSurfaceId={activeRightPanelSurface?.id ?? null}
-          pendingSurfaceIds={pendingFileSurfaceIds}
+          pendingSurfaceIds={pendingSurfaceIds}
           previewSessions={activePreviewState.sessions}
           terminalLabelsById={activeTerminalLabelsById}
           onActivate={activateRightPanelSurface}
@@ -6087,7 +6337,7 @@ function ChatViewContent(props: ChatViewProps) {
             layoutControls={panelToggleControls}
             surfaces={rightPanelState.surfaces}
             activeSurfaceId={activeRightPanelSurface?.id ?? null}
-            pendingSurfaceIds={pendingFileSurfaceIds}
+            pendingSurfaceIds={pendingSurfaceIds}
             previewSessions={activePreviewState.sessions}
             terminalLabelsById={activeTerminalLabelsById}
             onActivate={activateRightPanelSurface}

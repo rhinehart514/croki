@@ -24,6 +24,7 @@ function optimisticFileAtom(environmentId: EnvironmentId, cwd: string, relativeP
 interface ProjectQueryState<A> {
   readonly data: A | null;
   readonly error: string | null;
+  readonly failure: unknown | null;
   readonly isPending: boolean;
   readonly refresh: () => void;
 }
@@ -120,6 +121,10 @@ function errorMessage<A>(result: AsyncResult.AsyncResult<A, unknown>): string | 
   return cause instanceof Error ? cause.message : "Workspace query failed.";
 }
 
+function queryFailure<A>(result: AsyncResult.AsyncResult<A, unknown>): unknown | null {
+  return result._tag === "Failure" ? Cause.squash(result.cause) : null;
+}
+
 export function useProjectEntriesQuery(
   environmentId: EnvironmentId,
   cwd: string,
@@ -131,6 +136,7 @@ export function useProjectEntriesQuery(
   return {
     data: Option.getOrNull(AsyncResult.value(result)),
     error: errorMessage(result),
+    failure: queryFailure(result),
     isPending: result.waiting,
     refresh,
   };
@@ -157,6 +163,7 @@ export function useProjectFileQuery(
   return {
     data: optimisticFile?.data ?? data,
     error: errorMessage(result),
+    failure: queryFailure(result),
     isPending: result.waiting,
     refresh,
   };

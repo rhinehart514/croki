@@ -7,15 +7,14 @@ import {
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
+  type OrchestrationThread,
   ThreadId,
   type ProviderSession,
   type RuntimeMode,
   type TurnId,
 } from "@t3tools/contracts";
 import {
-  buildCrokiAgentContext,
-  CROKI_CONTEXT_RELATIVE_PATH,
-  parseCrokiContext,
+  type CrokiContextAppliedActivityPayload,
   prependCrokiAgentContext,
 } from "@t3tools/shared/crokiContext";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
@@ -25,10 +24,8 @@ import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
@@ -52,6 +49,7 @@ import {
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { isCrokiContextAppliedActivityPayload, loadCrokiAgentContext } from "./CrokiContext.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
@@ -71,21 +69,6 @@ type ProviderIntentEvent = Extract<
 function toNonEmptyProviderInput(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
-}
-
-export function loadCrokiAgentContext(cwd: string | undefined) {
-  if (!cwd) return Effect.succeed(null);
-  return Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const contents = yield* fileSystem.readFileString(path.join(cwd, CROKI_CONTEXT_RELATIVE_PATH));
-    if (contents.length > 256_000) return null;
-    return yield* Effect.try(() => buildCrokiAgentContext(parseCrokiContext(contents)));
-  }).pipe(
-    // Product context is an optional repository capability. A missing or
-    // temporarily invalid file must never prevent a user turn from starting.
-    Effect.orElseSucceed(() => null),
-  );
 }
 
 function mapProviderSessionStatusToOrchestrationStatus(
@@ -279,6 +262,55 @@ const make = Effect.gen(function* () {
         }),
       ),
     );
+
+  const resolveAppliedCrokiContext = Effect.fnUntraced(function* (input: {
+    readonly thread: OrchestrationThread;
+    readonly contextRoot: string | undefined;
+    readonly sourceEventId: string;
+    readonly messageId: string;
+    readonly createdAt: string;
+  }) {
+    const existing = input.thread.activities.find(
+      (activity) =>
+        activity.kind === "croki.context.applied" &&
+        isCrokiContextAppliedActivityPayload(activity.payload) &&
+        activity.payload.sourceEventId === input.sourceEventId,
+    );
+    if (existing && isCrokiContextAppliedActivityPayload(existing.payload)) {
+      return existing.payload;
+    }
+
+    const loaded = yield* loadCrokiAgentContext(input.contextRoot);
+    const payload: CrokiContextAppliedActivityPayload = {
+      sourceEventId: input.sourceEventId,
+      messageId: input.messageId,
+      prompt: loaded.prompt,
+      receipt: loaded.receipt,
+    };
+    const [commandId, activityId] = yield* Effect.all([
+      serverCommandId("croki-context-applied"),
+      serverEventId(),
+    ]);
+    yield* orchestrationEngine.dispatch({
+      type: "thread.activity.append",
+      commandId,
+      threadId: input.thread.id,
+      activity: {
+        id: activityId,
+        tone: "info",
+        kind: "croki.context.applied",
+        summary:
+          loaded.receipt.status === "loaded"
+            ? `Applied Canvas context (${loaded.receipt.activeCount} active)`
+            : `Canvas context ${loaded.receipt.status}`,
+        payload,
+        turnId: null,
+        createdAt: input.createdAt,
+      },
+      createdAt: input.createdAt,
+    });
+    return payload;
+  });
 
   const formatFailureDetail = (cause: Cause.Cause<unknown>): string => {
     const failReason = cause.reasons.find(Cause.isFailReason);
@@ -636,6 +668,8 @@ const make = Effect.gen(function* () {
 
   const buildSendTurnRequestForThread = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
+    readonly sourceEventId: string;
+    readonly messageId: string;
     readonly messageText: string;
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
@@ -662,8 +696,16 @@ const make = Effect.gen(function* () {
       thread,
       projects: project ? [project] : [],
     });
-    const crokiContext = yield* loadCrokiAgentContext(workspaceCwd);
-    const providerInput = prependCrokiAgentContext(crokiContext, normalizedInput);
+    const crokiContext = yield* resolveAppliedCrokiContext({
+      thread,
+      // Product context belongs to the project, not an individual mutable
+      // worktree. This keeps all project threads on one canonical snapshot.
+      contextRoot: project?.workspaceRoot ?? workspaceCwd,
+      sourceEventId: input.sourceEventId,
+      messageId: input.messageId,
+      createdAt: input.createdAt,
+    });
+    const providerInput = prependCrokiAgentContext(crokiContext.prompt, normalizedInput);
     const activeSession = yield* providerService
       .listSessions()
       .pipe(
@@ -902,6 +944,8 @@ const make = Effect.gen(function* () {
 
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
+      sourceEventId: event.eventId,
+      messageId: event.payload.messageId,
       messageText: message.text,
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
       ...(event.payload.modelSelection !== undefined

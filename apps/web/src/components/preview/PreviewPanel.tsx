@@ -13,9 +13,17 @@ interface Props {
   tabId?: string | null;
   configuredUrls?: ReadonlyArray<string> | undefined;
   visible: boolean;
+  onAddCanvasEvidence?: ((url: string) => void) | undefined;
 }
 
-export function PreviewPanel({ mode, threadRef, tabId, configuredUrls, visible }: Props) {
+export function PreviewPanel({
+  mode,
+  threadRef,
+  tabId,
+  configuredUrls,
+  visible,
+  onAddCanvasEvidence,
+}: Props) {
   if (!isPreviewSupportedInRuntime()) {
     return (
       <PreviewPanelShell mode={mode}>
@@ -35,6 +43,7 @@ export function PreviewPanel({ mode, threadRef, tabId, configuredUrls, visible }
         {...(tabId !== undefined ? { tabId } : {})}
         configuredUrls={configuredUrls}
         visible={visible}
+        onAddCanvasEvidence={onAddCanvasEvidence}
       />
     </PreviewPanelShell>
   );

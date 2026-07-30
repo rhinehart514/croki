@@ -16,6 +16,12 @@ import {
   resolveWebAssetBrandForChannel,
   type WebAssetBrand,
 } from "./lib/brand-assets.ts";
+import {
+  CROKI_VISIBLE_BRAND,
+  RETAINED_T3_IDENTIFIERS,
+  resolveCrokiDesktopBrandChannel,
+  resolveCrokiDesktopBrandMetadata,
+} from "./lib/brand-policy.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import { loadRepoEnv } from "./lib/public-config.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
@@ -35,7 +41,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.t3tools.t3code";
+const DESKTOP_APP_ID = RETAINED_T3_IDENTIFIERS.desktopAppId;
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -111,7 +117,9 @@ export function resolveResourceMonitorRustTargets(
 }
 
 export function resourceMonitorExecutableName(platform: typeof BuildPlatform.Type): string {
-  return platform === "win" ? "t3-resource-monitor.exe" : "t3-resource-monitor";
+  return platform === "win"
+    ? `${RETAINED_T3_IDENTIFIERS.resourceMonitorExecutableName}.exe`
+    : RETAINED_T3_IDENTIFIERS.resourceMonitorExecutableName;
 }
 
 const PLATFORM_CONFIG: Record<typeof BuildPlatform.Type, PlatformConfig> = {
@@ -1508,10 +1516,18 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
-  return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "Croki (Nightly)"
-    : (desktopPackageJson.productName ?? "Croki");
+  const fallbackProductName = desktopPackageJson.productName ?? CROKI_VISIBLE_BRAND.baseName;
+  return resolveCrokiDesktopBrandMetadata({
+    platform: "mac",
+    channel: resolveCrokiDesktopBrandChannel({ version, fallbackProductName }),
+  }).displayName;
 }
+
+export const STAGED_DESKTOP_PACKAGE_IDENTITY = {
+  name: RETAINED_T3_IDENTIFIERS.stagedPackageName,
+  description: CROKI_VISIBLE_BRAND.desktopDescription,
+  author: CROKI_VISIBLE_BRAND.desktopPackageAuthor,
+} as const;
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   platform: typeof BuildPlatform.Type,
@@ -1530,7 +1546,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "Croki-${version}-${arch}.${ext}",
+    artifactName: CROKI_VISIBLE_BRAND.desktopArtifactName,
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS],
     directories: {
@@ -1562,8 +1578,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "public.app-category.developer-tools",
       protocols: [
         {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
+          name: CROKI_VISIBLE_BRAND.protocolDisplayName,
+          schemes: [
+            RETAINED_T3_IDENTIFIERS.productionScheme,
+            RETAINED_T3_IDENTIFIERS.developmentScheme,
+          ],
         },
       ],
       ...(macPasskeySigning
@@ -1578,12 +1597,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "linux") {
     buildConfig.linux = {
       target: [target],
-      executableName: "t3code",
+      executableName: RETAINED_T3_IDENTIFIERS.stagedPackageName,
       icon: "icons",
       category: "Development",
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: RETAINED_T3_IDENTIFIERS.productionStorageName,
         },
       },
     };
@@ -1895,14 +1914,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     stageDependencies,
   );
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    ...STAGED_DESKTOP_PACKAGE_IDENTITY,
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: "T3 Code desktop build",
-    author: "T3 Tools",
     main: "apps/desktop/dist-electron/main.cjs",
     build: yield* createBuildConfig(
       options.platform,
@@ -2125,7 +2142,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for T3 Code."),
+  Command.withDescription("Build a desktop artifact for Croki."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

@@ -3,11 +3,40 @@ import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools
 import type { Thread } from "../types";
 import {
   buildBrowseGroups,
+  buildOpenCanvasAction,
   buildThreadActionItems,
   enumerateCommandPaletteItems,
   filterCommandPaletteGroups,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
+
+describe("buildOpenCanvasAction", () => {
+  it("runs the native Canvas command with its configurable shortcut", async () => {
+    const onOpenCanvas = vi.fn();
+    const action = buildOpenCanvasAction({ icon: null, onOpenCanvas });
+
+    expect(action).toMatchObject({
+      value: "action:open-canvas",
+      title: "Open Canvas",
+      shortcutCommand: "canvas.open",
+      disabled: false,
+    });
+    await action.run();
+    expect(onOpenCanvas).toHaveBeenCalledOnce();
+  });
+
+  it("stays searchable but disabled with a clear reason when unavailable", async () => {
+    const action = buildOpenCanvasAction({
+      icon: null,
+      unavailableReason: "Select a project workspace first.",
+    });
+
+    expect(action.disabled).toBe(true);
+    expect(action.description).toBe("Select a project workspace first.");
+    expect(action.searchTerms).toContain("open canvas");
+    await action.run();
+  });
+});
 
 describe("enumerateCommandPaletteItems", () => {
   it("assigns positional jump shortcuts to the first nine displayed items", () => {

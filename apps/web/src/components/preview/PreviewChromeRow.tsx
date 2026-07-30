@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Camera,
+  CircleDot,
   ExternalLink,
   MousePointerClick,
   PictureInPicture2,
@@ -39,6 +40,7 @@ interface Props {
   /** When provided, renders an "Open in browser" affordance to the right. */
   onOpenInBrowser?: (() => void) | undefined;
   onCapture?: ((record: boolean) => void) | undefined;
+  onAddCanvasEvidence?: (() => void) | undefined;
   captureDisabled?: boolean | undefined;
   recording?: boolean | undefined;
   onPictureInPicture?: (() => void) | undefined;
@@ -79,6 +81,7 @@ export function PreviewChromeRow({
   onSubmit,
   onOpenInBrowser,
   onCapture,
+  onAddCanvasEvidence,
   captureDisabled,
   recording,
   onPictureInPicture,
@@ -229,6 +232,25 @@ export function PreviewChromeRow({
             </InputGroupAddon>
           ) : null}
         </InputGroup>
+
+        {onAddCanvasEvidence ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onAddCanvasEvidence}
+                  aria-label="Add URL to Canvas"
+                  type="button"
+                />
+              }
+            >
+              <CircleDot />
+            </TooltipTrigger>
+            <TooltipPopup>Add this URL as provisional Canvas evidence</TooltipPopup>
+          </Tooltip>
+        ) : null}
 
         {onPickElement ? (
           <Tooltip>

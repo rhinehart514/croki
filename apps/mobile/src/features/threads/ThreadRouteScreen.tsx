@@ -67,6 +67,7 @@ import {
 } from "../layout/AdaptiveWorkspaceLayout";
 import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
 import { ThreadFileNavigatorPane } from "../files/thread-file-navigator-pane";
+import { CrokiCanvasPane } from "../croki/CrokiCanvasPane";
 import {
   ThreadInspectorContentStack,
   type ThreadInspectorMode,
@@ -208,7 +209,10 @@ function ThreadRouteContent(
   );
   const inspectorMode = (() => {
     if (inspectorSelection?.routeThreadIdentity === routeThreadIdentity) {
-      if (inspectorSelection.mode === "files" && selectedThreadCwd === null) {
+      if (
+        (inspectorSelection.mode === "files" || inspectorSelection.mode === "canvas") &&
+        selectedThreadCwd === null
+      ) {
         return null;
       }
       return inspectorSelection.mode;
@@ -364,6 +368,27 @@ function ThreadRouteContent(
     selectedThreadCwd,
     showAuxiliaryPane,
   ]);
+  const handleOpenCanvasInspector = useCallback(() => {
+    if (selectedThread === null || selectedThreadCwd === null) {
+      return;
+    }
+    if (!fileInspector.supported) {
+      navigation.navigate("ThreadCanvas", {
+        environmentId: String(selectedThread.environmentId),
+        threadId: String(selectedThread.id),
+      });
+      return;
+    }
+    setInspectorSelection({ routeThreadIdentity, mode: "canvas" });
+    showAuxiliaryPane("inspector");
+  }, [
+    fileInspector.supported,
+    navigation,
+    routeThreadIdentity,
+    selectedThread,
+    selectedThreadCwd,
+    showAuxiliaryPane,
+  ]);
   const inspectorToggleActionRef = useRef({
     inspectorMode,
     openFilesInspector: handleOpenFilesInspector,
@@ -383,7 +408,7 @@ function ThreadRouteContent(
     action.toggleAuxiliaryPane();
   }, []);
   const handleSelectInspectorFile = useCallback(
-    (path: string) => {
+    (path: string, line: number | null = null) => {
       if (selectedThread === null) {
         return;
       }
@@ -391,6 +416,7 @@ function ThreadRouteContent(
         environmentId: String(selectedThread.environmentId),
         threadId: String(selectedThread.id),
         path: path.split("/").filter((segment) => segment.length > 0),
+        ...(line === null ? {} : { line: String(line) }),
       };
       if (fileInspector.supported) {
         navigation.navigate("ThreadFile", params);
@@ -435,6 +461,25 @@ function ThreadRouteContent(
       selectedThreadProject?.title,
     ],
   );
+  const CanvasInspector = useCallback(
+    () =>
+      selectedThread !== null && selectedThreadCwd !== null ? (
+        <CrokiCanvasPane
+          cwd={selectedThreadCwd}
+          environmentId={selectedThread.environmentId}
+          headerInset={inspectorHeaderInset}
+          onOpenFile={handleSelectInspectorFile}
+          projectName={selectedThreadProject?.title ?? "Canvas"}
+        />
+      ) : null,
+    [
+      handleSelectInspectorFile,
+      inspectorHeaderInset,
+      selectedThread,
+      selectedThreadCwd,
+      selectedThreadProject?.title,
+    ],
+  );
   const RouteInspector = useCallback(
     () => props.renderInspector?.(inspectorHeaderInset),
     [inspectorHeaderInset, props.renderInspector],
@@ -443,13 +488,21 @@ function ThreadRouteContent(
     () =>
       inspectorMode === null ? null : (
         <ThreadInspectorContentStack
+          Canvas={CanvasInspector}
           Files={FilesInspector}
           Git={GitInspector}
           mode={inspectorMode}
           Route={props.renderInspector ? RouteInspector : undefined}
         />
       ),
-    [FilesInspector, GitInspector, RouteInspector, inspectorMode, props.renderInspector],
+    [
+      CanvasInspector,
+      FilesInspector,
+      GitInspector,
+      RouteInspector,
+      inspectorMode,
+      props.renderInspector,
+    ],
   );
   const activeInspectorRenderer = inspectorMode === null ? undefined : renderInspectorStack;
   // Hand the inspector to the workspace so it renders beside the navigator,
@@ -602,12 +655,14 @@ function ThreadRouteContent(
         : undefined,
     onOpenFilesInspector:
       fileInspector.supported && selectedThreadCwd !== null ? handleOpenFilesInspector : undefined,
+    onOpenCanvasInspector: handleOpenCanvasInspector,
     onOpenGitInspector: fileInspector.supported ? handleOpenGitInspector : undefined,
     currentBranch: selectedThread?.branch ?? null,
     gitStatus: gitStatus.data,
     gitOperationLabel: gitState.gitOperationLabel,
     canOpenTerminal: Boolean(selectedThreadProject?.workspaceRoot),
     canOpenFiles: Boolean(selectedThreadProject?.workspaceRoot),
+    canOpenCanvas: selectedThreadCwd !== null,
     projectScripts: selectedThreadProject?.scripts ?? [],
     terminalSessions: terminalMenuSessions,
     showDirectFileControl: layout.usesSplitView,
@@ -673,6 +728,11 @@ function ThreadRouteContent(
     }
     if (selectedThreadCwd !== null) {
       actions.push({
+        accessibilityLabel: "Open Canvas",
+        icon: "point.3.connected.trianglepath.dotted",
+        onPress: handleOpenCanvasInspector,
+      });
+      actions.push({
         accessibilityLabel: "Open files",
         icon: "folder",
         onPress: handleOpenFilesInspector,
@@ -701,6 +761,7 @@ function ThreadRouteContent(
   }, [
     fileInspector.supported,
     handleOpenFilesInspector,
+    handleOpenCanvasInspector,
     handleOpenTerminal,
     handleOpenGitInspector,
     handleToggleInspector,

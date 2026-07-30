@@ -8,8 +8,13 @@ import {
   resolveWebAssetBrandForPackageVersion,
   resolveWebIconOverrides,
 } from "./brand-assets.ts";
+import { CROKI_BRAND_ASSET_PATHS } from "./brand-policy.ts";
 
 describe("brand-assets", () => {
+  it("sources the active product asset family from the Croki brand policy", () => {
+    expect(BRAND_ASSET_PATHS).toMatchObject(CROKI_BRAND_ASSET_PATHS);
+  });
+
   it("maps production web assets into the server package", () => {
     expect(resolveWebIconOverrides("production", "dist/client")).toEqual([
       {

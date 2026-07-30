@@ -255,14 +255,16 @@ function PreviewFavicon({ url }: { url: string | null }) {
   );
 }
 
-function SurfaceIcon({
+export function RightPanelSurfaceIcon({
   surface,
   sessions,
   theme,
+  active,
 }: {
   surface: RightPanelSurface;
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>;
   theme: "light" | "dark";
+  active: boolean;
 }) {
   switch (surface.kind) {
     case "preview": {
@@ -272,6 +274,13 @@ function SurfaceIcon({
     }
     case "diff":
       return <FileDiff className="size-3.5 shrink-0" />;
+    case "canvas":
+      return (
+        <CircleDot
+          data-surface-icon-state={active ? "active" : "inactive"}
+          className={cn("size-3.5 shrink-0", active ? "text-primary" : "text-current")}
+        />
+      );
     case "files":
       return <Files className="size-3.5 shrink-0" />;
     case "file":
@@ -420,10 +429,11 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                           className="flex min-w-0 flex-1 items-center gap-1.5"
                           onClick={() => props.onActivate(surface)}
                         >
-                          <SurfaceIcon
+                          <RightPanelSurfaceIcon
                             surface={surface}
                             sessions={props.previewSessions}
                             theme={resolvedTheme}
+                            active={active}
                           />
                           <span className="truncate">{title}</span>
                         </button>

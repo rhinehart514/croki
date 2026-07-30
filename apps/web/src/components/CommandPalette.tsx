@@ -30,6 +30,7 @@ import {
   ArrowDownIcon,
   ArrowLeftIcon,
   ArrowUpIcon,
+  CircleDotIcon,
   CornerLeftUpIcon,
   FolderIcon,
   FolderPlusIcon,
@@ -40,9 +41,11 @@ import {
 } from "lucide-react";
 import {
   useCallback,
+  createContext,
   useDeferredValue,
   useEffect,
   useLayoutEffect,
+  useContext,
   useMemo,
   useReducer,
   useRef,
@@ -93,6 +96,7 @@ import {
 import {
   ADDON_ICON_CLASS,
   buildBrowseGroups,
+  buildOpenCanvasAction,
   buildProjectActionItems,
   buildRootGroups,
   buildThreadActionItems,
@@ -381,7 +385,33 @@ function reduceCommandPaletteUiState(
   }
 }
 
-export function CommandPalette({ children }: { children: ReactNode }) {
+export interface CommandPaletteProps {
+  readonly children: ReactNode;
+}
+
+export interface CanvasCommandRegistration {
+  readonly onOpenCanvas?: (() => void) | undefined;
+  readonly unavailableReason?: string | undefined;
+}
+
+interface CanvasCommandRegistrationContextValue {
+  readonly register: (owner: symbol, registration: CanvasCommandRegistration) => () => void;
+}
+
+const CanvasCommandRegistrationContext =
+  createContext<CanvasCommandRegistrationContextValue | null>(null);
+
+export function useRegisterCanvasCommand(registration: CanvasCommandRegistration): void {
+  const context = useContext(CanvasCommandRegistrationContext);
+  const ownerRef = useRef(Symbol("canvas-command-registration"));
+
+  useEffect(() => {
+    if (!context) return;
+    return context.register(ownerRef.current, registration);
+  }, [context, registration.onOpenCanvas, registration.unavailableReason]);
+}
+
+export function CommandPalette({ children }: CommandPaletteProps) {
   const [state, dispatch] = useReducer(reduceCommandPaletteUiState, {
     open: false,
     openIntent: null,
@@ -391,6 +421,30 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   const openAddProject = useCallback(() => dispatch({ _tag: "OpenAddProject" }), []);
   const openNewThreadIn = useCallback(() => dispatch({ _tag: "OpenNewThreadIn" }), []);
   const clearOpenIntent = useCallback(() => dispatch({ _tag: "ClearOpenIntent" }), []);
+  const [canvasCommands, setCanvasCommands] = useState<
+    ReadonlyArray<{
+      readonly owner: symbol;
+      readonly registration: CanvasCommandRegistration;
+    }>
+  >([]);
+  const registerCanvasCommand = useCallback(
+    (owner: symbol, registration: CanvasCommandRegistration) => {
+      setCanvasCommands((current) => [
+        ...current.filter((entry) => entry.owner !== owner),
+        { owner, registration },
+      ]);
+      return () => {
+        setCanvasCommands((current) => current.filter((entry) => entry.owner !== owner));
+      };
+    },
+    [],
+  );
+  const canvasRegistrationContext = useMemo(
+    () => ({ register: registerCanvasCommand }),
+    [registerCanvasCommand],
+  );
+  const canvasCommand = canvasCommands.at(-1) ?? null;
+  const onOpenCanvas = canvasCommand?.registration.onOpenCanvas;
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const composerHandleRef = useRef<ChatComposerHandle | null>(null);
   const routeTarget = useParams({
@@ -413,6 +467,14 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           terminalOpen,
         },
       });
+      if (command === "canvas.open") {
+        if (!onOpenCanvas) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        onOpenCanvas();
+        return;
+      }
       if (command !== "commandPalette.toggle") {
         return;
       }
@@ -422,7 +484,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keybindings, terminalOpen, toggleOpen]);
+  }, [keybindings, onOpenCanvas, setOpen, terminalOpen, toggleOpen]);
 
   useEffect(
     () =>
@@ -440,21 +502,27 @@ export function CommandPalette({ children }: { children: ReactNode }) {
 
   return (
     <ComposerHandleContext value={composerHandleRef}>
-      <CommandDialog open={state.open} onOpenChange={setOpen}>
-        {children}
-        <CommandPaletteDialog
-          open={state.open}
-          openIntent={state.openIntent}
-          setOpen={setOpen}
-          clearOpenIntent={clearOpenIntent}
-        />
-      </CommandDialog>
+      <CanvasCommandRegistrationContext value={canvasRegistrationContext}>
+        <CommandDialog open={state.open} onOpenChange={setOpen}>
+          {children}
+          <CommandPaletteDialog
+            open={state.open}
+            openIntent={state.openIntent}
+            setOpen={setOpen}
+            clearOpenIntent={clearOpenIntent}
+            canvasUnavailableReason={canvasCommand?.registration.unavailableReason}
+            onOpenCanvas={onOpenCanvas}
+          />
+        </CommandDialog>
+      </CanvasCommandRegistrationContext>
     </ComposerHandleContext>
   );
 }
 
 function CommandPaletteDialog(props: {
+  readonly canvasUnavailableReason?: string | undefined;
   readonly open: boolean;
+  readonly onOpenCanvas?: (() => void) | undefined;
   readonly openIntent: CommandPaletteOpenIntent | null;
   readonly setOpen: (open: boolean) => void;
   readonly clearOpenIntent: () => void;
@@ -466,6 +534,8 @@ function CommandPaletteDialog(props: {
   return (
     <OpenCommandPaletteDialog
       openIntent={props.openIntent}
+      canvasUnavailableReason={props.canvasUnavailableReason}
+      onOpenCanvas={props.onOpenCanvas}
       setOpen={props.setOpen}
       clearOpenIntent={props.clearOpenIntent}
     />
@@ -473,7 +543,9 @@ function CommandPaletteDialog(props: {
 }
 
 function OpenCommandPaletteDialog(props: {
+  readonly canvasUnavailableReason?: string | undefined;
   readonly openIntent: CommandPaletteOpenIntent | null;
+  readonly onOpenCanvas?: (() => void) | undefined;
   readonly setOpen: (open: boolean) => void;
   readonly clearOpenIntent: () => void;
 }) {
@@ -1261,6 +1333,14 @@ function OpenCommandPaletteDialog(props: {
   ]);
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+
+  actionItems.push(
+    buildOpenCanvasAction({
+      icon: <CircleDotIcon className={ITEM_ICON_CLASS} />,
+      onOpenCanvas: props.onOpenCanvas,
+      unavailableReason: props.canvasUnavailableReason,
+    }),
+  );
 
   if (projects.length > 0) {
     const activeProjectTitle =

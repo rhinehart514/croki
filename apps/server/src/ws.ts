@@ -224,6 +224,8 @@ function projectFileFailureContext(
   readonly resolvedWorkspaceRoot?: string;
   readonly operation?: ProjectFileOperation;
   readonly operationPath?: string;
+  readonly expectedContentsSha256?: string | null;
+  readonly actualContentsSha256?: string | null;
 } {
   switch (error._tag) {
     case "WorkspacePathOutsideRootError":
@@ -245,6 +247,13 @@ function projectFileFailureContext(
       return { failure: "path_not_file", resolvedPath: error.resolvedPath };
     case "WorkspaceBinaryFileError":
       return { failure: "binary_file", resolvedPath: error.resolvedPath };
+    case "WorkspaceFileWriteConflictError":
+      return {
+        failure: "stale_write",
+        resolvedPath: error.resolvedPath,
+        expectedContentsSha256: error.expectedContentsSha256,
+        actualContentsSha256: error.actualContentsSha256,
+      };
     default:
       return unexpectedCompatibilityError(error);
   }

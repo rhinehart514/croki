@@ -4,6 +4,8 @@ import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchema
 const PROJECT_SEARCH_ENTRIES_MAX_LIMIT = 200;
 const PROJECT_WRITE_FILE_PATH_MAX_LENGTH = 512;
 const PROJECT_READ_FILE_PATH_MAX_LENGTH = 512;
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
+const Sha256Hex = Schema.String.check(Schema.isPattern(SHA256_HEX_PATTERN));
 
 export const ProjectSearchEntriesInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
@@ -135,6 +137,7 @@ export const ProjectFileFailure = Schema.Literals([
   "resolved_path_outside_root",
   "path_not_file",
   "binary_file",
+  "stale_write",
   "operation_failed",
 ]);
 export type ProjectFileFailure = typeof ProjectFileFailure.Type;
@@ -159,6 +162,8 @@ type ProjectFileFailureContext = {
   readonly resolvedWorkspaceRoot?: string;
   readonly operation?: ProjectFileOperation;
   readonly operationPath?: string;
+  readonly expectedContentsSha256?: string | null;
+  readonly actualContentsSha256?: string | null;
   readonly cause?: unknown;
 };
 
@@ -191,6 +196,13 @@ export const ProjectWriteFileInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   relativePath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_WRITE_FILE_PATH_MAX_LENGTH)),
   contents: Schema.String,
+  /**
+   * Optional compare-and-write precondition.
+   *
+   * Omit for an unconditional legacy write, pass null to require that the file
+   * is absent, or pass the SHA-256 of its current raw contents.
+   */
+  expectedContentsSha256: Schema.optional(Schema.NullOr(Sha256Hex)),
 });
 export type ProjectWriteFileInput = typeof ProjectWriteFileInput.Type;
 
@@ -209,6 +221,8 @@ export class ProjectWriteFileError extends Schema.TaggedErrorClass<ProjectWriteF
     resolvedWorkspaceRoot: Schema.optional(TrimmedNonEmptyString),
     operation: Schema.optional(ProjectFileOperation),
     operationPath: Schema.optional(TrimmedNonEmptyString),
+    expectedContentsSha256: Schema.optional(Schema.NullOr(Sha256Hex)),
+    actualContentsSha256: Schema.optional(Schema.NullOr(Sha256Hex)),
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
   },

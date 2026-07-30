@@ -76,6 +76,7 @@ interface FilePreviewPanelProps {
   revealRequestId: number;
   onOpenFile: (relativePath: string) => void;
   onPendingChange: (relativePath: string, pending: boolean) => void;
+  onAddCanvasEvidence?: ((relativePath: string, line: number) => void) | undefined;
 }
 
 const FILE_EXPLORER_STORAGE_KEY = "t3code.fileExplorerOpen";
@@ -292,6 +293,7 @@ interface EditableFileSurfaceProps {
   wordWrap: boolean;
   onPostRender: FilePostRender;
   onPendingChange: (relativePath: string, pending: boolean) => void;
+  onAddCanvasEvidence?: ((relativePath: string, line: number) => void) | undefined;
 }
 
 interface FileSelectionOverride {
@@ -341,6 +343,7 @@ function EditableFileSurface({
   wordWrap,
   onPostRender,
   onPendingChange,
+  onAddCanvasEvidence,
 }: EditableFileSurfaceProps) {
   const addReviewComment = useComposerDraftStore((store) => store.addReviewComment);
   const removeReviewComment = useComposerDraftStore((store) => store.removeReviewComment);
@@ -586,6 +589,11 @@ function EditableFileSurface({
                     onCancel={() => removeAnnotationEntry(entry.id)}
                     onComment={(text) => submitAnnotationEntry(entry.id, text)}
                     onDelete={() => removeAnnotationEntry(entry.id)}
+                    onAddCanvasEvidence={
+                      onAddCanvasEvidence
+                        ? () => onAddCanvasEvidence(relativePath, entry.endLine)
+                        : undefined
+                    }
                   />
                 ))}
               </div>
@@ -667,6 +675,7 @@ export default function FilePreviewPanel({
   revealRequestId,
   onOpenFile,
   onPendingChange,
+  onAddCanvasEvidence,
 }: FilePreviewPanelProps) {
   const { resolvedTheme } = useTheme();
   const wordWrap = useClientSettings((settings) => settings.wordWrap);
@@ -905,6 +914,7 @@ export default function FilePreviewPanel({
                 threadRef={threadRef}
                 contents={file.data.contents}
                 onPendingChange={onPendingChange}
+                onAddCanvasEvidence={onAddCanvasEvidence}
               />
             ) : file.data.truncated ? (
               <Virtualizer

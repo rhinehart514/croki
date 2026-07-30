@@ -163,6 +163,177 @@ function assertContains(haystack: string, needle: string, message: string): void
   }
 }
 
+function assertNotContains(haystack: string, needle: string, message: string): void {
+  if (haystack.includes(needle)) {
+    throw new Error(message);
+  }
+}
+
+function assertCrokiReleaseGuards(): void {
+  const releaseWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/release.yml"),
+    "utf8",
+  );
+  const relayWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/deploy-relay.yml"),
+    "utf8",
+  );
+  const mobileProductionWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/mobile-eas-production.yml"),
+    "utf8",
+  );
+  const mobilePreviewWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/mobile-eas-preview.yml"),
+    "utf8",
+  );
+
+  for (const guard of [
+    "CROKI_RELEASE_ENABLED",
+    "CROKI_RELEASE_REPOSITORY",
+    "CROKI_RELEASE_BRANCH",
+    "CROKI_CLI_PACKAGE",
+    "CROKI_RELAY_DOMAIN",
+    "CROKI_VERCEL_PROJECT_ID",
+    "dry_run",
+    "node scripts/croki-release-plan.ts",
+    "inputs.dry_run != true",
+    "needs: [release_guard, check_changes]",
+    'cli_package" == "t3"',
+    "Refusing inherited T3 destination",
+    'git push origin "HEAD:$RELEASE_BRANCH"',
+  ]) {
+    assertContains(releaseWorkflow, guard, `Release workflow is missing guard: ${guard}`);
+  }
+  for (const inheritedReleaseTarget of [
+    "git push origin HEAD:main",
+    "secrets.RELEASE_APP_ID",
+    "secrets.VERCEL_TOKEN",
+    "latest.app.t3.codes",
+    "nightly.app.t3.codes",
+    "name=T3 Code v",
+  ]) {
+    assertNotContains(
+      releaseWorkflow,
+      inheritedReleaseTarget,
+      `Release workflow still targets inherited T3 release state: ${inheritedReleaseTarget}`,
+    );
+  }
+
+  for (const guard of [
+    "workflow_dispatch:",
+    "dry_run:",
+    "release:croki:plan",
+    "inputs.dry_run != true",
+    "vars.CROKI_RELAY_DEPLOY_ENABLED == 'true'",
+    "github.repository == vars.CROKI_RELEASE_REPOSITORY",
+    "github.ref_name == vars.CROKI_RELEASE_BRANCH",
+    "Refusing inherited T3 relay destination",
+    "secrets.CROKI_CLOUDFLARE_API_TOKEN",
+  ]) {
+    assertContains(relayWorkflow, guard, `Relay workflow is missing guard: ${guard}`);
+  }
+  assertNotContains(
+    relayWorkflow,
+    "secrets.CLOUDFLARE_API_TOKEN",
+    "Relay workflow still uses the inherited Cloudflare credential.",
+  );
+
+  for (const guard of ["dry-run", "release:croki:plan", "inputs.mode != 'dry-run'"]) {
+    assertContains(
+      mobileProductionWorkflow,
+      guard,
+      `Mobile production workflow is missing dry-run guard: ${guard}`,
+    );
+  }
+
+  for (const [name, workflow, enableVariable] of [
+    ["production", mobileProductionWorkflow, "CROKI_MOBILE_DEPLOY_ENABLED"],
+    ["preview", mobilePreviewWorkflow, "CROKI_MOBILE_PREVIEW_ENABLED"],
+  ] as const) {
+    for (const guard of [
+      enableVariable,
+      "CROKI_RELEASE_REPOSITORY",
+      "CROKI_RELEASE_BRANCH",
+      "CROKI_EAS_PROJECT_ID",
+      "secrets.CROKI_EXPO_TOKEN",
+      "croki-release-plan.ts",
+      "Verify configured EAS project",
+      "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    ]) {
+      assertContains(workflow, guard, `Mobile ${name} workflow is missing guard: ${guard}`);
+    }
+    assertNotContains(
+      workflow,
+      "secrets.EXPO_TOKEN",
+      `Mobile ${name} workflow still uses the inherited Expo credential.`,
+    );
+  }
+}
+
+function assertCrokiReleasePlan(): void {
+  const scriptPath = NodePath.resolve(repoRoot, "scripts/croki-release-plan.ts");
+  const localResult = NodeChildProcess.spawnSync(process.execPath, [scriptPath], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: {},
+  });
+  if (localResult.status !== 0) {
+    throw new Error(`Croki local release plan failed:\n${localResult.stderr}`);
+  }
+  const localPlan = JSON.parse(localResult.stdout) as {
+    readonly status?: unknown;
+    readonly enabled?: unknown;
+    readonly destinations?: Record<string, { readonly status?: unknown }>;
+  };
+  if (localPlan.status !== "disabled" || localPlan.enabled !== false) {
+    throw new Error("Croki local release plan must be safely disabled without configuration.");
+  }
+  for (const category of ["github", "cli", "relay", "web", "signing", "discord", "mobile"]) {
+    if (localPlan.destinations?.[category]?.status !== "disabled") {
+      throw new Error(`Croki local release plan is missing disabled category: ${category}.`);
+    }
+  }
+
+  const secretMarker = "CROKI_RELEASE_SMOKE_SECRET_MUST_NOT_RENDER";
+  const productionResult = NodeChildProcess.spawnSync(
+    process.execPath,
+    [scriptPath, "--production"],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        CROKI_RELEASE_ENABLED: "true",
+        CROKI_RELEASE_REPOSITORY: "pingdotgg/t3code",
+        CROKI_RELEASE_BRANCH: "main",
+        CROKI_CLI_PACKAGE: "t3",
+        CROKI_RELAY_DOMAIN: "relay.t3.codes",
+        CROKI_WEB_ROUTER_URL: "https://app.t3.codes",
+        CROKI_WEB_LATEST_DOMAIN: "latest.app.t3.codes",
+        CROKI_WEB_NIGHTLY_DOMAIN: "nightly.app.t3.codes",
+        CROKI_VERCEL_ORG_ID: "inherited-org",
+        CROKI_VERCEL_PROJECT_ID: "inherited-project",
+        CROKI_RELEASE_APP_PRIVATE_KEY: secretMarker,
+        CROKI_DISCORD_RELEASE_WEBHOOK_URL: secretMarker,
+      },
+    },
+  );
+  if (productionResult.status === 0) {
+    throw new Error("Croki production release plan unexpectedly accepted inherited destinations.");
+  }
+  assertNotContains(
+    productionResult.stdout,
+    secretMarker,
+    "Croki release plan rendered a secret value.",
+  );
+  const productionPlan = JSON.parse(productionResult.stdout) as {
+    readonly status?: unknown;
+    readonly enabled?: unknown;
+  };
+  if (productionPlan.status !== "invalid" || productionPlan.enabled !== false) {
+    throw new Error("Croki production release plan did not fail closed.");
+  }
+}
+
 function assertExists(path: string, message: string): void {
   if (!NodeFS.existsSync(path)) {
     throw new Error(message);
@@ -188,6 +359,8 @@ function assertMissing(path: string, message: string): void {
 const tempRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-release-smoke-"));
 
 try {
+  assertCrokiReleaseGuards();
+  assertCrokiReleasePlan();
   copyWorkspaceManifestFixture(tempRoot);
 
   NodeChildProcess.execFileSync(

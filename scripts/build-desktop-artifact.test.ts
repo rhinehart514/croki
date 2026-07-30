@@ -41,6 +41,7 @@ import {
   resolveMockUpdateServerUrl,
   resolvePackageManagerUserAgent,
   stageLinuxIconSize,
+  STAGED_DESKTOP_PACKAGE_IDENTITY,
   STAGE_INSTALL_ARGS,
   WINDOWS_ASAR_UNPACK,
 } from "./build-desktop-artifact.ts";
@@ -93,6 +94,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it("switches desktop packaging product names to nightly for nightly builds", () => {
     assert.equal(resolveDesktopProductName("0.0.17"), "Croki (Alpha)");
     assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Croki (Nightly)");
+  });
+
+  it("keeps staged package identity internal while exposing Croki metadata", () => {
+    assert.deepStrictEqual(STAGED_DESKTOP_PACKAGE_IDENTITY, {
+      name: "t3code",
+      description: "Croki desktop build",
+      author: "Croki",
+    });
   });
 
   it("keeps Croki desktop packaging icons across release channels", () => {
@@ -350,9 +359,26 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(linux, "asarUnpack");
       assert.deepStrictEqual(win.asarUnpack, WINDOWS_ASAR_UNPACK);
       for (const config of [mac, linux, win]) {
+        assert.equal(config.appId, "com.t3tools.t3code");
+        assert.equal(config.productName, "Croki (Alpha)");
+        assert.equal(config.artifactName, "Croki-${version}-${arch}.${ext}");
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
       }
+
+      assert.deepStrictEqual((mac.mac as Record<string, unknown>).protocols, [
+        { name: "Croki", schemes: ["t3code", "t3code-dev"] },
+      ]);
+      assert.equal((linux.linux as Record<string, unknown>).executableName, "t3code");
+      assert.equal(
+        (
+          (linux.linux as Record<string, unknown>).desktop as {
+            readonly entry: Record<string, unknown>;
+          }
+        ).entry.StartupWMClass,
+        "t3code",
+      );
+      assert.equal((win.win as Record<string, unknown>).icon, "icon.ico");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
@@ -522,9 +548,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(config.appId, "com.t3tools.t3code");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
-      assert.deepStrictEqual(mac.protocols, [
-        { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
-      ]);
+      assert.deepStrictEqual(mac.protocols, [{ name: "Croki", schemes: ["t3code", "t3code-dev"] }]);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 

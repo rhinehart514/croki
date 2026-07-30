@@ -113,6 +113,8 @@ import {
   parseReviewCommentMessageSegments,
   type ReviewCommentContext,
 } from "../../reviewCommentContext";
+import type { CrokiContextReceipt } from "@t3tools/shared/crokiContext";
+import { CrokiAppliedContextReceipt } from "./CrokiContextPresentation";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -130,9 +132,11 @@ interface TimelineRowSharedState {
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   activeThreadEnvironmentId: EnvironmentId;
+  crokiContextReceiptsByMessageId: ReadonlyMap<string, CrokiContextReceipt>;
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
   onToggleTurnFold: (turnId: TurnId) => void;
   onToggleWorkGroup: (groupId: string, anchorElement?: HTMLElement) => void;
 }
@@ -150,6 +154,7 @@ const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
 const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
+const EMPTY_CROKI_CONTEXT_RECEIPTS: ReadonlyMap<string, CrokiContextReceipt> = new Map();
 
 // ---------------------------------------------------------------------------
 // Props (public API)
@@ -166,11 +171,13 @@ interface MessagesTimelineProps {
   turnDiffSummaryByAssistantMessageId: Map<MessageId, TurnDiffSummary>;
   routeThreadKey: string;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
+  crokiContextReceiptsByMessageId?: ReadonlyMap<string, CrokiContextReceipt>;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
@@ -201,11 +208,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   turnDiffSummaryByAssistantMessageId,
   routeThreadKey,
   onOpenTurnDiff,
+  onPrepareCanvasUpdate,
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
+  crokiContextReceiptsByMessageId = EMPTY_CROKI_CONTEXT_RECEIPTS,
   markdownCwd,
   resolvedTheme,
   timestampFormat,
@@ -425,9 +434,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       skills,
       activeThreadEnvironmentId,
+      crokiContextReceiptsByMessageId,
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
+      onPrepareCanvasUpdate,
       onToggleTurnFold,
       onToggleWorkGroup,
     }),
@@ -439,9 +450,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       skills,
       activeThreadEnvironmentId,
+      crokiContextReceiptsByMessageId,
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
+      onPrepareCanvasUpdate,
       onToggleTurnFold,
       onToggleWorkGroup,
     ],
@@ -948,6 +961,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           markdownCwd={ctx.markdownCwd}
         />
       </div>
+      <CrokiAppliedContextReceipt
+        receipt={ctx.crokiContextReceiptsByMessageId.get(row.message.id) ?? null}
+      />
       <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
@@ -1034,6 +1050,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           routeThreadKey={ctx.routeThreadKey}
           resolvedTheme={ctx.resolvedTheme}
           onOpenTurnDiff={ctx.onOpenTurnDiff}
+          onPrepareCanvasUpdate={ctx.onPrepareCanvasUpdate}
         />
         {row.showAssistantMeta ? (
           <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
@@ -1240,11 +1257,13 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
   routeThreadKey,
   resolvedTheme,
   onOpenTurnDiff,
+  onPrepareCanvasUpdate,
 }: {
   turnSummary: TurnDiffSummary | undefined;
   routeThreadKey: string;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
 }) {
   if (!turnSummary) return null;
   const checkpointFiles = turnSummary.files;
@@ -1257,6 +1276,7 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
       routeThreadKey={routeThreadKey}
       resolvedTheme={resolvedTheme}
       onOpenTurnDiff={onOpenTurnDiff}
+      onPrepareCanvasUpdate={onPrepareCanvasUpdate}
     />
   );
 });
@@ -1269,12 +1289,14 @@ function AssistantChangedFilesSectionInner({
   routeThreadKey,
   resolvedTheme,
   onOpenTurnDiff,
+  onPrepareCanvasUpdate,
 }: {
   turnSummary: TurnDiffSummary;
   checkpointFiles: TurnDiffSummary["files"];
   routeThreadKey: string;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
 }) {
   const activity = use(TimelineRowActivityCtx);
   const isLatestTurn = activity.latestTurnId === turnSummary.turnId;
@@ -1287,6 +1309,7 @@ function AssistantChangedFilesSectionInner({
   );
   const [allDirectoriesExpanded, setAllDirectoriesExpanded] = useState(autoExpanded);
   const expanded = persistedExpanded ?? (isLatestTurn && autoExpanded);
+  const canPrepareCanvasUpdate = !isLatestTurn || !activity.activeTurnInProgress;
 
   return (
     <ChangedFilesCard
@@ -1301,6 +1324,11 @@ function AssistantChangedFilesSectionInner({
       }
       onToggleAllDirectories={() => setAllDirectoriesExpanded((current) => !current)}
       onOpenTurnDiff={onOpenTurnDiff}
+      onUpdateCanvas={
+        onPrepareCanvasUpdate && canPrepareCanvasUpdate
+          ? () => onPrepareCanvasUpdate(turnSummary)
+          : undefined
+      }
     />
   );
 }
