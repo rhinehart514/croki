@@ -19,6 +19,7 @@ import { CrokiCanvasOverview } from "./CrokiCanvasOverview";
 import {
   CROKI_CANVAS_VIEWS,
   crokiDomainForView,
+  crokiNewNodeTitle,
   type CrokiCanvasView,
 } from "./crokiCanvasLanguage";
 import { CrokiCanvasRunProjection } from "./CrokiCanvasRunProjection";
@@ -240,6 +241,7 @@ export function CrokiCanvas(props: CrokiCanvasProps) {
                       id,
                       kind,
                       domain,
+                      title: crokiNewNodeTitle(kind, domain),
                       now: new Date().toISOString(),
                     }),
                   );

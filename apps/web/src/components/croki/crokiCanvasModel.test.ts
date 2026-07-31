@@ -35,9 +35,11 @@ describe("crokiCanvasModel", () => {
     const added = addCrokiNode(createEmptyCrokiContext("Croki"), {
       id: "intent-1",
       kind: "intent",
+      title: "New audience",
       now: NOW,
     });
     expect(added.error).toBeNull();
+    expect(added.context.nodes[0]?.title).toBe("New audience");
     const edited = updateCrokiNode(
       added.context,
       "intent-1",

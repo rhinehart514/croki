@@ -31,6 +31,7 @@ interface NewNodeInput {
   readonly id: string;
   readonly kind: CrokiNodeKind;
   readonly domain?: CrokiNodeDomain;
+  readonly title?: string;
   readonly now: string;
 }
 
@@ -51,7 +52,7 @@ export function addCrokiNode(context: CrokiContext, input: NewNodeInput): CrokiC
     status: "provisional",
     domain: input.domain ?? "product",
     origin: "founder",
-    title: `New ${input.kind}`,
+    title: input.title?.trim() || `New ${input.kind}`,
     body: "",
     updatedAt: input.now,
   };

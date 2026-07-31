@@ -55,6 +55,10 @@ export function crokiNodeKindLabel(kind: CrokiNodeKind, domain: CrokiNodeDomain)
   return KIND_LABELS[domain][kind];
 }
 
+export function crokiNewNodeTitle(kind: CrokiNodeKind, domain: CrokiNodeDomain): string {
+  return `New ${crokiNodeKindLabel(kind, domain).toLowerCase()}`;
+}
+
 export function crokiNodeMatchesView(node: CrokiContextNode, view: CrokiCanvasView): boolean {
   if (view === "review") return node.status === "provisional";
   const domain = crokiNodeDomain(node);
