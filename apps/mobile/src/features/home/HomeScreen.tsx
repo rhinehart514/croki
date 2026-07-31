@@ -36,7 +36,11 @@ import {
   ThreadListRow,
   ThreadListShowMoreRow,
 } from "../threads/thread-list-items";
-import { ThreadListV2PendingRow, ThreadListV2Row } from "../threads/thread-list-v2-items";
+import {
+  ThreadListV2PendingRow,
+  ThreadListV2Row,
+  ThreadListV2SnoozedShelfHeader,
+} from "../threads/thread-list-v2-items";
 import {
   buildThreadListV2Items,
   buildThreadListV2ListItems,
@@ -93,6 +97,11 @@ interface HomeScreenProps {
   readonly onDeleteThread: (thread: EnvironmentThreadShell) => void;
   /** Resolves true iff the settle was dispatched and succeeded. */
   readonly onSettleThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
+  readonly onSnoozeThread: (
+    thread: EnvironmentThreadShell,
+    snoozedUntil: string,
+  ) => Promise<boolean>;
+  readonly onUnsnoozeThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly onUnsettleThread: (thread: EnvironmentThreadShell) => void;
   readonly onSelectPendingTask: (pendingTask: PendingNewTask) => void;
   readonly onDeletePendingTask: (pendingTask: PendingNewTask) => void;
@@ -451,6 +460,18 @@ export function HomeScreen(props: HomeScreenProps) {
     },
     [props.onSettleThread],
   );
+  const handleSnoozeThread = useCallback(
+    (thread: EnvironmentThreadShell, snoozedUntil: string) => {
+      void props.onSnoozeThread(thread, snoozedUntil);
+    },
+    [props.onSnoozeThread],
+  );
+  const handleUnsnoozeThread = useCallback(
+    (thread: EnvironmentThreadShell) => {
+      void props.onUnsnoozeThread(thread);
+    },
+    [props.onUnsnoozeThread],
+  );
   const handleDeleteThread = props.onDeleteThread;
   const handleUnsettleThread = props.onUnsettleThread;
   // The settled tail renders in pages; expansion resets when the filter
@@ -468,6 +489,8 @@ export function HomeScreen(props: HomeScreenProps) {
     () => setSettledVisibleCount((count) => count + THREAD_LIST_V2_SETTLED_PAGE_COUNT),
     [],
   );
+  const [snoozedShelfExpanded, setSnoozedShelfExpanded] = useState(false);
+  const toggleSnoozedShelf = useCallback(() => setSnoozedShelfExpanded((value) => !value), []);
   // now is quantized to the minute and ticks so the inactivity auto-settle
   // boundary is actually crossed while the app stays open (mirrors web);
   // without a clock dependency the partition memoizes a frozen "now".
@@ -508,7 +531,13 @@ export function HomeScreen(props: HomeScreenProps) {
   }, [serverConfigs]);
   const threadListV2Layout = useMemo(() => {
     if (!threadListV2Enabled)
-      return { items: [], hiddenSettledCount: 0, snoozedCount: 0, nextSnoozeWakeAt: null };
+      return {
+        items: [],
+        hiddenSettledCount: 0,
+        snoozedCount: 0,
+        snoozedShelfHeaderIndex: null,
+        nextSnoozeWakeAt: null,
+      };
     // Settled threads are live shells; archived threads keep their original
     // "hidden from lists" meaning.
     return buildThreadListV2Items({
@@ -522,11 +551,14 @@ export function HomeScreen(props: HomeScreenProps) {
       settledLimit: settledVisibleCount,
       now: `${nowMinute}:00.000Z`,
       snoozeNow: new Date().toISOString(),
+      snoozedShelfExpanded,
+      selectedThreadKey: null,
     });
   }, [
     changeRequestStateByKey,
     nowMinute,
     snoozeWakeTick,
+    snoozedShelfExpanded,
     settledVisibleCount,
     settlementEnvironmentIds,
     snoozeEnvironmentIds,
@@ -575,8 +607,12 @@ export function HomeScreen(props: HomeScreenProps) {
       buildThreadListV2ListItems({
         items: threadListV2Layout.items,
         pendingTasks: v2PendingTasks,
+        snoozedCount: threadListV2Layout.snoozedCount,
+        snoozedShelfExpanded,
+        snoozedShelfHeaderIndex: threadListV2Layout.snoozedShelfHeaderIndex,
+        snoozeLabelNow: `${nowMinute}:00.000Z`,
       }),
-    [threadListV2Layout.items, v2PendingTasks],
+    [snoozedShelfExpanded, threadListV2Layout, v2PendingTasks],
   );
 
   const renderV2Item = useCallback(
@@ -603,12 +639,24 @@ export function HomeScreen(props: HomeScreenProps) {
           />
         );
       }
+      if (item.type === "v2-snoozed-shelf") {
+        return (
+          <ThreadListV2SnoozedShelfHeader
+            count={item.count}
+            expanded={item.expanded}
+            onToggle={toggleSnoozedShelf}
+          />
+        );
+      }
       const thread = item.item.thread;
       return (
         <ThreadListV2Row
           thread={thread}
           variant={item.item.variant}
           showSettledDivider={item.item.showSettledDivider}
+          snoozed={item.item.snoozed}
+          snoozePresetMinute={nowMinute}
+          snoozeWakeLabelText={item.snoozeWakeLabelText}
           project={
             projectByKey.get(scopedProjectKey(thread.environmentId, thread.projectId)) ?? null
           }
@@ -634,6 +682,9 @@ export function HomeScreen(props: HomeScreenProps) {
           onArchiveThread={props.onArchiveThread}
           settlementSupported={settlementEnvironmentIds.has(thread.environmentId)}
           onSettleThread={handleSettleThread}
+          snoozeSupported={snoozeEnvironmentIds.has(thread.environmentId)}
+          onSnoozeThread={handleSnoozeThread}
+          onUnsnoozeThread={handleUnsnoozeThread}
           onUnsettleThread={handleUnsettleThread}
           onChangeRequestState={handleChangeRequestState}
           projectCwd={
@@ -648,6 +699,8 @@ export function HomeScreen(props: HomeScreenProps) {
       handleChangeRequestState,
       handleDeleteThread,
       handleSettleThread,
+      handleSnoozeThread,
+      handleUnsnoozeThread,
       handleSwipeableClose,
       handleSwipeableWillOpen,
       handleUnsettleThread,
@@ -660,7 +713,10 @@ export function HomeScreen(props: HomeScreenProps) {
       props.savedConnectionsById,
       serverConfigs,
       settlementEnvironmentIds,
+      snoozeEnvironmentIds,
+      toggleSnoozedShelf,
       v2ProjectTitleByProjectKey,
+      nowMinute,
     ],
   );
   const v2KeyExtractor = useCallback((item: ThreadListV2ListItem) => item.key, []);
@@ -675,12 +731,14 @@ export function HomeScreen(props: HomeScreenProps) {
       projectTitleByProjectKey: v2ProjectTitleByProjectKey,
       serverConfigs,
       savedConnectionsById: props.savedConnectionsById,
+      snoozePresetMinute: nowMinute,
     }),
     [
       projectByKey,
       projectCwdByKey,
       props.savedConnectionsById,
       serverConfigs,
+      nowMinute,
       v2ProjectTitleByProjectKey,
     ],
   );
