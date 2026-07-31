@@ -126,6 +126,5 @@ jobs:
           path: |
             release/Croki-*.exe
             release/Croki-*.blockmap
-            release/*.yml
           if-no-files-found: error
           retention-days: 14
