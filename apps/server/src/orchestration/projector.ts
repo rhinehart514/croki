@@ -1,9 +1,13 @@
 import type { OrchestrationEvent, OrchestrationReadModel, ThreadId } from "@t3tools/contracts";
 import {
+  EventId,
+  MessageId,
   OrchestrationCheckpointSummary,
   OrchestrationMessage,
   OrchestrationSession,
   OrchestrationThread,
+  ThreadForkRequestedPayload,
+  TurnId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -182,6 +186,38 @@ function compareThreadActivities(
   return left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id);
 }
 
+function forkScopedId(threadId: ThreadId, sourceId: string): string {
+  return `fork:${threadId}:${sourceId}`;
+}
+
+function openBlockingRequestIds(
+  activities: ReadonlyArray<OrchestrationThread["activities"][number]>,
+): ReadonlySet<string> {
+  const openRequestIds = new Set<string>();
+  for (const activity of activities) {
+    const payload =
+      typeof activity.payload === "object" && activity.payload !== null
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const requestId = typeof payload?.requestId === "string" ? payload.requestId : null;
+    if (requestId === null) continue;
+    if (activity.kind === "approval.requested" || activity.kind === "user-input.requested") {
+      openRequestIds.add(requestId);
+    } else if (activity.kind === "approval.resolved" || activity.kind === "user-input.resolved") {
+      openRequestIds.delete(requestId);
+    } else if (
+      activity.kind === "provider.approval.respond.failed" ||
+      activity.kind === "provider.user-input.respond.failed"
+    ) {
+      const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : "";
+      if (detail.includes("stale pending") || detail.includes("unknown pending")) {
+        openRequestIds.delete(requestId);
+      }
+    }
+  }
+  return openRequestIds;
+}
+
 export function createEmptyReadModel(nowIso: string): OrchestrationReadModel {
   return {
     snapshotSequence: 0,
@@ -304,6 +340,108 @@ export function projectEvent(
           "thread",
         );
         const existing = nextBase.threads.find((entry) => entry.id === thread.id);
+        return {
+          ...nextBase,
+          threads: existing
+            ? nextBase.threads.map((entry) => (entry.id === thread.id ? thread : entry))
+            : [...nextBase.threads, thread],
+        };
+      });
+
+    case "thread.fork-requested":
+      return Effect.gen(function* () {
+        const payload = yield* decodeForEvent(
+          ThreadForkRequestedPayload,
+          event.payload,
+          event.type,
+          "payload",
+        );
+        const source = nextBase.threads.find((entry) => entry.id === payload.sourceThreadId);
+        if (!source) {
+          return nextBase;
+        }
+
+        const remapTurnId = (turnId: OrchestrationThread["messages"][number]["turnId"]) =>
+          turnId === null ? null : TurnId.make(forkScopedId(payload.threadId, turnId));
+        const remapMessageId = (messageId: OrchestrationThread["messages"][number]["id"]) =>
+          MessageId.make(forkScopedId(payload.threadId, messageId));
+        const pendingRequestIds = openBlockingRequestIds(source.activities);
+
+        const thread: OrchestrationThread = yield* decodeForEvent(
+          OrchestrationThread,
+          {
+            id: payload.threadId,
+            projectId: source.projectId,
+            forkedFromThreadId: source.id,
+            title: `${source.title} (fork)`,
+            modelSelection: source.modelSelection,
+            runtimeMode: source.runtimeMode,
+            interactionMode: source.interactionMode,
+            branch: source.branch,
+            worktreePath: source.worktreePath,
+            latestTurn:
+              source.latestTurn === null
+                ? null
+                : {
+                    ...source.latestTurn,
+                    turnId: TurnId.make(forkScopedId(payload.threadId, source.latestTurn.turnId)),
+                    assistantMessageId:
+                      source.latestTurn.assistantMessageId === null
+                        ? null
+                        : remapMessageId(source.latestTurn.assistantMessageId),
+                    sourceProposedPlan: undefined,
+                  },
+            createdAt: payload.createdAt,
+            updatedAt: payload.createdAt,
+            archivedAt: null,
+            settledOverride: null,
+            settledAt: null,
+            snoozedUntil: null,
+            snoozedAt: null,
+            deletedAt: null,
+            messages: source.messages.map((message) => ({
+              ...message,
+              id: remapMessageId(message.id),
+              turnId: remapTurnId(message.turnId),
+              streaming: false,
+            })),
+            proposedPlans: source.proposedPlans
+              .filter((plan) => plan.implementedAt !== null)
+              .map((plan) => ({
+                ...plan,
+                turnId: remapTurnId(plan.turnId),
+              })),
+            activities: source.activities
+              .filter((activity) => {
+                const activityPayload =
+                  typeof activity.payload === "object" && activity.payload !== null
+                    ? (activity.payload as Record<string, unknown>)
+                    : null;
+                const requestId =
+                  typeof activityPayload?.requestId === "string" ? activityPayload.requestId : null;
+                return requestId === null || !pendingRequestIds.has(requestId);
+              })
+              .map((activity) => ({
+                ...activity,
+                id: EventId.make(forkScopedId(payload.threadId, activity.id)),
+                turnId: remapTurnId(activity.turnId),
+              })),
+            checkpoints: [],
+            session: {
+              threadId: payload.threadId,
+              status: "starting",
+              providerName: null,
+              runtimeMode: source.runtimeMode,
+              activeTurnId: null,
+              lastError: null,
+              updatedAt: payload.createdAt,
+            },
+          },
+          event.type,
+          "thread",
+        );
+
+        const existing = nextBase.threads.find((entry) => entry.id === payload.threadId);
         return {
           ...nextBase,
           threads: existing

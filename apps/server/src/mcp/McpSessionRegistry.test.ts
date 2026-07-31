@@ -110,6 +110,24 @@ it.effect("keeps a credential alive across turns that never touch an MCP tool", 
   }),
 );
 
+it.effect("grants Canvas only for turns where the Canvas surface is active", () =>
+  Effect.gen(function* () {
+    const registry = yield* makeRegistry(() => 1_000);
+    const threadId = ThreadId.make("thread-canvas");
+    const issued = yield* registry.issue({
+      threadId,
+      providerInstanceId: ProviderInstanceId.make("codex"),
+    });
+    const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
+
+    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
+    yield* registry.touch(threadId, { canvasEnabled: true });
+    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(true);
+    yield* registry.touch(threadId, { canvasEnabled: false });
+    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
+  }),
+);
+
 it.effect("does not keep credentials of other threads alive", () =>
   Effect.gen(function* () {
     let timestamp = 1_000;

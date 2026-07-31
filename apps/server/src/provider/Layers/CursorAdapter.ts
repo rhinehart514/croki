@@ -1129,6 +1129,15 @@ export function makeCursorAdapter(
         return { threadId, turns: ctx.turns };
       });
 
+    const forkThread: CursorAdapterShape["forkThread"] = (_sourceThreadId, _targetThreadId) =>
+      Effect.fail(
+        new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Cursor ACP sessions do not support native conversation forks.",
+        }),
+      );
+
     const stopSession: CursorAdapterShape["stopSession"] = (threadId) =>
       withThreadLock(
         threadId,
@@ -1164,12 +1173,13 @@ export function makeCursorAdapter(
 
     return {
       provider: PROVIDER,
-      capabilities: { sessionModelSwitch: "in-session" },
+      capabilities: { sessionModelSwitch: "in-session", conversationFork: "unsupported" },
       startSession,
       sendTurn,
       interruptTurn,
       readThread,
       rollbackThread,
+      forkThread,
       respondToRequest,
       respondToUserInput,
       stopSession,

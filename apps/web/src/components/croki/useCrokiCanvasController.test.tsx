@@ -194,6 +194,32 @@ describe("useCrokiCanvasController save lifecycle", () => {
     expect(dirtyPending).toHaveBeenCalledWith(true);
   });
 
+  it("exposes session undo, redo, and discard controls", () => {
+    seedDirtyDraft();
+    let controller = renderController();
+    expect(controller.canUndo).toBe(true);
+    expect(controller.canRedo).toBe(false);
+
+    controller.undo();
+    expect(getCrokiCanvasDraft(WORKSPACE_KEY).context.product).toBe("Croki");
+    expect(getCrokiCanvasDraft(WORKSPACE_KEY).dirty).toBe(false);
+
+    controller = renderController();
+    expect(controller.canUndo).toBe(false);
+    expect(controller.canRedo).toBe(true);
+    controller.redo();
+    expect(getCrokiCanvasDraft(WORKSPACE_KEY).context.product).toBe("Croki Studio");
+
+    controller = renderController();
+    controller.discard();
+    expect(getCrokiCanvasDraft(WORKSPACE_KEY).context.product).toBe("Croki");
+    expect(getCrokiCanvasDraft(WORKSPACE_KEY).dirty).toBe(false);
+
+    controller = renderController();
+    expect(controller.canUndo).toBe(false);
+    expect(controller.canRedo).toBe(false);
+  });
+
   it.each([
     {
       expected: "valid",

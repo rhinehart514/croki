@@ -1,10 +1,8 @@
 import { EnvironmentId } from "@t3tools/contracts";
 import type {
   CrokiContext,
-  CrokiContextEdge,
   CrokiContextNode,
   CrokiContextReference,
-  CrokiNodeKind,
 } from "@t3tools/shared/crokiContext";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -13,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   applyTransition: vi.fn(),
   controllerProps: null as unknown,
   nodeEditorProps: null as unknown,
-  overviewProps: null as unknown,
+  workspaceProps: null as unknown,
   replaceDraft: vi.fn(),
   save: vi.fn(),
   selectNode: vi.fn(),
@@ -49,10 +47,10 @@ vi.mock("./CrokiCanvasNodeEditor", () => ({
     return <article aria-label="Focused Canvas editor" />;
   },
 }));
-vi.mock("./CrokiCanvasOverview", () => ({
-  CrokiCanvasOverview: (props: unknown) => {
-    mocks.overviewProps = props;
-    return <nav aria-label="Canvas overview" />;
+vi.mock("./CrokiCanvasWorkspace", () => ({
+  CrokiCanvasWorkspace: (props: unknown) => {
+    mocks.workspaceProps = props;
+    return <div aria-label="Visual Canvas workspace" />;
   },
 }));
 vi.mock("./CrokiCanvasSourceNotice", () => ({
@@ -86,7 +84,7 @@ const CONTEXT: CrokiContext = {
       updatedAt: "2026-07-30T00:00:00.000Z",
     },
   ],
-  edges: [{ from: "work-1", to: "intent-1", relation: "advances" }],
+  edges: [{ from: "work-1", to: "intent-1", relation: "enables" }],
 };
 
 const controllerState = {
@@ -115,47 +113,24 @@ describe("CrokiCanvas interaction routing", () => {
     mocks.selectNode.mockReset();
     mocks.updateNode.mockReset();
     mocks.nodeEditorProps = null;
-    mocks.overviewProps = null;
+    mocks.workspaceProps = null;
     controllerState.selectedNode = null;
   });
 
-  it("routes add, adopt, retire, relationship, and selection actions", () => {
+  it("keeps the decision field mounted while routing selection and retirement", () => {
     renderCanvas();
-    const props = mocks.overviewProps as OverviewProps;
+    const props = mocks.workspaceProps as WorkspaceProps;
 
-    props.onAddNode("evidence");
-    expect(mocks.applyTransition).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        error: null,
-        context: expect.objectContaining({
-          nodes: expect.arrayContaining([
-            expect.objectContaining({
-              kind: "evidence",
-              status: "provisional",
-            }),
-          ]),
-        }),
-      }),
-    );
-    expect(mocks.selectNode).toHaveBeenCalledWith(
-      "local\u0000/work/croki",
-      expect.stringMatching(/^evidence-/),
-    );
-
-    props.onAdopt("work-1");
-    expect(lastTransitionNode("work-1").status).toBe("current");
-    props.onReject("work-1");
-    expect(lastTransitionNode("work-1").status).toBe("retired");
-    props.onRetire("intent-1");
-    expect(lastTransitionNode("intent-1").status).toBe("retired");
-
-    props.onDeleteEdge(CONTEXT.edges[0]!);
-    expect(mocks.replaceDraft).toHaveBeenLastCalledWith(
-      "local\u0000/work/croki",
-      expect.objectContaining({ edges: [] }),
-    );
     props.onSelect("work-1");
     expect(mocks.selectNode).toHaveBeenLastCalledWith("local\u0000/work/croki", "work-1");
+
+    controllerState.selectedNode = CONTEXT.nodes[1]!;
+    const markup = renderCanvas();
+    expect(markup).toContain('aria-label="Visual Canvas workspace"');
+    expect(markup).toContain('aria-label="Focused Canvas editor"');
+    const editor = mocks.nodeEditorProps as NodeEditorProps;
+    editor.onRetire("intent-1");
+    expect(lastTransitionNode("intent-1").status).toBe("retired");
   });
 
   it("routes focused edits and cascading deletion", () => {
@@ -187,14 +162,69 @@ describe("CrokiCanvas interaction routing", () => {
     expect(mocks.selectNode).toHaveBeenLastCalledWith("local\u0000/work/croki", null);
   });
 
+  it("completes founder judgment and makes relationships correctable", () => {
+    controllerState.selectedNode = CONTEXT.nodes[1]!;
+    renderCanvas();
+    const editor = mocks.nodeEditorProps as NodeEditorProps;
+    const workspace = mocks.workspaceProps as WorkspaceProps;
+
+    editor.onAdopt("work-1");
+    expect(lastTransitionNode("work-1").status).toBe("current");
+
+    editor.onDecline("work-1");
+    expect(lastTransitionNode("work-1").status).toBe("retired");
+    expect(mocks.selectNode).toHaveBeenLastCalledWith("local\u0000/work/croki", null);
+
+    const edge = CONTEXT.edges[0]!;
+    expect(workspace.onConnect({ from: edge.from, to: edge.to })).toBeNull();
+    expect(mocks.applyTransition.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ error: "duplicate-edge" }),
+    );
+
+    expect(
+      workspace.onReplaceEdge(edge, {
+        ...edge,
+        from: "intent-1",
+        to: "intent-1",
+      }),
+    ).toBeNull();
+    const refused = mocks.applyTransition.mock.calls.at(-1)?.[0] as {
+      readonly context: CrokiContext;
+      readonly error: string | null;
+    };
+    expect(refused.context.edges).toEqual(CONTEXT.edges);
+    expect(refused.error).toBe("self-edge");
+
+    expect(
+      workspace.onReplaceEdge(edge, {
+        ...edge,
+        relation: "guides",
+        from: "intent-1",
+        to: "work-1",
+      }),
+    ).toEqual({ ...edge, relation: "guides", from: "intent-1", to: "work-1" });
+    const replaced = mocks.applyTransition.mock.calls.at(-1)?.[0] as {
+      readonly context: CrokiContext;
+    };
+    expect(replaced.context.edges).toEqual([
+      { from: "intent-1", to: "work-1", relation: "guides" },
+    ]);
+
+    workspace.onDisconnect(edge);
+    const disconnected = mocks.applyTransition.mock.calls.at(-1)?.[0] as {
+      readonly context: CrokiContext;
+    };
+    expect(disconnected.context.edges).toEqual([]);
+  });
+
   it("forwards pending lifecycle ownership and exposes labeled landmarks", () => {
     const onPendingChange = vi.fn();
     const markup = renderCanvas(onPendingChange);
 
     expect(mocks.controllerProps).toEqual(expect.objectContaining({ onPendingChange }));
     expect(markup).toContain('aria-label="Croki Canvas"');
-    expect(markup).toContain('aria-label="Canvas overview"');
-    expect(markup).toContain("Unsaved");
+    expect(markup).toContain('aria-label="Visual Canvas workspace"');
+    expect(markup).toContain("Save Canvas");
   });
 
   it("forwards repository bootstrap and reference opening seams", () => {
@@ -208,7 +238,7 @@ describe("CrokiCanvas interaction routing", () => {
       />,
     );
     expect(
-      (mocks.overviewProps as { onBuildFromRepository?: () => void }).onBuildFromRepository,
+      (mocks.workspaceProps as { onBuildFromRepository?: () => void }).onBuildFromRepository,
     ).toBe(onBuildFromRepository);
 
     const onOpenReference = vi.fn();
@@ -251,18 +281,25 @@ function lastTransitionNode(id: string) {
   return node;
 }
 
-interface OverviewProps {
-  readonly onAddNode: (kind: CrokiNodeKind) => void;
-  readonly onAdopt: (id: string) => void;
-  readonly onDeleteEdge: (edge: CrokiContextEdge) => void;
-  readonly onReject: (id: string) => void;
-  readonly onRetire: (id: string) => void;
+interface WorkspaceProps {
+  readonly onConnect: (edge: {
+    readonly from: string;
+    readonly to: string;
+  }) => CrokiContext["edges"][number] | null;
+  readonly onDisconnect: (edge: CrokiContext["edges"][number]) => void;
+  readonly onReplaceEdge: (
+    previous: CrokiContext["edges"][number],
+    next: CrokiContext["edges"][number],
+  ) => CrokiContext["edges"][number] | null;
   readonly onSelect: (id: string) => void;
 }
 
 interface NodeEditorProps {
+  readonly onAdopt: (id: string) => void;
   readonly onAddReference: (reference: CrokiContextReference) => string | null;
+  readonly onDecline: (id: string) => void;
   readonly onDelete: (id: string) => void;
   readonly onRemoveReference: (reference: CrokiContextReference) => void;
+  readonly onRetire: (id: string) => void;
   readonly onUpdate: (id: string, patch: Partial<Pick<CrokiContextNode, "title">>) => void;
 }

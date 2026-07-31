@@ -74,6 +74,8 @@ export const ProviderSendTurnInput = Schema.Struct({
   ),
   modelSelection: Schema.optional(ModelSelection),
   interactionMode: Schema.optional(ProviderInteractionMode),
+  /** Enables the scoped Croki Canvas presentation tool for this provider turn. */
+  canvasEnabled: Schema.optional(Schema.Boolean),
 });
 export type ProviderSendTurnInput = typeof ProviderSendTurnInput.Type;
 

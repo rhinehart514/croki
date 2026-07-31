@@ -5,7 +5,51 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import { isCrokiContextAppliedActivityPayload, loadCrokiAgentContext } from "./CrokiContext.ts";
+import {
+  compileCrokiTurnInput,
+  CROKI_CANVAS_HARNESS_INSTRUCTION,
+  isCrokiContextAppliedActivityPayload,
+  loadCrokiAgentContext,
+} from "./CrokiContext.ts";
+
+it("keeps ordinary provider turns byte-for-byte compatible when Canvas is disabled", () => {
+  const agentContext = "<croki_product_context>canon</croki_product_context>";
+  const userInput = "Keep this exact request";
+
+  assert.equal(
+    compileCrokiTurnInput({ canvasEnabled: false, agentContext, userInput }),
+    `${agentContext}\n\n${userInput}`,
+  );
+  assert.equal(
+    compileCrokiTurnInput({ canvasEnabled: false, agentContext: null, userInput }),
+    userInput,
+  );
+  assert.isUndefined(
+    compileCrokiTurnInput({
+      canvasEnabled: false,
+      agentContext: null,
+      userInput: undefined,
+    }),
+  );
+});
+
+it("adds one bounded strategy harness without weakening founder authority", () => {
+  const agentContext = "<croki_product_context>canon</croki_product_context>";
+  const userInput = "Explore the first customer";
+  const compiled = compileCrokiTurnInput({
+    canvasEnabled: true,
+    agentContext,
+    userInput,
+  });
+
+  assert.isAtMost(CROKI_CANVAS_HARNESS_INSTRUCTION.length, 1_500);
+  assert.equal(compiled?.match(/<croki_canvas_harness version="1">/g)?.length, 1);
+  assert.include(compiled ?? "", "leave consequential judgment to the founder");
+  assert.include(compiled ?? "", "Do not ask the user to author or connect nodes");
+  assert.include(compiled ?? "", "not another memory, runtime, or source of truth");
+  assert.include(compiled ?? "", agentContext);
+  assert.isTrue(compiled?.endsWith(userInput));
+});
 
 it.layer(NodeServices.layer)("Croki provider context", (it) => {
   it.effect("loads a bounded repository snapshot and content-free receipt", () =>

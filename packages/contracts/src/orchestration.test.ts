@@ -223,6 +223,7 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
     assert.strictEqual(parsed.modelSelection, undefined);
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    assert.strictEqual(parsed.canvasEnabled, undefined);
   }),
 );
 
@@ -243,11 +244,13 @@ it.effect("preserves explicit provider and runtime mode in thread.turn.start", (
         model: "gpt-5.4",
       },
       runtimeMode: "full-access",
+      canvasEnabled: true,
       createdAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.modelSelection?.instanceId, "codex");
     assert.strictEqual(parsed.runtimeMode, "full-access");
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    assert.strictEqual(parsed.canvasEnabled, true);
   }),
 );
 
@@ -414,6 +417,44 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
     assert.strictEqual(thread.settledAt, null);
     assert.strictEqual(shell.settledOverride, null);
     assert.strictEqual(shell.settledAt, null);
+  }),
+);
+
+it.effect("decodes thread fork commands and requested events", () =>
+  Effect.gen(function* () {
+    const createdAt = "2026-01-02T03:04:05.000Z";
+    const command = yield* decodeOrchestrationCommand({
+      type: "thread.fork",
+      commandId: "command-fork",
+      threadId: "thread-fork",
+      sourceThreadId: "thread-source",
+      createdAt,
+    });
+    assert.strictEqual(command.type, "thread.fork");
+    if (command.type !== "thread.fork") return;
+    assert.strictEqual(command.threadId, "thread-fork");
+    assert.strictEqual(command.sourceThreadId, "thread-source");
+
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 1,
+      eventId: "event-fork",
+      aggregateKind: "thread",
+      aggregateId: "thread-fork",
+      type: "thread.fork-requested",
+      occurredAt: createdAt,
+      commandId: "command-fork",
+      causationEventId: null,
+      correlationId: "command-fork",
+      metadata: {},
+      payload: {
+        threadId: "thread-fork",
+        sourceThreadId: "thread-source",
+        createdAt,
+      },
+    });
+    assert.strictEqual(event.type, "thread.fork-requested");
+    if (event.type !== "thread.fork-requested") return;
+    assert.strictEqual(event.payload.sourceThreadId, "thread-source");
   }),
 );
 
@@ -653,20 +694,32 @@ it.effect("accepts a source proposed plan reference in thread.turn.start", () =>
   }),
 );
 
-it.effect(
-  "decodes thread.turn-start-requested defaults for provider, runtime mode, and interaction mode",
-  () =>
-    Effect.gen(function* () {
-      const parsed = yield* decodeThreadTurnStartRequestedPayload({
-        threadId: "thread-1",
-        messageId: "msg-1",
-        createdAt: "2026-01-01T00:00:00.000Z",
-      });
-      assert.strictEqual(parsed.modelSelection, undefined);
-      assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
-      assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
-      assert.strictEqual(parsed.sourceProposedPlan, undefined);
-    }),
+it.effect("decodes legacy thread.turn-start-requested payloads without Canvas state", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartRequestedPayload({
+      threadId: "thread-1",
+      messageId: "msg-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.modelSelection, undefined);
+    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
+    assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    assert.isUndefined(parsed.canvasEnabled);
+    assert.strictEqual(parsed.sourceProposedPlan, undefined);
+  }),
+);
+
+it.effect("preserves enabled Canvas state in thread.turn-start-requested", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartRequestedPayload({
+      threadId: "thread-1",
+      messageId: "msg-1",
+      canvasEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    assert.isTrue(parsed.canvasEnabled);
+  }),
 );
 
 it.effect("decodes thread.turn-start-requested source proposed plan metadata when present", () =>

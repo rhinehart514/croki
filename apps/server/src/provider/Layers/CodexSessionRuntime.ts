@@ -141,6 +141,8 @@ export interface CodexSessionRuntimeShape {
   readonly rollbackThread: (
     numTurns: number,
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
+  /** Fork the current Codex thread and return resumable state for the clone. */
+  readonly forkThread: Effect.Effect<CodexResumeCursor, CodexSessionRuntimeError>;
   readonly respondToRequest: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -1361,6 +1363,13 @@ export const makeCodexSessionRuntime = (
           });
           return parseThreadSnapshot(response);
         }),
+      forkThread: Effect.gen(function* () {
+        const providerThreadId = yield* readProviderThreadId;
+        const response = yield* client.request("thread/fork", {
+          threadId: providerThreadId,
+        });
+        return { threadId: response.thread.id } satisfies CodexResumeCursor;
+      }),
       respondToRequest: (requestId, decision) =>
         Effect.gen(function* () {
           const pending = (yield* Ref.get(pendingApprovalsRef)).get(requestId);

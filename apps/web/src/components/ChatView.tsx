@@ -45,6 +45,7 @@ import {
   CROKI_CONTEXT_RELATIVE_PATH,
   type CrokiContextReference,
 } from "@t3tools/shared/crokiContext";
+import { parseCrokiCanvasPresentedActivityPayload } from "@t3tools/shared/crokiCanvasActivity";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -124,6 +125,7 @@ import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import {
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
+  selectThreadCanvasEnabled,
   selectThreadRightPanelState,
   type RightPanelSurface,
   useRightPanelStore,
@@ -144,6 +146,7 @@ import {
 } from "../previewMiniPlayerStore";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { CrokiCanvas } from "./croki/CrokiCanvas";
+import type { CrokiCanvasView } from "./croki/crokiCanvasLanguage";
 import { addProvisionalCrokiEvidence } from "./croki/crokiCanvasEvidenceDraft";
 import {
   makeCrokiCanvasWorkspaceKey,
@@ -244,7 +247,6 @@ import {
   buildCrokiGtmExplorationPrompt,
   buildCrokiRepositoryBootstrapPrompt,
   buildCrokiTurnUpdatePrompt,
-  buildCrokiWorkflowCompositionPrompt,
   mergePreparedComposerPrompt,
 } from "./chat/CrokiProposalPrompts.logic";
 import { useProjectFileQuery } from "./files/projectFilesQueryState";
@@ -336,6 +338,7 @@ const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -1229,6 +1232,14 @@ function ChatViewContent(props: ChatViewProps) {
     [routeServerThreadShell, threadDetailLoading],
   );
   const activeServerThread = serverThread ?? loadingServerThread;
+  const forkSourceThreadRef = useMemo(
+    () =>
+      activeServerThread?.forkedFromThreadId
+        ? scopeThreadRef(activeServerThread.environmentId, activeServerThread.forkedFromThreadId)
+        : null,
+    [activeServerThread],
+  );
+  const forkSourceThread = useThreadShell(forkSourceThreadRef);
   const markThreadVisited = useUiStateStore((store) => store.markThreadVisited);
   const activeThreadLastVisitedAt = useUiStateStore(
     (store) => store.threadLastVisitedAtById[routeThreadKey],
@@ -1528,6 +1539,9 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const activeRightPanelSurface = useRightPanelStore((state) =>
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
+  );
+  const canvasEnabled = useRightPanelStore((state) =>
+    selectThreadCanvasEnabled(state.byThreadKey, activeThreadRef),
   );
   const activeFileSurface =
     activeRightPanelSurface?.kind === "file" ? activeRightPanelSurface : null;
@@ -2462,6 +2476,15 @@ function ChatViewContent(props: ChatViewProps) {
     crokiCanvasWorkspaceKey,
     activeProject?.title ?? "",
   );
+  const latestCanvasPresentation = activeThread?.activities.findLast(
+    (activity) => activity.kind === "croki.canvas.presented",
+  );
+  const latestCanvasPresentationPayload = parseCrokiCanvasPresentedActivityPayload(
+    latestCanvasPresentation?.payload,
+  );
+  const latestCanvasPresentationView = latestCanvasPresentationPayload?.view ?? null;
+  const latestCanvasPresentationQuestion = latestCanvasPresentationPayload?.question ?? null;
+  const latestCanvasPresentationNodeIds = latestCanvasPresentationPayload?.provisionalNodeIds ?? [];
   const [queuedCanvasEvidence, setQueuedCanvasEvidence] = useState<{
     readonly reference: CrokiContextReference;
     readonly title: string;
@@ -2656,10 +2679,10 @@ function ChatViewContent(props: ChatViewProps) {
     if (!crokiWorkspaceRoot) return;
     prepareCrokiComposerRequest(buildCrokiGtmExplorationPrompt(crokiWorkspaceRoot));
   }, [crokiWorkspaceRoot, prepareCrokiComposerRequest]);
-  const prepareCanvasWorkflow = useCallback(() => {
-    if (!crokiWorkspaceRoot) return;
-    prepareCrokiComposerRequest(buildCrokiWorkflowCompositionPrompt(crokiWorkspaceRoot));
-  }, [crokiWorkspaceRoot, prepareCrokiComposerRequest]);
+  const openCanvasPlan = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().open(activeThreadRef, "plan");
+  }, [activeThreadRef]);
   const addTerminalContextToDraft = useCallback(
     (selection: TerminalContextSelection) => {
       composerRef.current?.addTerminalContext(selection);
@@ -5069,6 +5092,7 @@ function ChatViewContent(props: ChatViewProps) {
           titleSeed: title,
           runtimeMode,
           interactionMode,
+          canvasEnabled,
           ...(bootstrap ? { bootstrap } : {}),
           createdAt: messageCreatedAt,
         },
@@ -5421,6 +5445,7 @@ function ChatViewContent(props: ChatViewProps) {
             titleSeed: activeThread.title,
             runtimeMode,
             interactionMode: nextInteractionMode,
+            canvasEnabled,
             ...(nextInteractionMode === "default" && activeProposedPlan
               ? {
                   sourceProposedPlan: {
@@ -5477,6 +5502,7 @@ function ChatViewContent(props: ChatViewProps) {
       setThreadError,
       startThreadTurn,
       autoOpenPlanSidebar,
+      canvasEnabled,
       environmentId,
       composerRef,
     ],
@@ -5561,6 +5587,7 @@ function ChatViewContent(props: ChatViewProps) {
           titleSeed: nextThreadTitle,
           runtimeMode,
           interactionMode: "default",
+          canvasEnabled: false,
           sourceProposedPlan: {
             threadId: activeThread.id,
             planId: activeProposedPlan.id,
@@ -5882,11 +5909,15 @@ function ChatViewContent(props: ChatViewProps) {
         environmentId={activeProject.environmentId}
         workspaceRoot={crokiWorkspaceRoot}
         productName={activeProject.title}
+        externalRevision={latestCanvasPresentation?.id ?? null}
+        externalQuestion={latestCanvasPresentationQuestion}
+        externalNodeIds={latestCanvasPresentationNodeIds}
+        externalView={latestCanvasPresentationView}
         onPendingChange={handleCanvasPendingChange}
         onBuildFromRepository={prepareCanvasFromRepository}
         onOpenReference={openCanvasReference}
         onPrepareGtm={prepareCanvasGtmExploration}
-        onPrepareWorkflow={prepareCanvasWorkflow}
+        onOpenPlan={openCanvasPlan}
       />
     ) : activeRightPanelSurface?.kind === "plan" ? (
       <PlanSidebar
@@ -5958,6 +5989,10 @@ function ChatViewContent(props: ChatViewProps) {
             activeThreadId={activeThread.id}
             {...(routeKind === "draft" && draftId ? { draftId } : {})}
             activeThreadTitle={activeThread.title}
+            forkedFromThreadTitle={
+              forkSourceThread?.title ??
+              (activeServerThread?.forkedFromThreadId ? "deleted thread" : undefined)
+            }
             activeProjectName={activeProject?.title}
             activeProjectCwd={activeProject?.workspaceRoot ?? null}
             openInCwd={gitCwd}

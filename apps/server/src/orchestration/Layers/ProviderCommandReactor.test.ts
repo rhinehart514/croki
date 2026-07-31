@@ -236,6 +236,7 @@ describe("ProviderCommandReactor", () => {
     const interruptTurn = vi.fn((_: unknown) => Effect.void);
     const respondToRequest = vi.fn<ProviderServiceShape["respondToRequest"]>(() => Effect.void);
     const respondToUserInput = vi.fn<ProviderServiceShape["respondToUserInput"]>(() => Effect.void);
+    const forkConversation = vi.fn<ProviderServiceShape["forkConversation"]>(() => Effect.void);
     const stopSession = vi.fn((input: unknown) =>
       Effect.sync(() => {
         const threadId =
@@ -312,11 +313,13 @@ describe("ProviderCommandReactor", () => {
       interruptTurn: interruptTurn as ProviderServiceShape["interruptTurn"],
       respondToRequest: respondToRequest as ProviderServiceShape["respondToRequest"],
       respondToUserInput: respondToUserInput as ProviderServiceShape["respondToUserInput"],
+      forkConversation,
       stopSession: stopSession as ProviderServiceShape["stopSession"],
       listSessions: () => Effect.succeed(runtimeSessions),
       getCapabilities: (_provider) =>
         Effect.succeed({
           sessionModelSwitch: input?.sessionModelSwitch ?? "in-session",
+          conversationFork: "native",
         }),
       getInstanceInfo: (instanceId) => {
         const raw = String(instanceId);
@@ -428,6 +431,7 @@ describe("ProviderCommandReactor", () => {
       interruptTurn,
       respondToRequest,
       respondToUserInput,
+      forkConversation,
       stopSession,
       renameBranch,
       refreshStatus,
@@ -535,6 +539,7 @@ describe("ProviderCommandReactor", () => {
     const providerRequest = harness.sendTurn.mock.calls[0]?.[0] as { input?: string };
     expect(providerRequest.input).toContain("Durable product context");
     expect(providerRequest.input).toContain(userText);
+    expect(providerRequest.input).not.toContain("<croki_canvas_harness");
 
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
@@ -601,6 +606,7 @@ describe("ProviderCommandReactor", () => {
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
+        canvasEnabled: true,
         createdAt: "2026-01-01T00:00:01.000Z",
       }),
     );
@@ -613,6 +619,10 @@ describe("ProviderCommandReactor", () => {
       | { input?: string }
       | undefined;
     expect(refreshedProviderRequest?.input).not.toContain("Durable product context");
+    expect(refreshedProviderRequest?.input).toContain('<croki_canvas_harness version="1">');
+    expect(refreshedProviderRequest?.input).toContain(
+      "leave consequential judgment to the founder",
+    );
     const refreshedReadModel = await harness.readModel();
     const refreshedThread = refreshedReadModel.threads.find(
       (entry) => entry.id === ThreadId.make("thread-1"),
@@ -633,6 +643,53 @@ describe("ProviderCommandReactor", () => {
         (message) => message.id === asMessageId("user-message-croki-attachment-only"),
       )?.text,
     ).toBe("");
+  });
+
+  it("enables the strategy harness while invalid project context fails open", async () => {
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "croki-reactor-"));
+    const workspaceRoot = NodePath.join(baseDir, "project");
+    NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".croki"), { recursive: true });
+    NodeFS.writeFileSync(NodePath.join(workspaceRoot, ".croki", "context.json"), "not json");
+    const harness = await createHarness({ baseDir, projectWorkspaceRoot: workspaceRoot });
+    const userText = "Help me challenge the first-customer assumption";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-canvas-harness"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-canvas-harness"),
+          role: "user",
+          text: userText,
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        canvasEnabled: true,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    const providerRequest = harness.sendTurn.mock.calls[0]?.[0] as { input?: string };
+    expect(providerRequest.input).toContain('<croki_canvas_harness version="1">');
+    expect(providerRequest.input).toContain(userText);
+    expect(providerRequest.input).not.toContain("not json");
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(
+      thread?.messages.find((message) => message.id === asMessageId("user-message-canvas-harness"))
+        ?.text,
+    ).toBe(userText);
+    const applied = thread?.activities.find(
+      (activity) => activity.kind === "croki.context.applied",
+    );
+    const receipt = (applied?.payload as { receipt?: unknown } | undefined)?.receipt;
+    expect(receipt).toMatchObject({ status: "invalid", errorCode: "invalid-json" });
+    expect(JSON.stringify(receipt)).not.toContain(userText);
+    expect(JSON.stringify(receipt)).not.toContain("croki_canvas_harness");
   });
 
   effectIt.effect("projects starting before a slow provider session finishes", () =>
@@ -2372,5 +2429,85 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
     expect(thread?.session?.activeTurnId).toBeNull();
+  });
+
+  it("forks provider history, binds the target, and releases a temporary source session", async () => {
+    const harness = await createHarness();
+    const createdAt = "2026-01-01T00:00:01.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.make("cmd-thread-fork"),
+        threadId: ThreadId.make("thread-fork"),
+        sourceThreadId: ThreadId.make("thread-1"),
+        createdAt,
+      }),
+    );
+
+    await waitFor(() => harness.forkConversation.mock.calls.length === 1);
+    await harness.drain();
+
+    expect(harness.forkConversation).toHaveBeenCalledWith({
+      sourceThreadId: ThreadId.make("thread-1"),
+      targetThreadId: ThreadId.make("thread-fork"),
+    });
+    expect(harness.startSession).toHaveBeenCalledTimes(1);
+    expect(harness.stopSession).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
+
+    const readModel = await harness.readModel();
+    const source = readModel.threads.find((thread) => thread.id === ThreadId.make("thread-1"));
+    const target = readModel.threads.find((thread) => thread.id === ThreadId.make("thread-fork"));
+    expect(source?.session?.status).toBe("stopped");
+    expect(target).toMatchObject({
+      title: "Thread (fork)",
+      forkedFromThreadId: ThreadId.make("thread-1"),
+      session: {
+        status: "stopped",
+        providerName: "codex",
+        providerInstanceId: ProviderInstanceId.make("codex"),
+      },
+    });
+  });
+
+  it("leaves a recoverable target error when the provider fork fails", async () => {
+    const harness = await createHarness();
+    harness.forkConversation.mockImplementationOnce(() =>
+      Effect.fail(
+        new ProviderAdapterRequestError({
+          provider: ProviderDriverKind.make("codex"),
+          method: "thread.fork",
+          detail: "Native history fork failed.",
+        }),
+      ),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.make("cmd-thread-fork-failure"),
+        threadId: ThreadId.make("thread-fork-failure"),
+        sourceThreadId: ThreadId.make("thread-1"),
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+
+    await waitFor(async () => {
+      const readModel = await harness.readModel();
+      return readModel.threads.some(
+        (thread) =>
+          thread.id === ThreadId.make("thread-fork-failure") && thread.session?.status === "error",
+      );
+    });
+
+    const readModel = await harness.readModel();
+    const target = readModel.threads.find(
+      (thread) => thread.id === ThreadId.make("thread-fork-failure"),
+    );
+    expect(target?.session).toMatchObject({
+      status: "error",
+      lastError: "Native history fork failed.",
+    });
+    expect(harness.stopSession).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
   });
 });

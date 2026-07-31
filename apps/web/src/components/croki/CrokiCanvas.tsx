@@ -1,45 +1,32 @@
 import type { EnvironmentId } from "@t3tools/contracts";
-import {
-  CROKI_CONTEXT_LIMITS,
-  type CrokiContextEdge,
-  type CrokiContextReference,
-  type CrokiNodeDomain,
-  type CrokiNodeKind,
-} from "@t3tools/shared/crokiContext";
-import { CircleDot, Save } from "lucide-react";
-import { useState } from "react";
+import type { CrokiContextReference } from "@t3tools/shared/crokiContext";
+import { Redo2, Save, Undo2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { randomHex } from "~/lib/utils";
 import type { ActivePlanState } from "~/session-logic";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { ScrollArea } from "../ui/scroll-area";
 import { CrokiCanvasNodeEditor } from "./CrokiCanvasNodeEditor";
-import { CrokiCanvasOverview } from "./CrokiCanvasOverview";
+import { CrokiCanvasWorkspace } from "./CrokiCanvasWorkspace";
 import {
   CROKI_CANVAS_VIEWS,
-  crokiDomainForView,
-  crokiNewNodeTitle,
+  crokiSemanticRelation,
   type CrokiCanvasView,
 } from "./crokiCanvasLanguage";
-import { CrokiCanvasRunProjection } from "./CrokiCanvasRunProjection";
 import { CrokiCanvasSourceNotice } from "./CrokiCanvasSourceNotice";
 import {
   cancelCrokiCanvasRepair,
   confirmCrokiCanvasRepair,
   reloadConflictingCrokiCanvasFile,
-  replaceCrokiCanvasDraft,
   requestCrokiCanvasRepair,
   selectCrokiCanvasNode,
 } from "./crokiCanvasDraftStore";
 import {
   addCrokiEdge,
-  addCrokiNode,
   addCrokiNodeReference,
   adoptCrokiNode,
   deleteCrokiEdge,
   deleteCrokiNode,
-  replaceCrokiProduct,
   removeCrokiNodeReference,
   retireCrokiNode,
 } from "./crokiCanvasModel";
@@ -47,12 +34,16 @@ import { useCrokiCanvasController } from "./useCrokiCanvasController";
 
 interface CrokiCanvasProps {
   readonly environmentId: EnvironmentId;
+  readonly externalNodeIds?: readonly string[];
+  readonly externalQuestion?: string | null;
+  readonly externalRevision?: string | null;
+  readonly externalView?: CrokiCanvasView | null;
   readonly activePlan?: ActivePlanState | null;
   readonly onBuildFromRepository?: () => void;
   readonly onOpenReference?: (reference: CrokiContextReference) => void;
   readonly onPendingChange?: (pending: boolean) => void;
   readonly onPrepareGtm?: () => void;
-  readonly onPrepareWorkflow?: () => void;
+  readonly onOpenPlan?: () => void;
   readonly productName: string;
   readonly workspaceRoot: string;
 }
@@ -60,69 +51,90 @@ interface CrokiCanvasProps {
 export function CrokiCanvas(props: CrokiCanvasProps) {
   const {
     applyTransition,
+    canRedo,
+    canUndo,
+    discard,
+    redo,
     retry,
     save,
     selectedNode,
     state,
+    undo,
     updateNode,
     validationErrors,
     workspaceKey,
   } = useCrokiCanvasController(props);
-  const [edgeFrom, setEdgeFrom] = useState("");
-  const [edgeTo, setEdgeTo] = useState("");
-  const [edgeRelation, setEdgeRelation] = useState("supports");
   const [view, setView] = useState<CrokiCanvasView>("product");
+  const [sceneFocused, setSceneFocused] = useState(false);
+  const proposalCount = state.context.nodes.filter((node) => node.status === "provisional").length;
+
+  useEffect(() => {
+    if (!props.externalRevision) return;
+    if (props.externalView) setView(props.externalView);
+    setSceneFocused((props.externalNodeIds?.length ?? 0) > 0);
+  }, [props.externalNodeIds?.length, props.externalRevision, props.externalView]);
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-black text-white" aria-label="Croki Canvas">
-      <header className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border/60 px-3">
-        <CircleDot className="size-4 text-primary" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold">Canvas</h2>
-          <p className="truncate text-[11px] text-muted-foreground">
-            {state.context.nodes.length} items · {state.context.edges.length} links
-            {state.dirty ? " · Unsaved" : ""}
-          </p>
-        </div>
-        <Button
-          size="sm"
-          onClick={save}
-          disabled={
-            state.isSaving ||
-            !state.dirty ||
-            validationErrors.length > 0 ||
-            ((state.sourceState === "malformed" || state.sourceState === "partial") &&
-              !state.repairInProgress)
-          }
-        >
-          <Save className="size-3.5" aria-hidden />
-          {state.isSaving ? "Saving…" : "Save"}
-        </Button>
+      <header className="flex min-h-11 shrink-0 items-center gap-4 border-b border-white/10 px-4">
+        <p className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
+          {proposalCount > 0
+            ? `${proposalCount} ${proposalCount === 1 ? "proposal" : "proposals"} awaiting review`
+            : state.dirty
+              ? "Unsaved Canvas changes"
+              : "Product understanding is current"}
+        </p>
+        <nav aria-label="Canvas workflow" className="flex shrink-0 items-center gap-1">
+          {CROKI_CANVAS_VIEWS.map((candidate) => (
+            <button
+              key={candidate.id}
+              type="button"
+              aria-current={view === candidate.id ? "page" : undefined}
+              className={
+                view === candidate.id
+                  ? "h-8 border-b border-white px-2 text-[11px] text-white"
+                  : "h-8 border-b border-transparent px-2 text-[11px] text-zinc-600 hover:text-white"
+              }
+              onClick={() => {
+                setView(candidate.id);
+                selectCrokiCanvasNode(workspaceKey, null);
+              }}
+            >
+              {candidate.label}
+            </button>
+          ))}
+        </nav>
+        {canUndo ? (
+          <Button size="icon-sm" variant="ghost" aria-label="Undo Canvas change" onClick={undo}>
+            <Undo2 className="size-3.5" aria-hidden />
+          </Button>
+        ) : null}
+        {canRedo ? (
+          <Button size="icon-sm" variant="ghost" aria-label="Redo Canvas change" onClick={redo}>
+            <Redo2 className="size-3.5" aria-hidden />
+          </Button>
+        ) : null}
+        {state.dirty ? (
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={discard} disabled={state.isSaving}>
+              Discard
+            </Button>
+            <Button
+              size="sm"
+              onClick={save}
+              disabled={
+                state.isSaving ||
+                validationErrors.length > 0 ||
+                ((state.sourceState === "malformed" || state.sourceState === "partial") &&
+                  !state.repairInProgress)
+              }
+            >
+              <Save className="size-3.5" aria-hidden />
+              {state.isSaving ? "Saving…" : "Save Canvas"}
+            </Button>
+          </div>
+        ) : null}
       </header>
-
-      <nav
-        aria-label="Canvas views"
-        className="flex shrink-0 items-center gap-4 overflow-x-auto border-b border-border/60 px-3"
-      >
-        {CROKI_CANVAS_VIEWS.map((candidate) => (
-          <button
-            key={candidate.id}
-            type="button"
-            aria-current={view === candidate.id ? "page" : undefined}
-            className={
-              view === candidate.id
-                ? "border-b border-foreground py-2 text-xs text-foreground"
-                : "border-b border-transparent py-2 text-xs text-muted-foreground hover:text-foreground"
-            }
-            onClick={() => {
-              setView(candidate.id);
-              selectCrokiCanvasNode(workspaceKey, null);
-            }}
-          >
-            {candidate.label}
-          </button>
-        ))}
-      </nav>
 
       <CrokiCanvasSourceNotice
         state={state}
@@ -132,149 +144,139 @@ export function CrokiCanvas(props: CrokiCanvasProps) {
         onRequestRepair={() => requestCrokiCanvasRepair(workspaceKey)}
         onRetry={retry}
       />
-
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-5 p-3 pb-10">
-          {state.modelError ? (
-            <p role="status" className="text-xs text-destructive">
-              {MODEL_ERROR_MESSAGE[state.modelError] ?? "Canvas change was refused."}
-            </p>
-          ) : validationErrors.length > 0 ? (
-            <p role="alert" className="text-xs text-destructive">
-              Fix invalid or over-limit Canvas content before saving.
-            </p>
-          ) : null}
-          {selectedNode ? (
-            <CrokiCanvasNodeEditor
-              node={selectedNode}
-              onAddReference={(reference) => {
-                const transition = addCrokiNodeReference(
-                  state.context,
-                  selectedNode.id,
-                  reference,
-                  new Date().toISOString(),
-                );
-                applyTransition(transition);
-                return transition.error;
-              }}
-              onBack={() => selectCrokiCanvasNode(workspaceKey, null)}
-              onDelete={(id) => {
-                applyTransition(deleteCrokiNode(state.context, id, new Date().toISOString()));
-                selectCrokiCanvasNode(workspaceKey, null);
-              }}
-              onRemoveReference={(reference) =>
-                applyTransition(
-                  removeCrokiNodeReference(
-                    state.context,
-                    selectedNode.id,
-                    reference,
-                    new Date().toISOString(),
-                  ),
-                )
-              }
-              onUpdate={updateNode}
-              {...(props.onOpenReference ? { onOpenReference: props.onOpenReference } : {})}
-            />
-          ) : (
-            <>
-              {view === "product" ? (
-                <label className="block space-y-1">
-                  <span className="text-xs text-muted-foreground">Product</span>
-                  <Input
-                    aria-invalid={state.context.product.length > CROKI_CONTEXT_LIMITS.productChars}
-                    value={state.context.product}
-                    placeholder={props.productName}
-                    onChange={(event) =>
-                      replaceCrokiCanvasDraft(
-                        workspaceKey,
-                        replaceCrokiProduct(
-                          state.context,
-                          event.target.value,
-                          new Date().toISOString(),
-                        ),
-                      )
-                    }
-                  />
-                </label>
-              ) : null}
-              {view === "gtm" && props.onPrepareGtm ? (
-                <section className="border-y border-border/60 py-3">
-                  <p className="text-sm font-medium">Reason from the founder perspective</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Ask the current agent to connect product truth to audiences, claims, signals,
-                    and experiments.
-                  </p>
-                  <Button className="mt-2" size="sm" variant="outline" onClick={props.onPrepareGtm}>
-                    Explore in Thread
-                  </Button>
-                </section>
-              ) : null}
-              {view === "workflow" ? (
-                <CrokiCanvasRunProjection
-                  activePlan={props.activePlan ?? null}
-                  {...(props.onPrepareWorkflow
-                    ? { onPrepareWorkflow: props.onPrepareWorkflow }
-                    : {})}
-                />
-              ) : null}
-              <CrokiCanvasOverview
-                context={state.context}
-                edgeFrom={edgeFrom}
-                edgeRelation={edgeRelation}
-                edgeTo={edgeTo}
-                onAddEdge={() => {
-                  applyTransition(
-                    addCrokiEdge(state.context, {
-                      from: edgeFrom,
-                      to: edgeTo,
-                      relation: edgeRelation,
-                      now: new Date().toISOString(),
-                    }),
-                  );
-                  setEdgeRelation("supports");
-                }}
-                onAddNode={(kind: CrokiNodeKind) => {
-                  const id = `${kind}-${randomHex(16)}`;
-                  const domain: CrokiNodeDomain = crokiDomainForView(view);
-                  applyTransition(
-                    addCrokiNode(state.context, {
-                      id,
-                      kind,
-                      domain,
-                      title: crokiNewNodeTitle(kind, domain),
-                      now: new Date().toISOString(),
-                    }),
-                  );
-                  selectCrokiCanvasNode(workspaceKey, id);
-                }}
-                {...(props.onBuildFromRepository
-                  ? { onBuildFromRepository: props.onBuildFromRepository }
-                  : {})}
-                onAdopt={(id) =>
-                  applyTransition(adoptCrokiNode(state.context, id, new Date().toISOString()))
-                }
-                onDeleteEdge={(edge: CrokiContextEdge) =>
-                  replaceCrokiCanvasDraft(
-                    workspaceKey,
-                    deleteCrokiEdge(state.context, edge, new Date().toISOString()),
-                  )
-                }
-                onEdgeFromChange={setEdgeFrom}
-                onEdgeRelationChange={setEdgeRelation}
-                onEdgeToChange={setEdgeTo}
-                onReject={(id) =>
-                  applyTransition(retireCrokiNode(state.context, id, new Date().toISOString()))
-                }
-                onRetire={(id) =>
-                  applyTransition(retireCrokiNode(state.context, id, new Date().toISOString()))
-                }
-                onSelect={(id) => selectCrokiCanvasNode(workspaceKey, id)}
-                view={view}
-              />
-            </>
-          )}
+      {sceneFocused && props.externalQuestion ? (
+        <div className="croki-canvas-scene-enter flex shrink-0 items-center gap-3 border-b border-white/15 px-4 py-3">
+          <p className="min-w-0 flex-1 text-sm leading-5 text-white">{props.externalQuestion}</p>
+          <button
+            type="button"
+            className="h-8 shrink-0 text-xs text-zinc-400 hover:text-white"
+            onClick={() => setSceneFocused(false)}
+          >
+            View all
+          </button>
         </div>
-      </ScrollArea>
+      ) : null}
+      {state.modelError ? (
+        <p
+          role="status"
+          className="shrink-0 border-b border-destructive/30 px-4 py-2 text-xs text-destructive"
+        >
+          {MODEL_ERROR_MESSAGE[state.modelError] ?? "Canvas change was refused."}
+        </p>
+      ) : null}
+
+      <div className="relative flex min-h-0 flex-1">
+        <CrokiCanvasWorkspace
+          activePlan={props.activePlan ?? null}
+          context={state.context}
+          layoutKey={workspaceKey}
+          focusIds={sceneFocused ? (props.externalNodeIds ?? []) : []}
+          onClearSelection={() => selectCrokiCanvasNode(workspaceKey, null)}
+          onConnect={({ from, to }) => {
+            const source = state.context.nodes.find((node) => node.id === from);
+            const target = state.context.nodes.find((node) => node.id === to);
+            const edge = {
+              from,
+              to,
+              relation: crokiSemanticRelation(source?.kind, target?.kind),
+            };
+            const transition = addCrokiEdge(state.context, {
+              ...edge,
+              now: new Date().toISOString(),
+            });
+            applyTransition(transition);
+            if (transition.error) return null;
+            return edge;
+          }}
+          onDisconnect={(edge) =>
+            applyTransition({
+              context: deleteCrokiEdge(state.context, edge, new Date().toISOString()),
+              error: null,
+            })
+          }
+          onReplaceEdge={(previous, next) => {
+            const withoutPrevious = deleteCrokiEdge(
+              state.context,
+              previous,
+              new Date().toISOString(),
+            );
+            const transition = addCrokiEdge(withoutPrevious, {
+              ...next,
+              now: new Date().toISOString(),
+            });
+            if (transition.error) {
+              applyTransition({ context: state.context, error: transition.error });
+              return null;
+            }
+            applyTransition(transition);
+            return next;
+          }}
+          onSelect={(id) => selectCrokiCanvasNode(workspaceKey, id)}
+          selectedId={selectedNode?.id ?? null}
+          view={view}
+          {...(props.onBuildFromRepository
+            ? { onBuildFromRepository: props.onBuildFromRepository }
+            : {})}
+          {...(props.onPrepareGtm ? { onPrepareGtm: props.onPrepareGtm } : {})}
+          {...(props.onOpenPlan ? { onOpenPlan: props.onOpenPlan } : {})}
+          {...(props.onOpenReference ? { onOpenReference: props.onOpenReference } : {})}
+        />
+
+        {selectedNode ? (
+          <aside className="croki-canvas-panel-enter relative z-20 w-[min(400px,48%)] min-w-72 shrink-0 border-l border-white/15 bg-black">
+            <ScrollArea className="h-full">
+              <div className="space-y-5 p-5 pb-12">
+                {validationErrors.length > 0 ? (
+                  <p role="alert" className="text-xs text-destructive">
+                    Fix invalid or over-limit Canvas content before committing.
+                  </p>
+                ) : null}
+                <CrokiCanvasNodeEditor
+                  node={selectedNode}
+                  onAdopt={(id) => {
+                    applyTransition(adoptCrokiNode(state.context, id, new Date().toISOString()));
+                    selectCrokiCanvasNode(workspaceKey, null);
+                  }}
+                  onAddReference={(reference) => {
+                    const transition = addCrokiNodeReference(
+                      state.context,
+                      selectedNode.id,
+                      reference,
+                      new Date().toISOString(),
+                    );
+                    applyTransition(transition);
+                    return transition.error;
+                  }}
+                  onBack={() => selectCrokiCanvasNode(workspaceKey, null)}
+                  onDelete={(id) => {
+                    applyTransition(deleteCrokiNode(state.context, id, new Date().toISOString()));
+                    selectCrokiCanvasNode(workspaceKey, null);
+                  }}
+                  onRemoveReference={(reference) =>
+                    applyTransition(
+                      removeCrokiNodeReference(
+                        state.context,
+                        selectedNode.id,
+                        reference,
+                        new Date().toISOString(),
+                      ),
+                    )
+                  }
+                  onDecline={(id) => {
+                    applyTransition(retireCrokiNode(state.context, id, new Date().toISOString()));
+                    selectCrokiCanvasNode(workspaceKey, null);
+                  }}
+                  onRetire={(id) =>
+                    applyTransition(retireCrokiNode(state.context, id, new Date().toISOString()))
+                  }
+                  onUpdate={updateNode}
+                  {...(props.onOpenReference ? { onOpenReference: props.onOpenReference } : {})}
+                />
+              </div>
+            </ScrollArea>
+          </aside>
+        ) : null}
+      </div>
     </section>
   );
 }

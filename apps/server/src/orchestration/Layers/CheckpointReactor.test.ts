@@ -108,9 +108,11 @@ function createProviderServiceHarness(
     interruptTurn: () => unsupported(),
     respondToRequest: () => unsupported(),
     respondToUserInput: () => unsupported(),
+    forkConversation: () => unsupported(),
     stopSession: () => unsupported(),
     listSessions,
-    getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
+    getCapabilities: () =>
+      Effect.succeed({ sessionModelSwitch: "in-session", conversationFork: "unsupported" }),
     getInstanceInfo: (instanceId) =>
       Effect.succeed({
         instanceId,

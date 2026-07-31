@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import {
   archiveSelectedThreadEntries,
   buildMultiSelectThreadContextMenuItems,
+  buildForkThreadContextMenuItem,
+  canForkSidebarThread,
+  isSidebarThreadForkBlocked,
   createThreadJumpHintVisibilityController,
   getSidebarThreadIdsToPrewarm,
   getVisibleSidebarThreadIds,
@@ -33,14 +36,17 @@ import {
   EnvironmentId,
   OrchestrationLatestTurn,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   type Project,
+  type SidebarThreadSummary,
   type Thread,
 } from "../types";
 
@@ -160,6 +166,58 @@ describe("buildMultiSelectThreadContextMenuItems", () => {
     expect(
       buildMultiSelectThreadContextMenuItems({ count: 2, hasRunningThread: true }),
     ).toContainEqual({ id: "archive", label: "Archive (2)", disabled: true });
+  });
+});
+
+describe("thread fork context menu", () => {
+  it("disables forking while the source session is running", () => {
+    expect(buildForkThreadContextMenuItem({ isRunning: true })).toEqual({
+      id: "fork",
+      label: "Fork thread",
+      disabled: true,
+    });
+  });
+
+  it("blocks forking when the projected turn is running before a session appears", () => {
+    expect(
+      isSidebarThreadForkBlocked({
+        session: null,
+        latestTurn: {
+          turnId: TurnId.make("turn-running-before-session"),
+          state: "running",
+          requestedAt: "2026-07-31T00:00:00.000Z",
+          startedAt: null,
+          completedAt: null,
+          assistantMessageId: null,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("only supports provider instances backed by native fork drivers", () => {
+    const thread = {
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("codex_personal"),
+        model: "gpt-5",
+      },
+      session: null,
+    } as SidebarThreadSummary;
+    expect(
+      canForkSidebarThread(thread, [
+        {
+          instanceId: ProviderInstanceId.make("codex_personal"),
+          driver: ProviderDriverKind.make("codex"),
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      canForkSidebarThread(thread, [
+        {
+          instanceId: ProviderInstanceId.make("codex_personal"),
+          driver: ProviderDriverKind.make("cursor"),
+        },
+      ]),
+    ).toBe(false);
   });
 });
 

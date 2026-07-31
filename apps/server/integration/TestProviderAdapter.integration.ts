@@ -483,6 +483,11 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       });
     };
 
+    const forkThread: ProviderAdapterShape<ProviderAdapterError>["forkThread"] = (
+      _sourceThreadId,
+      targetThreadId,
+    ) => Effect.succeed({ resumeCursor: { threadId: targetThreadId } });
+
     const stopAll: ProviderAdapterShape<ProviderAdapterError>["stopAll"] = () =>
       Effect.sync(() => {
         sessions.clear();
@@ -492,6 +497,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       provider,
       capabilities: {
         sessionModelSwitch: "in-session",
+        conversationFork: "native",
       },
       startSession,
       sendTurn,
@@ -503,6 +509,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       hasSession,
       readThread,
       rollbackThread,
+      forkThread,
       stopAll,
       streamEvents: Stream.fromQueue(runtimeEvents),
     };

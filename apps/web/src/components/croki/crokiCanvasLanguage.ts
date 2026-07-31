@@ -10,10 +10,9 @@ export const CROKI_CANVAS_VIEWS: readonly {
   readonly id: CrokiCanvasView;
   readonly label: string;
 }[] = [
-  { id: "product", label: "Understanding" },
-  { id: "gtm", label: "GTM" },
-  { id: "workflow", label: "Workflows" },
-  { id: "review", label: "Review" },
+  { id: "product", label: "Product" },
+  { id: "workflow", label: "Work" },
+  { id: "review", label: "Proposals" },
 ];
 
 const KIND_LABELS: Record<CrokiNodeDomain, Record<CrokiNodeKind, string>> = {
@@ -76,4 +75,15 @@ export function crokiViewEmptyCopy(view: CrokiCanvasView): string {
     case "review":
       return "No proposals waiting for founder review.";
   }
+}
+
+export function crokiSemanticRelation(
+  source: CrokiNodeKind | undefined,
+  target: CrokiNodeKind | undefined,
+): string {
+  if (source === "evidence") return "supports";
+  if (source === "intent") return "guides";
+  if (source === "decision" && target === "work") return "commits";
+  if (source === "work") return "enables";
+  return "informs";
 }

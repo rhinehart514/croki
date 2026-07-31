@@ -1,5 +1,5 @@
 import * as React from "react";
-import type { ContextMenuItem } from "@t3tools/contracts";
+import type { ContextMenuItem, ServerProvider } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import {
   getThreadSortTimestamp,
@@ -92,6 +92,35 @@ export function buildMultiSelectThreadContextMenuItems(input: {
     },
     { id: "delete", label: `Delete (${input.count})`, destructive: true },
   ];
+}
+
+export function canForkSidebarThread(
+  thread: SidebarThreadSummary,
+  providers: ReadonlyArray<Pick<ServerProvider, "driver" | "instanceId">>,
+): boolean {
+  const instanceId = thread.session?.providerInstanceId ?? thread.modelSelection.instanceId;
+  const driver = providers.find((provider) => provider.instanceId === instanceId)?.driver;
+  return driver === "codex" || driver === "claudeAgent";
+}
+
+export function buildForkThreadContextMenuItem(input: {
+  isRunning: boolean;
+}): ContextMenuItem<"fork"> {
+  return {
+    id: "fork",
+    label: "Fork thread",
+    disabled: input.isRunning,
+  };
+}
+
+export function isSidebarThreadForkBlocked(
+  thread: Pick<SidebarThreadSummary, "latestTurn" | "session">,
+): boolean {
+  return (
+    thread.session?.status === "starting" ||
+    thread.session?.status === "running" ||
+    thread.latestTurn?.state === "running"
+  );
 }
 
 export interface ThreadStatusPill {

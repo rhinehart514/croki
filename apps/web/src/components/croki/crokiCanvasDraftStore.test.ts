@@ -8,12 +8,17 @@ import {
   acceptCrokiCanvasFile,
   acceptCrokiCanvasReadError,
   confirmCrokiCanvasRepair,
+  discardCrokiCanvasDraft,
   getCrokiCanvasDraft,
   makeCrokiCanvasWorkspaceKey,
+  markCrokiCanvasSaved,
+  redoCrokiCanvasDraft,
   reloadConflictingCrokiCanvasFile,
   replaceCrokiCanvasDraft,
   resetCrokiCanvasDraftStoreForTests,
+  undoCrokiCanvasDraft,
 } from "./crokiCanvasDraftStore";
+import { canRedoCrokiCanvasDraft, canUndoCrokiCanvasDraft } from "./crokiCanvasDraftHistory";
 import { addProvisionalCrokiEvidence } from "./crokiCanvasEvidenceDraft";
 
 const KEY = makeCrokiCanvasWorkspaceKey("local", "/work/croki");
@@ -42,6 +47,103 @@ describe("crokiCanvasDraftStore", () => {
     resetCrokiCanvasDraftStoreForTests();
     expect(getCrokiCanvasDraft(KEY).context.product).toBe("Croki Studio");
     expect(getCrokiCanvasDraft(KEY).dirty).toBe(true);
+    expect(canUndoCrokiCanvasDraft(KEY)).toBe(false);
+  });
+
+  it("undoes and redoes draft changes without persisting session history", () => {
+    const baseline = createEmptyCrokiContext("Croki");
+    acceptCrokiCanvasFile(KEY, serializeCrokiContext(baseline), "Croki");
+    const studio = replaceCrokiProduct(baseline, "Croki Studio", "2026-07-30T00:00:00.000Z");
+    const ade = replaceCrokiProduct(studio, "Croki ADE", "2026-07-30T00:01:00.000Z");
+
+    replaceCrokiCanvasDraft(KEY, studio);
+    replaceCrokiCanvasDraft(KEY, ade);
+    expect(canUndoCrokiCanvasDraft(KEY)).toBe(true);
+    expect(canRedoCrokiCanvasDraft(KEY)).toBe(false);
+
+    undoCrokiCanvasDraft(KEY);
+    expect(getCrokiCanvasDraft(KEY).context.product).toBe("Croki Studio");
+    expect(getCrokiCanvasDraft(KEY).dirty).toBe(true);
+    expect(canRedoCrokiCanvasDraft(KEY)).toBe(true);
+
+    undoCrokiCanvasDraft(KEY);
+    expect(getCrokiCanvasDraft(KEY).context.product).toBe("Croki");
+    expect(getCrokiCanvasDraft(KEY).dirty).toBe(false);
+
+    redoCrokiCanvasDraft(KEY);
+    redoCrokiCanvasDraft(KEY);
+    expect(getCrokiCanvasDraft(KEY).context.product).toBe("Croki ADE");
+    expect(canRedoCrokiCanvasDraft(KEY)).toBe(false);
+  });
+
+  it("clears redo history when the user branches from an undone draft", () => {
+    const baseline = createEmptyCrokiContext("Croki");
+    acceptCrokiCanvasFile(KEY, serializeCrokiContext(baseline), "Croki");
+    replaceCrokiCanvasDraft(
+      KEY,
+      replaceCrokiProduct(baseline, "First", "2026-07-30T00:00:00.000Z"),
+    );
+    replaceCrokiCanvasDraft(
+      KEY,
+      replaceCrokiProduct(getCrokiCanvasDraft(KEY).context, "Second", "2026-07-30T00:01:00.000Z"),
+    );
+
+    undoCrokiCanvasDraft(KEY);
+    replaceCrokiCanvasDraft(
+      KEY,
+      replaceCrokiProduct(getCrokiCanvasDraft(KEY).context, "Branch", "2026-07-30T00:02:00.000Z"),
+    );
+
+    expect(canRedoCrokiCanvasDraft(KEY)).toBe(false);
+    expect(getCrokiCanvasDraft(KEY).context.product).toBe("Branch");
+  });
+
+  it("discards uncommitted changes and resets history to the workspace baseline", () => {
+    const baseline = createEmptyCrokiContext("Croki");
+    acceptCrokiCanvasFile(KEY, serializeCrokiContext(baseline), "Croki");
+    replaceCrokiCanvasDraft(
+      KEY,
+      replaceCrokiProduct(baseline, "Unsaved", "2026-07-30T00:00:00.000Z"),
+    );
+
+    discardCrokiCanvasDraft(KEY);
+
+    expect(getCrokiCanvasDraft(KEY).context).toEqual(baseline);
+    expect(getCrokiCanvasDraft(KEY).dirty).toBe(false);
+    expect(canUndoCrokiCanvasDraft(KEY)).toBe(false);
+    expect(canRedoCrokiCanvasDraft(KEY)).toBe(false);
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("starts a fresh history after save or source replacement", () => {
+    const baseline = createEmptyCrokiContext("Croki");
+    acceptCrokiCanvasFile(KEY, serializeCrokiContext(baseline), "Croki");
+    const saved = replaceCrokiProduct(baseline, "Saved", "2026-07-30T00:00:00.000Z");
+    replaceCrokiCanvasDraft(KEY, saved);
+    markCrokiCanvasSaved(KEY, saved);
+    expect(canUndoCrokiCanvasDraft(KEY)).toBe(false);
+
+    const external = replaceCrokiProduct(saved, "External", "2026-07-30T00:01:00.000Z");
+    acceptCrokiCanvasFile(KEY, serializeCrokiContext(external), "Croki");
+    expect(canUndoCrokiCanvasDraft(KEY)).toBe(false);
+    expect(canRedoCrokiCanvasDraft(KEY)).toBe(false);
+  });
+
+  it("keeps newer edits undoable when a save finishes in the background", () => {
+    const baseline = createEmptyCrokiContext("Croki");
+    acceptCrokiCanvasFile(KEY, serializeCrokiContext(baseline), "Croki");
+    const saving = replaceCrokiProduct(baseline, "Saving", "2026-07-30T00:00:00.000Z");
+    const newer = replaceCrokiProduct(saving, "Newer edit", "2026-07-30T00:01:00.000Z");
+    replaceCrokiCanvasDraft(KEY, saving);
+    replaceCrokiCanvasDraft(KEY, newer);
+
+    markCrokiCanvasSaved(KEY, saving);
+    expect(getCrokiCanvasDraft(KEY).context.product).toBe("Newer edit");
+    expect(canUndoCrokiCanvasDraft(KEY)).toBe(true);
+
+    undoCrokiCanvasDraft(KEY);
+    expect(getCrokiCanvasDraft(KEY).context.product).toBe("Saving");
+    expect(getCrokiCanvasDraft(KEY).dirty).toBe(false);
   });
 
   it("does not replace dirty state when the workspace file changes", () => {

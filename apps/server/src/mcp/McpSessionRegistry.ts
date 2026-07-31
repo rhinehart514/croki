@@ -30,7 +30,10 @@ export interface McpSessionRegistryShape {
    * turns call this so that a session which is plainly alive keeps its
    * credential even when it goes a long time without touching an MCP tool.
    */
-  readonly touch: (threadId: ThreadId) => Effect.Effect<void>;
+  readonly touch: (
+    threadId: ThreadId,
+    options?: { readonly canvasEnabled?: boolean },
+  ) => Effect.Effect<void>;
   readonly revokeProviderSession: (providerSessionId: string) => Effect.Effect<void>;
   readonly revokeThread: (threadId: ThreadId) => Effect.Effect<void>;
   readonly revokeAll: Effect.Effect<void>;
@@ -166,14 +169,21 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
   );
 
   const touch: McpSessionRegistryShape["touch"] = Effect.fn("McpSessionRegistry.touch")(
-    function* (threadId) {
+    function* (threadId, touchOptions) {
       const timestamp = yield* currentTimeMillis;
       yield* SynchronizedRef.update(state, ({ records }) => {
         const current = pruneDead(records, timestamp);
         const next = new Map(current);
         for (const [tokenHash, record] of current) {
           if (record.scope.threadId === threadId) {
-            next.set(tokenHash, { ...record, lastAliveAt: timestamp });
+            const capabilities = new Set(record.scope.capabilities);
+            if (touchOptions?.canvasEnabled === true) capabilities.add("canvas");
+            else if (touchOptions?.canvasEnabled === false) capabilities.delete("canvas");
+            next.set(tokenHash, {
+              ...record,
+              scope: { ...record.scope, capabilities },
+              lastAliveAt: timestamp,
+            });
           }
         }
         return { records: next };
@@ -235,8 +245,11 @@ export const issueActiveMcpCredential = (
  * Refreshes the liveness of a thread's MCP credential. Called on every provider
  * turn so an active session is never mistaken for an abandoned one.
  */
-export const touchActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
-  activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId) : Effect.void;
+export const touchActiveMcpThread = (
+  threadId: ThreadId,
+  options?: { readonly canvasEnabled?: boolean },
+): Effect.Effect<void> =>
+  activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId, options) : Effect.void;
 
 export const revokeActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.revokeThread(threadId) : Effect.void;

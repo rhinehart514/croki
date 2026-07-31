@@ -11,6 +11,13 @@ import {
   loadPersistedCrokiCanvasDraft,
   persistCrokiCanvasDraft,
 } from "./crokiCanvasDraftPersistence";
+import {
+  moveThroughCrokiCanvasDraftHistory,
+  recordCrokiCanvasDraftChange,
+  resetAllCrokiCanvasDraftHistoryForTests,
+  resetCrokiCanvasDraftHistory,
+  resetCrokiCanvasDraftHistoryAfterSave,
+} from "./crokiCanvasDraftHistory";
 import { isCrokiContextDirty } from "./crokiCanvasModel";
 
 export type CrokiCanvasSourceState =
@@ -79,7 +86,29 @@ export function replaceCrokiCanvasDraft(
   context: CrokiContext,
   modelError: string | null = null,
 ): void {
-  update(key, (state) => withDirty({ ...state, context, modelError, repairConfirmation: false }));
+  update(key, (state) => {
+    if (isCrokiContextDirty(context, state.context)) {
+      recordCrokiCanvasDraftChange(key, state.context, context);
+    }
+    return withDirty({ ...state, context, modelError, repairConfirmation: false });
+  });
+}
+
+export const undoCrokiCanvasDraft = (key: string): void => restoreHistory(key, "undo");
+export const redoCrokiCanvasDraft = (key: string): void => restoreHistory(key, "redo");
+
+export function discardCrokiCanvasDraft(key: string): void {
+  const current = getCrokiCanvasDraft(key);
+  resetCrokiCanvasDraftHistory(key);
+  set(key, {
+    ...current,
+    context: current.baseline,
+    dirty: false,
+    modelError: null,
+    repairConfirmation: false,
+    repairInProgress: false,
+    selectedNodeId: selectedNodeStillExists(current.selectedNodeId, current.baseline),
+  });
 }
 
 export function selectCrokiCanvasNode(key: string, nodeId: string | null): void {
@@ -167,6 +196,7 @@ export function acceptCrokiCanvasFile(key: string, contents: string, productName
     }));
     return;
   }
+  resetCrokiCanvasDraftHistory(key);
   set(key, {
     ...current,
     baseline: parsed,
@@ -195,6 +225,7 @@ export function acceptCrokiCanvasMissing(key: string, productName: string): void
     return;
   }
   const empty = createEmptyCrokiContext(productName);
+  resetCrokiCanvasDraftHistory(key);
   set(key, {
     ...current,
     baseline: empty,
@@ -224,6 +255,7 @@ export function reloadConflictingCrokiCanvasFile(key: string, productName: strin
   const contents = current.conflictContents;
   if (contents === null) return;
   if (contents === "") {
+    resetCrokiCanvasDraftHistory(key);
     set(key, initialDraft(productName, "missing"));
     return;
   }
@@ -234,12 +266,14 @@ export function reloadConflictingCrokiCanvasFile(key: string, productName: strin
     try {
       const recovery = recoverCrokiContext(contents);
       if (recovery.issues.length > 0) {
+        resetCrokiCanvasDraftHistory(key);
         set(key, recoveredDraft(current, contents, recovery.context, recovery.issues.length));
         return;
       }
     } catch {
       // Keep the malformed workspace state below.
     }
+    resetCrokiCanvasDraftHistory(key);
     set(key, {
       ...current,
       baselineContents: contents,
@@ -253,6 +287,7 @@ export function reloadConflictingCrokiCanvasFile(key: string, productName: strin
     });
     return;
   }
+  resetCrokiCanvasDraftHistory(key);
   set(key, {
     ...current,
     baseline: parsed,
@@ -290,6 +325,7 @@ function acceptRecoveredCrokiCanvasFile(
     }));
     return;
   }
+  resetCrokiCanvasDraftHistory(key);
   set(key, recoveredDraft(current, contents, recovered, issueCount));
 }
 
@@ -315,9 +351,8 @@ function recoveredDraft(
   };
 }
 
-function recoveredSourceMessage(issueCount: number): string {
-  return `${issueCount} invalid Canvas entr${issueCount === 1 ? "y was" : "ies were"} omitted. Valid items are preserved.`;
-}
+const recoveredSourceMessage = (issueCount: number): string =>
+  `${issueCount} invalid Canvas entr${issueCount === 1 ? "y was" : "ies were"} omitted. Valid items are preserved.`;
 
 export function markCrokiCanvasSaved(
   key: string,
@@ -326,6 +361,7 @@ export function markCrokiCanvasSaved(
 ): void {
   update(key, (state) => {
     const hasNewerEdits = isCrokiContextDirty(state.context, context);
+    resetCrokiCanvasDraftHistoryAfterSave(key, context, state.context, hasNewerEdits);
     return {
       ...state,
       baseline: context,
@@ -363,6 +399,7 @@ function acceptSourceFailure(
     }));
     return;
   }
+  resetCrokiCanvasDraftHistory(key);
   set(key, {
     ...current,
     baselineContents: contents,
@@ -400,12 +437,11 @@ function withDirty(state: CrokiCanvasDraftSnapshot): CrokiCanvasDraftSnapshot {
   };
 }
 
-function selectedNodeStillExists(
+const selectedNodeStillExists = (
   selectedNodeId: string | null,
   context: CrokiContext,
-): string | null {
-  return context.nodes.some((node) => node.id === selectedNodeId) ? selectedNodeId : null;
-}
+): string | null =>
+  context.nodes.some((node) => node.id === selectedNodeId) ? selectedNodeId : null;
 
 function subscribe(key: string, listener: () => void): () => void {
   const keyListeners = listeners.get(key) ?? new Set();
@@ -415,6 +451,22 @@ function subscribe(key: string, listener: () => void): () => void {
     keyListeners.delete(listener);
     if (keyListeners.size === 0) listeners.delete(key);
   };
+}
+
+function restoreHistory(key: string, direction: "undo" | "redo"): void {
+  const current = getCrokiCanvasDraft(key);
+  const context = moveThroughCrokiCanvasDraftHistory(key, direction);
+  if (!context) return;
+  set(
+    key,
+    withDirty({
+      ...current,
+      context,
+      modelError: null,
+      repairConfirmation: false,
+      selectedNodeId: selectedNodeStillExists(current.selectedNodeId, context),
+    }),
+  );
 }
 
 function update(
@@ -443,5 +495,6 @@ function hydrateDraft(key: string): CrokiCanvasDraftSnapshot | null {
 
 export function resetCrokiCanvasDraftStoreForTests(): void {
   drafts.clear();
+  resetAllCrokiCanvasDraftHistoryForTests();
   listeners.clear();
 }

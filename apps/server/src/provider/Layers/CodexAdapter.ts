@@ -1622,6 +1622,24 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     );
   };
 
+  const forkThread: CodexAdapterShape["forkThread"] = Effect.fn("forkThread")(
+    function* (sourceThreadId, _targetThreadId) {
+      const session = yield* requireSession(sourceThreadId);
+      const providerSession = yield* session.runtime.getSession;
+      if (providerSession.activeTurnId !== undefined || providerSession.status === "running") {
+        return yield* new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Cannot fork a Codex conversation while a turn is running.",
+        });
+      }
+      const resumeCursor = yield* session.runtime.forkThread.pipe(
+        Effect.mapError((cause) => mapCodexRuntimeError(sourceThreadId, "thread/fork", cause)),
+      );
+      return { resumeCursor };
+    },
+  );
+
   const respondToRequest: CodexAdapterShape["respondToRequest"] = (threadId, requestId, decision) =>
     requireSession(threadId).pipe(
       Effect.flatMap((session) => session.runtime.respondToRequest(requestId, decision)),
@@ -1703,12 +1721,14 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     provider: PROVIDER,
     capabilities: {
       sessionModelSwitch: "in-session",
+      conversationFork: "native",
     },
     startSession,
     sendTurn,
     interruptTurn,
     readThread,
     rollbackThread,
+    forkThread,
     respondToRequest,
     respondToUserInput,
     stopSession,

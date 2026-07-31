@@ -12,6 +12,7 @@ import {
   type CrokiContextReceipt,
   isCrokiAgentContextTruncated,
   parseCrokiContext,
+  prependCrokiAgentContext,
 } from "@t3tools/shared/crokiContext";
 import { recoverCrokiContext } from "@t3tools/shared/crokiContextRecovery";
 import * as Effect from "effect/Effect";
@@ -21,6 +22,24 @@ import * as Path from "effect/Path";
 export interface LoadedCrokiAgentContext {
   readonly prompt: string | null;
   readonly receipt: CrokiContextReceipt;
+}
+
+export const CROKI_CANVAS_HARNESS_INSTRUCTION = `<croki_canvas_harness version="1">
+Canvas is active for this turn. Stay in this Croki Thread and use its native agent runtime, tools, authority, and Review. Act as the founder's product and GTM strategy partner: infer the decision behind the request; expose assumptions, evidence, contradictions, consequences, and reversible tests; keep uncertainty explicit; and leave consequential judgment to the founder. Do not ask the user to author or connect nodes, fill forms, or treat agent proposals as canon. When the strategic model materially changes, call canvas_present with one complete, bounded, provisional scene grounded in the Thread and project evidence. The scene is a visual projection, not another memory, runtime, or source of truth.
+</croki_canvas_harness>`;
+
+/** Compiles one provider turn without creating a second Canvas conversation or history. */
+export function compileCrokiTurnInput(input: {
+  readonly canvasEnabled: boolean;
+  readonly agentContext: string | null;
+  readonly userInput: string | undefined;
+}): string | undefined {
+  if (!input.canvasEnabled) {
+    return prependCrokiAgentContext(input.agentContext, input.userInput);
+  }
+  return [CROKI_CANVAS_HARNESS_INSTRUCTION, input.agentContext, input.userInput]
+    .filter((value): value is string => Boolean(value))
+    .join("\n\n");
 }
 
 const emptyReceipt = (
@@ -74,9 +93,7 @@ function loadedContext(
   status: "loaded" | "partial",
   recovery: Pick<CrokiContextReceipt, "errorCode" | "issueCount"> = {},
 ): LoadedCrokiAgentContext {
-  const compilation = compileCrokiAgentContext(context, {
-    ...(query !== undefined ? { query } : {}),
-  });
+  const compilation = compileCrokiAgentContext(context, query !== undefined ? { query } : {});
   const currentCount = context.nodes.filter((node) => node.status === "current").length;
   const provisionalCount = context.nodes.filter((node) => node.status === "provisional").length;
   return {

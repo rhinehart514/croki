@@ -14,46 +14,49 @@ const NODE: CrokiContextNode = {
 };
 
 describe("CrokiCanvasNodeEditor", () => {
-  it("labels every focused editing control", () => {
+  it("starts as a readable judgment inspector instead of a form", () => {
     const markup = renderToStaticMarkup(
       <CrokiCanvasNodeEditor
         node={NODE}
+        onAdopt={vi.fn()}
         onAddReference={vi.fn(() => null)}
         onBack={vi.fn()}
+        onDecline={vi.fn()}
         onDelete={vi.fn()}
         onRemoveReference={vi.fn()}
+        onRetire={vi.fn()}
         onUpdate={vi.fn()}
       />,
     );
 
-    expect(markup).toContain('aria-label="Back to Canvas overview"');
-    expect(markup).toContain('aria-label="Kind"');
-    expect(markup).toContain('aria-label="Area"');
-    expect(markup).not.toContain('aria-label="Status"');
+    expect(markup).toContain('aria-label="Close inspector"');
+    expect(markup).toContain('aria-label="Founder judgment"');
+    expect(markup).toContain("Accept");
+    expect(markup).toContain("Decline");
     expect(markup).toContain("Proposed");
     expect(markup).toContain("origin agent");
-    expect(markup).toContain(">Title</span>");
-    expect(markup).toContain(">Details</span>");
-    expect(markup).toContain("Delete item");
+    expect(markup).toContain("Advanced edit");
+    expect(markup).not.toContain('aria-label="Kind"');
+    expect(markup).not.toContain("Delete item");
   });
 
   it("marks invalid titles and over-limit details for assistive technology", () => {
     const markup = renderToStaticMarkup(
       <CrokiCanvasNodeEditor
         node={{ ...NODE, title: "", body: "x".repeat(12_001) }}
+        onAdopt={vi.fn()}
         onAddReference={vi.fn(() => null)}
         onBack={vi.fn()}
+        onDecline={vi.fn()}
         onDelete={vi.fn()}
         onRemoveReference={vi.fn()}
+        onRetire={vi.fn()}
         onUpdate={vi.fn()}
       />,
     );
 
-    expect(markup.match(/aria-invalid="true"/g)).toHaveLength(2);
-    expect(markup.match(/aria-describedby=/g)).toHaveLength(2);
-    expect(markup.match(/role="alert"/g)).toHaveLength(2);
     expect(markup).toContain('aria-label="Edit untitled Canvas item"');
-    expect(markup).toContain("Enter a title under 240 characters.");
-    expect(markup).toContain("Details exceed the Canvas limit.");
+    expect(markup).toContain("Advanced edit");
+    expect(markup).not.toContain('aria-label="Kind"');
   });
 });

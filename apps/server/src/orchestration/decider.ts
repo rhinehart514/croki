@@ -378,6 +378,53 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.fork": {
+      const sourceThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.sourceThreadId,
+      });
+      yield* requireThreadAbsent({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+
+      if (sourceThread.deletedAt !== null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Source thread '${command.sourceThreadId}' has been deleted and cannot be forked.`,
+        });
+      }
+
+      const sourceIsRunning =
+        sourceThread.session?.status === "starting" ||
+        sourceThread.session?.status === "running" ||
+        sourceThread.latestTurn?.state === "running" ||
+        threadHasQueuedTurnStart(sourceThread, command.createdAt);
+      if (sourceIsRunning) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Source thread '${command.sourceThreadId}' is running and cannot be forked.`,
+        });
+      }
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.fork-requested",
+        payload: {
+          threadId: command.threadId,
+          sourceThreadId: command.sourceThreadId,
+          createdAt: command.createdAt,
+        },
+      };
+    }
+
     case "thread.delete": {
       yield* requireThread({
         readModel,
@@ -778,6 +825,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.titleSeed !== undefined ? { titleSeed: command.titleSeed } : {}),
           runtimeMode: targetThread.runtimeMode,
           interactionMode: targetThread.interactionMode,
+          canvasEnabled: command.canvasEnabled ?? false,
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
           createdAt: command.createdAt,
         },

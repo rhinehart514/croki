@@ -31,7 +31,7 @@ export interface AddedOverlayLine {
 const REQUIRED_FOCUSED_TESTS = [
   "apps/server/src/orchestration/Layers/CrokiContext.test.ts",
   "apps/web/src/branding.test.ts",
-  "apps/web/src/components/croki/CrokiCanvasOverview.test.tsx",
+  "apps/web/src/components/croki/CrokiCanvasField.test.tsx",
   "apps/web/src/components/croki/crokiCanvasModel.test.ts",
   "packages/shared/src/crokiContext.test.ts",
   "scripts/lib/brand-policy.test.ts",

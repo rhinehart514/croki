@@ -74,6 +74,11 @@ const ProviderRollbackConversationInput = Schema.Struct({
   numTurns: NonNegativeInt,
 });
 
+const ProviderForkConversationInput = Schema.Struct({
+  sourceThreadId: ThreadId,
+  targetThreadId: ThreadId,
+});
+
 function toValidationError(
   operation: string,
   issue: string,
@@ -684,7 +689,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       // an already-spawned agent process, so we keep the existing token valid
       // rather than issuing a new one: sessions that go a long time between
       // browser tool calls used to lose the toolkit outright.
-      yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
+      yield* McpSessionRegistry.touchActiveMcpThread(input.threadId, {
+        canvasEnabled: input.canvasEnabled ?? false,
+      });
       const turn = yield* routed.adapter.sendTurn(input);
       yield* directory.upsert({
         threadId: input.threadId,
@@ -1014,6 +1021,89 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     );
   });
 
+  const forkConversation: ProviderServiceMethod<"forkConversation"> = Effect.fn("forkConversation")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.forkConversation",
+        schema: ProviderForkConversationInput,
+        payload: rawInput,
+      });
+      if (input.sourceThreadId === input.targetThreadId) {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          "Source and target thread ids must be different.",
+        );
+      }
+
+      const sourceBinding = Option.getOrUndefined(
+        yield* directory.getBinding(input.sourceThreadId),
+      );
+      if (!sourceBinding) {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          `Cannot fork thread '${input.sourceThreadId}' because no persisted provider binding exists.`,
+        );
+      }
+      if (Option.isSome(yield* directory.getBinding(input.targetThreadId))) {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          `Cannot fork into thread '${input.targetThreadId}' because it already has a provider binding.`,
+        );
+      }
+
+      const routed = yield* resolveRoutableSession({
+        threadId: input.sourceThreadId,
+        operation: "ProviderService.forkConversation",
+        allowRecovery: false,
+      });
+      if (!routed.isActive) {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          `Cannot fork thread '${input.sourceThreadId}' because its provider session is not active.`,
+        );
+      }
+      if (routed.adapter.capabilities.conversationFork !== "native") {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          `Provider '${routed.adapter.provider}' does not support native conversation forks.`,
+        );
+      }
+
+      yield* Effect.annotateCurrentSpan({
+        "provider.operation": "fork-conversation",
+        "provider.kind": routed.adapter.provider,
+        "provider.instance_id": routed.instanceId,
+        "provider.thread_id": input.sourceThreadId,
+        "provider.target_thread_id": input.targetThreadId,
+      });
+      const result = yield* routed.adapter.forkThread(input.sourceThreadId, input.targetThreadId);
+      const sourceRuntimePayload =
+        sourceBinding.runtimePayload &&
+        typeof sourceBinding.runtimePayload === "object" &&
+        !Array.isArray(sourceBinding.runtimePayload)
+          ? sourceBinding.runtimePayload
+          : {};
+      yield* directory.upsert({
+        threadId: input.targetThreadId,
+        provider: sourceBinding.provider,
+        providerInstanceId: routed.instanceId,
+        ...(sourceBinding.adapterKey !== undefined ? { adapterKey: sourceBinding.adapterKey } : {}),
+        runtimeMode: sourceBinding.runtimeMode ?? "full-access",
+        status: "stopped",
+        resumeCursor: result.resumeCursor,
+        runtimePayload: {
+          ...sourceRuntimePayload,
+          activeTurnId: null,
+          lastRuntimeEvent: "provider.forkConversation",
+          lastRuntimeEventAt: yield* nowIso,
+        },
+      });
+      yield* analytics.record("provider.conversation.forked", {
+        provider: routed.adapter.provider,
+      });
+    },
+  );
+
   const runStopAll = Effect.fn("runStopAll")(function* () {
     const threadIds = yield* directory.listThreadIds();
     const currentAdapters = yield* getAdapterEntries;
@@ -1085,6 +1175,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     getCapabilities,
     getInstanceInfo,
     rollbackConversation,
+    forkConversation,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
     // independently receive all runtime events.

@@ -1682,6 +1682,15 @@ export function makeOpenCodeAdapter(
       },
     );
 
+    const forkThread: OpenCodeAdapterShape["forkThread"] = (_sourceThreadId, _targetThreadId) =>
+      Effect.fail(
+        new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "OpenCode sessions do not support native conversation forks.",
+        }),
+      );
+
     const stopAll: OpenCodeAdapterShape["stopAll"] = () =>
       Effect.gen(function* () {
         const contexts = [...sessions.values()];
@@ -1701,6 +1710,7 @@ export function makeOpenCodeAdapter(
       provider: PROVIDER,
       capabilities: {
         sessionModelSwitch: "in-session",
+        conversationFork: "unsupported",
       },
       startSession,
       sendTurn,
@@ -1712,6 +1722,7 @@ export function makeOpenCodeAdapter(
       hasSession,
       readThread,
       rollbackThread,
+      forkThread,
       stopAll,
       get streamEvents() {
         return Stream.fromQueue(runtimeEvents);

@@ -24,12 +24,23 @@ import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
 
 export type ProviderSessionModelSwitchMode = "in-session" | "unsupported";
+export type ProviderConversationForkMode = "native" | "unsupported";
 
 export interface ProviderAdapterCapabilities {
   /**
    * Declares whether changing the model on an existing session is supported.
    */
   readonly sessionModelSwitch: ProviderSessionModelSwitchMode;
+  /**
+   * Declares whether the provider can create an independent native conversation
+   * from an existing thread without replaying its transcript.
+   */
+  readonly conversationFork: ProviderConversationForkMode;
+}
+
+export interface ProviderThreadForkResult {
+  /** Provider-specific state used to resume the newly forked conversation. */
+  readonly resumeCursor: unknown;
 }
 
 export interface ProviderThreadTurnSnapshot {
@@ -113,6 +124,15 @@ export interface ProviderAdapterShape<TError> {
     threadId: ThreadId,
     numTurns: number,
   ) => Effect.Effect<ProviderThreadSnapshot, TError>;
+
+  /**
+   * Fork a provider-native conversation. The source session must be active;
+   * this only creates resume state and does not start a target session.
+   */
+  readonly forkThread: (
+    sourceThreadId: ThreadId,
+    targetThreadId: ThreadId,
+  ) => Effect.Effect<ProviderThreadForkResult, TError>;
 
   /**
    * Stop all sessions owned by this adapter.

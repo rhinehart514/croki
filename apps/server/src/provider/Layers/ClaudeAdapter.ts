@@ -8,6 +8,7 @@
  */
 import {
   type CanUseTool,
+  forkSession as forkClaudeSession,
   query,
   type Options as ClaudeQueryOptions,
   type PermissionMode,
@@ -220,6 +221,13 @@ export interface ClaudeAdapterLiveOptions {
     readonly prompt: AsyncIterable<SDKUserMessage>;
     readonly options: ClaudeQueryOptions;
   }) => ClaudeQueryRuntime;
+  readonly forkSession?: (
+    sessionId: string,
+    options?: {
+      readonly dir?: string;
+      readonly title?: string;
+    },
+  ) => Promise<{ readonly sessionId: string }>;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
 }
@@ -1367,6 +1375,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         prompt: input.prompt,
         options: input.options,
       }) as ClaudeQueryRuntime);
+  const forkSession = options?.forkSession ?? forkClaudeSession;
 
   const sessions = new Map<ThreadId, ClaudeSessionContext>();
   const runtimeEventQueue = yield* Queue.unbounded<ProviderRuntimeEvent>();
@@ -3849,6 +3858,68 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     },
   );
 
+  const forkThread: ClaudeAdapterShape["forkThread"] = Effect.fn("forkThread")(
+    function* (sourceThreadId, targetThreadId) {
+      if (sourceThreadId === targetThreadId) {
+        return yield* new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Source and target thread ids must be different.",
+        });
+      }
+
+      const source = yield* requireSession(sourceThreadId);
+      if (source.turnState || source.session.status === "running") {
+        return yield* new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Cannot fork a Claude thread while a turn is running.",
+        });
+      }
+
+      const sourceResumeState = readClaudeResumeState(source.session.resumeCursor);
+      const sourceSessionId = source.resumeSessionId ?? sourceResumeState?.resume;
+      if (!sourceSessionId) {
+        return yield* new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Claude session does not have a durable resume id to fork.",
+        });
+      }
+
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          forkSession(
+            sourceSessionId,
+            source.session.cwd ? { dir: source.session.cwd } : undefined,
+          ),
+        catch: (cause) =>
+          new ProviderAdapterRequestError({
+            provider: PROVIDER,
+            method: "thread/fork",
+            detail: "Failed to fork Claude session.",
+            cause,
+          }),
+      });
+
+      if (!isUuid(result.sessionId)) {
+        return yield* new ProviderAdapterRequestError({
+          provider: PROVIDER,
+          method: "thread/fork",
+          detail: "Claude returned an invalid forked session id.",
+        });
+      }
+
+      return {
+        resumeCursor: {
+          threadId: targetThreadId,
+          resume: result.sessionId,
+          turnCount: sourceResumeState?.turnCount ?? source.turns.length,
+        },
+      };
+    },
+  );
+
   const respondToRequest: ClaudeAdapterShape["respondToRequest"] = Effect.fn("respondToRequest")(
     function* (threadId, requestId, decision) {
       const context = yield* requireSession(threadId);
@@ -3932,12 +4003,14 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     provider: PROVIDER,
     capabilities: {
       sessionModelSwitch: "in-session",
+      conversationFork: "native",
     },
     startSession,
     sendTurn,
     interruptTurn,
     readThread,
     rollbackThread,
+    forkThread,
     respondToRequest,
     respondToUserInput,
     stopSession,

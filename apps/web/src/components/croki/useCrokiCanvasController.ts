@@ -18,16 +18,21 @@ import {
   acceptCrokiCanvasFile,
   acceptCrokiCanvasMissing,
   acceptCrokiCanvasReadError,
+  discardCrokiCanvasDraft,
   makeCrokiCanvasWorkspaceKey,
   markCrokiCanvasSaved,
+  redoCrokiCanvasDraft,
   replaceCrokiCanvasDraft,
   setCrokiCanvasSaving,
+  undoCrokiCanvasDraft,
   useCrokiCanvasDraft,
 } from "./crokiCanvasDraftStore";
+import { canRedoCrokiCanvasDraft, canUndoCrokiCanvasDraft } from "./crokiCanvasDraftHistory";
 import { addCrokiNode, updateCrokiNode, validateCrokiContextForSave } from "./crokiCanvasModel";
 
 interface CrokiCanvasControllerProps {
   readonly environmentId: EnvironmentId;
+  readonly externalRevision?: string | null;
   readonly onPendingChange?: (pending: boolean) => void;
   readonly productName: string;
   readonly workspaceRoot: string;
@@ -49,8 +54,14 @@ export function useCrokiCanvasController(props: CrokiCanvasControllerProps) {
   });
   const validationErrors = validateCrokiContextForSave(state.context);
   const pending = state.dirty || state.isSaving;
+  const canUndo = canUndoCrokiCanvasDraft(workspaceKey);
+  const canRedo = canRedoCrokiCanvasDraft(workspaceKey);
 
   useEffect(() => props.onPendingChange?.(pending), [pending, props.onPendingChange]);
+
+  useEffect(() => {
+    if (props.externalRevision) fileQuery.refresh();
+  }, [fileQuery.refresh, props.externalRevision]);
 
   useEffect(() => {
     if (fileQuery.data) {
@@ -86,6 +97,12 @@ export function useCrokiCanvasController(props: CrokiCanvasControllerProps) {
     },
     [applyTransition, state.context],
   );
+
+  const undo = useCallback(() => undoCrokiCanvasDraft(workspaceKey), [workspaceKey]);
+  const redo = useCallback(() => redoCrokiCanvasDraft(workspaceKey), [workspaceKey]);
+  const discard = useCallback(() => {
+    if (!state.isSaving) discardCrokiCanvasDraft(workspaceKey);
+  }, [state.isSaving, workspaceKey]);
 
   const save = useCallback(() => {
     if (
@@ -150,10 +167,15 @@ export function useCrokiCanvasController(props: CrokiCanvasControllerProps) {
 
   return {
     applyTransition,
+    canRedo,
+    canUndo,
+    discard,
+    redo,
     retry: fileQuery.refresh,
     save,
     selectedNode: state.context.nodes.find((node) => node.id === state.selectedNodeId) ?? null,
     state,
+    undo,
     updateNode,
     validationErrors,
     workspaceKey,

@@ -25,6 +25,7 @@ interface ChatHeaderProps {
   activeThreadId: ThreadId;
   draftId?: DraftId;
   activeThreadTitle: string;
+  forkedFromThreadTitle: string | undefined;
   activeProjectName: string | undefined;
   activeProjectCwd: string | null;
   openInCwd: string | null;
@@ -61,6 +62,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   draftId,
   activeThreadTitle,
+  forkedFromThreadTitle,
   activeProjectName,
   activeProjectCwd,
   openInCwd,
@@ -132,6 +134,11 @@ export const ChatHeader = memo(function ChatHeader({
           />
           <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
         </Tooltip>
+        {forkedFromThreadTitle ? (
+          <span className="max-w-40 shrink truncate text-xs text-muted-foreground">
+            Forked from {forkedFromThreadTitle}
+          </span>
+        ) : null}
       </div>
       <div
         data-chat-header-actions

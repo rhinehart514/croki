@@ -387,6 +387,222 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-atta
   },
 );
 
+it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork-")))(
+  "OrchestrationProjectionPipeline thread forks",
+  (it) => {
+    it.effect("clones stable history, lineage, and independently owned attachments", () =>
+      Effect.gen(function* () {
+        const projectionPipeline = yield* OrchestrationProjectionPipeline;
+        const eventStore = yield* OrchestrationEventStore;
+        const sql = yield* SqlClient.SqlClient;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const serverConfig = yield* ServerConfig;
+        const sourceThreadId = ThreadId.make("fork-source");
+        const targetThreadId = ThreadId.make("fork-target");
+        const now = "2026-07-31T12:00:00.000Z";
+        const attachmentUuid = "12345678-1234-1234-1234-123456789abc";
+        const sourceAttachmentId = `fork-source-${attachmentUuid}`;
+        const targetAttachmentId = `fork-target-${attachmentUuid}`;
+
+        yield* fileSystem.makeDirectory(serverConfig.attachmentsDir, { recursive: true });
+        yield* fileSystem.writeFile(
+          path.join(serverConfig.attachmentsDir, `${sourceAttachmentId}.png`),
+          new Uint8Array([1, 2, 3]),
+        );
+
+        yield* eventStore.append({
+          type: "thread.created",
+          eventId: EventId.make("evt-fork-source"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-source"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-source"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            projectId: ProjectId.make("project-fork"),
+            title: "Original",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5.4",
+            },
+            runtimeMode: "full-access",
+            branch: "main",
+            worktreePath: "/tmp/project-fork",
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.message-sent",
+          eventId: EventId.make("evt-fork-message"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-message"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-message"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            messageId: MessageId.make("fork-message"),
+            role: "user",
+            text: "Inspect this",
+            attachments: [
+              {
+                type: "image",
+                id: sourceAttachmentId,
+                name: "example.png",
+                mimeType: "image/png",
+                sizeBytes: 3,
+              },
+            ],
+            turnId: null,
+            streaming: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.activity-appended",
+          eventId: EventId.make("evt-fork-open-request"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-open-request"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-open-request"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            activity: {
+              id: EventId.make("activity-fork-open-request"),
+              turnId: null,
+              tone: "approval",
+              kind: "user-input.requested",
+              summary: "Needs input",
+              payload: { requestId: "request-open" },
+              createdAt: now,
+            },
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.activity-appended",
+          eventId: EventId.make("evt-fork-history"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-history"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-history"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            activity: {
+              id: EventId.make("activity-fork-history"),
+              turnId: null,
+              tone: "info",
+              kind: "tool.completed",
+              summary: "Finished",
+              payload: {},
+              createdAt: now,
+            },
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.fork-requested",
+          eventId: EventId.make("evt-fork-target"),
+          aggregateKind: "thread",
+          aggregateId: targetThreadId,
+          occurredAt: "2026-07-31T12:01:00.000Z",
+          commandId: CommandId.make("cmd-fork-target"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-target"),
+          metadata: {},
+          payload: {
+            threadId: targetThreadId,
+            sourceThreadId,
+            createdAt: "2026-07-31T12:01:00.000Z",
+          },
+        });
+
+        yield* projectionPipeline.bootstrap;
+
+        const threadRows = yield* sql<{
+          readonly forkedFromThreadId: string | null;
+          readonly title: string;
+        }>`
+          SELECT
+            forked_from_thread_id AS "forkedFromThreadId",
+            title
+          FROM projection_threads
+          WHERE thread_id = ${targetThreadId}
+        `;
+        assert.deepEqual(threadRows, [
+          { forkedFromThreadId: sourceThreadId, title: "Original (fork)" },
+        ]);
+        const sessionRows = yield* sql<{ readonly status: string }>`
+          SELECT status
+          FROM projection_thread_sessions
+          WHERE thread_id = ${targetThreadId}
+        `;
+        assert.deepEqual(sessionRows, [{ status: "starting" }]);
+        const messageRows = yield* sql<{
+          readonly messageId: string;
+          readonly attachmentId: string | null;
+        }>`
+          SELECT
+            message_id AS "messageId",
+            json_extract(attachments_json, '$[0].id') AS "attachmentId"
+          FROM projection_thread_messages
+          WHERE thread_id = ${targetThreadId}
+        `;
+        assert.equal(messageRows[0]?.messageId, "fork:fork-target:fork-message");
+        assert.equal(messageRows[0]?.attachmentId, targetAttachmentId);
+        const activityRows = yield* sql<{ readonly kind: string }>`
+          SELECT kind
+          FROM projection_thread_activities
+          WHERE thread_id = ${targetThreadId}
+        `;
+        assert.deepEqual(activityRows, [{ kind: "tool.completed" }]);
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${targetAttachmentId}.png`)),
+          true,
+        );
+
+        yield* eventStore.append({
+          type: "thread.deleted",
+          eventId: EventId.make("evt-delete-fork-source"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: "2026-07-31T12:02:00.000Z",
+          commandId: CommandId.make("cmd-delete-fork-source"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-delete-fork-source"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            deletedAt: "2026-07-31T12:02:00.000Z",
+          },
+        });
+        yield* projectionPipeline.bootstrap;
+
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${sourceAttachmentId}.png`)),
+          false,
+        );
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${targetAttachmentId}.png`)),
+          true,
+        );
+      }),
+    );
+  },
+);
+
 it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
   it.effect(
     "passes explicit empty attachment arrays through the projection pipeline to clear attachments",

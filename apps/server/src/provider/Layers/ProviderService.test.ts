@@ -192,6 +192,16 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
       Effect.succeed({ threadId, turns: [] }),
   );
 
+  const forkThread = vi.fn(
+    (
+      _sourceThreadId: ThreadId,
+      targetThreadId: ThreadId,
+    ): Effect.Effect<{ resumeCursor: unknown }, ProviderAdapterError> =>
+      Effect.succeed({
+        resumeCursor: { providerThreadId: `fork-${String(targetThreadId)}` },
+      }),
+  );
+
   const stopAll = vi.fn(
     (): Effect.Effect<void, ProviderAdapterError> =>
       Effect.sync(() => {
@@ -203,6 +213,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     provider,
     capabilities: {
       sessionModelSwitch: "in-session",
+      conversationFork: "native",
     },
     startSession,
     sendTurn,
@@ -214,6 +225,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     hasSession,
     readThread,
     rollbackThread,
+    forkThread,
     stopAll,
     get streamEvents() {
       return Stream.fromPubSub(runtimeEventPubSub);
@@ -249,6 +261,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     hasSession,
     readThread,
     rollbackThread,
+    forkThread,
     stopAll,
   };
 }
@@ -841,6 +854,90 @@ it.effect(
 );
 
 routing.layer("ProviderServiceLive routing", (it) => {
+  it.effect("forks natively and persists an inactive resumable target binding", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("thread-fork-source");
+      const targetThreadId = asThreadId("thread-fork-target");
+
+      yield* provider.startSession(sourceThreadId, {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/fork-project",
+        runtimeMode: "auto-accept-edits",
+      });
+      routing.codex.forkThread.mockClear();
+      routing.codex.startSession.mockClear();
+
+      yield* provider.forkConversation({ sourceThreadId, targetThreadId });
+
+      assert.deepEqual(routing.codex.forkThread.mock.calls, [[sourceThreadId, targetThreadId]]);
+      assert.equal(routing.codex.startSession.mock.calls.length, 0);
+      assert.equal(yield* routing.codex.hasSession(targetThreadId), false);
+      const targetBinding = yield* directory.getBinding(targetThreadId);
+      assert.equal(Option.isSome(targetBinding), true);
+      if (Option.isSome(targetBinding)) {
+        assert.equal(targetBinding.value.provider, CODEX_DRIVER);
+        assert.equal(targetBinding.value.providerInstanceId, codexInstanceId);
+        assert.equal(targetBinding.value.runtimeMode, "auto-accept-edits");
+        assert.equal(targetBinding.value.status, "stopped");
+        assert.deepEqual(targetBinding.value.resumeCursor, {
+          providerThreadId: "fork-thread-fork-target",
+        });
+        const runtimePayload = targetBinding.value.runtimePayload;
+        assert.equal(
+          runtimePayload !== null &&
+            typeof runtimePayload === "object" &&
+            !Array.isArray(runtimePayload),
+          true,
+        );
+        if (
+          runtimePayload &&
+          typeof runtimePayload === "object" &&
+          !Array.isArray(runtimePayload)
+        ) {
+          assert.equal(
+            "cwd" in runtimePayload ? runtimePayload.cwd : undefined,
+            "/tmp/fork-project",
+          );
+          assert.equal(
+            "activeTurnId" in runtimePayload ? runtimePayload.activeTurnId : undefined,
+            null,
+          );
+          assert.equal(
+            "lastRuntimeEvent" in runtimePayload ? runtimePayload.lastRuntimeEvent : undefined,
+            "provider.forkConversation",
+          );
+          assert.equal(
+            typeof ("lastRuntimeEventAt" in runtimePayload
+              ? runtimePayload.lastRuntimeEventAt
+              : undefined),
+            "string",
+          );
+        }
+      }
+      yield* provider.sendTurn({
+        threadId: targetThreadId,
+        input: "continue the fork",
+        attachments: [],
+      });
+      assert.equal(routing.codex.startSession.mock.calls.length, 1);
+      assert.deepEqual(routing.codex.startSession.mock.calls[0]?.[0], {
+        threadId: targetThreadId,
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        cwd: "/tmp/fork-project",
+        resumeCursor: { providerThreadId: "fork-thread-fork-target" },
+        runtimeMode: "auto-accept-edits",
+      });
+      yield* provider.stopSession({ threadId: targetThreadId });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+      routing.codex.sendTurn.mockClear();
+    }),
+  );
+
   it.effect("routes provider operations and rollback conversation", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;

@@ -62,7 +62,7 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
   private readonly eventQueue = Effect.runSync(Queue.unbounded<ProviderEvent>());
   private readonly now = "2026-01-01T00:00:00.000Z";
 
-  public readonly startImpl = vi.fn(() =>
+  public readonly startImpl = vi.fn<() => Promise<ProviderSession>>(() =>
     Promise.resolve({
       provider: ProviderDriverKind.make("codex"),
       status: "ready" as const,
@@ -103,6 +103,10 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
       }),
   );
 
+  public readonly forkThreadImpl = vi.fn(() =>
+    Promise.resolve({ threadId: "provider-thread-forked" }),
+  );
+
   public readonly respondToRequestImpl = vi.fn(
     (_requestId: ApprovalRequestId, _decision: ProviderApprovalDecision): Promise<void> =>
       Promise.resolve(undefined),
@@ -140,6 +144,8 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
   rollbackThread(numTurns: number) {
     return Effect.promise(() => this.rollbackThreadImpl(numTurns));
   }
+
+  forkThread = Effect.promise(() => this.forkThreadImpl());
 
   respondToRequest(requestId: ApprovalRequestId, decision: ProviderApprovalDecision) {
     return Effect.promise(() => this.respondToRequestImpl(requestId, decision));
@@ -512,6 +518,44 @@ function startLifecycleRuntime() {
 }
 
 lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
+  it.effect("returns the native Codex resume cursor when forking a thread", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+
+      const result = yield* adapter.forkThread(asThreadId("thread-1"), asThreadId("thread-forked"));
+
+      NodeAssert.deepStrictEqual(result, {
+        resumeCursor: { threadId: "provider-thread-forked" },
+      });
+      NodeAssert.equal(runtime.forkThreadImpl.mock.calls.length, 1);
+    }),
+  );
+
+  it.effect("rejects a native fork while the source turn is running", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      runtime.startImpl.mockResolvedValue({
+        provider: ProviderDriverKind.make("codex"),
+        status: "running",
+        runtimeMode: "full-access",
+        threadId: asThreadId("thread-1"),
+        activeTurnId: asTurnId("turn-running"),
+        cwd: process.cwd(),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      });
+      runtime.forkThreadImpl.mockClear();
+
+      const failure = yield* adapter
+        .forkThread(asThreadId("thread-1"), asThreadId("thread-forked"))
+        .pipe(Effect.flip);
+
+      NodeAssert.equal(failure._tag, "ProviderAdapterValidationError");
+      NodeAssert.equal(failure.operation, "forkThread");
+      NodeAssert.equal(runtime.forkThreadImpl.mock.calls.length, 0);
+    }),
+  );
+
   it.effect("maps completed agent message items to canonical item.completed events", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();

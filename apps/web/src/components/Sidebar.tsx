@@ -107,6 +107,7 @@ import { useShortcutModifierState } from "../shortcutModifierState";
 import { readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useForkThread } from "../hooks/useForkThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 
 import { useThreadActions } from "../hooks/useThreadActions";
@@ -171,7 +172,10 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { openCommandPalette } from "../commandPaletteBus";
 import {
   archiveSelectedThreadEntries,
+  buildForkThreadContextMenuItem,
   buildMultiSelectThreadContextMenuItems,
+  canForkSidebarThread,
+  isSidebarThreadForkBlocked,
   getSidebarThreadIdsToPrewarm,
   resolveAdjacentThreadId,
   isContextMenuPointerDown,
@@ -191,7 +195,7 @@ import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
-import { primaryServerKeybindingsAtom } from "../state/server";
+import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import {
   derivePhysicalProjectKey,
   deriveProjectGroupingOverrideKey,
@@ -1109,6 +1113,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const forkThread = useForkThread();
+  const serverConfigs = useAtomValue(environmentServerConfigsAtom);
   const updateSettings = useUpdateClientSettings();
   const sidebarThreadPreviewCount = useClientSettings<SidebarThreadPreviewCount>(
     (settings) => settings.sidebarThreadPreviewCount,
@@ -2111,8 +2117,12 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       );
       const threadWorkspacePath =
         thread.worktreePath ?? threadProject?.workspaceRoot ?? project.workspaceRoot ?? null;
+      const providers = serverConfigs.get(thread.environmentId)?.providers ?? [];
+      const canFork = canForkSidebarThread(thread, providers);
+      const forkBlocked = isSidebarThreadForkBlocked(thread);
       const clicked = await api.contextMenu.show(
         [
+          ...(canFork ? [buildForkThreadContextMenuItem({ isRunning: forkBlocked })] : []),
           ...(thread.branch
             ? [{ id: "new-thread-on-branch", label: `New thread on ${thread.branch}` }]
             : []),
@@ -2124,6 +2134,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         ],
         position,
       );
+
+      if (clicked === "fork") {
+        await forkThread(threadRef);
+        return;
+      }
 
       if (clicked === "new-thread-on-branch") {
         // Explicit branch carry-over: reuse the thread's worktree when it
@@ -2205,10 +2220,12 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      forkThread,
       handleNewThread,
       markThreadUnread,
       memberProjectByScopedKey,
       project.workspaceRoot,
+      serverConfigs,
       startThreadRename,
     ],
   );

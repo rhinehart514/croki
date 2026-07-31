@@ -11,6 +11,7 @@ import { Input } from "../ui/input";
 import type { CrokiCanvasModelError } from "./crokiCanvasModel";
 
 interface CrokiCanvasReferencesProps {
+  readonly editable?: boolean;
   readonly onAdd: (reference: CrokiContextReference) => CrokiCanvasModelError | null;
   readonly onOpenReference?: (reference: CrokiContextReference) => void;
   readonly onRemove: (reference: CrokiContextReference) => void;
@@ -18,6 +19,7 @@ interface CrokiCanvasReferencesProps {
 }
 
 export function CrokiCanvasReferences(props: CrokiCanvasReferencesProps) {
+  const editable = props.editable ?? true;
   const [kind, setKind] = useState<"file" | "url">("file");
   const [value, setValue] = useState("");
   const [line, setLine] = useState("");
@@ -80,14 +82,16 @@ export function CrokiCanvasReferences(props: CrokiCanvasReferencesProps) {
                   <span className="truncate">{referenceLabel(reference)}</span>
                 </span>
               )}
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                aria-label={`Remove ${referenceLabel(reference)}`}
-                onClick={() => props.onRemove(reference)}
-              >
-                <Trash2 className="size-3" aria-hidden />
-              </Button>
+              {editable ? (
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label={`Remove ${referenceLabel(reference)}`}
+                  onClick={() => props.onRemove(reference)}
+                >
+                  <Trash2 className="size-3" aria-hidden />
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -97,61 +101,63 @@ export function CrokiCanvasReferences(props: CrokiCanvasReferencesProps) {
         </p>
       )}
 
-      <form
-        className="grid grid-cols-[5rem_minmax(0,1fr)_auto] gap-1"
-        onSubmit={(event) => {
-          event.preventDefault();
-          add();
-        }}
-      >
-        <select
-          aria-label="Reference kind"
-          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-          value={kind}
-          onChange={(event) => {
-            setKind(event.target.value as "file" | "url");
-            setValue("");
-            setLine("");
-            setError(null);
+      {editable ? (
+        <form
+          className="grid grid-cols-[5rem_minmax(0,1fr)_auto] gap-1"
+          onSubmit={(event) => {
+            event.preventDefault();
+            add();
           }}
         >
-          <option value="file">File</option>
-          <option value="url">URL</option>
-        </select>
-        <Input
-          className="h-8 min-w-0 text-xs"
-          aria-label={kind === "file" ? "Repository-relative path" : "HTTP(S) URL"}
-          maxLength={
-            kind === "file"
-              ? CROKI_CONTEXT_LIMITS.referencePathChars
-              : CROKI_CONTEXT_LIMITS.referenceUrlChars
-          }
-          placeholder={kind === "file" ? "src/file.ts" : "https://…"}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-        />
-        <Button
-          size="icon-sm"
-          variant="outline"
-          type="submit"
-          aria-label="Add evidence reference"
-          disabled={!value.trim()}
-        >
-          <Plus className="size-3.5" aria-hidden />
-        </Button>
-        {kind === "file" ? (
+          <select
+            aria-label="Reference kind"
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            value={kind}
+            onChange={(event) => {
+              setKind(event.target.value as "file" | "url");
+              setValue("");
+              setLine("");
+              setError(null);
+            }}
+          >
+            <option value="file">File</option>
+            <option value="url">URL</option>
+          </select>
           <Input
-            className="col-start-2 h-8 text-xs"
-            aria-label="Optional line number"
-            inputMode="numeric"
-            min={1}
-            placeholder="Line (optional)"
-            type="number"
-            value={line}
-            onChange={(event) => setLine(event.target.value)}
+            className="h-8 min-w-0 text-xs"
+            aria-label={kind === "file" ? "Repository-relative path" : "HTTP(S) URL"}
+            maxLength={
+              kind === "file"
+                ? CROKI_CONTEXT_LIMITS.referencePathChars
+                : CROKI_CONTEXT_LIMITS.referenceUrlChars
+            }
+            placeholder={kind === "file" ? "src/file.ts" : "https://…"}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
           />
-        ) : null}
-      </form>
+          <Button
+            size="icon-sm"
+            variant="outline"
+            type="submit"
+            aria-label="Add evidence reference"
+            disabled={!value.trim()}
+          >
+            <Plus className="size-3.5" aria-hidden />
+          </Button>
+          {kind === "file" ? (
+            <Input
+              className="col-start-2 h-8 text-xs"
+              aria-label="Optional line number"
+              inputMode="numeric"
+              min={1}
+              placeholder="Line (optional)"
+              type="number"
+              value={line}
+              onChange={(event) => setLine(event.target.value)}
+            />
+          ) : null}
+        </form>
+      ) : null}
       {error ? (
         <p role="alert" className="text-xs text-destructive">
           {error}

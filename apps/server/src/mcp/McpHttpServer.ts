@@ -22,6 +22,8 @@ import {
   PreviewSnapshotToolkit,
   PreviewStandardToolkit,
 } from "./toolkits/preview/tools.ts";
+import { CrokiCanvasToolkitHandlersLive } from "./toolkits/canvas/handlers.ts";
+import { CrokiCanvasToolkit } from "./toolkits/canvas/tools.ts";
 
 const unauthorized = HttpServerResponse.jsonUnsafe(
   {
@@ -216,10 +218,19 @@ export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewSnapshotRegistrationLive,
 );
 
+export const CrokiCanvasToolkitRegistrationLive = McpServer.toolkit(CrokiCanvasToolkit).pipe(
+  Layer.provide(CrokiCanvasToolkitHandlersLive),
+);
+
+export const CrokiToolkitRegistrationLive = Layer.mergeAll(
+  PreviewToolkitRegistrationLive,
+  CrokiCanvasToolkitRegistrationLive,
+);
+
 const McpTransportLive = McpServer.layerHttp({
   name: "Croki",
   version: packageJson.version,
   path: "/mcp",
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
 
-export const layer = PreviewToolkitRegistrationLive.pipe(Layer.provideMerge(McpTransportLive));
+export const layer = CrokiToolkitRegistrationLive.pipe(Layer.provideMerge(McpTransportLive));

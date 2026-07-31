@@ -84,6 +84,7 @@ import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore"
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useForkThread } from "../hooks/useForkThread";
 import { openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
@@ -106,6 +107,9 @@ import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat"
 import type { SidebarThreadSummary } from "../types";
 import { cn } from "~/lib/utils";
 import {
+  buildForkThreadContextMenuItem,
+  canForkSidebarThread,
+  isSidebarThreadForkBlocked,
   formatWorkingDurationLabel,
   firstValidTimestampMs,
   hasUnseenCompletion,
@@ -1067,6 +1071,7 @@ export default function SidebarV2() {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const forkThread = useForkThread();
   const deleteProject = useAtomCommand(projectEnvironment.delete, {
     reportFailure: false,
   });
@@ -2063,6 +2068,9 @@ export default function SidebarV2() {
           true;
         const supportsSnooze =
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true;
+        const providers = serverConfigs.get(thread.environmentId)?.providers ?? [];
+        const canFork = canForkSidebarThread(thread, providers);
+        const forkBlocked = isSidebarThreadForkBlocked(thread);
         const isSettled = settledThreadKeysRef.current.has(threadKey);
         const isSnoozed = snoozedThreadKeysRef.current.has(threadKey);
         // Presets resolve at menu-open time (same as the popover).
@@ -2070,6 +2078,7 @@ export default function SidebarV2() {
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
             [
+              ...(canFork ? [buildForkThreadContextMenuItem({ isRunning: forkBlocked })] : []),
               ...(thread.branch
                 ? [
                     {
@@ -2118,6 +2127,9 @@ export default function SidebarV2() {
           return;
         }
         switch (clicked.value) {
+          case "fork":
+            await forkThread(threadRef);
+            return;
           case "new-thread-on-branch": {
             // Explicit branch carry-over: reuse the thread's worktree when it
             // has one, otherwise its branch on the local checkout.
@@ -2214,6 +2226,7 @@ export default function SidebarV2() {
       copyBranchToClipboard,
       copyPathToClipboard,
       deleteThread,
+      forkThread,
       handleMultiSelectContextMenu,
       markThreadUnread,
       projectCwdByKey,

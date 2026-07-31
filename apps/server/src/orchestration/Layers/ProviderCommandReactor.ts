@@ -13,10 +13,7 @@ import {
   type RuntimeMode,
   type TurnId,
 } from "@t3tools/contracts";
-import {
-  type CrokiContextAppliedActivityPayload,
-  prependCrokiAgentContext,
-} from "@t3tools/shared/crokiContext";
+import { type CrokiContextAppliedActivityPayload } from "@t3tools/shared/crokiContext";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -24,6 +21,7 @@ import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -49,7 +47,11 @@ import {
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
-import { isCrokiContextAppliedActivityPayload, loadCrokiAgentContext } from "./CrokiContext.ts";
+import {
+  compileCrokiTurnInput,
+  isCrokiContextAppliedActivityPayload,
+  loadCrokiAgentContext,
+} from "./CrokiContext.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
@@ -58,6 +60,7 @@ type ProviderIntentEvent = Extract<
   {
     type:
       | "thread.runtime-mode-set"
+      | "thread.fork-requested"
       | "thread.turn-start-requested"
       | "thread.turn-interrupt-requested"
       | "thread.approval-response-requested"
@@ -675,6 +678,7 @@ const make = Effect.gen(function* () {
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
+    readonly canvasEnabled: boolean;
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThread(input.threadId);
@@ -707,7 +711,11 @@ const make = Effect.gen(function* () {
       ...(normalizedInput !== undefined ? { query: normalizedInput } : {}),
       createdAt: input.createdAt,
     });
-    const providerInput = prependCrokiAgentContext(crokiContext.prompt, normalizedInput);
+    const providerInput = compileCrokiTurnInput({
+      canvasEnabled: input.canvasEnabled,
+      agentContext: crokiContext.prompt,
+      userInput: normalizedInput,
+    });
     const activeSession = yield* providerService
       .listSessions()
       .pipe(
@@ -738,6 +746,7 @@ const make = Effect.gen(function* () {
 
     return {
       threadId: input.threadId,
+      canvasEnabled: input.canvasEnabled,
       ...(providerInput ? { input: providerInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
@@ -954,6 +963,7 @@ const make = Effect.gen(function* () {
         ? { modelSelection: event.payload.modelSelection }
         : {}),
       interactionMode: event.payload.interactionMode,
+      canvasEnabled: event.payload.canvasEnabled ?? false,
       createdAt: event.payload.createdAt,
     }).pipe(
       Effect.map(Option.some),
@@ -1111,6 +1121,108 @@ const make = Effect.gen(function* () {
     });
   });
 
+  const processThreadForkRequested = Effect.fn("processThreadForkRequested")(function* (
+    event: Extract<ProviderIntentEvent, { type: "thread.fork-requested" }>,
+  ) {
+    const sourceThread = yield* resolveThread(event.payload.sourceThreadId);
+    const targetThread = yield* resolveThread(event.payload.threadId);
+    if (!sourceThread || !targetThread) {
+      return;
+    }
+
+    const sourceWasActive = (yield* providerService.listSessions()).some(
+      (session) => session.threadId === sourceThread.id,
+    );
+
+    const stopTemporarySourceSession = Effect.gen(function* () {
+      if (sourceWasActive) return;
+      const activeSourceSession = (yield* providerService.listSessions()).find(
+        (session) => session.threadId === sourceThread.id,
+      );
+      if (!activeSourceSession) return;
+      yield* providerService.stopSession({ threadId: sourceThread.id }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("failed to stop temporary source session after thread fork", {
+            threadId: sourceThread.id,
+            cause: Cause.pretty(cause),
+          }),
+        ),
+      );
+      yield* setThreadSession({
+        threadId: sourceThread.id,
+        session: {
+          threadId: sourceThread.id,
+          status: "stopped",
+          providerName: activeSourceSession.provider,
+          ...(activeSourceSession.providerInstanceId !== undefined
+            ? { providerInstanceId: activeSourceSession.providerInstanceId }
+            : {}),
+          runtimeMode: sourceThread.runtimeMode,
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: event.payload.createdAt,
+        },
+        createdAt: event.payload.createdAt,
+      });
+    });
+
+    const forkExit = yield* Effect.exit(
+      Effect.gen(function* () {
+        yield* ensureSessionForThread(sourceThread.id, event.payload.createdAt);
+        const activeSourceSession = (yield* providerService.listSessions()).find(
+          (session) => session.threadId === sourceThread.id,
+        );
+        if (!activeSourceSession) {
+          return yield* new ProviderAdapterRequestError({
+            provider: providerErrorLabel(sourceThread.session?.providerName ?? undefined),
+            method: "thread.fork",
+            detail: `Thread '${sourceThread.id}' did not start a provider session for forking.`,
+          });
+        }
+
+        yield* providerService.forkConversation({
+          sourceThreadId: sourceThread.id,
+          targetThreadId: targetThread.id,
+        });
+
+        yield* setThreadSession({
+          threadId: targetThread.id,
+          session: {
+            threadId: targetThread.id,
+            status: "stopped",
+            providerName: activeSourceSession.provider,
+            ...(activeSourceSession.providerInstanceId !== undefined
+              ? { providerInstanceId: activeSourceSession.providerInstanceId }
+              : {}),
+            runtimeMode: targetThread.runtimeMode,
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: event.payload.createdAt,
+          },
+          createdAt: event.payload.createdAt,
+        });
+      }),
+    );
+
+    yield* stopTemporarySourceSession;
+
+    if (Exit.isSuccess(forkExit)) return;
+    yield* setThreadSession({
+      threadId: targetThread.id,
+      session: {
+        threadId: targetThread.id,
+        status: "error",
+        providerName: sourceThread.session?.providerName ?? null,
+        providerInstanceId: targetThread.modelSelection.instanceId,
+        runtimeMode: targetThread.runtimeMode,
+        activeTurnId: null,
+        lastError: formatFailureDetail(forkExit.cause),
+        updatedAt: event.payload.createdAt,
+      },
+      createdAt: event.payload.createdAt,
+    });
+  });
+
   const processDomainEvent = Effect.fn("processDomainEvent")(function* (
     event: ProviderIntentEvent,
   ) {
@@ -1123,6 +1235,9 @@ const make = Effect.gen(function* () {
       eventType: event.type,
     });
     switch (event.type) {
+      case "thread.fork-requested":
+        yield* processThreadForkRequested(event);
+        return;
       case "thread.runtime-mode-set": {
         const thread = yield* resolveThread(event.payload.threadId);
         if (!thread?.session || thread.session.status === "stopped") {
@@ -1173,6 +1288,7 @@ const make = Effect.gen(function* () {
     const processEvent = Effect.fn("processEvent")(function* (event: OrchestrationEvent) {
       if (
         event.type === "thread.runtime-mode-set" ||
+        event.type === "thread.fork-requested" ||
         event.type === "thread.turn-start-requested" ||
         event.type === "thread.turn-interrupt-requested" ||
         event.type === "thread.approval-response-requested" ||
