@@ -83,10 +83,10 @@ describe("resolveWebAppBranding", () => {
       displayName: "Croki (Dev)",
     },
     {
-      channel: "alpha",
+      channel: "standalone",
       input: { hostedChannel: undefined, development: false },
-      stageLabel: "Alpha",
-      displayName: "Croki (Alpha)",
+      stageLabel: "Latest",
+      displayName: "Croki",
     },
     {
       channel: "stable",

@@ -81,7 +81,7 @@ describe("Croki brand policy", () => {
       category: "app-id",
       match: "prefix",
       value: "com.t3tools.t3code",
-      reason: "Desktop and mobile installed-app identity",
+      reason: "Legacy installed-app identity recognized for migration and mobile compatibility",
     });
     expect(RETAINED_T3_IDENTIFIER_ALLOWLIST).toContainEqual({
       category: "environment",

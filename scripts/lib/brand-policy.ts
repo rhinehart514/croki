@@ -12,6 +12,25 @@ export const CROKI_VISIBLE_BRAND = {
   protocolDisplayName: "Croki",
 } as const;
 
+/**
+ * Croki-owned identities that must never be shared with an installed T3 Code build.
+ * Internal package and wire names can remain compatible without coupling app state.
+ */
+export const CROKI_PRODUCT_IDENTIFIERS = {
+  stagedPackageName: "croki",
+  desktopAppId: "com.croki.desktop",
+  desktopDevelopmentAppId: "com.croki.desktop.dev",
+  productionScheme: "croki",
+  developmentScheme: "croki-dev",
+  stateRoot: ".croki",
+  productionStorageName: "Croki",
+  developmentStorageName: "Croki (Dev)",
+  productionDesktopEntryName: "croki.desktop",
+  developmentDesktopEntryName: "croki-dev.desktop",
+  productionWmClass: "croki",
+  developmentWmClass: "croki-dev",
+} as const;
+
 export const CROKI_BRAND_ASSET_PATHS = {
   crokiIconPng: "assets/croki/croki-mark-1024.png",
   crokiWindowsIconIco: "assets/croki/croki-mark.ico",
@@ -45,12 +64,12 @@ export const RETAINED_T3_IDENTIFIERS = {
 } as const;
 
 /**
- * Compatibility identifiers inherited from T3 Code.
+ * Compatibility and migration identifiers inherited from T3 Code.
  *
- * These values are deliberately not rebranded: changing them would fork
- * persisted state, installed-app identity, deep links, automation, or wire
- * contracts. Release gates can consume this list when distinguishing intended
- * compatibility references from accidental user-visible T3 branding.
+ * Croki-owned app identity is defined separately above. These legacy values
+ * remain available where wire compatibility or one-time migration still needs
+ * to recognize T3 Code. Release gates consume the list when distinguishing
+ * intentional compatibility references from accidental visible branding.
  */
 export const RETAINED_T3_IDENTIFIER_ALLOWLIST = [
   {
@@ -75,19 +94,19 @@ export const RETAINED_T3_IDENTIFIER_ALLOWLIST = [
     category: "app-id",
     match: "prefix",
     value: RETAINED_T3_IDENTIFIERS.desktopAppId,
-    reason: "Desktop and mobile installed-app identity",
+    reason: "Legacy installed-app identity recognized for migration and mobile compatibility",
   },
   {
     category: "url-scheme",
     match: "exact",
     value: RETAINED_T3_IDENTIFIERS.productionScheme,
-    reason: "Production deep links and renderer origin",
+    reason: "Legacy production deep links recognized for compatibility",
   },
   {
     category: "url-scheme",
     match: "exact",
     value: RETAINED_T3_IDENTIFIERS.developmentScheme,
-    reason: "Development deep links and renderer origin",
+    reason: "Legacy development deep links recognized for compatibility",
   },
   {
     category: "url-scheme",
@@ -99,19 +118,19 @@ export const RETAINED_T3_IDENTIFIER_ALLOWLIST = [
     category: "storage",
     match: "exact",
     value: RETAINED_T3_IDENTIFIERS.stateRoot,
-    reason: "Server and desktop state root",
+    reason: "Legacy state root recognized as migration input",
   },
   {
     category: "storage",
     match: "exact",
     value: RETAINED_T3_IDENTIFIERS.productionStorageName,
-    reason: "Production user-data directory",
+    reason: "Legacy production user-data directory recognized as migration input",
   },
   {
     category: "storage",
     match: "exact",
     value: RETAINED_T3_IDENTIFIERS.developmentStorageName,
-    reason: "Development user-data directory and storage keys",
+    reason: "Legacy development user-data directory recognized as migration input",
   },
   {
     category: "storage",

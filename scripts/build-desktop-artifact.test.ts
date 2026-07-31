@@ -92,13 +92,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "Croki (Alpha)");
+    assert.equal(resolveDesktopProductName("0.0.17"), "Croki");
     assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Croki (Nightly)");
   });
 
   it("keeps staged package identity internal while exposing Croki metadata", () => {
     assert.deepStrictEqual(STAGED_DESKTOP_PACKAGE_IDENTITY, {
-      name: "t3code",
+      name: "croki",
       description: "Croki desktop build",
       author: "Croki",
     });
@@ -130,6 +130,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
+                CROKI_DESKTOP_UPDATE_REPOSITORY: "rhinehart514/croki",
                 T3CODE_DESKTOP_UPDATE_REPOSITORY: "pingdotgg/t3code",
               },
             }),
@@ -150,8 +151,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       assert.deepStrictEqual(latestConfig, {
         provider: "github",
-        owner: "pingdotgg",
-        repo: "t3code",
+        owner: "rhinehart514",
+        repo: "croki",
         releaseType: "release",
       });
       assert.deepStrictEqual(nightlyConfig, {
@@ -359,30 +360,30 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(linux, "asarUnpack");
       assert.deepStrictEqual(win.asarUnpack, WINDOWS_ASAR_UNPACK);
       for (const config of [mac, linux, win]) {
-        assert.equal(config.appId, "com.t3tools.t3code");
-        assert.equal(config.productName, "Croki (Alpha)");
+        assert.equal(config.appId, "com.croki.desktop");
+        assert.equal(config.productName, "Croki");
         assert.equal(config.artifactName, "Croki-${version}-${arch}.${ext}");
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
       }
 
       assert.deepStrictEqual((mac.mac as Record<string, unknown>).protocols, [
-        { name: "Croki", schemes: ["t3code", "t3code-dev"] },
+        { name: "Croki", schemes: ["croki"] },
       ]);
-      assert.equal((linux.linux as Record<string, unknown>).executableName, "t3code");
+      assert.equal((linux.linux as Record<string, unknown>).executableName, "croki");
       assert.equal(
         (
           (linux.linux as Record<string, unknown>).desktop as {
             readonly entry: Record<string, unknown>;
           }
         ).entry.StartupWMClass,
-        "t3code",
+        "croki",
       );
       assert.equal((win.win as Record<string, unknown>).icon, "icon.ico");
       assert.equal((win.win as Record<string, unknown>).executableName, "Croki");
       assert.deepStrictEqual(win.nsis, {
-        shortcutName: "Croki (Alpha)",
-        uninstallDisplayName: "Croki (Alpha)",
+        shortcutName: "Croki",
+        uninstallDisplayName: "Croki",
         installerIcon: "icon.ico",
         uninstallerIcon: "icon.ico",
         installerHeaderIcon: "icon.ico",
@@ -438,7 +439,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "com.croki.desktop",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -458,7 +459,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.croki.desktop</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -545,19 +546,21 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.notInclude(error.message, secret);
   });
 
-  it.effect("adds passkey entitlements and both renderer protocols to signed macOS builds", () =>
-    Effect.gen(function* () {
-      const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
-        entitlementsPath: "/tmp/entitlements.mac.plist",
-        provisioningProfilePath: "/tmp/t3code.provisionprofile",
-      });
+  it.effect(
+    "adds passkey entitlements and the Croki renderer protocol to signed macOS builds",
+    () =>
+      Effect.gen(function* () {
+        const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
+          entitlementsPath: "/tmp/entitlements.mac.plist",
+          provisioningProfilePath: "/tmp/t3code.provisionprofile",
+        });
 
-      const mac = config.mac as Record<string, unknown>;
-      assert.equal(config.appId, "com.t3tools.t3code");
-      assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
-      assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
-      assert.deepStrictEqual(mac.protocols, [{ name: "Croki", schemes: ["t3code", "t3code-dev"] }]);
-    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+        const mac = config.mac as Record<string, unknown>;
+        assert.equal(config.appId, "com.croki.desktop");
+        assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
+        assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
+        assert.deepStrictEqual(mac.protocols, [{ name: "Croki", schemes: ["croki"] }]);
+      }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
   it.effect("keeps executable resource editing enabled for unsigned Windows builds", () =>

@@ -17,6 +17,7 @@ import {
   type WebAssetBrand,
 } from "./lib/brand-assets.ts";
 import {
+  CROKI_PRODUCT_IDENTIFIERS,
   CROKI_VISIBLE_BRAND,
   RETAINED_T3_IDENTIFIERS,
   resolveCrokiDesktopBrandChannel,
@@ -41,7 +42,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = RETAINED_T3_IDENTIFIERS.desktopAppId;
+const DESKTOP_APP_ID = CROKI_PRODUCT_IDENTIFIERS.desktopAppId;
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -1460,10 +1461,12 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   updateChannel: "latest" | "nightly",
 ) {
   const env = yield* Config.all({
+    crokiUpdateRepository: Config.string("CROKI_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
     updateRepository: Config.string("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
     githubRepository: Config.string("GITHUB_REPOSITORY").pipe(Config.option),
   });
   const rawRepo = (
+    Option.getOrUndefined(env.crokiUpdateRepository)?.trim() ||
     Option.getOrUndefined(env.updateRepository)?.trim() ||
     Option.getOrUndefined(env.githubRepository)?.trim() ||
     ""
@@ -1524,7 +1527,7 @@ export function resolveDesktopProductName(version: string): string {
 }
 
 export const STAGED_DESKTOP_PACKAGE_IDENTITY = {
-  name: RETAINED_T3_IDENTIFIERS.stagedPackageName,
+  name: CROKI_PRODUCT_IDENTIFIERS.stagedPackageName,
   description: CROKI_VISIBLE_BRAND.desktopDescription,
   author: CROKI_VISIBLE_BRAND.desktopPackageAuthor,
 } as const;
@@ -1580,10 +1583,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: CROKI_VISIBLE_BRAND.protocolDisplayName,
-          schemes: [
-            RETAINED_T3_IDENTIFIERS.productionScheme,
-            RETAINED_T3_IDENTIFIERS.developmentScheme,
-          ],
+          schemes: [CROKI_PRODUCT_IDENTIFIERS.productionScheme],
         },
       ],
       ...(macPasskeySigning
@@ -1598,12 +1598,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "linux") {
     buildConfig.linux = {
       target: [target],
-      executableName: RETAINED_T3_IDENTIFIERS.stagedPackageName,
+      executableName: CROKI_PRODUCT_IDENTIFIERS.productionWmClass,
       icon: "icons",
       category: "Development",
       desktop: {
         entry: {
-          StartupWMClass: RETAINED_T3_IDENTIFIERS.productionStorageName,
+          StartupWMClass: CROKI_PRODUCT_IDENTIFIERS.productionWmClass,
         },
       },
     };

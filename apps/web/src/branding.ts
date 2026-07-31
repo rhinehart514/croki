@@ -35,7 +35,7 @@ export function resolveWebAppBranding(input: {
   const stageLabel =
     input.injectedDesktopBranding?.stageLabel ??
     hostedChannelLabel ??
-    (input.development ? "Dev" : "Alpha");
+    (input.development ? "Dev" : "Latest");
 
   return {
     baseName,
