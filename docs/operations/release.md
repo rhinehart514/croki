@@ -1,10 +1,9 @@
 # Release ownership and enablement
 
-Croki production releases are disabled by default. Destinations are opt-in
-independently: a Croki-owned GitHub release can publish desktop artifacts while
-CLI, relay, hosted web, signing, Discord, and mobile destinations remain off.
-Every enabled destination still fails closed unless its own Croki-owned
-configuration is complete.
+Croki production releases are disabled by default. Destinations are opt-in,
+and every enabled destination fails closed unless its Croki-owned configuration
+is complete. Update-capable desktop, hosted web, and mobile clients additionally
+require exact-version `croki-server` publication in the same release.
 
 ## 0.4.3 source candidate
 
@@ -21,9 +20,9 @@ notes](../project/release-notes-0.4.3.md) for the product summary.
 - Manual release dispatch defaults to a dry-run destination plan.
 - Tagged and scheduled GitHub release paths can be enabled with
   `CROKI_RELEASE_ENABLED=true`, `CROKI_RELEASE_REPOSITORY=rhinehart514/croki`,
-  and `CROKI_RELEASE_BRANCH=croki/main`. CLI, relay, web, signing, Discord, and
-  mobile paths remain skipped unless their specific enable flags are true and
-  their destination configuration validates.
+  `CROKI_RELEASE_BRANCH=croki/main`, `CROKI_CLI_PUBLISH_ENABLED=true`, and
+  `CROKI_CLI_PACKAGE=croki-server`. Relay, web, signing, Discord, and mobile
+  paths remain skipped unless their own enable flags and configuration validate.
 - The local server package is `croki-server` and its metadata points at the
   Croki repository. Publication is still disabled because the Croki-owned
   package destination and release variables are not configured.
@@ -74,6 +73,16 @@ npm run release:croki:plan
 npm run release:smoke
 npm run check:croki
 ```
+
+## Exact-version update invariant
+
+Croki clients ask a connected server to install the client's exact version.
+The release plan therefore rejects desktop, hosted web, or mobile publication
+unless `croki-server` publication is enabled, and the GitHub release job runs
+only after that exact package version publishes successfully. Do not weaken
+this dependency to accept a skipped CLI job. Without the package, automatic
+server update capability must stay unavailable and the client must offer the
+manual path.
 
 The Windows artifact workflow is safe for local testing because it omits
 inherited updater repository metadata. It should remain unsigned until Croki's

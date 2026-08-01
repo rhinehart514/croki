@@ -853,7 +853,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [preflight, build, publish_cli]
-    if: ${{ always() && !cancelled() && vars.CROKI_RELEASE_ENABLED == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && (needs.publish_cli.result == 'success' || needs.publish_cli.result == 'skipped') }}
+    if: ${{ always() && !cancelled() && vars.CROKI_RELEASE_ENABLED == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && needs.publish_cli.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
