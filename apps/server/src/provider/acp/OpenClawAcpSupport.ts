@@ -72,5 +72,6 @@ export const makeOpenClawAcpRuntime = (
   });
 
 export function resolveOpenClawAcpBaseModelId(model: string | null | undefined): string {
-  return model?.trim() || "sol-medium-luna-max";
+  const normalized = model?.trim();
+  return !normalized || normalized === "sol-medium-luna-max" ? "agent-default" : normalized;
 }

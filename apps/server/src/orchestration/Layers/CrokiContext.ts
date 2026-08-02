@@ -1,5 +1,7 @@
 import * as NodeCrypto from "node:crypto";
 
+import type { CrokiHarnessId } from "@t3tools/contracts";
+
 import {
   compileCrokiAgentContext,
   CROKI_CONTEXT_LIMITS,
@@ -24,26 +26,27 @@ export interface LoadedCrokiAgentContext {
   readonly receipt: CrokiContextReceipt;
 }
 
-export const CROKI_CANVAS_HARNESS_INSTRUCTION = `<croki_canvas_harness version="1">
-Canvas is active for this turn. Stay in this Croki Thread and use its native agent runtime, tools, authority, and Review. Act as the founder's product and GTM strategy partner: infer the decision behind the request; expose assumptions, evidence, contradictions, consequences, and reversible tests; keep uncertainty explicit; and leave consequential judgment to the founder. Do not ask the user to author or connect nodes, fill forms, or treat agent proposals as canon. When the strategic model materially changes, call canvas_present with one complete, bounded, provisional scene grounded in the Thread and project evidence. The scene is a visual projection, not another memory, runtime, or source of truth.
-</croki_canvas_harness>`;
+export const CROKI_GTM_HARNESS_INSTRUCTION = `<croki_gtm_harness version="1">
+Use the provider's native agent runtime, tools, authority, and Review. For this turn, act as the founder's product and GTM strategy partner: infer the decision behind the request; expose assumptions, evidence, contradictions, consequences, and reversible tests; keep uncertainty explicit; and leave consequential judgment to the founder. Do not ask the user to author or connect nodes, fill forms, or treat agent proposals as canon. When the strategic model materially changes, call canvas_present with one complete, bounded, provisional scene grounded in the Thread and project evidence. The scene is a visual projection, not another memory, runtime, or source of truth.
+</croki_gtm_harness>`;
 
 /** Compiles one provider turn without creating a second Canvas conversation or history. */
 export function compileCrokiTurnInput(input: {
-  readonly canvasEnabled: boolean;
+  readonly harnessId: CrokiHarnessId;
   readonly agentContext: string | null;
   readonly userInput: string | undefined;
 }): string | undefined {
-  if (!input.canvasEnabled) {
+  if (input.harnessId === "native") {
     return prependCrokiAgentContext(input.agentContext, input.userInput);
   }
-  return [CROKI_CANVAS_HARNESS_INSTRUCTION, input.agentContext, input.userInput]
+  return [CROKI_GTM_HARNESS_INSTRUCTION, input.agentContext, input.userInput]
     .filter((value): value is string => Boolean(value))
     .join("\n\n");
 }
 
 const emptyReceipt = (
   status: CrokiContextReceipt["status"],
+  harnessId: CrokiHarnessId,
   fields: Partial<CrokiContextReceipt> = {},
 ): CrokiContextReceipt => ({
   status,
@@ -56,6 +59,7 @@ const emptyReceipt = (
   provisionalCount: 0,
   renderedChars: 0,
   truncated: false,
+  harnessId,
   ...fields,
 });
 
@@ -66,15 +70,16 @@ function parseLoadedContext(
   contents: string,
   fingerprint: string,
   query: string | undefined,
+  harnessId: CrokiHarnessId,
 ): LoadedCrokiAgentContext {
   try {
     const context = parseCrokiContext(contents);
-    return loadedContext(context, fingerprint, query, "loaded");
+    return loadedContext(context, fingerprint, query, harnessId, "loaded");
   } catch (error) {
     try {
       const recovery = recoverCrokiContext(contents);
       if (recovery.issues.length > 0) {
-        return loadedContext(recovery.context, fingerprint, query, "partial", {
+        return loadedContext(recovery.context, fingerprint, query, harnessId, "partial", {
           errorCode: recovery.issues[0]!.code,
           issueCount: recovery.issues.length,
         });
@@ -82,7 +87,7 @@ function parseLoadedContext(
     } catch {
       // The strict error below is the authoritative envelope failure.
     }
-    return invalidContext(error, fingerprint);
+    return invalidContext(error, fingerprint, harnessId);
   }
 }
 
@@ -90,6 +95,7 @@ function loadedContext(
   context: ReturnType<typeof parseCrokiContext>,
   fingerprint: string,
   query: string | undefined,
+  harnessId: CrokiHarnessId,
   status: "loaded" | "partial",
   recovery: Pick<CrokiContextReceipt, "errorCode" | "issueCount"> = {},
 ): LoadedCrokiAgentContext {
@@ -98,11 +104,11 @@ function loadedContext(
   const provisionalCount = context.nodes.filter((node) => node.status === "provisional").length;
   return {
     prompt: compilation.prompt,
-    receipt: emptyReceipt(status, {
+    receipt: emptyReceipt(status, harnessId, {
       version: context.version,
       sha256: fingerprint,
       updatedAt: context.updatedAt,
-      activeCount: currentCount + provisionalCount,
+      activeCount: currentCount,
       currentCount,
       provisionalCount,
       renderedChars: compilation.prompt?.length ?? 0,
@@ -115,23 +121,31 @@ function loadedContext(
   };
 }
 
-function invalidContext(error: unknown, fingerprint: string): LoadedCrokiAgentContext {
+function invalidContext(
+  error: unknown,
+  fingerprint: string,
+  harnessId: CrokiHarnessId,
+): LoadedCrokiAgentContext {
   const errorCode: CrokiContextParseErrorCode =
     error instanceof CrokiContextParseError ? error.code : "malformed";
   return {
     prompt: null,
-    receipt: emptyReceipt("invalid", {
+    receipt: emptyReceipt("invalid", harnessId, {
       sha256: fingerprint,
       errorCode,
     }),
   };
 }
 
-export function loadCrokiAgentContext(cwd: string | undefined, query?: string) {
+export function loadCrokiAgentContext(
+  cwd: string | undefined,
+  query?: string,
+  harnessId: CrokiHarnessId = "native",
+) {
   if (!cwd) {
     return Effect.succeed<LoadedCrokiAgentContext>({
       prompt: null,
-      receipt: emptyReceipt("absent"),
+      receipt: emptyReceipt("absent", harnessId),
     });
   }
 
@@ -142,7 +156,7 @@ export function loadCrokiAgentContext(cwd: string | undefined, query?: string) {
     if (!(yield* fileSystem.exists(contextPath))) {
       return {
         prompt: null,
-        receipt: emptyReceipt("absent"),
+        receipt: emptyReceipt("absent", harnessId),
       } satisfies LoadedCrokiAgentContext;
     }
 
@@ -151,18 +165,18 @@ export function loadCrokiAgentContext(cwd: string | undefined, query?: string) {
     if (Buffer.byteLength(contents, "utf8") > CROKI_CONTEXT_LIMITS.sourceBytes) {
       return {
         prompt: null,
-        receipt: emptyReceipt("oversized", { sha256: fingerprint }),
+        receipt: emptyReceipt("oversized", harnessId, { sha256: fingerprint }),
       } satisfies LoadedCrokiAgentContext;
     }
 
-    return parseLoadedContext(contents, fingerprint, query);
+    return parseLoadedContext(contents, fingerprint, query, harnessId);
   }).pipe(
     // Product context is optional. Filesystem failures must never block a turn.
     Effect.orElseSucceed(
       () =>
         ({
           prompt: null,
-          receipt: emptyReceipt("invalid", { errorCode: "malformed" }),
+          receipt: emptyReceipt("invalid", harnessId, { errorCode: "malformed" }),
         }) satisfies LoadedCrokiAgentContext,
     ),
   );
@@ -194,7 +208,8 @@ export function isCrokiContextAppliedActivityPayload(
     isNonNegativeInteger(receipt.activeCount) &&
     isNonNegativeInteger(receipt.currentCount) &&
     isNonNegativeInteger(receipt.provisionalCount) &&
-    receipt.activeCount === receipt.currentCount + receipt.provisionalCount;
+    (receipt.activeCount === receipt.currentCount ||
+      receipt.activeCount === receipt.currentCount + receipt.provisionalCount);
   const fingerprintIsValid =
     receipt.sha256 === null ||
     (typeof receipt.sha256 === "string" && /^[a-f0-9]{64}$/.test(receipt.sha256));
@@ -208,6 +223,10 @@ export function isCrokiContextAppliedActivityPayload(
     receipt.status === "partial"
       ? isNonNegativeInteger(receipt.issueCount) && receipt.issueCount > 0
       : receipt.issueCount === undefined;
+  const harnessIsValid =
+    receipt.harnessId === undefined ||
+    receipt.harnessId === "native" ||
+    receipt.harnessId === "gtm-v1";
   const selectionIsValid =
     receipt.includedCount === undefined &&
     receipt.omittedCount === undefined &&
@@ -237,6 +256,7 @@ export function isCrokiContextAppliedActivityPayload(
     receipt.truncated === isCrokiAgentContextTruncated(prompt) &&
     errorCodeIsValid &&
     issueCountIsValid &&
+    harnessIsValid &&
     selectionIsValid
   );
 }

@@ -1,7 +1,14 @@
 # Croki Canvas: 0 to 1 Product Spec
 
-Status: Prepared product exploration
+Status: Active product contract with the first native-provider UX slice shipped
 Date: July 30, 2026
+
+Update, August 2, 2026: Croki is Jacob's current ADE. Native provider behavior
+is a primary product invariant. Canvas is context and visualization, not an
+implicit harness. The web composer now defaults to Native and offers GTM v1 for
+one turn. Approved Canvas context attaches independently of panel visibility;
+proposals stay excluded. OpenClaw now preserves its selected agent's native
+configuration instead of injecting the old Sol/Luna coordination profile.
 
 ## How to read this document
 
@@ -71,6 +78,9 @@ The first renovation slice is implemented in the new Croki/T3 overlay:
 - Provider context stays bounded and selects relevant whole items for the current turn when the complete active model does not fit.
 - Valid canon survives invalid individual nodes or relationships. Partial recovery is visible and requires explicit repair before rewriting the source.
 - Every outward activity path, including full HTTP snapshots, retains content-free receipts while removing raw rendered Canvas prompts and replay identifiers.
+- The composer exposes `Native` and one-turn `GTM v1` behavior explicitly; GTM resets after send.
+- Approved Canvas canon is attached by default, independent of Canvas panel visibility, while proposals remain review-only.
+- Canvas navigation is Product, Run, and Proposals. Run projects native Thread plan state and does not own execution.
 
 Still-gated long-term capabilities are not smuggled into this slice:
 
@@ -169,8 +179,9 @@ The current Canvas is much narrower than the earlier standalone product.
 `apps/server/src/orchestration/Layers/CrokiContext.ts` and `ProviderCommandReactor.ts`:
 
 - Load Canvas at the generic provider boundary.
-- Preserve native provider behavior.
-- Prioritize current canon, separate provisional suggestions, and omit retired context.
+- Preserve the generic provider runtime boundary. Native turns add no Croki
+  behavior prompt; GTM v1 is explicit and one-turn.
+- Include current canon and omit provisional and retired context from provider input.
 - Prepend active Canvas context to every supported turn up to the render limit.
 - Leave the stored user message unchanged.
 - Fail open when context is missing or invalid.

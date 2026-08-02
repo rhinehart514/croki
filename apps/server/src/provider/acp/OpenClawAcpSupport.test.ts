@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildOpenClawAcpSpawnInput } from "./OpenClawAcpSupport.ts";
+import { buildOpenClawAcpSpawnInput, resolveOpenClawAcpBaseModelId } from "./OpenClawAcpSupport.ts";
 
 describe("buildOpenClawAcpSpawnInput", () => {
   it("starts the OpenClaw ACP bridge and scopes it to the Croki thread", () => {
@@ -30,5 +30,11 @@ describe("buildOpenClawAcpSpawnInput", () => {
       cwd: "/repo",
       env: { OPENCLAW_TOKEN: "secret" },
     });
+  });
+
+  it("migrates the retired orchestration profile to the native agent label", () => {
+    expect(resolveOpenClawAcpBaseModelId(undefined)).toBe("agent-default");
+    expect(resolveOpenClawAcpBaseModelId("sol-medium-luna-max")).toBe("agent-default");
+    expect(resolveOpenClawAcpBaseModelId("custom-agent-model")).toBe("custom-agent-model");
   });
 });

@@ -100,6 +100,8 @@ export interface CrokiContextReceipt {
   readonly provisionalCount: number;
   readonly renderedChars: number;
   readonly truncated: boolean;
+  /** Absent only on receipts persisted before explicit turn behaviors shipped. */
+  readonly harnessId?: "native" | "gtm-v1";
   readonly errorCode?: CrokiContextParseErrorCode;
   readonly issueCount?: number;
   readonly includedCount?: number;

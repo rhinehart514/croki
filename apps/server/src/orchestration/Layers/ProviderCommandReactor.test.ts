@@ -619,10 +619,7 @@ describe("ProviderCommandReactor", () => {
       | { input?: string }
       | undefined;
     expect(refreshedProviderRequest?.input).not.toContain("Durable product context");
-    expect(refreshedProviderRequest?.input).toContain('<croki_canvas_harness version="1">');
-    expect(refreshedProviderRequest?.input).toContain(
-      "leave consequential judgment to the founder",
-    );
+    expect(refreshedProviderRequest?.input).not.toContain("<croki_gtm_harness");
     const refreshedReadModel = await harness.readModel();
     const refreshedThread = refreshedReadModel.threads.find(
       (entry) => entry.id === ThreadId.make("thread-1"),
@@ -667,13 +664,14 @@ describe("ProviderCommandReactor", () => {
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         canvasEnabled: true,
+        harnessId: "gtm-v1",
         createdAt: "2026-01-01T00:00:00.000Z",
       }),
     );
 
     await waitFor(() => harness.sendTurn.mock.calls.length === 1);
     const providerRequest = harness.sendTurn.mock.calls[0]?.[0] as { input?: string };
-    expect(providerRequest.input).toContain('<croki_canvas_harness version="1">');
+    expect(providerRequest.input).toContain('<croki_gtm_harness version="1">');
     expect(providerRequest.input).toContain(userText);
     expect(providerRequest.input).not.toContain("not json");
 

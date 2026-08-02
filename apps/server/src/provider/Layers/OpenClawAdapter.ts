@@ -41,7 +41,6 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
-import { buildOpenClawTurnPrompt } from "../OpenClawMultiAgentPolicy.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -218,13 +217,6 @@ function resolveRequestedModeId(input: {
   const modeState = input.modeState;
   if (!modeState) {
     return undefined;
-  }
-
-  // OpenClaw exposes thinking levels as ACP modes. The Croki orchestration
-  // profile keeps its parent agent at medium reasoning in every UI mode.
-  const mediumMode = findModeByAliases(modeState.availableModes, ["medium"]);
-  if (mediumMode) {
-    return mediumMode.id;
   }
 
   if (input.interactionMode === "plan") {
@@ -816,9 +808,9 @@ export function makeOpenClawAdapter(
           }
 
           const promptParts: Array<EffectAcpSchema.ContentBlock> = [];
-          const orchestratorPrompt = buildOpenClawTurnPrompt(input.input?.trim());
-          if (orchestratorPrompt) {
-            promptParts.push({ type: "text", text: orchestratorPrompt });
+          const userPrompt = input.input?.trim();
+          if (userPrompt) {
+            promptParts.push({ type: "text", text: userPrompt });
           }
           if (input.attachments && input.attachments.length > 0) {
             for (const attachment of input.attachments) {

@@ -1,5 +1,11 @@
 # Relay observability
 
+> [!WARNING]
+> Croki production relay deployment is disabled until the release ownership
+> guard validates Croki-owned infrastructure. The resource names and deployment
+> flow below describe the inherited compatibility stack and personal source-build
+> stages; do not deploy to inherited production resources.
+
 The relay Alchemy stack owns a focused Axiom trace setup:
 
 - `t3-code-relay-traces-prod`, an OpenTelemetry trace dataset for Worker requests

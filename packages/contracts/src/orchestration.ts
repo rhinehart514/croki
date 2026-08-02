@@ -45,6 +45,11 @@ export const ProviderSandboxMode = Schema.Literals([
 ]);
 export type ProviderSandboxMode = typeof ProviderSandboxMode.Type;
 
+/** Optional, one-turn Croki behavior layered over the provider's native agent runtime. */
+export const CrokiHarnessId = Schema.Literals(["native", "gtm-v1"]);
+export type CrokiHarnessId = typeof CrokiHarnessId.Type;
+export const DEFAULT_CROKI_HARNESS_ID: CrokiHarnessId = "native";
+
 /**
  * `ModelSelection` — selection of a model on a configured provider instance.
  *
@@ -693,6 +698,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
   canvasEnabled: Schema.optional(Schema.Boolean),
+  harnessId: Schema.optional(CrokiHarnessId),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   createdAt: IsoDateTime,
@@ -713,6 +719,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   canvasEnabled: Schema.optional(Schema.Boolean),
+  harnessId: Schema.optional(CrokiHarnessId),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   createdAt: IsoDateTime,
@@ -1064,6 +1071,9 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
   canvasEnabled: Schema.optional(Schema.Boolean),
+  harnessId: CrokiHarnessId.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CROKI_HARNESS_ID)),
+  ),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   createdAt: IsoDateTime,
 });

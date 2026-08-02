@@ -1,7 +1,7 @@
 {
   "version": 1,
   "product": "Croki is a coding environment for founders building products with Codex and other coding agents. Threads are the durable spine; Canvas holds optional, repository-owned product truth that survives individual conversations.",
-  "updatedAt": "2026-07-29T20:10:00.000Z",
+  "updatedAt": "2026-08-01T03:18:00.000Z",
   "nodes": [
     {
       "id": "intent-durable-product-understanding",
@@ -42,6 +42,117 @@
       "title": "Preserve upstream compatibility",
       "body": "Keep internal package names, storage keys, URL schemes, bundle identifiers, and service contracts stable unless a Croki requirement truly needs to diverge. Make visible product identity and product behavior explicit at narrow seams.",
       "updatedAt": "2026-07-29T20:10:00.000Z"
+    },
+    {
+      "id": "repo-decision-semantic-authority",
+      "kind": "decision",
+      "status": "provisional",
+      "domain": "product",
+      "origin": "repository",
+      "title": "Keep Canvas authority founder-controlled",
+      "body": "Treat current nodes as founder-approved canon, provisional nodes as proposals, and retired nodes as preserved history omitted from provider context. Agents propose; only explicit founder action promotes or retires canon.",
+      "updatedAt": "2026-08-01T03:18:00.000Z"
+    },
+    {
+      "id": "repo-decision-context-fails-open",
+      "kind": "decision",
+      "status": "provisional",
+      "domain": "product",
+      "origin": "repository",
+      "title": "Keep provider turns independent of Canvas health",
+      "body": "Load a fresh bounded context snapshot before each provider turn, treat repository text as untrusted input, and continue the turn when Canvas context is missing, malformed, unsupported, or oversized.",
+      "updatedAt": "2026-08-01T03:18:00.000Z"
+    },
+    {
+      "id": "repo-decision-conflict-safe-editing",
+      "kind": "decision",
+      "status": "provisional",
+      "domain": "product",
+      "origin": "repository",
+      "title": "Make Canvas saves explicit and conflict-safe",
+      "body": "Keep dirty drafts session-local, never autosave them, validate the full document, and use compare-and-write so concurrent source changes preserve the draft and require an explicit reload.",
+      "updatedAt": "2026-08-01T03:18:00.000Z"
+    },
+    {
+      "id": "repo-evidence-multi-provider-surface",
+      "kind": "evidence",
+      "status": "provisional",
+      "domain": "product",
+      "origin": "repository",
+      "title": "Croki supports five coding-agent providers",
+      "body": "The installation contract lists Codex, Claude, Cursor, Grok Build, and OpenCode as supported providers, each authenticated through its native CLI.",
+      "updatedAt": "2026-08-01T03:18:00.000Z",
+      "references": [
+        {
+          "kind": "file",
+          "path": "README.md",
+          "line": 12
+        }
+      ]
+    },
+    {
+      "id": "repo-evidence-canvas-boundary",
+      "kind": "evidence",
+      "status": "provisional",
+      "domain": "product",
+      "origin": "repository",
+      "title": "Canvas is implemented as bounded context",
+      "body": "The architecture reads repository-owned context at the shared provider seam, bounds rendering to 12,000 characters, records content-free receipts, and avoids changing the stored user message.",
+      "updatedAt": "2026-08-01T03:18:00.000Z",
+      "references": [
+        {
+          "kind": "file",
+          "path": "docs/croki.md",
+          "line": 33
+        },
+        {
+          "kind": "file",
+          "path": "apps/server/src/orchestration/Layers/CrokiContext.ts",
+          "line": 89
+        }
+      ]
+    },
+    {
+      "id": "repo-evidence-release-fails-closed",
+      "kind": "evidence",
+      "status": "provisional",
+      "domain": "product",
+      "origin": "repository",
+      "title": "Production release is intentionally gated",
+      "body": "Release planning defaults destinations to disabled or unconfigured and rejects inherited T3 repositories, packages, and domains. Production remains blocked until Croki-owned destinations and credentials are configured.",
+      "updatedAt": "2026-08-01T03:18:00.000Z",
+      "references": [
+        {
+          "kind": "file",
+          "path": "docs/croki.md",
+          "line": 87
+        },
+        {
+          "kind": "file",
+          "path": "scripts/croki-release-plan.ts",
+          "line": 80
+        }
+      ]
+    },
+    {
+      "id": "repo-work-enable-croki-release",
+      "kind": "work",
+      "status": "provisional",
+      "domain": "product",
+      "origin": "repository",
+      "title": "Configure Croki-owned release infrastructure",
+      "body": "Before production release, configure Croki-owned repository and branch targets, CLI package, relay and web domains, Vercel coordinates, signing credentials, and required release variables without pointing at inherited T3 destinations.",
+      "updatedAt": "2026-08-01T03:18:00.000Z"
+    },
+    {
+      "id": "repo-work-preserve-overlay-boundary",
+      "kind": "work",
+      "status": "provisional",
+      "domain": "product",
+      "origin": "repository",
+      "title": "Continuously verify the narrow overlay",
+      "body": "Run the Croki overlay check and focused owner tests for context, provider loading, Canvas UI, branding, and overlay policy. Report overlap against the exact upstream commit before every upstream sync.",
+      "updatedAt": "2026-08-01T03:18:00.000Z"
     }
   ],
   "edges": [
@@ -64,6 +175,46 @@
       "from": "work-upstream-discipline",
       "to": "decision-t3-native-fork",
       "relation": "constrains"
+    },
+    {
+      "from": "repo-decision-semantic-authority",
+      "to": "decision-thread-spine-canvas-context",
+      "relation": "governs"
+    },
+    {
+      "from": "repo-decision-context-fails-open",
+      "to": "decision-thread-spine-canvas-context",
+      "relation": "constrains"
+    },
+    {
+      "from": "repo-decision-conflict-safe-editing",
+      "to": "repo-decision-semantic-authority",
+      "relation": "protects"
+    },
+    {
+      "from": "repo-evidence-multi-provider-surface",
+      "to": "decision-t3-native-fork",
+      "relation": "demonstrates"
+    },
+    {
+      "from": "repo-evidence-canvas-boundary",
+      "to": "repo-decision-context-fails-open",
+      "relation": "supports"
+    },
+    {
+      "from": "repo-evidence-release-fails-closed",
+      "to": "repo-work-enable-croki-release",
+      "relation": "requires"
+    },
+    {
+      "from": "repo-work-enable-croki-release",
+      "to": "decision-t3-native-fork",
+      "relation": "operationalizes"
+    },
+    {
+      "from": "repo-work-preserve-overlay-boundary",
+      "to": "work-upstream-discipline",
+      "relation": "executes"
     }
   ]
 }

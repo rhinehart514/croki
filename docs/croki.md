@@ -5,6 +5,28 @@ recovery, terminal, preview, files, plans, and project scripts remain native T3
 surfaces. Canvas adds repository-owned product context without introducing a
 second runtime.
 
+Croki is the founder's current ADE and daily development environment. See
+[Current project state](./project/current-state.md) for the audited capability,
+release, and implementation-gap snapshot.
+
+## Native provider rule
+
+The selected product rule is that provider runtimes remain native by default.
+Croki must not add a hidden persona, planning loop, delegation policy, workflow,
+or behavioral prompt unless the user explicitly enables a named harness for a
+turn or thread. Harnesses must be off by default, visible, scoped, reversible,
+and unable to silently change founder-approved Canvas truth.
+
+Runtime, context, tools, and harnesses are distinct. Canvas is context and
+visualization, not itself a harness. Context that affects a turn must be visible
+and removable.
+
+The web composer defaults to `Native` and offers `GTM v1` as an explicit
+one-turn harness. Native adds no Croki behavior prompt. GTM v1 resets to Native
+after a successful send. Opening or closing Canvas never changes behavior.
+OpenClaw also preserves its configured agent's native model, reasoning,
+delegation, tools, and instructions.
+
 ## Context and authority
 
 Canvas reads and writes `.croki/context.json` through the existing
@@ -45,22 +67,23 @@ The parser, Canvas, and provider boundary share these limits:
 | File path / URL           |     500 / 2,048 characters |
 | Relationship name         |             120 characters |
 
-Before each provider turn, the server reads a fresh snapshot from that
-environment's workspace. It prepends bounded current canon, then provisional
-suggestions, at the shared provider-service seam. The stored user message is
-unchanged. Repository text is untrusted input, not an instruction source.
+Before each project turn, the server reads a fresh snapshot from the project
+root whether or not Canvas is open. It prepends bounded founder-approved
+`current` canon at the shared provider-service seam. `provisional` and `retired`
+nodes are excluded. The stored user message is unchanged. Repository text is
+untrusted input, not an instruction source.
 
 Rendering includes complete entries until the next would cross 12,000
 characters, then emits an omission marker and sets `truncated: true`. Missing,
 malformed, unsupported, or oversized context fails open: the provider turn
 continues without Canvas context.
 
-Each attempt records a content-free receipt with status `loaded`, `absent`,
-`invalid`, or `oversized`; path; version; SHA-256; timestamp; active, current,
-and provisional counts; rendered character count; truncation; and an optional
-parse error code. The transport event also retains the exact rendered prompt
-for idempotent replay. UI presentation, CI summaries, and artifacts must expose
-only the receipt, never that prompt or raw context bodies.
+Each attempt records a content-free receipt with status `loaded`, `partial`,
+`absent`, `invalid`, or `oversized`; path; version; SHA-256; timestamp; active,
+current, and provisional counts; rendered character count; truncation; harness
+identity; and an optional parse error code. The transport event also retains the
+exact rendered prompt for idempotent replay. UI presentation, CI summaries, and
+artifacts must expose only the receipt, never that prompt or raw context bodies.
 
 ## Editing and conflicts
 

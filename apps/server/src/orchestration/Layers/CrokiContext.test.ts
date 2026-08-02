@@ -7,26 +7,26 @@ import * as Path from "effect/Path";
 
 import {
   compileCrokiTurnInput,
-  CROKI_CANVAS_HARNESS_INSTRUCTION,
+  CROKI_GTM_HARNESS_INSTRUCTION,
   isCrokiContextAppliedActivityPayload,
   loadCrokiAgentContext,
 } from "./CrokiContext.ts";
 
-it("keeps ordinary provider turns byte-for-byte compatible when Canvas is disabled", () => {
+it("keeps native provider turns free of a Croki behavior prompt", () => {
   const agentContext = "<croki_product_context>canon</croki_product_context>";
   const userInput = "Keep this exact request";
 
   assert.equal(
-    compileCrokiTurnInput({ canvasEnabled: false, agentContext, userInput }),
+    compileCrokiTurnInput({ harnessId: "native", agentContext, userInput }),
     `${agentContext}\n\n${userInput}`,
   );
   assert.equal(
-    compileCrokiTurnInput({ canvasEnabled: false, agentContext: null, userInput }),
+    compileCrokiTurnInput({ harnessId: "native", agentContext: null, userInput }),
     userInput,
   );
   assert.isUndefined(
     compileCrokiTurnInput({
-      canvasEnabled: false,
+      harnessId: "native",
       agentContext: null,
       userInput: undefined,
     }),
@@ -37,13 +37,13 @@ it("adds one bounded strategy harness without weakening founder authority", () =
   const agentContext = "<croki_product_context>canon</croki_product_context>";
   const userInput = "Explore the first customer";
   const compiled = compileCrokiTurnInput({
-    canvasEnabled: true,
+    harnessId: "gtm-v1",
     agentContext,
     userInput,
   });
 
-  assert.isAtMost(CROKI_CANVAS_HARNESS_INSTRUCTION.length, 1_500);
-  assert.equal(compiled?.match(/<croki_canvas_harness version="1">/g)?.length, 1);
+  assert.isAtMost(CROKI_GTM_HARNESS_INSTRUCTION.length, 1_500);
+  assert.equal(compiled?.match(/<croki_gtm_harness version="1">/g)?.length, 1);
   assert.include(compiled ?? "", "leave consequential judgment to the founder");
   assert.include(compiled ?? "", "Do not ask the user to author or connect nodes");
   assert.include(compiled ?? "", "not another memory, runtime, or source of truth");
@@ -104,13 +104,14 @@ it.layer(NodeServices.layer)("Croki provider context", (it) => {
         relativePath: ".croki/context.json",
         version: 1,
         updatedAt: "2026-07-29T00:00:00.000Z",
-        activeCount: 2,
+        activeCount: 1,
         currentCount: 1,
         provisionalCount: 1,
         truncated: false,
       });
       assert.match(context.receipt.sha256 ?? "", /^[a-f0-9]{64}$/);
       assert.equal(context.receipt.renderedChars, context.prompt?.length);
+      assert.notInclude(context.prompt ?? "", "Make the receipt legible");
     }),
   );
 
@@ -188,7 +189,7 @@ it.layer(NodeServices.layer)("Croki provider context", (it) => {
 it("accepts only bounded, internally consistent persisted activity payloads", () => {
   const prompt =
     '<croki_product_context version="1">\n<current_canon>\n</current_canon>\n' +
-    "<provisional_suggestions>\n</provisional_suggestions>\n</croki_product_context>";
+    "</croki_product_context>";
   const payload = {
     sourceEventId: "event-1",
     messageId: "message-1",

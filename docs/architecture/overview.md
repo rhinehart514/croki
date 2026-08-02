@@ -1,6 +1,10 @@
 # Architecture
 
-T3 Code runs as a **Node.js WebSocket server** that wraps `codex app-server` (JSON-RPC over stdio) and serves a React web app.
+Croki runs a local server that owns projects, threads, provider sessions,
+terminals, preview, Git state, checkpoints, and authenticated client access. It
+serves a React web app and is embedded by the Electron desktop app. Provider
+adapters translate native Codex, Claude, Cursor, Grok, OpenCode, and OpenClaw
+events into one orchestration model without creating a second agent runtime.
 
 ```
 ┌─────────────────────────────────┐
@@ -10,7 +14,7 @@ T3 Code runs as a **Node.js WebSocket server** that wraps `codex app-server` (JS
 └──────────┬──────────────────────┘
            │ ws://localhost:3773
 ┌──────────▼──────────────────────┐
-│  apps/server (Node.js)          │
+│  apps/server                    │
 │  WebSocket + HTTP static server │
 │  ServerPushBus (ordered pushes) │
 │  ServerReadiness (startup gate) │
@@ -19,9 +23,9 @@ T3 Code runs as a **Node.js WebSocket server** that wraps `codex app-server` (JS
 │  CheckpointReactor              │
 │  RuntimeReceiptBus              │
 └──────────┬──────────────────────┘
-           │ JSON-RPC over stdio
+           │ provider-native SDK, app-server, or ACP
 ┌──────────▼──────────────────────┐
-│  codex app-server               │
+│  Configured coding-agent runtime│
 └─────────────────────────────────┘
 ```
 
@@ -31,7 +35,9 @@ T3 Code runs as a **Node.js WebSocket server** that wraps `codex app-server` (JS
 
 - **Server**: `apps/server` is the main coordinator. It serves the web app, accepts WebSocket requests, waits for startup readiness before welcoming clients, and sends all outbound pushes through a single ordered push path.
 
-- **Provider runtime**: `codex app-server` does the actual provider/session work. The server talks to it over JSON-RPC on stdio and translates those runtime events into the app's orchestration model.
+- **Provider runtime**: The selected provider does the actual agent/session work. `ProviderService` resolves a configured provider instance and its adapter, then translates provider-native events into Croki's orchestration model. See [Provider architecture](./providers.md).
+
+- **Croki overlay**: Canvas reads repository-owned context from `.croki/context.json` and projects it beside the native Thread. It does not own a provider, conversation, worktree, Review, or execution runtime.
 
 - **Background workers**: Long-running async flows such as runtime ingestion, command reaction, and checkpoint processing run as queue-backed workers. This keeps work ordered, reduces timing races, and gives tests a deterministic way to wait for the system to go idle.
 
@@ -80,16 +86,18 @@ sequenceDiagram
     participant Transport as WsTransport
     participant Server as wsServer
     participant Provider as ProviderService
-    participant Codex as codex app-server
+    participant Adapter as Provider adapter
+    participant Runtime as Native provider runtime
     participant Ingest as ProviderRuntimeIngestion
     participant Engine as OrchestrationEngine
     participant Push as ServerPushBus
 
     Browser->>Transport: Send user action
     Transport->>Server: Typed WebSocket request
-    Server->>Provider: Route request
-    Provider->>Codex: JSON-RPC over stdio
-    Codex-->>Ingest: Provider runtime events
+    Server->>Provider: Resolve provider instance
+    Provider->>Adapter: Start or resume session
+    Adapter->>Runtime: Native provider request
+    Runtime-->>Ingest: Provider-native runtime events
     Ingest->>Engine: Normalize into orchestration events
     Engine-->>Server: Domain events
     Server->>Push: Publish orchestration.domainEvent
@@ -98,10 +106,22 @@ sequenceDiagram
 
 1. A user action in the browser becomes a typed request through `WsTransport` and the browser API layer in `nativeApi`.
 2. `wsServer` decodes that request using the shared WebSocket contracts in `ws.ts` and routes it to the right service.
-3. [`ProviderService`][8] starts or resumes a session and talks to `codex app-server` over JSON-RPC on stdio.
+3. [`ProviderService`][8] resolves the configured provider instance and starts or resumes its native session through the matching adapter.
 4. Provider-native events are pulled back into the server by [`ProviderRuntimeIngestion`][9], which converts them into orchestration events.
 5. [`OrchestrationEngine`][10] persists those events, updates the read model, and exposes them as domain events.
 6. `wsServer` pushes those updates to the browser through `ServerPushBus` on channels defined in [`orchestration.ts`][11].
+
+## Native provider rule
+
+Croki's selected default is provider-native behavior. The shared runtime may
+translate transport, persist threads, expose explicit tools, and attach visible
+context, but it must not add hidden personas, planning loops, delegation
+policies, or behavioral workflows. Those belong to explicit named harnesses
+that are off by default.
+
+Croki 0.4.1 still has two documented exceptions: Canvas activation adds a
+founder-product/GTM behavioral preamble, and OpenClaw exposes a fixed
+coordination profile. See [Current project state](../project/current-state.md).
 
 ### Async completion flow
 

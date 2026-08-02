@@ -6,7 +6,6 @@ import {
   migratePersistedRightPanelState,
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
-  selectThreadCanvasEnabled,
   selectThreadRightPanelState,
   useRightPanelStore,
 } from "./rightPanelStore";
@@ -119,28 +118,6 @@ describe("rightPanelStore", () => {
     expect(
       selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
     ).toHaveLength(1);
-  });
-
-  it("enables Canvas only while it is open and active for the selected thread", () => {
-    useRightPanelStore.getState().open(refA, "canvas");
-
-    expect(selectThreadCanvasEnabled(useRightPanelStore.getState().byThreadKey, refA)).toBe(true);
-    expect(selectThreadCanvasEnabled(useRightPanelStore.getState().byThreadKey, refB)).toBe(false);
-
-    useRightPanelStore.getState().open(refA, "plan");
-    expect(selectThreadCanvasEnabled(useRightPanelStore.getState().byThreadKey, refA)).toBe(false);
-
-    useRightPanelStore.getState().activateSurface(refA, "canvas");
-    expect(selectThreadCanvasEnabled(useRightPanelStore.getState().byThreadKey, refA)).toBe(true);
-
-    useRightPanelStore.getState().close(refA);
-    expect(selectThreadCanvasEnabled(useRightPanelStore.getState().byThreadKey, refA)).toBe(false);
-
-    useRightPanelStore.getState().show(refA);
-    expect(selectThreadCanvasEnabled(useRightPanelStore.getState().byThreadKey, refA)).toBe(true);
-
-    useRightPanelStore.getState().closeSurface(refA, "canvas");
-    expect(selectThreadCanvasEnabled(useRightPanelStore.getState().byThreadKey, refA)).toBe(false);
   });
 
   it("restores a persisted Canvas surface as the active workspace surface", () => {

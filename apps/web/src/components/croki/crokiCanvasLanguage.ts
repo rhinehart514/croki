@@ -11,7 +11,7 @@ export const CROKI_CANVAS_VIEWS: readonly {
   readonly label: string;
 }[] = [
   { id: "product", label: "Product" },
-  { id: "workflow", label: "Work" },
+  { id: "workflow", label: "Run" },
   { id: "review", label: "Proposals" },
 ];
 
@@ -71,7 +71,7 @@ export function crokiViewEmptyCopy(view: CrokiCanvasView): string {
     case "gtm":
       return "No approved audience, claim, signal, or experiment yet.";
     case "workflow":
-      return "No approved workflow outcome, gate, result, or assignment yet.";
+      return "No active run or approved workflow context yet.";
     case "review":
       return "No proposals waiting for founder review.";
   }

@@ -33,7 +33,7 @@ describe("Croki product context", () => {
           {
             id: "claim-1",
             kind: "decision",
-            status: "provisional",
+            status: "current",
             domain: "gtm",
             origin: "external",
             title: "Founders value product coherence",
@@ -128,7 +128,7 @@ describe("Croki product context", () => {
     }
   });
 
-  it("separates current canon from provisional suggestions and omits retired nodes", () => {
+  it("includes only founder-approved canon by default", () => {
     const prompt = buildCrokiAgentContext({
       version: 1,
       product: "Croki",
@@ -163,8 +163,8 @@ describe("Croki product context", () => {
     });
     expect(prompt).toContain("Keep product truth durable");
     expect(prompt).toContain("<current_canon>");
-    expect(prompt).toContain("<provisional_suggestions>");
-    expect(prompt).toContain("Suggested next step");
+    expect(prompt).not.toContain("<provisional_suggestions>");
+    expect(prompt).not.toContain("Suggested next step");
     expect(prompt).not.toContain("Old architecture");
   });
 
@@ -222,7 +222,7 @@ describe("Croki product context", () => {
         {
           id: "billing-position",
           kind: "decision" as const,
-          status: "provisional" as const,
+          status: "current" as const,
           domain: "gtm" as const,
           title: "Billing teams are the first audience",
           body: "Test the billing workflow positioning with founder-led outreach.",

@@ -1,6 +1,6 @@
 # Observability
 
-T3 Code has one server-side observability model:
+Croki has one server-side observability model:
 
 - pretty logs go to stdout for humans
 - completed spans go to a local NDJSON trace file
@@ -65,15 +65,11 @@ You do not need any extra env vars. Just run the app normally and inspect `serve
 Examples:
 
 ```bash
-npx t3
+vp run dev
 ```
 
 ```bash
-node --run dev
-```
-
-```bash
-node --run dev:desktop
+vp run dev:desktop
 ```
 
 ### Option 2: Run With A Local LGTM Stack
@@ -116,19 +112,19 @@ export T3CODE_TRACE_TIMING_ENABLED=true
 CLI:
 
 ```bash
-npx t3
+vp run dev
 ```
 
 Monorepo web/server dev:
 
 ```bash
-node --run dev
+vp run dev
 ```
 
 Monorepo desktop dev:
 
 ```bash
-node --run dev:desktop
+vp run dev:desktop
 ```
 
 Packaged desktop app:
@@ -141,7 +137,7 @@ macOS app bundle example:
 T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
 T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
 T3CODE_OTLP_SERVICE_NAME=t3-desktop \
-"/Applications/T3 Code.app/Contents/MacOS/T3 Code"
+"/Applications/Croki.app/Contents/MacOS/Croki"
 ```
 
 Direct binary example:

@@ -1,6 +1,17 @@
 # CI quality gates
 
-- `.github/workflows/ci.yml` runs `vp check` (lint + typecheck), `vpr typecheck`, and `vp run test` on pull requests and pushes to `main`.
-- `.github/workflows/release.yml` builds macOS (`arm64` and `x64`), Linux (`x64`), and Windows (`x64`) desktop artifacts from a single `v*.*.*` tag and publishes one GitHub release.
-- The release workflow auto-enables signing only when platform credentials are present. macOS passkey builds additionally require `APPLE_TEAM_ID` and the `MACOS_PROVISIONING_PROFILE` secret; Windows uses Azure Trusted Signing. Without the core signing credentials, it still releases unsigned artifacts.
-- See [Release Checklist](./release.md) for the full release/signing setup checklist.
+- `.github/workflows/ci.yml` runs on pull requests and pushes to `main` and
+  `croki/main`.
+- The Croki overlay job validates brand policy, Canvas boundaries, migration
+  records, and focused Croki tests. CI summaries and artifacts may contain only
+  content-free Canvas receipts.
+- General jobs run Vite+ checks, strict typechecking, desktop build verification,
+  tests, Rust resource-monitor checks, mobile native static analysis, and the
+  release smoke path.
+- `.github/workflows/build-windows-installer.yml` builds an unsigned Windows x64
+  installer artifact on pushes to `croki/main` and manual dispatches. It is not
+  a production update channel.
+- Production release, relay, and mobile workflows validate Croki-owned
+  destinations and fail closed while ownership is incomplete.
+
+See [Release ownership and enablement](./release.md).

@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
+  DEFAULT_CROKI_HARNESS_ID,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   ModelSelection,
@@ -224,6 +225,7 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
     assert.strictEqual(parsed.canvasEnabled, undefined);
+    assert.strictEqual(parsed.harnessId, undefined);
   }),
 );
 
@@ -245,12 +247,14 @@ it.effect("preserves explicit provider and runtime mode in thread.turn.start", (
       },
       runtimeMode: "full-access",
       canvasEnabled: true,
+      harnessId: "gtm-v1",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.modelSelection?.instanceId, "codex");
     assert.strictEqual(parsed.runtimeMode, "full-access");
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
     assert.strictEqual(parsed.canvasEnabled, true);
+    assert.strictEqual(parsed.harnessId, "gtm-v1");
   }),
 );
 
@@ -705,6 +709,7 @@ it.effect("decodes legacy thread.turn-start-requested payloads without Canvas st
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
     assert.isUndefined(parsed.canvasEnabled);
+    assert.strictEqual(parsed.harnessId, DEFAULT_CROKI_HARNESS_ID);
     assert.strictEqual(parsed.sourceProposedPlan, undefined);
   }),
 );
@@ -715,10 +720,12 @@ it.effect("preserves enabled Canvas state in thread.turn-start-requested", () =>
       threadId: "thread-1",
       messageId: "msg-1",
       canvasEnabled: true,
+      harnessId: "gtm-v1",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
 
     assert.isTrue(parsed.canvasEnabled);
+    assert.strictEqual(parsed.harnessId, "gtm-v1");
   }),
 );
 

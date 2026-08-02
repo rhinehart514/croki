@@ -1,8 +1,12 @@
 # Remote Architecture
 
-This document describes the target architecture for first-class remote environments in T3 Code.
+This document describes the target architecture for first-class remote environments in Croki.
 
 It is intentionally architecture-first. It does not define a complete implementation plan or user-facing rollout checklist. The goal is to establish the core model so remote support can be added without another broad rewrite.
+
+Direct and desktop-managed remote paths are implemented. Hosted `t3.codes`,
+published CLI, relay-production, and automatic remote-update destinations remain
+inherited compatibility references until Croki release ownership is configured.
 
 ## Goals
 

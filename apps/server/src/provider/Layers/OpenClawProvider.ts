@@ -21,20 +21,20 @@ import { makeOpenClawAcpRuntime } from "../acp/OpenClawAcpSupport.ts";
 
 const OPENCLAW_PRESENTATION = {
   displayName: "OpenClaw",
-  badgeLabel: "Multi-agent",
+  badgeLabel: "ACP",
   showInteractionModeToggle: false,
   requiresNewThreadForModelChange: true,
 } as const;
 
 const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({ optionDescriptors: [] });
 
-export const OPENCLAW_ORCHESTRATION_MODEL = "sol-medium-luna-max";
+export const OPENCLAW_NATIVE_MODEL = "agent-default";
 
 const OPENCLAW_MODELS: ReadonlyArray<ServerProviderModel> = [
   {
-    slug: OPENCLAW_ORCHESTRATION_MODEL,
-    name: "Sol Medium + Luna Max",
-    shortName: "Sol + Luna",
+    slug: OPENCLAW_NATIVE_MODEL,
+    name: "Agent default",
+    shortName: "Default",
     isCustom: false,
     capabilities: EMPTY_CAPABILITIES,
   },
@@ -107,6 +107,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function configuredOpenClawAgentModel(json: string, agentId: string): string | undefined {
+  const agent = configuredOpenClawAgent(json, agentId);
+  if (!agent) return undefined;
+  if (typeof agent.model === "string") return agent.model;
+  if (isRecord(agent.model) && typeof agent.model.primary === "string") {
+    return agent.model.primary;
+  }
+  return undefined;
+}
+
+export function hasConfiguredOpenClawAgent(json: string, agentId: string): boolean {
+  return configuredOpenClawAgent(json, agentId) !== undefined;
+}
+
+function configuredOpenClawAgent(
+  json: string,
+  agentId: string,
+): Record<string, unknown> | undefined {
   const decoded = decodeUnknownJson(json);
   if (Exit.isFailure(decoded)) return undefined;
   const root = decoded.value;
@@ -116,12 +133,7 @@ export function configuredOpenClawAgentModel(json: string, agentId: string): str
       ? root.agents
       : [];
   const agent = agents.find((entry) => isRecord(entry) && entry.id === agentId);
-  if (!isRecord(agent)) return undefined;
-  if (typeof agent.model === "string") return agent.model;
-  if (isRecord(agent.model) && typeof agent.model.primary === "string") {
-    return agent.model.primary;
-  }
-  return undefined;
+  return isRecord(agent) ? agent : undefined;
 }
 
 const probeAcp = (settings: OpenClawSettings, environment: NodeJS.ProcessEnv) =>
@@ -204,18 +216,25 @@ export const checkOpenClawProviderStatus = Effect.fn("checkOpenClawProviderStatu
     Effect.timeoutOption(VERSION_PROBE_TIMEOUT_MS),
     Effect.result,
   );
-  const configuredModel =
-    Result.isSuccess(agentsResult) && Option.isSome(agentsResult.success)
-      ? configuredOpenClawAgentModel(agentsResult.success.value.stdout, agentId)
-      : undefined;
-  if (!configuredModel?.endsWith("/gpt-5.6-sol")) {
+  if (Result.isFailure(agentsResult) || Option.isNone(agentsResult.success)) {
     return snapshot({
       settings,
       checkedAt,
       installed: true,
       version,
       status: "error",
-      message: `OpenClaw agent '${agentId}' must be configured to use GPT-5.6 Sol.`,
+      message: "OpenClaw is installed, but Croki could not inspect its configured agents.",
+    });
+  }
+  const agentsJson = agentsResult.success.value.stdout;
+  if (!hasConfiguredOpenClawAgent(agentsJson, agentId)) {
+    return snapshot({
+      settings,
+      checkedAt,
+      installed: true,
+      version,
+      status: "error",
+      message: `OpenClaw agent '${agentId}' was not found.`,
     });
   }
 
@@ -240,6 +259,6 @@ export const checkOpenClawProviderStatus = Effect.fn("checkOpenClawProviderStatu
     installed: true,
     version,
     status: "ready",
-    message: "OpenClaw is ready to orchestrate Sol Medium with Luna Max workers.",
+    message: `OpenClaw is ready using agent '${agentId}' with its native configuration.`,
   });
 });

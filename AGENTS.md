@@ -5,6 +5,8 @@ repository rules.
 
 ## Product boundary
 
+- Croki is Jacob's current ADE and daily development environment. Preserve its
+  reliability and direct build loop before expanding its product surface.
 - Croki is a narrow overlay on T3 Code. Preserve native threads, providers,
   worktrees, recovery, Git, terminal, preview, files, plans, and project scripts.
 - `main` mirrors `upstream/main`; product work belongs on `croki/main`.
@@ -12,6 +14,21 @@ repository rules.
   `scripts/lib/brand-policy.ts` unless a migration is explicitly in scope.
 - Do not import or revive the archived standalone `brain`, `relay`, runtime, or
   workflow machinery.
+
+## Native provider rule
+
+- Provider runtimes are native by default. Croki must not add a hidden persona,
+  planning loop, delegation policy, workflow, or behavioral prompt unless the
+  user explicitly enables a named harness for that turn or thread.
+- Harnesses are off by default, visible, scoped, reversible, and cannot silently
+  change founder-approved Canvas truth. Do not stack harnesses until one-at-a-time
+  behavior is proven.
+- Treat runtime, context, tools, and harnesses as separate concepts. Canvas is
+  context and visualization, not itself a harness. Context that affects a turn
+  must be visible and removable.
+- The current Canvas behavioral preamble and fixed OpenClaw coordination profile
+  predate this rule. Document them as implementation gaps until they are split
+  into explicit optional harnesses; do not describe the gap as completed work.
 
 ## Canvas authority and evidence
 

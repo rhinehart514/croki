@@ -2,6 +2,7 @@ import type { CrokiContextReceipt } from "@t3tools/shared/crokiContext";
 import { CircleDot } from "lucide-react";
 
 import { cn } from "~/lib/utils";
+import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import type { CrokiComposerContextState } from "./CrokiContextPresentation.logic";
 
 export function CrokiComposerContextIndicator(props: {
@@ -45,9 +46,9 @@ export function CrokiAppliedContextReceipt(props: {
 }) {
   if (!props.receipt) return null;
   const { receipt } = props;
-  const parts = [appliedStatusLabel(receipt)];
+  const parts = [harnessLabel(receipt), appliedStatusLabel(receipt)];
   if (receipt.status === "loaded" || receipt.status === "partial") {
-    parts.push(`${receipt.currentCount} current`, `${receipt.provisionalCount} proposed`);
+    parts.push(`${receipt.includedCount ?? receipt.currentCount} approved`);
     if (receipt.truncated) parts.push("partial");
     if (receipt.selectionMode === "focused") parts.push("turn-focused");
   }
@@ -57,7 +58,7 @@ export function CrokiAppliedContextReceipt(props: {
   const detail = [
     `Canvas status: ${receipt.status}`,
     `Current: ${receipt.currentCount}`,
-    `Provisional: ${receipt.provisionalCount}`,
+    `Proposals excluded: ${receipt.provisionalCount}`,
     `Truncated: ${receipt.truncated ? "yes" : "no"}`,
     receipt.issueCount !== undefined ? `Omitted invalid entries: ${receipt.issueCount}` : null,
     receipt.includedCount !== undefined ? `Included: ${receipt.includedCount}` : null,
@@ -69,15 +70,48 @@ export function CrokiAppliedContextReceipt(props: {
     .join(". ");
 
   return (
-    <div
-      data-croki-context-receipt={receipt.status}
-      aria-label={detail}
-      title={detail}
-      className="flex max-w-[80%] items-center gap-1 pe-1 text-[11px] text-muted-foreground/70"
-    >
-      <CircleDot className="size-3 shrink-0" aria-hidden />
-      <span className="truncate tabular-nums">{label}</span>
-    </div>
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            data-croki-context-receipt={receipt.status}
+            aria-label={`${detail}. Inspect turn setup.`}
+            className="flex max-w-[80%] items-center gap-1 pe-1 text-[11px] text-muted-foreground/70 hover:text-foreground"
+          />
+        }
+      >
+        <CircleDot className="size-3 shrink-0" aria-hidden />
+        <span className="truncate tabular-nums">{label}</span>
+      </PopoverTrigger>
+      <PopoverPopup align="start" side="bottom" className="w-72 p-0" viewportClassName="p-3">
+        <div className="grid gap-2 text-xs">
+          <p className="font-medium text-foreground">Turn setup</p>
+          <dl className="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1.5 text-muted-foreground">
+            <dt>Behavior</dt>
+            <dd className="text-foreground">{harnessLabel(receipt)}</dd>
+            <dt>Canvas</dt>
+            <dd className="text-foreground">{appliedStatusLabel(receipt)}</dd>
+            <dt>Approved</dt>
+            <dd className="text-foreground tabular-nums">
+              {receipt.includedCount ?? receipt.currentCount} included
+            </dd>
+            <dt>Proposals</dt>
+            <dd className="text-foreground tabular-nums">{receipt.provisionalCount} excluded</dd>
+            <dt>Capability</dt>
+            <dd className="text-foreground">Native agent SDK + Canvas tools</dd>
+            {receipt.sha256 ? (
+              <>
+                <dt>Snapshot</dt>
+                <dd className="truncate font-mono text-foreground">
+                  {receipt.sha256.slice(0, 12)}
+                </dd>
+              </>
+            ) : null}
+          </dl>
+        </div>
+      </PopoverPopup>
+    </Popover>
   );
 }
 
@@ -87,12 +121,10 @@ function composerPresentation(
 ): { readonly description: string; readonly label: string; readonly problem: boolean } {
   switch (state.status) {
     case "partial": {
-      const counts = compact
-        ? `${state.currentCount}/${state.provisionalCount}`
-        : `${state.currentCount} current · ${state.provisionalCount} proposed`;
+      const counts = compact ? state.currentCount : `${state.currentCount} approved`;
       return {
         label: `Canvas ${counts} · ${state.issueCount} invalid`,
-        description: `The next turn will use the valid Canvas entries. ${state.issueCount} invalid entr${
+        description: `The next turn will use valid approved Canvas entries. Proposals stay excluded. ${state.issueCount} invalid entr${
           state.issueCount === 1 ? "y was" : "ies were"
         } omitted. Open Canvas to review and repair.`,
         problem: true,
@@ -106,13 +138,11 @@ function composerPresentation(
           problem: false,
         };
       }
-      const counts = compact
-        ? `${state.currentCount}/${state.provisionalCount}`
-        : `${state.currentCount} current · ${state.provisionalCount} proposed`;
+      const counts = compact ? state.currentCount : `${state.currentCount} approved`;
       const suffix = state.promptTruncated ? " · partial" : "";
       return {
         label: `Canvas ${counts}${suffix}`,
-        description: `The next turn will include ${state.currentCount} current and ${state.provisionalCount} proposed Canvas items${state.promptTruncated ? ", truncated to the provider context limit" : ""}. Open Canvas.`,
+        description: `The next turn will include ${state.currentCount} approved Canvas item${state.currentCount === 1 ? "" : "s"}. ${state.provisionalCount} proposal${state.provisionalCount === 1 ? " is" : "s are"} excluded${state.promptTruncated ? ", and approved context is truncated to the provider limit" : ""}. Open Canvas.`,
         problem: false,
       };
     }
@@ -174,6 +204,10 @@ function appliedStatusLabel(receipt: CrokiContextReceipt): string {
     case "oversized":
       return "Canvas oversized";
   }
+}
+
+function harnessLabel(receipt: CrokiContextReceipt): string {
+  return receipt.harnessId === "gtm-v1" ? "GTM v1" : "Native";
 }
 
 function formatUpdatedAt(value: string): string {

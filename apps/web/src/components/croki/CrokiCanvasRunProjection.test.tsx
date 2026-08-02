@@ -34,7 +34,7 @@ describe("CrokiCanvasRunProjection", () => {
       <CrokiCanvasRunProjection activePlan={null} onPrepareWorkflow={onPrepareWorkflow} />,
     );
 
-    expect(markup).toContain("ordinary Croki turns");
+    expect(markup).toContain("ordinary native agent turns");
     expect(markup).toContain("Compose in Thread");
   });
 });

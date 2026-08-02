@@ -1,6 +1,12 @@
 # Remote Access
 
-Use this when you want to connect to a T3 Code server from another device such as a phone, tablet, or separate desktop app.
+Use this when you want to connect to a Croki server from another device such as a phone, tablet, or separate desktop app.
+
+> [!WARNING]
+> Direct desktop, LAN, Tailnet, and operator-managed SSH paths are available in
+> source builds. `app.t3.codes`, `npx t3`, automated remote self-update, and the
+> published `t3` CLI are inherited T3 destinations, not Croki-owned production
+> services. Do not use them as Croki release or hosting instructions.
 
 ## Recommended Setup
 
@@ -61,7 +67,14 @@ For `https://app.t3.codes`, prefer an HTTPS Tailnet or other HTTPS endpoint. A p
 
 Use this when you want to run the server without a GUI, for example on a remote machine over SSH.
 
-Run the server with `t3 serve`.
+From a built Croki source checkout, run the server directly:
+
+```bash
+node apps/server/dist/bin.mjs serve --host "$(tailscale ip -4)"
+```
+
+The inherited published-CLI equivalent is shown below only to document the
+compatibility command shape:
 
 ```bash
 npx t3 serve --host "$(tailscale ip -4)"
@@ -81,7 +94,9 @@ From there, connect from another device in either of these ways:
 - in the desktop app, enter the host and token separately
 - in the hosted web app, open a hosted pairing URL when the backend is reachable over HTTPS
 
-Use `t3 serve --help` for the full flag reference. It supports the same general startup options as the normal server command, including an optional `cwd` argument.
+Use `node apps/server/dist/bin.mjs serve --help` for the source-build flag
+reference. It supports the same general startup options as the compatibility
+CLI, including an optional `cwd` argument.
 
 For hosted web pairing over Tailscale HTTPS, opt in to Tailscale Serve:
 
@@ -103,7 +118,7 @@ npx t3 serve --tailscale-serve --tailscale-serve-port 8443
 
 ### Option 3: Desktop-Managed SSH Launch
 
-Use this when you want the desktop app to start or reuse T3 Code on another machine over SSH.
+Use this when you want the desktop app to start or reuse Croki on another machine over SSH.
 
 1. Open **Settings** → **Connections**.
 2. Under **Remote Environments**, choose **Add environment**.
@@ -119,13 +134,13 @@ SSH launch is a desktop feature because it needs local process and SSH access. O
 
 The desktop SSH launcher connects with a non-interactive `sh` session, writes a small launcher script under `~/.t3/ssh-launch/<host-key>/`, starts or reuses a remote T3 server, and forwards the remote loopback port back to your desktop.
 
-The remote host must have a compatible Node.js runtime. T3 Code uses the server package's `engines.node` requirement:
+The remote host must have a compatible Node.js runtime. Croki uses the server package's `engines.node` requirement:
 
 ```text
 ^22.16 || ^23.11 || >=24.10
 ```
 
-During SSH launch, T3 Code first checks whether `node` is already available on `PATH`. If it is missing, the launcher tries common non-interactive shell locations and version-manager shims/activation hooks:
+During SSH launch, Croki first checks whether `node` is already available on `PATH`. If it is missing, the launcher tries common non-interactive shell locations and version-manager shims/activation hooks:
 
 - `~/.local/bin`, `~/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, `/bin`
 - Volta via `~/.volta/bin`
@@ -136,7 +151,7 @@ During SSH launch, T3 Code first checks whether `node` is already available on `
 - nvm via `$NVM_DIR/nvm.sh`, then `nvm use default`, `nvm use node`, or `nvm use --lts`
 - installed nvm versions under `$NVM_DIR/versions/node/*/bin`
 
-If launch fails with `node: command not found`, a port-scan failure, or a message that the remote Node version does not satisfy the required range, SSH into the host and check the same non-interactive shell path T3 Code uses:
+If launch fails with `node: command not found`, a port-scan failure, or a message that the remote Node version does not satisfy the required range, SSH into the host and check the same non-interactive shell path Croki uses:
 
 ```bash
 ssh user@example.com 'sh -lc "command -v node && node --version"'
@@ -154,16 +169,16 @@ If reconnecting after an app update fails, retry the SSH launch once. The launch
 
 ## Updating a Remote Server
 
-When the T3 Code web or desktop app and a remote server use different versions, a warning appears in
-the conversation and in **Settings** → **Connections**. Follow the action shown there: T3 Code may
+When the Croki web or desktop app and a remote server use different versions, a warning appears in
+the conversation and in **Settings** → **Connections**. Follow the action shown there: Croki may
 be able to update and reconnect the server for you, or it may ask you to update the desktop app or
 run a copied command on the server machine.
 
 Finish active work before updating because the server restarts briefly. For step-by-step guidance,
-see [Keeping T3 Code in Sync](./server-updates.md).
+see [Keeping Croki in Sync](./server-updates.md).
 
 On a Linux host, you can keep the server running after logout and manage it independently of the
-connection method. See [Running T3 Code in the Background](./background-service.md).
+connection method. See [Running Croki in the Background](./background-service.md).
 
 ## How Pairing Works
 
@@ -189,7 +204,7 @@ Use hosted pairing when the backend is reachable from the browser over HTTPS/WSS
 
 Do not use hosted pairing for plain HTTP LAN URLs such as `http://192.168.x.y:3773`. Browsers block an HTTPS page from connecting to an insecure HTTP or WS backend. For those endpoints, use the direct pairing URL shown by the desktop app or CLI from a client that can open that HTTP URL directly.
 
-Hosted pairing does not proxy traffic through T3 Code. The browser still connects directly to the backend URL in the pairing link.
+Hosted pairing does not proxy traffic through Croki. The browser still connects directly to the backend URL in the pairing link.
 
 ## Managing Access Later
 

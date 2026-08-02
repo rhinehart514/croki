@@ -1,12 +1,19 @@
-# T3 Connect Clerk Setup
+# Croki Connect Clerk Setup
 
-T3 Connect uses one Clerk application for web, desktop, and mobile authentication. The relay accepts
+Croki Connect uses one Clerk application for web, desktop, and mobile authentication. The relay accepts
 Clerk JWTs only when they are generated from the `t3-relay` template with the shared
 `t3-code-relay` audience.
 
+> [!WARNING]
+> Croki Connect production ownership is not configured. This document describes
+> the inherited compatibility architecture and source-build setup. Do not deploy
+> to inherited T3 Clerk, relay, Cloudflare, PlanetScale, or hosted web resources.
+> Production workflows remain disabled until the Croki release guard validates
+> every destination.
+
 ## Application Keys
 
-T3 Connect is disabled in a fresh clone. To enable it for source builds, add a repository-root `.env`
+Croki Connect is disabled in a fresh clone. To enable it for source builds, add a repository-root `.env`
 or `.env.local` file:
 
 ```dotenv
@@ -191,7 +198,7 @@ binary from another:
 ```sh
 VITE_DEV_SERVER_URL=http://127.0.0.1:5733 \
 T3CODE_PORT=13773 \
-  "/Applications/T3 Code (Alpha).app/Contents/MacOS/T3 Code (Alpha)"
+  "/Applications/Croki (Alpha).app/Contents/MacOS/Croki (Alpha)"
 ```
 
 After changing Associated Domains, bump the build version before rebuilding; macOS may otherwise
@@ -200,8 +207,8 @@ reuse stale Shared Web Credentials metadata for the same app/version pair.
 Verify the installed bundle before testing:
 
 ```sh
-codesign --verify --deep --strict "/Applications/T3 Code (Alpha).app"
-codesign -d --entitlements :- "/Applications/T3 Code (Alpha).app"
+codesign --verify --deep --strict "/Applications/Croki (Alpha).app"
+codesign -d --entitlements :- "/Applications/Croki (Alpha).app"
 ```
 
 The current mobile UI uses Clerk's native authentication view. If a future mobile browser OAuth
@@ -214,9 +221,9 @@ For a private beta where people should request access, use **Clerk Dashboard > W
 1. Toggle on **Enable waitlist** and save.
 2. Review requests on the same page and select **Invite** or **Deny**.
 
-Approved signed-in users manage T3 Connect under **Connections**. The web and desktop sidebars do
+Approved signed-in users manage Croki Connect under **Connections**. The web and desktop sidebars do
 not expose a dedicated account or waitlist control. Signed-out users reach Clerk's waitlist and
-sign-in flow contextually from the T3 Connect controls on the Connections page.
+sign-in flow contextually from the Croki Connect controls on the Connections page.
 
 On mobile, signed-out users open **Settings > T3 Account** to reach `/settings/waitlist` within the
 Settings form sheet. It submits enrollment through Clerk's `useWaitlist()` flow because the prebuilt

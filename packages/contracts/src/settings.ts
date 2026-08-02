@@ -378,8 +378,8 @@ export const OpenClawSettings = makeProviderSettingsSchema(
     agentId: TrimmedString.pipe(
       Schema.withDecodingDefault(Effect.succeed("croki")),
       Schema.annotateKey({
-        title: "Orchestrator agent",
-        description: "OpenClaw agent configured to use GPT-5.6 Sol.",
+        title: "Agent",
+        description: "OpenClaw agent used for this provider instance.",
         providerSettingsForm: {
           placeholder: "croki",
           clearWhenEmpty: "omit",

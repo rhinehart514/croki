@@ -58,7 +58,7 @@ const testLayer = it.layer(
 );
 
 testLayer("OpenClawAdapter", (it) => {
-  it.effect("routes a thread through OpenClaw and injects the Sol/Luna policy", () =>
+  it.effect("routes a thread through OpenClaw without changing the agent's behavior", () =>
     Effect.gen(function* () {
       const requestLogPath = NodePath.join(
         yield* Effect.promise(() =>
@@ -81,7 +81,7 @@ testLayer("OpenClawAdapter", (it) => {
         runtimeMode: "full-access",
         modelSelection: {
           instanceId: ProviderInstanceId.make("openclaw"),
-          model: "sol-medium-luna-max",
+          model: "agent-default",
         },
       });
       assert.equal(session.provider, "openclaw");
@@ -89,10 +89,9 @@ testLayer("OpenClawAdapter", (it) => {
       yield* adapter.sendTurn({ threadId, input: "Implement the feature", attachments: [] });
 
       const requestLog = yield* Effect.promise(() => NodeFSP.readFile(requestLogPath, "utf8"));
-      assert.include(requestLog, "GPT-5.6 Sol with medium thinking");
-      assert.include(requestLog, "openai/gpt-5.6-luna");
-      assert.include(requestLog, "sessions_spawn");
       assert.include(requestLog, "Implement the feature");
+      assert.notInclude(requestLog, "croki_multi_agent");
+      assert.notInclude(requestLog, "do not silently substitute");
 
       const argvLog = yield* Effect.promise(() => NodeFSP.readFile(argvLogPath, "utf8"));
       assert.include(argvLog, "acp");

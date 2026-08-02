@@ -74,6 +74,7 @@ describe("projectActivityPayload", () => {
       provisionalCount: 1,
       renderedChars: 123,
       truncated: false,
+      harnessId: "gtm-v1",
     };
     const projected = projectActivityPayload({
       id: EventId.make("event-croki-context"),

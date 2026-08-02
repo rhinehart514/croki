@@ -1,6 +1,7 @@
 import {
   type ChatAttachment,
   CommandId,
+  type CrokiHarnessId,
   EventId,
   type ModelSelection,
   type OrchestrationEvent,
@@ -272,6 +273,7 @@ const make = Effect.gen(function* () {
     readonly sourceEventId: string;
     readonly messageId: string;
     readonly query?: string;
+    readonly harnessId: CrokiHarnessId;
     readonly createdAt: string;
   }) {
     const existing = input.thread.activities.find(
@@ -284,7 +286,7 @@ const make = Effect.gen(function* () {
       return existing.payload;
     }
 
-    const loaded = yield* loadCrokiAgentContext(input.contextRoot, input.query);
+    const loaded = yield* loadCrokiAgentContext(input.contextRoot, input.query, input.harnessId);
     const payload: CrokiContextAppliedActivityPayload = {
       sourceEventId: input.sourceEventId,
       messageId: input.messageId,
@@ -679,6 +681,7 @@ const make = Effect.gen(function* () {
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
     readonly canvasEnabled: boolean;
+    readonly harnessId: CrokiHarnessId;
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThread(input.threadId);
@@ -709,10 +712,11 @@ const make = Effect.gen(function* () {
       sourceEventId: input.sourceEventId,
       messageId: input.messageId,
       ...(normalizedInput !== undefined ? { query: normalizedInput } : {}),
+      harnessId: input.harnessId,
       createdAt: input.createdAt,
     });
     const providerInput = compileCrokiTurnInput({
-      canvasEnabled: input.canvasEnabled,
+      harnessId: input.harnessId,
       agentContext: crokiContext.prompt,
       userInput: normalizedInput,
     });
@@ -964,6 +968,7 @@ const make = Effect.gen(function* () {
         : {}),
       interactionMode: event.payload.interactionMode,
       canvasEnabled: event.payload.canvasEnabled ?? false,
+      harnessId: event.payload.harnessId,
       createdAt: event.payload.createdAt,
     }).pipe(
       Effect.map(Option.some),

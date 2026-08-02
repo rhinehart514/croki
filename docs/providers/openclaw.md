@@ -1,24 +1,20 @@
 # OpenClaw
 
-OpenClaw is the coordinator in this setup. It is not the model.
+OpenClaw is the configured agent runtime in this setup. Croki connects to it
+through ACP and preserves the selected agent's own model, reasoning,
+delegation, tools, and instructions.
 
-Croki gives OpenClaw one fixed job profile:
-
-- the main thread uses `openai/gpt-5.6-sol` with medium thinking
-- useful, self-contained pieces of work are delegated with `sessions_spawn`
-- every delegated worker explicitly requests `openai/gpt-5.6-luna` with max thinking
-- Croki shows the delegated work in the thread and combines the results into the main answer
-
-Croki does not silently replace Luna Max with another model. If that model is unavailable,
-OpenClaw should report the problem clearly.
+Croki does not prepend an OpenClaw persona or delegation policy. The composer
+shows `Agent default` because model choice belongs to the selected OpenClaw
+agent, not to a fake Croki model profile. If that agent delegates work, Croki
+projects the resulting tool activity without requiring a particular parent or
+worker model.
 
 ## Before Adding OpenClaw To Croki
 
-Install OpenClaw and make sure its Gateway is running. In OpenClaw, create an agent named `croki`
-whose main model is `openai/gpt-5.6-sol`.
-
-The OpenClaw account or model provider behind that agent must also be able to run
-`openai/gpt-5.6-luna`, and the agent's tool policy must allow `sessions_spawn`.
+Install OpenClaw and make sure its Gateway is running. Create or choose the
+agent Croki should use. The default Agent ID is `croki`, but any configured
+agent is valid.
 
 You can confirm the configured agent with:
 
@@ -46,15 +42,20 @@ Croki checks that:
 
 - the OpenClaw command is installed
 - the selected OpenClaw agent exists
-- that agent's main model is GPT-5.6 Sol
 - Croki can connect to the OpenClaw Gateway through ACP
 
-After the provider shows as ready, start a new thread and choose **Sol Medium + Luna Max**.
+After the provider shows as ready, start a new thread and choose **Agent default**.
+
+Adding the provider does not guarantee runtime readiness. The OpenClaw CLI,
+Gateway, selected agent, model access, and ACP connection must all be available
+on the machine running the Croki server.
 
 ## What You Will See
 
-Sol remains responsible for the thread and the final response. When it delegates suitable work, the
-thread shows a **Luna Max worker** activity row with its running or completed state.
+The configured OpenClaw agent remains responsible for the thread and final
+response. Delegated work appears as ordinary tool activity. If a delegated run
+explicitly identifies itself as Luna Max, Croki may use that precise label, but
+Croki does not request it.
 
 OpenClaw keeps each Croki thread in its own OpenClaw session. Returning to a thread continues the
 same coordinated work instead of starting over.
@@ -63,10 +64,9 @@ same coordinated work instead of starting over.
 
 If the provider says the agent is missing, check that Agent ID matches the OpenClaw agent exactly.
 
-If it says the main model is wrong, configure that agent to use `openai/gpt-5.6-sol`.
-
-If a delegated task fails, verify that Luna is available to OpenClaw and that `sessions_spawn` is
-allowed. Croki intentionally does not hide this by switching to a different worker model.
+Model, reasoning, delegation, and tool-policy failures belong to the configured
+OpenClaw agent. Inspect that agent's native configuration and Gateway logs;
+Croki does not override them.
 
 OpenClaw's ACP bridge does not accept Croki's own MCP server list. Browser and other tools needed by
 workers must therefore be made available through OpenClaw itself.

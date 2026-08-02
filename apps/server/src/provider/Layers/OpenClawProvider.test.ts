@@ -7,21 +7,22 @@ import { describe, expect } from "vite-plus/test";
 import {
   buildInitialOpenClawProviderSnapshot,
   configuredOpenClawAgentModel,
-  OPENCLAW_ORCHESTRATION_MODEL,
+  hasConfiguredOpenClawAgent,
+  OPENCLAW_NATIVE_MODEL,
 } from "./OpenClawProvider.ts";
 
 const decodeSettings = Schema.decodeSync(OpenClawSettings);
 
 describe("OpenClaw provider", () => {
-  it.effect("advertises one understandable Sol/Luna orchestration profile", () =>
+  it.effect("advertises the configured agent's native behavior", () =>
     Effect.gen(function* () {
       const provider = yield* buildInitialOpenClawProviderSnapshot(decodeSettings({}));
 
       expect(provider.displayName).toBe("OpenClaw");
       expect(provider.models).toMatchObject([
         {
-          slug: OPENCLAW_ORCHESTRATION_MODEL,
-          name: "Sol Medium + Luna Max",
+          slug: OPENCLAW_NATIVE_MODEL,
+          name: "Agent default",
         },
       ]);
       expect(provider.status).toBe("warning");
@@ -38,6 +39,8 @@ describe("OpenClaw provider", () => {
         "croki",
       ),
     ).toBe("openai/gpt-5.6-sol");
+    expect(hasConfiguredOpenClawAgent(JSON.stringify([{ id: "croki" }]), "croki")).toBe(true);
+    expect(hasConfiguredOpenClawAgent(JSON.stringify([{ id: "main" }]), "croki")).toBe(false);
     expect(configuredOpenClawAgentModel("not-json", "croki")).toBeUndefined();
   });
 });

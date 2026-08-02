@@ -1,8 +1,13 @@
 # Server Update Architecture
 
-T3 Code can update a connected server to the exact version of the client that detected version
+Croki can update a connected server to the exact version of the client that detected version
 drift. This path exists primarily for remote environments, where the user may not have a terminal
 open on the server machine.
+
+The mechanism is implemented, but Croki 0.4.1 cannot use it as a production
+Croki update channel because the pinned runtime still installs the inherited
+`t3@<version>` npm package. Keep self-update disabled for Croki releases until
+the CLI package is renamed, owned, and published by Croki.
 
 The feature has three boundaries:
 
@@ -77,7 +82,7 @@ preflight also removes the candidate runtime so retrying the same version perfor
 
 ## Host Service Lifecycle
 
-The systemd user service is a host lifecycle concern, not a T3 Connect resource. The standalone
+The systemd user service is a host lifecycle concern, not a Croki Connect resource. The standalone
 `t3 service install`, `uninstall`, `update`, and `status` commands own it. Install and update both
 reconcile the unit through `BootService`; running `npx t3@latest service update` therefore pins and
 activates the latest CLI release without requiring a connected client.
@@ -106,9 +111,10 @@ and the next version check determine the result.
 
 ## Release Invariant
 
-The exact client version must exist as the `t3` npm package before a client carrying that version is
-published. The release workflow therefore makes the GitHub release depend on CLI publication, and
-the hosted web deployment depends on that release. See [Release Checklist](../operations/release.md#server-self-update-release-invariant).
+The exact client version must exist as the configured Croki-owned npm package
+before a client carrying that version is published. The release workflow must
+make the GitHub release depend on CLI publication, and hosted web deployment
+must depend on that release. See [Release ownership and enablement](../operations/release.md).
 
 ## Source Map
 

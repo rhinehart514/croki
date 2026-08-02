@@ -1,5 +1,6 @@
 import type {
   ApprovalRequestId,
+  CrokiHarnessId,
   EnvironmentId,
   ModelSelection,
   PreviewAnnotationPayload,
@@ -565,6 +566,7 @@ export interface ChatComposerProps {
   // Mode
   runtimeMode: RuntimeMode;
   interactionMode: ProviderInteractionMode;
+  crokiHarnessId: CrokiHarnessId;
 
   // Provider / model
   lockedProvider: ProviderDriverKind | null;
@@ -616,6 +618,7 @@ export interface ChatComposerProps {
   toggleInteractionMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
+  onCrokiHarnessChange: (harnessId: CrokiHarnessId) => void;
   togglePlanSidebar: () => void;
   onOpenCanvas: () => void;
 
@@ -666,6 +669,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     planSidebarOpen,
     runtimeMode,
     interactionMode,
+    crokiHarnessId,
     lockedProvider,
     providerStatuses,
     activeProjectDefaultModelSelection,
@@ -697,6 +701,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     toggleInteractionMode,
     handleRuntimeModeChange,
     handleInteractionModeChange,
+    onCrokiHarnessChange,
     togglePlanSidebar,
     onOpenCanvas,
     focusComposer,
@@ -3113,6 +3118,42 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
                 {canvasContext ? (
                   <>
+                    <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+                    <Select
+                      value={crokiHarnessId}
+                      onValueChange={(value) => onCrokiHarnessChange(value!)}
+                    >
+                      <ComposerSelectControl
+                        className={cn(
+                          "font-medium",
+                          crokiHarnessId === "gtm-v1" && "text-amber-400 hover:text-amber-300",
+                        )}
+                        aria-label="Turn behavior"
+                      >
+                        <ComposerControlIcon icon={BotIcon} opticalSize="large" />
+                        <SelectValue>
+                          {crokiHarnessId === "gtm-v1" ? "GTM v1" : "Native"}
+                        </SelectValue>
+                      </ComposerSelectControl>
+                      <SelectPopup alignItemWithTrigger={false}>
+                        <SelectItem value="native" hideIndicator className="min-w-72 py-2">
+                          <div className="grid gap-0.5">
+                            <span className="font-medium text-foreground">Native</span>
+                            <span className="text-xs leading-4 text-muted-foreground">
+                              Provider agent SDK as configured, with approved Canvas context.
+                            </span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="gtm-v1" hideIndicator className="min-w-72 py-2">
+                          <div className="grid gap-0.5">
+                            <span className="font-medium text-foreground">GTM v1</span>
+                            <span className="text-xs leading-4 text-muted-foreground">
+                              Adds Croki GTM guidance for one turn, then resets to Native.
+                            </span>
+                          </div>
+                        </SelectItem>
+                      </SelectPopup>
+                    </Select>
                     <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
                     <CrokiComposerContextIndicator
                       compact={isComposerFooterCompact}

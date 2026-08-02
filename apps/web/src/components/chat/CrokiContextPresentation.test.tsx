@@ -62,7 +62,7 @@ describe("deriveCrokiComposerContextState", () => {
       ...validContext,
       nodes: [
         { ...validContext.nodes[0]!, body: "x".repeat(11_000) },
-        { ...validContext.nodes[1]!, body: "y".repeat(11_000) },
+        { ...validContext.nodes[1]!, status: "current", body: "y".repeat(11_000) },
       ],
     };
     expect(
@@ -147,8 +147,9 @@ describe("Croki context presentation", () => {
       />,
     );
 
-    expect(markup).toContain("Canvas 2/1");
-    expect(markup).toContain("The next turn will include 2 current and 1 proposed");
+    expect(markup).toContain("Canvas 2");
+    expect(markup).toContain("The next turn will include 2 approved Canvas items");
+    expect(markup).toContain("1 proposal is excluded");
     expect(markup).not.toContain("2026-07-30T14:00:00.000Z");
   });
 
@@ -193,8 +194,9 @@ describe("Croki context presentation", () => {
 
     expect(receipts.size).toBe(1);
     expect(markup).toContain("Canvas applied");
-    expect(markup).toContain("2 current");
-    expect(markup).toContain("1 proposed");
+    expect(markup).toContain("Native");
+    expect(markup).toContain("2 approved");
+    expect(markup).toContain("Proposals excluded: 1");
     expect(markup).toContain("aaaaaaaa");
     expect(markup).toContain("2026-07-30 14:00");
     expect(markup).not.toContain("SECRET");
@@ -259,11 +261,12 @@ function loadedReceipt(): CrokiContextReceipt {
     version: 1,
     sha256: "a".repeat(64),
     updatedAt: "2026-07-30T14:00:00.000Z",
-    activeCount: 3,
+    activeCount: 2,
     currentCount: 2,
     provisionalCount: 1,
     renderedChars: 420,
     truncated: false,
+    harnessId: "native",
   };
 }
 

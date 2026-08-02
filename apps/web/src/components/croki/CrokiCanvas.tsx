@@ -84,7 +84,7 @@ export function CrokiCanvas(props: CrokiCanvasProps) {
               ? "Unsaved Canvas changes"
               : "Product understanding is current"}
         </p>
-        <nav aria-label="Canvas workflow" className="flex shrink-0 items-center gap-1">
+        <nav aria-label="Canvas views" className="flex shrink-0 items-center gap-1">
           {CROKI_CANVAS_VIEWS.map((candidate) => (
             <button
               key={candidate.id}

@@ -570,11 +570,3 @@ export function selectActiveRightPanelSurface(
   if (!state.isOpen) return null;
   return state.surfaces.find((surface) => surface.id === state.activeSurfaceId) ?? null;
 }
-
-/** Canvas changes an agent turn only while it is the visible surface for that Thread. */
-export function selectThreadCanvasEnabled(
-  byThreadKey: Record<string, ThreadRightPanelState>,
-  ref: ScopedThreadRef | null | undefined,
-): boolean {
-  return selectActiveRightPanelSurface(byThreadKey, ref)?.kind === "canvas";
-}

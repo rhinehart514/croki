@@ -132,7 +132,8 @@ function parseCrokiContextReceipt(value: unknown): CrokiContextReceipt | null {
     !isNonNegativeInteger(value.currentCount) ||
     !isNonNegativeInteger(value.provisionalCount) ||
     !isNonNegativeInteger(value.renderedChars) ||
-    typeof value.truncated !== "boolean"
+    typeof value.truncated !== "boolean" ||
+    (value.harnessId !== undefined && value.harnessId !== "native" && value.harnessId !== "gtm-v1")
   ) {
     return null;
   }
@@ -170,6 +171,7 @@ function parseCrokiContextReceipt(value: unknown): CrokiContextReceipt | null {
     provisionalCount: value.provisionalCount,
     renderedChars: value.renderedChars,
     truncated: value.truncated,
+    ...(value.harnessId ? { harnessId: value.harnessId } : {}),
     ...(value.errorCode ? { errorCode: value.errorCode } : {}),
     ...(value.issueCount !== undefined ? { issueCount: value.issueCount as number } : {}),
     ...(hasSelection

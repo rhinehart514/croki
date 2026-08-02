@@ -1,5 +1,6 @@
 import {
   type ApprovalRequestId,
+  type CrokiHarnessId,
   DEFAULT_MODEL,
   defaultInstanceIdForDriver,
   type EnvironmentId,
@@ -125,7 +126,6 @@ import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import {
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
-  selectThreadCanvasEnabled,
   selectThreadRightPanelState,
   type RightPanelSurface,
   useRightPanelStore,
@@ -146,7 +146,6 @@ import {
 } from "../previewMiniPlayerStore";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { CrokiCanvas } from "./croki/CrokiCanvas";
-import type { CrokiCanvasView } from "./croki/crokiCanvasLanguage";
 import { addProvisionalCrokiEvidence } from "./croki/crokiCanvasEvidenceDraft";
 import {
   makeCrokiCanvasWorkspaceKey,
@@ -1522,6 +1521,20 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThread],
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  const [crokiHarnessSelection, setCrokiHarnessSelection] = useState<{
+    readonly threadKey: string | null;
+    readonly harnessId: CrokiHarnessId;
+  }>({ threadKey: activeThreadKey, harnessId: "native" });
+  const crokiHarnessId =
+    crokiHarnessSelection.threadKey === activeThreadKey
+      ? crokiHarnessSelection.harnessId
+      : "native";
+  const setCrokiHarnessId = useCallback(
+    (harnessId: CrokiHarnessId) => {
+      setCrokiHarnessSelection({ threadKey: activeThreadKey, harnessId });
+    },
+    [activeThreadKey],
+  );
   const [timelineAnchor, setTimelineAnchor] = useState<{
     readonly threadKey: string | null;
     readonly messageId: MessageId | null;
@@ -1540,9 +1553,8 @@ function ChatViewContent(props: ChatViewProps) {
   const activeRightPanelSurface = useRightPanelStore((state) =>
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
   );
-  const canvasEnabled = useRightPanelStore((state) =>
-    selectThreadCanvasEnabled(state.byThreadKey, activeThreadRef),
-  );
+  // Canvas is project context and a capability, not a right-panel mode.
+  const canvasEnabled = activeThread !== undefined;
   const activeFileSurface =
     activeRightPanelSurface?.kind === "file" ? activeRightPanelSurface : null;
   const activePreviewState = useThreadPreviewState(activeThreadRef);
@@ -5093,6 +5105,7 @@ function ChatViewContent(props: ChatViewProps) {
           runtimeMode,
           interactionMode,
           canvasEnabled,
+          harnessId: crokiHarnessId,
           ...(bootstrap ? { bootstrap } : {}),
           createdAt: messageCreatedAt,
         },
@@ -5101,6 +5114,7 @@ function ChatViewContent(props: ChatViewProps) {
         failure = startResult;
       } else {
         turnStartSucceeded = true;
+        setCrokiHarnessId("native");
       }
     }
 
@@ -5446,6 +5460,7 @@ function ChatViewContent(props: ChatViewProps) {
             runtimeMode,
             interactionMode: nextInteractionMode,
             canvasEnabled,
+            harnessId: crokiHarnessId,
             ...(nextInteractionMode === "default" && activeProposedPlan
               ? {
                   sourceProposedPlan: {
@@ -5461,6 +5476,7 @@ function ChatViewContent(props: ChatViewProps) {
       }
 
       if (failure === null) {
+        setCrokiHarnessId("native");
         // Optimistically open the plan sidebar when implementing (not refining).
         // "default" mode here means the agent is executing the plan, which produces
         // step-tracking activities that the sidebar will display.
@@ -5503,8 +5519,10 @@ function ChatViewContent(props: ChatViewProps) {
       startThreadTurn,
       autoOpenPlanSidebar,
       canvasEnabled,
+      crokiHarnessId,
       environmentId,
       composerRef,
+      setCrokiHarnessId,
     ],
   );
 
@@ -5587,7 +5605,8 @@ function ChatViewContent(props: ChatViewProps) {
           titleSeed: nextThreadTitle,
           runtimeMode,
           interactionMode: "default",
-          canvasEnabled: false,
+          canvasEnabled: true,
+          harnessId: "native",
           sourceProposedPlan: {
             threadId: activeThread.id,
             planId: activeProposedPlan.id,
@@ -6181,6 +6200,7 @@ function ChatViewContent(props: ChatViewProps) {
                             planSidebarOpen={planSidebarOpen}
                             runtimeMode={runtimeMode}
                             interactionMode={interactionMode}
+                            crokiHarnessId={crokiHarnessId}
                             lockedProvider={lockedProvider}
                             providerStatuses={providerStatuses as ServerProvider[]}
                             activeProjectDefaultModelSelection={
@@ -6219,6 +6239,7 @@ function ChatViewContent(props: ChatViewProps) {
                             toggleInteractionMode={toggleInteractionMode}
                             handleRuntimeModeChange={handleRuntimeModeChange}
                             handleInteractionModeChange={handleInteractionModeChange}
+                            onCrokiHarnessChange={setCrokiHarnessId}
                             togglePlanSidebar={togglePlanSidebar}
                             onOpenCanvas={addCanvasSurface}
                             focusComposer={focusComposer}

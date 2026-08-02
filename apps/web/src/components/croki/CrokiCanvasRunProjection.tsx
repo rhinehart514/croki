@@ -10,7 +10,7 @@ interface CrokiCanvasRunProjectionProps {
 
 export function CrokiCanvasRunProjection(props: CrokiCanvasRunProjectionProps) {
   return (
-    <section aria-label="Current Thread workflow" className="border-y border-border/60 py-3">
+    <section aria-label="Current Thread run" className="border-y border-border/60 py-3">
       <div className="flex items-start gap-2">
         <ListTodo className="mt-0.5 size-4 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1">
@@ -21,8 +21,8 @@ export function CrokiCanvasRunProjection(props: CrokiCanvasRunProjectionProps) {
                 <p className="mt-1 text-xs text-muted-foreground">{props.activePlan.explanation}</p>
               ) : null}
               <ol className="mt-2 divide-y divide-border/50">
-                {props.activePlan.steps.map((step, index) => (
-                  <li key={`${index}:${step.step}`} className="flex gap-2 py-2 text-xs">
+                {props.activePlan.steps.map((step) => (
+                  <li key={step.step} className="flex gap-2 py-2 text-xs">
                     <PlanStatusIcon status={step.status} />
                     <span
                       className={
@@ -37,7 +37,7 @@ export function CrokiCanvasRunProjection(props: CrokiCanvasRunProjectionProps) {
             </>
           ) : (
             <p className="mt-1 text-xs text-muted-foreground">
-              No active plan in this Thread. Workflow work still runs as ordinary Croki turns.
+              No active plan in this Thread. Work still runs as ordinary native agent turns.
             </p>
           )}
           {props.onPrepareWorkflow ? (
