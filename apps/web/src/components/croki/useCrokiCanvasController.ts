@@ -31,6 +31,8 @@ import { canRedoCrokiCanvasDraft, canUndoCrokiCanvasDraft } from "./crokiCanvasD
 import { addCrokiNode, updateCrokiNode, validateCrokiContextForSave } from "./crokiCanvasModel";
 
 interface CrokiCanvasControllerProps {
+  /** Legacy context projection only. Native Perception Frames never read a Canvas file. */
+  readonly enabled?: boolean;
   readonly environmentId: EnvironmentId;
   readonly externalRevision?: string | null;
   readonly onPendingChange?: (pending: boolean) => void;
@@ -48,22 +50,24 @@ export function useCrokiCanvasController(props: CrokiCanvasControllerProps) {
     props.environmentId,
     props.workspaceRoot,
     CROKI_CONTEXT_RELATIVE_PATH,
+    props.enabled ?? true,
   );
   const writeProjectFile = useAtomCommand(projectEnvironment.writeFile, {
     reportFailure: false,
   });
   const validationErrors = validateCrokiContextForSave(state.context);
-  const pending = state.dirty || state.isSaving;
+  const pending = (props.enabled ?? true) && (state.dirty || state.isSaving);
   const canUndo = canUndoCrokiCanvasDraft(workspaceKey);
   const canRedo = canRedoCrokiCanvasDraft(workspaceKey);
 
   useEffect(() => props.onPendingChange?.(pending), [pending, props.onPendingChange]);
 
   useEffect(() => {
-    if (props.externalRevision) fileQuery.refresh();
-  }, [fileQuery.refresh, props.externalRevision]);
+    if ((props.enabled ?? true) && props.externalRevision) fileQuery.refresh();
+  }, [fileQuery.refresh, props.enabled, props.externalRevision]);
 
   useEffect(() => {
+    if (!(props.enabled ?? true)) return;
     if (fileQuery.data) {
       if (fileQuery.data.truncated) {
         acceptCrokiCanvasReadError(
@@ -79,7 +83,14 @@ export function useCrokiCanvasController(props: CrokiCanvasControllerProps) {
     } else if (!fileQuery.isPending) {
       acceptCrokiCanvasMissing(workspaceKey, props.productName);
     }
-  }, [fileQuery.data, fileQuery.error, fileQuery.isPending, props.productName, workspaceKey]);
+  }, [
+    fileQuery.data,
+    fileQuery.error,
+    fileQuery.isPending,
+    props.enabled,
+    props.productName,
+    workspaceKey,
+  ]);
 
   const applyTransition = useCallback(
     (transition: ReturnType<typeof addCrokiNode>) => {

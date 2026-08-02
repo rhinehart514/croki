@@ -1,13 +1,17 @@
 # Harness Canvas product specification
 
-Status: selected supporting mode for Croki 0.4.2
+Status: superseded compatibility specification
+
+> Superseded by the 0.4.2 Croki Senses / Perception Frame contract in
+> [Croki on Croki](../croki.md). Agents must not call `canvas_present` or
+> maintain Canvas artifacts. This document describes legacy history parsing
+> only and is retained so existing Thread artifacts remain understandable.
 
 ## Product decision
 
-This specification covers Thread-scoped visual artifacts created by an explicit
+Historically, this specification covered Thread-scoped visual artifacts created by an explicit
 Product or GTM harness when spatial representation materially improves founder
-judgment. It is a supporting Canvas mode. The primary Canvas experience is the
-[next release candidate](./release-canvas-spec.md).
+judgment. It is not an active Canvas mode.
 
 A visual artifact is not project memory, release state, an execution surface,
 a proposal inbox, a plan view, or an agent coordination dashboard.

@@ -19,7 +19,13 @@ import {
 } from "../../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
-import { presentCrokiCanvas } from "./handlers.ts";
+import {
+  presentCrokiCanvas,
+  senseInspect,
+  senseObserve,
+  senseStatus,
+  senseWait,
+} from "./handlers.ts";
 
 const threadId = ThreadId.make("thread-canvas-tool");
 const invocation: McpInvocationContext.McpInvocationScope = {
@@ -46,6 +52,16 @@ const testCrypto = Crypto.make({
   randomBytes: (size) => new Uint8Array(size),
   digest: (_algorithm, data) => Effect.succeed(data),
 });
+
+const senseThread = {
+  ...thread,
+  id: threadId,
+  projectId: "project-sense",
+  title: "Sense Thread",
+  runtimeMode: "local",
+  updatedAt: "2026-08-02T18:00:02.000Z",
+  latestTurn: null,
+} as unknown as OrchestrationThread;
 
 it.effect("persists a bounded artifact in the originating Thread activity", () =>
   Effect.gen(function* () {
@@ -137,4 +153,42 @@ it.effect("does not persist when the active invocation is Native", () =>
     expect(result.code).toBe("canvas-unavailable");
     expect(dispatches).toBe(0);
   }).pipe(Effect.provideService(Crypto.Crypto, testCrypto)),
+);
+
+it.effect("reads semantic sense state without dispatching a Canvas or receipt activity", () =>
+  Effect.gen(function* () {
+    let dispatches = 0;
+    const projection = Layer.mock(ProjectionSnapshotQuery)({
+      getThreadDetailById: () => Effect.succeed(Option.some(senseThread)),
+    });
+    const engine = OrchestrationEngineService.of({
+      dispatch: () =>
+        Effect.sync(() => {
+          dispatches += 1;
+          return { sequence: 9 };
+        }),
+      readEvents: () => Stream.empty,
+      streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(9),
+    } satisfies OrchestrationEngineShape);
+    const provide = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      effect.pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+        Effect.provide(projection),
+        Effect.provideService(OrchestrationEngineService, engine),
+      );
+
+    const status = yield* provide(senseStatus({}));
+    const observation = yield* provide(senseObserve({}));
+    const inspection = yield* provide(
+      senseInspect({ objectId: `thread:${threadId}`, revision: observation.revision, depth: 1 }),
+    );
+    const waited = yield* provide(senseWait({ sinceRevision: observation.revision }));
+
+    expect(status.revision).toBe(observation.revision);
+    expect(inspection.object.id).toBe(`thread:${threadId}`);
+    expect(waited.changed).toBe(false);
+    expect(waited.timedOut).toBe(true);
+    expect(dispatches).toBe(0);
+  }),
 );

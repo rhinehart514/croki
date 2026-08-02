@@ -21,7 +21,6 @@ import {
   ThreadId,
   TurnId,
 } from "@croki/contracts";
-import { serializeCrokiContext } from "@croki/shared/crokiContext";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
 import * as Exit from "effect/Exit";
@@ -483,28 +482,13 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
 
-  it("applies canonical Canvas context without mutating stored user text", async () => {
+  it("does not inject legacy Canvas context into provider turns", async () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "croki-reactor-"));
     const workspaceRoot = NodePath.join(baseDir, "project");
     NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".croki"), { recursive: true });
     NodeFS.writeFileSync(
       NodePath.join(workspaceRoot, ".croki", "context.json"),
-      serializeCrokiContext({
-        version: 1,
-        product: "Croki",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-        nodes: [
-          {
-            id: "intent-1",
-            kind: "intent",
-            status: "current",
-            title: "Durable product context",
-            body: "Apply this at the generic provider boundary.",
-            updatedAt: "2026-01-01T00:00:00.000Z",
-          },
-        ],
-        edges: [],
-      }),
+      "legacy context must never be read during a provider turn",
     );
     const harness = await createHarness({ baseDir, projectWorkspaceRoot: workspaceRoot });
     const userText = "Keep this exact user message";
@@ -537,53 +521,23 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(() => harness.sendTurn.mock.calls.length === 1);
     const providerRequest = harness.sendTurn.mock.calls[0]?.[0] as { input?: string };
-    expect(providerRequest.input).toContain("Durable product context");
-    expect(providerRequest.input).toContain(userText);
+    expect(providerRequest.input).toBe(userText);
     expect(providerRequest.input).not.toContain("<croki_canvas_harness");
 
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.messages.find((message) => message.role === "user")?.text).toBe(userText);
-    const applied = thread?.activities.find(
-      (activity) => activity.kind === "croki.context.applied",
+    expect(thread?.activities.some((activity) => activity.kind === "croki.context.applied")).toBe(
+      false,
     );
-    expect(applied?.payload).toMatchObject({
-      messageId: "user-message-croki-context",
-      receipt: {
-        status: "loaded",
-        relativePath: ".croki/context.json",
-        activeCount: 1,
-        currentCount: 1,
-        provisionalCount: 0,
-      },
-    });
     expect(thread).toMatchObject({
       title: "Thread",
       branch: "feature/croki-context",
       worktreePath: NodePath.join(baseDir, "worktree"),
     });
-    const firstReceiptSha = (
-      applied?.payload as { receipt?: { sha256?: string | null } } | undefined
-    )?.receipt?.sha256;
-
     NodeFS.writeFileSync(
       NodePath.join(workspaceRoot, ".croki", "context.json"),
-      serializeCrokiContext({
-        version: 1,
-        product: "Croki",
-        updatedAt: "2026-01-01T00:00:01.000Z",
-        nodes: [
-          {
-            id: "intent-2",
-            kind: "intent",
-            status: "current",
-            title: "Fresh canonical context",
-            body: "Reload the project-owned snapshot for every turn.",
-            updatedAt: "2026-01-01T00:00:01.000Z",
-          },
-        ],
-        edges: [],
-      }),
+      "changed context must never be read during a provider turn",
     );
 
     const imageAttachment = {
@@ -612,29 +566,19 @@ describe("ProviderCommandReactor", () => {
     );
     await waitFor(() => harness.sendTurn.mock.calls.length === 2);
     expect(harness.sendTurn.mock.calls[1]?.[0]).toMatchObject({
-      input: expect.stringContaining("Fresh canonical context"),
       attachments: [imageAttachment],
     });
     const refreshedProviderRequest = harness.sendTurn.mock.calls[1]?.[0] as
       | { input?: string }
       | undefined;
-    expect(refreshedProviderRequest?.input).not.toContain("Durable product context");
-    expect(refreshedProviderRequest?.input).not.toContain("<croki_gtm_harness");
+    expect(refreshedProviderRequest?.input).toBeUndefined();
     const refreshedReadModel = await harness.readModel();
     const refreshedThread = refreshedReadModel.threads.find(
       (entry) => entry.id === ThreadId.make("thread-1"),
     );
-    const receipts = refreshedThread?.activities.filter(
-      (activity) => activity.kind === "croki.context.applied",
-    );
-    expect(receipts).toHaveLength(2);
     expect(
-      (
-        receipts?.[1]?.payload as {
-          receipt?: { sha256?: string | null };
-        }
-      )?.receipt?.sha256,
-    ).not.toBe(firstReceiptSha);
+      refreshedThread?.activities.some((activity) => activity.kind === "croki.context.applied"),
+    ).toBe(false);
     expect(
       refreshedThread?.messages.find(
         (message) => message.id === asMessageId("user-message-croki-attachment-only"),
@@ -642,7 +586,7 @@ describe("ProviderCommandReactor", () => {
     ).toBe("");
   });
 
-  it("enables the strategy harness while invalid project context fails open", async () => {
+  it("enables the strategy harness while ignoring invalid legacy context", async () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "croki-reactor-"));
     const workspaceRoot = NodePath.join(baseDir, "project");
     NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".croki"), { recursive: true });
@@ -681,13 +625,9 @@ describe("ProviderCommandReactor", () => {
       thread?.messages.find((message) => message.id === asMessageId("user-message-canvas-harness"))
         ?.text,
     ).toBe(userText);
-    const applied = thread?.activities.find(
-      (activity) => activity.kind === "croki.context.applied",
+    expect(thread?.activities.some((activity) => activity.kind === "croki.context.applied")).toBe(
+      false,
     );
-    const receipt = (applied?.payload as { receipt?: unknown } | undefined)?.receipt;
-    expect(receipt).toMatchObject({ status: "invalid", errorCode: "invalid-json" });
-    expect(JSON.stringify(receipt)).not.toContain(userText);
-    expect(JSON.stringify(receipt)).not.toContain("croki_canvas_harness");
   });
 
   effectIt.effect("projects starting before a slow provider session finishes", () =>

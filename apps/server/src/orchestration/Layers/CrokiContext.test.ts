@@ -54,7 +54,9 @@ it("adds one bounded product harness without weakening founder authority", () =>
   assert.isAtMost(CROKI_PRODUCT_HARNESS_INSTRUCTION.length, 1_500);
   assert.equal(compiled?.match(/<croki_product_harness version="1">/g)?.length, 1);
   assert.include(compiled ?? "", "leave consequential judgment to the founder");
-  assert.include(compiled ?? "", "call canvas_present");
+  assert.include(compiled ?? "", "Croki Senses");
+  assert.include(compiled ?? "", "automatic visual projection of sensed state");
+  assert.notInclude(compiled ?? "", "canvas_present");
   assert.include(compiled ?? "", "not project memory");
   assert.include(compiled ?? "", agentContext);
   assert.isTrue(compiled?.endsWith(userInput));
@@ -73,7 +75,8 @@ it("adds one bounded GTM harness without weakening founder authority", () => {
   assert.equal(compiled?.match(/<croki_gtm_harness version="1">/g)?.length, 1);
   assert.include(compiled ?? "", "leave consequential judgment to the founder");
   assert.include(compiled ?? "", "Do not ask the user to author or connect nodes");
-  assert.include(compiled ?? "", "not another memory, runtime, or source of truth");
+  assert.include(compiled ?? "", "maintain a Canvas");
+  assert.include(compiled ?? "", "automatic visual projection of sensed state");
   assert.include(compiled ?? "", agentContext);
   assert.isTrue(compiled?.endsWith(userInput));
 });

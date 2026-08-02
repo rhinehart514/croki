@@ -192,14 +192,18 @@ function assertCrokiReleaseGuards(): void {
     "CROKI_RELEASE_REPOSITORY",
     "CROKI_RELEASE_BRANCH",
     "CROKI_CLI_PACKAGE",
+    "CROKI_CLI_PUBLISH_ENABLED",
     "CROKI_RELAY_DOMAIN",
+    "CROKI_WEB_DEPLOY_ENABLED",
+    "CROKI_SIGNING_ENABLED",
+    "CROKI_DISCORD_RELEASE_ENABLED",
     "CROKI_VERCEL_PROJECT_ID",
     "dry_run",
     "node scripts/croki-release-plan.ts",
     "inputs.dry_run != true",
     "needs: [release_guard, check_changes]",
-    'cli_package" == "croki"',
-    "Refusing inherited T3 destination",
+    "croki-release-plan.ts --production",
+    "name=Croki v",
     'git push origin "HEAD:$RELEASE_BRANCH"',
   ]) {
     assertContains(releaseWorkflow, guard, `Release workflow is missing guard: ${guard}`);
@@ -210,7 +214,6 @@ function assertCrokiReleaseGuards(): void {
     "secrets.VERCEL_TOKEN",
     "latest.app.t3.codes",
     "nightly.app.t3.codes",
-    "name=Croki v",
   ]) {
     assertNotContains(
       releaseWorkflow,
@@ -294,6 +297,36 @@ function assertCrokiReleasePlan(): void {
     }
   }
 
+  const githubOnlyResult = NodeChildProcess.spawnSync(
+    process.execPath,
+    [scriptPath, "--production"],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        CROKI_RELEASE_ENABLED: "true",
+        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
+        CROKI_RELEASE_BRANCH: "croki/main",
+      },
+    },
+  );
+  if (githubOnlyResult.status !== 0) {
+    throw new Error(`Croki GitHub-only release plan failed:\n${githubOnlyResult.stderr}`);
+  }
+  const githubOnlyPlan = JSON.parse(githubOnlyResult.stdout) as {
+    readonly status?: unknown;
+    readonly enabled?: unknown;
+    readonly destinations?: Record<string, { readonly status?: unknown }>;
+  };
+  if (githubOnlyPlan.status !== "enabled" || githubOnlyPlan.enabled !== true) {
+    throw new Error("Croki GitHub-only release plan must be enabled for the owned repository.");
+  }
+  for (const category of ["cli", "relay", "web", "signing", "discord", "mobile"]) {
+    if (githubOnlyPlan.destinations?.[category]?.status !== "disabled") {
+      throw new Error(`Croki GitHub-only plan unexpectedly enabled category: ${category}.`);
+    }
+  }
+
   const secretMarker = "CROKI_RELEASE_SMOKE_SECRET_MUST_NOT_RENDER";
   const productionResult = NodeChildProcess.spawnSync(
     process.execPath,
@@ -303,9 +336,9 @@ function assertCrokiReleasePlan(): void {
       encoding: "utf8",
       env: {
         CROKI_RELEASE_ENABLED: "true",
-        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
+        CROKI_RELEASE_REPOSITORY: "pingdotgg/t3code",
         CROKI_RELEASE_BRANCH: "main",
-        CROKI_CLI_PACKAGE: "croki",
+        CROKI_CLI_PACKAGE: "t3",
         CROKI_RELAY_DOMAIN: "relay.t3.codes",
         CROKI_WEB_ROUTER_URL: "https://app.t3.codes",
         CROKI_WEB_LATEST_DOMAIN: "latest.app.t3.codes",

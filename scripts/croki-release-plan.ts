@@ -62,9 +62,14 @@ export interface CrokiReleasePlan {
 
 type ReleaseEnvironment = Readonly<Record<string, string | undefined>>;
 
+// These are the predecessor's publication identities. Keep them explicit: the
+// current Croki repository and package are intentionally named `croki` and
+// must remain valid release destinations.
+const INHERITED_T3_REPOSITORY = LEGACY_PRODUCT_IDENTIFIERS.predecessorRepository;
+const INHERITED_T3_CLI_PACKAGE = LEGACY_PRODUCT_IDENTIFIERS.predecessorPackageName;
+const INHERITED_T3_CLI_PACKAGE_SCOPE = LEGACY_PRODUCT_IDENTIFIERS.predecessorPackageScope;
 const INHERITED_T3_EAS_PROJECT_ID = "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
-const INHERITED_T3_REPOSITORY = `rhinehart514/${LEGACY_PRODUCT_IDENTIFIERS.stagedPackageName}`;
-const INHERITED_T3_CLI_PACKAGE = `t${3}`;
+const INHERITED_T3_DOMAIN_SUFFIX = "t3.codes";
 
 const value = (environment: ReleaseEnvironment, name: string): string | null => {
   const resolved = environment[name]?.trim();
@@ -105,7 +110,7 @@ function missingValues(
 }
 
 function inheritedDomainError(name: string, destination: string | null): string[] {
-  return destination?.toLowerCase().includes(LEGACY_PRODUCT_IDENTIFIERS.hostedServiceDomainSuffix)
+  return destination?.toLowerCase().includes(INHERITED_T3_DOMAIN_SUFFIX)
     ? [`${name} must not target the inherited T3 domain.`]
     : [];
 }
@@ -114,8 +119,15 @@ export function buildCrokiReleasePlan(
   environment: ReleaseEnvironment,
   options: { readonly production?: boolean } = {},
 ): CrokiReleasePlan {
+  // Destinations are opt-in independently. A GitHub release can publish
+  // desktop assets while CLI, relay, web, signing, Discord, and mobile stay
+  // disabled until their own Croki-owned configuration exists.
   const releaseRequested = enabled(environment, "CROKI_RELEASE_ENABLED");
-  const relayRequested = releaseRequested || enabled(environment, "CROKI_RELAY_DEPLOY_ENABLED");
+  const cliRequested = enabled(environment, "CROKI_CLI_PUBLISH_ENABLED");
+  const relayRequested = enabled(environment, "CROKI_RELAY_DEPLOY_ENABLED");
+  const webRequested = enabled(environment, "CROKI_WEB_DEPLOY_ENABLED");
+  const signingRequested = enabled(environment, "CROKI_SIGNING_ENABLED");
+  const discordRequested = enabled(environment, "CROKI_DISCORD_RELEASE_ENABLED");
   const mobileProductionRequested = enabled(environment, "CROKI_MOBILE_DEPLOY_ENABLED");
   const mobilePreviewRequested = enabled(environment, "CROKI_MOBILE_PREVIEW_ENABLED");
   const mobileRequested = mobileProductionRequested || mobilePreviewRequested;
@@ -139,12 +151,6 @@ export function buildCrokiReleasePlan(
       missing: missingValues(releaseRequested || relayRequested || mobileRequested, [
         ["CROKI_RELEASE_REPOSITORY", repository !== null],
         ["CROKI_RELEASE_BRANCH", branch !== null],
-        ...(releaseRequested
-          ? ([
-              ["CROKI_RELEASE_APP_ID", releaseAppIdConfigured],
-              ["CROKI_RELEASE_APP_PRIVATE_KEY", releaseAppPrivateKeyConfigured],
-            ] as const)
-          : []),
       ]),
       errors: githubErrors,
     }),
@@ -157,13 +163,13 @@ export function buildCrokiReleasePlan(
   const packageName = value(environment, "CROKI_CLI_PACKAGE");
   const cliErrors =
     packageName === INHERITED_T3_CLI_PACKAGE ||
-    packageName?.startsWith(LEGACY_PRODUCT_IDENTIFIERS.packageScope) === true
+    packageName?.startsWith(INHERITED_T3_CLI_PACKAGE_SCOPE) === true
       ? ["CROKI_CLI_PACKAGE must not target an inherited T3 package."]
       : [];
   const cli = {
     ...destinationBase({
-      requested: releaseRequested,
-      missing: missingValues(releaseRequested, [["CROKI_CLI_PACKAGE", packageName !== null]]),
+      requested: cliRequested,
+      missing: missingValues(cliRequested, [["CROKI_CLI_PACKAGE", packageName !== null]]),
       errors: cliErrors,
     }),
     packageName,
@@ -187,8 +193,8 @@ export function buildCrokiReleasePlan(
   const nightlyDomain = value(environment, "CROKI_WEB_NIGHTLY_DOMAIN");
   const web = {
     ...destinationBase({
-      requested: releaseRequested,
-      missing: missingValues(releaseRequested, [
+      requested: webRequested,
+      missing: missingValues(webRequested, [
         ["CROKI_VERCEL_ORG_ID", vercelOrgId !== null],
         ["CROKI_VERCEL_PROJECT_ID", vercelProjectId !== null],
         ["CROKI_WEB_ROUTER_URL", routerUrl !== null],
@@ -232,8 +238,8 @@ export function buildCrokiReleasePlan(
   const windowsCredentialsConfigured = allConfigured(environment, windowsCredentialNames);
   const signing = {
     ...destinationBase({
-      requested: releaseRequested,
-      missing: missingValues(releaseRequested, [
+      requested: signingRequested,
+      missing: missingValues(signingRequested, [
         ["Croki macOS signing credentials", macosCredentialsConfigured],
         ["Croki Windows signing credentials", windowsCredentialsConfigured],
       ]),
@@ -250,8 +256,8 @@ export function buildCrokiReleasePlan(
     value(environment, "CROKI_DISCORD_RELEASE_NIGHTLY_ROLE_ID") !== null;
   const discord = {
     ...destinationBase({
-      requested: releaseRequested,
-      missing: missingValues(releaseRequested, [
+      requested: discordRequested,
+      missing: missingValues(discordRequested, [
         ["CROKI_DISCORD_RELEASE_WEBHOOK_URL", webhookConfigured],
         ["CROKI_DISCORD_RELEASE_LATEST_ROLE_ID", latestRoleConfigured],
         ["CROKI_DISCORD_RELEASE_NIGHTLY_ROLE_ID", nightlyRoleConfigured],
@@ -284,7 +290,14 @@ export function buildCrokiReleasePlan(
   };
 
   const destinations = { github, cli, relay, web, signing, discord, mobile };
-  const requested = releaseRequested || relayRequested || mobileRequested;
+  const requested =
+    releaseRequested ||
+    cliRequested ||
+    relayRequested ||
+    webRequested ||
+    signingRequested ||
+    discordRequested ||
+    mobileRequested;
   const destinationErrors = Object.values(destinations).flatMap((destination) => [
     ...destination.missing.map((name) => `Missing required Croki release configuration: ${name}.`),
     ...destination.errors,

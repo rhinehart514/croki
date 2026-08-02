@@ -5,13 +5,14 @@ belong in issues or the relevant subsystem documentation.
 
 The current Croki-specific product gaps are:
 
-- exercise GTM v1 in daily work before supporting harness stacks or persistence;
-- decide whether selected provisional context should ever be attachable for one
-  turn without promoting it to canon;
+- expand native source adapters beyond the initial Thread, preview, checkpoint,
+  approval, and runtime senses when a real workflow needs them;
+- preserve compatibility reads for legacy Release, Context, and Artifact modes
+  only while 0.4.2 histories still depend on them;
 - revisit the [deferred composer toolbar cleanup](./deferred-composer-toolbar-cleanup.md)
-  after the current turn-setup and Canvas behavior has been exercised in daily
-  work;
-- keep production releases disabled until every destination is Croki-owned.
+  after the native Canvas projection has been exercised in daily work;
+- keep each non-GitHub publication destination disabled until that destination
+  is independently Croki-owned.
 
 See [Current project state](./current-state.md) for the audited status and
 [Croki product contract](../croki.md) for durable boundaries.

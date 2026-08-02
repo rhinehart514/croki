@@ -235,7 +235,10 @@ import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import {
   appendCanvasSelectionToPrompt,
+  appendCrokiPerceptionFocusToPrompt,
+  deriveCanvasPerceptionFrame,
   deriveCanvasPresentationActivities,
+  type CanvasPerceptionFrame,
   type CanvasPresentationTimelineActivity,
   type HarnessCanvasArtifactNode,
 } from "./chat/canvasThreadIntegration";
@@ -2528,6 +2531,32 @@ function ChatViewContent(props: ChatViewProps) {
   const canvasPresentationActivities = useMemo(
     () => deriveCanvasPresentationActivities(threadActivities),
     [threadActivities],
+  );
+  const canvasPerceptionFrame = useMemo<CanvasPerceptionFrame>(
+    () =>
+      deriveCanvasPerceptionFrame({
+        threadId: activeThread?.id ? String(activeThread.id) : "unknown-thread",
+        activities: threadActivities,
+        checkpoints: activeThread?.checkpoints ?? [],
+        activeTurnId: activeThread?.latestTurn?.turnId
+          ? String(activeThread.latestTurn.turnId)
+          : null,
+      }),
+    [
+      activeThread?.checkpoints,
+      activeThread?.id,
+      activeThread?.latestTurn?.turnId,
+      threadActivities,
+    ],
+  );
+  const hasNativeCanvasPerception = canvasPerceptionFrame.objects.some(
+    (object) =>
+      object.source.kind !== "thread" &&
+      object.source.kind !== "canvas" &&
+      object.source.kind !== "context",
+  );
+  const hasCanvasPerceptionSelection = canvasSelectionNodeIds.some((id) =>
+    canvasPerceptionFrame.objects.some((object) => object.id === id),
   );
   const canvasPresentationsByActivityId = useMemo(
     () =>
@@ -5023,6 +5052,14 @@ function ChatViewContent(props: ChatViewProps) {
     const messageTextForSend = appendCanvasSelectionToPrompt(
       messageTextWithReviewComments,
       canvasSelectionSnapshot,
+      {
+        includeLegacySerialization: !hasNativeCanvasPerception || !hasCanvasPerceptionSelection,
+      },
+    );
+    const messageTextWithPerceptionFocus = appendCrokiPerceptionFocusToPrompt(
+      messageTextForSend,
+      canvasSelectionNodeIds,
+      canvasPerceptionFrame,
     );
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
@@ -5031,7 +5068,7 @@ function ChatViewContent(props: ChatViewProps) {
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+      text: messageTextWithPerceptionFocus || IMAGE_ONLY_BOOTSTRAP_PROMPT,
     });
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
@@ -5494,6 +5531,9 @@ function ChatViewContent(props: ChatViewProps) {
 
       const threadIdForSend = activeThread.id;
       const canvasSelectionSnapshot = [...selectedCanvasNodes];
+      const planFollowUpText = appendCanvasSelectionToPrompt(trimmed, canvasSelectionSnapshot, {
+        includeLegacySerialization: !hasNativeCanvasPerception || !hasCanvasPerceptionSelection,
+      });
       const messageIdForSend = newMessageId();
       const messageCreatedAt = new Date().toISOString();
       const outgoingMessageText = formatOutgoingPrompt({
@@ -5501,7 +5541,11 @@ function ChatViewContent(props: ChatViewProps) {
         model: ctxSelectedModel,
         models: ctxSelectedProviderModels,
         effort: ctxSelectedPromptEffort,
-        text: appendCanvasSelectionToPrompt(trimmed, canvasSelectionSnapshot),
+        text: appendCrokiPerceptionFocusToPrompt(
+          planFollowUpText,
+          canvasSelectionNodeIds,
+          canvasPerceptionFrame,
+        ),
       });
 
       sendInFlightRef.current = true;
@@ -5620,7 +5664,12 @@ function ChatViewContent(props: ChatViewProps) {
       activeThread,
       activeProposedPlan,
       appendCanvasSelectionToPrompt,
+      appendCrokiPerceptionFocusToPrompt,
       beginLocalDispatch,
+      canvasPerceptionFrame,
+      canvasSelectionNodeIds,
+      hasCanvasPerceptionSelection,
+      hasNativeCanvasPerception,
       isConnecting,
       isSendBusy,
       isServerThread,
@@ -6041,6 +6090,7 @@ function ChatViewContent(props: ChatViewProps) {
       <CrokiCanvas
         activePlan={activePlan}
         activeThread={{ id: activeThread.id, title: activeThread.title }}
+        perceptionFrame={canvasPerceptionFrame}
         environmentId={activeProject.environmentId}
         workspaceRoot={crokiWorkspaceRoot}
         productName={activeProject.title}

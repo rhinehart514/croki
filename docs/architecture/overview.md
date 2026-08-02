@@ -37,7 +37,7 @@ events into one orchestration model without creating a second agent runtime.
 
 - **Provider runtime**: The selected provider does the actual agent/session work. `ProviderService` resolves a configured provider instance and its adapter, then translates provider-native events into Croki's orchestration model. See [Provider architecture](./providers.md).
 
-- **Croki overlay**: Canvas reads the repository-owned next release and durable context from `.croki/context.json`, then projects them beside the native Thread. It does not own a provider, conversation, worktree, Review, or execution runtime.
+- **Croki overlay**: Croki Senses derive disposable Perception Frames from native Thread, runtime, preview, checkpoint, approval, and source activity. Canvas projects those frames beside the Thread without reading or writing a Canvas document. It does not own a provider, conversation, worktree, Review, or execution runtime.
 
 - **Background workers**: Long-running async flows such as runtime ingestion, command reaction, and checkpoint processing run as queue-backed workers. This keeps work ordered, reduces timing races, and gives tests a deterministic way to wait for the system to go idle.
 
@@ -120,8 +120,9 @@ policies, or behavioral workflows. Those belong to explicit named harnesses
 that are off by default.
 
 Croki 0.4.2 keeps the native-provider rule for all runtimes. Product and GTM
-are explicit one-turn harnesses, while Canvas context and Workstream activity
-are visible projections that do not change provider behavior. OpenClaw connects
+are explicit one-turn harnesses, while Canvas is the automatic projection of
+native source activity through Croki Senses and does not change provider
+behavior. OpenClaw connects
 to the user's selected Gateway agent through ACP and does not impose a Croki
 coordination profile. See [Current project state](../project/current-state.md).
 

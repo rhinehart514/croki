@@ -6,10 +6,13 @@ import type { ActivePlanState } from "~/session-logic";
 
 import type { CrokiCanvasView } from "./crokiCanvasLanguage";
 import type { CrokiCanvasArtifactLike, CrokiCanvasArtifactNodeLike } from "./CrokiCanvasArtifact";
+import type { CrokiPerceptionFrame } from "@croki/shared/crokiPerception";
 
 export interface CrokiCanvasProps {
   readonly environmentId: EnvironmentId;
-  /** Thread-scoped Harness Canvas mode. Undefined keeps the legacy project-context editor. */
+  /** Primary live sense packet. Legacy project data is only a fallback projection. */
+  readonly perceptionFrame?: CrokiPerceptionFrame | null;
+  /** Legacy projections are accepted during migration and rendered into the same scene. */
   readonly artifact?: CrokiCanvasArtifactLike | null;
   readonly viewedRevision?: number;
   readonly latestArtifact?: CrokiCanvasArtifactLike | null;
@@ -20,6 +23,9 @@ export interface CrokiCanvasProps {
   readonly onUseSelectionInThread?: (ids: readonly string[]) => void;
   readonly onViewArtifactRevision?: (artifact: CrokiCanvasArtifactLike) => void;
   readonly onViewRevision?: (artifact: CrokiCanvasArtifactLike) => void;
+  /** Optional founder authority seams. The projection stays read-only when omitted. */
+  readonly onApproveCanvasObjects?: (ids: readonly string[]) => void;
+  readonly onChooseCanvasBranch?: (artifact: CrokiCanvasArtifactLike) => void;
   readonly onOpenArtifactThread?: (threadId: string) => void;
   readonly onBackToRelease?: () => void;
   readonly onOpenContext?: () => void;

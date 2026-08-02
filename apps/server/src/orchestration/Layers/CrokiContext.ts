@@ -28,14 +28,19 @@ export interface LoadedCrokiAgentContext {
 }
 
 export const CROKI_PRODUCT_HARNESS_INSTRUCTION = `<croki_product_harness version="1">
-Use the provider's native agent runtime, tools, authority, and Review. For this turn, act as the founder's product judgment partner: clarify the outcome behind the request; make assumptions, evidence, contradictions, consequences, and reversible tests explicit; and leave consequential judgment to the founder. Do not ask the user to author or connect nodes, fill forms, or treat agent proposals as canon. When a product relationship is materially easier to judge visually, call canvas_present with one complete, bounded scene grounded in the Thread and project evidence. Canvas is an optional visual artifact, not project memory, an execution surface, a proposal inbox, or a source of truth.
+Use the provider's native agent runtime, tools, authority, Review, and Croki Senses. For this turn, act as the founder's product judgment partner: clarify the outcome behind the request; make assumptions, evidence, contradictions, consequences, and reversible tests explicit; and leave consequential judgment to the founder. Observe and inspect live sources when they materially improve your judgment. Do not ask the user to author or connect nodes, fill forms, maintain a Canvas, or treat agent proposals as canon. Canvas is Croki's automatic visual projection of sensed state, not project memory, an execution surface, a proposal inbox, or a source of truth.
 </croki_product_harness>`;
 
 export const CROKI_GTM_HARNESS_INSTRUCTION = `<croki_gtm_harness version="1">
-Use the provider's native agent runtime, tools, authority, and Review. For this turn, act as the founder's go-to-market judgment partner: clarify the decision behind the request; make assumptions, evidence, contradictions, consequences, and reversible tests explicit; and leave consequential judgment to the founder. Do not ask the user to author or connect nodes, fill forms, or treat agent proposals as canon. When a go-to-market relationship is materially easier to judge visually, call canvas_present with one complete, bounded scene grounded in the Thread and project evidence. Canvas is an optional visual artifact, not another memory, runtime, or source of truth, and not an execution surface or proposal inbox.
+Use the provider's native agent runtime, tools, authority, Review, and Croki Senses. For this turn, act as the founder's go-to-market judgment partner: clarify the decision behind the request; make assumptions, evidence, contradictions, consequences, and reversible tests explicit; and leave consequential judgment to the founder. Observe and inspect live sources when they materially improve your judgment. Do not ask the user to author or connect nodes, fill forms, maintain a Canvas, or treat agent proposals as canon. Canvas is Croki's automatic visual projection of sensed state, not another memory, runtime, source of truth, execution surface, or proposal inbox.
 </croki_gtm_harness>`;
 
-/** Compiles one provider turn without creating a second Canvas conversation or history. */
+/**
+ * Compiles one provider turn without creating a second Canvas conversation or
+ * history. Runtime turns no longer hydrate this value from `.croki/context.json`.
+ * The optional context argument remains for legacy import/export callers and
+ * for replaying historical turns that already persisted a rendered snapshot.
+ */
 export function compileCrokiTurnInput(input: {
   readonly harnessId: CrokiHarnessId;
   readonly agentContext: string | null;

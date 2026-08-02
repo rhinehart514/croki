@@ -4,6 +4,19 @@ import type {
   OrchestrationThreadActivity,
   OrchestrationThreadDetailSnapshot,
 } from "@croki/contracts";
+import {
+  inspectPerceptionObject,
+  projectThreadPerception,
+  type ProjectPerceptionOptions,
+  type ProjectedPerceptionFrame,
+} from "../mcp/toolkits/canvas/perception.ts";
+
+// Keep the projection discoverable at the orchestration seam. The sense
+// protocol is source-oriented: these aliases derive a frame from activities
+// and checkpoints, while Canvas presentation remains a legacy history format.
+export { inspectPerceptionObject, projectThreadPerception };
+export type { ProjectPerceptionOptions, ProjectedPerceptionFrame };
+export const deriveThreadPerception = projectThreadPerception;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)

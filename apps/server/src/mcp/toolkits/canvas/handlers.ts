@@ -1,5 +1,6 @@
 import { CommandId, EventId, type OrchestrationThread } from "@croki/contracts";
 import * as Crypto from "effect/Crypto";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -9,8 +10,22 @@ import { ProjectionSnapshotQuery } from "../../../orchestration/Services/Project
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { buildCrokiCanvasArtifact } from "./presentation.ts";
 import {
+  inspectPerceptionObject,
+  projectThreadPerception,
+  type ProjectedThreadPerception,
+} from "./perception.ts";
+import {
+  CrokiSenseError,
+  type CrokiSenseInspectInput,
+  type CrokiSenseObserveInput,
+  type CrokiSenseStatusInput,
+  type CrokiSenseWaitInput,
+  type CrokiSenseInspection,
+  type CrokiSenseObservation,
+  type CrokiSenseStatus,
+  type CrokiSenseWaitResult,
   CrokiCanvasPresentError,
-  CrokiCanvasToolkit,
+  CrokiSenseToolkit,
   type CrokiCanvasHarnessId,
   type CrokiCanvasPresentInput,
   type CrokiCanvasPresentResult,
@@ -26,7 +41,7 @@ const fail = (
  * Presents a visual as an immutable Thread activity. Project context is not
  * read or written here: Canvas is a harness artifact, never a memory store.
  */
-export const presentCrokiCanvas = Effect.fn("CrokiCanvasToolkit.present")(function* (
+export const presentCrokiCanvas = Effect.fn("CrokiLegacyCanvasPresentation.present")(function* (
   input: CrokiCanvasPresentInput,
 ) {
   const invocation = yield* McpInvocationContext.McpInvocationContext;
@@ -140,6 +155,154 @@ export const presentCrokiCanvas = Effect.fn("CrokiCanvasToolkit.present")(functi
   } satisfies CrokiCanvasPresentResult;
 });
 
+/** Read a Thread without granting a model any Canvas mutation surface. */
+export const senseStatus = Effect.fn("CrokiSenseToolkit.status")(function* (
+  input: CrokiSenseStatusInput,
+) {
+  const thread = yield* resolveSenseThread(input.threadId);
+  const observation = projectThreadPerception(thread);
+  const sourceKinds = new Set(observation.objects.map((object) => object.source.kind));
+  const result: CrokiSenseStatus = {
+    threadId: String(thread.id),
+    available: true,
+    revision: observation.revision,
+    sourceRevision: observation.sourceRevision,
+    objectCount: observation.objects.length,
+    relationshipCount: observation.relationships.length,
+    latestActivityAt: observation.latestActivityAt,
+    activeTurnId: observation.activeTurnId,
+    sources: Array.from(sourceKinds).sort(),
+    affordances: [
+      {
+        id: "observe",
+        kind: "observe",
+        label: "Observe live sources",
+        authority: "read",
+        reversible: true,
+        requiresApproval: false,
+      },
+      {
+        id: "inspect",
+        kind: "inspect",
+        label: "Inspect a sensed object",
+        authority: "read",
+        reversible: true,
+        requiresApproval: false,
+      },
+      {
+        id: "wait",
+        kind: "wait",
+        label: "Wait for source change",
+        authority: "read",
+        reversible: true,
+        requiresApproval: false,
+      },
+    ],
+  };
+  return result;
+});
+
+export const senseObserve = Effect.fn("CrokiSenseToolkit.observe")(function* (
+  input: CrokiSenseObserveInput,
+) {
+  const thread = yield* resolveSenseThread(input.threadId);
+  return projectThreadPerception(thread, {
+    ...(input.sinceRevision === undefined ? {} : { sinceRevision: input.sinceRevision }),
+    ...(input.limit === undefined ? {} : { limit: input.limit }),
+    ...(input.sources === undefined ? {} : { sources: input.sources }),
+  }) satisfies CrokiSenseObservation;
+});
+
+export const senseInspect = Effect.fn("CrokiSenseToolkit.inspect")(function* (
+  input: CrokiSenseInspectInput,
+) {
+  const thread = yield* resolveSenseThread(input.threadId);
+  const observation = projectThreadPerception(thread);
+  if (input.revision !== undefined && input.revision !== observation.revision) {
+    return yield* senseFail(
+      "invalid-revision",
+      `The sensed Thread advanced from revision ${input.revision} to ${observation.revision}; observe again before inspecting.`,
+    );
+  }
+  const inspected = inspectPerceptionObject(observation, input.objectId, input.depth ?? 0);
+  if (!inspected.object) {
+    return yield* senseFail(
+      "object-not-found",
+      `No sensed object exists with id '${input.objectId}'.`,
+    );
+  }
+  return {
+    observation,
+    object: inspected.object,
+    relationships: inspected.relationships,
+    relatedObjects: inspected.relatedObjects,
+  } satisfies CrokiSenseInspection;
+});
+
+export const senseWait = Effect.fn("CrokiSenseToolkit.wait")(function* (
+  input: CrokiSenseWaitInput,
+) {
+  const startedAt = yield* Clock.currentTimeMillis;
+  const timeoutMs = input.timeoutMs ?? 0;
+  const pollIntervalMs = input.pollIntervalMs ?? 100;
+  let observation: ProjectedThreadPerception;
+  while (true) {
+    const thread = yield* resolveSenseThread(input.threadId);
+    observation = projectThreadPerception(thread);
+    if (observation.revision > input.sinceRevision) break;
+    const waitedMs = Number(yield* Clock.currentTimeMillis) - Number(startedAt);
+    if (waitedMs >= timeoutMs) {
+      return {
+        observation,
+        changed: false,
+        timedOut: true,
+        waitedMs,
+      } satisfies CrokiSenseWaitResult;
+    }
+    yield* Effect.sleep(Math.min(pollIntervalMs, timeoutMs - waitedMs));
+  }
+  const waitedMs = Number(yield* Clock.currentTimeMillis) - Number(startedAt);
+  return {
+    observation,
+    changed: true,
+    timedOut: false,
+    waitedMs,
+  } satisfies CrokiSenseWaitResult;
+});
+
+function resolveSenseThread(requestedThreadId?: string) {
+  return Effect.gen(function* () {
+    const invocation = yield* McpInvocationContext.McpInvocationContext;
+    if (requestedThreadId !== undefined && requestedThreadId !== String(invocation.threadId)) {
+      return yield* senseFail(
+        "thread-not-found",
+        "Sense calls may only observe the Thread bound to this provider session.",
+      );
+    }
+    const query = yield* ProjectionSnapshotQuery;
+    const thread = yield* query.getThreadDetailById(invocation.threadId).pipe(
+      Effect.mapError(
+        () =>
+          new CrokiSenseError({
+            code: "thread-not-found",
+            message: "Could not resolve the Thread.",
+          }),
+      ),
+    );
+    if (Option.isNone(thread)) {
+      return yield* senseFail("thread-not-found", "Could not resolve the Thread.");
+    }
+    return thread.value;
+  });
+}
+
+function senseFail(
+  code: CrokiSenseError["code"],
+  message: string,
+): Effect.Effect<never, CrokiSenseError> {
+  return Effect.fail(new CrokiSenseError({ code, message }));
+}
+
 function getInvocationHarnessId(
   invocation: McpInvocationContext.McpInvocationScope,
 ): CrokiCanvasHarnessId | "native" | undefined {
@@ -183,6 +346,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export const CrokiCanvasToolkitHandlersLive = CrokiCanvasToolkit.toLayer({
-  canvas_present: presentCrokiCanvas,
+export const CrokiSenseToolkitHandlersLive = CrokiSenseToolkit.toLayer({
+  sense_status: senseStatus,
+  sense_observe: senseObserve,
+  sense_inspect: senseInspect,
+  sense_wait: senseWait,
 });

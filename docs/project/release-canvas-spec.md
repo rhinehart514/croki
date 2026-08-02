@@ -1,10 +1,15 @@
 # Release Canvas product specification
 
-Status: selected for Croki 0.4.2
+Status: superseded compatibility specification
+
+> Superseded by the 0.4.2 Croki Senses / Perception Frame contract in
+> [Croki on Croki](../croki.md). Release and Context data may be read as
+> historical sources, but Canvas is no longer a release board, context editor,
+> or persisted project-management surface.
 
 ## Product decision
 
-Canvas opens on the next Croki release candidate. It answers four questions
+Historically, Canvas opened on the next Croki release candidate and answered four questions
 beside any Thread:
 
 1. What are we considering?

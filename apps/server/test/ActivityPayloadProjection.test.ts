@@ -16,6 +16,7 @@ import { deriveWorkLogEntries } from "../../web/src/session-logic.ts";
 import {
   projectActivityEvent,
   projectActivityPayload,
+  projectThreadPerception,
   projectThreadDetailSnapshot,
 } from "../src/orchestration/ActivityPayloadProjection.ts";
 
@@ -230,6 +231,71 @@ describe("projectActivityPayload", () => {
         : undefined,
     ).toEqual(projectActivityPayload(activity));
     expect(event.payload.activity).toBe(activity);
+  });
+});
+
+describe("automatic Thread perception projection", () => {
+  it("derives stable source objects from activities without a Canvas presentation", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      {
+        id: EventId.make("sense-tool"),
+        tone: "tool",
+        kind: "preview.updated",
+        summary: "Preview browser check",
+        payload: {
+          itemType: "browser_preview",
+          title: "Preview browser check",
+          detail: "Captured the onboarding screen",
+          frame: { url: "http://localhost:4173/onboarding" },
+        },
+        turnId: TurnId.make("turn-sense"),
+        sequence: 3,
+        createdAt: "2026-07-27T00:00:03.000Z",
+      },
+      {
+        id: EventId.make("sense-approval"),
+        tone: "approval",
+        kind: "approval.requested",
+        summary: "File-change approval requested",
+        payload: { requestId: "approval-1", requestKind: "file-change" },
+        turnId: TurnId.make("turn-sense"),
+        sequence: 4,
+        createdAt: "2026-07-27T00:00:04.000Z",
+      },
+      {
+        id: EventId.make("sense-error"),
+        tone: "error",
+        kind: "runtime.error",
+        summary: "Preview failed",
+        payload: { message: "Preview exited." },
+        turnId: TurnId.make("turn-sense"),
+        sequence: 5,
+        createdAt: "2026-07-27T00:00:05.000Z",
+      },
+      {
+        id: EventId.make("sense-receipt"),
+        tone: "info",
+        kind: "croki.sense.observed",
+        summary: "Sensed one source object",
+        payload: {
+          version: 1,
+          operation: "observe",
+          observedRevision: 5,
+          objectIds: ["activity:sense-tool"],
+        },
+        turnId: TurnId.make("turn-sense"),
+        sequence: 6,
+        createdAt: "2026-07-27T00:00:06.000Z",
+      },
+    ];
+    const frame = projectThreadPerception(makeThread(activities));
+
+    expect(frame.revision).toBe(6);
+    expect(frame.objects.some((object) => object.type === "preview")).toBe(true);
+    expect(frame.objects.some((object) => object.type === "authority")).toBe(true);
+    expect(frame.objects.some((object) => object.type === "runtime")).toBe(true);
+    expect(frame.objects.some((object) => object.type === "sense")).toBe(true);
+    expect(frame.objects.every((object) => object.id.length > 0)).toBe(true);
   });
 });
 

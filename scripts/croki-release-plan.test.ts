@@ -20,14 +20,18 @@ const safeProductionEnvironment = {
   CROKI_RELEASE_BRANCH: "croki/main",
   CROKI_RELEASE_APP_ID: "app-id-secret",
   CROKI_RELEASE_APP_PRIVATE_KEY: "private-key-secret",
+  CROKI_CLI_PUBLISH_ENABLED: "true",
   CROKI_CLI_PACKAGE: "@example/croki",
+  CROKI_RELAY_DEPLOY_ENABLED: "true",
   CROKI_RELAY_DOMAIN: "relay.croki.example",
+  CROKI_WEB_DEPLOY_ENABLED: "true",
   CROKI_VERCEL_ORG_ID: "croki-org",
   CROKI_VERCEL_PROJECT_ID: "croki-project",
   CROKI_VERCEL_TEAM_SLUG: "croki-team",
   CROKI_WEB_ROUTER_URL: "https://app.croki.example",
   CROKI_WEB_LATEST_DOMAIN: "latest.croki.example",
   CROKI_WEB_NIGHTLY_DOMAIN: "nightly.croki.example",
+  CROKI_SIGNING_ENABLED: "true",
   CROKI_MACOS_CERTIFICATE: "mac-certificate-secret",
   CROKI_MACOS_CERTIFICATE_PASSWORD: "mac-password-secret",
   CROKI_APPLE_API_KEY: "apple-api-secret",
@@ -42,6 +46,7 @@ const safeProductionEnvironment = {
   CROKI_AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: "croki-signing",
   CROKI_AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: "croki-profile",
   CROKI_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: "Croki",
+  CROKI_DISCORD_RELEASE_ENABLED: "true",
   CROKI_DISCORD_RELEASE_WEBHOOK_URL: "discord-webhook-secret",
   CROKI_DISCORD_RELEASE_LATEST_ROLE_ID: "discord-latest-secret",
   CROKI_DISCORD_RELEASE_NIGHTLY_ROLE_ID: "discord-nightly-secret",
@@ -102,9 +107,9 @@ describe("Croki release plan", () => {
     const plan = buildCrokiReleasePlan(
       {
         ...safeProductionEnvironment,
-        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
+        CROKI_RELEASE_REPOSITORY: "pingdotgg/t3code",
         CROKI_RELEASE_BRANCH: "main",
-        CROKI_CLI_PACKAGE: "croki",
+        CROKI_CLI_PACKAGE: "t3",
         CROKI_RELAY_DOMAIN: "relay.t3.codes",
         CROKI_WEB_ROUTER_URL: "https://app.t3.codes",
         CROKI_WEB_LATEST_DOMAIN: "latest.app.t3.codes",
@@ -117,8 +122,8 @@ describe("Croki release plan", () => {
     expect(plan.enabled).toBe(false);
     expect(plan.destinations.github.status).toBe("invalid");
     expect(plan.destinations.github.enabled).toBe(false);
-    expect(plan.destinations.cli.status).toBe("enabled");
-    expect(plan.destinations.cli.enabled).toBe(true);
+    expect(plan.destinations.cli.status).toBe("invalid");
+    expect(plan.destinations.cli.enabled).toBe(false);
     expect(plan.destinations.relay.status).toBe("invalid");
     expect(plan.destinations.relay.enabled).toBe(false);
     expect(plan.destinations.web.status).toBe("invalid");
@@ -126,6 +131,34 @@ describe("Croki release plan", () => {
     expect(plan.destinations.mobile.status).toBe("invalid");
     expect(plan.destinations.mobile.enabled).toBe(false);
     expect(plan.errors.join("\n")).toContain("pushes to main");
+  });
+
+  it("allows a GitHub-only release on the Croki repository", () => {
+    const plan = buildCrokiReleasePlan(
+      {
+        CROKI_RELEASE_ENABLED: "true",
+        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
+        CROKI_RELEASE_BRANCH: "croki/main",
+        CROKI_RELEASE_APP_ID: "app-id-secret",
+        CROKI_RELEASE_APP_PRIVATE_KEY: "private-key-secret",
+        CROKI_CLI_PACKAGE: "croki",
+      },
+      { production: true },
+    );
+    expect(plan).toMatchObject({
+      status: "enabled",
+      enabled: true,
+      valid: true,
+      destinations: {
+        github: { status: "enabled", enabled: true },
+        cli: { status: "disabled", enabled: false },
+        relay: { status: "disabled", enabled: false },
+        web: { status: "disabled", enabled: false },
+        signing: { status: "disabled", enabled: false },
+        discord: { status: "disabled", enabled: false },
+        mobile: { status: "disabled", enabled: false },
+      },
+    });
   });
 
   it("reports credential presence without ever rendering secret values", () => {

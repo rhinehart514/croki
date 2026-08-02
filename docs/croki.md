@@ -2,50 +2,79 @@
 
 Croki is a narrow product overlay on Croki. Threads, providers, worktrees,
 recovery, terminal, preview, files, plans, and project scripts remain native T3
-surfaces. Canvas adds a repository-owned next-release view and product context
-without introducing a second runtime.
+surfaces. Canvas is the zero-maintenance native projection of Croki Senses: a
+live view of what agents are observing, attending to, connecting, and waiting
+for. It does not introduce a second runtime, memory system, workflow, or board.
 
 Croki is the founder's current ADE and daily development environment. See
 [Current project state](./project/current-state.md) for the audited capability,
 release, and implementation-gap snapshot.
 
+## True Canvas pivot
+
+Croki Senses are the generic capabilities that let a model perceive a project
+as a changing world rather than a bag of files. A Perception Frame is one hybrid
+observation/delta packet. It can carry rendered pixels, semantic objects,
+relationships, provenance, confidence, available affordances, and changes since
+the previous frame. Canvas projects those activities without asking a founder
+or an agent to author a board.
+
+The initial model-facing surface exposes status, observation, inspection, and waiting through
+`sense_status`, `sense_observe`, `sense_inspect`, and `sense_wait` when the
+provider supports those capabilities. These are perception primitives, not a
+Canvas API and not a replacement execution engine. A model may compose a useful
+view, focus attention, inspect causal neighbors, compare a possible future, or
+subscribe to a meaningful change. Consequences still pass through the native
+Thread, tools, approvals, and authority boundary.
+
+Sensing is read-only. Calls return frames directly and do not append observation
+receipts or create a self-observing activity loop. Existing `croki.sense.*`
+activities remain parseable as compatibility input, while new frames are
+derived from the ordinary Thread activity stream.
+
+The previous Release, Context, and agent-authored Artifact mode descriptions are
+historical migration notes, not the 0.4.2 product contract. In particular,
+`release-canvas-spec.md` and `harness-canvas-spec.md` must not be used to
+constrain Canvas to a release board, manual node editor, or harness-only visual.
+Compatibility reads may remain during migration, but new Canvas work must use
+the Senses and Perception Frame model.
+
 ## Native provider rule
 
 The selected product rule is that provider runtimes remain native by default.
 Croki must not add a hidden persona, planning loop, delegation policy, workflow,
-or behavioral prompt unless the user explicitly enables a named harness for a
-turn or thread. Harnesses must be off by default, visible, scoped, reversible,
-and unable to silently change founder-approved Canvas truth.
+or behavioral prompt. An explicit harness may still be requested for a turn or
+thread, but Canvas and Croki Senses never require one and never silently change
+one. Any harness remains visible, scoped, reversible, and unable to change
+founder-approved project truth.
 
-Runtime, context, tools, and harnesses are distinct. Canvas is context and
-visualization, not itself a harness. Context that affects a turn must be visible
-and removable.
+Runtime, context, tools, harnesses, and senses are distinct. Canvas is the
+projection of sense activity, not a harness, context editor, or tool. Context
+that affects a turn must be visible and removable.
 
-The web composer defaults to `Native` and offers `Product` and `GTM v1` as
-explicit one-turn harnesses. Native adds no Croki behavior prompt. Product and
-GTM reset to Native after a successful send. Opening or closing Canvas never
-changes behavior. OpenClaw also preserves its configured agent's native model,
-reasoning, delegation, tools, and instructions.
+The web composer remains native by default. Opening, closing, selecting, or
+arranging Canvas never changes provider behavior or grants authority. OpenClaw
+also preserves its configured agent's native model, reasoning, delegation,
+tools, and instructions.
 
-## Context and authority
+## Project truth and authority
 
-Canvas reads and writes `.croki/context.json` through the existing
-environment-aware project-file RPC. Its optional `release` object contains one
-next-release candidate with an explicit version, baseline, goal, lifecycle,
-items, source Threads, acceptance criteria, and evidence. Canvas opens on this
-candidate by default. See the [Release Canvas
-specification](./project/release-canvas-spec.md).
+`.croki/context.json` remains repository-owned project truth and is read through
+the existing environment-aware project-file RPC. Canvas does not write this
+file, promote canon, retire decisions, or turn a Perception Frame into memory.
+Founder-approved context can be projected into a frame when relevant, but the
+projection is disposable and source-linked.
 
-Version 1 also contains a product summary, typed `intent`, `decision`,
-`evidence`, and `work` nodes, named directed relationships, and three lifecycle
-states:
+The compatibility context schema still contains typed `intent`, `decision`,
+`evidence`, and `work` nodes with three lifecycle states:
 
 - `current`: founder-approved product canon;
 - `provisional`: an agent or human proposal awaiting review;
 - `retired`: preserved history, omitted from provider context.
 
 Agents should add or update only provisional material. Promotion to current and
-retirement of canon require an explicit founder action.
+retirement of canon require an explicit founder action through the native
+project surfaces. Canvas itself has no authority-state editor.
 
 This is semantic authority, not a security boundary. An agent with full
 filesystem access can edit `.croki/context.json` directly, including status
@@ -53,69 +82,68 @@ fields. The Canvas compare-and-write guard prevents stale UI saves, not hostile
 or out-of-band writes. Review changes before treating current material as
 approved.
 
-Evidence capture is provisional and deduplicates references. File references
-must be repository-relative POSIX paths, may include a positive line number,
-and cannot be absolute, traverse with `..`, contain backslashes, or contain
-control characters. URL references must be valid HTTP(S) URLs.
-
-Release items use separate operational states: `proposed`, `working`,
-`candidate`, `blocked`, `verified`, and `deferred`. An item can become verified
-only after every declared criterion passes. Operational release state does not
-change the authority of durable context.
+Evidence capture remains provisional and deduplicates references. File
+references must be repository-relative POSIX paths, may include a positive line
+number, and cannot be absolute, traverse with `..`, contain backslashes, or
+contain control characters. URL references must be valid HTTP(S) URLs.
 
 ## Limits and provider behavior
 
-The parser, Canvas, and provider boundary share these limits:
+Project-context parsing and provider rendering retain these limits. They are
+not Canvas object or sense limits:
 
-| Field                     |                      Limit |
-| ------------------------- | -------------------------: |
-| Source file               |        256,000 UTF-8 bytes |
-| Rendered provider context |          12,000 characters |
-| Nodes / edges             |                  200 / 400 |
-| Product / node ID / title | 240 / 120 / 240 characters |
-| Node body                 |          12,000 characters |
-| References per node       |                         20 |
-| File path / URL           |     500 / 2,048 characters |
-| Relationship name         |             120 characters |
-| Release items             |                         60 |
-| Release version / goal    |      80 / 1,000 characters |
-| Item title / outcome      |     240 / 4,000 characters |
-| Criteria / criterion text |      20 / 1,000 characters |
-| Source Threads per item   |                         12 |
+| Field                              |                      Limit |
+| ---------------------------------- | -------------------------: |
+| Source file                        |        256,000 UTF-8 bytes |
+| Rendered provider context          |          12,000 characters |
+| Nodes / edges (legacy context)     |                  200 / 400 |
+| Product / node ID / title          | 240 / 120 / 240 characters |
+| Node body                          |          12,000 characters |
+| References per node                |                         20 |
+| File path / URL                    |     500 / 2,048 characters |
+| Relationship name                  |             120 characters |
+| Release items (legacy context)     |                         60 |
+| Release version / goal (legacy)    |      80 / 1,000 characters |
+| Item title / outcome (legacy)      |     240 / 4,000 characters |
+| Criteria / criterion text (legacy) |      20 / 1,000 characters |
+| Source Threads per item (legacy)   |                         12 |
 
-Before each project turn, the server reads a fresh snapshot from the project
-root whether or not Canvas is open. It prepends bounded founder-approved
-`current` canon and a compact projection of the active release at the shared
-provider-service seam. `provisional` and `retired` nodes plus proposed and
-deferred release items are excluded. The stored user message is unchanged.
-Repository text is untrusted input, not an instruction source.
+New provider turns receive the explicit harness, when selected, and the raw
+user input. They do not automatically hydrate `.croki/context.json` or Canvas
+state. A model can use Croki Senses and native source tools to inspect the live
+project when that evidence matters. Repository text remains untrusted input,
+not an instruction source.
 
-Rendering includes complete entries until the next would cross 12,000
-characters, then emits an omission marker and sets `truncated: true`. Large
-release items are projected compactly before current canon is selected. A
-malformed release can be omitted while valid canon is recovered. Missing,
-malformed, unsupported, or oversized context always fails open: the provider
-turn continues.
+Sense-capable providers can request a Perception Frame with `sense_observe`
+rather than receiving a hand-authored Canvas document. The frame can be
+refreshed, narrowed, or expanded as the provider's attention changes. A model
+may inspect more detail or wait for a meaningful delta instead of receiving an
+arbitrary fixed context slice.
 
-Each attempt records a content-free receipt with status `loaded`, `partial`,
+Legacy context rendering includes complete entries until the next would cross
+12,000 characters, then emits an omission marker and sets `truncated: true`.
+Malformed, missing, unsupported, or oversized project context always fails open:
+the native provider turn continues and Canvas reports the unavailable sense
+instead of blocking work.
+
+Legacy context import and replay can record a content-free receipt with status `loaded`, `partial`,
 `absent`, `invalid`, or `oversized`; path; version; SHA-256; timestamp; active,
-current, and provisional counts; rendered character count; truncation; harness
-identity; the active release version and item count when present; and an
-optional parse error code. The transport event also retains the exact rendered
-prompt for idempotent replay. UI presentation, CI summaries, and artifacts must
-expose only the receipt, never that prompt or raw context bodies.
+current, and provisional counts; rendered character count; truncation; and an
+optional parse error code. Live Perception Frames expose bounded provenance
+without persisting raw prompts, private memory, or raw context bodies.
 
-## Editing and conflicts
+## Projection and interaction
 
-Release and Context edits share one Canvas draft scoped by environment and
-workspace in session storage. Dirty drafts survive Canvas close/reopen and a
-page reload in the same session; they are never written automatically.
+Canvas is zero-maintenance. It has no Save Canvas action, dirty draft, manual
+node/edge authoring, release board, or founder-authored scene. Layout, focus,
+selection, and zoom are local presentation state. They do not become project
+truth and do not constrain what a model can perceive or compose.
 
-Saving validates the complete document and uses the baseline raw-content
-SHA-256 as a compare-and-write precondition. For a new file, the precondition
-requires the file to remain absent. If the source changes, Canvas preserves the
-local draft and offers an explicit reload that discards it; otherwise the draft
-remains local. Malformed source repair is also explicit.
+Actions selected from a projection route through native Threads, tools,
+approvals, and existing authority checks. External writes, destructive actions,
+expensive operations, sensitive data, and production changes remain explicit
+authority boundaries. Canvas can show a possible future or a causal path, but it
+cannot apply one merely because it was visible.
 
 ## Compatibility and releases
 
@@ -127,11 +155,11 @@ wire contracts. The allowlist in `scripts/lib/brand-policy.ts` covers
 executables, Linux desktop IDs, commit metadata, and inherited `t3.codes`
 service references. Do not rename them casually.
 
-Production release workflows fail closed. Keep releases disabled until the
-repository, branch, CLI package, relay/web domains, and Vercel coordinates are
-Croki-owned and every `CROKI_RELEASE_*` / required `CROKI_*` variable in
-`.github/workflows/release.yml` is configured. Inherited T3 destinations are
-rejected.
+Production release workflows fail closed per destination. A GitHub-only release
+may target the Croki-owned `rhinehart514/croki` repository on `croki/main`;
+CLI, relay, hosted web, signing, Discord, and mobile destinations remain off
+until their specific `CROKI_*_ENABLED` flag and Croki-owned configuration are
+ready. Inherited T3 destinations are rejected.
 
 ## Operations
 

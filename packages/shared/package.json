@@ -103,6 +103,10 @@
       "types": "./src/crokiCanvasArtifact.ts",
       "import": "./src/crokiCanvasArtifact.ts"
     },
+    "./crokiPerception": {
+      "types": "./src/crokiPerception.ts",
+      "import": "./src/crokiPerception.ts"
+    },
     "./crokiReleaseCandidate": {
       "types": "./src/crokiReleaseCandidate.ts",
       "import": "./src/crokiReleaseCandidate.ts"

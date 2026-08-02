@@ -14,7 +14,6 @@ import {
   type RuntimeMode,
   type TurnId,
 } from "@croki/contracts";
-import { type CrokiContextAppliedActivityPayload } from "@croki/shared/crokiContext";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@croki/shared/git";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -48,11 +47,7 @@ import {
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
-import {
-  compileCrokiTurnInput,
-  isCrokiContextAppliedActivityPayload,
-  loadCrokiAgentContext,
-} from "./CrokiContext.ts";
+import { compileCrokiTurnInput } from "./CrokiContext.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
@@ -266,57 +261,6 @@ const make = Effect.gen(function* () {
         }),
       ),
     );
-
-  const resolveAppliedCrokiContext = Effect.fnUntraced(function* (input: {
-    readonly thread: OrchestrationThread;
-    readonly contextRoot: string | undefined;
-    readonly sourceEventId: string;
-    readonly messageId: string;
-    readonly query?: string;
-    readonly harnessId: CrokiHarnessId;
-    readonly createdAt: string;
-  }) {
-    const existing = input.thread.activities.find(
-      (activity) =>
-        activity.kind === "croki.context.applied" &&
-        isCrokiContextAppliedActivityPayload(activity.payload) &&
-        activity.payload.sourceEventId === input.sourceEventId,
-    );
-    if (existing && isCrokiContextAppliedActivityPayload(existing.payload)) {
-      return existing.payload;
-    }
-
-    const loaded = yield* loadCrokiAgentContext(input.contextRoot, input.query, input.harnessId);
-    const payload: CrokiContextAppliedActivityPayload = {
-      sourceEventId: input.sourceEventId,
-      messageId: input.messageId,
-      prompt: loaded.prompt,
-      receipt: loaded.receipt,
-    };
-    const [commandId, activityId] = yield* Effect.all([
-      serverCommandId("croki-context-applied"),
-      serverEventId(),
-    ]);
-    yield* orchestrationEngine.dispatch({
-      type: "thread.activity.append",
-      commandId,
-      threadId: input.thread.id,
-      activity: {
-        id: activityId,
-        tone: "info",
-        kind: "croki.context.applied",
-        summary:
-          loaded.receipt.status === "loaded" || loaded.receipt.status === "partial"
-            ? `Applied project context (${loaded.receipt.activeCount} active)`
-            : `Project context ${loaded.receipt.status}`,
-        payload,
-        turnId: null,
-        createdAt: input.createdAt,
-      },
-      createdAt: input.createdAt,
-    });
-    return payload;
-  });
 
   const formatFailureDetail = (cause: Cause.Cause<unknown>): string => {
     const failReason = cause.reasons.find(Cause.isFailReason);
@@ -674,8 +618,6 @@ const make = Effect.gen(function* () {
 
   const buildSendTurnRequestForThread = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
-    readonly sourceEventId: string;
-    readonly messageId: string;
     readonly messageText: string;
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
@@ -704,20 +646,12 @@ const make = Effect.gen(function* () {
       thread,
       projects: project ? [project] : [],
     });
-    const crokiContext = yield* resolveAppliedCrokiContext({
-      thread,
-      // Product context belongs to the project, not an individual mutable
-      // worktree. This keeps all project threads on one canonical snapshot.
-      contextRoot: project?.workspaceRoot ?? workspaceCwd,
-      sourceEventId: input.sourceEventId,
-      messageId: input.messageId,
-      ...(normalizedInput !== undefined ? { query: normalizedInput } : {}),
-      harnessId: input.harnessId,
-      createdAt: input.createdAt,
-    });
     const providerInput = compileCrokiTurnInput({
       harnessId: input.harnessId,
-      agentContext: crokiContext.prompt,
+      // `.croki/context.json` is a legacy import/export format, not runtime
+      // provider context. Generic senses are emitted as typed Thread
+      // activities by the provider/tool runtime when available.
+      agentContext: null,
       userInput: normalizedInput,
     });
     const activeSession = yield* providerService
@@ -960,8 +894,6 @@ const make = Effect.gen(function* () {
 
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
-      sourceEventId: event.eventId,
-      messageId: event.payload.messageId,
       messageText: message.text,
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
       ...(event.payload.modelSelection !== undefined

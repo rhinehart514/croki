@@ -44,6 +44,10 @@ jobs:
       CROKI_RELEASE_BRANCH: ${{ vars.CROKI_RELEASE_BRANCH }}
       CROKI_CLI_PACKAGE: ${{ vars.CROKI_CLI_PACKAGE }}
       CROKI_RELAY_DOMAIN: ${{ vars.CROKI_RELAY_DOMAIN }}
+      CROKI_CLI_PUBLISH_ENABLED: ${{ vars.CROKI_CLI_PUBLISH_ENABLED }}
+      CROKI_WEB_DEPLOY_ENABLED: ${{ vars.CROKI_WEB_DEPLOY_ENABLED }}
+      CROKI_SIGNING_ENABLED: ${{ vars.CROKI_SIGNING_ENABLED }}
+      CROKI_DISCORD_RELEASE_ENABLED: ${{ vars.CROKI_DISCORD_RELEASE_ENABLED }}
       CROKI_WEB_ROUTER_URL: ${{ vars.CROKI_WEB_ROUTER_URL }}
       CROKI_WEB_LATEST_DOMAIN: ${{ vars.CROKI_WEB_LATEST_DOMAIN }}
       CROKI_WEB_NIGHTLY_DOMAIN: ${{ vars.CROKI_WEB_NIGHTLY_DOMAIN }}
@@ -99,64 +103,52 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$CROKI_RELEASE_ENABLED" != "true" ]]; then
-            echo "Croki production releases are disabled. Set CROKI_RELEASE_ENABLED=true only after every destination below is Croki-owned." >&2
+          if [[ "$CROKI_RELEASE_ENABLED" != "true" && \
+                "$CROKI_CLI_PUBLISH_ENABLED" != "true" && \
+                "$CROKI_RELAY_DEPLOY_ENABLED" != "true" && \
+                "$CROKI_WEB_DEPLOY_ENABLED" != "true" && \
+                "$CROKI_SIGNING_ENABLED" != "true" && \
+                "$CROKI_DISCORD_RELEASE_ENABLED" != "true" && \
+                "$CROKI_MOBILE_DEPLOY_ENABLED" != "true" && \
+                "$CROKI_MOBILE_PREVIEW_ENABLED" != "true" ]]; then
+            echo "No Croki release destination is enabled. Set one destination flag only after its Croki-owned configuration is ready." >&2
             exit 1
           fi
 
-          required=(
-            CROKI_RELEASE_REPOSITORY
-            CROKI_RELEASE_BRANCH
-            CROKI_CLI_PACKAGE
-            CROKI_RELAY_DOMAIN
-            CROKI_WEB_ROUTER_URL
-            CROKI_WEB_LATEST_DOMAIN
-            CROKI_WEB_NIGHTLY_DOMAIN
-            CROKI_VERCEL_ORG_ID
-            CROKI_VERCEL_PROJECT_ID
-          )
-          for name in "${required[@]}"; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "Missing required Croki release variable: $name" >&2
-              exit 1
-            fi
-          done
+          node scripts/croki-release-plan.ts --production > "$RUNNER_TEMP/croki-release-plan.json"
 
-          if [[ "$GITHUB_REPOSITORY" != "$CROKI_RELEASE_REPOSITORY" ]]; then
+          if [[ -n "${CROKI_RELEASE_REPOSITORY:-}" && "$GITHUB_REPOSITORY" != "$CROKI_RELEASE_REPOSITORY" ]]; then
             echo "Release repository mismatch: expected $CROKI_RELEASE_REPOSITORY, got $GITHUB_REPOSITORY." >&2
             exit 1
           fi
-          if [[ "$GITHUB_DEFAULT_BRANCH" != "$CROKI_RELEASE_BRANCH" ]]; then
+          if [[ -n "${CROKI_RELEASE_BRANCH:-}" && "$GITHUB_DEFAULT_BRANCH" != "$CROKI_RELEASE_BRANCH" ]]; then
             echo "Default branch mismatch: expected $CROKI_RELEASE_BRANCH, got $GITHUB_DEFAULT_BRANCH." >&2
             exit 1
           fi
 
-          cli_package="$(node -p "require('./apps/server/package.json').name")"
-          if [[ "$cli_package" != "$CROKI_CLI_PACKAGE" || "$cli_package" == "croki" ]]; then
-            echo "CLI package must be renamed to the configured Croki-owned package before release (configured: $CROKI_CLI_PACKAGE, actual: $cli_package)." >&2
-            exit 1
-          fi
-          cli_repository="$(node -p "require('./apps/server/package.json').repository?.url ?? ''")"
-          if [[ "$cli_repository" == *"rhinehart514/croki"* ]]; then
-            echo "CLI package metadata still targets the inherited T3 repository." >&2
-            exit 1
-          fi
-
-          for destination in \
-            "$CROKI_RELAY_DOMAIN" \
-            "$CROKI_WEB_ROUTER_URL" \
-            "$CROKI_WEB_LATEST_DOMAIN" \
-            "$CROKI_WEB_NIGHTLY_DOMAIN"; do
-            if [[ "$destination" == *"t3.codes"* ]]; then
-              echo "Refusing inherited T3 destination: $destination" >&2
+          if [[ "$CROKI_CLI_PUBLISH_ENABLED" == "true" ]]; then
+            cli_package="$(node -p "require('./apps/server/package.json').name")"
+            if [[ "$cli_package" != "$CROKI_CLI_PACKAGE" ]]; then
+              echo "CLI package does not match the configured Croki-owned package (configured: $CROKI_CLI_PACKAGE, actual: $cli_package)." >&2
               exit 1
             fi
-          done
+            if [[ "$cli_package" == "t3" || "$cli_package" == @t3tools/* ]]; then
+              echo "CLI package must not target an inherited T3 package." >&2
+              exit 1
+            fi
+            cli_repository="$(node -p "require('./apps/server/package.json').repository?.url ?? ''")"
+            if [[ "$cli_repository" == *"pingdotgg/t3code"* ]]; then
+              echo "CLI package metadata still targets the inherited T3 repository." >&2
+              exit 1
+            fi
+          fi
 
-          git fetch --no-tags origin "$CROKI_RELEASE_BRANCH"
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$CROKI_RELEASE_BRANCH"; then
-            echo "Release commit $GITHUB_SHA is not contained in the configured release branch $CROKI_RELEASE_BRANCH." >&2
-            exit 1
+          if [[ -n "${CROKI_RELEASE_BRANCH:-}" ]]; then
+            git fetch --no-tags origin "$CROKI_RELEASE_BRANCH"
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$CROKI_RELEASE_BRANCH"; then
+              echo "Release commit $GITHUB_SHA is not contained in the configured release branch $CROKI_RELEASE_BRANCH." >&2
+              exit 1
+            fi
           fi
 
   check_changes:
@@ -306,7 +298,7 @@ jobs:
   relay_public_config:
     name: Resolve Croki Connect public config
     needs: preflight
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' }}
+    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && (vars.CROKI_RELAY_DEPLOY_ENABLED == 'true' || vars.CROKI_CLI_PUBLISH_ENABLED == 'true' || vars.CROKI_WEB_DEPLOY_ENABLED == 'true') }}
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 5
     environment:
@@ -439,14 +431,11 @@ jobs:
   build:
     name: Build ${{ matrix.label }}
     # build_wsl_node_pty stays in `needs` so it runs first and its artifact is
-    # available to download, but only the Windows matrix entry consumes it. We
-    # therefore gate the job on preflight + relay (must succeed) WITHOUT requiring
-    # build_wsl_node_pty, so a failed Linux prebuild doesn't skip the macOS/Linux
-    # builds. `!cancelled()` (not `!failure()`) lets the job run even when
-    # build_wsl_node_pty failed; the Windows-only download step below then fails
-    # that single platform if the prebuild is missing.
+    # available to download, but only the Windows matrix entry consumes it. The
+    # relay config is optional for a GitHub-only release; blank public-config
+    # outputs keep desktop packaging independent from relay/web destinations.
     needs: [preflight, relay_public_config, build_wsl_node_pty]
-    if: ${{ !cancelled() && needs.preflight.result == 'success' && needs.relay_public_config.result == 'success' }}
+    if: ${{ always() && !cancelled() && needs.preflight.result == 'success' && (needs.relay_public_config.result == 'success' || needs.relay_public_config.result == 'skipped') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     env:
@@ -454,6 +443,7 @@ jobs:
       CROKI_CLERK_JWT_TEMPLATE: ${{ needs.relay_public_config.outputs.clerk_jwt_template }}
       CROKI_CLERK_CLI_OAUTH_CLIENT_ID: ${{ needs.relay_public_config.outputs.clerk_cli_oauth_client_id }}
       CROKI_RELAY_URL: ${{ needs.relay_public_config.outputs.relay_url }}
+      CROKI_SIGNING_ENABLED: ${{ vars.CROKI_SIGNING_ENABLED }}
     strategy:
       fail-fast: false
       matrix:
@@ -511,12 +501,14 @@ jobs:
           targets: ${{ matrix.rust_target }}
 
       - name: Download relay client tracing config
+        if: needs.relay_public_config.result == 'success'
         uses: actions/download-artifact@v8
         with:
           name: relay-client-tracing-config
           path: ${{ runner.temp }}/relay-client-tracing
 
       - name: Load relay client tracing config
+        if: needs.relay_public_config.result == 'success'
         shell: bash
         run: |
           config_path="$RUNNER_TEMP/relay-client-tracing/relay-client-tracing.env"
@@ -570,6 +562,7 @@ jobs:
         if: matrix.platform == 'win'
         shell: pwsh
         env:
+          CROKI_SIGNING_ENABLED: ${{ vars.CROKI_SIGNING_ENABLED }}
           AZURE_TENANT_ID: ${{ secrets.CROKI_AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.CROKI_AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.CROKI_AZURE_CLIENT_SECRET }}
@@ -579,6 +572,11 @@ jobs:
           AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.CROKI_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
         run: |
           $ErrorActionPreference = "Stop"
+
+          if ($env:CROKI_SIGNING_ENABLED -ne "true") {
+            Write-Host "Signing disabled by CROKI_SIGNING_ENABLED; skipping TrustedSigning module preparation."
+            exit 0
+          }
 
           $requiredSecrets = @(
             $env:AZURE_TENANT_ID,
@@ -664,7 +662,9 @@ jobs:
             return 0
           }
 
-          if [[ "${{ matrix.platform }}" == "mac" ]]; then
+          if [[ "$CROKI_SIGNING_ENABLED" != "true" ]]; then
+            echo "Signing disabled by CROKI_SIGNING_ENABLED."
+          elif [[ "${{ matrix.platform }}" == "mac" ]]; then
             if has_all "$CSC_LINK" "$CSC_KEY_PASSWORD" "$APPLE_API_KEY" "$APPLE_API_KEY_ID" "$APPLE_API_ISSUER"; then
               if ! has_all "$APPLE_TEAM_ID" "$MACOS_PROVISIONING_PROFILE"; then
                 echo "macOS signing is configured, but APPLE_TEAM_ID or MACOS_PROVISIONING_PROFILE is missing." >&2
@@ -778,7 +778,7 @@ jobs:
   publish_cli:
     name: Publish CLI to npm
     needs: [preflight, relay_public_config, build]
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.relay_public_config.result == 'success' && needs.build.result == 'success' }}
+    if: ${{ !failure() && !cancelled() && vars.CROKI_CLI_PUBLISH_ENABLED == 'true' && needs.preflight.result == 'success' && needs.relay_public_config.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04 # blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 10
     permissions:
@@ -853,12 +853,18 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [preflight, build, publish_cli]
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.build.result == 'success' && needs.publish_cli.result == 'success' }}
+    if: ${{ always() && !cancelled() && vars.CROKI_RELEASE_ENABLED == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && (needs.publish_cli.result == 'success' || needs.publish_cli.result == 'skipped') }}
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      CROKI_RELEASE_APP_ID: ${{ secrets.CROKI_RELEASE_APP_ID }}
+      CROKI_RELEASE_APP_PRIVATE_KEY: ${{ secrets.CROKI_RELEASE_APP_PRIVATE_KEY }}
     steps:
       - id: app_token
         name: Mint release app token
+        if: ${{ env.CROKI_RELEASE_APP_ID != '' && env.CROKI_RELEASE_APP_PRIVATE_KEY != '' }}
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.CROKI_RELEASE_APP_ID }}
@@ -945,7 +951,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: true
-          token: ${{ steps.app_token.outputs.token }}
+          token: ${{ steps.app_token.outputs.token || github.token }}
 
       - name: Publish first release
         if: needs.preflight.outputs.previous_tag == ''
@@ -965,12 +971,12 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: true
-          token: ${{ steps.app_token.outputs.token }}
+          token: ${{ steps.app_token.outputs.token || github.token }}
 
   deploy_web:
     name: Deploy hosted web app
     needs: [preflight, relay_public_config, release]
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.relay_public_config.result == 'success' && needs.release.result == 'success' }}
+    if: ${{ always() && !cancelled() && vars.CROKI_WEB_DEPLOY_ENABLED == 'true' && needs.preflight.result == 'success' && needs.relay_public_config.result == 'success' && needs.release.result == 'success' }}
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 10
     env:
@@ -1084,13 +1090,19 @@ jobs:
 
   finalize:
     name: Finalize release
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.release.result == 'success' && needs.preflight.outputs.release_channel == 'stable' }}
+    if: ${{ always() && !cancelled() && vars.CROKI_RELEASE_ENABLED == 'true' && needs.preflight.result == 'success' && needs.release.result == 'success' && needs.preflight.outputs.release_channel == 'stable' }}
     needs: [preflight, release]
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      CROKI_RELEASE_APP_ID: ${{ secrets.CROKI_RELEASE_APP_ID }}
+      CROKI_RELEASE_APP_PRIVATE_KEY: ${{ secrets.CROKI_RELEASE_APP_PRIVATE_KEY }}
     steps:
       - id: app_token
         name: Mint release app token
+        if: ${{ env.CROKI_RELEASE_APP_ID != '' && env.CROKI_RELEASE_APP_PRIVATE_KEY != '' }}
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.CROKI_RELEASE_APP_ID }}
@@ -1102,18 +1114,23 @@ jobs:
         with:
           ref: ${{ vars.CROKI_RELEASE_BRANCH }}
           fetch-depth: 0
-          token: ${{ steps.app_token.outputs.token }}
+          token: ${{ steps.app_token.outputs.token || github.token }}
           persist-credentials: true
 
       - id: app_bot
         name: Resolve GitHub App bot identity
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token || github.token }}
           APP_SLUG: ${{ steps.app_token.outputs.app-slug }}
         run: |
-          user_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
-          echo "name=${APP_SLUG}[bot]" >> "$GITHUB_OUTPUT"
-          echo "email=${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+          if [[ -n "$APP_SLUG" ]]; then
+            user_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+            echo "name=${APP_SLUG}[bot]" >> "$GITHUB_OUTPUT"
+            echo "email=${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=github-actions[bot]" >> "$GITHUB_OUTPUT"
+            echo "email=41898282+github-actions[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
@@ -1162,10 +1179,10 @@ jobs:
     name: Announce release on Discord
     if: |
       always() && !cancelled() &&
+      vars.CROKI_DISCORD_RELEASE_ENABLED == 'true' &&
       needs.preflight.result == 'success' &&
-      needs.relay_public_config.result == 'success' &&
       needs.release.result == 'success' &&
-      needs.deploy_web.result == 'success' &&
+      (needs.deploy_web.result == 'success' || needs.deploy_web.result == 'skipped') &&
       (needs.finalize.result == 'success' || needs.finalize.result == 'skipped')
     needs: [preflight, relay_public_config, release, deploy_web, finalize]
     runs-on: blacksmith-8vcpu-ubuntu-2404

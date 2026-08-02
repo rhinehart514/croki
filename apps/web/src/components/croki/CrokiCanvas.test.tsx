@@ -4,35 +4,49 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { CrokiCanvasArtifactLike } from "./crokiCanvasArtifactTypes";
 
-vi.mock("./CrokiReleaseCanvas", () => ({
-  CrokiReleaseCanvas: () => <section aria-label="Release mode" />,
+const mocks = vi.hoisted(() => ({
+  props: null as Record<string, unknown> | null,
 }));
-vi.mock("./CrokiContextCanvas", () => ({
-  CrokiContextCanvas: () => <section aria-label="Context mode" />,
-}));
-vi.mock("./CrokiCanvasArtifact", () => ({
-  CrokiCanvasArtifactView: () => <section aria-label="Artifact mode" />,
+
+vi.mock("./CrokiTrueCanvas", () => ({
+  CrokiTrueCanvas: (props: Record<string, unknown>) => {
+    mocks.props = props;
+    return <section aria-label="Croki Live Canvas" data-canvas-surface="true" />;
+  },
 }));
 
 import { CrokiCanvas } from "./CrokiCanvas";
 
 const artifact = { id: "visual-1" } as CrokiCanvasArtifactLike;
 
-describe("CrokiCanvas routing", () => {
-  it("opens Release Canvas for an explicit empty artifact selection", () => {
-    expect(renderCanvas({ artifact: null })).toContain('aria-label="Release mode"');
+describe("CrokiCanvas unified surface", () => {
+  it("uses one Canvas surface when no legacy selection exists", () => {
+    expect(renderCanvas({})).toContain('aria-label="Croki Live Canvas"');
+    expect(renderCanvas({})).not.toContain("Release mode");
+    expect(renderCanvas({})).not.toContain("Context mode");
+    expect(renderCanvas({})).not.toContain("Artifact mode");
   });
 
-  it("keeps project Context as an explicit secondary mode", () => {
-    expect(renderCanvas({})).toContain('aria-label="Context mode"');
+  it("keeps the same surface for release and Thread visual projections", () => {
+    expect(renderCanvas({ artifact: null })).toContain('aria-label="Croki Live Canvas"');
+    expect(renderCanvas({ artifact })).toContain('aria-label="Croki Live Canvas"');
   });
 
-  it("opens a selected Thread visual without changing either project mode", () => {
-    expect(renderCanvas({ artifact })).toContain('aria-label="Artifact mode"');
+  it("forwards legacy data and source seams to the live projection", () => {
+    const onOpenReference = vi.fn();
+    const onApproveCanvasObjects = vi.fn();
+    renderCanvas({ artifact, onOpenReference, onApproveCanvasObjects });
+    expect(mocks.props).toEqual(
+      expect.objectContaining({ artifact, onOpenReference, onApproveCanvasObjects }),
+    );
   });
 });
 
-function renderCanvas(props: { readonly artifact?: CrokiCanvasArtifactLike | null }): string {
+function renderCanvas(props: {
+  readonly artifact?: CrokiCanvasArtifactLike | null;
+  readonly onOpenReference?: () => void;
+  readonly onApproveCanvasObjects?: (ids: readonly string[]) => void;
+}): string {
   return renderToStaticMarkup(
     <CrokiCanvas
       environmentId={EnvironmentId.make("local")}

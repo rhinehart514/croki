@@ -40,6 +40,9 @@ export const CROKI_BRAND_ASSET_PATHS = {
 } as const;
 
 export const LEGACY_PRODUCT_IDENTIFIERS = {
+  predecessorRepository: "pingdotgg/t3code",
+  predecessorPackageName: "t3",
+  predecessorPackageScope: "@t3tools/",
   stagedPackageName: "croki",
   packageScope: "@croki/",
   desktopAppId: "com.croki.desktop",
@@ -73,6 +76,24 @@ export const LEGACY_PRODUCT_IDENTIFIERS = {
  * intentional compatibility references from accidental visible branding.
  */
 export const LEGACY_PRODUCT_IDENTIFIER_ALLOWLIST = [
+  {
+    category: "release-guard",
+    match: "exact",
+    value: LEGACY_PRODUCT_IDENTIFIERS.predecessorRepository,
+    reason: "Predecessor repository rejected by Croki release ownership checks",
+  },
+  {
+    category: "release-guard",
+    match: "exact",
+    value: LEGACY_PRODUCT_IDENTIFIERS.predecessorPackageName,
+    reason: "Predecessor package rejected by Croki release ownership checks",
+  },
+  {
+    category: "release-guard",
+    match: "prefix",
+    value: LEGACY_PRODUCT_IDENTIFIERS.predecessorPackageScope,
+    reason: "Predecessor package scope rejected by Croki release ownership checks",
+  },
   {
     category: "package",
     match: "exact",

@@ -5,6 +5,22 @@ import {
   CrokiCanvasNodeRole as ArtifactNodeRole,
   CrokiCanvasPresentation as ArtifactPresentation,
 } from "@croki/shared/crokiCanvasArtifact";
+import {
+  CrokiPerceptionAffordance,
+  CrokiPerceptionDelta,
+  CrokiPerceptionFrame,
+  CrokiPerceptionFrameReference,
+  CrokiPerceptionObject,
+  CrokiPerceptionRelationship,
+  CrokiPerceptionSource,
+  type CrokiPerceptionAffordance as CrokiPerceptionAffordanceValue,
+  type CrokiPerceptionDelta as CrokiPerceptionDeltaValue,
+  type CrokiPerceptionFrame as CrokiPerceptionFrameValue,
+  type CrokiPerceptionFrameReference as CrokiPerceptionFrameReferenceValue,
+  type CrokiPerceptionObject as CrokiPerceptionObjectValue,
+  type CrokiPerceptionRelationship as CrokiPerceptionRelationshipValue,
+  type CrokiPerceptionSource as CrokiPerceptionSourceValue,
+} from "@croki/contracts/perception";
 import type {
   CrokiCanvasHarnessId as CrokiCanvasHarnessIdType,
   CrokiCanvasPresentation as CrokiCanvasPresentationType,
@@ -12,9 +28,7 @@ import type {
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
-import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../../../orchestration/Services/ProjectionSnapshotQuery.ts";
-import * as Crypto from "effect/Crypto";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 /**
@@ -149,28 +163,193 @@ export class CrokiCanvasPresentError extends Schema.TaggedErrorClass<CrokiCanvas
   },
 ) {}
 
-const dependencies = [
-  McpInvocationContext.McpInvocationContext,
-  ProjectionSnapshotQuery,
-  OrchestrationEngineService,
-  Crypto.Crypto,
-];
+/**
+ * The sense protocol is intentionally source-oriented.  Canvas is a client
+ * projection of these packets; models observe the Thread, runtime, preview,
+ * and other source activity without manipulating a Canvas scene.
+ */
+const SenseObjectId = NonEmpty.check(Schema.isMaxLength(256));
+const SenseRevision = Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0));
+const SenseLimit = Schema.Number.check(
+  Schema.isInt(),
+  Schema.isGreaterThanOrEqualTo(1),
+  Schema.isLessThanOrEqualTo(200),
+);
 
-export const CrokiCanvasPresentTool = Tool.make("canvas_present", {
+const SenseTargetInput = Schema.Struct({
+  /** A Thread id is accepted for forwards compatibility but invocation scope wins. */
+  threadId: Schema.optional(Schema.String),
+});
+
+export const CrokiSenseStatusInput = Schema.Struct({
+  ...SenseTargetInput.fields,
+});
+export type CrokiSenseStatusInput = typeof CrokiSenseStatusInput.Type;
+
+export const CrokiSenseObserveInput = Schema.Struct({
+  ...SenseTargetInput.fields,
+  sinceRevision: Schema.optional(SenseRevision),
+  limit: Schema.optional(SenseLimit),
+  /** Restrict the packet to source families; omitted means every source. */
+  sources: Schema.optional(Schema.Array(Schema.String).check(Schema.isMaxLength(32))),
+});
+export type CrokiSenseObserveInput = typeof CrokiSenseObserveInput.Type;
+
+export const CrokiSenseInspectInput = Schema.Struct({
+  ...SenseTargetInput.fields,
+  objectId: SenseObjectId,
+  revision: Schema.optional(SenseRevision),
+  depth: Schema.optional(
+    Schema.Number.check(
+      Schema.isInt(),
+      Schema.isGreaterThanOrEqualTo(0),
+      Schema.isLessThanOrEqualTo(3),
+    ),
+  ),
+});
+export type CrokiSenseInspectInput = typeof CrokiSenseInspectInput.Type;
+
+export const CrokiSenseWaitInput = Schema.Struct({
+  ...SenseTargetInput.fields,
+  sinceRevision: SenseRevision,
+  timeoutMs: Schema.optional(
+    Schema.Number.check(
+      Schema.isInt(),
+      Schema.isGreaterThanOrEqualTo(0),
+      Schema.isLessThanOrEqualTo(30_000),
+    ),
+  ),
+  pollIntervalMs: Schema.optional(
+    Schema.Number.check(
+      Schema.isInt(),
+      Schema.isGreaterThanOrEqualTo(10),
+      Schema.isLessThanOrEqualTo(2_000),
+    ),
+  ),
+});
+export type CrokiSenseWaitInput = typeof CrokiSenseWaitInput.Type;
+
+/** Generic perception contract aliases retained for MCP naming ergonomics. */
+export const CrokiSenseAffordance = CrokiPerceptionAffordance;
+export type CrokiSenseAffordance = CrokiPerceptionAffordanceValue;
+export const CrokiSenseFrameReference = CrokiPerceptionFrameReference;
+export type CrokiSenseFrameReference = CrokiPerceptionFrameReferenceValue;
+export const CrokiSenseSource = CrokiPerceptionSource;
+export type CrokiSenseSource = CrokiPerceptionSourceValue;
+export const CrokiSenseObject = CrokiPerceptionObject;
+export type CrokiSenseObject = CrokiPerceptionObjectValue;
+export const CrokiSenseRelationship = CrokiPerceptionRelationship;
+export type CrokiSenseRelationship = CrokiPerceptionRelationshipValue;
+export const CrokiSenseDelta = CrokiPerceptionDelta;
+export type CrokiSenseDelta = CrokiPerceptionDeltaValue;
+export const CrokiSenseObservation = CrokiPerceptionFrame;
+export type CrokiSenseObservation = CrokiPerceptionFrameValue;
+
+export const CrokiSenseStatus = Schema.Struct({
+  threadId: Schema.String,
+  available: Schema.Boolean,
+  revision: SenseRevision,
+  sourceRevision: SenseRevision,
+  objectCount: Schema.Number,
+  relationshipCount: Schema.Number,
+  latestActivityAt: Schema.NullOr(Schema.String),
+  activeTurnId: Schema.NullOr(Schema.String),
+  sources: Schema.Array(Schema.String),
+  affordances: Schema.Array(CrokiPerceptionAffordance),
+});
+export type CrokiSenseStatus = typeof CrokiSenseStatus.Type;
+
+export const CrokiSenseInspection = Schema.Struct({
+  observation: CrokiPerceptionFrame,
+  object: CrokiPerceptionObject,
+  relationships: Schema.Array(CrokiPerceptionRelationship),
+  relatedObjects: Schema.Array(CrokiPerceptionObject),
+});
+export type CrokiSenseInspection = typeof CrokiSenseInspection.Type;
+
+export const CrokiSenseWaitResult = Schema.Struct({
+  observation: CrokiSenseObservation,
+  changed: Schema.Boolean,
+  timedOut: Schema.Boolean,
+  waitedMs: Schema.Number,
+});
+export type CrokiSenseWaitResult = typeof CrokiSenseWaitResult.Type;
+
+export class CrokiSenseError extends Schema.TaggedErrorClass<CrokiSenseError>()("CrokiSenseError", {
+  code: Schema.Literals([
+    "thread-not-found",
+    "invalid-revision",
+    "object-not-found",
+    "persistence-failed",
+    "observation-failed",
+  ]),
+  message: Schema.String,
+}) {}
+
+const senseDependencies = [McpInvocationContext.McpInvocationContext, ProjectionSnapshotQuery];
+
+export const CrokiSenseStatusTool = Tool.make("sense_status", {
   description:
-    "Present one complete, bounded Canvas visual for an explicit Product or GTM turn. Use stable semantic ids, choose a semantic presentation, connect claims to evidence or consequences, and cite repository-relative files or HTTP(S) sources. Canvas is a Thread-scoped immutable artifact; it never changes project context.",
-  parameters: CrokiCanvasPresentInput,
-  success: CrokiCanvasPresentResult,
-  failure: CrokiCanvasPresentError,
-  dependencies,
+    "Read the current perceptual state of the invocation Thread. This is a source-oriented capability: it reports live revision, active turn, observed source families, and safe read affordances. Canvas is only one possible projection of this state.",
+  parameters: CrokiSenseStatusInput,
+  success: CrokiSenseStatus,
+  failure: CrokiSenseError,
+  dependencies: senseDependencies,
 })
-  .annotate(Tool.Title, "Present Canvas visual")
-  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Title, "Sense status")
+  .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
-  .annotate(Tool.Idempotent, false)
+  .annotate(Tool.Idempotent, true)
   .annotate(Tool.OpenWorld, false);
 
-export const CrokiCanvasToolkit = Toolkit.make(CrokiCanvasPresentTool);
+export const CrokiSenseObserveTool = Tool.make("sense_observe", {
+  description:
+    "Observe the live Thread as stable semantic objects and relationships. Returns a monotonic source revision, deltas since an optional revision, affordances with authority annotations, and a rendered-frame reference when one is present in source activity. This is read-only; source events are projected automatically.",
+  parameters: CrokiSenseObserveInput,
+  success: CrokiSenseObservation,
+  failure: CrokiSenseError,
+  dependencies: senseDependencies,
+})
+  .annotate(Tool.Title, "Observe live sources")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
+
+export const CrokiSenseInspectTool = Tool.make("sense_inspect", {
+  description:
+    "Inspect one stable semantic object from the current Thread observation, including its source evidence, relationships, and nearby objects. Use the returned revision as the consistency boundary for a follow-up source action.",
+  parameters: CrokiSenseInspectInput,
+  success: CrokiSenseInspection,
+  failure: CrokiSenseError,
+  dependencies: senseDependencies,
+})
+  .annotate(Tool.Title, "Inspect sensed object")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
+
+export const CrokiSenseWaitTool = Tool.make("sense_wait", {
+  description:
+    "Wait for a Thread perceptual revision newer than sinceRevision, then return the same semantic observation shape. The wait is bounded and never performs a source action.",
+  parameters: CrokiSenseWaitInput,
+  success: CrokiSenseWaitResult,
+  failure: CrokiSenseError,
+  dependencies: senseDependencies,
+})
+  .annotate(Tool.Title, "Wait for sensed change")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
+
+export const CrokiSenseToolkit = Toolkit.make(
+  CrokiSenseStatusTool,
+  CrokiSenseObserveTool,
+  CrokiSenseInspectTool,
+  CrokiSenseWaitTool,
+);
 
 export type CanonicalCanvasNodeInput = typeof CanonicalCanvasNode.Type;
 export type CanonicalCanvasEdgeInput = typeof CanonicalCanvasEdge.Type;

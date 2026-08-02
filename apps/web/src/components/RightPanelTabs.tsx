@@ -109,7 +109,7 @@ function RightPanelEmptyState(props: {
   const actions = [
     {
       label: "Canvas",
-      description: "See the next release and the work shaping it.",
+      description: "See live agent perception and source relationships.",
       icon: CircleDot,
       available: props.filesAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.files,
