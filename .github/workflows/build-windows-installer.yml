@@ -110,9 +110,10 @@ jobs:
 
       - name: Build Croki installer
         shell: bash
+        env:
+          CROKI_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
         run: |
-          # Manual artifacts are not an update channel. Omit inherited repository metadata.
-          GITHUB_REPOSITORY="" vp run dist:desktop:artifact \
+          vp run dist:desktop:artifact \
             --platform win \
             --target nsis \
             --arch x64 \
@@ -126,5 +127,6 @@ jobs:
           path: |
             release/Croki-*.exe
             release/Croki-*.blockmap
+            release/latest.yml
           if-no-files-found: error
           retention-days: 14

@@ -1,0 +1,75 @@
+name: Build Croki for macOS
+
+on:
+  push:
+    branches:
+      - croki/main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Installer version
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: Build macOS Apple Silicon installer
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - id: version
+        name: Resolve installer version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION:-}"
+          if [[ -z "$version" ]]; then
+            version="$(node -p "require('./apps/desktop/package.json').version")"
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid installer version: $version" >&2
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build Croki installer and update metadata
+        env:
+          CROKI_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
+        run: |
+          vp run dist:desktop:artifact \
+            --platform mac \
+            --target dmg \
+            --arch arm64 \
+            --build-version "${{ steps.version.outputs.value }}"
+
+      - name: Upload Croki installer and update metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: croki-macos-arm64-${{ steps.version.outputs.value }}
+          path: |
+            release/Croki-*.dmg
+            release/Croki-*.dmg.blockmap
+            release/Croki-*.zip
+            release/Croki-*.zip.blockmap
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 14

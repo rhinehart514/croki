@@ -35,6 +35,15 @@ context format, and recovery record.
 > - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
 > - OpenClaw: install OpenClaw, start its Gateway, and configure the selected agent
 
+### macOS
+
+Download the Apple Silicon DMG from the
+[latest release](https://github.com/rhinehart514/croki/releases/latest), open it,
+and drag Croki into Applications.
+
+The current macOS build is unsigned, so macOS may require approval in
+**System Settings → Privacy & Security** on first launch.
+
 ### Windows
 
 Every push to `croki/main` produces a Windows x64 installer:
