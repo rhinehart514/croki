@@ -1849,32 +1849,39 @@ export function ProviderSettingsPanel() {
 
   for (const providerSettings of visibleProviderSettings) {
     type LegacyProviderSettings = (typeof settings.providers)[keyof typeof settings.providers];
-    const legacyProviders = settings.providers as Record<string, LegacyProviderSettings>;
+    const legacyProviders = settings.providers as Record<
+      string,
+      LegacyProviderSettings | undefined
+    >;
     const defaultLegacyProviders = DEFAULT_UNIFIED_SETTINGS.providers as Record<
       string,
-      LegacyProviderSettings
+      LegacyProviderSettings | undefined
     >;
     const driver = providerSettings.provider;
     const defaultInstanceId = defaultInstanceIdForDriver(driver);
     const explicitInstance = settings.providerInstances?.[defaultInstanceId];
-    const legacyConfig = legacyProviders[providerSettings.provider]!;
-    const defaultLegacyConfig = defaultLegacyProviders[providerSettings.provider]!;
-    const effectiveInstance: ProviderInstanceConfig =
-      explicitInstance ??
-      ({
+    const legacyConfig = legacyProviders[providerSettings.provider];
+    const defaultLegacyConfig = defaultLegacyProviders[providerSettings.provider];
+    const legacyInstance: ProviderInstanceConfig | undefined =
+      legacyConfig === undefined
+        ? undefined
+        : {
+            driver,
+            enabled: legacyConfig.enabled,
+            config: legacyConfig,
+          };
+    const effectiveInstance = explicitInstance ?? legacyInstance;
+    if (effectiveInstance !== undefined) {
+      const isDirty =
+        explicitInstance !== undefined || !Equal.equals(legacyConfig, defaultLegacyConfig);
+      rows.push({
+        instanceId: defaultInstanceId,
+        instance: effectiveInstance,
         driver,
-        enabled: legacyConfig.enabled,
-        config: legacyConfig,
-      } satisfies ProviderInstanceConfig);
-    const isDirty =
-      explicitInstance !== undefined || !Equal.equals(legacyConfig, defaultLegacyConfig);
-    rows.push({
-      instanceId: defaultInstanceId,
-      instance: effectiveInstance,
-      driver,
-      isDefault: true,
-      isDirty,
-    });
+        isDefault: true,
+        isDirty,
+      });
+    }
     for (const [id, instance] of instancesByDriver.get(providerSettings.provider) ?? []) {
       if (id === defaultInstanceId) continue;
       rows.push({ instanceId: id, instance, driver: instance.driver, isDefault: false });

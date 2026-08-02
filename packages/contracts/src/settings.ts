@@ -351,6 +351,48 @@ export const GrokSettings = makeProviderSettingsSchema(
 );
 export type GrokSettings = typeof GrokSettings.Type;
 
+export const OpenClawSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    binaryPath: makeBinaryPathSetting("openclaw").pipe(
+      Schema.annotateKey({
+        title: "Binary path",
+        description: "Path to the OpenClaw CLI binary.",
+        providerSettingsForm: { placeholder: "openclaw", clearWhenEmpty: "omit" },
+      }),
+    ),
+    launchArgs: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "ACP arguments",
+        description: "Optional arguments added after `openclaw acp`.",
+        providerSettingsForm: {
+          placeholder: "--url wss://gateway:18789",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    agentId: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("croki")),
+      Schema.annotateKey({
+        title: "Orchestrator agent",
+        description: "OpenClaw agent configured to use GPT-5.6 Sol.",
+        providerSettingsForm: {
+          placeholder: "croki",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+  },
+  {
+    order: ["binaryPath", "agentId", "launchArgs"],
+  },
+);
+export type OpenClawSettings = typeof OpenClawSettings.Type;
+
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
