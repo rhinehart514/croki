@@ -19,7 +19,7 @@ import * as Schema from "effect/Schema";
 
 import { ServerConfig } from "../../config.ts";
 import type { OpenClawAdapterShape } from "../Services/OpenClawAdapter.ts";
-import { makeOpenClawAdapter } from "./OpenClawAdapter.ts";
+import { makeOpenClawAdapter, presentOpenClawToolCall } from "./OpenClawAdapter.ts";
 
 class OpenClawAdapter extends Context.Service<OpenClawAdapter, OpenClawAdapterShape>()(
   "t3/provider/Layers/OpenClawAdapter.test/OpenClawAdapter",
@@ -28,6 +28,24 @@ class OpenClawAdapter extends Context.Service<OpenClawAdapter, OpenClawAdapterSh
 const dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
 const mockAgentPath = NodePath.join(dirname, "../../../scripts/acp-mock-agent.ts");
 const defaultSettings = Schema.decodeSync(OpenClawSettings)({});
+
+it("recognizes OpenClaw's generic ACP payload as delegated work", () => {
+  assert.equal(
+    presentOpenClawToolCall({
+      toolCallId: "spawn-1",
+      title: "Tool",
+      status: "completed",
+      data: {
+        rawInput: {
+          runtime: "subagent",
+          mode: "run",
+          taskName: "inspect-version",
+        },
+      },
+    }).title,
+    "Delegated work",
+  );
+});
 
 async function makeWrapper(requestLogPath: string, argvLogPath: string): Promise<string> {
   const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "croki-openclaw-acp-"));

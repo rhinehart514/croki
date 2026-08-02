@@ -9,12 +9,12 @@ import {
 } from "@t3tools/contracts";
 import type * as Schema from "effect/Schema";
 import {
-  ACPRegistryIcon,
   ClaudeAI,
   CursorIcon,
   GrokIcon,
   type Icon,
   OpenAI,
+  OpenClawIcon,
   OpenCodeIcon,
 } from "../Icons";
 
@@ -73,7 +73,7 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
   {
     value: ProviderDriverKind.make("openclaw"),
     label: "OpenClaw",
-    icon: ACPRegistryIcon,
+    icon: OpenClawIcon,
     badgeLabel: "Multi-agent",
     settingsSchema: OpenClawSettings,
   },

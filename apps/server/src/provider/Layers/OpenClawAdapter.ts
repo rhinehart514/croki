@@ -115,13 +115,14 @@ interface OpenClawSessionContext {
   stopped: boolean;
 }
 
-function presentOpenClawToolCall(
+export function presentOpenClawToolCall(
   toolCall: import("../acp/AcpRuntimeModel.ts").AcpToolCallState,
 ): import("../acp/AcpRuntimeModel.ts").AcpToolCallState {
   const title = toolCall.title?.toLowerCase() ?? "";
   const rawInput = toolCall.data.rawInput;
   const input = isRecord(rawInput) ? rawInput : undefined;
   const isSpawn =
+    input?.runtime === "subagent" ||
     title.includes("sessions_spawn") ||
     title.includes("sessions spawn") ||
     title.includes("subagent");
@@ -131,7 +132,11 @@ function presentOpenClawToolCall(
   const isLunaMax = input?.model === "openai/gpt-5.6-luna" && input?.thinking === "max";
   return {
     ...toolCall,
-    title: isLunaMax ? "Luna Max worker" : "Delegating work",
+    title: isLunaMax
+      ? "Luna Max worker"
+      : toolCall.status === "completed"
+        ? "Delegated work"
+        : "Delegating work",
   };
 }
 
