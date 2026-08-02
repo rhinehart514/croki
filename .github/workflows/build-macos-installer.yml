@@ -64,9 +64,17 @@ jobs:
       - name: Verify updater-compatible app signature
         shell: bash
         run: |
-          app_path="$(find release -type d -name 'Croki.app' -print -quit)"
+          signature_dir="$RUNNER_TEMP/croki-signature"
+          mkdir -p "$signature_dir"
+          zip_path="$(find release -maxdepth 1 -type f -name 'Croki-*.zip' -print -quit)"
+          if [[ -z "$zip_path" ]]; then
+            echo "Packaged Croki update ZIP was not found" >&2
+            exit 1
+          fi
+          ditto -x -k "$zip_path" "$signature_dir"
+          app_path="$(find "$signature_dir" -type d -name 'Croki.app' -print -quit)"
           if [[ -z "$app_path" ]]; then
-            echo "Packaged Croki.app was not found" >&2
+            echo "Croki.app was not found in the update ZIP" >&2
             exit 1
           fi
           codesign --verify --deep --strict "$app_path"
