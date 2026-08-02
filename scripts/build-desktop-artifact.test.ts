@@ -559,8 +559,27 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.equal(config.appId, "com.croki.desktop");
         assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
         assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
+        assert.notProperty(mac, "identity");
         assert.deepStrictEqual(mac.protocols, [{ name: "Croki", schemes: ["croki"] }]);
       }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect("ad-hoc signs macOS builds when Developer ID signing is disabled", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "1.2.3",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+
+      const mac = config.mac as Record<string, unknown>;
+      assert.equal(mac.identity, "-");
+      assert.equal(mac.hardenedRuntime, false);
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
   it.effect("keeps executable resource editing enabled for unsigned Windows builds", () =>

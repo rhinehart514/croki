@@ -61,6 +61,17 @@ jobs:
             --arch arm64 \
             --build-version "${{ steps.version.outputs.value }}"
 
+      - name: Verify updater-compatible app signature
+        shell: bash
+        run: |
+          app_path="$(find release -type d -name 'Croki.app' -print -quit)"
+          if [[ -z "$app_path" ]]; then
+            echo "Packaged Croki.app was not found" >&2
+            exit 1
+          fi
+          codesign --verify --deep --strict "$app_path"
+          codesign --display --verbose=2 "$app_path"
+
       - name: Upload Croki installer and update metadata
         uses: actions/upload-artifact@v7
         with:

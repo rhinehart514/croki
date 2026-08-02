@@ -1580,6 +1580,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
+      // Squirrel.Mac requires every auto-updatable app to be signed. An ad-hoc
+      // signature provides that compatibility without an Apple Developer ID;
+      // users still approve the unnotarized app on first install.
+      ...(signed ? {} : { identity: "-", hardenedRuntime: false }),
       protocols: [
         {
           name: CROKI_VISIBLE_BRAND.protocolDisplayName,
