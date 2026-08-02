@@ -1,6 +1,6 @@
 import * as NodeCrypto from "node:crypto";
 
-import type { CrokiHarnessId } from "@t3tools/contracts";
+import type { CrokiHarnessId } from "@croki/contracts";
 
 import {
   compileCrokiAgentContext,
@@ -15,8 +15,9 @@ import {
   isCrokiAgentContextTruncated,
   parseCrokiContext,
   prependCrokiAgentContext,
-} from "@t3tools/shared/crokiContext";
-import { recoverCrokiContext } from "@t3tools/shared/crokiContextRecovery";
+} from "@croki/shared/crokiContext";
+import { recoverCrokiContext } from "@croki/shared/crokiContextRecovery";
+import { CROKI_RELEASE_LIMITS } from "@croki/shared/crokiReleaseCandidate";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -26,8 +27,12 @@ export interface LoadedCrokiAgentContext {
   readonly receipt: CrokiContextReceipt;
 }
 
+export const CROKI_PRODUCT_HARNESS_INSTRUCTION = `<croki_product_harness version="1">
+Use the provider's native agent runtime, tools, authority, and Review. For this turn, act as the founder's product judgment partner: clarify the outcome behind the request; make assumptions, evidence, contradictions, consequences, and reversible tests explicit; and leave consequential judgment to the founder. Do not ask the user to author or connect nodes, fill forms, or treat agent proposals as canon. When a product relationship is materially easier to judge visually, call canvas_present with one complete, bounded scene grounded in the Thread and project evidence. Canvas is an optional visual artifact, not project memory, an execution surface, a proposal inbox, or a source of truth.
+</croki_product_harness>`;
+
 export const CROKI_GTM_HARNESS_INSTRUCTION = `<croki_gtm_harness version="1">
-Use the provider's native agent runtime, tools, authority, and Review. For this turn, act as the founder's product and GTM strategy partner: infer the decision behind the request; expose assumptions, evidence, contradictions, consequences, and reversible tests; keep uncertainty explicit; and leave consequential judgment to the founder. Do not ask the user to author or connect nodes, fill forms, or treat agent proposals as canon. When the strategic model materially changes, call canvas_present with one complete, bounded, provisional scene grounded in the Thread and project evidence. The scene is a visual projection, not another memory, runtime, or source of truth.
+Use the provider's native agent runtime, tools, authority, and Review. For this turn, act as the founder's go-to-market judgment partner: clarify the decision behind the request; make assumptions, evidence, contradictions, consequences, and reversible tests explicit; and leave consequential judgment to the founder. Do not ask the user to author or connect nodes, fill forms, or treat agent proposals as canon. When a go-to-market relationship is materially easier to judge visually, call canvas_present with one complete, bounded scene grounded in the Thread and project evidence. Canvas is an optional visual artifact, not another memory, runtime, or source of truth, and not an execution surface or proposal inbox.
 </croki_gtm_harness>`;
 
 /** Compiles one provider turn without creating a second Canvas conversation or history. */
@@ -39,7 +44,11 @@ export function compileCrokiTurnInput(input: {
   if (input.harnessId === "native") {
     return prependCrokiAgentContext(input.agentContext, input.userInput);
   }
-  return [CROKI_GTM_HARNESS_INSTRUCTION, input.agentContext, input.userInput]
+  const harnessInstruction =
+    input.harnessId === "product-v1"
+      ? CROKI_PRODUCT_HARNESS_INSTRUCTION
+      : CROKI_GTM_HARNESS_INSTRUCTION;
+  return [harnessInstruction, input.agentContext, input.userInput]
     .filter((value): value is string => Boolean(value))
     .join("\n\n");
 }
@@ -116,6 +125,14 @@ function loadedContext(
       includedCount: compilation.includedCount,
       omittedCount: compilation.omittedCount,
       selectionMode: compilation.selectionMode,
+      ...(context.release?.status === "active"
+        ? {
+            releaseVersion: context.release.version,
+            releaseItemCount: context.release.items.filter(
+              (item) => item.status !== "proposed" && item.status !== "deferred",
+            ).length,
+          }
+        : {}),
       ...recovery,
     }),
   };
@@ -226,6 +243,7 @@ export function isCrokiContextAppliedActivityPayload(
   const harnessIsValid =
     receipt.harnessId === undefined ||
     receipt.harnessId === "native" ||
+    receipt.harnessId === "product-v1" ||
     receipt.harnessId === "gtm-v1";
   const selectionIsValid =
     receipt.includedCount === undefined &&
@@ -238,6 +256,15 @@ export function isCrokiContextAppliedActivityPayload(
         (receipt.selectionMode === "full" ||
           receipt.selectionMode === "focused" ||
           receipt.selectionMode === "bounded");
+  const releaseIsValid =
+    receipt.releaseVersion === undefined && receipt.releaseItemCount === undefined
+      ? true
+      : typeof receipt.releaseVersion === "string" &&
+        receipt.releaseVersion === receipt.releaseVersion.trim() &&
+        receipt.releaseVersion.length > 0 &&
+        receipt.releaseVersion.length <= CROKI_RELEASE_LIMITS.versionChars &&
+        isNonNegativeInteger(receipt.releaseItemCount) &&
+        receipt.releaseItemCount <= CROKI_RELEASE_LIMITS.items;
   return (
     promptIsBounded &&
     receipt.relativePath === CROKI_CONTEXT_RELATIVE_PATH &&
@@ -257,7 +284,8 @@ export function isCrokiContextAppliedActivityPayload(
     errorCodeIsValid &&
     issueCountIsValid &&
     harnessIsValid &&
-    selectionIsValid
+    selectionIsValid &&
+    releaseIsValid
   );
 }
 

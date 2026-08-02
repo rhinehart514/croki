@@ -1,5 +1,5 @@
-import { EnvironmentId } from "@t3tools/contracts";
-import { createEmptyCrokiContext, serializeCrokiContext } from "@t3tools/shared/crokiContext";
+import { EnvironmentId } from "@croki/contracts";
+import { createEmptyCrokiContext, serializeCrokiContext } from "@croki/shared/crokiContext";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { replaceCrokiProduct } from "./crokiCanvasModel";

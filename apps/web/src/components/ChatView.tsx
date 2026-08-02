@@ -21,32 +21,31 @@ import {
   ProviderDriverKind,
   RuntimeMode,
   TerminalOpenInput,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   connectionStatusTitle,
   type EnvironmentConnectionPresentation,
-} from "@t3tools/client-runtime/connection";
-import { effectiveSettled, effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
+} from "@croki/client-runtime/connection";
+import { effectiveSettled, effectiveSnoozed } from "@croki/client-runtime/state/thread-settled";
 import {
   parseScopedThreadKey,
   scopedThreadKey,
   scopeProjectRef,
   scopeThreadRef,
-} from "@t3tools/client-runtime/environment";
+} from "@croki/client-runtime/environment";
 import {
   applyClaudePromptEffortPrefix,
   createModelSelection,
   resolvePromptInjectedEffort,
-} from "@t3tools/shared/model";
-import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
-import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
-import { truncate } from "@t3tools/shared/String";
-import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
+} from "@croki/shared/model";
+import { CHAT_LIST_ANCHOR_OFFSET } from "@croki/shared/chatList";
+import { projectScriptCwd, projectScriptRuntimeEnv } from "@croki/shared/projectScripts";
+import { truncate } from "@croki/shared/String";
+import { nextTerminalId, resolveTerminalSessionLabel } from "@croki/shared/terminalLabels";
 import {
   CROKI_CONTEXT_RELATIVE_PATH,
   type CrokiContextReference,
-} from "@t3tools/shared/crokiContext";
-import { parseCrokiCanvasPresentedActivityPayload } from "@t3tools/shared/crokiCanvasActivity";
+} from "@croki/shared/crokiContext";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -69,7 +68,7 @@ import {
   settlePromise,
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@croki/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
@@ -120,7 +119,7 @@ import {
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
-import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
+import { buildTemporaryWorktreeBranchName } from "@croki/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import {
@@ -234,6 +233,12 @@ import {
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
+import {
+  appendCanvasSelectionToPrompt,
+  deriveCanvasPresentationActivities,
+  type CanvasPresentationTimelineActivity,
+  type HarnessCanvasArtifactNode,
+} from "./chat/canvasThreadIntegration";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
@@ -1535,6 +1540,39 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [activeThreadKey],
   );
+  const [canvasSelectionState, setCanvasSelectionState] = useState<{
+    readonly threadKey: string | null;
+    readonly artifactId: string | null;
+    readonly nodeIds: readonly string[];
+  }>({ threadKey: activeThreadKey, artifactId: null, nodeIds: [] });
+  const [canvasViewedArtifactId, setCanvasViewedArtifactId] = useState<string | null>(null);
+  const [canvasBaseView, setCanvasBaseView] = useState<"release" | "context">("release");
+  const canvasSelectionNodeIds =
+    canvasSelectionState.threadKey === activeThreadKey ? canvasSelectionState.nodeIds : [];
+  const clearCanvasSelection = useCallback(() => {
+    setCanvasSelectionState((current) => ({ ...current, nodeIds: [] }));
+  }, []);
+  const removeCanvasSelection = useCallback((nodeId: string) => {
+    setCanvasSelectionState((current) => ({
+      ...current,
+      nodeIds: current.nodeIds.filter((selectedId) => selectedId !== nodeId),
+    }));
+  }, []);
+  const handleCanvasSelectionChange = useCallback(
+    (nodeIds: readonly string[], artifactId: string | null) => {
+      setCanvasSelectionState({
+        threadKey: activeThreadKey,
+        artifactId,
+        nodeIds: [...new Set(nodeIds)],
+      });
+    },
+    [activeThreadKey],
+  );
+  useEffect(() => {
+    setCanvasViewedArtifactId(null);
+    setCanvasBaseView("release");
+    setCanvasSelectionState({ threadKey: activeThreadKey, artifactId: null, nodeIds: [] });
+  }, [activeThreadKey]);
   const [timelineAnchor, setTimelineAnchor] = useState<{
     readonly threadKey: string | null;
     readonly messageId: MessageId | null;
@@ -1553,7 +1591,6 @@ function ChatViewContent(props: ChatViewProps) {
   const activeRightPanelSurface = useRightPanelStore((state) =>
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
   );
-  // Canvas is project context and a capability, not a right-panel mode.
   const canvasEnabled = activeThread !== undefined;
   const activeFileSurface =
     activeRightPanelSurface?.kind === "file" ? activeRightPanelSurface : null;
@@ -2488,15 +2525,38 @@ function ChatViewContent(props: ChatViewProps) {
     crokiCanvasWorkspaceKey,
     activeProject?.title ?? "",
   );
-  const latestCanvasPresentation = activeThread?.activities.findLast(
-    (activity) => activity.kind === "croki.canvas.presented",
+  const canvasPresentationActivities = useMemo(
+    () => deriveCanvasPresentationActivities(threadActivities),
+    [threadActivities],
   );
-  const latestCanvasPresentationPayload = parseCrokiCanvasPresentedActivityPayload(
-    latestCanvasPresentation?.payload,
+  const canvasPresentationsByActivityId = useMemo(
+    () =>
+      new Map(
+        canvasPresentationActivities.map(
+          (presentation) => [presentation.activityId, presentation] as const,
+        ),
+      ),
+    [canvasPresentationActivities],
   );
-  const latestCanvasPresentationView = latestCanvasPresentationPayload?.view ?? null;
-  const latestCanvasPresentationQuestion = latestCanvasPresentationPayload?.question ?? null;
-  const latestCanvasPresentationNodeIds = latestCanvasPresentationPayload?.provisionalNodeIds ?? [];
+  const latestCanvasPresentation =
+    canvasPresentationActivities.findLast((presentation) => presentation.artifact !== null) ?? null;
+  const viewedCanvasPresentation =
+    canvasViewedArtifactId === null
+      ? null
+      : (canvasPresentationActivities.find(
+          (presentation) => presentation.artifact?.id === canvasViewedArtifactId,
+        ) ?? null);
+  const selectedCanvasPresentation =
+    canvasSelectionState.artifactId === null
+      ? viewedCanvasPresentation
+      : (canvasPresentationActivities.find(
+          (presentation) => presentation.artifact?.id === canvasSelectionState.artifactId,
+        ) ?? null);
+  const selectedCanvasNodes = useMemo<readonly HarnessCanvasArtifactNode[]>(() => {
+    if (!selectedCanvasPresentation?.artifact || canvasSelectionNodeIds.length === 0) return [];
+    const ids = new Set(canvasSelectionNodeIds);
+    return selectedCanvasPresentation.artifact.nodes.filter((node) => ids.has(node.id));
+  }, [canvasSelectionNodeIds, selectedCanvasPresentation]);
   const [queuedCanvasEvidence, setQueuedCanvasEvidence] = useState<{
     readonly reference: CrokiContextReference;
     readonly title: string;
@@ -3210,8 +3270,43 @@ function ChatViewContent(props: ChatViewProps) {
     if (!activeThreadRef || !activeProject || !crokiWorkspaceRoot) return;
     useRightPanelStore.getState().open(activeThreadRef, "canvas");
   }, [activeProject, activeThreadRef, crokiWorkspaceRoot]);
+  const openReleaseCanvas = useCallback(() => {
+    setCanvasViewedArtifactId(null);
+    setCanvasBaseView("release");
+    setCanvasSelectionState((current) => ({ ...current, artifactId: null, nodeIds: [] }));
+    addCanvasSurface();
+  }, [addCanvasSurface]);
+  const openContextCanvas = useCallback(() => {
+    setCanvasViewedArtifactId(null);
+    setCanvasBaseView("context");
+    setCanvasSelectionState((current) => ({ ...current, artifactId: null, nodeIds: [] }));
+    addCanvasSurface();
+  }, [addCanvasSurface]);
+  const openCanvasSourceThread = useCallback(
+    (threadId: string) => {
+      if (!activeProject) return;
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: { environmentId: activeProject.environmentId, threadId },
+      });
+    },
+    [activeProject, navigate],
+  );
+  const openCanvasArtifact = useCallback(
+    (presentation: CanvasPresentationTimelineActivity) => {
+      setCanvasViewedArtifactId(presentation.artifact?.id ?? null);
+      setCanvasBaseView("release");
+      setCanvasSelectionState((current) => ({
+        ...current,
+        artifactId: presentation.artifact?.id ?? null,
+        nodeIds: [],
+      }));
+      addCanvasSurface();
+    },
+    [addCanvasSurface],
+  );
   useRegisterCanvasCommand({
-    onOpenCanvas: activeProject && crokiWorkspaceRoot ? addCanvasSurface : undefined,
+    onOpenCanvas: activeProject && crokiWorkspaceRoot ? openReleaseCanvas : undefined,
     unavailableReason:
       activeProject && crokiWorkspaceRoot ? undefined : "Open a project workspace to use Canvas.",
   });
@@ -3232,7 +3327,7 @@ function ChatViewContent(props: ChatViewProps) {
             title,
             workspaceKey: crokiCanvasWorkspaceKey,
           });
-          addCanvasSurface();
+          openContextCanvas();
           return;
         }
         toastManager.add(
@@ -3244,11 +3339,11 @@ function ChatViewContent(props: ChatViewProps) {
         );
         return;
       }
-      addCanvasSurface();
+      openContextCanvas();
     },
     [
       activeProject,
-      addCanvasSurface,
+      openContextCanvas,
       crokiWorkspaceRoot,
       crokiCanvasDraftSummary.sourceState,
       crokiCanvasWorkspaceKey,
@@ -4912,6 +5007,7 @@ function ChatViewContent(props: ChatViewProps) {
     const composerElementContextsSnapshot = [...composerElementContexts];
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
     const composerReviewCommentsSnapshot: ReviewCommentContext[] = [...composerReviewComments];
+    const canvasSelectionSnapshot = [...selectedCanvasNodes];
     const messageTextWithContexts = appendElementContextsToPrompt(
       appendTerminalContextsToPrompt(promptForSend, composerTerminalContextsSnapshot),
       composerElementContextsSnapshot,
@@ -4920,9 +5016,13 @@ function ChatViewContent(props: ChatViewProps) {
       (text, annotation) => appendPreviewAnnotationPrompt(text, annotation),
       messageTextWithContexts,
     );
-    const messageTextForSend = appendReviewCommentsToPrompt(
+    const messageTextWithReviewComments = appendReviewCommentsToPrompt(
       messageTextWithPreviewAnnotations,
       composerReviewCommentsSnapshot,
+    );
+    const messageTextForSend = appendCanvasSelectionToPrompt(
+      messageTextWithReviewComments,
+      canvasSelectionSnapshot,
     );
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
@@ -5115,6 +5215,15 @@ function ChatViewContent(props: ChatViewProps) {
       } else {
         turnStartSucceeded = true;
         setCrokiHarnessId("native");
+        if (canvasSelectionSnapshot.length > 0) {
+          setCanvasSelectionState((current) =>
+            current.nodeIds.some((nodeId) =>
+              canvasSelectionSnapshot.some((node) => node.id === nodeId),
+            )
+              ? { ...current, nodeIds: [] }
+              : current,
+          );
+        }
       }
     }
 
@@ -5384,6 +5493,7 @@ function ChatViewContent(props: ChatViewProps) {
       } = sendCtx;
 
       const threadIdForSend = activeThread.id;
+      const canvasSelectionSnapshot = [...selectedCanvasNodes];
       const messageIdForSend = newMessageId();
       const messageCreatedAt = new Date().toISOString();
       const outgoingMessageText = formatOutgoingPrompt({
@@ -5391,7 +5501,7 @@ function ChatViewContent(props: ChatViewProps) {
         model: ctxSelectedModel,
         models: ctxSelectedProviderModels,
         effort: ctxSelectedPromptEffort,
-        text: trimmed,
+        text: appendCanvasSelectionToPrompt(trimmed, canvasSelectionSnapshot),
       });
 
       sendInFlightRef.current = true;
@@ -5477,6 +5587,9 @@ function ChatViewContent(props: ChatViewProps) {
 
       if (failure === null) {
         setCrokiHarnessId("native");
+        if (canvasSelectionSnapshot.length > 0) {
+          setCanvasSelectionState((current) => ({ ...current, nodeIds: [] }));
+        }
         // Optimistically open the plan sidebar when implementing (not refining).
         // "default" mode here means the agent is executing the plan, which produces
         // step-tracking activities that the sidebar will display.
@@ -5506,6 +5619,7 @@ function ChatViewContent(props: ChatViewProps) {
     [
       activeThread,
       activeProposedPlan,
+      appendCanvasSelectionToPrompt,
       beginLocalDispatch,
       isConnecting,
       isSendBusy,
@@ -5514,6 +5628,7 @@ function ChatViewContent(props: ChatViewProps) {
       persistThreadSettingsForNextTurn,
       resetLocalDispatch,
       runtimeMode,
+      selectedCanvasNodes,
       setComposerDraftInteractionMode,
       setThreadError,
       startThreadTurn,
@@ -5925,13 +6040,49 @@ function ChatViewContent(props: ChatViewProps) {
     ) : activeRightPanelSurface?.kind === "canvas" && activeProject && crokiWorkspaceRoot ? (
       <CrokiCanvas
         activePlan={activePlan}
+        activeThread={{ id: activeThread.id, title: activeThread.title }}
         environmentId={activeProject.environmentId}
         workspaceRoot={crokiWorkspaceRoot}
         productName={activeProject.title}
-        externalRevision={latestCanvasPresentation?.id ?? null}
-        externalQuestion={latestCanvasPresentationQuestion}
-        externalNodeIds={latestCanvasPresentationNodeIds}
-        externalView={latestCanvasPresentationView}
+        {...(viewedCanvasPresentation?.artifact
+          ? { artifact: viewedCanvasPresentation.artifact }
+          : canvasBaseView === "release"
+            ? { artifact: null }
+            : {})}
+        latestArtifact={latestCanvasPresentation?.artifact ?? null}
+        artifacts={canvasPresentationActivities.flatMap((presentation) =>
+          presentation.artifact ? [presentation.artifact] : [],
+        )}
+        selectedNodeIds={canvasSelectionNodeIds}
+        onSelectArtifactNodes={(nodeIds) =>
+          handleCanvasSelectionChange(
+            nodeIds,
+            viewedCanvasPresentation?.artifact?.id ??
+              latestCanvasPresentation?.artifact?.id ??
+              null,
+          )
+        }
+        onUseArtifactSelection={(nodes) => {
+          handleCanvasSelectionChange(
+            nodes.map((node) => node.id),
+            viewedCanvasPresentation?.artifact?.id ??
+              latestCanvasPresentation?.artifact?.id ??
+              null,
+          );
+          scheduleComposerFocus();
+        }}
+        onViewArtifactRevision={(artifact) => {
+          setCanvasViewedArtifactId(artifact.id);
+          setCanvasSelectionState((current) => ({
+            ...current,
+            artifactId: artifact.id,
+            nodeIds: [],
+          }));
+        }}
+        onBackToRelease={openReleaseCanvas}
+        onOpenContext={openContextCanvas}
+        onOpenArtifactThread={openCanvasSourceThread}
+        onOpenThread={openCanvasSourceThread}
         onPendingChange={handleCanvasPendingChange}
         onBuildFromRepository={prepareCanvasFromRepository}
         onOpenReference={openCanvasReference}
@@ -6068,6 +6219,9 @@ function ChatViewContent(props: ChatViewProps) {
                 routeThreadKey={routeThreadKey}
                 onOpenTurnDiff={onOpenTurnDiff}
                 onPrepareCanvasUpdate={prepareTurnCanvasUpdate}
+                canvasPresentationsByActivityId={canvasPresentationsByActivityId}
+                coordinationActivities={threadActivities}
+                onOpenCanvasArtifact={openCanvasArtifact}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
                 isRevertingCheckpoint={isRevertingCheckpoint}
@@ -6209,6 +6363,7 @@ function ChatViewContent(props: ChatViewProps) {
                             activeThreadModelSelection={activeThread?.modelSelection}
                             activeThreadActivities={activeThread?.activities}
                             canvasContext={crokiComposerContext}
+                            canvasSelection={selectedCanvasNodes}
                             canvasWorkspaceKind="project"
                             canvasWorkspaceRoot={crokiWorkspaceRoot}
                             resolvedTheme={resolvedTheme}
@@ -6240,8 +6395,9 @@ function ChatViewContent(props: ChatViewProps) {
                             handleRuntimeModeChange={handleRuntimeModeChange}
                             handleInteractionModeChange={handleInteractionModeChange}
                             onCrokiHarnessChange={setCrokiHarnessId}
+                            onClearCanvasSelection={clearCanvasSelection}
+                            onRemoveCanvasSelection={removeCanvasSelection}
                             togglePlanSidebar={togglePlanSidebar}
-                            onOpenCanvas={addCanvasSurface}
                             focusComposer={focusComposer}
                             scheduleComposerFocus={scheduleComposerFocus}
                             setThreadError={setThreadError}
@@ -6394,7 +6550,7 @@ function ChatViewContent(props: ChatViewProps) {
           onAddTerminal={addTerminalSurface}
           onAddDiff={addDiffSurface}
           onAddFiles={addFilesSurface}
-          onAddCanvas={addCanvasSurface}
+          onAddCanvas={openReleaseCanvas}
           browserAvailable={isPreviewSupportedInRuntime()}
           diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
@@ -6422,7 +6578,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddTerminal={addTerminalSurface}
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
-            onAddCanvas={addCanvasSurface}
+            onAddCanvas={openReleaseCanvas}
             browserAvailable={isPreviewSupportedInRuntime()}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}

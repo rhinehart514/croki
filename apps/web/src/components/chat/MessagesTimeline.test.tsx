@@ -1,12 +1,9 @@
-import { CheckpointRef, EnvironmentId, MessageId, TurnId } from "@t3tools/contracts";
+import { CheckpointRef, EnvironmentId, MessageId, TurnId } from "@croki/contracts";
 import { createRef, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
-import {
-  CROKI_CONTEXT_RELATIVE_PATH,
-  type CrokiContextReceipt,
-} from "@t3tools/shared/crokiContext";
+import { CROKI_CONTEXT_RELATIVE_PATH, type CrokiContextReceipt } from "@croki/shared/crokiContext";
 
 vi.mock("@legendapp/list/react", async () => {
   const legendListTestId = "legend-list";
@@ -266,7 +263,7 @@ describe("MessagesTimeline", () => {
 
     expect(markup).toContain("Keep this text unchanged");
     expect(markup).toContain('data-croki-context-receipt="loaded"');
-    expect(markup).toContain("Canvas applied");
+    expect(markup).toContain("Context applied");
     expect(markup).toContain("bbbbbbbb");
   });
 
@@ -574,16 +571,16 @@ describe("MessagesTimeline", () => {
               createdAt: "2026-03-17T19:12:28.000Z",
               label: "Updated files",
               tone: "tool",
-              changedFiles: ["C:/Users/mike/dev-stuff/t3code/apps/web/src/session-logic.ts"],
+              changedFiles: ["C:/Users/mike/dev-stuff/croki/apps/web/src/session-logic.ts"],
             },
           },
         ]}
-        workspaceRoot="C:/Users/mike/dev-stuff/t3code"
+        workspaceRoot="C:/Users/mike/dev-stuff/croki"
       />,
     );
 
-    expect(markup).toContain("t3code/apps/web/src/session-logic.ts");
-    expect(markup).not.toContain("C:/Users/mike/dev-stuff/t3code/apps/web/src/session-logic.ts");
+    expect(markup).toContain("croki/apps/web/src/session-logic.ts");
+    expect(markup).not.toContain("C:/Users/mike/dev-stuff/croki/apps/web/src/session-logic.ts");
   });
 
   it("renders review comment contexts as structured cards instead of raw tags", () => {

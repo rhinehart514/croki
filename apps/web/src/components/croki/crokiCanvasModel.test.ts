@@ -2,7 +2,7 @@ import {
   CROKI_CONTEXT_LIMITS,
   createEmptyCrokiContext,
   type CrokiContext,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

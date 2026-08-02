@@ -2,7 +2,7 @@ import type {
   CrokiContext,
   CrokiContextEdge,
   CrokiContextReference,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 
 import type { ActivePlanState } from "~/session-logic";
 import { Button } from "../ui/button";

@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProviderInstanceId, ThreadId } from "@croki/contracts";
 import * as Effect from "effect/Effect";
 import { HttpServer } from "effect/unstable/http";
 
@@ -110,7 +110,7 @@ it.effect("keeps a credential alive across turns that never touch an MCP tool", 
   }),
 );
 
-it.effect("grants Canvas only for turns where the Canvas surface is active", () =>
+it.effect("grants Canvas only for explicit Product and GTM harness turns", () =>
   Effect.gen(function* () {
     const registry = yield* makeRegistry(() => 1_000);
     const threadId = ThreadId.make("thread-canvas");
@@ -120,10 +120,18 @@ it.effect("grants Canvas only for turns where the Canvas surface is active", () 
     });
     const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
 
+    expect((yield* registry.resolve(token))?.harnessId).toBe("native");
     expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
-    yield* registry.touch(threadId, { canvasEnabled: true });
+    // Panel visibility is deliberately not part of the capability decision.
+    yield* registry.touch(threadId, { harnessId: "native" });
+    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
+    yield* registry.touch(threadId, { harnessId: "product-v1" });
     expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(true);
-    yield* registry.touch(threadId, { canvasEnabled: false });
+    expect((yield* registry.resolve(token))?.harnessId).toBe("product-v1");
+    yield* registry.touch(threadId, { harnessId: "gtm-v1" });
+    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(true);
+    expect((yield* registry.resolve(token))?.harnessId).toBe("gtm-v1");
+    yield* registry.touch(threadId, { harnessId: "native" });
     expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
   }),
 );

@@ -2,7 +2,7 @@
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
-import { RETAINED_T3_IDENTIFIERS } from "./lib/brand-policy.ts";
+import { LEGACY_PRODUCT_IDENTIFIERS } from "./lib/brand-policy.ts";
 
 export type CrokiReleaseDestinationStatus = "enabled" | "disabled" | "unconfigured" | "invalid";
 
@@ -63,7 +63,7 @@ export interface CrokiReleasePlan {
 type ReleaseEnvironment = Readonly<Record<string, string | undefined>>;
 
 const INHERITED_T3_EAS_PROJECT_ID = "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
-const INHERITED_T3_REPOSITORY = `pingdotgg/${RETAINED_T3_IDENTIFIERS.stagedPackageName}`;
+const INHERITED_T3_REPOSITORY = `rhinehart514/${LEGACY_PRODUCT_IDENTIFIERS.stagedPackageName}`;
 const INHERITED_T3_CLI_PACKAGE = `t${3}`;
 
 const value = (environment: ReleaseEnvironment, name: string): string | null => {
@@ -105,7 +105,7 @@ function missingValues(
 }
 
 function inheritedDomainError(name: string, destination: string | null): string[] {
-  return destination?.toLowerCase().includes(RETAINED_T3_IDENTIFIERS.hostedServiceDomainSuffix)
+  return destination?.toLowerCase().includes(LEGACY_PRODUCT_IDENTIFIERS.hostedServiceDomainSuffix)
     ? [`${name} must not target the inherited T3 domain.`]
     : [];
 }
@@ -157,7 +157,7 @@ export function buildCrokiReleasePlan(
   const packageName = value(environment, "CROKI_CLI_PACKAGE");
   const cliErrors =
     packageName === INHERITED_T3_CLI_PACKAGE ||
-    packageName?.startsWith(RETAINED_T3_IDENTIFIERS.packageScope) === true
+    packageName?.startsWith(LEGACY_PRODUCT_IDENTIFIERS.packageScope) === true
       ? ["CROKI_CLI_PACKAGE must not target an inherited T3 package."]
       : [];
   const cli = {

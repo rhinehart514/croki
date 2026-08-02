@@ -2,7 +2,7 @@ import {
   CROKI_CONTEXT_LIMITS,
   parseCrokiContextReference,
   type CrokiContextReference,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 import { ExternalLink, FileCode2, Link2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 

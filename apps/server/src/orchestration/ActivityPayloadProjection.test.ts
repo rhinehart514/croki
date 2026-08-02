@@ -4,7 +4,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { projectActivityPayload, projectReadModelSnapshot } from "./ActivityPayloadProjection.ts";

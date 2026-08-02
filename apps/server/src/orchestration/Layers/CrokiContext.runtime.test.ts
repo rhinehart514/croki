@@ -9,7 +9,7 @@ it("loads the shared Croki context entry through the Node runtime", () => {
     [
       "--input-type=module",
       "--eval",
-      'const context = await import("@t3tools/shared/crokiContext"); process.stdout.write(String(context.CROKI_CONTEXT_VERSION));',
+      'const context = await import("@croki/shared/crokiContext"); process.stdout.write(String(context.CROKI_CONTEXT_VERSION));',
     ],
     {
       encoding: "utf8",

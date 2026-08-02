@@ -1,6 +1,6 @@
-import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
-import { EnvironmentId, ProjectWriteFileError } from "@t3tools/contracts";
-import { createEmptyCrokiContext, serializeCrokiContext } from "@t3tools/shared/crokiContext";
+import type { AtomCommandResult } from "@croki/client-runtime/state/runtime";
+import { EnvironmentId, ProjectWriteFileError } from "@croki/contracts";
+import { createEmptyCrokiContext, serializeCrokiContext } from "@croki/shared/crokiContext";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { renderToStaticMarkup } from "react-dom/server";

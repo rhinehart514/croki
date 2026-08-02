@@ -8,6 +8,7 @@ import type {
   CrokiContextParseErrorCode,
   CrokiContextReference,
 } from "./crokiContextValidation.ts";
+import { parseCrokiReleaseCandidate, type CrokiReleaseCandidate } from "./crokiReleaseCandidate.ts";
 
 export {
   CROKI_CONTEXT_LIMITS,
@@ -73,6 +74,8 @@ export interface CrokiContext {
   readonly updatedAt: string;
   readonly nodes: readonly CrokiContextNode[];
   readonly edges: readonly CrokiContextEdge[];
+  /** One project-owned next-release snapshot. Operational status is separate from canon authority. */
+  readonly release?: CrokiReleaseCandidate;
 }
 
 export const CROKI_CONTEXT_RECEIPT_STATUSES = [
@@ -100,8 +103,11 @@ export interface CrokiContextReceipt {
   readonly provisionalCount: number;
   readonly renderedChars: number;
   readonly truncated: boolean;
+  /** Present only when an active project-owned release candidate affected the turn. */
+  readonly releaseVersion?: string;
+  readonly releaseItemCount?: number;
   /** Absent only on receipts persisted before explicit turn behaviors shipped. */
-  readonly harnessId?: "native" | "gtm-v1";
+  readonly harnessId?: "native" | "product-v1" | "gtm-v1";
   readonly errorCode?: CrokiContextParseErrorCode;
   readonly issueCount?: number;
   readonly includedCount?: number;
@@ -334,6 +340,8 @@ export function parseCrokiContext(input: string): CrokiContext {
 
   const nodes = parsed.nodes.map(parseCrokiContextNode);
   const edges = parsed.edges.map(parseCrokiContextEdge);
+  const release =
+    parsed.release === undefined ? undefined : parseCrokiReleaseCandidate(parsed.release);
   const nodeIds = new Set(nodes.map((node) => node.id));
   if (nodeIds.size !== nodes.length) {
     throw new CrokiContextParseError("duplicate-node-id", "Croki context node ids must be unique.");
@@ -362,6 +370,7 @@ export function parseCrokiContext(input: string): CrokiContext {
     updatedAt: parsed.updatedAt,
     nodes,
     edges,
+    ...(release ? { release } : {}),
   };
 }
 

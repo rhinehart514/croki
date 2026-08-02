@@ -3,8 +3,8 @@ import {
   parseCrokiContext,
   serializeCrokiContext,
   type CrokiContext,
-} from "@t3tools/shared/crokiContext";
-import { recoverCrokiContext } from "@t3tools/shared/crokiContextRecovery";
+} from "@croki/shared/crokiContext";
+import { recoverCrokiContext } from "@croki/shared/crokiContextRecovery";
 import { useSyncExternalStore } from "react";
 
 import {

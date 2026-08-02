@@ -1,9 +1,9 @@
-import type { EnvironmentId, ProjectReadFileResult } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectReadFileResult } from "@croki/contracts";
 import {
   CROKI_CONTEXT_RELATIVE_PATH,
   type CrokiContextNode,
   type CrokiNodeDomain,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 import { useMemo } from "react";
 import {
   ActivityIndicator,

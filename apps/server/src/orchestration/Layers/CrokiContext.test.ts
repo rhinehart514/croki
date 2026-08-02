@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { CROKI_CONTEXT_LIMITS, serializeCrokiContext } from "@t3tools/shared/crokiContext";
+import { CROKI_CONTEXT_LIMITS, serializeCrokiContext } from "@croki/shared/crokiContext";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import {
   compileCrokiTurnInput,
   CROKI_GTM_HARNESS_INSTRUCTION,
+  CROKI_PRODUCT_HARNESS_INSTRUCTION,
   isCrokiContextAppliedActivityPayload,
   loadCrokiAgentContext,
 } from "./CrokiContext.ts";
@@ -19,6 +20,14 @@ it("keeps native provider turns free of a Croki behavior prompt", () => {
   assert.equal(
     compileCrokiTurnInput({ harnessId: "native", agentContext, userInput }),
     `${agentContext}\n\n${userInput}`,
+  );
+  assert.notInclude(
+    compileCrokiTurnInput({ harnessId: "native", agentContext, userInput }) ?? "",
+    "croki_product_harness",
+  );
+  assert.notInclude(
+    compileCrokiTurnInput({ harnessId: "native", agentContext, userInput }) ?? "",
+    "croki_gtm_harness",
   );
   assert.equal(
     compileCrokiTurnInput({ harnessId: "native", agentContext: null, userInput }),
@@ -33,7 +42,25 @@ it("keeps native provider turns free of a Croki behavior prompt", () => {
   );
 });
 
-it("adds one bounded strategy harness without weakening founder authority", () => {
+it("adds one bounded product harness without weakening founder authority", () => {
+  const agentContext = '<croki_product_context version="1">canon</croki_product_context>';
+  const userInput = "Reconsider the project surface";
+  const compiled = compileCrokiTurnInput({
+    harnessId: "product-v1",
+    agentContext,
+    userInput,
+  });
+
+  assert.isAtMost(CROKI_PRODUCT_HARNESS_INSTRUCTION.length, 1_500);
+  assert.equal(compiled?.match(/<croki_product_harness version="1">/g)?.length, 1);
+  assert.include(compiled ?? "", "leave consequential judgment to the founder");
+  assert.include(compiled ?? "", "call canvas_present");
+  assert.include(compiled ?? "", "not project memory");
+  assert.include(compiled ?? "", agentContext);
+  assert.isTrue(compiled?.endsWith(userInput));
+});
+
+it("adds one bounded GTM harness without weakening founder authority", () => {
   const agentContext = "<croki_product_context>canon</croki_product_context>";
   const userInput = "Explore the first customer";
   const compiled = compileCrokiTurnInput({
@@ -92,6 +119,23 @@ it.layer(NodeServices.layer)("Croki provider context", (it) => {
             },
           ],
           edges: [],
+          release: {
+            version: "0.4.2",
+            baseline: "0.4.1",
+            goal: "Make the next release legible.",
+            status: "active",
+            items: [
+              {
+                id: "release-canvas",
+                title: "Introduce Release Canvas",
+                kind: "feature",
+                status: "working",
+                outcome: "See the candidate beside the Thread.",
+                acceptanceCriteria: [],
+                sourceThreads: [],
+              },
+            ],
+          },
         }),
       );
 
@@ -99,6 +143,7 @@ it.layer(NodeServices.layer)("Croki provider context", (it) => {
       assert.include(context.prompt ?? "", "Use one generic provider seam");
       assert.include(context.prompt ?? "", "apps/server/src/orchestration/Layers/CrokiContext.ts");
       assert.include(context.prompt ?? "", "https://example.com/context-evidence");
+      assert.include(context.prompt ?? "", "Introduce Release Canvas");
       assert.deepInclude(context.receipt, {
         status: "loaded",
         relativePath: ".croki/context.json",
@@ -108,6 +153,8 @@ it.layer(NodeServices.layer)("Croki provider context", (it) => {
         currentCount: 1,
         provisionalCount: 1,
         truncated: false,
+        releaseVersion: "0.4.2",
+        releaseItemCount: 1,
       });
       assert.match(context.receipt.sha256 ?? "", /^[a-f0-9]{64}$/);
       assert.equal(context.receipt.renderedChars, context.prompt?.length);
@@ -233,6 +280,44 @@ it("accepts only bounded, internally consistent persisted activity payloads", ()
     isCrokiContextAppliedActivityPayload({
       ...payload,
       receipt: { ...payload.receipt, status: "partial" },
+    }),
+  );
+  assert.isTrue(
+    isCrokiContextAppliedActivityPayload({
+      ...payload,
+      receipt: {
+        ...payload.receipt,
+        harnessId: "product-v1",
+      },
+    }),
+  );
+  assert.isFalse(
+    isCrokiContextAppliedActivityPayload({
+      ...payload,
+      receipt: {
+        ...payload.receipt,
+        releaseVersion: "x".repeat(81),
+        releaseItemCount: 61,
+      },
+    }),
+  );
+  assert.isTrue(
+    isCrokiContextAppliedActivityPayload({
+      ...payload,
+      receipt: {
+        ...payload.receipt,
+        releaseVersion: "0.4.2",
+        releaseItemCount: 3,
+      },
+    }),
+  );
+  assert.isFalse(
+    isCrokiContextAppliedActivityPayload({
+      ...payload,
+      receipt: {
+        ...payload.receipt,
+        releaseVersion: "0.4.2",
+      },
     }),
   );
   assert.isTrue(

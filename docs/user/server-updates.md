@@ -4,8 +4,8 @@ The Croki web or desktop app and the server it connects to work best when they u
 version. If they do not match, Croki shows a warning with the right update option for that server.
 
 > [!WARNING]
-> Croki 0.4.1 has no Croki-owned CLI release channel. Automatic self-update and
-> copied `npx t3@<version>` commands still target the inherited upstream npm
+> Croki 0.4.2 has no Croki-owned CLI release channel. Automatic self-update and
+> copied `npx croki-server@<version>` commands still target the inherited upstream npm
 > package. Use desktop-managed local backends or rebuild and restart the same
 > Croki source revision until the CLI is renamed and published by Croki.
 
@@ -40,7 +40,7 @@ servers silently in the background.
 The inherited background-service update command is retained for reference:
 
 ```sh
-npx t3@latest service update
+npx croki-server@latest service update
 ```
 
 See [Running Croki in the Background](./background-service.md) for install, status, and removal
@@ -56,7 +56,7 @@ reconnect or open **Settings** → **Connections** again. If the warning remains
 
 1. Retry the offered action once.
 2. Make sure you updated the machine named in the warning, not only the device you are using.
-3. For a command-line server, relaunch it with `npx t3@<client-version>`, replacing
+3. For a command-line server, relaunch it with `npx croki-server@<client-version>`, replacing
    `<client-version>` with the client version shown in the warning.
 
 For remote connection setup and access troubleshooting, see [Remote Access](./remote-access.md).

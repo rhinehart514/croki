@@ -1,4 +1,4 @@
-import type { CrokiContext, CrokiContextNode } from "@t3tools/shared/crokiContext";
+import type { CrokiContext, CrokiContextNode } from "@croki/shared/crokiContext";
 import { describe, expect, it } from "vite-plus/test";
 
 import { crokiNodeEpistemicLabel, projectCrokiCanvas } from "./crokiCanvasProjection";

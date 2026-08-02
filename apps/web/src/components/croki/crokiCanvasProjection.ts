@@ -1,8 +1,4 @@
-import type {
-  CrokiContext,
-  CrokiContextEdge,
-  CrokiContextNode,
-} from "@t3tools/shared/crokiContext";
+import type { CrokiContext, CrokiContextEdge, CrokiContextNode } from "@croki/shared/crokiContext";
 
 import { crokiNodeMatchesView, type CrokiCanvasView } from "./crokiCanvasLanguage";
 

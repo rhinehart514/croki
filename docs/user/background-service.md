@@ -15,25 +15,25 @@ After Croki owns and publishes its CLI package, install it with the matching
 Croki release command. The current inherited command shape is:
 
 ```sh
-npx t3@latest service install
+npx croki-server@latest service install
 ```
 
 Check whether it is installed:
 
 ```sh
-npx t3@latest service status
+npx croki-server@latest service status
 ```
 
 Update or repair it:
 
 ```sh
-npx t3@latest service update
+npx croki-server@latest service update
 ```
 
 Stop it and remove it from startup:
 
 ```sh
-npx t3@latest service uninstall
+npx croki-server@latest service uninstall
 ```
 
 Updating restarts Croki briefly. Let active agent work and terminal commands finish first.

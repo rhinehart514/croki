@@ -7,7 +7,7 @@ repository rules.
 
 - Croki is Jacob's current ADE and daily development environment. Preserve its
   reliability and direct build loop before expanding its product surface.
-- Croki is a narrow overlay on T3 Code. Preserve native threads, providers,
+- Croki is a narrow overlay on Croki. Preserve native threads, providers,
   worktrees, recovery, Git, terminal, preview, files, plans, and project scripts.
 - `main` mirrors `upstream/main`; product work belongs on `croki/main`.
 - Visible branding is Croki. Preserve compatibility IDs listed in

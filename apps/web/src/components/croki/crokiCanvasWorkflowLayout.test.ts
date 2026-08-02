@@ -1,5 +1,5 @@
-import { TurnId } from "@t3tools/contracts";
-import type { CrokiContextNode, CrokiContextReference } from "@t3tools/shared/crokiContext";
+import { TurnId } from "@croki/contracts";
+import type { CrokiContextNode, CrokiContextReference } from "@croki/shared/crokiContext";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {

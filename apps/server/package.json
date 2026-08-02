@@ -1,14 +1,14 @@
 {
-  "name": "t3",
-  "version": "0.4.1",
+  "name": "croki-server",
+  "version": "0.4.2",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pingdotgg/t3code",
+    "url": "https://github.com/rhinehart514/croki",
     "directory": "apps/server"
   },
   "bin": {
-    "t3": "./dist/bin.mjs"
+    "croki": "./dist/bin.mjs"
   },
   "files": [
     "dist"
@@ -35,11 +35,11 @@
     "yaml": "catalog:"
   },
   "devDependencies": {
+    "@croki/contracts": "workspace:*",
+    "@croki/shared": "workspace:*",
+    "@croki/tailscale": "workspace:*",
+    "@croki/web": "workspace:*",
     "@effect/vitest": "catalog:",
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/shared": "workspace:*",
-    "@t3tools/tailscale": "workspace:*",
-    "@t3tools/web": "workspace:*",
     "@types/bun": "1.3.14",
     "@types/node": "catalog:",
     "effect-acp": "workspace:*",

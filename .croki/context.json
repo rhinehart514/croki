@@ -1,7 +1,137 @@
 {
   "version": 1,
-  "product": "Croki is a coding environment for founders building products with Codex and other coding agents. Threads are the durable spine; Canvas holds optional, repository-owned product truth that survives individual conversations.",
-  "updatedAt": "2026-08-01T03:18:00.000Z",
+  "product": "Croki is a coding environment for founders building products with Codex and other coding agents. Threads are the durable spine; Canvas shows the next release candidate and preserves repository-owned product truth across conversations.",
+  "updatedAt": "2026-08-02T20:25:10.000Z",
+  "release": {
+    "version": "0.4.2",
+    "baseline": "0.4.1",
+    "goal": "Introduce Canvas as the native view of the next Croki release: see what is being worked on, what is accepted for the candidate, and what evidence is still required before shipping.",
+    "status": "active",
+    "items": [
+      {
+        "id": "native-release-canvas",
+        "title": "Introduce native Release Canvas",
+        "kind": "feature",
+        "status": "verified",
+        "outcome": "Opening Canvas beside any Croki Thread shows the 0.4.2 candidate, active work, blockers, and proof without creating a second execution workflow.",
+        "acceptanceCriteria": [
+          {
+            "id": "project-owned-candidate",
+            "text": "The project-owned Canvas source stores one bounded release candidate with explicit item and proof states.",
+            "status": "passed",
+            "references": [
+              {
+                "kind": "file",
+                "path": "packages/shared/src/crokiReleaseCandidate.ts"
+              }
+            ]
+          },
+          {
+            "id": "native-entry",
+            "text": "Opening Canvas from the existing right panel lands on the release candidate, while visual artifacts retain an explicit return path.",
+            "status": "passed",
+            "references": [
+              {
+                "kind": "file",
+                "path": "apps/web/src/components/croki/CrokiCanvas.tsx"
+              }
+            ]
+          },
+          {
+            "id": "thread-and-proof",
+            "text": "A release item can link the current Thread, declare acceptance criteria, attach portable evidence, and become verified only after every criterion passes.",
+            "status": "passed",
+            "references": [
+              {
+                "kind": "file",
+                "path": "apps/web/src/components/croki/crokiReleaseModel.ts"
+              }
+            ]
+          },
+          {
+            "id": "release-boundary",
+            "text": "Focused Canvas, server-context, shared-schema, and Croki release checks pass for the 0.4.2 source candidate.",
+            "status": "passed"
+          }
+        ],
+        "sourceThreads": []
+      },
+      {
+        "id": "product-gtm-visuals",
+        "title": "Keep Product and GTM visuals as supporting artifacts",
+        "kind": "feature",
+        "status": "verified",
+        "outcome": "Explicit Product and GTM turns may create bounded immutable visuals, but release state and native provider behavior remain independent.",
+        "acceptanceCriteria": [
+          {
+            "id": "artifact-boundary",
+            "text": "Thread-scoped visuals never silently change project canon, provider behavior, or release readiness.",
+            "status": "passed",
+            "references": [
+              {
+                "kind": "file",
+                "path": "docs/project/harness-canvas-spec.md"
+              }
+            ]
+          }
+        ],
+        "sourceThreads": []
+      },
+      {
+        "id": "thread-native-coordination",
+        "title": "Keep delegated work visible in the Thread",
+        "kind": "feature",
+        "status": "verified",
+        "outcome": "Coordination Workstreams show actor, ownership, progress, and evidence without turning Canvas into an execution dashboard.",
+        "acceptanceCriteria": [
+          {
+            "id": "thread-projection",
+            "text": "Delegated work remains a compact Thread-native projection and does not create another scheduler or runtime.",
+            "status": "passed",
+            "references": [
+              {
+                "kind": "file",
+                "path": "apps/web/src/components/chat/CoordinationWorkstreams.tsx"
+              }
+            ]
+          }
+        ],
+        "sourceThreads": []
+      },
+      {
+        "id": "release-ownership-gates",
+        "title": "Keep production publishing behind Croki ownership gates",
+        "kind": "cleanup",
+        "status": "blocked",
+        "outcome": "The source candidate can be verified locally while publishing remains impossible until every destination and credential is Croki-owned.",
+        "acceptanceCriteria": [
+          {
+            "id": "source-candidate",
+            "text": "The 0.4.2 source candidate passes local release planning, smoke, and Croki boundary checks.",
+            "status": "passed",
+            "references": [
+              {
+                "kind": "file",
+                "path": "docs/project/release-notes-0.4.2.md"
+              }
+            ]
+          },
+          {
+            "id": "owned-publishing",
+            "text": "Repository, package, relay, web, signing, and requested mobile destinations are Croki-owned and configured.",
+            "status": "pending",
+            "references": [
+              {
+                "kind": "file",
+                "path": "docs/operations/release.md"
+              }
+            ]
+          }
+        ],
+        "sourceThreads": []
+      }
+    ]
+  },
   "nodes": [
     {
       "id": "intent-durable-product-understanding",
@@ -15,7 +145,7 @@
       "id": "decision-t3-native-fork",
       "kind": "decision",
       "status": "current",
-      "title": "Croki is a product fork of T3 Code",
+      "title": "Croki is a product fork of Croki",
       "body": "Keep main as a clean upstream mirror. Develop Croki on croki/main and prefer T3-native threads, providers, worktrees, checkpoints, review, terminal, preview, and project-file RPCs over porting the standalone runtime.",
       "updatedAt": "2026-07-29T20:10:00.000Z"
     },
@@ -24,8 +154,8 @@
       "kind": "decision",
       "status": "current",
       "title": "Threads are the spine; Canvas is contextual",
-      "body": "Threads remain the permanent record of work. Canvas is a compact view of product truth and relationships, stored in .croki/context.json and supplied to every supported provider.",
-      "updatedAt": "2026-07-29T20:10:00.000Z"
+      "body": "Threads remain the permanent record of work. Canvas opens on the project-owned next release candidate so active scope, source Threads, blockers, and proof are visible; its secondary Context view preserves product truth and relationships. Both are stored in .croki/context.json and supplied in bounded form to every supported provider.",
+      "updatedAt": "2026-08-02T20:25:10.000Z"
     },
     {
       "id": "evidence-standalone-preserved",

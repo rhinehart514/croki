@@ -62,10 +62,10 @@ const WEB_ICON_TARGET_FILENAMES = {
 
 const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
   development: {
-    faviconIco: BRAND_ASSET_PATHS.crokiWindowsIconIco,
-    favicon16Png: BRAND_ASSET_PATHS.crokiWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.crokiWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.crokiWebAppleTouchIconPng,
+    faviconIco: BRAND_ASSET_PATHS.developmentWebFaviconIco,
+    favicon16Png: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
+    favicon32Png: BRAND_ASSET_PATHS.developmentWebFavicon32Png,
+    appleTouchIconPng: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
   },
   nightly: {
     faviconIco: BRAND_ASSET_PATHS.crokiWindowsIconIco,

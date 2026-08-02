@@ -1,10 +1,14 @@
 # Current project state
 
 Last audited: 2026-08-02
-Code baseline: Croki 0.4.1 on `croki/main`
+Code baseline: Croki 0.4.2 release candidate on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
-a narrow Croki overlay on T3 Code rather than a second agent runtime.
+a narrow Croki overlay on Croki rather than a second agent runtime.
+
+The 0.4.2 source candidate is prepared but is not tagged or published. See the
+[0.4.2 release notes](./release-notes-0.4.2.md) and [release ownership
+contract](../operations/release.md) for the remaining external gates.
 
 ## Working product
 
@@ -17,6 +21,10 @@ Croki currently provides:
 - web, Electron desktop, and mobile clients;
 - multiple configured instances of Codex, Claude, Cursor, Grok Build,
   OpenCode, and OpenClaw;
+- OpenClaw instances can connect to any agent already configured in the user's
+  Gateway. Croki stores the selected agent identity and preserves that agent's
+  workspace, memory, skills, model, tools, and delegation settings; it does not
+  provision or replace an agent.
 - local and remote environment connection paths, including desktop-managed SSH
   and Croki Connect compatibility infrastructure;
 - Croki branding and completion feedback;
@@ -29,22 +37,33 @@ Gateway and configured agent.
 
 ## Canvas
 
-Canvas is optional repository context and a visual projection beside the
-Thread. Version 1 stores `intent`, `decision`, `evidence`, and `work` nodes with
-`current`, `provisional`, and `retired` authority states. Founder-approved
-records are protected by product transitions; agent presentations remain
-provisional. Web editing is conflict-safe, mobile presentation is read-only,
-and provider context fails open when the source is absent or invalid.
+Croki 0.4.2 introduces Release Canvas as the default Canvas view. It shows one
+project-owned next-release candidate with proposed, working, candidate,
+blocked, verified, and deferred items. Each item can link native source Threads,
+state an outcome, declare acceptance criteria, and attach portable evidence.
+Verification is valid only when every criterion passes.
 
-Canvas does not own a conversation, provider, workflow runtime, scheduler,
-memory database, Review system, or worktree system.
+The Thread remains the work and evidence spine. Release Canvas is the spatial
+view of scope and readiness, not a conversation, provider, workflow runtime,
+scheduler, memory database, Review system, or worktree system. Coordination
+Workstreams remain compact Thread-native runtime activity.
 
-Approved `current` context is attached to every project turn whether or not the
-Canvas panel is open. `provisional` proposals remain visible for review but are
-excluded from provider context by default. The composer shows the approved
-count, and each sent turn records an inspectable, content-free setup receipt.
-The web Canvas navigation is `Product`, `Run`, and `Proposals`; Run projects the
-current Thread plan and does not introduce another execution engine.
+The secondary Context view retains repository-owned product truth. Version 1
+stores `intent`, `decision`, `evidence`, and `work` nodes with `current`,
+`provisional`, and `retired` authority states. Existing file, diff, and preview
+evidence capture lands there. Product and GTM harnesses may also create bounded
+immutable visual artifacts, but those remain Thread-scoped presentations and
+never become release state or canon.
+
+Approved `current` context and a bounded projection of the active release are
+attached to every project turn whether or not Canvas is open. Proposals and
+deferred release items are excluded by default. The composer and content-free
+turn receipt expose the active release version without leaking Canvas bodies.
+Large releases are summarized; malformed release data can be omitted without
+discarding valid canon or blocking the provider turn.
+
+See the [Release Canvas specification](./release-canvas-spec.md) for the selected
+0.4.2 boundary.
 
 ## Selected native-provider rule
 
@@ -62,17 +81,20 @@ Runtime, context, tools, and harnesses are separate:
 - a harness deliberately changes how an agent approaches a task.
 
 Canvas is context and visualization, not a harness. The web composer now ships
-two one-turn behaviors: `Native`, the default, and `GTM v1`. Native adds no
-Croki behavior prompt. GTM v1 adds one bounded strategy instruction and resets
-to Native after a successful send. Both use the same provider runtime, Thread,
-permissions, tools, and approved Canvas context.
+three one-turn behaviors: `Native`, the default, `Product`, and `GTM v1`.
+Native adds no Croki behavior prompt. Product adds bounded product judgment with
+optional Canvas presentation. GTM v1 adds one bounded strategy instruction.
+Product and GTM reset to Native after a successful send. All three use the same
+provider runtime, Thread, permissions, tools, and approved Canvas context.
 OpenClaw follows the same rule: Croki passes prompts through ACP without a
-persona, delegation policy, model requirement, or forced reasoning mode.
+persona, delegation policy, model requirement, or forced reasoning mode. The
+selected OpenClaw agent remains user-owned and native; Croki never asks it to
+use a Croki-owned workspace, memory, skills, or model.
 
 ## Known implementation gaps
 
-- The new behavior selector is web-only. Mobile remains a read-only Canvas
-  projection and does not yet expose named harness selection.
+- Release Canvas editing and the new behavior selector are web-only. Mobile
+  does not yet expose the full candidate board or named harness selection.
 - Turn setup inspection currently covers behavior, Canvas application,
   approved/proposed counts, capability, and snapshot identity. Provider/model
   and access controls remain visible in their existing native surfaces.
@@ -80,7 +102,7 @@ persona, delegation policy, model requirement, or forced reasoning mode.
   destinations, signing, and mobile production deployment remain disabled by
   ownership guards.
 - Remote self-update and copied CLI launch commands still target the inherited
-  `t3@<version>` npm package. They are not Croki release paths until the CLI is
+  `croki-server@<version>` npm package. They are not Croki release paths until the CLI is
   renamed and published under Croki ownership.
 - Several deep subsystem documents originated upstream. Compatibility names are
   intentional, but any instructions that publish to inherited T3 destinations

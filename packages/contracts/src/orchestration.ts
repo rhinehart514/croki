@@ -46,7 +46,7 @@ export const ProviderSandboxMode = Schema.Literals([
 export type ProviderSandboxMode = typeof ProviderSandboxMode.Type;
 
 /** Optional, one-turn Croki behavior layered over the provider's native agent runtime. */
-export const CrokiHarnessId = Schema.Literals(["native", "gtm-v1"]);
+export const CrokiHarnessId = Schema.Literals(["native", "product-v1", "gtm-v1"]);
 export type CrokiHarnessId = typeof CrokiHarnessId.Type;
 export const DEFAULT_CROKI_HARNESS_ID: CrokiHarnessId = "native";
 

@@ -1,4 +1,4 @@
-import type { CrokiContext, CrokiContextEdge } from "@t3tools/shared/crokiContext";
+import type { CrokiContext, CrokiContextEdge } from "@croki/shared/crokiContext";
 
 import type { ActivePlanState } from "~/session-logic";
 import {

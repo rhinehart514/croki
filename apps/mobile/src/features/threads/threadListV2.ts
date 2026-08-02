@@ -1,6 +1,6 @@
-import { effectiveSettled, effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { effectiveSettled, effectiveSnoozed } from "@croki/client-runtime/state/thread-settled";
+import type { EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
+import type { EnvironmentId, ProjectId } from "@croki/contracts";
 
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 

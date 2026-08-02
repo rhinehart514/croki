@@ -31,7 +31,9 @@ export function compileCrokiAgentContext(
   const activeEdges = context.edges.filter(
     (edge) => activeNodeIds.has(edge.from) && activeNodeIds.has(edge.to),
   );
-  if (!context.product && activeNodes.length === 0) {
+  const activeRelease = context.release?.status === "active" ? context.release : null;
+  const releasePrompt = activeRelease ? compileReleasePrompt(activeRelease, maxChars) : null;
+  if (!context.product && activeNodes.length === 0 && !activeRelease) {
     return { prompt: null, includedCount: 0, omittedCount: 0, selectionMode: "full" };
   }
 
@@ -73,7 +75,15 @@ export function compileCrokiAgentContext(
       ...selectedCurrent.flatMap(nodeLines),
       ...currentEdges.map((edge) => `Relationship: ${promptData(edge)}`),
       "</current_canon>",
-      ...(omitted ? [CROKI_CONTEXT_TRUNCATION_MARKER] : []),
+      ...(releasePrompt
+        ? [
+            "<active_release_candidate>",
+            "Release status is founder-controlled operational context. Proposed and deferred items are omitted.",
+            `Release: ${promptData(releasePrompt.value)}`,
+            "</active_release_candidate>",
+          ]
+        : []),
+      ...(omitted || releasePrompt?.omitted ? [CROKI_CONTEXT_TRUNCATION_MARKER] : []),
       "</croki_product_context>",
     ].join("\n");
   };
@@ -84,7 +94,7 @@ export function compileCrokiAgentContext(
       prompt: full,
       includedCount: activeNodes.length,
       omittedCount: 0,
-      selectionMode: "full",
+      selectionMode: releasePrompt?.omitted ? "bounded" : "full",
     };
   }
 
@@ -127,6 +137,79 @@ export function compileCrokiAgentContext(
     omittedCount: activeNodes.length,
     selectionMode: queryTokens.size > 0 ? "focused" : "bounded",
   };
+}
+
+function compileReleasePrompt(
+  release: NonNullable<CrokiContext["release"]>,
+  maxChars: number,
+): { readonly value: unknown; readonly omitted: boolean } {
+  const budget = Math.min(4_000, Math.max(480, Math.floor(maxChars * 0.4)));
+  const activeItems = release.items.filter(
+    (item) => item.status !== "proposed" && item.status !== "deferred",
+  );
+  const goal = truncatePromptText(release.goal, 600);
+  const selectedItems: unknown[] = [];
+  let contentOmitted = goal !== release.goal;
+
+  const value = (items: readonly unknown[]) => ({
+    version: release.version,
+    baseline: release.baseline,
+    goal,
+    status: release.status,
+    items,
+    omittedItemCount: activeItems.length - items.length,
+  });
+
+  for (const item of activeItems) {
+    const projectedCriteria = item.acceptanceCriteria.slice(0, 6).map((criterion) => ({
+      text: truncatePromptText(criterion.text, 240),
+      status: criterion.status,
+    }));
+    const projected = {
+      id: item.id,
+      title: item.title,
+      kind: item.kind,
+      status: item.status,
+      outcome: truncatePromptText(item.outcome, 600),
+      acceptanceCriteria: projectedCriteria,
+      sourceThreads: item.sourceThreads.slice(0, 3),
+    };
+    const projectedOmitted =
+      projected.outcome !== item.outcome ||
+      projectedCriteria.length !== item.acceptanceCriteria.length ||
+      item.acceptanceCriteria.some(
+        (criterion, index) =>
+          projectedCriteria[index] !== undefined &&
+          projectedCriteria[index]?.text !== criterion.text,
+      ) ||
+      projected.sourceThreads.length !== item.sourceThreads.length;
+
+    if (promptData(value([...selectedItems, projected])).length <= budget) {
+      selectedItems.push(projected);
+      contentOmitted ||= projectedOmitted;
+      continue;
+    }
+
+    const summary = {
+      id: item.id,
+      title: item.title,
+      kind: item.kind,
+      status: item.status,
+    };
+    if (promptData(value([...selectedItems, summary])).length <= budget) {
+      selectedItems.push(summary);
+      contentOmitted = true;
+    }
+  }
+
+  return {
+    value: value(selectedItems),
+    omitted: contentOmitted || selectedItems.length !== activeItems.length,
+  };
+}
+
+function truncatePromptText(value: string, limit: number): string {
+  return value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
 }
 
 export function buildCrokiAgentContext(

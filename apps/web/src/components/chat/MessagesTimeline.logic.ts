@@ -7,7 +7,14 @@ import {
   type WorkLogEntry,
 } from "../../session-logic";
 import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
-import { type MessageId, type OrchestrationLatestTurn, type TurnId } from "@t3tools/contracts";
+import {
+  type MessageId,
+  type OrchestrationLatestTurn,
+  type OrchestrationThreadActivity,
+  type TurnId,
+} from "@croki/contracts";
+import type { CanvasPresentationTimelineActivity } from "./canvasThreadIntegration";
+import { isCoordinationTaskActivity } from "./CoordinationWorkstreams.logic";
 
 export const MAX_VISIBLE_WORK_LOG_ENTRIES = 1;
 export const TIMELINE_MINIMAP_ITEM_SPACING = 8;
@@ -175,7 +182,19 @@ export type MessagesTimelineRow =
       createdAt: string;
       proposedPlan: ProposedPlan;
     }
-  | { kind: "working"; id: string; createdAt: string | null };
+  | { kind: "working"; id: string; createdAt: string | null }
+  | {
+      kind: "canvas";
+      id: string;
+      createdAt: string;
+      presentation: CanvasPresentationTimelineActivity;
+    }
+  | {
+      kind: "coordination";
+      id: string;
+      createdAt: string;
+      activities: ReadonlyArray<OrchestrationThreadActivity>;
+    };
 
 export interface StableMessagesTimelineRowsState {
   byId: Map<string, MessagesTimelineRow>;
@@ -352,7 +371,9 @@ function deriveTurnFolds(input: {
     }
     const hiddenEntryIds = new Set<string>();
     for (const entry of group.entries) {
-      if (entry.id !== group.terminalEntry?.id) {
+      const isCanvasPresentation =
+        entry.kind === "work" && entry.entry.sourceActivityKind === "croki.canvas.presented";
+      if (entry.id !== group.terminalEntry?.id && !isCanvasPresentation) {
         hiddenEntryIds.add(entry.id);
       }
     }
@@ -404,6 +425,8 @@ function deriveTurnFolds(input: {
 
 export function deriveMessagesTimelineRows(input: {
   timelineEntries: ReadonlyArray<TimelineEntry>;
+  canvasPresentationsByActivityId?: ReadonlyMap<string, CanvasPresentationTimelineActivity>;
+  coordinationActivities?: ReadonlyArray<OrchestrationThreadActivity>;
   latestTurn?: TimelineLatestTurn | null;
   runningTurnId?: TurnId | null;
   expandedTurnIds?: ReadonlySet<TurnId>;
@@ -437,6 +460,18 @@ export function deriveMessagesTimelineRows(input: {
     }
   }
 
+  const coordinationGroups = new Map<
+    string,
+    { turnId: TurnId | null; activities: OrchestrationThreadActivity[] }
+  >();
+  for (const activity of input.coordinationActivities ?? []) {
+    if (!isCoordinationTaskActivity(activity)) continue;
+    const scope = activity.turnId === null ? "thread" : String(activity.turnId);
+    const group = coordinationGroups.get(scope) ?? { turnId: activity.turnId, activities: [] };
+    group.activities.push(activity);
+    coordinationGroups.set(scope, group);
+  }
+
   for (let index = 0; index < input.timelineEntries.length; index += 1) {
     const timelineEntry = input.timelineEntries[index];
     if (!timelineEntry) {
@@ -460,6 +495,26 @@ export function deriveMessagesTimelineRows(input: {
     }
 
     if (timelineEntry.kind === "work") {
+      if (
+        timelineEntry.entry.sourceActivityKind === "task.started" ||
+        timelineEntry.entry.sourceActivityKind === "task.progress" ||
+        timelineEntry.entry.sourceActivityKind === "task.completed"
+      ) {
+        continue;
+      }
+      const presentation = input.canvasPresentationsByActivityId?.get(timelineEntry.entry.id);
+      if (presentation) {
+        nextRows.push({
+          kind: "canvas",
+          id: `canvas:${presentation.activityId}`,
+          createdAt: presentation.createdAt,
+          presentation,
+        });
+        continue;
+      }
+    }
+
+    if (timelineEntry.kind === "work") {
       const groupedEntries = [timelineEntry.entry];
       let cursor = index + 1;
       while (cursor < input.timelineEntries.length) {
@@ -467,6 +522,10 @@ export function deriveMessagesTimelineRows(input: {
         if (
           !nextEntry ||
           nextEntry.kind !== "work" ||
+          nextEntry.entry.sourceActivityKind === "task.started" ||
+          nextEntry.entry.sourceActivityKind === "task.progress" ||
+          nextEntry.entry.sourceActivityKind === "task.completed" ||
+          input.canvasPresentationsByActivityId?.has(nextEntry.entry.id) === true ||
           collapsedEntryIds.has(nextEntry.id) ||
           foldsByAnchorEntryId.has(nextEntry.id)
         ) {
@@ -563,6 +622,31 @@ export function deriveMessagesTimelineRows(input: {
     });
   }
 
+  for (const [scope, group] of coordinationGroups) {
+    const visible =
+      group.turnId === null ||
+      unsettledTurnId === group.turnId ||
+      input.expandedTurnIds?.has(group.turnId) === true;
+    if (!visible) continue;
+    const activities = group.activities.toSorted(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+    );
+    const createdAt = activities[0]?.createdAt;
+    if (!createdAt) continue;
+    const row: MessagesTimelineRow = {
+      kind: "coordination",
+      id: `coordination:${scope}`,
+      createdAt,
+      activities,
+    };
+    const insertionIndex = nextRows.findIndex(
+      (candidate) => candidate.createdAt !== null && candidate.createdAt > createdAt,
+    );
+    if (insertionIndex === -1) nextRows.push(row);
+    else nextRows.splice(insertionIndex, 0, row);
+  }
+
   if (input.isWorking) {
     nextRows.push({
       kind: "working",
@@ -601,6 +685,12 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
   switch (a.kind) {
     case "working":
       return a.createdAt === (b as typeof a).createdAt;
+
+    case "canvas":
+      return a.presentation === (b as typeof a).presentation;
+
+    case "coordination":
+      return Equal.equals(a.activities, (b as typeof a).activities);
 
     case "turn-fold": {
       const bf = b as typeof a;

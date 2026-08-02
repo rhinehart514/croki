@@ -97,7 +97,7 @@ jobs:
       - name: Deploy production relay stage
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
         id: deploy
-        run: vp run --filter t3code-relay deploy --stage prod --yes --github-output
+        run: vp run --filter croki-relay deploy --stage prod --yes --github-output
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CROKI_CLOUDFLARE_API_TOKEN }}
           PLANETSCALE_API_TOKEN_ID: ${{ secrets.CROKI_PLANETSCALE_API_TOKEN_ID }}

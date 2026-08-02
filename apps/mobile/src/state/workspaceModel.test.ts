@@ -1,9 +1,6 @@
-import type { EnvironmentShellSummary } from "@t3tools/client-runtime/state/shell";
-import {
-  BearerConnectionProfile,
-  BearerConnectionTarget,
-} from "@t3tools/client-runtime/connection";
-import { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentShellSummary } from "@croki/client-runtime/state/shell";
+import { BearerConnectionProfile, BearerConnectionTarget } from "@croki/client-runtime/connection";
+import { EnvironmentId } from "@croki/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 

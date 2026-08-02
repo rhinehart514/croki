@@ -1,4 +1,4 @@
-import { parseCrokiContext, type CrokiContext } from "@t3tools/shared/crokiContext";
+import { parseCrokiContext, type CrokiContext } from "@croki/shared/crokiContext";
 
 import type { CrokiCanvasDraftSnapshot, CrokiCanvasSourceState } from "./crokiCanvasDraftStore";
 

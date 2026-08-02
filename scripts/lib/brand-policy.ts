@@ -13,7 +13,7 @@ export const CROKI_VISIBLE_BRAND = {
 } as const;
 
 /**
- * Croki-owned identities that must never be shared with an installed T3 Code build.
+ * Croki-owned identities that must never be shared with an installed predecessor build.
  * Internal package and wire names can remain compatible without coupling app state.
  */
 export const CROKI_PRODUCT_IDENTIFIERS = {
@@ -39,163 +39,164 @@ export const CROKI_BRAND_ASSET_PATHS = {
   crokiWebAppleTouchIconPng: "assets/croki/croki-mark-180.png",
 } as const;
 
-export const RETAINED_T3_IDENTIFIERS = {
-  stagedPackageName: "t3code",
-  packageScope: "@t3tools/",
-  desktopAppId: "com.t3tools.t3code",
-  desktopDevelopmentAppId: "com.t3tools.t3code.dev",
-  productionScheme: "t3code",
-  developmentScheme: "t3code-dev",
-  previewScheme: "t3code-preview",
+export const LEGACY_PRODUCT_IDENTIFIERS = {
+  stagedPackageName: "croki",
+  packageScope: "@croki/",
+  desktopAppId: "com.croki.desktop",
+  desktopDevelopmentAppId: "com.croki.desktop.dev",
+  productionScheme: "croki",
+  developmentScheme: "croki-dev",
+  previewScheme: "croki-preview",
   stateRoot: ".t3",
-  productionStorageName: "t3code",
-  developmentStorageName: "t3code-dev",
-  storageKeyPrefix: "t3code:",
-  productionDesktopEntryName: "t3code.desktop",
-  developmentDesktopEntryName: "t3code-dev.desktop",
-  environmentPrefix: "T3CODE_",
+  productionStorageName: "Croki",
+  developmentStorageName: "Croki (Dev)",
+  storageKeyPrefix: "croki:",
+  productionDesktopEntryName: "croki.desktop",
+  developmentDesktopEntryName: "croki-dev.desktop",
+  environmentPrefix: "CROKI_",
   desktopIpcPrefix: "desktop:",
-  telemetryPrefix: "t3.",
-  embeddedCommitHashKey: "t3codeCommitHash",
-  projectConfigFileName: "t3.json",
-  productMcpName: "t3-code",
-  resourceMonitorExecutableName: "t3-resource-monitor",
+  telemetryPrefix: "croki.",
+  embeddedCommitHashKey: "crokiCommitHash",
+  projectConfigFileName: "croki.json",
+  productMcpName: "croki",
+  resourceMonitorExecutableName: "croki-resource-monitor",
+  // Keep this single denylist value so releases cannot accidentally target the predecessor service.
   hostedServiceDomainSuffix: "t3.codes",
 } as const;
 
 /**
- * Compatibility and migration identifiers inherited from T3 Code.
+ * Compatibility and migration identifiers inherited from Croki.
  *
  * Croki-owned app identity is defined separately above. These legacy values
  * remain available where wire compatibility or one-time migration still needs
- * to recognize T3 Code. Release gates consume the list when distinguishing
+ * to recognize Croki. Release gates consume the list when distinguishing
  * intentional compatibility references from accidental visible branding.
  */
-export const RETAINED_T3_IDENTIFIER_ALLOWLIST = [
+export const LEGACY_PRODUCT_IDENTIFIER_ALLOWLIST = [
   {
     category: "package",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.stagedPackageName,
+    value: LEGACY_PRODUCT_IDENTIFIERS.stagedPackageName,
     reason: "Staged package and executable identity",
   },
   {
     category: "executable",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.stagedPackageName,
+    value: LEGACY_PRODUCT_IDENTIFIERS.stagedPackageName,
     reason: "Desktop launcher executable identity",
   },
   {
     category: "package",
     match: "prefix",
-    value: RETAINED_T3_IDENTIFIERS.packageScope,
+    value: LEGACY_PRODUCT_IDENTIFIERS.packageScope,
     reason: "Published and workspace package scope",
   },
   {
     category: "app-id",
     match: "prefix",
-    value: RETAINED_T3_IDENTIFIERS.desktopAppId,
+    value: LEGACY_PRODUCT_IDENTIFIERS.desktopAppId,
     reason: "Legacy installed-app identity recognized for migration and mobile compatibility",
   },
   {
     category: "url-scheme",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.productionScheme,
+    value: LEGACY_PRODUCT_IDENTIFIERS.productionScheme,
     reason: "Legacy production deep links recognized for compatibility",
   },
   {
     category: "url-scheme",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.developmentScheme,
+    value: LEGACY_PRODUCT_IDENTIFIERS.developmentScheme,
     reason: "Legacy development deep links recognized for compatibility",
   },
   {
     category: "url-scheme",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.previewScheme,
+    value: LEGACY_PRODUCT_IDENTIFIERS.previewScheme,
     reason: "Mobile preview deep links",
   },
   {
     category: "storage",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.stateRoot,
+    value: LEGACY_PRODUCT_IDENTIFIERS.stateRoot,
     reason: "Legacy state root recognized as migration input",
   },
   {
     category: "storage",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.productionStorageName,
+    value: LEGACY_PRODUCT_IDENTIFIERS.productionStorageName,
     reason: "Legacy production user-data directory recognized as migration input",
   },
   {
     category: "storage",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.developmentStorageName,
+    value: LEGACY_PRODUCT_IDENTIFIERS.developmentStorageName,
     reason: "Legacy development user-data directory recognized as migration input",
   },
   {
     category: "storage",
     match: "prefix",
-    value: RETAINED_T3_IDENTIFIERS.storageKeyPrefix,
+    value: LEGACY_PRODUCT_IDENTIFIERS.storageKeyPrefix,
     reason: "Persisted browser and renderer state",
   },
   {
     category: "desktop-entry",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.productionDesktopEntryName,
+    value: LEGACY_PRODUCT_IDENTIFIERS.productionDesktopEntryName,
     reason: "Production Linux desktop integration",
   },
   {
     category: "desktop-entry",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.developmentDesktopEntryName,
+    value: LEGACY_PRODUCT_IDENTIFIERS.developmentDesktopEntryName,
     reason: "Development Linux desktop integration",
   },
   {
     category: "environment",
     match: "prefix",
-    value: RETAINED_T3_IDENTIFIERS.environmentPrefix,
+    value: LEGACY_PRODUCT_IDENTIFIERS.environmentPrefix,
     reason: "Existing CLI and deployment configuration",
   },
   {
     category: "wire",
     match: "prefix",
-    value: RETAINED_T3_IDENTIFIERS.desktopIpcPrefix,
+    value: LEGACY_PRODUCT_IDENTIFIERS.desktopIpcPrefix,
     reason: "Desktop IPC channel namespace",
   },
   {
     category: "telemetry",
     match: "prefix",
-    value: RETAINED_T3_IDENTIFIERS.telemetryPrefix,
+    value: LEGACY_PRODUCT_IDENTIFIERS.telemetryPrefix,
     reason: "Existing telemetry attribute namespace",
   },
   {
     category: "package-metadata",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.embeddedCommitHashKey,
+    value: LEGACY_PRODUCT_IDENTIFIERS.embeddedCommitHashKey,
     reason: "Packaged commit metadata read by existing desktop clients",
   },
   {
     category: "project-contract",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.projectConfigFileName,
+    value: LEGACY_PRODUCT_IDENTIFIERS.projectConfigFileName,
     reason: "Repository-owned project configuration file",
   },
   {
     category: "provider-wire",
     match: "exact",
-    value: RETAINED_T3_IDENTIFIERS.productMcpName,
+    value: LEGACY_PRODUCT_IDENTIFIERS.productMcpName,
     reason: "Provider MCP server and client identity",
   },
   {
     category: "executable",
     match: "prefix",
-    value: RETAINED_T3_IDENTIFIERS.resourceMonitorExecutableName,
+    value: LEGACY_PRODUCT_IDENTIFIERS.resourceMonitorExecutableName,
     reason: "Bundled resource-monitor executable and lookup contract",
   },
   {
     category: "service",
     match: "suffix",
-    value: RETAINED_T3_IDENTIFIERS.hostedServiceDomainSuffix,
+    value: LEGACY_PRODUCT_IDENTIFIERS.hostedServiceDomainSuffix,
     reason: "Existing hosted app, auth, schema, and legal endpoints",
   },
 ] as const;

@@ -1,119 +1,168 @@
+import { parseCrokiContextReference, type CrokiContextReference } from "@croki/shared/crokiContext";
 import {
-  CROKI_CONTEXT_LIMITS,
-  parseCrokiContext,
-  serializeCrokiContext,
-  type CrokiContext,
-  type CrokiContextEdge,
-  type CrokiContextNode,
-  type CrokiNodeDomain,
-} from "@t3tools/shared/crokiContext";
+  CrokiCanvasArtifact,
+  type CrokiCanvasArtifact as CrokiCanvasArtifactValue,
+  type CrokiCanvasArtifactEdge,
+  type CrokiCanvasArtifactNode,
+} from "@croki/shared/crokiCanvasArtifact";
+import * as Schema from "effect/Schema";
 
-import type { CrokiCanvasPresentInput } from "./tools.ts";
+import {
+  CROKI_CANVAS_PRESENT_LIMITS,
+  type CanonicalCanvasEdgeInput,
+  type CanonicalCanvasNodeInput,
+  type CrokiCanvasHarnessId,
+  type CrokiCanvasPresentation,
+  type CrokiCanvasPresentInput,
+} from "./tools.ts";
+
+const decodeCrokiCanvasArtifact = Schema.decodeUnknownSync(CrokiCanvasArtifact);
+
+export interface BuildCrokiCanvasArtifactOptions {
+  readonly artifactId: string;
+  readonly revision: number;
+  readonly threadId: string;
+  readonly turnId: string | null;
+  readonly harnessId: CrokiCanvasHarnessId;
+  readonly createdAt: string;
+}
+
+interface NormalizedCanvasScene {
+  readonly presentation: CrokiCanvasPresentation;
+  readonly question: string;
+  readonly nodes: readonly CrokiCanvasArtifactNode[];
+  readonly edges: readonly CrokiCanvasArtifactEdge[];
+}
 
 /**
- * Applies an agent scene as provisional semantics. Founder-approved and retired
- * records are immutable at this boundary; position remains a derived UI concern.
+ * Converts the current and rollout-era tool wire shapes into one immutable
+ * artifact. This function is intentionally pure so malformed scenes can fail
+ * the MCP tool without touching project context or orchestration state.
  */
-export function applyCrokiCanvasPresentation(
-  context: CrokiContext,
-  scene: CrokiCanvasPresentInput,
-  now: string,
-): CrokiContext {
-  const sceneIds = new Set<string>();
-  for (const node of scene.nodes) {
-    const id = node.id.trim();
-    if (sceneIds.has(id)) throw new Error(`Scene node id '${id}' is duplicated.`);
-    sceneIds.add(id);
-  }
+export function buildCrokiCanvasArtifact(
+  input: CrokiCanvasPresentInput,
+  options: BuildCrokiCanvasArtifactOptions,
+): CrokiCanvasArtifactValue {
+  const scene = normalizeScene(input);
+  const artifact = {
+    id: options.artifactId.trim(),
+    revision: options.revision,
+    threadId: options.threadId,
+    turnId: options.turnId,
+    harnessId: options.harnessId,
+    presentation: scene.presentation,
+    question: scene.question,
+    nodes: scene.nodes,
+    edges: scene.edges,
+    createdAt: options.createdAt,
+  };
 
-  const existingById = new Map(context.nodes.map((node) => [node.id, node]));
-  const presentedNodes = scene.nodes.map((input): CrokiContextNode => {
-    const id = input.id.trim();
-    const existing = existingById.get(id);
-    if (existing && (existing.status !== "provisional" || existing.origin !== "agent")) {
-      throw new Error(`Scene node id '${id}' belongs to founder or repository context.`);
-    }
-    const domain = input.domain ?? defaultDomain(scene.view);
-    if (domain !== scene.view && domain !== "shared") {
-      throw new Error(`Scene node '${id}' must belong to the presented view or be shared.`);
-    }
+  // Decode once more at the artifact boundary. The MCP parameter schema is a
+  // helpful first line of defense, while this check protects the activity
+  // store from future call sites that bypass the generated tool decoder.
+  const encoded = JSON.stringify(artifact);
+  if (new TextEncoder().encode(encoded).byteLength > CROKI_CANVAS_PRESENT_LIMITS.artifactBytes) {
+    throw new Error("The Canvas visual exceeds the artifact size limit.");
+  }
+  return decodeCrokiCanvasArtifact(artifact);
+}
+
+function normalizeScene(input: CrokiCanvasPresentInput): NormalizedCanvasScene {
+  if ("presentation" in input) {
+    const nodeIds = new Set<string>();
+    const nodes = input.nodes.map((node) => {
+      const normalized = normalizeCanonicalNode(node);
+      if (nodeIds.has(normalized.id)) {
+        throw new Error(`Canvas node id '${normalized.id}' is duplicated.`);
+      }
+      nodeIds.add(normalized.id);
+      return normalized;
+    });
     return {
-      id,
-      kind: input.kind,
-      status: "provisional",
-      domain,
-      origin: "agent",
-      title: input.title.trim(),
-      body: input.body ?? "",
-      updatedAt: now,
-      ...(input.references && input.references.length > 0
-        ? {
-            references: input.references.map((reference) =>
-              reference.kind === "file"
-                ? {
-                    kind: reference.kind,
-                    path: reference.path,
-                    ...(reference.line !== undefined ? { line: reference.line } : {}),
-                  }
-                : reference,
-            ),
-          }
-        : {}),
+      presentation: input.presentation,
+      question: input.question.trim(),
+      nodes,
+      edges: normalizeEdges(input.edges, nodeIds),
     };
-  });
-  const presentedById = new Map(presentedNodes.map((node) => [node.id, node]));
-  const nodes = [
-    ...context.nodes.map((node) => presentedById.get(node.id) ?? node),
-    ...presentedNodes.filter((node) => !existingById.has(node.id)),
-  ];
-  if (nodes.length > CROKI_CONTEXT_LIMITS.nodes) {
-    throw new Error("The scene would exceed the Canvas item limit.");
   }
 
-  const allIds = new Set(nodes.map((node) => node.id));
-  const incomingEdges = scene.edges.map((edge): CrokiContextEdge => {
+  if (input.view === "workflow") {
+    throw new Error("Canvas workflow scenes are no longer supported; choose Product or GTM.");
+  }
+  const nodeIds = new Set<string>();
+  const nodes = input.nodes.map((node) => {
+    const normalized = normalizeLegacyNode(node);
+    if (nodeIds.has(normalized.id)) {
+      throw new Error(`Canvas node id '${normalized.id}' is duplicated.`);
+    }
+    nodeIds.add(normalized.id);
+    return normalized;
+  });
+  return {
+    // A legacy `view` did not carry a presentation kind. Compare is the least
+    // surprising projection for old Product/GTM scenes and remains recoverable.
+    presentation: "compare",
+    question: input.question.trim(),
+    nodes,
+    edges: normalizeEdges(input.edges, nodeIds),
+  };
+}
+
+function normalizeCanonicalNode(node: CanonicalCanvasNodeInput): CrokiCanvasArtifactNode {
+  return {
+    id: node.id.trim(),
+    role: node.role,
+    title: node.title.trim(),
+    ...(node.body !== undefined ? { body: node.body.trim() } : {}),
+    ...(node.whyItMatters !== undefined ? { whyItMatters: node.whyItMatters.trim() } : {}),
+    ...(node.references !== undefined ? { references: normalizeReferences(node.references) } : {}),
+  };
+}
+
+function normalizeLegacyNode(
+  node: Extract<CrokiCanvasPresentInput, { view: unknown }>["nodes"][number],
+): CrokiCanvasArtifactNode {
+  const role =
+    node.kind === "intent"
+      ? "question"
+      : node.kind === "decision"
+        ? "route"
+        : node.kind === "evidence"
+          ? "evidence"
+          : "action";
+  return {
+    id: node.id.trim(),
+    role,
+    title: node.title.trim(),
+    ...(node.body !== undefined ? { body: node.body.trim() } : {}),
+    ...(node.references !== undefined ? { references: normalizeReferences(node.references) } : {}),
+  };
+}
+
+function normalizeReferences(references: readonly unknown[]): readonly CrokiContextReference[] {
+  return references.map((reference, index) =>
+    parseCrokiContextReference(reference, `Canvas node reference ${index}`),
+  );
+}
+
+function normalizeEdges(
+  edges: readonly CanonicalCanvasEdgeInput[],
+  nodeIds: ReadonlySet<string>,
+): readonly CrokiCanvasArtifactEdge[] {
+  const seen = new Set<string>();
+  return edges.map((edge) => {
     const from = edge.from.trim();
     const to = edge.to.trim();
     const relation = edge.relation.trim();
-    if (from === to) throw new Error("A scene relationship cannot point to itself.");
-    if (!allIds.has(from) || !allIds.has(to)) {
-      throw new Error(`Scene relationship '${from}' to '${to}' references a missing item.`);
+    if (from === to) throw new Error("A Canvas relationship cannot point to itself.");
+    if (!nodeIds.has(from) || !nodeIds.has(to)) {
+      throw new Error(`Canvas relationship '${from}' to '${to}' references a missing node.`);
     }
-    if (!sceneIds.has(from) && !sceneIds.has(to)) {
-      throw new Error("A scene relationship must touch an agent-authored proposal.");
+    const key = JSON.stringify([from, relation, to]);
+    if (seen.has(key)) {
+      throw new Error(`Canvas relationship '${from}' to '${to}' is duplicated.`);
     }
-    return { from, to, relation };
-  });
-  const retainedEdges = context.edges.filter(
-    (edge) => !sceneIds.has(edge.from) && !sceneIds.has(edge.to),
-  );
-  const edges = dedupeEdges([...retainedEdges, ...incomingEdges]);
-  if (edges.length > CROKI_CONTEXT_LIMITS.edges) {
-    throw new Error("The scene would exceed the Canvas relationship limit.");
-  }
-
-  // The strict parser is the final authority for references, ids, timestamps,
-  // duplicate relationships, and every repository storage invariant.
-  return parseCrokiContext(
-    serializeCrokiContext({
-      ...context,
-      updatedAt: now,
-      nodes,
-      edges,
-    }),
-  );
-}
-
-function defaultDomain(view: CrokiCanvasPresentInput["view"]): CrokiNodeDomain {
-  return view;
-}
-
-function dedupeEdges(edges: readonly CrokiContextEdge[]): CrokiContextEdge[] {
-  const seen = new Set<string>();
-  return edges.filter((edge) => {
-    const key = JSON.stringify([edge.from, edge.relation, edge.to]);
-    if (seen.has(key)) return false;
     seen.add(key);
-    return true;
+    return { from, to, relation };
   });
 }

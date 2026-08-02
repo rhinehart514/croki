@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@croki/contracts";
 
 import { groupProjectsByRepository } from "./repositoryGroups";
-import { EnvironmentProject, EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import { EnvironmentProject, EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
 
 function makeProject(
   input: Partial<EnvironmentProject> & Pick<EnvironmentProject, "environmentId" | "id" | "title">,
@@ -46,29 +46,29 @@ function makeThread(
 describe("groupProjectsByRepository", () => {
   it("groups projects across environments by repository identity", () => {
     const repoIdentity = {
-      canonicalKey: "github.com/t3tools/t3code",
+      canonicalKey: "github.com/croki/croki",
       locator: {
         source: "git-remote" as const,
         remoteName: "origin",
-        remoteUrl: "git@github.com:t3tools/t3code.git",
+        remoteUrl: "git@github.com:croki/croki.git",
       },
       provider: "github",
-      owner: "t3tools",
-      name: "t3code",
-      displayName: "T3 Code",
+      owner: "croki",
+      name: "croki",
+      displayName: "Croki",
     };
 
     const projects = [
       makeProject({
         environmentId: EnvironmentId.make("env-local"),
         id: ProjectId.make("project-local"),
-        title: "T3 Code",
+        title: "Croki",
         repositoryIdentity: repoIdentity,
       }),
       makeProject({
         environmentId: EnvironmentId.make("env-staging"),
         id: ProjectId.make("project-staging"),
-        title: "T3 Code",
+        title: "Croki",
         repositoryIdentity: repoIdentity,
       }),
     ];
@@ -96,9 +96,9 @@ describe("groupProjectsByRepository", () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0]).toMatchObject({
-      key: "github.com/t3tools/t3code",
-      title: "T3 Code",
-      subtitle: "t3tools/t3code",
+      key: "github.com/croki/croki",
+      title: "Croki",
+      subtitle: "croki/croki",
       projectCount: 2,
       threadCount: 2,
     });

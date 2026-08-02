@@ -3,9 +3,9 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
-} from "@t3tools/contracts";
-import { isDevProxiedPath } from "@t3tools/shared/devProxy";
-import { decodeOtlpTraceRecords } from "@t3tools/shared/observability";
+} from "@croki/contracts";
+import { isDevProxiedPath } from "@croki/shared/devProxy";
+import { decodeOtlpTraceRecords } from "@croki/shared/observability";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -47,8 +47,8 @@ const DESKTOP_RENDERER_ORIGINS = [
   "croki://app",
   "croki-dev://app",
   // Keep accepting legacy origins while old T3 clients can target this server.
-  "t3code://app",
-  "t3code-dev://app",
+  "croki://app",
+  "croki-dev://app",
 ];
 const GZIP_MIN_BYTES = 1024;
 
@@ -125,7 +125,7 @@ export const browserApiCorsLayer = Layer.unwrap(
     // Dev uses credentialed requests from Vite or the Electron custom origin, so both must be
     // explicit. Packaged desktop omits credentials and uses Effect's default wildcard origin.
     //
-    // T3CODE_DEV_ALLOWED_ORIGINS covers dev servers reached from a second
+    // CROKI_DEV_ALLOWED_ORIGINS covers dev servers reached from a second
     // origin — a tailnet name, a LAN IP, a phone. Browser dev normally proxies
     // through Vite and is same-origin (no preflight at all), so this is a
     // safety net for the desktop renderer and any direct-to-backend caller.

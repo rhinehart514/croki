@@ -22,7 +22,7 @@ vp run dev
 vp run dev:desktop
 
 # Desktop development on an isolated port set
-T3CODE_DEV_INSTANCE=feature-xyz vp run dev:desktop
+CROKI_DEV_INSTANCE=feature-xyz vp run dev:desktop
 
 # Explicit isolated Croki state
 vp run dev --home-dir /tmp/croki-dev

@@ -3,7 +3,7 @@ import {
   type CrokiContext,
   type CrokiContextEdge,
   type CrokiContextNode,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 import { Link2, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "../ui/button";

@@ -6,7 +6,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeProcess from "node:process";
 
-import { RETAINED_T3_IDENTIFIER_ALLOWLIST } from "./lib/brand-policy.ts";
+import { LEGACY_PRODUCT_IDENTIFIER_ALLOWLIST } from "./lib/brand-policy.ts";
 
 export const CROKI_TSX_MAX_LINES = 300;
 export const CROKI_MODEL_SERVICE_MAX_LINES = 500;
@@ -103,7 +103,7 @@ export function extractImportSpecifiers(contents: string): readonly string[] {
 
 export function isArchivedStandaloneImport(specifier: string): boolean {
   const normalized = specifier.replaceAll("\\", "/").toLowerCase();
-  if (normalized.startsWith("@t3tools/")) return false;
+  if (normalized.startsWith("@croki/")) return false;
   if (
     normalized.includes("croki-transition-archive") ||
     normalized.includes("gtm-ide") ||
@@ -118,7 +118,7 @@ export function isArchivedStandaloneImport(specifier: string): boolean {
 }
 
 function matchesRetainedIdentifier(identifier: string): boolean {
-  return RETAINED_T3_IDENTIFIER_ALLOWLIST.some((entry) => {
+  return LEGACY_PRODUCT_IDENTIFIER_ALLOWLIST.some((entry) => {
     switch (entry.match) {
       case "exact":
         return identifier === entry.value;
@@ -130,15 +130,15 @@ function matchesRetainedIdentifier(identifier: string): boolean {
   });
 }
 
-const T3_IDENTIFIER_PATTERN =
-  /T3CODE_[A-Z0-9_]+|@t3tools\/[A-Za-z0-9._/-]+|com\.t3tools\.t3code(?:\.[A-Za-z0-9-]+)*|t3-resource-monitor(?:\.exe)?|t3codeCommitHash|t3code-(?:dev|preview)|t3code|t3-code|(?:[A-Za-z0-9-]+\.)*t3\.codes|t3\.json|desktop:[A-Za-z0-9:._-]+|t3\.[A-Za-z0-9._-]+/gu;
+const CROKI_IDENTIFIER_PATTERN =
+  /CROKI_[A-Z0-9_]+|@croki\/[A-Za-z0-9._/-]+|com\.croki\.croki(?:\.[A-Za-z0-9-]+)*|croki-resource-monitor(?:\.exe)?|crokiCommitHash|croki-(?:dev|preview)|croki|croki|(?:[A-Za-z0-9-]+\.)*t3\.codes|t3\.json|desktop:[A-Za-z0-9:._-]+|t3\.[A-Za-z0-9._-]+/gu;
 
 export function findUnretainedT3Identifiers(value: string): readonly string[] {
   if (/\b(?:font|text|bg|border)-t3-/u.test(value)) return [];
   if (/\bT3 (?:Code|Tools)\b/u.test(value)) {
     return [value.match(/\bT3 (?:Code|Tools)\b/u)?.[0] ?? value];
   }
-  const identifiers = [...value.matchAll(T3_IDENTIFIER_PATTERN)].map((match) => match[0]);
+  const identifiers = [...value.matchAll(CROKI_IDENTIFIER_PATTERN)].map((match) => match[0]);
   const unretained = identifiers.filter((identifier) => !matchesRetainedIdentifier(identifier));
   if (unretained.length > 0) return [...new Set(unretained)];
   if (identifiers.length > 0) return [];

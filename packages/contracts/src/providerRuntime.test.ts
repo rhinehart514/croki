@@ -4,6 +4,9 @@ import * as Schema from "effect/Schema";
 import { ProviderRuntimeEvent } from "./providerRuntime.ts";
 
 const decodeRuntimeEvent = Schema.decodeUnknownSync(ProviderRuntimeEvent);
+const decodeStrictRuntimeEvent = Schema.decodeUnknownSync(ProviderRuntimeEvent, {
+  onExcessProperty: "error",
+});
 
 describe("ProviderRuntimeEvent", () => {
   it("accepts fork-provided driver kinds as branded slugs", () => {
@@ -128,6 +131,91 @@ describe("ProviderRuntimeEvent", () => {
       throw new Error("expected user-input.resolved");
     }
     expect(parsed.payload.answers.sandbox_mode).toBe("workspace-write");
+  });
+
+  it("decodes native task coordination metadata while keeping legacy task payloads valid", () => {
+    const started = decodeRuntimeEvent({
+      type: "task.started",
+      eventId: "event-task-started-1",
+      provider: "openclaw",
+      createdAt: "2026-08-02T00:00:00.000Z",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      payload: {
+        taskId: "task-child-1",
+        description: "Inspect release packaging",
+        parentTaskId: "task-parent-1",
+        actor: {
+          id: "worker-macos",
+          label: "macOS packaging",
+          model: "claude-sonnet",
+          reasoning: "high",
+        },
+        ownership: {
+          files: ["release/macos.ts"],
+          areas: ["macOS packaging"],
+        },
+      },
+    });
+
+    expect(started.type).toBe("task.started");
+    if (started.type !== "task.started") throw new Error("expected task.started");
+    expect(started.payload.actor?.label).toBe("macOS packaging");
+    expect(started.payload.parentTaskId).toBe("task-parent-1");
+
+    const completed = decodeRuntimeEvent({
+      type: "task.completed",
+      eventId: "event-task-completed-1",
+      provider: "openclaw",
+      createdAt: "2026-08-02T00:00:01.000Z",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      payload: {
+        taskId: "task-child-1",
+        status: "completed",
+        evidence: [
+          {
+            kind: "test",
+            label: "macOS packaging tests",
+            status: "passed",
+            referenceId: "check-123",
+          },
+        ],
+      },
+    });
+
+    expect(completed.type).toBe("task.completed");
+    if (completed.type !== "task.completed") throw new Error("expected task.completed");
+    expect(completed.payload.evidence?.[0]?.status).toBe("passed");
+
+    const legacy = decodeRuntimeEvent({
+      type: "task.progress",
+      eventId: "event-task-progress-legacy",
+      provider: "openclaw",
+      createdAt: "2026-08-02T00:00:02.000Z",
+      threadId: "thread-1",
+      payload: {
+        taskId: "task-child-1",
+        description: "Still inspecting",
+      },
+    });
+    expect(legacy.type).toBe("task.progress");
+  });
+
+  it("rejects malformed native task metadata", () => {
+    expect(() =>
+      decodeStrictRuntimeEvent({
+        type: "task.started",
+        eventId: "event-task-invalid-1",
+        provider: "openclaw",
+        createdAt: "2026-08-02T00:00:00.000Z",
+        threadId: "thread-1",
+        payload: {
+          taskId: "task-child-1",
+          actor: { id: "worker-1", privatePrompt: "must not cross boundary" },
+        },
+      }),
+    ).toThrow();
   });
 
   it("rejects legacy message.delta type", () => {

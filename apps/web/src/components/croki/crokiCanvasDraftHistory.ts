@@ -1,4 +1,4 @@
-import type { CrokiContext } from "@t3tools/shared/crokiContext";
+import type { CrokiContext } from "@croki/shared/crokiContext";
 
 interface CrokiCanvasDraftHistory {
   readonly entries: readonly CrokiContext[];

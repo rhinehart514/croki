@@ -95,16 +95,16 @@ Default Grafana login:
 #### 2. Export OTLP env vars
 
 ```bash
-export T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces
-export T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
-export T3CODE_OTLP_SERVICE_NAME=t3-local
+export CROKI_OTLP_TRACES_URL=http://localhost:4318/v1/traces
+export CROKI_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
+export CROKI_OTLP_SERVICE_NAME=t3-local
 ```
 
 Optional:
 
 ```bash
-export T3CODE_TRACE_MIN_LEVEL=Info
-export T3CODE_TRACE_TIMING_ENABLED=true
+export CROKI_TRACE_MIN_LEVEL=Info
+export CROKI_TRACE_TIMING_ENABLED=true
 ```
 
 #### 3. Launch the app from that same shell
@@ -129,23 +129,23 @@ vp run dev:desktop
 
 Packaged desktop app:
 
-Launch the actual app executable from the same shell so the desktop app and embedded backend inherit `T3CODE_OTLP_*`.
+Launch the actual app executable from the same shell so the desktop app and embedded backend inherit `CROKI_OTLP_*`.
 
 macOS app bundle example:
 
 ```bash
-T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
-T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_SERVICE_NAME=t3-desktop \
+CROKI_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
+CROKI_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
+CROKI_OTLP_SERVICE_NAME=t3-desktop \
 "/Applications/Croki.app/Contents/MacOS/Croki"
 ```
 
 Direct binary example:
 
 ```bash
-T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
-T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_SERVICE_NAME=t3-desktop \
+CROKI_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
+CROKI_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
+CROKI_OTLP_SERVICE_NAME=t3-desktop \
 ./path/to/your/desktop-app-binary
 ```
 
@@ -165,7 +165,7 @@ Resolve the production or explicitly configured trace file once. Runtime state l
 base directory's `userdata` folder:
 
 ```bash
-TRACE_FILE="${T3CODE_HOME:-$HOME/.t3}/userdata/logs/server.trace.ndjson"
+TRACE_FILE="${CROKI_HOME:-$HOME/.t3}/userdata/logs/server.trace.ndjson"
 ```
 
 Tail it:
@@ -362,7 +362,7 @@ If you need those later, add client-side instrumentation or a dedicated server f
 
 Usually one of these is true:
 
-- `T3CODE_OTLP_TRACES_URL` was not set
+- `CROKI_OTLP_TRACES_URL` was not set
 - the app was launched from a different environment than the one where you exported the vars
 - the app was not fully restarted after changing env
 - Grafana is looking at the wrong time range or service name
@@ -486,19 +486,19 @@ It provides:
 
 Local trace file:
 
-- `T3CODE_TRACE_FILE`: override trace file path
-- `T3CODE_TRACE_MAX_BYTES`: per-file rotation size, default `10485760`
-- `T3CODE_TRACE_MAX_FILES`: rotated file count, default `10`
-- `T3CODE_TRACE_BATCH_WINDOW_MS`: flush window, default `200`
-- `T3CODE_TRACE_MIN_LEVEL`: minimum trace level, default `Info`
-- `T3CODE_TRACE_TIMING_ENABLED`: enable timing metadata, default `true`
+- `CROKI_TRACE_FILE`: override trace file path
+- `CROKI_TRACE_MAX_BYTES`: per-file rotation size, default `10485760`
+- `CROKI_TRACE_MAX_FILES`: rotated file count, default `10`
+- `CROKI_TRACE_BATCH_WINDOW_MS`: flush window, default `200`
+- `CROKI_TRACE_MIN_LEVEL`: minimum trace level, default `Info`
+- `CROKI_TRACE_TIMING_ENABLED`: enable timing metadata, default `true`
 
 OTLP export:
 
-- `T3CODE_OTLP_TRACES_URL`: OTLP trace endpoint
-- `T3CODE_OTLP_METRICS_URL`: OTLP metric endpoint
-- `T3CODE_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
-- `T3CODE_OTLP_SERVICE_NAME`: service name, default `t3-server`
+- `CROKI_OTLP_TRACES_URL`: OTLP trace endpoint
+- `CROKI_OTLP_METRICS_URL`: OTLP metric endpoint
+- `CROKI_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
+- `CROKI_OTLP_SERVICE_NAME`: service name, default `t3-server`
 
 If the OTLP URLs are unset, local tracing still works and metrics stay in-process only.
 

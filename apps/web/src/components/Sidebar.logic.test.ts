@@ -40,7 +40,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 
 import {
   DEFAULT_INTERACTION_MODE,

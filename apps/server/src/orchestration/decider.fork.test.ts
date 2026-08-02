@@ -6,7 +6,7 @@ import {
   ThreadId,
   type OrchestrationCommand,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 

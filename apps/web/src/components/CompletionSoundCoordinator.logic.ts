@@ -1,8 +1,4 @@
-import type {
-  OrchestrationLatestTurnState,
-  OrchestrationSession,
-  TurnId,
-} from "@t3tools/contracts";
+import type { OrchestrationLatestTurnState, OrchestrationSession, TurnId } from "@croki/contracts";
 
 export interface CompletionSoundSnapshot {
   readonly turnId: TurnId | null;

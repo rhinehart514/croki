@@ -25,6 +25,10 @@ requires a running Gateway and configured agent.
 A driver describes an integration kind. An instance is one configured copy of
 that driver, such as personal and work Codex accounts. Instances have stable
 IDs, settings, health state, model discovery, and their own adapter sessions.
+For OpenClaw, the instance also records which existing user-owned Gateway
+agent to connect to. Croki may discover and select that agent, but never
+provisions or replaces its workspace, memory, skills, model, tools, or
+delegation policy.
 
 `ProviderService` resolves the selected instance through
 `ProviderInstanceRegistry`. Its adapter implements the common session boundary:

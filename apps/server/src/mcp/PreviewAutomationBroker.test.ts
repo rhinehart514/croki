@@ -13,7 +13,7 @@ import {
   type PreviewAutomationHost,
   type PreviewAutomationRequest,
   type PreviewAutomationStreamEvent,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
@@ -29,6 +29,7 @@ const scope = {
   threadId: ThreadId.make("thread-1"),
   providerSessionId: "provider-session-1",
   providerInstanceId: ProviderInstanceId.make("codex"),
+  harnessId: "native" as const,
   capabilities: new Set(["preview"] as const),
   issuedAt: 1,
 };

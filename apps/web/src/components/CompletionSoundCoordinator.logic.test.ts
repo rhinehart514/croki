@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { TurnId } from "@t3tools/contracts";
+import { TurnId } from "@croki/contracts";
 
 import {
   completionSoundSnapshot,

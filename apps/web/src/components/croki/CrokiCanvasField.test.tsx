@@ -1,4 +1,4 @@
-import type { CrokiContext } from "@t3tools/shared/crokiContext";
+import type { CrokiContext } from "@croki/shared/crokiContext";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 

@@ -1,4 +1,4 @@
-import type { CrokiContextNode } from "@t3tools/shared/crokiContext";
+import type { CrokiContextNode } from "@croki/shared/crokiContext";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { ArrowRight, FileCode2, Link2, Quote } from "lucide-react";
 import type { ReactNode } from "react";

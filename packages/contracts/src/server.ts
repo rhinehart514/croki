@@ -93,6 +93,23 @@ export const ServerProviderSkill = Schema.Struct({
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 
 /**
+ * A normalized agent discovered from OpenClaw's native agent inventory.
+ *
+ * OpenClaw does not require every agent to have an explicit display name or
+ * model override. The server fills those optional values from the agent id or
+ * leaves them absent so clients can present the user's native configuration
+ * without inventing provider settings.
+ */
+export const OpenClawAgent = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  model: Schema.optional(TrimmedNonEmptyString),
+  workspace: Schema.optional(TrimmedNonEmptyString),
+  isDefault: Schema.Boolean,
+});
+export type OpenClawAgent = typeof OpenClawAgent.Type;
+
+/**
  * Availability of a configured provider instance from the runtime's POV.
  *
  *  - `available` — the build ships this driver and an instance is wired
@@ -184,6 +201,8 @@ export const ServerProvider = Schema.Struct({
   // Surfaces in the UI alongside the missing-driver affordance.
   unavailableReason: Schema.optional(TrimmedNonEmptyString),
   models: Schema.Array(ServerProviderModel),
+  /** Agents discovered from OpenClaw's native `agents list --json` command. */
+  openClawAgents: Schema.optional(Schema.Array(OpenClawAgent)),
   slashCommands: Schema.Array(ServerProviderSlashCommand).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),

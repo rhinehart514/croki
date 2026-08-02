@@ -1,4 +1,4 @@
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@croki/contracts";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useCallback } from "react";
 import { View } from "react-native";

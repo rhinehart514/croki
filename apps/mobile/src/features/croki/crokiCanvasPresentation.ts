@@ -1,4 +1,4 @@
-import type { ProjectReadFileResult } from "@t3tools/contracts";
+import type { ProjectReadFileResult } from "@croki/contracts";
 import {
   CROKI_CONTEXT_LIMITS,
   CrokiContextParseError,
@@ -6,8 +6,8 @@ import {
   type CrokiContext,
   type CrokiContextEdge,
   type CrokiContextNode,
-} from "@t3tools/shared/crokiContext";
-import { recoverCrokiContext } from "@t3tools/shared/crokiContextRecovery";
+} from "@croki/shared/crokiContext";
+import { recoverCrokiContext } from "@croki/shared/crokiContextRecovery";
 
 export type CrokiCanvasLoadState =
   | { readonly status: "loading" }

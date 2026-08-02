@@ -1,4 +1,4 @@
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopedThreadKey, scopeThreadRef } from "@croki/client-runtime/environment";
 import { useEffect, useRef } from "react";
 
 import { playCompletionSound, primeCompletionSound } from "../completionSound";

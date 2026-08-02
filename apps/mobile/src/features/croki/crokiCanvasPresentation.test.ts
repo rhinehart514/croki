@@ -1,5 +1,5 @@
-import type { ProjectReadFileResult } from "@t3tools/contracts";
-import type { CrokiContext } from "@t3tools/shared/crokiContext";
+import type { ProjectReadFileResult } from "@croki/contracts";
+import type { CrokiContext } from "@croki/shared/crokiContext";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

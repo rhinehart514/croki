@@ -1,4 +1,4 @@
-import type { OrchestrationThreadActivity, ProjectReadFileResult } from "@t3tools/contracts";
+import type { OrchestrationThreadActivity, ProjectReadFileResult } from "@croki/contracts";
 import {
   buildCrokiAgentContext,
   CROKI_CONTEXT_LIMITS,
@@ -10,8 +10,9 @@ import {
   type CrokiContextAppliedActivityPayload,
   type CrokiContextParseErrorCode,
   type CrokiContextReceipt,
-} from "@t3tools/shared/crokiContext";
-import { recoverCrokiContext } from "@t3tools/shared/crokiContextRecovery";
+} from "@croki/shared/crokiContext";
+import { recoverCrokiContext } from "@croki/shared/crokiContextRecovery";
+import { CROKI_RELEASE_LIMITS } from "@croki/shared/crokiReleaseCandidate";
 
 const OMITTED_CONTEXT_MARKER = "[additional context omitted due to size limit]";
 
@@ -30,6 +31,7 @@ export type CrokiComposerContextState =
       readonly issueCount: number;
       readonly promptTruncated: boolean;
       readonly updatedAt: string;
+      readonly releaseVersion?: string | null;
     }
   | {
       readonly status: "loaded";
@@ -38,6 +40,7 @@ export type CrokiComposerContextState =
       readonly included: boolean;
       readonly promptTruncated: boolean;
       readonly updatedAt: string;
+      readonly releaseVersion?: string | null;
     };
 
 interface CrokiContextFileQueryState {
@@ -65,6 +68,7 @@ export function deriveCrokiComposerContextState(
         included: prompt !== null,
         promptTruncated: prompt?.includes(OMITTED_CONTEXT_MARKER) ?? false,
         updatedAt: context.updatedAt,
+        releaseVersion: context.release?.status === "active" ? context.release.version : null,
       };
     } catch (error) {
       try {
@@ -80,6 +84,10 @@ export function deriveCrokiComposerContextState(
             issueCount: recovery.issues.length,
             promptTruncated: prompt?.includes(OMITTED_CONTEXT_MARKER) ?? false,
             updatedAt: recovery.context.updatedAt,
+            releaseVersion:
+              recovery.context.release?.status === "active"
+                ? recovery.context.release.version
+                : null,
           };
         }
       } catch {
@@ -133,7 +141,22 @@ function parseCrokiContextReceipt(value: unknown): CrokiContextReceipt | null {
     !isNonNegativeInteger(value.provisionalCount) ||
     !isNonNegativeInteger(value.renderedChars) ||
     typeof value.truncated !== "boolean" ||
-    (value.harnessId !== undefined && value.harnessId !== "native" && value.harnessId !== "gtm-v1")
+    (value.harnessId !== undefined &&
+      value.harnessId !== "native" &&
+      value.harnessId !== "product-v1" &&
+      value.harnessId !== "gtm-v1")
+  ) {
+    return null;
+  }
+  const hasRelease = value.releaseVersion !== undefined || value.releaseItemCount !== undefined;
+  if (
+    hasRelease &&
+    (typeof value.releaseVersion !== "string" ||
+      value.releaseVersion !== value.releaseVersion.trim() ||
+      !value.releaseVersion ||
+      value.releaseVersion.length > CROKI_RELEASE_LIMITS.versionChars ||
+      !isNonNegativeInteger(value.releaseItemCount) ||
+      value.releaseItemCount > CROKI_RELEASE_LIMITS.items)
   ) {
     return null;
   }
@@ -174,6 +197,12 @@ function parseCrokiContextReceipt(value: unknown): CrokiContextReceipt | null {
     ...(value.harnessId ? { harnessId: value.harnessId } : {}),
     ...(value.errorCode ? { errorCode: value.errorCode } : {}),
     ...(value.issueCount !== undefined ? { issueCount: value.issueCount as number } : {}),
+    ...(hasRelease
+      ? {
+          releaseVersion: value.releaseVersion as string,
+          releaseItemCount: value.releaseItemCount as number,
+        }
+      : {}),
     ...(hasSelection
       ? {
           includedCount: value.includedCount as number,

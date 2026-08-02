@@ -1,6 +1,6 @@
 import * as React from "react";
-import type { ContextMenuItem, ServerProvider } from "@t3tools/contracts";
-import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
+import type { ContextMenuItem, ServerProvider } from "@croki/contracts";
+import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@croki/contracts/settings";
 import {
   getThreadSortTimestamp,
   sortThreads,

@@ -1,8 +1,4 @@
-import type {
-  CrokiContextNode,
-  CrokiNodeDomain,
-  CrokiNodeKind,
-} from "@t3tools/shared/crokiContext";
+import type { CrokiContextNode, CrokiNodeDomain, CrokiNodeKind } from "@croki/shared/crokiContext";
 
 export type CrokiCanvasView = "product" | "gtm" | "workflow" | "review";
 

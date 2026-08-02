@@ -71,4 +71,37 @@ describe("ServerProvider", () => {
 
     expect(parsed.continuation?.groupKey).toBe("codex:home:/Users/julius/.codex");
   });
+
+  it("decodes normalized OpenClaw agent inventory while keeping the field optional", () => {
+    const parsed = decodeServerProvider({
+      instanceId: "openclaw",
+      driver: "openclaw",
+      enabled: true,
+      installed: true,
+      version: "2026.7.1",
+      status: "ready",
+      auth: { status: "unknown" },
+      checkedAt: "2026-04-10T00:00:00.000Z",
+      models: [],
+      openClawAgents: [
+        {
+          id: "main",
+          name: "main",
+          model: "openai/gpt-5.6-sol",
+          workspace: "/work/main",
+          isDefault: true,
+        },
+      ],
+    });
+
+    expect(parsed.openClawAgents).toEqual([
+      {
+        id: "main",
+        name: "main",
+        model: "openai/gpt-5.6-sol",
+        workspace: "/work/main",
+        isDefault: true,
+      },
+    ]);
+  });
 });

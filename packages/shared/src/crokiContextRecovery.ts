@@ -9,11 +9,12 @@ import {
   type CrokiContextParseErrorCode,
   type CrokiContextNode,
 } from "./crokiContext.ts";
+import { parseCrokiReleaseCandidate, type CrokiReleaseCandidate } from "./crokiReleaseCandidate.ts";
 
 export interface CrokiContextRecoveryIssue {
   readonly code: CrokiContextParseErrorCode;
   readonly message: string;
-  readonly path: `nodes[${number}]` | `edges[${number}]`;
+  readonly path: "release" | `nodes[${number}]` | `edges[${number}]`;
 }
 
 export interface CrokiContextRecovery {
@@ -22,9 +23,9 @@ export interface CrokiContextRecovery {
 }
 
 /**
- * Recovers independently valid nodes and relationships from a structurally
- * valid context file. Invalid JSON, envelopes, and source limits still fail so
- * repository data cannot invent a different Canvas boundary.
+ * Recovers independently valid release, node, and relationship entries from a
+ * structurally valid context file. Invalid JSON, envelopes, and source limits
+ * still fail so repository data cannot invent a different Canvas boundary.
  */
 export function recoverCrokiContext(input: string): CrokiContextRecovery {
   if (new TextEncoder().encode(input).byteLength > CROKI_CONTEXT_LIMITS.sourceBytes) {
@@ -56,14 +57,23 @@ export function recoverCrokiContext(input: string): CrokiContextRecovery {
     );
   }
 
+  const { release: releaseCandidate, ...envelopeValue } = value;
   const envelope = parseCrokiContext(
     JSON.stringify({
-      ...value,
+      ...envelopeValue,
       nodes: [],
       edges: [],
     }),
   );
   const issues: CrokiContextRecoveryIssue[] = [];
+  let release: CrokiReleaseCandidate | undefined;
+  if (releaseCandidate !== undefined) {
+    try {
+      release = parseCrokiReleaseCandidate(releaseCandidate);
+    } catch (error) {
+      issues.push(issueFromError(error, "release"));
+    }
+  }
   const nodes: CrokiContextNode[] = [];
   const nodeIds = new Set<string>();
 
@@ -119,6 +129,7 @@ export function recoverCrokiContext(input: string): CrokiContextRecovery {
       ...envelope,
       nodes,
       edges,
+      ...(release ? { release } : {}),
     },
     issues,
   };

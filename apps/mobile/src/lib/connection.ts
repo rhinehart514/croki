@@ -1,6 +1,6 @@
-import { EnvironmentId } from "@t3tools/contracts";
-import { stripPairingTokenFromUrl } from "@t3tools/shared/remote";
-import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import { EnvironmentId } from "@croki/contracts";
+import { stripPairingTokenFromUrl } from "@croki/shared/remote";
+import { type EnvironmentConnectionPhase } from "@croki/client-runtime/connection";
 
 export { authClientMetadata } from "./authClientMetadata";
 

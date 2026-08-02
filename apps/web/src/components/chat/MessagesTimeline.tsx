@@ -1,12 +1,13 @@
 import {
   type EnvironmentId,
   type MessageId,
+  type OrchestrationThreadActivity,
   type ScopedThreadRef,
   type ServerProviderSkill,
   type TurnId,
-} from "@t3tools/contracts";
-import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
-import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
+} from "@croki/contracts";
+import { parseScopedThreadKey } from "@croki/client-runtime/environment";
+import { resolveChatListAnchoredEndSpace } from "@croki/shared/chatList";
 import {
   createContext,
   Fragment,
@@ -81,6 +82,10 @@ import {
   TIMELINE_MINIMAP_MIN_ITEMS,
   type TimelineLatestTurn,
 } from "./MessagesTimeline.logic";
+import {
+  canvasHarnessLabel,
+  type CanvasPresentationTimelineActivity,
+} from "./canvasThreadIntegration";
 import { TerminalContextInlineChip } from "./TerminalContextInlineChip";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
@@ -97,7 +102,7 @@ import {
 } from "~/lib/previewAnnotation";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
-import { type TimestampFormat } from "@t3tools/contracts/settings";
+import { type TimestampFormat } from "@croki/contracts/settings";
 import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
 
 import {
@@ -113,8 +118,9 @@ import {
   parseReviewCommentMessageSegments,
   type ReviewCommentContext,
 } from "../../reviewCommentContext";
-import type { CrokiContextReceipt } from "@t3tools/shared/crokiContext";
+import type { CrokiContextReceipt } from "@croki/shared/crokiContext";
 import { CrokiAppliedContextReceipt } from "./CrokiContextPresentation";
+import { CoordinationWorkstreams } from "./CoordinationWorkstreams";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -137,6 +143,8 @@ interface TimelineRowSharedState {
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
+  canvasPresentationsByActivityId: ReadonlyMap<string, CanvasPresentationTimelineActivity>;
+  onOpenCanvasArtifact?: (presentation: CanvasPresentationTimelineActivity) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   onToggleWorkGroup: (groupId: string, anchorElement?: HTMLElement) => void;
 }
@@ -155,6 +163,9 @@ const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
 const EMPTY_CROKI_CONTEXT_RECEIPTS: ReadonlyMap<string, CrokiContextReceipt> = new Map();
+const EMPTY_CANVAS_PRESENTATIONS: ReadonlyMap<string, CanvasPresentationTimelineActivity> =
+  new Map();
+const EMPTY_COORDINATION_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = [];
 
 // ---------------------------------------------------------------------------
 // Props (public API)
@@ -172,6 +183,9 @@ interface MessagesTimelineProps {
   routeThreadKey: string;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
+  canvasPresentationsByActivityId?: ReadonlyMap<string, CanvasPresentationTimelineActivity>;
+  coordinationActivities?: ReadonlyArray<OrchestrationThreadActivity>;
+  onOpenCanvasArtifact?: (presentation: CanvasPresentationTimelineActivity) => void;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
@@ -209,6 +223,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   routeThreadKey,
   onOpenTurnDiff,
   onPrepareCanvasUpdate,
+  canvasPresentationsByActivityId = EMPTY_CANVAS_PRESENTATIONS,
+  coordinationActivities = EMPTY_COORDINATION_ACTIVITIES,
+  onOpenCanvasArtifact,
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
   isRevertingCheckpoint,
@@ -311,6 +328,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     () =>
       deriveMessagesTimelineRows({
         timelineEntries,
+        canvasPresentationsByActivityId,
+        coordinationActivities,
         latestTurn,
         runningTurnId,
         expandedTurnIds,
@@ -322,6 +341,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       }),
     [
       timelineEntries,
+      canvasPresentationsByActivityId,
+      coordinationActivities,
       latestTurn,
       runningTurnId,
       expandedTurnIds,
@@ -439,6 +460,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onOpenTurnDiff,
       onPrepareCanvasUpdate,
+      canvasPresentationsByActivityId,
+      ...(onOpenCanvasArtifact ? { onOpenCanvasArtifact } : {}),
       onToggleTurnFold,
       onToggleWorkGroup,
     }),
@@ -455,6 +478,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onOpenTurnDiff,
       onPrepareCanvasUpdate,
+      canvasPresentationsByActivityId,
+      onOpenCanvasArtifact,
       onToggleTurnFold,
       onToggleWorkGroup,
     ],
@@ -856,7 +881,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         // they sit closer to the work that follows them.
         (row.kind === "message" && row.message.role === "assistant" && !row.showAssistantMeta) ||
           row.kind === "work" ||
-          row.kind === "work-toggle"
+          row.kind === "work-toggle" ||
+          row.kind === "coordination" ||
+          row.kind === "canvas"
           ? "pb-2"
           : "pb-4",
         row.kind === "message" && row.message.role === "assistant" ? "group/assistant" : null,
@@ -875,9 +902,46 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       ) : null}
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
+      {row.kind === "canvas" ? <CanvasPresentationTimelineRow row={row} /> : null}
+      {row.kind === "coordination" ? <CoordinationWorkstreams activities={row.activities} /> : null}
     </div>
   );
 });
+
+function CanvasPresentationTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "canvas" }> }) {
+  const ctx = use(TimelineRowCtx);
+  const { presentation } = row;
+  const label = canvasHarnessLabel(
+    presentation.harnessId ?? presentation.artifact?.harnessId ?? null,
+  );
+  const question = presentation.question ?? presentation.artifact?.question ?? null;
+  const revision = presentation.revision ?? presentation.artifact?.revision ?? null;
+  return (
+    <div className="flex min-w-0 items-center gap-2 border-s border-border/45 py-1 ps-3 text-[12px]">
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-foreground/85">
+          {presentation.artifact ? `${label} visual ready` : "Canvas visual unavailable"}
+        </p>
+        {question ? <p className="truncate text-foreground/75">{question}</p> : null}
+        <p className="truncate text-muted-foreground/65">
+          {presentation.summary}
+          {revision !== null ? ` · revision ${revision}` : null}
+        </p>
+      </div>
+      {ctx.onOpenCanvasArtifact ? (
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          className="shrink-0 text-xs text-foreground/80 hover:text-foreground"
+          onClick={() => ctx.onOpenCanvasArtifact?.(presentation)}
+        >
+          Open Canvas
+        </Button>
+      ) : null}
+    </div>
+  );
+}
 
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);

@@ -5,7 +5,7 @@ import {
   CROKI_BRAND_ASSET_PATHS,
   CROKI_DESKTOP_PLATFORMS,
   CROKI_VISIBLE_BRAND,
-  RETAINED_T3_IDENTIFIER_ALLOWLIST,
+  LEGACY_PRODUCT_IDENTIFIER_ALLOWLIST,
   resolveCrokiDesktopBrandChannel,
   resolveCrokiDesktopBrandMetadata,
 } from "./brand-policy.ts";
@@ -73,20 +73,20 @@ describe("Croki brand policy", () => {
   });
 
   it("publishes a unique compatibility allowlist for later gates", () => {
-    const keys = RETAINED_T3_IDENTIFIER_ALLOWLIST.map(
+    const keys = LEGACY_PRODUCT_IDENTIFIER_ALLOWLIST.map(
       (entry) => `${entry.category}:${entry.match}:${entry.value}`,
     );
     expect(new Set(keys).size).toBe(keys.length);
-    expect(RETAINED_T3_IDENTIFIER_ALLOWLIST).toContainEqual({
+    expect(LEGACY_PRODUCT_IDENTIFIER_ALLOWLIST).toContainEqual({
       category: "app-id",
       match: "prefix",
-      value: "com.t3tools.t3code",
+      value: "com.croki.desktop",
       reason: "Legacy installed-app identity recognized for migration and mobile compatibility",
     });
-    expect(RETAINED_T3_IDENTIFIER_ALLOWLIST).toContainEqual({
+    expect(LEGACY_PRODUCT_IDENTIFIER_ALLOWLIST).toContainEqual({
       category: "environment",
       match: "prefix",
-      value: "T3CODE_",
+      value: "CROKI_",
       reason: "Existing CLI and deployment configuration",
     });
   });

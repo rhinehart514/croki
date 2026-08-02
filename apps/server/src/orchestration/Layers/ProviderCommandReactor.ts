@@ -13,9 +13,9 @@ import {
   type ProviderSession,
   type RuntimeMode,
   type TurnId,
-} from "@t3tools/contracts";
-import { type CrokiContextAppliedActivityPayload } from "@t3tools/shared/crokiContext";
-import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
+} from "@croki/contracts";
+import { type CrokiContextAppliedActivityPayload } from "@croki/shared/crokiContext";
+import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@croki/shared/git";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -27,7 +27,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+import { makeDrainableWorker } from "@croki/shared/DrainableWorker";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
 import { increment, orchestrationEventsProcessedTotal } from "../../observability/Metrics.ts";
@@ -307,8 +307,8 @@ const make = Effect.gen(function* () {
         kind: "croki.context.applied",
         summary:
           loaded.receipt.status === "loaded" || loaded.receipt.status === "partial"
-            ? `Applied Canvas context (${loaded.receipt.activeCount} active)`
-            : `Canvas context ${loaded.receipt.status}`,
+            ? `Applied project context (${loaded.receipt.activeCount} active)`
+            : `Project context ${loaded.receipt.status}`,
         payload,
         turnId: null,
         createdAt: input.createdAt,
@@ -751,6 +751,7 @@ const make = Effect.gen(function* () {
     return {
       threadId: input.threadId,
       canvasEnabled: input.canvasEnabled,
+      harnessId: input.harnessId,
       ...(providerInput ? { input: providerInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),

@@ -23,6 +23,79 @@ describe("Croki product context", () => {
     expect(parseCrokiContext(serializeCrokiContext(empty))).toEqual(empty);
   });
 
+  it("round trips the active release candidate and exposes approved operational context", () => {
+    const context = {
+      ...createEmptyCrokiContext("Croki"),
+      release: {
+        version: "0.4.2",
+        baseline: "0.4.1",
+        goal: "Make the next release legible.",
+        status: "active" as const,
+        items: [
+          {
+            id: "release-canvas",
+            title: "Introduce Release Canvas",
+            kind: "feature" as const,
+            status: "working" as const,
+            outcome: "See active work and missing proof beside the Thread.",
+            acceptanceCriteria: [
+              { id: "open", text: "Canvas opens on 0.4.2.", status: "pending" as const },
+            ],
+            sourceThreads: [{ id: "thread-1", title: "Release Canvas" }],
+          },
+          {
+            id: "future",
+            title: "Later work",
+            kind: "cleanup" as const,
+            status: "deferred" as const,
+            outcome: "",
+            acceptanceCriteria: [],
+            sourceThreads: [],
+          },
+        ],
+      },
+    };
+
+    expect(parseCrokiContext(serializeCrokiContext(context))).toEqual(context);
+    const prompt = buildCrokiAgentContext(context);
+    expect(prompt).toContain("<active_release_candidate>");
+    expect(prompt).toContain("Introduce Release Canvas");
+    expect(prompt).not.toContain("Later work");
+  });
+
+  it("bounds a large release candidate without dropping all provider context", () => {
+    const context = {
+      ...createEmptyCrokiContext("Croki"),
+      release: {
+        version: "0.4.2",
+        baseline: "0.4.1",
+        goal: "Keep the next release visible.",
+        status: "active" as const,
+        items: Array.from({ length: 60 }, (_, index) => ({
+          id: `item-${index}`,
+          title: `Release item ${index}`,
+          kind: "performance" as const,
+          status: "working" as const,
+          outcome: "Detailed release outcome. ".repeat(160),
+          acceptanceCriteria: Array.from({ length: 20 }, (_, criterionIndex) => ({
+            id: `criterion-${criterionIndex}`,
+            text: `Proof ${criterionIndex}: ${"measured evidence ".repeat(50)}`,
+            status: "pending" as const,
+          })),
+          sourceThreads: [],
+        })),
+      },
+    };
+
+    const compiled = compileCrokiAgentContext(context);
+
+    expect(compiled.prompt).not.toBeNull();
+    expect(compiled.prompt?.length).toBeLessThanOrEqual(CROKI_CONTEXT_LIMITS.renderChars);
+    expect(compiled.prompt).toContain("Release item 0");
+    expect(compiled.prompt).toContain(CROKI_CONTEXT_TRUNCATION_MARKER);
+    expect(compiled.selectionMode).toBe("bounded");
+  });
+
   it("preserves optional Product, GTM, workflow, and origin metadata", () => {
     const parsed = parseCrokiContext(
       JSON.stringify({

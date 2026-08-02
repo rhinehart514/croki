@@ -13,9 +13,9 @@ const defaultInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "0.0.22",
-  appPath: "/Applications/T3 Code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Croki.app/Contents/Resources/app.asar",
   isPackaged: false,
-  resourcesPath: "/Applications/T3 Code.app/Contents/Resources",
+  resourcesPath: "/Applications/Croki.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -40,13 +40,13 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          T3CODE_HOME: " /tmp/t3 ",
-          T3CODE_COMMIT_HASH: " 0123456789abcdef ",
-          T3CODE_PORT: "4949",
+          CROKI_HOME: " /tmp/t3 ",
+          CROKI_COMMIT_HASH: " 0123456789abcdef ",
+          CROKI_PORT: "4949",
           VITE_DEV_SERVER_URL: "http://localhost:5173",
-          T3CODE_DEV_REMOTE_T3_SERVER_ENTRY_PATH: " /remote/server.mjs ",
-          T3CODE_OTLP_TRACES_URL: " http://127.0.0.1:4318/v1/traces ",
-          T3CODE_OTLP_EXPORT_INTERVAL_MS: "2500",
+          CROKI_DEV_REMOTE_T3_SERVER_ENTRY_PATH: " /remote/server.mjs ",
+          CROKI_OTLP_TRACES_URL: " http://127.0.0.1:4318/v1/traces ",
+          CROKI_OTLP_EXPORT_INTERVAL_MS: "2500",
         },
       );
 
@@ -86,7 +86,7 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          T3CODE_HOME: "/tmp/t3",
+          CROKI_HOME: "/tmp/t3",
         },
       );
 
@@ -111,13 +111,12 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
-  it.effect("prefers the Croki home override while retaining the legacy override", () =>
+  it.effect("uses the Croki home override", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment(
         {},
         {
           CROKI_HOME: "/tmp/croki",
-          T3CODE_HOME: "/tmp/t3",
         },
       );
 
@@ -131,12 +130,12 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          T3CODE_DESKTOP_APP_USER_MODEL_ID: " com.t3tools.t3code.dev.local ",
+          CROKI_DESKTOP_APP_USER_MODEL_ID: " com.croki.croki.dev.local ",
           VITE_DEV_SERVER_URL: "http://localhost:5173",
         },
       );
 
-      assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev.local");
+      assert.equal(environment.appUserModelId, "com.croki.croki.dev.local");
     }),
   );
 

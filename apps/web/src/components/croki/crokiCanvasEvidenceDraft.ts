@@ -1,9 +1,9 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@croki/contracts";
 import {
   CROKI_CONTEXT_LIMITS,
   parseCrokiContextReference,
   type CrokiContextReference,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 
 import { randomHex } from "~/lib/utils";
 import {

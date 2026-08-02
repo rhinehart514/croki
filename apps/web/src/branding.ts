@@ -1,4 +1,4 @@
-import type { DesktopAppBranding } from "@t3tools/contracts";
+import type { DesktopAppBranding } from "@croki/contracts";
 import { formatAppDisplayName } from "./branding.logic";
 
 export const CROKI_WEB_BASE_NAME = "Croki";

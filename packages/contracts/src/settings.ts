@@ -376,12 +376,15 @@ export const OpenClawSettings = makeProviderSettingsSchema(
       }),
     ),
     agentId: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("croki")),
+      // An empty value means use OpenClaw's own default agent. The server
+      // discovers that agent from `openclaw agents list --json` when it can,
+      // while ACP itself remains the final source of truth at runtime.
+      Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Agent",
         description: "OpenClaw agent used for this provider instance.",
         providerSettingsForm: {
-          placeholder: "croki",
+          placeholder: "Native default",
           clearWhenEmpty: "omit",
         },
       }),

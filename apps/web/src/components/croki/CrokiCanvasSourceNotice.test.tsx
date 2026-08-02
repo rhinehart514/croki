@@ -20,7 +20,7 @@ vi.mock("../ui/button", () => ({
   },
 }));
 
-import { createEmptyCrokiContext } from "@t3tools/shared/crokiContext";
+import { createEmptyCrokiContext } from "@croki/shared/crokiContext";
 import { CrokiCanvasSourceNotice } from "./CrokiCanvasSourceNotice";
 import type { CrokiCanvasDraftSnapshot } from "./crokiCanvasDraftStore";
 

@@ -3,7 +3,7 @@ import type {
   CrokiContextNode,
   CrokiContextReference,
   CrokiContextUrlReference,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 
 import type { ActivePlanState } from "~/session-logic";
 

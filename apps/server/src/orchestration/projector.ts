@@ -1,4 +1,4 @@
-import type { OrchestrationEvent, OrchestrationReadModel, ThreadId } from "@t3tools/contracts";
+import type { OrchestrationEvent, OrchestrationReadModel, ThreadId } from "@croki/contracts";
 import {
   EventId,
   MessageId,
@@ -8,7 +8,7 @@ import {
   OrchestrationThread,
   ThreadForkRequestedPayload,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 

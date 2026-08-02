@@ -5,8 +5,9 @@ import type {
   CrokiContextReference,
   CrokiNodeDomain,
   CrokiNodeKind,
-} from "@t3tools/shared/crokiContext";
-import { CROKI_CONTEXT_LIMITS, parseCrokiContextReference } from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
+import { CROKI_CONTEXT_LIMITS, parseCrokiContextReference } from "@croki/shared/crokiContext";
+import { parseCrokiReleaseCandidate } from "@croki/shared/crokiReleaseCandidate";
 
 export type CrokiCanvasModelError =
   | "duplicate-edge"
@@ -20,7 +21,17 @@ export type CrokiCanvasModelError =
   | "reference-limit"
   | "self-edge"
   | "invalid-relation"
-  | "invalid-title";
+  | "invalid-title"
+  | "invalid-release"
+  | "missing-release"
+  | "missing-release-item"
+  | "missing-release-criterion"
+  | "release-item-limit"
+  | "duplicate-release-item"
+  | "release-thread-limit"
+  | "release-criterion-limit"
+  | "duplicate-release-criterion"
+  | "release-verification-required";
 
 export interface CrokiCanvasTransition {
   readonly context: CrokiContext;
@@ -279,6 +290,13 @@ export function validateCrokiContextForSave(
       errors.add("invalid-relation");
     }
   }
+  if (context.release) {
+    try {
+      parseCrokiReleaseCandidate(context.release);
+    } catch {
+      errors.add("invalid-release");
+    }
+  }
   return [...errors];
 }
 
@@ -287,6 +305,7 @@ function editableFingerprint(context: CrokiContext): string {
     product: context.product,
     nodes: context.nodes.map(({ updatedAt: _, ...node }) => node),
     edges: context.edges,
+    release: context.release,
   });
 }
 
@@ -304,7 +323,7 @@ function withCrokiNodeReferences(
 function touch(
   context: CrokiContext,
   now: string,
-  patch: Partial<Pick<CrokiContext, "product" | "nodes" | "edges">>,
+  patch: Partial<Pick<CrokiContext, "product" | "nodes" | "edges" | "release">>,
 ): CrokiContext {
   return { ...context, ...patch, updatedAt: now };
 }

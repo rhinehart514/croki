@@ -1,4 +1,4 @@
-import type { CrokiContextReceipt } from "@t3tools/shared/crokiContext";
+import type { CrokiContextReceipt } from "@croki/shared/crokiContext";
 import { CircleDot } from "lucide-react";
 
 import { cn } from "~/lib/utils";
@@ -7,7 +7,6 @@ import type { CrokiComposerContextState } from "./CrokiContextPresentation.logic
 
 export function CrokiComposerContextIndicator(props: {
   readonly compact: boolean;
-  readonly onOpenCanvas: () => void;
   readonly state: CrokiComposerContextState;
   readonly workspaceKind?: "project" | "worktree" | undefined;
   readonly workspaceRoot?: string | null | undefined;
@@ -18,14 +17,12 @@ export function CrokiComposerContextIndicator(props: {
     : "";
   const description = `${presentation.description}${workspaceDescription}`;
   return (
-    <button
-      type="button"
-      onClick={props.onOpenCanvas}
+    <div
       aria-label={description}
       title={description}
       data-croki-workspace-root={props.workspaceRoot ?? undefined}
       className={cn(
-        "flex h-8 min-w-0 max-w-64 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs transition-colors hover:bg-accent hover:text-foreground",
+        "flex h-8 min-w-0 max-w-64 shrink-0 items-center gap-1.5 px-2 text-xs",
         presentation.problem ? "text-amber-500" : "text-muted-foreground/80",
       )}
     >
@@ -37,7 +34,7 @@ export function CrokiComposerContextIndicator(props: {
           {workspaceLabel(props.workspaceRoot)}
         </span>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -48,6 +45,7 @@ export function CrokiAppliedContextReceipt(props: {
   const { receipt } = props;
   const parts = [harnessLabel(receipt), appliedStatusLabel(receipt)];
   if (receipt.status === "loaded" || receipt.status === "partial") {
+    if (receipt.releaseVersion) parts.push(`Release ${receipt.releaseVersion}`);
     parts.push(`${receipt.includedCount ?? receipt.currentCount} approved`);
     if (receipt.truncated) parts.push("partial");
     if (receipt.selectionMode === "focused") parts.push("turn-focused");
@@ -56,10 +54,13 @@ export function CrokiAppliedContextReceipt(props: {
   if (receipt.updatedAt) parts.push(formatUpdatedAt(receipt.updatedAt));
   const label = parts.join(" · ");
   const detail = [
-    `Canvas status: ${receipt.status}`,
+    `Project context status: ${receipt.status}`,
     `Current: ${receipt.currentCount}`,
     `Proposals excluded: ${receipt.provisionalCount}`,
     `Truncated: ${receipt.truncated ? "yes" : "no"}`,
+    receipt.releaseVersion
+      ? `Release: ${receipt.releaseVersion} (${receipt.releaseItemCount ?? 0} active items)`
+      : null,
     receipt.issueCount !== undefined ? `Omitted invalid entries: ${receipt.issueCount}` : null,
     receipt.includedCount !== undefined ? `Included: ${receipt.includedCount}` : null,
     receipt.omittedCount !== undefined ? `Context omitted: ${receipt.omittedCount}` : null,
@@ -90,7 +91,7 @@ export function CrokiAppliedContextReceipt(props: {
           <dl className="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1.5 text-muted-foreground">
             <dt>Behavior</dt>
             <dd className="text-foreground">{harnessLabel(receipt)}</dd>
-            <dt>Canvas</dt>
+            <dt>Context</dt>
             <dd className="text-foreground">{appliedStatusLabel(receipt)}</dd>
             <dt>Approved</dt>
             <dd className="text-foreground tabular-nums">
@@ -99,7 +100,15 @@ export function CrokiAppliedContextReceipt(props: {
             <dt>Proposals</dt>
             <dd className="text-foreground tabular-nums">{receipt.provisionalCount} excluded</dd>
             <dt>Capability</dt>
-            <dd className="text-foreground">Native agent SDK + Canvas tools</dd>
+            <dd className="text-foreground">{capabilityLabel(receipt)}</dd>
+            {receipt.releaseVersion ? (
+              <>
+                <dt>Release</dt>
+                <dd className="text-foreground">
+                  {receipt.releaseVersion} · {receipt.releaseItemCount ?? 0} active
+                </dd>
+              </>
+            ) : null}
             {receipt.sha256 ? (
               <>
                 <dt>Snapshot</dt>
@@ -123,67 +132,71 @@ function composerPresentation(
     case "partial": {
       const counts = compact ? state.currentCount : `${state.currentCount} approved`;
       return {
-        label: `Canvas ${counts} · ${state.issueCount} invalid`,
-        description: `The next turn will use valid approved Canvas entries. Proposals stay excluded. ${state.issueCount} invalid entr${
+        label: `Context ${counts} · ${state.issueCount} invalid`,
+        description: `The next turn will use valid approved project-context entries. Proposals stay excluded. ${state.issueCount} invalid entr${
           state.issueCount === 1 ? "y was" : "ies were"
-        } omitted. Open Canvas to review and repair.`,
+        } omitted.`,
         problem: true,
       };
     }
     case "loaded": {
       if (!state.included) {
         return {
-          label: "Canvas empty",
-          description: "Canvas has no active product context for the next turn. Open Canvas.",
+          label: "Context empty",
+          description: "Project context has no approved entries for the next turn.",
           problem: false,
         };
       }
       const counts = compact ? state.currentCount : `${state.currentCount} approved`;
       const suffix = state.promptTruncated ? " · partial" : "";
+      if (state.releaseVersion) {
+        return {
+          label: `Release ${state.releaseVersion}${suffix}`,
+          description: `The next turn will include the active ${state.releaseVersion} release candidate and ${state.currentCount} approved project-context item${state.currentCount === 1 ? "" : "s"}. ${state.provisionalCount} proposal${state.provisionalCount === 1 ? " is" : "s are"} excluded${state.promptTruncated ? ", and approved context is truncated to the provider limit" : ""}.`,
+          problem: false,
+        };
+      }
       return {
-        label: `Canvas ${counts}${suffix}`,
-        description: `The next turn will include ${state.currentCount} approved Canvas item${state.currentCount === 1 ? "" : "s"}. ${state.provisionalCount} proposal${state.provisionalCount === 1 ? " is" : "s are"} excluded${state.promptTruncated ? ", and approved context is truncated to the provider limit" : ""}. Open Canvas.`,
+        label: `Context ${counts}${suffix}`,
+        description: `The next turn will include ${state.currentCount} approved project-context item${state.currentCount === 1 ? "" : "s"}. ${state.provisionalCount} proposal${state.provisionalCount === 1 ? " is" : "s are"} excluded${state.promptTruncated ? ", and approved context is truncated to the provider limit" : ""}.`,
         problem: false,
       };
     }
     case "loading":
       return {
-        label: "Canvas checking",
-        description: "Checking Canvas context for the next turn. Open Canvas.",
+        label: "Context checking",
+        description: "Checking project context for the next turn.",
         problem: false,
       };
     case "absent":
       return {
-        label: "No Canvas",
-        description:
-          "No Canvas context will be included in the next turn. Open Canvas to create it.",
+        label: "No context",
+        description: "No project context will be included in the next turn.",
         problem: false,
       };
     case "invalid":
       return {
-        label: "Canvas invalid",
-        description: `Canvas context will not be included in the next turn because it is invalid (${state.errorCode}). Open Canvas to repair it.`,
+        label: "Context invalid",
+        description: `Project context will not be included in the next turn because it is invalid (${state.errorCode}).`,
         problem: true,
       };
     case "oversized":
       return {
-        label: "Canvas oversized",
-        description:
-          "Canvas context exceeds its source limit and will not be included. Open Canvas.",
+        label: "Context oversized",
+        description: "Project context exceeds its source limit and will not be included.",
         problem: true,
       };
     case "truncated":
       return {
-        label: "Canvas truncated",
+        label: "Context truncated",
         description:
-          "The workspace returned only part of Canvas, so it will not be included. Open Canvas.",
+          "The workspace returned only part of project context, so it will not be included.",
         problem: true,
       };
     case "unavailable":
       return {
-        label: "Canvas unavailable",
-        description:
-          "Canvas could not be read. The next turn can continue without it. Open Canvas.",
+        label: "Context unavailable",
+        description: "Project context could not be read. The next turn can continue without it.",
         problem: true,
       };
   }
@@ -192,22 +205,30 @@ function composerPresentation(
 function appliedStatusLabel(receipt: CrokiContextReceipt): string {
   switch (receipt.status) {
     case "loaded":
-      return "Canvas applied";
+      return "Context applied";
     case "partial":
-      return `Canvas applied with ${receipt.issueCount ?? 0} omitted issue${
+      return `Context applied with ${receipt.issueCount ?? 0} omitted issue${
         receipt.issueCount === 1 ? "" : "s"
       }`;
     case "absent":
-      return "No Canvas applied";
+      return "No context applied";
     case "invalid":
-      return `Canvas invalid${receipt.errorCode ? ` (${receipt.errorCode})` : ""}`;
+      return `Context invalid${receipt.errorCode ? ` (${receipt.errorCode})` : ""}`;
     case "oversized":
-      return "Canvas oversized";
+      return "Context oversized";
   }
 }
 
 function harnessLabel(receipt: CrokiContextReceipt): string {
-  return receipt.harnessId === "gtm-v1" ? "GTM v1" : "Native";
+  if (receipt.harnessId === "product-v1") return "Product";
+  if (receipt.harnessId === "gtm-v1") return "GTM";
+  return "Native";
+}
+
+function capabilityLabel(receipt: CrokiContextReceipt): string {
+  return receipt.harnessId === "product-v1" || receipt.harnessId === "gtm-v1"
+    ? "Native provider tools + Canvas"
+    : "Native provider tools";
 }
 
 function formatUpdatedAt(value: string): string {

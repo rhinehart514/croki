@@ -1,9 +1,9 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@croki/contracts";
 import type {
   CrokiContext,
   CrokiContextNode,
   CrokiContextReference,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 

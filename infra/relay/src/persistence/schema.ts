@@ -2,7 +2,7 @@ import type {
   RelayAgentActivityAggregateState,
   RelayAgentActivityState,
   RelayAgentAwarenessPreferences,
-} from "@t3tools/contracts/relay";
+} from "@croki/contracts/relay";
 import {
   boolean,
   index,

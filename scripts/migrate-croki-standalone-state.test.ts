@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
-import * as NodeFS from "node:fs/promises";
+import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
@@ -12,12 +12,12 @@ const temporaryRoots: string[] = [];
 
 afterEach(async () => {
   await Promise.all(
-    temporaryRoots.splice(0).map((root) => NodeFS.rm(root, { recursive: true, force: true })),
+    temporaryRoots.splice(0).map((root) => NodeFSP.rm(root, { recursive: true, force: true })),
   );
 });
 
 async function makeRoot(): Promise<string> {
-  const root = await NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "croki-migration-test-"));
+  const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "croki-migration-test-"));
   temporaryRoots.push(root);
   return root;
 }
@@ -28,13 +28,13 @@ describe("standalone Croki migration", () => {
     const sourceRoot = NodePath.join(root, ".t3");
     const targetRoot = NodePath.join(root, ".croki");
     const sourceStateDir = NodePath.join(sourceRoot, "userdata");
-    await NodeFS.mkdir(NodePath.join(sourceStateDir, "secrets"), { recursive: true });
-    await NodeFS.writeFile(
+    await NodeFSP.mkdir(NodePath.join(sourceStateDir, "secrets"), { recursive: true });
+    await NodeFSP.writeFile(
       NodePath.join(sourceStateDir, "settings.json"),
       '{"provider":"codex"}\n',
     );
-    await NodeFS.writeFile(NodePath.join(sourceStateDir, "secrets", "provider"), "encrypted");
-    await NodeFS.writeFile(NodePath.join(sourceStateDir, "environment-id"), "legacy-id");
+    await NodeFSP.writeFile(NodePath.join(sourceStateDir, "secrets", "provider"), "encrypted");
+    await NodeFSP.writeFile(NodePath.join(sourceStateDir, "environment-id"), "legacy-id");
     const databasePath = NodePath.join(sourceStateDir, "state.sqlite");
     NodeChildProcess.execFileSync("/usr/bin/sqlite3", [
       databasePath,
@@ -54,17 +54,19 @@ describe("standalone Croki migration", () => {
       "thread-1",
     );
     await expect(
-      NodeFS.access(NodePath.join(targetRoot, "userdata", "environment-id")),
+      NodeFSP.access(NodePath.join(targetRoot, "userdata", "environment-id")),
     ).rejects.toThrow();
-    await expect(NodeFS.access(NodePath.join(targetRoot, "userdata", "secrets"))).rejects.toThrow();
+    await expect(
+      NodeFSP.access(NodePath.join(targetRoot, "userdata", "secrets")),
+    ).rejects.toThrow();
   });
 
   it("refuses to overwrite an existing Croki state directory", async () => {
     const root = await makeRoot();
     const sourceRoot = NodePath.join(root, ".t3");
     const targetRoot = NodePath.join(root, ".croki");
-    await NodeFS.mkdir(NodePath.join(sourceRoot, "userdata"), { recursive: true });
-    await NodeFS.mkdir(NodePath.join(targetRoot, "userdata"), { recursive: true });
+    await NodeFSP.mkdir(NodePath.join(sourceRoot, "userdata"), { recursive: true });
+    await NodeFSP.mkdir(NodePath.join(targetRoot, "userdata"), { recursive: true });
 
     await expect(migrateLegacyT3State({ sourceRoot, targetRoot })).rejects.toThrow(
       /refusing to overwrite/u,

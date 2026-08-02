@@ -2,7 +2,7 @@ import type {
   CrokiContext,
   CrokiContextEdge,
   CrokiContextReference,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 import { MarkerType, ReactFlow, useNodesState, type Connection, type Edge } from "@xyflow/react";
 import { Sparkles } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";

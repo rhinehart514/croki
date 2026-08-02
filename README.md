@@ -4,7 +4,7 @@ Croki is an agentic development environment (ADE) for founders building real
 products with coding agents. It is a working daily development environment, not
 a standalone agent runtime or a replacement for the provider behind the work.
 
-Croki is a narrow product overlay on T3 Code. It preserves native threads,
+Croki is a narrow product overlay on Croki. It preserves native threads,
 providers, worktrees, checkpoints, recovery, Git, terminal, preview, files,
 plans, project scripts, desktop, web, and mobile clients. Canvas adds optional,
 repository-owned product understanding that survives individual conversations.

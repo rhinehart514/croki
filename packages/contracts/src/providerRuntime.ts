@@ -459,10 +459,54 @@ const UserInputResolvedPayload = Schema.Struct({
 });
 export type UserInputResolvedPayload = typeof UserInputResolvedPayload.Type;
 
+const RuntimeTaskActorId = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(128));
+const RuntimeTaskActorLabel = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+const RuntimeTaskActorModel = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+const RuntimeTaskActorReasoning = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(120));
+
+/** Native worker identity carried on task lifecycle events when available. */
+export const RuntimeTaskActor = Schema.Struct({
+  id: RuntimeTaskActorId,
+  label: Schema.optional(RuntimeTaskActorLabel),
+  model: Schema.optional(RuntimeTaskActorModel),
+  reasoning: Schema.optional(RuntimeTaskActorReasoning),
+});
+export type RuntimeTaskActor = typeof RuntimeTaskActor.Type;
+
+const RuntimeTaskOwnershipPath = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(500));
+const RuntimeTaskOwnershipArea = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+
+/** File or conceptual ownership reported by a native coordinator. */
+export const RuntimeTaskOwnership = Schema.Struct({
+  files: Schema.optional(Schema.Array(RuntimeTaskOwnershipPath).check(Schema.isMaxLength(64))),
+  areas: Schema.optional(Schema.Array(RuntimeTaskOwnershipArea).check(Schema.isMaxLength(32))),
+});
+export type RuntimeTaskOwnership = typeof RuntimeTaskOwnership.Type;
+
+const RuntimeTaskEvidenceLabel = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+const RuntimeTaskEvidenceReferenceId = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+
+/** Bounded verification signal that can be attributed to one workstream. */
+export const RuntimeTaskEvidence = Schema.Struct({
+  kind: Schema.Literals(["command", "test", "build", "review", "artifact"]),
+  label: RuntimeTaskEvidenceLabel,
+  status: Schema.Literals(["passed", "failed", "unknown"]),
+  referenceId: Schema.optional(RuntimeTaskEvidenceReferenceId),
+});
+export type RuntimeTaskEvidence = typeof RuntimeTaskEvidence.Type;
+
+const RuntimeTaskMetadataFields = {
+  parentTaskId: Schema.optional(RuntimeTaskId),
+  actor: Schema.optional(RuntimeTaskActor),
+  ownership: Schema.optional(RuntimeTaskOwnership),
+  evidence: Schema.optional(Schema.Array(RuntimeTaskEvidence).check(Schema.isMaxLength(16))),
+} as const;
+
 const TaskStartedPayload = Schema.Struct({
   taskId: RuntimeTaskId,
   description: Schema.optional(TrimmedNonEmptyStringSchema),
   taskType: Schema.optional(TrimmedNonEmptyStringSchema),
+  ...RuntimeTaskMetadataFields,
 });
 export type TaskStartedPayload = typeof TaskStartedPayload.Type;
 
@@ -472,6 +516,7 @@ const TaskProgressPayload = Schema.Struct({
   summary: Schema.optional(TrimmedNonEmptyStringSchema),
   usage: Schema.optional(Schema.Unknown),
   lastToolName: Schema.optional(TrimmedNonEmptyStringSchema),
+  ...RuntimeTaskMetadataFields,
 });
 export type TaskProgressPayload = typeof TaskProgressPayload.Type;
 
@@ -480,6 +525,7 @@ const TaskCompletedPayload = Schema.Struct({
   status: Schema.Literals(["completed", "failed", "stopped"]),
   summary: Schema.optional(TrimmedNonEmptyStringSchema),
   usage: Schema.optional(Schema.Unknown),
+  ...RuntimeTaskMetadataFields,
 });
 export type TaskCompletedPayload = typeof TaskCompletedPayload.Type;
 

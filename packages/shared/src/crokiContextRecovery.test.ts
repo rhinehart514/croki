@@ -59,4 +59,30 @@ describe("recoverCrokiContext", () => {
       ),
     ).toThrow(/invalid updatedAt/);
   });
+
+  it("keeps valid canon when the release candidate is malformed", () => {
+    const recovered = recoverCrokiContext(
+      JSON.stringify({
+        version: 1,
+        product: "Croki",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+        nodes: [
+          {
+            id: "intent-1",
+            kind: "intent",
+            status: "current",
+            title: "Keep founder canon available",
+            body: "",
+            updatedAt: "2026-08-02T00:00:00.000Z",
+          },
+        ],
+        edges: [],
+        release: { version: "0.4.2" },
+      }),
+    );
+
+    expect(recovered.context.nodes).toHaveLength(1);
+    expect(recovered.context.release).toBeUndefined();
+    expect(recovered.issues).toMatchObject([{ code: "malformed", path: "release" }]);
+  });
 });

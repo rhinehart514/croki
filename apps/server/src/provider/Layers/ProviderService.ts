@@ -23,8 +23,8 @@ import {
   type ProviderDriverKind,
   type ProviderRuntimeEvent,
   type ProviderSession,
-} from "@t3tools/contracts";
-import { causeErrorTag } from "@t3tools/shared/observability";
+} from "@croki/contracts";
+import { causeErrorTag } from "@croki/shared/observability";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -690,7 +690,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       // rather than issuing a new one: sessions that go a long time between
       // browser tool calls used to lose the toolkit outright.
       yield* McpSessionRegistry.touchActiveMcpThread(input.threadId, {
-        canvasEnabled: input.canvasEnabled ?? false,
+        harnessId: input.harnessId ?? "native",
       });
       const turn = yield* routed.adapter.sendTurn(input);
       yield* directory.upsert({

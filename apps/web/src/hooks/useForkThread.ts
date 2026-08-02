@@ -1,9 +1,9 @@
-import type { ScopedThreadRef } from "@t3tools/contracts";
-import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import type { ScopedThreadRef } from "@croki/contracts";
+import { scopeThreadRef, scopedThreadKey } from "@croki/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@croki/client-runtime/state/runtime";
 import { useRouter } from "@tanstack/react-router";
 import { useCallback } from "react";
 

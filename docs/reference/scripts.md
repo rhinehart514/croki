@@ -10,11 +10,11 @@ with `pnpm exec`.
   Node or Bun HTTP and PTY adapters from the active runtime; the bundled CLI is
   a Node executable.
 - `vp run dev:web` — Starts just the Vite dev server for the web app.
-- Dev commands run from a linked **git worktree** default to that worktree's gitignored `.t3`, even when `T3CODE_HOME` is set, storing state in `<worktree>/.t3/userdata`. Pass `--home-dir <path>` to choose another isolated directory explicitly. Submodules are not worktrees and keep the normal precedence.
+- Dev commands run from a linked **git worktree** default to that worktree's gitignored `.t3`, even when `CROKI_HOME` is set, storing state in `<worktree>/.t3/userdata`. Pass `--home-dir <path>` to choose another isolated directory explicitly. Submodules are not worktrees and keep the normal precedence.
 - From the **main checkout**, dev commands implicitly use `~/.t3/dev`, keeping development state separate from `~/.t3/userdata`. An explicit `--home-dir <path>` stores state under `<path>/userdata`; the base directory remains available for caches, worktrees, and other shared data.
-- Web dev commands do not auto-open a browser. Open the one-time pairing URL printed by the server so the first browser navigation is authenticated. Set `T3CODE_NO_BROWSER=0` only when interactive auto-open is intentional.
+- Web dev commands do not auto-open a browser. Open the one-time pairing URL printed by the server so the first browser navigation is authenticated. Set `CROKI_NO_BROWSER=0` only when interactive auto-open is intentional.
 - Pass dev-runner flags directly after the root task name, for example:
-  `vp run dev --home-dir /tmp/t3code-dev`
+  `vp run dev --home-dir /tmp/croki-dev`
 - `vp run start` — Runs the production server (serves built web app as static files).
 - `vp run build` — Builds contracts, web app, and server.
 - `vp run typecheck` — Strict TypeScript checks for all packages.
@@ -30,15 +30,15 @@ with `pnpm exec`.
 
 - Default build is unsigned/not notarized for local sharing.
 - The DMG build uses `assets/prod/black-macos-1024.png` as the production app icon source.
-- Desktop production windows load the bundled UI from `t3code://app/index.html` (not a `127.0.0.1` document URL).
+- Desktop production windows load the bundled UI from `croki://app/index.html` (not a `127.0.0.1` document URL).
 
 - Desktop packaging includes `apps/server/dist` (the `t3` backend) and starts it on loopback with an auth token for WebSocket/API traffic.
 - Your tester can still open it on macOS by right-clicking the app and choosing **Open** on first launch.
 - To keep staging files for debugging package contents, run: `vp run dist:desktop:dmg -- --keep-stage`
 - To allow code-signing/notarization when configured in CI/secrets, add: `--signed`.
-- Signed macOS builds also require `T3CODE_APPLE_TEAM_ID` and
-  `T3CODE_MACOS_PROVISIONING_PROFILE`. The passkey RP domain is derived from
-  `T3CODE_CLERK_PUBLISHABLE_KEY` unless `T3CODE_CLERK_PASSKEY_RP_DOMAINS` overrides it.
+- Signed macOS builds also require `CROKI_APPLE_TEAM_ID` and
+  `CROKI_MACOS_PROVISIONING_PROFILE`. The passkey RP domain is derived from
+  `CROKI_CLERK_PUBLISHABLE_KEY` unless `CROKI_CLERK_PASSKEY_RP_DOMAINS` overrides it.
 - Windows `--signed` uses Azure Trusted Signing and expects:
   `AZURE_TRUSTED_SIGNING_ENDPOINT`, `AZURE_TRUSTED_SIGNING_ACCOUNT_NAME`,
   `AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME`, and `AZURE_TRUSTED_SIGNING_PUBLISHER_NAME`.
@@ -53,10 +53,10 @@ Worktrees derive a preferred port offset from their path. The runner shifts both
 
 ## Running multiple dev instances
 
-Set `T3CODE_DEV_INSTANCE` to any value to deterministically shift all dev ports together.
+Set `CROKI_DEV_INSTANCE` to any value to deterministically shift all dev ports together.
 
 - Default ports: server `13773`, web `5733`
-- Shifted ports: `base + offset` (offset is hashed from `T3CODE_DEV_INSTANCE`)
-- Example: `T3CODE_DEV_INSTANCE=branch-a vp run dev:desktop`
+- Shifted ports: `base + offset` (offset is hashed from `CROKI_DEV_INSTANCE`)
+- Example: `CROKI_DEV_INSTANCE=branch-a vp run dev:desktop`
 
-If you want full control instead of hashing, set `T3CODE_PORT_OFFSET` to a numeric offset.
+If you want full control instead of hashing, set `CROKI_PORT_OFFSET` to a numeric offset.

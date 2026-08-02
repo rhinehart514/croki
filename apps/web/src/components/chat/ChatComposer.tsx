@@ -12,16 +12,16 @@ import type {
   ServerProvider,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   ProviderDriverKind,
   ProviderInstanceId,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-} from "@t3tools/contracts";
-import type { EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
-import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
-import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
+} from "@croki/contracts";
+import type { EnvironmentConnectionPresentation } from "@croki/client-runtime/connection";
+import { serializeComposerFileLink } from "@croki/shared/composerTrigger";
+import { createModelSelection, normalizeModelSlug } from "@croki/shared/model";
 import {
   memo,
   type ReactNode,
@@ -78,6 +78,7 @@ import {
 } from "../../lib/terminalContext";
 import { useComposerPathSearch } from "../../lib/composerPathSearchState";
 import { type ElementContextDraft } from "../../lib/elementContext";
+import type { HarnessCanvasArtifactNode } from "./canvasThreadIntegration";
 import { ComposerPendingElementContexts } from "./ComposerPendingElementContexts";
 import { ComposerPendingReviewComments } from "./ComposerPendingReviewComments";
 import { ComposerPreviewAnnotationCards } from "./ComposerPreviewAnnotationCards";
@@ -196,7 +197,7 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
-import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import type { UnifiedSettings } from "@croki/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
@@ -577,6 +578,7 @@ export interface ChatComposerProps {
   // Context window
   activeThreadActivities: Thread["activities"] | undefined;
   canvasContext: CrokiComposerContextState | null;
+  canvasSelection?: readonly HarnessCanvasArtifactNode[];
   canvasWorkspaceKind?: "project" | "worktree" | undefined;
   canvasWorkspaceRoot?: string | null | undefined;
 
@@ -619,8 +621,9 @@ export interface ChatComposerProps {
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
   onCrokiHarnessChange: (harnessId: CrokiHarnessId) => void;
+  onClearCanvasSelection?: () => void;
+  onRemoveCanvasSelection?: (nodeId: string) => void;
   togglePlanSidebar: () => void;
-  onOpenCanvas: () => void;
 
   focusComposer: () => void;
   scheduleComposerFocus: () => void;
@@ -676,6 +679,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeThreadModelSelection,
     activeThreadActivities,
     canvasContext,
+    canvasSelection = [],
     canvasWorkspaceKind,
     canvasWorkspaceRoot,
     resolvedTheme,
@@ -702,8 +706,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     handleRuntimeModeChange,
     handleInteractionModeChange,
     onCrokiHarnessChange,
+    onClearCanvasSelection,
+    onRemoveCanvasSelection,
     togglePlanSidebar,
-    onOpenCanvas,
     focusComposer,
     scheduleComposerFocus,
     setThreadError,
@@ -2819,6 +2824,36 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             </div>
           ) : null}
 
+          {!isComposerCollapsedMobile && canvasSelection.length > 0 ? (
+            <div
+              className="flex min-w-0 items-start gap-2 border-b border-border/55 px-3 pb-2 text-xs sm:px-4"
+              data-canvas-selection-context="true"
+            >
+              <span className="shrink-0 pt-0.5 font-medium text-foreground/75">
+                Canvas selection
+              </span>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground/75">
+                {canvasSelection.map((node) => (
+                  <span key={node.id} className="inline-flex min-w-0 items-center gap-1">
+                    <span className="max-w-56 truncate">{node.title}</span>
+                    {onRemoveCanvasSelection || onClearCanvasSelection ? (
+                      <button
+                        type="button"
+                        className="shrink-0 text-muted-foreground/55 hover:text-foreground"
+                        aria-label={`Remove ${node.title} from Canvas selection`}
+                        onClick={() =>
+                          onRemoveCanvasSelection?.(node.id) ?? onClearCanvasSelection?.()
+                        }
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div
             ref={setComposerMenuAnchor}
             className={cn(
@@ -3116,7 +3151,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   />
                 )}
 
-                {canvasContext ? (
+                {activeThread ? (
                   <>
                     <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
                     <Select
@@ -3126,13 +3161,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       <ComposerSelectControl
                         className={cn(
                           "font-medium",
+                          (crokiHarnessId as string) === "product-v1" &&
+                            "text-sky-300 hover:text-sky-200",
                           crokiHarnessId === "gtm-v1" && "text-amber-400 hover:text-amber-300",
                         )}
                         aria-label="Turn behavior"
                       >
                         <ComposerControlIcon icon={BotIcon} opticalSize="large" />
                         <SelectValue>
-                          {crokiHarnessId === "gtm-v1" ? "GTM v1" : "Native"}
+                          {(crokiHarnessId as string) === "product-v1"
+                            ? "Product"
+                            : crokiHarnessId === "gtm-v1"
+                              ? "GTM"
+                              : "Native"}
                         </SelectValue>
                       </ComposerSelectControl>
                       <SelectPopup alignItemWithTrigger={false}>
@@ -3140,28 +3181,39 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                           <div className="grid gap-0.5">
                             <span className="font-medium text-foreground">Native</span>
                             <span className="text-xs leading-4 text-muted-foreground">
-                              Provider agent SDK as configured, with approved Canvas context.
+                              Provider agent as configured for this turn.
+                            </span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="product-v1" hideIndicator className="min-w-72 py-2">
+                          <div className="grid gap-0.5">
+                            <span className="font-medium text-foreground">Product</span>
+                            <span className="text-xs leading-4 text-muted-foreground">
+                              Product judgment with an optional visual Canvas artifact for this
+                              turn.
                             </span>
                           </div>
                         </SelectItem>
                         <SelectItem value="gtm-v1" hideIndicator className="min-w-72 py-2">
                           <div className="grid gap-0.5">
-                            <span className="font-medium text-foreground">GTM v1</span>
+                            <span className="font-medium text-foreground">GTM</span>
                             <span className="text-xs leading-4 text-muted-foreground">
-                              Adds Croki GTM guidance for one turn, then resets to Native.
+                              Go-to-market judgment with an optional visual Canvas artifact for this
+                              turn.
                             </span>
                           </div>
                         </SelectItem>
                       </SelectPopup>
                     </Select>
                     <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-                    <CrokiComposerContextIndicator
-                      compact={isComposerFooterCompact}
-                      state={canvasContext}
-                      onOpenCanvas={onOpenCanvas}
-                      workspaceKind={canvasWorkspaceKind}
-                      workspaceRoot={canvasWorkspaceRoot}
-                    />
+                    {canvasContext ? (
+                      <CrokiComposerContextIndicator
+                        compact={isComposerFooterCompact}
+                        state={canvasContext}
+                        workspaceKind={canvasWorkspaceKind}
+                        workspaceRoot={canvasWorkspaceRoot}
+                      />
+                    ) : null}
                   </>
                 ) : null}
 

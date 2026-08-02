@@ -2,7 +2,7 @@
 
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
-import * as NodeFS from "node:fs/promises";
+import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
@@ -26,7 +26,7 @@ export interface CrokiStandaloneMigrationResult {
 }
 
 async function pathExists(path: string): Promise<boolean> {
-  return NodeFS.access(path).then(
+  return NodeFSP.access(path).then(
     () => true,
     () => false,
   );
@@ -51,7 +51,7 @@ function runSqlite(sourceDatabase: string, statement: string): string {
  * Creates a fresh Croki-owned state directory from the current T3 desktop state.
  * SQLite is copied through its online backup API so a live WAL cannot produce a
  * torn database. Runtime IDs, logs, caches, and transient process files are not
- * copied, allowing Croki and T3 Code to coexist after the migration.
+ * copied, allowing Croki and Croki to coexist after the migration.
  */
 export async function migrateLegacyT3State(input: {
   readonly sourceRoot: string;
@@ -66,15 +66,15 @@ export async function migrateLegacyT3State(input: {
     throw new Error(`Croki state already exists at ${targetStateDir}; refusing to overwrite it.`);
   }
 
-  await NodeFS.mkdir(input.targetRoot, { recursive: true });
-  const temporaryStateDir = await NodeFS.mkdtemp(NodePath.join(input.targetRoot, ".migrating-"));
+  await NodeFSP.mkdir(input.targetRoot, { recursive: true });
+  const temporaryStateDir = await NodeFSP.mkdtemp(NodePath.join(input.targetRoot, ".migrating-"));
 
   try {
     const migratedEntries: string[] = [];
     for (const entry of MIGRATED_STATE_ENTRIES) {
       const sourcePath = NodePath.join(sourceStateDir, entry);
       if (!(await pathExists(sourcePath))) continue;
-      await NodeFS.cp(sourcePath, NodePath.join(temporaryStateDir, entry), {
+      await NodeFSP.cp(sourcePath, NodePath.join(temporaryStateDir, entry), {
         recursive: true,
         preserveTimestamps: true,
       });
@@ -92,12 +92,12 @@ export async function migrateLegacyT3State(input: {
       }
     }
 
-    await NodeFS.writeFile(
+    await NodeFSP.writeFile(
       NodePath.join(temporaryStateDir, "croki-migration.json"),
       `${JSON.stringify(
         {
           version: 1,
-          source: "t3code-userdata",
+          source: "croki-userdata",
           migratedEntries,
           migratedDatabase,
           intentionallyRegenerated: [
@@ -113,7 +113,7 @@ export async function migrateLegacyT3State(input: {
         2,
       )}\n`,
     );
-    await NodeFS.rename(temporaryStateDir, targetStateDir);
+    await NodeFSP.rename(temporaryStateDir, targetStateDir);
 
     return {
       sourceStateDir,
@@ -122,7 +122,7 @@ export async function migrateLegacyT3State(input: {
       migratedDatabase,
     };
   } catch (error) {
-    await NodeFS.rm(temporaryStateDir, { recursive: true, force: true });
+    await NodeFSP.rm(temporaryStateDir, { recursive: true, force: true });
     throw error;
   }
 }

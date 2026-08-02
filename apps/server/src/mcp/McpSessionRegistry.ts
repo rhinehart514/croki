@@ -1,4 +1,9 @@
-import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  DEFAULT_CROKI_HARNESS_ID,
+  ProviderInstanceId,
+  ThreadId,
+  type CrokiHarnessId,
+} from "@croki/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -14,6 +19,8 @@ import * as McpProviderSession from "./McpProviderSession.ts";
 export interface McpCredentialRequest {
   readonly threadId: ThreadId;
   readonly providerInstanceId: ProviderInstanceId;
+  /** The selected behavior for the first turn, when known. */
+  readonly harnessId?: CrokiHarnessId;
 }
 
 export interface McpIssuedCredential {
@@ -32,7 +39,7 @@ export interface McpSessionRegistryShape {
    */
   readonly touch: (
     threadId: ThreadId,
-    options?: { readonly canvasEnabled?: boolean },
+    options?: { readonly harnessId?: CrokiHarnessId },
   ) => Effect.Effect<void>;
   readonly revokeProviderSession: (providerSessionId: string) => Effect.Effect<void>;
   readonly revokeThread: (threadId: ThreadId) => Effect.Effect<void>;
@@ -42,7 +49,7 @@ export interface McpSessionRegistryShape {
 export class McpSessionRegistry extends Context.Service<
   McpSessionRegistry,
   McpSessionRegistryShape
->()("t3/mcp/McpSessionRegistry") {}
+>()("croki-server/mcp/McpSessionRegistry") {}
 
 interface CredentialRecord {
   readonly tokenHash: string;
@@ -131,7 +138,8 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         threadId: ThreadId.make(request.threadId),
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
-        capabilities: new Set(["preview"]),
+        harnessId: request.harnessId ?? DEFAULT_CROKI_HARNESS_ID,
+        capabilities: capabilitiesForHarness(request.harnessId ?? DEFAULT_CROKI_HARNESS_ID),
         issuedAt,
       };
       yield* SynchronizedRef.update(state, ({ records }) => {
@@ -171,17 +179,21 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
   const touch: McpSessionRegistryShape["touch"] = Effect.fn("McpSessionRegistry.touch")(
     function* (threadId, touchOptions) {
       const timestamp = yield* currentTimeMillis;
+      // The turn selection is the authority boundary. Canvas panel visibility
+      // is client presentation state and must never grant provider tooling.
+      const harnessId = touchOptions?.harnessId ?? DEFAULT_CROKI_HARNESS_ID;
       yield* SynchronizedRef.update(state, ({ records }) => {
         const current = pruneDead(records, timestamp);
         const next = new Map(current);
         for (const [tokenHash, record] of current) {
           if (record.scope.threadId === threadId) {
-            const capabilities = new Set(record.scope.capabilities);
-            if (touchOptions?.canvasEnabled === true) capabilities.add("canvas");
-            else if (touchOptions?.canvasEnabled === false) capabilities.delete("canvas");
             next.set(tokenHash, {
               ...record,
-              scope: { ...record.scope, capabilities },
+              scope: {
+                ...record.scope,
+                harnessId,
+                capabilities: capabilitiesForHarness(harnessId),
+              },
               lastAliveAt: timestamp,
             });
           }
@@ -247,7 +259,7 @@ export const issueActiveMcpCredential = (
  */
 export const touchActiveMcpThread = (
   threadId: ThreadId,
-  options?: { readonly canvasEnabled?: boolean },
+  options?: { readonly harnessId?: CrokiHarnessId },
 ): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId, options) : Effect.void;
 
@@ -261,3 +273,7 @@ export const revokeAllActiveMcpCredentials = (): Effect.Effect<void> =>
 export const __testing = {
   make: makeWithOptions,
 };
+
+function capabilitiesForHarness(harnessId: CrokiHarnessId): ReadonlySet<"preview" | "canvas"> {
+  return harnessId === "native" ? new Set(["preview"]) : new Set(["preview", "canvas"]);
+}

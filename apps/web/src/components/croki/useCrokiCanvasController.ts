@@ -1,13 +1,13 @@
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId } from "@t3tools/contracts";
+} from "@croki/client-runtime/state/runtime";
+import type { EnvironmentId } from "@croki/contracts";
 import {
   CROKI_CONTEXT_RELATIVE_PATH,
   serializeCrokiContext,
   type CrokiContextNode,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 import { useCallback, useEffect, useMemo } from "react";
 
 import { projectEnvironment } from "~/state/projects";

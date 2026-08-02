@@ -151,6 +151,18 @@ describe("ProviderSendTurnInput", () => {
     expect(getOptionValue(parsed.modelSelection?.options, "effort")).toBe("ultrathink");
     expect(getOptionValue(parsed.modelSelection?.options, "fastMode")).toBe(true);
   });
+
+  it("accepts one-turn Product harness metadata", () => {
+    const parsed = decodeProviderSendTurnInput({
+      threadId: "thread-1",
+      input: "Reconsider Canvas",
+      canvasEnabled: true,
+      harnessId: "product-v1",
+    });
+
+    expect(parsed.harnessId).toBe("product-v1");
+    expect(parsed.canvasEnabled).toBe(true);
+  });
 });
 
 describe("providerInstanceId routing key (slice-2 invariant)", () => {

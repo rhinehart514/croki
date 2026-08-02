@@ -6,6 +6,7 @@ import {
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
 } from "./MessagesTimeline.logic";
+import type { CanvasPresentationTimelineActivity } from "./canvasThreadIntegration";
 
 describe("computeMessageDurationStart", () => {
   it("returns message createdAt when there is no preceding user message", () => {
@@ -261,6 +262,105 @@ describe("resolveAssistantMessageCopyState", () => {
 });
 
 describe("deriveMessagesTimelineRows", () => {
+  it("keeps a Canvas presentation as a dedicated timeline row", () => {
+    const presentation = {
+      activityId: "canvas-activity",
+      createdAt: "2026-01-01T00:00:01Z",
+      summary: "Canvas visual ready · 2 items",
+      artifact: {
+        id: "canvas-artifact",
+        revision: 1,
+        threadId: "thread-1",
+        turnId: null,
+        harnessId: "product-v1",
+        presentation: "compare",
+        question: "Which route?",
+        nodes: [{ id: "question", role: "question", title: "Which route?" }],
+        edges: [],
+        createdAt: "2026-01-01T00:00:01Z",
+      },
+    } as const;
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "canvas-entry",
+          kind: "work",
+          createdAt: presentation.createdAt,
+          entry: {
+            id: "canvas-activity",
+            createdAt: presentation.createdAt,
+            label: "Canvas visual ready",
+            tone: "info",
+            sourceActivityKind: "croki.canvas.presented",
+          },
+        },
+      ],
+      canvasPresentationsByActivityId: new Map([
+        [presentation.activityId, presentation as unknown as CanvasPresentationTimelineActivity],
+      ]),
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.kind).toBe("canvas");
+  });
+
+  it("consolidates native task lifecycle entries into one Workstreams row", () => {
+    const turnId = "turn-workstreams" as never;
+    const started = {
+      id: "task-started" as never,
+      kind: "task.started" as const,
+      tone: "info" as const,
+      summary: "run task started",
+      payload: {
+        taskId: "openclaw:turn-workstreams:spawn-1",
+        description: "Inspect the provider boundary",
+        actor: { id: "worker-1", label: "Luna Max worker" },
+      },
+      turnId,
+      createdAt: "2026-01-01T00:00:01Z",
+    };
+    const progress = {
+      ...started,
+      id: "task-progress" as never,
+      kind: "task.progress" as const,
+      summary: "Inspecting provider events",
+      createdAt: "2026-01-01T00:00:02Z",
+    };
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "task-progress",
+          kind: "work",
+          createdAt: progress.createdAt,
+          entry: {
+            id: "task-progress",
+            createdAt: progress.createdAt,
+            turnId,
+            label: progress.summary,
+            tone: "thinking",
+            sourceActivityKind: "task.progress",
+          },
+        },
+      ],
+      coordinationActivities: [started, progress] as never,
+      runningTurnId: turnId,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.kind).toBe("coordination");
+    if (rows[0]?.kind === "coordination") {
+      expect(rows[0].activities).toHaveLength(2);
+    }
+  });
+
   it("only enables assistant copy for the terminal assistant message in a turn", () => {
     const rows = deriveMessagesTimelineRows({
       timelineEntries: [

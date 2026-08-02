@@ -84,7 +84,7 @@ jobs:
             echo "Missing CROKI_EXPO_TOKEN." >&2
             exit 1
           fi
-          if grep -Eq 'owner: "pingdotgg"|com\.t3tools\.t3code|slug: "t3-code"' apps/mobile/app.config.ts; then
+          if grep -Eq 'owner: "rhinehart514"|com\.croki\.croki|slug: "croki"' apps/mobile/app.config.ts; then
             echo "Inherited T3 EAS owner, slug, or application identifiers must be replaced before production deploys." >&2
             exit 1
           fi

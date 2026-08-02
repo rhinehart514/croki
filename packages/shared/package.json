@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/shared",
+  "name": "@croki/shared",
   "private": true,
   "type": "module",
   "exports": {
@@ -99,13 +99,21 @@
       "types": "./src/crokiCanvasActivity.ts",
       "import": "./src/crokiCanvasActivity.ts"
     },
+    "./crokiCanvasArtifact": {
+      "types": "./src/crokiCanvasArtifact.ts",
+      "import": "./src/crokiCanvasArtifact.ts"
+    },
+    "./crokiReleaseCandidate": {
+      "types": "./src/crokiReleaseCandidate.ts",
+      "import": "./src/crokiReleaseCandidate.ts"
+    },
     "./crokiContextRecovery": {
       "types": "./src/crokiContextRecovery.ts",
       "import": "./src/crokiContextRecovery.ts"
     },
-    "./t3ProjectFile": {
-      "types": "./src/t3ProjectFile.ts",
-      "import": "./src/t3ProjectFile.ts"
+    "./crokiProjectFile": {
+      "types": "./src/crokiProjectFile.ts",
+      "import": "./src/crokiProjectFile.ts"
     },
     "./orchestrationTiming": {
       "types": "./src/orchestrationTiming.ts",
@@ -225,9 +233,9 @@
     "test": "vp test run"
   },
   "dependencies": {
+    "@croki/contracts": "workspace:*",
     "@noble/curves": "catalog:",
     "@noble/hashes": "catalog:",
-    "@t3tools/contracts": "workspace:*",
     "effect": "catalog:",
     "jose": "catalog:",
     "yaml": "catalog:"

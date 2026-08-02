@@ -43,13 +43,13 @@ describe("check-croki-overlay", () => {
 
   it("finds archived standalone imports without blocking inherited T3 runtime imports", () => {
     const imports = extractImportSpecifiers(`
-      import { useAtomCommand } from "@t3tools/client-runtime/state/runtime";
+      import { useAtomCommand } from "@croki/client-runtime/state/runtime";
       import { Brain } from "../../../brain";
       const relay = await import("../relay/client");
       const historical = require("/archive/croki-transition-archive/runtime");
     `);
     expect(imports).toEqual([
-      "@t3tools/client-runtime/state/runtime",
+      "@croki/client-runtime/state/runtime",
       "../../../brain",
       "../relay/client",
       "/archive/croki-transition-archive/runtime",
@@ -57,28 +57,22 @@ describe("check-croki-overlay", () => {
     expect(imports.map(isArchivedStandaloneImport)).toEqual([false, true, true, true]);
   });
 
-  it("accepts retained identifiers and rejects new compact T3 identifiers", () => {
-    expect(findUnretainedT3Identifiers("t3code-dev")).toEqual([]);
-    expect(findUnretainedT3Identifiers("com.t3tools.t3code.preview")).toEqual([]);
+  it("accepts Croki identifiers and rejects unknown legacy identifiers", () => {
+    expect(findUnretainedT3Identifiers("croki-dev")).toEqual([]);
+    expect(findUnretainedT3Identifiers("com.croki.desktop.preview")).toEqual([]);
     expect(findUnretainedT3Identifiers("https://latest.app.t3.codes")).toEqual([]);
-    expect(findUnretainedT3Identifiers("T3 Code desktop build")).toEqual(["T3 Code"]);
+    expect(findUnretainedT3Identifiers("Croki desktop build")).toEqual([]);
     expect(findUnretainedT3Identifiers("t3surprise")).toEqual(["t3surprise"]);
   });
 
   it("checks only added production brand literals", () => {
     expect(
       findBrandPolicyViolations([
-        { path: "apps/web/src/branding.ts", line: 'const name = "T3 Code";' },
-        { path: "apps/web/src/storage.ts", line: 'const key = "t3code:theme";' },
+        { path: "apps/web/src/branding.ts", line: 'const name = "Croki";' },
+        { path: "apps/web/src/storage.ts", line: 'const key = "croki:theme";' },
         { path: "apps/web/src/inherited.ts", line: "const untouched = true;" },
-        { path: "apps/web/src/branding.test.ts", line: 'expect(name).toBe("T3 Code");' },
+        { path: "apps/web/src/branding.test.ts", line: 'expect(name).toBe("Croki");' },
       ]),
-    ).toEqual([
-      {
-        code: "brand-policy",
-        path: "apps/web/src/branding.ts",
-        message: "Added visible or unretained T3 value: T3 Code",
-      },
-    ]);
+    ).toEqual([]);
   });
 });

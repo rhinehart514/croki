@@ -4,6 +4,15 @@ Croki production releases are currently disabled. The repository can build and
 test release artifacts, but it must not publish a CLI, desktop update, hosted
 web app, relay, signed installer, or mobile build to inherited T3 destinations.
 
+## 0.4.2 source candidate
+
+The 0.4.2 source candidate aligns the four manifests updated by the release
+workflow (`apps/server`, `apps/desktop`, `apps/web`, and `packages/contracts`).
+It includes the Canvas and named-harness surface, Thread-native Coordination
+Workstreams, and ACP support for connecting to any user-owned OpenClaw agent.
+The candidate is not tagged or published. See the [0.4.2 release
+notes](../project/release-notes-0.4.2.md) for the product summary.
+
 ## Current behavior
 
 - `croki/main` receives full CI and Croki overlay checks.
@@ -30,15 +39,15 @@ destinations require their own complete Croki-prefixed configuration.
 
 The guard rejects:
 
-- the inherited `pingdotgg/t3code` repository;
+- the inherited `rhinehart514/croki` repository;
 - release pushes to `main`;
-- the inherited `t3` or `@t3tools/*` CLI packages;
+- the inherited `t3` or `@croki/*` CLI packages;
 - inherited `t3.codes` service destinations;
 - the inherited T3 EAS project;
 - incomplete signing, hosted web, relay, Discord, or mobile ownership.
 
-Do not bypass the guard. Compatibility identifiers such as `T3CODE_*`,
-`t3code://`, `.t3`, and the current server binary name remain in the codebase to
+Do not bypass the guard. Compatibility identifiers such as `CROKI_*`,
+`croki://`, `.t3`, and the current server binary name remain in the codebase to
 preserve installed state and wire compatibility; they are not release authority.
 
 ## Enablement order

@@ -9,7 +9,7 @@ optional mobile notifications and Live Activities.
 
 The relay is intentionally not in the hot path for normal Croki traffic. After a client connects,
 regular API and WebSocket traffic goes directly between that client and the selected environment.
-See the [Croki Connect architecture overview](../../docs/cloud/t3-code-connect-auth-flow.html) for the larger system
+See the [Croki Connect architecture overview](../../docs/cloud/croki-connect-auth-flow.html) for the larger system
 design.
 
 ## Responsibilities
@@ -79,7 +79,7 @@ dependencies represented at their boundary rather than mocking internal behavior
 The relay deploys through Alchemy:
 
 ```sh
-vp run --filter t3code-relay deploy
+vp run --filter croki-relay deploy
 ```
 
 The stack provisions the Cloudflare Worker and queues, managed endpoint resources, database
@@ -95,8 +95,8 @@ PlanetScale branch and runtime role for local development, so deploy `prod` befo
 developer stages:
 
 ```sh
-vp run --filter t3code-relay deploy -- --stage prod
-vp run --filter t3code-relay deploy -- --env-file .env.local
+vp run --filter croki-relay deploy -- --stage prod
+vp run --filter croki-relay deploy -- --env-file .env.local
 ```
 
 Alchemy defaults personal deployments to the `dev_$USER` stage. Relay custom domains apply the same
@@ -162,5 +162,5 @@ See:
 - [Croki Connect Clerk Setup](../../docs/cloud/t3-connect-clerk.md) for Clerk keys, JWT templates, and waitlist
   setup.
 - [Relay Observability](../../docs/relay-observability.md) for deployment tracing and diagnostics.
-- [Croki Connect Architecture Overview](../../docs/cloud/t3-code-connect-auth-flow.html) for the full link,
+- [Croki Connect Architecture Overview](../../docs/cloud/croki-connect-auth-flow.html) for the full link,
   connect, endpoint, and notification flows.

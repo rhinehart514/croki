@@ -13,5 +13,5 @@
 - `/packages/shared`: Shared runtime and Canvas utilities consumed across apps.
   It uses explicit subpath exports rather than a barrel index.
 
-The `t3`, `.t3`, `T3CODE_*`, and `@t3tools/*` names are preserved compatibility
+The `t3`, `.t3`, `CROKI_*`, and `@croki/*` names are preserved compatibility
 identifiers. Visible product branding is Croki.

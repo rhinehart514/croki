@@ -1,5 +1,5 @@
-import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
-import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
+import type { ContextMenuItem, PreviewSessionSnapshot } from "@croki/contracts";
+import { getTerminalLabel } from "@croki/shared/terminalLabels";
 import {
   CircleDot,
   ClipboardList,
@@ -109,7 +109,7 @@ function RightPanelEmptyState(props: {
   const actions = [
     {
       label: "Canvas",
-      description: "Shape durable product truth shared with agents.",
+      description: "See the next release and the work shaping it.",
       icon: CircleDot,
       available: props.filesAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.files,

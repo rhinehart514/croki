@@ -6,7 +6,7 @@ import {
   OpenClawSettings,
   OpenCodeSettings,
   ProviderDriverKind,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import type * as Schema from "effect/Schema";
 import {
   ClaudeAI,

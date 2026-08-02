@@ -16,7 +16,7 @@ import {
   type OrchestrationThread,
   type OrchestrationThreadActivity,
   type ProviderRuntimeEvent,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -25,7 +25,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
-import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+import { makeDrainableWorker } from "@croki/shared/DrainableWorker";
 
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
@@ -92,7 +92,7 @@ const BUFFERED_PROPOSED_PLAN_BY_ID_TTL = Duration.minutes(120);
 const TASK_DESCRIPTION_BY_TASK_CACHE_CAPACITY = 10_000;
 const TASK_DESCRIPTION_BY_TASK_TTL = Duration.minutes(120);
 const MAX_BUFFERED_ASSISTANT_CHARS = 24_000;
-const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.T3CODE_STRICT_PROVIDER_LIFECYCLE_GUARD !== "0";
+const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.CROKI_STRICT_PROVIDER_LIFECYCLE_GUARD !== "0";
 
 type TurnStartRequestedDomainEvent = Extract<
   OrchestrationEvent,
@@ -502,8 +502,15 @@ export function runtimeEventToActivities(
             taskId: event.payload.taskId,
             ...(event.payload.taskType ? { taskType: event.payload.taskType } : {}),
             ...(event.payload.description
-              ? { detail: truncateDetail(event.payload.description) }
+              ? {
+                  description: truncateDetail(event.payload.description),
+                  detail: truncateDetail(event.payload.description),
+                }
               : {}),
+            ...(event.payload.parentTaskId ? { parentTaskId: event.payload.parentTaskId } : {}),
+            ...(event.payload.actor ? { actor: event.payload.actor } : {}),
+            ...(event.payload.ownership ? { ownership: event.payload.ownership } : {}),
+            ...(event.payload.evidence ? { evidence: event.payload.evidence } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -531,6 +538,10 @@ export function runtimeEventToActivities(
             ...(event.payload.summary ? { summary: truncateDetail(event.payload.summary) } : {}),
             ...(event.payload.lastToolName ? { lastToolName: event.payload.lastToolName } : {}),
             ...(event.payload.usage !== undefined ? { usage: event.payload.usage } : {}),
+            ...(event.payload.parentTaskId ? { parentTaskId: event.payload.parentTaskId } : {}),
+            ...(event.payload.actor ? { actor: event.payload.actor } : {}),
+            ...(event.payload.ownership ? { ownership: event.payload.ownership } : {}),
+            ...(event.payload.evidence ? { evidence: event.payload.evidence } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -564,6 +575,10 @@ export function runtimeEventToActivities(
                 }
               : {}),
             ...(event.payload.usage !== undefined ? { usage: event.payload.usage } : {}),
+            ...(event.payload.parentTaskId ? { parentTaskId: event.payload.parentTaskId } : {}),
+            ...(event.payload.actor ? { actor: event.payload.actor } : {}),
+            ...(event.payload.ownership ? { ownership: event.payload.ownership } : {}),
+            ...(event.payload.evidence ? { evidence: event.payload.evidence } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,

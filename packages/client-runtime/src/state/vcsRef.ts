@@ -1,4 +1,4 @@
-import type { EnvironmentId, VcsRef as ContractVcsRef } from "@t3tools/contracts";
+import type { EnvironmentId, VcsRef as ContractVcsRef } from "@croki/contracts";
 
 export interface VcsRefTarget {
   readonly environmentId: EnvironmentId | null;

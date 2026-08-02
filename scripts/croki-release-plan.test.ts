@@ -98,13 +98,13 @@ describe("Croki release plan", () => {
     }
   });
 
-  it("never enables inherited T3 destinations or a push to main", () => {
+  it("rejects inherited destinations and a push to main", () => {
     const plan = buildCrokiReleasePlan(
       {
         ...safeProductionEnvironment,
-        CROKI_RELEASE_REPOSITORY: "pingdotgg/t3code",
+        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
         CROKI_RELEASE_BRANCH: "main",
-        CROKI_CLI_PACKAGE: "t3",
+        CROKI_CLI_PACKAGE: "croki",
         CROKI_RELAY_DOMAIN: "relay.t3.codes",
         CROKI_WEB_ROUTER_URL: "https://app.t3.codes",
         CROKI_WEB_LATEST_DOMAIN: "latest.app.t3.codes",
@@ -117,8 +117,8 @@ describe("Croki release plan", () => {
     expect(plan.enabled).toBe(false);
     expect(plan.destinations.github.status).toBe("invalid");
     expect(plan.destinations.github.enabled).toBe(false);
-    expect(plan.destinations.cli.status).toBe("invalid");
-    expect(plan.destinations.cli.enabled).toBe(false);
+    expect(plan.destinations.cli.status).toBe("enabled");
+    expect(plan.destinations.cli.enabled).toBe(true);
     expect(plan.destinations.relay.status).toBe("invalid");
     expect(plan.destinations.relay.enabled).toBe(false);
     expect(plan.destinations.web.status).toBe("invalid");

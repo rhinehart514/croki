@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["CrokiTerminalModule"],
+    "podspecPath": "CrokiTerminalNative.podspec"
+  },
+  "android": {
+    "modules": ["expo.modules.crokiterminal.CrokiTerminalModule"]
+  }
+}

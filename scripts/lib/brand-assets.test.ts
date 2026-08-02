@@ -38,7 +38,7 @@ describe("brand-assets", () => {
 
   it("maps server build web assets to development icons", () => {
     expect(DEVELOPMENT_ICON_OVERRIDES[0]).toEqual({
-      sourceRelativePath: BRAND_ASSET_PATHS.crokiWindowsIconIco,
+      sourceRelativePath: BRAND_ASSET_PATHS.developmentWebFaviconIco,
       targetRelativePath: "dist/client/favicon.ico",
     });
   });
@@ -46,19 +46,19 @@ describe("brand-assets", () => {
   it("maps development web assets to the public splash and favicon files", () => {
     expect(DEVELOPMENT_PUBLIC_ICON_OVERRIDES).toEqual([
       {
-        sourceRelativePath: BRAND_ASSET_PATHS.crokiWindowsIconIco,
+        sourceRelativePath: BRAND_ASSET_PATHS.developmentWebFaviconIco,
         targetRelativePath: "apps/web/public/favicon.ico",
       },
       {
-        sourceRelativePath: BRAND_ASSET_PATHS.crokiWebFavicon16Png,
+        sourceRelativePath: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
         targetRelativePath: "apps/web/public/favicon-16x16.png",
       },
       {
-        sourceRelativePath: BRAND_ASSET_PATHS.crokiWebFavicon32Png,
+        sourceRelativePath: BRAND_ASSET_PATHS.developmentWebFavicon32Png,
         targetRelativePath: "apps/web/public/favicon-32x32.png",
       },
       {
-        sourceRelativePath: BRAND_ASSET_PATHS.crokiWebAppleTouchIconPng,
+        sourceRelativePath: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
         targetRelativePath: "apps/web/public/apple-touch-icon.png",
       },
     ]);

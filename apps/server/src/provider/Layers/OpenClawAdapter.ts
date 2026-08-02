@@ -15,11 +15,13 @@ import {
   type ProviderUserInputAnswers,
   ProviderDriverKind,
   ProviderInstanceId,
+  RuntimeTaskId,
+  type RuntimeTaskActor,
   RuntimeRequestId,
   type RuntimeMode,
   type ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
@@ -28,6 +30,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
@@ -36,6 +39,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
+import { ChildProcess } from "effect/unstable/process";
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/schema";
 
@@ -64,13 +68,17 @@ import {
 } from "../acp/AcpRuntimeModel.ts";
 import { makeAcpNativeLoggerFactory } from "../acp/AcpNativeLogging.ts";
 import { makeOpenClawAcpRuntime } from "../acp/OpenClawAcpSupport.ts";
+import { resolveSpawnCommand } from "@croki/shared/shell";
+import { spawnAndCollect } from "../providerSnapshot.ts";
+import { parseOpenClawAgents, resolveOpenClawAgentId } from "./OpenClawProvider.ts";
 import { type OpenClawAdapterShape } from "../Services/OpenClawAdapter.ts";
 import { resolveOpenClawAcpBaseModelId } from "../acp/OpenClawAcpSupport.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
+import packageJson from "../../../package.json" with { type: "json" };
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 
 const PROVIDER = ProviderDriverKind.make("openclaw");
-const OPENCLAW_RESUME_VERSION = 1 as const;
+const OPENCLAW_RESUME_VERSION = 2 as const;
 const ACP_PLAN_MODE_ALIASES = ["plan", "architect"];
 const ACP_IMPLEMENT_MODE_ALIASES = ["code", "agent", "default", "chat", "implement"];
 const ACP_APPROVAL_MODE_ALIASES = ["ask"];
@@ -106,6 +114,7 @@ interface OpenClawSessionContext {
   readonly pendingApprovals: Map<ApprovalRequestId, PendingApproval>;
   readonly pendingUserInputs: Map<ApprovalRequestId, PendingUserInput>;
   readonly turns: Array<{ id: TurnId; items: Array<unknown> }>;
+  readonly delegatedTasks: Map<string, OpenClawDelegatedTaskState>;
   lastPlanFingerprint: string | undefined;
   activeTurnId: TurnId | undefined;
   /** Number of sendTurn prompts currently in flight or being prepared.
@@ -113,6 +122,13 @@ interface OpenClawSessionContext {
    * continues it, and only the last remaining prompt settles the turn. */
   promptsInFlight: number;
   stopped: boolean;
+}
+
+interface OpenClawDelegatedTaskState {
+  readonly taskId: RuntimeTaskId;
+  readonly description: string;
+  readonly taskType?: string;
+  status: "pending" | "inProgress" | "completed" | "failed";
 }
 
 export function presentOpenClawToolCall(
@@ -138,6 +154,83 @@ export function presentOpenClawToolCall(
         ? "Delegated work"
         : "Delegating work",
   };
+}
+
+function delegatedTaskDescription(input: Record<string, unknown>, fallback: string): string {
+  for (const key of ["taskName", "description", "label", "task", "prompt"] as const) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) return value.trim().slice(0, 240);
+  }
+  return fallback;
+}
+
+function delegatedTaskType(input: Record<string, unknown>): string | undefined {
+  for (const key of ["role", "agent", "mode"] as const) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) return value.trim().slice(0, 120);
+  }
+  return undefined;
+}
+
+function delegatedTaskActor(
+  input: Record<string, unknown>,
+  toolCallId: string,
+): RuntimeTaskActor | undefined {
+  const model =
+    typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
+  const reasoning =
+    typeof input.thinking === "string" && input.thinking.trim()
+      ? input.thinking.trim()
+      : typeof input.reasoning === "string" && input.reasoning.trim()
+        ? input.reasoning.trim()
+        : undefined;
+  const nativeId =
+    typeof input.agentId === "string" && input.agentId.trim()
+      ? input.agentId.trim()
+      : typeof input.sessionKey === "string" && input.sessionKey.trim()
+        ? input.sessionKey.trim()
+        : undefined;
+  if (!model && !reasoning && !nativeId) return undefined;
+  const lunaMax = model === "openai/gpt-5.6-luna" && reasoning === "max";
+  return {
+    id: (nativeId ?? `worker:${toolCallId}`).slice(0, 128),
+    ...(lunaMax ? { label: "Luna Max worker" } : {}),
+    ...(model ? { model: model.slice(0, 240) } : {}),
+    ...(reasoning ? { reasoning: reasoning.slice(0, 120) } : {}),
+  };
+}
+
+export function parseOpenClawDelegatedTask(
+  toolCall: import("../acp/AcpRuntimeModel.ts").AcpToolCallState,
+  turnId?: TurnId,
+): {
+  readonly taskId: RuntimeTaskId;
+  readonly description: string;
+  readonly taskType?: string;
+  readonly actor?: RuntimeTaskActor;
+} | null {
+  const presented = presentOpenClawToolCall(toolCall);
+  if (presented === toolCall) return null;
+  const rawInput = isRecord(toolCall.data.rawInput) ? toolCall.data.rawInput : {};
+  const taskScope = turnId ?? TurnId.make("session");
+  const actor = delegatedTaskActor(rawInput, toolCall.toolCallId);
+  const taskType = delegatedTaskType(rawInput);
+  return {
+    taskId: RuntimeTaskId.make(`openclaw:${taskScope}:${toolCall.toolCallId}`),
+    description: delegatedTaskDescription(rawInput, "Delegated work"),
+    ...(taskType ? { taskType } : {}),
+    ...(actor ? { actor } : {}),
+  };
+}
+
+function delegatedTaskSummary(rawOutput: unknown): string | undefined {
+  if (typeof rawOutput === "string" && rawOutput.trim()) return rawOutput.trim().slice(0, 500);
+  if (!isRecord(rawOutput)) return undefined;
+  for (const key of ["summary", "result", "message"] as const) {
+    const value = rawOutput[key];
+    if (typeof value === "string" && value.trim()) return value.trim().slice(0, 500);
+  }
+  return undefined;
 }
 
 function settlePendingApprovalsAsCancelled(
@@ -170,11 +263,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseOpenClawResume(raw: unknown): { sessionId: string } | undefined {
+export function parseOpenClawResume(
+  raw: unknown,
+): { sessionId: string; agentId: string } | undefined {
   if (!isRecord(raw)) return undefined;
   if (raw.schemaVersion !== OPENCLAW_RESUME_VERSION) return undefined;
   if (typeof raw.sessionId !== "string" || !raw.sessionId.trim()) return undefined;
-  return { sessionId: raw.sessionId.trim() };
+  if (typeof raw.agentId !== "string" || !raw.agentId.trim()) return undefined;
+  return { sessionId: raw.sessionId.trim(), agentId: raw.agentId.trim() };
 }
 
 function normalizeModeSearchText(mode: AcpSessionMode): string {
@@ -290,6 +386,44 @@ function selectAutoApprovedPermissionOption(
 
   return undefined;
 }
+
+const OPENCLAW_AGENT_DISCOVERY_TIMEOUT_MS = 4_000;
+
+function hasRemoteOpenClawTarget(settings: OpenClawSettings): boolean {
+  return /(?:^|\s)--(?:url|gateway|host|port)(?:=|\s|$)/.test(settings.launchArgs.trim());
+}
+
+/** Resolve a blank agent setting before the first ACP session starts. */
+const resolveOpenClawRuntimeSettings = (
+  settings: OpenClawSettings,
+  environment: NodeJS.ProcessEnv | undefined,
+) =>
+  Effect.gen(function* () {
+    if (!settings.enabled || settings.agentId.trim() || hasRemoteOpenClawTarget(settings)) {
+      return settings;
+    }
+    const command = settings.binaryPath || "openclaw";
+    const spawnCommand = yield* resolveSpawnCommand(command, ["agents", "list", "--json"], {
+      env: environment ?? process.env,
+    });
+    const result = yield* spawnAndCollect(
+      command,
+      ChildProcess.make(spawnCommand.command, spawnCommand.args, {
+        env: environment ?? process.env,
+        shell: spawnCommand.shell,
+      }),
+    );
+    if (result.code !== 0) return settings;
+    const agents = parseOpenClawAgents(result.stdout);
+    const agentId = resolveOpenClawAgentId(agents, settings.agentId);
+    return agentId ? { ...settings, agentId } : settings;
+  }).pipe(
+    Effect.timeoutOption(OPENCLAW_AGENT_DISCOVERY_TIMEOUT_MS),
+    Effect.result,
+    Effect.map((result) =>
+      Result.isSuccess(result) && Option.isSome(result.success) ? result.success.value : settings,
+    ),
+  );
 
 export function makeOpenClawAdapter(
   openClawSettings: OpenClawSettings,
@@ -475,6 +609,34 @@ export function makeOpenClawAdapter(
               issue: "cwd is required and must be non-empty.",
             });
           }
+          const resumeCursor = parseOpenClawResume(input.resumeCursor);
+          const configuredAgentId = openClawSettings.agentId.trim();
+          const pinnedAgentId = configuredAgentId || resumeCursor?.agentId;
+          const effectiveOpenClawSettings = yield* resolveOpenClawRuntimeSettings(
+            pinnedAgentId ? { ...openClawSettings, agentId: pinnedAgentId } : openClawSettings,
+            options?.environment,
+          ).pipe(
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
+          );
+          if (
+            hasRemoteOpenClawTarget(effectiveOpenClawSettings) &&
+            !effectiveOpenClawSettings.agentId.trim()
+          ) {
+            return yield* new ProviderAdapterValidationError({
+              provider: PROVIDER,
+              operation: "startSession",
+              issue:
+                "agentId is required when OpenClaw ACP targets a remote Gateway because its native default cannot be discovered locally.",
+            });
+          }
+          if (!effectiveOpenClawSettings.agentId.trim()) {
+            return yield* new ProviderAdapterValidationError({
+              provider: PROVIDER,
+              operation: "startSession",
+              issue:
+                "Croki could not discover OpenClaw's native default agent. Select an explicit agent id and retry.",
+            });
+          }
 
           const cwd = path.resolve(input.cwd.trim());
           const existing = sessions.get(input.threadId);
@@ -491,23 +653,28 @@ export function makeOpenClawAdapter(
           );
           let ctx!: OpenClawSessionContext;
 
-          const resumeSessionId = parseOpenClawResume(input.resumeCursor)?.sessionId;
+          const resumeSessionId =
+            resumeCursor?.agentId === effectiveOpenClawSettings.agentId.trim()
+              ? resumeCursor.sessionId
+              : undefined;
           const acpNativeLoggers = makeAcpNativeLoggers({
             nativeEventLogger,
             provider: PROVIDER,
             threadId: input.threadId,
           });
 
-          const effectiveOpenClawSettings = openClawSettings;
-
           const acp = yield* makeOpenClawAcpRuntime({
             openClawSettings: effectiveOpenClawSettings,
-            sessionKey: `agent:${effectiveOpenClawSettings.agentId || "croki"}:croki:${input.threadId}`,
+            ...(effectiveOpenClawSettings.agentId.trim()
+              ? {
+                  sessionKey: `agent:${effectiveOpenClawSettings.agentId.trim()}:croki:${input.threadId}`,
+                }
+              : {}),
             ...(options?.environment ? { environment: options.environment } : {}),
             childProcessSpawner,
             cwd,
             ...(resumeSessionId ? { resumeSessionId } : {}),
-            clientInfo: { name: "t3-code", version: "0.0.0" },
+            clientInfo: { name: "croki", version: packageJson.version },
             ...acpNativeLoggers,
           }).pipe(
             Effect.provideService(Crypto.Crypto, crypto),
@@ -621,6 +788,7 @@ export function makeOpenClawAdapter(
             resumeCursor: {
               schemaVersion: OPENCLAW_RESUME_VERSION,
               sessionId: started.sessionId,
+              agentId: effectiveOpenClawSettings.agentId.trim(),
             },
             createdAt: now,
             updatedAt: now,
@@ -635,6 +803,7 @@ export function makeOpenClawAdapter(
             pendingApprovals,
             pendingUserInputs,
             turns: [],
+            delegatedTasks: new Map(),
             lastPlanFingerprint: undefined,
             activeTurnId: undefined,
             promptsInFlight: 0,
@@ -706,6 +875,65 @@ export function makeOpenClawAdapter(
                         rawPayload: event.rawPayload,
                       }),
                     );
+                    const delegatedTask = parseOpenClawDelegatedTask(
+                      event.toolCall,
+                      ctx.activeTurnId,
+                    );
+                    if (delegatedTask) {
+                      const delegatedStatus = event.toolCall.status ?? "pending";
+                      const delegatedTaskKey = `${ctx.activeTurnId ?? "session"}:${event.toolCall.toolCallId}`;
+                      const existingTask = ctx.delegatedTasks.get(delegatedTaskKey);
+                      const previousStatus = existingTask?.status;
+                      if (!existingTask) {
+                        yield* offerRuntimeEvent({
+                          type: "task.started",
+                          ...(yield* makeEventStamp()),
+                          provider: PROVIDER,
+                          threadId: ctx.threadId,
+                          turnId: ctx.activeTurnId,
+                          payload: delegatedTask,
+                        });
+                        ctx.delegatedTasks.set(delegatedTaskKey, {
+                          ...delegatedTask,
+                          status: delegatedStatus,
+                        });
+                      } else if (existingTask.status !== delegatedStatus) {
+                        existingTask.status = delegatedStatus;
+                      }
+
+                      const summary = delegatedTaskSummary(event.toolCall.data.rawOutput);
+                      if (event.toolCall.status === "inProgress" && existingTask) {
+                        yield* offerRuntimeEvent({
+                          type: "task.progress",
+                          ...(yield* makeEventStamp()),
+                          provider: PROVIDER,
+                          threadId: ctx.threadId,
+                          turnId: ctx.activeTurnId,
+                          payload: {
+                            taskId: delegatedTask.taskId,
+                            description: delegatedTask.description,
+                            ...(summary ? { summary } : {}),
+                            lastToolName: "sessions_spawn",
+                          },
+                        });
+                      } else if (
+                        (delegatedStatus === "completed" || delegatedStatus === "failed") &&
+                        previousStatus !== delegatedStatus
+                      ) {
+                        yield* offerRuntimeEvent({
+                          type: "task.completed",
+                          ...(yield* makeEventStamp()),
+                          provider: PROVIDER,
+                          threadId: ctx.threadId,
+                          turnId: ctx.activeTurnId,
+                          payload: {
+                            taskId: delegatedTask.taskId,
+                            status: delegatedStatus,
+                            ...(summary ? { summary } : {}),
+                          },
+                        });
+                      }
+                    }
                     return;
                   case "ContentDelta":
                     yield* logNative(

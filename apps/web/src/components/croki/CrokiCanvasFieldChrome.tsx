@@ -1,4 +1,4 @@
-import type { CrokiContextEdge } from "@t3tools/shared/crokiContext";
+import type { CrokiContextEdge } from "@croki/shared/crokiContext";
 
 import { crokiCanvasItemTitle, type CrokiCanvasItem } from "./crokiCanvasItems";
 

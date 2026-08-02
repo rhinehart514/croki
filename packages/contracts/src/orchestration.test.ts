@@ -287,7 +287,7 @@ it.effect("accepts bootstrap metadata in thread.turn.start", () =>
         prepareWorktree: {
           projectCwd: "/tmp/workspace",
           baseBranch: "main",
-          branch: "t3code/example",
+          branch: "croki/example",
           startFromOrigin: true,
         },
         runSetupScript: true,
@@ -726,6 +726,20 @@ it.effect("preserves enabled Canvas state in thread.turn-start-requested", () =>
 
     assert.isTrue(parsed.canvasEnabled);
     assert.strictEqual(parsed.harnessId, "gtm-v1");
+  }),
+);
+
+it.effect("accepts the Product harness alongside native and GTM", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartRequestedPayload({
+      threadId: "thread-product",
+      messageId: "msg-product",
+      canvasEnabled: true,
+      harnessId: "product-v1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    assert.strictEqual(parsed.harnessId, "product-v1");
   }),
 );
 

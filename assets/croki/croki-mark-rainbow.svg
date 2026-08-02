@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256" role="img" aria-label="Croki Dev">
+  <defs>
+    <linearGradient id="rainbow" x1="38" y1="43" x2="205" y2="217" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff375f"/>
+      <stop offset="0.18" stop-color="#ff9f0a"/>
+      <stop offset="0.34" stop-color="#ffd60a"/>
+      <stop offset="0.5" stop-color="#30d158"/>
+      <stop offset="0.66" stop-color="#32ade6"/>
+      <stop offset="0.82" stop-color="#0a84ff"/>
+      <stop offset="1" stop-color="#bf5af2"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="58" fill="#090b0f"/>
+  <path fill="url(#rainbow)" d="M88 61c12-3 25 3 40 15l29-15 23-24-3 61 14 31-14 57-49 33-49-33-15-57 18-29 1-23c0-9 1-14 5-16Z"/>
+  <path fill="url(#rainbow)" d="M84 59C62 53 42 68 36 89l12 41c3 10 14 13 21 4l25-58c3-8-2-14-10-17Z"/>
+  <path d="M91 69 70 132" fill="none" stroke="#090b0f" stroke-width="6" stroke-linecap="round"/>
+  <path fill="#090b0f" d="M82 119c9-10 25-10 35 1-9 13-27 14-35-1Zm59 1c9-11 26-12 36-2-8 14-27 15-36 2Zm-29 31c9-7 23-7 32 0l-16 19-16-19Z"/>
+  <path d="M128 168v16m0 0-13 10m13-10 13 10" fill="none" stroke="#090b0f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m152 151 28-4m-28 15h30m-29 11 27 5" fill="none" stroke="#090b0f" stroke-width="6" stroke-linecap="round"/>
+</svg>

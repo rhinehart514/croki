@@ -6,7 +6,7 @@ import {
   type CrokiContextReference,
   type CrokiNodeDomain,
   type CrokiNodeKind,
-} from "@t3tools/shared/crokiContext";
+} from "@croki/shared/crokiContext";
 import { Archive, Check, Pencil, Trash2, X } from "lucide-react";
 import { useId, useState } from "react";
 

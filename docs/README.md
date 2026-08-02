@@ -1,6 +1,9 @@
 # Documentation
 
 - [Current project state](./project/current-state.md)
+- [0.4.2 release notes](./project/release-notes-0.4.2.md)
+- [Release Canvas product specification](./project/release-canvas-spec.md)
+- [Harness visual-artifact specification](./project/harness-canvas-spec.md)
 - [Croki product and overlay contract](./croki.md)
 - [Getting started](./getting-started/quick-start.md)
 - Architecture
@@ -26,7 +29,7 @@
   - [OpenClaw](./providers/openclaw.md)
 - [Reference](./reference/encyclopedia.md)
 
-Some deep architecture documents retain `T3CODE_*`, `t3`, `@t3tools/*`,
-`t3code://`, and inherited service identifiers. Those are compatibility
+Some deep architecture documents retain `CROKI_*`, `t3`, `@croki/*`,
+`croki://`, and inherited service identifiers. Those are compatibility
 contracts, not visible product branding. Production release and hosted-service
 instructions are disabled until every destination is Croki-owned.

@@ -9,7 +9,7 @@ import {
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   ApprovalRequestId,
   CommandId,
@@ -21,7 +21,7 @@ import {
   type ServerSettings,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -3191,6 +3191,13 @@ describe("ProviderRuntimeIngestion", () => {
         taskId: "named-task-1",
         description: "Typecheck mobile app",
         taskType: "local_bash",
+        actor: {
+          id: "worker-1",
+          label: "Luna Max worker",
+          model: "openai/gpt-5.6-luna",
+          reasoning: "max",
+        },
+        ownership: { areas: ["mobile"] },
       },
     });
 
@@ -3239,12 +3246,27 @@ describe("ProviderRuntimeIngestion", () => {
       progress?.payload && typeof progress.payload === "object"
         ? (progress.payload as Record<string, unknown>)
         : undefined;
+    const started = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) => activity.id === "evt-named-task-started",
+    );
+    const startedPayload =
+      started?.payload && typeof started.payload === "object"
+        ? (started.payload as Record<string, unknown>)
+        : undefined;
     const completedPayload =
       completed?.payload && typeof completed.payload === "object"
         ? (completed.payload as Record<string, unknown>)
         : undefined;
 
     expect(progress?.summary).toBe("Typecheck mobile app");
+    expect(startedPayload?.description).toBe("Typecheck mobile app");
+    expect(startedPayload?.actor).toEqual({
+      id: "worker-1",
+      label: "Luna Max worker",
+      model: "openai/gpt-5.6-luna",
+      reasoning: "max",
+    });
+    expect(startedPayload?.ownership).toEqual({ areas: ["mobile"] });
     expect(progressPayload?.title).toBe("Typecheck mobile app");
     expect(completed?.summary).toBe("Task completed");
     expect(completedPayload?.title).toBe("Typecheck mobile app");

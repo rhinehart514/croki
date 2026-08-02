@@ -1,5 +1,5 @@
-import type { OpenClawSettings } from "@t3tools/contracts";
-import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
+import type { OpenClawSettings } from "@croki/contracts";
+import { tokenizeCliArgs } from "@croki/shared/cliArgs";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

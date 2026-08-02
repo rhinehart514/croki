@@ -4,9 +4,9 @@ Croki can update a connected server to the exact version of the client that dete
 drift. This path exists primarily for remote environments, where the user may not have a terminal
 open on the server machine.
 
-The mechanism is implemented, but Croki 0.4.1 cannot use it as a production
+The mechanism is implemented, but Croki 0.4.2 cannot use it as a production
 Croki update channel because the pinned runtime still installs the inherited
-`t3@<version>` npm package. Keep self-update disabled for Croki releases until
+`croki-server@<version>` npm package. Keep self-update disabled for Croki releases until
 the CLI package is renamed, owned, and published by Croki.
 
 The feature has three boundaries:
@@ -71,7 +71,7 @@ flowchart TD
 payload accepts only an exact npm version, including an exact prerelease version; dist-tags such as
 `latest` and `nightly` are rejected.
 
-The update service permits one update at a time. It installs `t3@<version>` under
+The update service permits one update at a time. It installs `croki-server@<version>` under
 `<baseDir>/runtime/versions/<version>` and writes an install-complete sentinel only after npm exits
 successfully. Boot-service setup and self-update share the same process-wide installation lock, so
 they cannot mutate a pinned runtime concurrently.
@@ -84,7 +84,7 @@ preflight also removes the candidate runtime so retrying the same version perfor
 
 The systemd user service is a host lifecycle concern, not a Croki Connect resource. The standalone
 `t3 service install`, `uninstall`, `update`, and `status` commands own it. Install and update both
-reconcile the unit through `BootService`; running `npx t3@latest service update` therefore pins and
+reconcile the unit through `BootService`; running `npx croki-server@latest service update` therefore pins and
 activates the latest CLI release without requiring a connected client.
 
 The `t3 connect` onboarding flow may offer service installation, but it calls the same reconciliation

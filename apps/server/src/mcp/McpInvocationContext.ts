@@ -1,9 +1,10 @@
 import {
+  type CrokiHarnessId,
   type EnvironmentId,
   PreviewAutomationUnavailableError,
   type ProviderInstanceId,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
@@ -14,6 +15,8 @@ export interface McpInvocationScope {
   readonly threadId: ThreadId;
   readonly providerSessionId: string;
   readonly providerInstanceId: ProviderInstanceId;
+  /** Harness selected for the current provider turn. Native is explicit. */
+  readonly harnessId: CrokiHarnessId;
   readonly capabilities: ReadonlySet<McpCapability>;
   readonly issuedAt: number;
 }
@@ -21,7 +24,7 @@ export interface McpInvocationScope {
 export class McpInvocationContext extends Context.Service<
   McpInvocationContext,
   McpInvocationScope
->()("t3/mcp/McpInvocationContext") {}
+>()("croki-server/mcp/McpInvocationContext") {}
 
 export const requireMcpCapability = Effect.fn("mcp.requireCapability")(function* (
   capability: "preview",

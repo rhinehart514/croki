@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["CrokiNativeControlsModule", "CrokiKeyboardCommandsModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.crokinativecontrols.CrokiNativeControlsModule"]
+  }
+}
