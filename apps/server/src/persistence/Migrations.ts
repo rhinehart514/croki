@@ -49,6 +49,7 @@ import Migration0033 from "./Migrations/033_ProjectionThreadsSettled.ts";
 import Migration0034 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
 import Migration0035 from "./Migrations/035_ProjectionThreadForkLineage.ts";
 import Migration0036 from "./Migrations/036_ProjectionProjectPerception.ts";
+import Migration0037 from "./Migrations/037_ProjectionThreadParentLineage.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -97,6 +98,7 @@ export const migrationEntries = [
   [34, "ProjectionThreadsSnoozed", Migration0034],
   [35, "ProjectionThreadForkLineage", Migration0035],
   [36, "ProjectionProjectPerception", Migration0036],
+  [37, "ProjectionThreadParentLineage", Migration0037],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

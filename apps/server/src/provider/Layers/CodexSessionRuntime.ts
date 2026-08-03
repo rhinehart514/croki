@@ -603,7 +603,7 @@ function readRouteFields(notification: CodexServerNotification): {
 }
 
 function rememberCollabReceiverTurns(
-  collabReceiverTurns: Map<string, TurnId>,
+  collabReceiverTurns: Map<string, { readonly parentTurnId: TurnId; readonly prompt?: string }>,
   notification: CodexServerNotification,
   parentTurnId: TurnId | undefined,
 ): void {
@@ -620,27 +620,13 @@ function rememberCollabReceiverTurns(
   }
 
   for (const receiverThreadId of notification.params.item.receiverThreadIds) {
-    collabReceiverTurns.set(receiverThreadId, parentTurnId);
+    const existing = collabReceiverTurns.get(receiverThreadId);
+    const prompt = notification.params.item.prompt ?? existing?.prompt;
+    collabReceiverTurns.set(receiverThreadId, {
+      parentTurnId,
+      ...(prompt ? { prompt } : {}),
+    });
   }
-}
-
-function shouldSuppressChildConversationNotification(
-  method: CodexRpc.ServerNotificationMethod,
-): boolean {
-  return (
-    method === "thread/started" ||
-    method === "thread/status/changed" ||
-    method === "thread/archived" ||
-    method === "thread/unarchived" ||
-    method === "thread/closed" ||
-    method === "thread/compacted" ||
-    method === "thread/name/updated" ||
-    method === "thread/tokenUsage/updated" ||
-    method === "turn/started" ||
-    method === "turn/completed" ||
-    method === "turn/plan/updated" ||
-    method === "item/plan/delta"
-  );
 }
 
 function toCodexUserInputAnswer(
@@ -724,7 +710,9 @@ export const makeCodexSessionRuntime = (
     const pendingApprovalsRef = yield* Ref.make(new Map<ApprovalRequestId, PendingApproval>());
     const approvalCorrelationsRef = yield* Ref.make(new Map<string, ApprovalCorrelation>());
     const pendingUserInputsRef = yield* Ref.make(new Map<ApprovalRequestId, PendingUserInput>());
-    const collabReceiverTurnsRef = yield* Ref.make(new Map<string, TurnId>());
+    const collabReceiverTurnsRef = yield* Ref.make(
+      new Map<string, { readonly parentTurnId: TurnId; readonly prompt?: string }>(),
+    );
     const closedRef = yield* Ref.make(false);
 
     // `~` is not shell-expanded when env vars are set via
@@ -846,7 +834,7 @@ export const makeCodexSessionRuntime = (
         const payload = notification.params;
         const route = readRouteFields(notification);
         const collabReceiverTurns = yield* Ref.get(collabReceiverTurnsRef);
-        const childParentTurnId = (() => {
+        const childLink = (() => {
           const providerConversationId = readNotificationThreadId(notification);
           return providerConversationId
             ? collabReceiverTurns.get(providerConversationId)
@@ -854,14 +842,9 @@ export const makeCodexSessionRuntime = (
         })();
 
         rememberCollabReceiverTurns(collabReceiverTurns, notification, route.turnId);
-        if (childParentTurnId && shouldSuppressChildConversationNotification(notification.method)) {
-          yield* Ref.set(collabReceiverTurnsRef, collabReceiverTurns);
-          return;
-        }
-
         let requestId: ApprovalRequestId | undefined;
         let requestKind: ProviderRequestKind | undefined;
-        let turnId = childParentTurnId ?? route.turnId;
+        let turnId = route.turnId;
         let itemId = route.itemId;
 
         if (notification.method === "serverRequest/resolved") {
@@ -888,7 +871,12 @@ export const makeCodexSessionRuntime = (
         yield* Ref.set(collabReceiverTurnsRef, collabReceiverTurns);
         yield* emitEvent({
           kind: "notification",
-          threadId: options.threadId,
+          threadId:
+            childLink && readNotificationThreadId(notification)
+              ? ThreadId.make(readNotificationThreadId(notification)!)
+              : options.threadId,
+          ...(childLink ? { parentThreadId: options.threadId } : {}),
+          ...(childLink?.prompt ? { childPrompt: childLink.prompt } : {}),
           method: notification.method,
           ...(turnId ? { turnId } : {}),
           ...(itemId ? { itemId } : {}),

@@ -372,6 +372,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           interactionMode: command.interactionMode,
           branch: command.branch,
           worktreePath: command.worktreePath,
+          parentThreadId: command.parentThreadId ?? null,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
@@ -1039,6 +1040,30 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         },
       };
       return [unsettledEvent, sessionSetEvent];
+    }
+
+    case "thread.message.user.append": {
+      yield* requireThread({ readModel, command, threadId: command.threadId });
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-sent" as const,
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          role: "user" as const,
+          text: command.text,
+          attachments: [],
+          turnId: null,
+          streaming: false,
+          createdAt: command.createdAt,
+          updatedAt: command.createdAt,
+        },
+      };
     }
 
     case "thread.message.assistant.delta": {

@@ -1,13 +1,13 @@
 # Current project state
 
 Last audited: 2026-08-03
-Code baseline: Croki 0.4.3 shared-product-model Canvas on `croki/main`
+Code baseline: Croki 0.4.5 stabilization release on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow Croki overlay on Croki rather than a second agent runtime.
 
-Croki 0.4.3 is the current release. See the [0.4.3 release
-notes](./release-notes-0.4.3.md) and [release ownership
+Croki 0.4.5 is the current release. See the [0.4.5 release
+notes](./release-notes-0.4.5.md) and [release ownership
 contract](../operations/release.md) for its independently gated destinations.
 
 ## Working product

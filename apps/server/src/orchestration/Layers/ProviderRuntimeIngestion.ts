@@ -25,6 +25,7 @@ import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -1451,7 +1452,41 @@ const make = Effect.gen(function* () {
 
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
-      const thread = yield* resolveThreadShell(event.threadId);
+      let thread = yield* resolveThreadShell(event.threadId);
+      if (!thread && event.parentThreadId) {
+        const parent = yield* resolveThreadShell(event.parentThreadId);
+        if (!parent) return;
+        const commandUuid = yield* crypto.randomUUIDv4;
+        const childTitle = event.childPrompt?.trim().split("\n", 1)[0]?.slice(0, 80);
+        yield* orchestrationEngine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make(`provider:child-thread:${event.threadId}:${commandUuid}`),
+          threadId: event.threadId,
+          projectId: parent.projectId,
+          title: childTitle || "Parallel worker",
+          modelSelection: parent.modelSelection,
+          runtimeMode: parent.runtimeMode,
+          interactionMode: parent.interactionMode,
+          branch: parent.branch,
+          worktreePath: parent.worktreePath,
+          parentThreadId: parent.id,
+          createdAt: event.createdAt,
+        });
+        if (event.childPrompt?.trim()) {
+          const promptCreatedAt = DateTime.formatIso(
+            DateTime.add(DateTime.makeUnsafe(event.createdAt), { milliseconds: -1 }),
+          );
+          yield* orchestrationEngine.dispatch({
+            type: "thread.message.user.append",
+            commandId: CommandId.make(`provider:child-prompt:${event.threadId}:${commandUuid}`),
+            threadId: event.threadId,
+            messageId: MessageId.make(`worker-prompt:${event.threadId}`),
+            text: event.childPrompt.trim(),
+            createdAt: promptCreatedAt,
+          });
+        }
+        thread = yield* resolveThreadShell(event.threadId);
+      }
       if (!thread) return;
 
       let loadedThreadDetail: OrchestrationThread | null | undefined;
