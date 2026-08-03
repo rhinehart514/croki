@@ -14,7 +14,7 @@ interface CrokiCanvasLiveFieldProps {
   readonly onSelect: (object: CrokiCanvasLiveObject) => void;
 }
 
-/** Read-only spatial projection of the perception stream. Layout is derived on every observation. */
+/** Read-only composition of the agent's current working understanding. */
 export function CrokiCanvasLiveField(props: CrokiCanvasLiveFieldProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [fieldWidth, setFieldWidth] = useState(800);
@@ -39,20 +39,10 @@ export function CrokiCanvasLiveField(props: CrokiCanvasLiveFieldProps) {
     return () => observer.disconnect();
   }, []);
 
-  const layout = useMemo(() => {
-    const columns = fieldWidth >= 1120 ? 3 : fieldWidth >= 720 ? 2 : 1;
-    const bySource = new Map<string, number>();
-    return Object.fromEntries(
-      visibleObjects.map((object) => {
-        const sourceIndex = bySource.get(object.source) ?? 0;
-        bySource.set(object.source, sourceIndex + 1);
-        const group = sourceOrder(object);
-        const localColumn = sourceIndex % columns;
-        const localRow = Math.floor(sourceIndex / columns);
-        return [object.id, { x: localColumn * 356, y: group * 236 + localRow * 196 }];
-      }),
-    );
-  }, [fieldWidth, visibleObjects]);
+  const layout = useMemo(
+    () => composeWorkingUnderstanding(visibleObjects, fieldWidth),
+    [fieldWidth, visibleObjects],
+  );
 
   const projectedNodes = useMemo(
     () =>
@@ -60,9 +50,9 @@ export function CrokiCanvasLiveField(props: CrokiCanvasLiveFieldProps) {
         (object): CrokiCanvasLiveNode => ({
           id: object.id,
           type: "live-object",
-          position: layout[object.id] ?? { x: 0, y: 0 },
-          width: object.source === "attention" ? 390 : object.source === "visual" ? 320 : 300,
-          height: object.source === "attention" ? 154 : object.source === "reference" ? 130 : 170,
+          position: layout[object.id]?.position ?? { x: 0, y: 0 },
+          width: layout[object.id]?.width ?? 320,
+          height: layout[object.id]?.height ?? 154,
           draggable: false,
           selectable: true,
           data: {
@@ -78,49 +68,49 @@ export function CrokiCanvasLiveField(props: CrokiCanvasLiveFieldProps) {
       ),
     [layout, props.onOpen, props.onSelect, props.scene.edges, selectedIds, visibleObjects],
   );
-  const edges = useMemo<Edge[]>(
-    () =>
-      props.scene.edges
-        .filter((edge) => visibleIds.has(edge.from) && visibleIds.has(edge.to))
-        .map((edge, index) => {
-          const emphasized = selectedIds.has(edge.from) || selectedIds.has(edge.to);
-          const edgeColor =
-            edge.kind === "epistemic"
-              ? "#6f6a57"
-              : edge.kind === "source"
-                ? "#3f3f46"
-                : edge.kind === "temporal"
-                  ? "#365064"
-                  : "#52525b";
-          return {
-            id: `${edge.from}:${edge.relation}:${edge.to}:${index}`,
-            source: edge.from,
-            target: edge.to,
-            type: "default",
-            selectable: false,
-            label: emphasized || props.focusMode === "attention" ? edge.relation : undefined,
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: emphasized ? "#f4f4f5" : edgeColor,
-              width: 10,
-              height: 10,
-            },
-            style: {
-              stroke: emphasized ? "#f4f4f5" : edgeColor,
-              strokeWidth: emphasized ? 1.25 : 0.8,
-            },
-            labelStyle: {
-              fill: emphasized ? "#f4f4f5" : edgeColor,
-              fontSize: 9,
-              letterSpacing: "0.04em",
-            },
-            labelBgStyle: { fill: "#000", fillOpacity: 0.95 },
-            labelBgPadding: [4, 2],
-            labelBgBorderRadius: 0,
-          };
-        }),
-    [props.focusMode, props.scene.edges, selectedIds, visibleIds],
-  );
+  const edges = useMemo<Edge[]>(() => {
+    if (selectedIds.size === 0) return [];
+    return props.scene.edges
+      .filter((edge) => visibleIds.has(edge.from) && visibleIds.has(edge.to))
+      .filter((edge) => selectedIds.has(edge.from) || selectedIds.has(edge.to))
+      .map((edge, index) => {
+        const edgeColor =
+          edge.kind === "epistemic"
+            ? "#6f6a57"
+            : edge.kind === "source"
+              ? "#3f3f46"
+              : edge.kind === "temporal"
+                ? "#365064"
+                : "#52525b";
+        return {
+          id: `${edge.from}:${edge.relation}:${edge.to}:${index}`,
+          source: edge.from,
+          target: edge.to,
+          type: "default",
+          selectable: false,
+          label: edge.relation,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: "#a1a1aa",
+            width: 10,
+            height: 10,
+          },
+          style: {
+            stroke: edgeColor,
+            strokeWidth: 1,
+            opacity: 0.7,
+          },
+          labelStyle: {
+            fill: "#a1a1aa",
+            fontSize: 9,
+            letterSpacing: "0.04em",
+          },
+          labelBgStyle: { fill: "#000", fillOpacity: 0.95 },
+          labelBgPadding: [4, 2],
+          labelBgBorderRadius: 0,
+        };
+      });
+  }, [props.focusMode, props.scene.edges, selectedIds, visibleIds]);
 
   const onNodeClick: NodeMouseHandler<CrokiCanvasLiveNode> = (_, node) => {
     const object = props.scene.objects.find((candidate) => candidate.id === node.id);
@@ -134,9 +124,9 @@ export function CrokiCanvasLiveField(props: CrokiCanvasLiveFieldProps) {
         className="flex min-h-72 flex-1 items-center justify-center bg-black p-8 text-center"
       >
         <div>
-          <p className="text-sm text-zinc-300">Waiting for perception.</p>
+          <p className="text-sm text-zinc-300">No working understanding yet.</p>
           <p className="mt-2 text-xs text-zinc-600">
-            The Canvas appears as the agent observes the project.
+            Start the Thread and Canvas will keep the meaningful result in view.
           </p>
         </div>
       </div>
@@ -159,7 +149,7 @@ export function CrokiCanvasLiveField(props: CrokiCanvasLiveFieldProps) {
         onNodeClick={onNodeClick}
         onPaneClick={props.onClearSelection}
         fitView
-        fitViewOptions={{ padding: fieldWidth >= 1120 ? 0.15 : 0.08, minZoom: 0.55, maxZoom: 1 }}
+        fitViewOptions={{ padding: fieldWidth >= 1120 ? 0.16 : 0.1, minZoom: 0.55, maxZoom: 1 }}
         minZoom={0.38}
         maxZoom={1.45}
         nodesDraggable={false}
@@ -184,12 +174,84 @@ function visibleSceneObjects(scene: CrokiCanvasLiveScene, focusMode: "all" | "at
   return scene.objects.filter((object) => ids.has(object.id));
 }
 
-function sourceOrder(object: CrokiCanvasLiveObject): number {
-  if (object.source === "attention") return 0;
-  if (object.source === "agent") return 1;
-  if (object.source === "outcome") return 2;
-  if (object.source === "release") return 3;
-  if (object.source === "visual") return 4;
-  if (object.source === "context") return 5;
-  return 6;
+interface ComposedObjectLayout {
+  readonly position: { readonly x: number; readonly y: number };
+  readonly width: number;
+  readonly height: number;
+}
+
+function composeWorkingUnderstanding(
+  objects: readonly CrokiCanvasLiveObject[],
+  fieldWidth: number,
+): Record<string, ComposedObjectLayout> {
+  const twoColumns = fieldWidth >= 760;
+  const columnWidth = twoColumns ? 340 : Math.min(440, Math.max(280, fieldWidth - 48));
+  const gap = 24;
+  const compositionWidth = twoColumns ? columnWidth * 2 + gap : columnWidth;
+  const layout: Record<string, ComposedObjectLayout> = {};
+  const unplaced = [...objects];
+  const explicitOutcome = unplaced.findIndex((object) => object.source === "outcome");
+  const outcomeIndex = explicitOutcome >= 0 ? explicitOutcome : unplaced.findIndex(isOutcomeLike);
+  const outcome = outcomeIndex >= 0 ? unplaced.splice(outcomeIndex, 1)[0] : undefined;
+  const judgments = unplaced.filter(isJudgment);
+  const evidence = unplaced.filter(isEvidence);
+  const understanding = unplaced.filter(
+    (object) => !judgments.includes(object) && !evidence.includes(object),
+  );
+  let y = 0;
+
+  if (outcome) {
+    layout[outcome.id] = {
+      position: { x: 0, y },
+      width: compositionWidth,
+      height: 148,
+    };
+    y += 148 + 36;
+  }
+
+  y = placeGrid(layout, understanding, y, columnWidth, gap, twoColumns, 154);
+  y = placeGrid(layout, judgments, y, columnWidth, gap, twoColumns, 168);
+  placeGrid(layout, evidence, y, columnWidth, gap, twoColumns, 112);
+  return layout;
+}
+
+function placeGrid(
+  layout: Record<string, ComposedObjectLayout>,
+  objects: readonly CrokiCanvasLiveObject[],
+  y: number,
+  width: number,
+  gap: number,
+  twoColumns: boolean,
+  height: number,
+): number {
+  if (objects.length === 0) return y;
+  const columns = twoColumns ? 2 : 1;
+  for (const [index, object] of objects.entries()) {
+    layout[object.id] = {
+      position: {
+        x: (index % columns) * (width + gap),
+        y: y + Math.floor(index / columns) * (height + gap),
+      },
+      width,
+      height,
+    };
+  }
+  return y + Math.ceil(objects.length / columns) * (height + gap) + 12;
+}
+
+function isOutcomeLike(object: CrokiCanvasLiveObject): boolean {
+  return object.source === "attention" || object.source === "release";
+}
+
+function isJudgment(object: CrokiCanvasLiveObject): boolean {
+  return (
+    object.kind === "decision" ||
+    object.status === "provisional" ||
+    object.status === "blocked" ||
+    object.authority?.toLowerCase().includes("judgment") === true
+  );
+}
+
+function isEvidence(object: CrokiCanvasLiveObject): boolean {
+  return object.source === "reference" || object.kind === "evidence" || object.kind === "source";
 }

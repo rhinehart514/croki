@@ -33,6 +33,8 @@ function CrokiCanvasLiveObjectNode({ data, selected }: NodeProps<CrokiCanvasLive
   const isOutcome = object.source === "outcome";
   const isReference = object.source === "reference";
   const isAgent = object.source === "agent";
+  const isJudgment =
+    object.kind === "decision" || object.status === "provisional" || object.status === "blocked";
   const isPrior = object.status === "prior" || object.status === "retired";
   const affordance = object.affordances.find(
     (candidate) => candidate.id === "source" || candidate.id === "thread",
@@ -46,7 +48,11 @@ function CrokiCanvasLiveObjectNode({ data, selected }: NodeProps<CrokiCanvasLive
             ? "border-zinc-400"
             : isOutcome
               ? "border-emerald-300/70"
-              : "border-white/15"
+              : isJudgment
+                ? "border-amber-300/60"
+                : isReference
+                  ? "border-white/10"
+                  : "border-white/15"
       } ${isPrior ? "opacity-55" : "opacity-100"}`}
       data-live-source={object.source}
       data-live-object={object.id}
@@ -64,7 +70,7 @@ function CrokiCanvasLiveObjectNode({ data, selected }: NodeProps<CrokiCanvasLive
       {selected ? <RegistrationCorners /> : null}
       <button
         type="button"
-        className="flex h-full w-full cursor-pointer flex-col p-3 text-left outline-none focus-visible:ring-1 focus-visible:ring-white"
+        className={`flex h-full w-full cursor-pointer flex-col text-left outline-none focus-visible:ring-1 focus-visible:ring-white ${isOutcome ? "p-5" : isReference ? "p-3" : "p-4"}`}
         aria-label={`Inspect ${object.title}`}
         onClick={() => data.onSelect(object.id)}
       >
@@ -83,22 +89,26 @@ function CrokiCanvasLiveObjectNode({ data, selected }: NodeProps<CrokiCanvasLive
                       : "text-zinc-500"
                 }
               >
-                {object.authority ?? statusLabel(object.status)}
+                {isJudgment ? "Needs judgment" : (object.authority ?? statusLabel(object.status))}
               </span>
             </div>
             <h3
-              className={`mt-1.5 line-clamp-2 text-[13px] leading-[17px] ${isAttention ? "font-medium text-white" : "font-semibold text-zinc-100"}`}
+              className={`mt-1.5 line-clamp-2 ${isOutcome ? "text-lg leading-6" : isReference ? "text-xs leading-4" : "text-[14px] leading-[19px]"} ${isAttention ? "font-medium text-white" : "font-semibold text-zinc-100"}`}
             >
               {object.title}
             </h3>
           </div>
         </div>
         {object.body.trim() ? (
-          <p className="mt-2 line-clamp-3 text-[11px] leading-[16px] text-zinc-400">
+          <p
+            className={`${isOutcome ? "mt-3 max-w-2xl text-[13px] leading-5 text-zinc-300" : isReference ? "mt-1.5 line-clamp-2 text-[10px] leading-[14px] text-zinc-500" : "mt-2 line-clamp-3 text-[11px] leading-[16px] text-zinc-400"}`}
+          >
             {object.body}
           </p>
         ) : null}
-        <div className="mt-auto flex items-end justify-between gap-2 pt-3 text-[9px] text-zinc-600">
+        <div
+          className={`mt-auto flex items-end justify-between gap-2 text-[9px] text-zinc-600 ${isReference ? "pt-1.5" : "pt-3"}`}
+        >
           <span>
             {object.updatedAt
               ? formatObservedTime(object.updatedAt)

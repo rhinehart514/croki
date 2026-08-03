@@ -41,6 +41,7 @@ export interface CrokiCanvasLiveObject {
   readonly sourceThreadId?: string;
   readonly artifact?: CrokiCanvasArtifactLike;
   readonly perceptionObject?: CrokiPerceptionObject;
+  readonly perceptionObjects?: readonly CrokiPerceptionObject[];
   readonly perceptionSourceUri?: string;
   readonly node?: CrokiContextNode;
   readonly releaseItem?: CrokiReleaseItem;

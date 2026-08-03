@@ -173,10 +173,7 @@ describe("projectCrokiCanvasLiveScene", () => {
     });
 
     expect(scene.perceptionRevision).toBe(7);
-    expect(scene.objects.map((object) => object.id)).toEqual([
-      "attention:stream",
-      "runtime:latency",
-    ]);
+    expect(scene.objects.map((object) => object.id)).toEqual(["runtime:latency"]);
     expect(scene.attentionIds).toEqual(["runtime:latency"]);
     expect(scene.objects.find((object) => object.id === "runtime:latency")?.affordances).toEqual([
       { id: "approve", label: "Approve fix" },

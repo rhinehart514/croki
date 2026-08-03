@@ -23,7 +23,6 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
     enabled: !hasNativePerception,
   });
   const { state, workspaceKey } = controller;
-  const [focusMode, setFocusMode] = useState<"all" | "attention">("all");
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
   const [scrubRevision, setScrubRevision] = useState<number | null>(null);
 
@@ -65,7 +64,6 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
 
   useEffect(() => {
     if (!props.externalRevision && !props.externalNodeIds?.length) return;
-    setFocusMode("attention");
     const externalIds = new Set(props.externalNodeIds ?? []);
     const matches = scene.objects
       .filter((object) => externalIds.has(object.selectionId ?? "") || externalIds.has(object.id))
@@ -84,6 +82,10 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
 
   const selectObject = (object: CrokiCanvasLiveObject) => {
     setSelectedIds([object.id]);
+    if (object.perceptionObjects?.length) {
+      props.onSelectArtifactNodes?.(object.perceptionObjects.map((item) => item.id));
+      return;
+    }
     if (object.perceptionObject && object.selectionId) {
       // Selection is ephemeral attention. The Thread receives only this stable
       // sensed id and can inspect the source through Croki Senses.
@@ -163,8 +165,6 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
     >
       <CrokiTrueCanvasHeader
         scene={scene}
-        focusMode={focusMode}
-        onFocusModeChange={setFocusMode}
         revisionObjects={revisionObjects}
         currentRevision={currentRevision}
         onScrubRevision={(revision, artifact) => {
@@ -226,7 +226,7 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
       <div className="relative flex min-h-0 flex-1">
         <CrokiCanvasLiveField
           scene={scene}
-          focusMode={focusMode}
+          focusMode="all"
           selectedIds={selectedIds}
           onClearSelection={clearSelection}
           onOpen={openObject}

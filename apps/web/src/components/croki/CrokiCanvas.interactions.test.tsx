@@ -90,7 +90,7 @@ describe("CrokiCanvas live perception interactions", () => {
     const onOpenReference = vi.fn();
     const markup = renderCanvas({ onOpenReference });
     expect(markup).toContain('aria-label="Croki Live Canvas"');
-    expect(markup).toContain("Live perception");
+    expect(markup).toContain("Working understanding");
     expect(markup).not.toContain("Save Canvas");
     expect(markup).not.toContain("Undo Canvas change");
   });

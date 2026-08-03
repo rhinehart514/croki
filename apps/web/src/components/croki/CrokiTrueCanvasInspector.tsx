@@ -51,6 +51,28 @@ export function CrokiTrueCanvasInspector(props: CrokiTrueCanvasInspectorProps) {
           </div>
         ) : null}
       </dl>
+      {object.perceptionObjects?.length ? (
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-zinc-600">
+            Source observations · {object.perceptionObjects.length}
+          </p>
+          <ol className="mt-3 divide-y divide-white/10 border-y border-white/10">
+            {object.perceptionObjects.slice(0, 8).map((item) => (
+              <li key={item.id} className="py-2.5">
+                <p className="text-[11px] leading-4 text-zinc-300">{item.title}</p>
+                <p className="mt-0.5 text-[9px] uppercase tracking-[0.1em] text-zinc-600">
+                  {item.source.kind}
+                </p>
+              </li>
+            ))}
+          </ol>
+          {object.perceptionObjects.length > 8 ? (
+            <p className="mt-2 text-[10px] text-zinc-600">
+              {object.perceptionObjects.length - 8} more available to the Thread
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <div className="space-y-2">
         {hasSource ? (
           <Button

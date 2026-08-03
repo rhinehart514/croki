@@ -6,14 +6,13 @@ CLI, relay, hosted web, signing, Discord, and mobile destinations remain off.
 Every enabled destination still fails closed unless its own Croki-owned
 configuration is complete.
 
-## 0.4.2 source candidate
+## 0.4.3 source candidate
 
-The 0.4.2 source candidate aligns the four manifests updated by the release
+The 0.4.3 source candidate aligns the four manifests updated by the release
 workflow (`apps/server`, `apps/desktop`, `apps/web`, and `packages/contracts`).
-Its product pivot is true Canvas: a zero-maintenance native projection of
-Croki Senses and their Perception Frames. The candidate is not tagged or
-published. See the [0.4.2 release notes](../project/release-notes-0.4.2.md) for
-the product summary.
+It compresses Croki Senses into a bounded working-understanding Canvas while
+preserving complete model-facing Perception Frames. See the [0.4.3 release
+notes](../project/release-notes-0.4.3.md) for the product summary.
 
 ## Current behavior
 

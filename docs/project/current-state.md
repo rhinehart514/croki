@@ -1,13 +1,13 @@
 # Current project state
 
 Last audited: 2026-08-02
-Code baseline: Croki 0.4.2 true Canvas on `croki/main`
+Code baseline: Croki 0.4.3 working-understanding Canvas on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow Croki overlay on Croki rather than a second agent runtime.
 
-Croki 0.4.2 is the current release. See the [0.4.2 release
-notes](./release-notes-0.4.2.md) and [release ownership
+Croki 0.4.3 is the current release. See the [0.4.3 release
+notes](./release-notes-0.4.3.md) and [release ownership
 contract](../operations/release.md) for its independently gated destinations.
 
 ## Working product
@@ -61,6 +61,12 @@ native Threads, tools, approvals, and authority checks.
 Sense calls are read-only and return frames directly. Canvas derives the same
 frame from ordinary Thread activity, so neither models nor founders maintain a
 second activity stream or scene.
+
+Canvas compresses that frame for a founder: one current outcome, up to three
+semantic conclusions, one judgment or blocker, and collapsed source evidence.
+Raw commands, context-window updates, checkpoints, and receipts remain
+inspectable without filling the field with runtime telemetry. The complete raw
+frame remains available to model-facing senses.
 
 `.croki/context.json` remains repository-owned project truth. It may be projected
 into a frame when relevant, but Canvas does not write canon, promote proposals,
@@ -117,7 +123,7 @@ memory, skills, or model.
   signing, Discord, and mobile destinations remain skipped until their specific
   flags and Croki-owned configuration are enabled.
 - Pushes to `croki/main` build unsigned macOS arm64 and Windows x64 installer
-  artifacts. A tagged GitHub release is the enabled 0.4.2 publication path.
+  artifacts. A tagged GitHub release is the enabled 0.4.3 publication path.
 
 ## Verification
 

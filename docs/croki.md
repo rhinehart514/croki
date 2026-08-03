@@ -32,6 +32,13 @@ receipts or create a self-observing activity loop. Existing `croki.sense.*`
 activities remain parseable as compatibility input, while new frames are
 derived from the ordinary Thread activity stream.
 
+The human Canvas compresses that frame into a bounded working understanding:
+one current outcome, up to three semantic conclusions, one judgment or blocker,
+and one collapsed evidence group. Commands, context-window updates,
+checkpoints, receipts, and other mechanical observations remain inspectable as
+source evidence but do not become first-class Canvas objects. Model-facing
+senses continue to receive the complete frame.
+
 The previous Release, Context, and agent-authored Artifact mode descriptions are
 historical migration notes, not the 0.4.2 product contract. In particular,
 `release-canvas-spec.md` and `harness-canvas-spec.md` must not be used to
