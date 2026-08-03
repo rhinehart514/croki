@@ -1,7 +1,7 @@
 import {
   ChatAttachment,
   CheckpointRef,
-  CrokiProjectPerceptionSnapshot,
+  type CrokiProjectPerceptionSnapshot,
   IsoDateTime,
   MessageId,
   NonNegativeInt,
@@ -43,8 +43,6 @@ import {
   type ProjectionRepositoryError,
 } from "../../persistence/Errors.ts";
 import { ProjectionCheckpoint } from "../../persistence/Services/ProjectionCheckpoints.ts";
-import { ProjectionProjectPerceptionRepository } from "../../persistence/Services/ProjectionProjectPerception.ts";
-import { ProjectionProjectPerceptionRepositoryLive } from "../../persistence/Layers/ProjectionProjectPerception.ts";
 import { ProjectionProject } from "../../persistence/Services/ProjectionProjects.ts";
 import { ProjectionState } from "../../persistence/Services/ProjectionState.ts";
 import { ProjectionThreadActivity } from "../../persistence/Services/ProjectionThreadActivities.ts";
@@ -61,6 +59,7 @@ import {
   type ProjectionThreadCheckpointContext,
   type ProjectionSnapshotQueryShape,
 } from "../Services/ProjectionSnapshotQuery.ts";
+import { projectProjectPerception } from "../projectPerception.ts";
 
 const decodeReadModel = Schema.decodeUnknownEffect(OrchestrationReadModel);
 const decodeShellSnapshot = Schema.decodeUnknownEffect(OrchestrationShellSnapshot);
@@ -110,6 +109,9 @@ const ProjectionStateDbRowSchema = ProjectionState;
 const ProjectionCountsRowSchema = Schema.Struct({
   projectCount: Schema.Number,
   threadCount: Schema.Number,
+});
+const ProjectPerceptionRevisionRowSchema = Schema.Struct({
+  revision: NonNegativeInt,
 });
 const WorkspaceRootLookupInput = Schema.Struct({
   workspaceRoot: Schema.String,
@@ -266,7 +268,6 @@ function toPersistenceSqlOrDecodeError(sqlOperation: string, decodeOperation: st
 
 const makeProjectionSnapshotQuery = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const projectPerceptionRepository = yield* ProjectionProjectPerceptionRepository;
   const repositoryIdentityResolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
   const repositoryIdentityResolutionConcurrency = 4;
   const resolveRepositoryIdentitiesForProjects = Effect.fn(
@@ -717,6 +718,27 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         WHERE project_id = ${projectId}
           AND deleted_at IS NULL
         LIMIT 1
+      `,
+  });
+
+  const getProjectPerceptionRevision = SqlSchema.findOne({
+    Request: ProjectIdLookupInput,
+    Result: ProjectPerceptionRevisionRowSchema,
+    execute: ({ projectId }) =>
+      sql`
+        SELECT COALESCE(MAX(events.sequence), 0) AS revision
+        FROM orchestration_events AS events
+        WHERE
+          (events.aggregate_kind = 'project' AND events.stream_id = ${projectId})
+          OR (
+            events.aggregate_kind = 'thread'
+            AND EXISTS (
+              SELECT 1
+              FROM projection_threads AS threads
+              WHERE threads.thread_id = events.stream_id
+                AND threads.project_id = ${projectId}
+            )
+          )
       `,
   });
 
@@ -1780,44 +1802,121 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       );
 
   const getProjectPerception: ProjectionSnapshotQueryShape["getProjectPerception"] = (input) =>
-    Effect.gen(function* () {
-      const row = yield* projectPerceptionRepository.getByProjectId({
-        projectId: input.projectId,
-      });
-      if (Option.isNone(row)) return Option.none<CrokiProjectPerceptionSnapshot>();
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const [projectRow, threadRows, sessionRows, checkpointRows, latestTurnRows, revisionRow] =
+            yield* Effect.all([
+              getActiveProjectRowById({ projectId: input.projectId }),
+              listThreadRows(undefined),
+              listThreadSessionRows(undefined),
+              listCheckpointRows(undefined),
+              listLatestTurnRows(undefined),
+              getProjectPerceptionRevision({ projectId: input.projectId }),
+            ]).pipe(
+              Effect.mapError(
+                toPersistenceSqlOrDecodeError(
+                  "ProjectionSnapshotQuery.getProjectPerception:query",
+                  "ProjectionSnapshotQuery.getProjectPerception:decodeRows",
+                ),
+              ),
+            );
 
-      // `revision` is scoped to this project. An event in a sibling project
-      // must not make this row look stale merely because its global sequence
-      // is newer; the project projector updates this row for every event that
-      // can affect it.
-      const stale = row.value.snapshot.stale;
-      const status = row.value.snapshot.status;
-      const sinceRevision = input.sinceRevision ?? 0;
-      const limit = input.limit ?? 200;
-      const objects = row.value.snapshot.objects.slice(0, limit);
-      const visibleObjectIds = new Set(objects.map((object) => object.id));
-      const relationships = row.value.snapshot.relationships.filter(
-        (relationship) =>
-          visibleObjectIds.has(relationship.from) && visibleObjectIds.has(relationship.to),
+          if (Option.isNone(projectRow)) {
+            return Option.none<CrokiProjectPerceptionSnapshot>();
+          }
+
+          const sessionsByThread = new Map(
+            sessionRows.map((row) => [row.threadId, mapSessionRow(row)] as const),
+          );
+          const checkpointsByThread = new Map<string, Array<OrchestrationCheckpointSummary>>();
+          for (const row of checkpointRows) {
+            const checkpoints = checkpointsByThread.get(row.threadId) ?? [];
+            checkpoints.push({
+              turnId: row.turnId,
+              checkpointTurnCount: row.checkpointTurnCount,
+              checkpointRef: row.checkpointRef,
+              status: row.status,
+              files: row.files,
+              assistantMessageId: row.assistantMessageId,
+              completedAt: row.completedAt,
+            });
+            checkpointsByThread.set(row.threadId, checkpoints);
+          }
+          const latestTurnByThread = new Map(
+            latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
+          );
+          const projectThreadRows = threadRows.filter(
+            (row) => row.projectId === input.projectId && row.deletedAt === null,
+          );
+          const threads = yield* Effect.forEach(
+            projectThreadRows,
+            (row) =>
+              listThreadActivityRowsByThread({ threadId: row.threadId }).pipe(
+                Effect.mapError(
+                  toPersistenceSqlOrDecodeError(
+                    "ProjectionSnapshotQuery.getProjectPerception:listActivities:query",
+                    "ProjectionSnapshotQuery.getProjectPerception:listActivities:decodeRows",
+                  ),
+                ),
+                Effect.map(
+                  (activityRows): OrchestrationThread => ({
+                    id: row.threadId,
+                    projectId: row.projectId,
+                    title: row.title,
+                    modelSelection: row.modelSelection,
+                    runtimeMode: row.runtimeMode,
+                    interactionMode: row.interactionMode,
+                    branch: row.branch,
+                    worktreePath: row.worktreePath,
+                    forkedFromThreadId: row.forkedFromThreadId,
+                    latestTurn: latestTurnByThread.get(row.threadId) ?? null,
+                    createdAt: row.createdAt,
+                    updatedAt: row.updatedAt,
+                    archivedAt: row.archivedAt,
+                    settledOverride: row.settledOverride,
+                    settledAt: row.settledAt,
+                    snoozedUntil: row.snoozedUntil,
+                    snoozedAt: row.snoozedAt,
+                    deletedAt: null,
+                    messages: [],
+                    proposedPlans: [],
+                    activities: activityRows.map((activity) => ({
+                      id: activity.activityId,
+                      tone: activity.tone,
+                      kind: activity.kind,
+                      summary: activity.summary,
+                      payload: activity.payload,
+                      turnId: activity.turnId,
+                      ...(activity.sequence !== null ? { sequence: activity.sequence } : {}),
+                      createdAt: activity.createdAt,
+                    })),
+                    checkpoints: checkpointsByThread.get(row.threadId) ?? [],
+                    session: sessionsByThread.get(row.threadId) ?? null,
+                  }),
+                ),
+              ),
+            { concurrency: 4 },
+          );
+
+          return Option.some(
+            projectProjectPerception(input.projectId, threads, {
+              revision: revisionRow.revision,
+              ...(input.sinceRevision === undefined ? {} : { sinceRevision: input.sinceRevision }),
+              ...(input.limit === undefined ? {} : { limit: input.limit }),
+            }),
+          );
+        }),
+      )
+      .pipe(
+        Effect.mapError((error) =>
+          isPersistenceError(error)
+            ? error
+            : toPersistenceSqlError("ProjectionSnapshotQuery.getProjectPerception:transaction")(
+                error,
+              ),
+        ),
       );
-
-      return Option.some({
-        ...row.value.snapshot,
-        objects,
-        relationships,
-        changed: row.value.snapshot.revision > sinceRevision,
-        delta: {
-          sinceRevision,
-          addedObjects: row.value.snapshot.revision > sinceRevision ? objects : [],
-          updatedObjects: [],
-          removedObjectIds: [],
-          addedRelationships: row.value.snapshot.revision > sinceRevision ? relationships : [],
-          removedRelationshipIds: [],
-        },
-        stale,
-        status,
-      });
-    });
 
   const getProjectShellById: ProjectionSnapshotQueryShape["getProjectShellById"] = (projectId) =>
     getActiveProjectRowById({ projectId }).pipe(
@@ -2179,4 +2278,4 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 export const OrchestrationProjectionSnapshotQueryLive = Layer.effect(
   ProjectionSnapshotQuery,
   makeProjectionSnapshotQuery,
-).pipe(Layer.provideMerge(ProjectionProjectPerceptionRepositoryLive));
+);

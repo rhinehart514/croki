@@ -146,21 +146,8 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         { projectId: "project-1", title: "Project 1", scriptsJson: "[]" },
       ]);
 
-      const perceptionRows = yield* sql<{
-        readonly projectId: string;
-        readonly revision: number;
-        readonly snapshotJson: string;
-      }>`
-        SELECT
-          project_id AS "projectId",
-          revision,
-          snapshot_json AS "snapshotJson"
-        FROM projection_project_perception
-      `;
-      assert.equal(perceptionRows.length, 1);
-      assert.equal(perceptionRows[0]?.projectId, "project-1");
-      assert.equal(perceptionRows[0]?.revision, 3);
-      assert.equal(perceptionRows[0]?.snapshotJson.includes('"projectId":"project-1"'), true);
+      const perceptionRows = yield* sql`SELECT project_id FROM projection_project_perception`;
+      assert.deepEqual(perceptionRows, []);
 
       const messageRows = yield* sql<{
         readonly messageId: string;
