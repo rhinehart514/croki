@@ -64,6 +64,8 @@ const TASK_ACTIVITY_KINDS: ReadonlySet<string> = new Set([
   "task.completed",
 ]);
 
+const COLLAB_ITEM_TYPE = "collab_agent_tool_call";
+
 const TERMINAL_STATUSES: ReadonlySet<CoordinationWorkstreamStatus> = new Set([
   "completed",
   "failed",
@@ -346,8 +348,83 @@ function mergeActor(
 }
 
 /** True when an activity carries one of the canonical native task lifecycle events. */
-export function isCoordinationTaskActivity(activity: OrchestrationThreadActivity): boolean {
+function isNativeTaskActivity(activity: OrchestrationThreadActivity): boolean {
   return TASK_ACTIVITY_KINDS.has(activity.kind);
+}
+
+export function isCoordinationTaskActivity(activity: OrchestrationThreadActivity): boolean {
+  return isNativeTaskActivity(activity) || expandCollabAgentActivities(activity).length > 0;
+}
+
+function collabAgentStatus(value: unknown): CoordinationWorkstreamStatus {
+  switch (asString(value)?.toLowerCase()) {
+    case "pending":
+      return "waiting";
+    case "running":
+      return "running";
+    case "completed":
+      return "completed";
+    case "errored":
+      return "failed";
+    case "shutdown":
+      return "stopped";
+    default:
+      return "unknown";
+  }
+}
+
+/**
+ * Codex reports native collaborators as tool lifecycle items rather than the
+ * canonical task events emitted by Claude. Project them into the same durable
+ * parent-Thread workstream model so provider transport does not leak into the
+ * product surface.
+ */
+function expandCollabAgentActivities(
+  activity: OrchestrationThreadActivity,
+): OrchestrationThreadActivity[] {
+  if (!activity.kind.startsWith("tool.")) return [];
+  const payload = asRecord(activity.payload);
+  if (asString(payload?.itemType) !== COLLAB_ITEM_TYPE) return [];
+  const data = asRecord(payload?.data);
+  const item = asRecord(data?.item);
+  if (asString(item?.type) !== "collabAgentToolCall") return [];
+
+  const states = asRecord(item?.agentsStates) ?? {};
+  const receiverIds = uniqueStrings([
+    ...asArray(item?.receiverThreadIds)
+      .map(asString)
+      .filter((id): id is string => Boolean(id)),
+    ...Object.keys(states),
+  ]);
+  const prompt = asString(item?.prompt);
+  const model = asString(item?.model);
+  const reasoning = asString(item?.reasoningEffort);
+
+  return receiverIds.map((agentId) => {
+    const state = asRecord(states[agentId]);
+    const status = collabAgentStatus(state?.status);
+    const terminal = TERMINAL_STATUSES.has(status);
+    return {
+      ...activity,
+      id: `${activity.id}:${agentId}`,
+      kind: terminal
+        ? "task.completed"
+        : activity.kind === "tool.started"
+          ? "task.started"
+          : "task.progress",
+      summary: terminal ? "Task completed" : (prompt ?? "Parallel investigation"),
+      payload: {
+        taskId: agentId,
+        status,
+        ...(prompt ? { title: prompt, description: prompt, detail: prompt } : {}),
+        actor: {
+          id: agentId,
+          ...(model ? { model } : {}),
+          ...(reasoning ? { reasoning } : {}),
+        },
+      },
+    } as OrchestrationThreadActivity;
+  });
 }
 
 /**
@@ -362,7 +439,11 @@ export function isCoordinationTaskActivity(activity: OrchestrationThreadActivity
 export function deriveCoordinationWorkstreams(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
 ): CoordinationWorkstream[] {
-  const ordered = activities.filter(isCoordinationTaskActivity).toSorted(compareActivities);
+  const ordered = activities
+    .flatMap((activity) =>
+      isNativeTaskActivity(activity) ? [activity] : expandCollabAgentActivities(activity),
+    )
+    .toSorted(compareActivities);
   const workstreams = new Map<string, MutableWorkstream>();
   const seenEventIds = new Set<string>();
 

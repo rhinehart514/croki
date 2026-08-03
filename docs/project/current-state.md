@@ -36,12 +36,27 @@ ready only when its required local CLI, authentication, model access, and
 supporting process are available. OpenClaw additionally requires a running
 Gateway and configured agent.
 
+## Venture evidence and Croki Senses
+
+Canvas presentation is on the back burner after 0.4.3. The active foundation
+is provider-neutral venture evidence carried through ordinary Thread activity
+and inspected through Croki Senses. Product behavior, customer language, market
+signals, and distribution results share one bounded observation envelope with
+source provenance, confidence, read-only authority, and explicit separation
+from founder-approved canon.
+
+Source adapters may observe evidence; Threads may investigate and compare it;
+neither action promotes an inference into `.croki/context.json`. Raw customer
+transcripts, private adapter payloads, and connector-specific data do not enter
+the perception packet. Consequential GTM writes remain outside Senses and still
+require native tools and explicit authority.
+
 ## Canvas and Croki Senses
 
-The 0.4.2 pivot makes Canvas the zero-maintenance native projection of Croki
-Senses. Senses are generic model capabilities for perceiving a changing
-project; Canvas is the human-readable projection of that activity. It is not a
-release board, context editor, artifact authoring surface, workflow runtime,
+The 0.4.2 pivot established Canvas as one zero-maintenance projection of Croki
+Senses. Senses are the durable direction; Canvas is an optional human-readable
+projection of that activity and is not the active expansion surface. It is not
+a release board, context editor, artifact authoring surface, workflow runtime,
 memory database, or coordination dashboard.
 
 A Perception Frame is one hybrid observation/delta packet. It can include
@@ -113,6 +128,13 @@ memory, skills, or model.
 
 ## Known implementation gaps
 
+- Venture evidence now has a typed observation and provenance boundary, but
+  source adapters for customer conversations, analytics, CRM, campaigns, and
+  market research have not landed yet.
+- Parallel Threads is implemented behind a default-off Settings → Beta toggle
+  for the planned 0.4.4 release. It reuses provider-native delegation and the
+  parent Thread's existing Workstreams projection; provider support therefore
+  depends on the selected runtime exposing native workers.
 - Legacy Release, Context, and Artifact code remains for compatibility reads;
   the unified Canvas no longer routes users into those authoring surfaces.
 - Additional native senses can expand beyond the initial Thread, preview,

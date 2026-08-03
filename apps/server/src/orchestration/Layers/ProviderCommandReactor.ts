@@ -47,7 +47,7 @@ import {
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
-import { compileCrokiTurnInput } from "./CrokiContext.ts";
+import { compileCrokiTurnInput, loadCrokiVentureContext } from "./CrokiContext.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
@@ -623,6 +623,7 @@ const make = Effect.gen(function* () {
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
     readonly canvasEnabled: boolean;
+    readonly parallelThreadsEnabled: boolean;
     readonly harnessId: CrokiHarnessId;
     readonly createdAt: string;
   }) {
@@ -646,13 +647,18 @@ const make = Effect.gen(function* () {
       thread,
       projects: project ? [project] : [],
     });
+    const ventureContext =
+      input.harnessId === "venture-v1" && workspaceCwd !== undefined
+        ? yield* loadCrokiVentureContext(workspaceCwd)
+        : null;
     const providerInput = compileCrokiTurnInput({
       harnessId: input.harnessId,
       // `.croki/context.json` is a legacy import/export format, not runtime
       // provider context. Generic senses are emitted as typed Thread
       // activities by the provider/tool runtime when available.
-      agentContext: null,
+      agentContext: ventureContext,
       userInput: normalizedInput,
+      parallelThreadsEnabled: input.parallelThreadsEnabled,
     });
     const activeSession = yield* providerService
       .listSessions()
@@ -901,6 +907,7 @@ const make = Effect.gen(function* () {
         : {}),
       interactionMode: event.payload.interactionMode,
       canvasEnabled: event.payload.canvasEnabled ?? false,
+      parallelThreadsEnabled: event.payload.parallelThreadsEnabled ?? false,
       harnessId: event.payload.harnessId,
       createdAt: event.payload.createdAt,
     }).pipe(

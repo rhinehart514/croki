@@ -49,7 +49,13 @@ export const ProviderSandboxMode = Schema.Literals([
 export type ProviderSandboxMode = typeof ProviderSandboxMode.Type;
 
 /** Optional, one-turn Croki behavior layered over the provider's native agent runtime. */
-export const CrokiHarnessId = Schema.Literals(["native", "product-v1", "gtm-v1"]);
+export const CrokiHarnessId = Schema.Literals([
+  "native",
+  "venture-v1",
+  // Persisted 0.4.3 turns remain readable; new UI no longer offers these split behaviors.
+  "product-v1",
+  "gtm-v1",
+]);
 export type CrokiHarnessId = typeof CrokiHarnessId.Type;
 export const DEFAULT_CROKI_HARNESS_ID: CrokiHarnessId = "native";
 
@@ -723,6 +729,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
   canvasEnabled: Schema.optional(Schema.Boolean),
+  parallelThreadsEnabled: Schema.optional(Schema.Boolean),
   harnessId: Schema.optional(CrokiHarnessId),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
@@ -744,6 +751,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   canvasEnabled: Schema.optional(Schema.Boolean),
+  parallelThreadsEnabled: Schema.optional(Schema.Boolean),
   harnessId: Schema.optional(CrokiHarnessId),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
@@ -1097,6 +1105,7 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
   canvasEnabled: Schema.optional(Schema.Boolean),
+  parallelThreadsEnabled: Schema.optional(Schema.Boolean),
   harnessId: CrokiHarnessId.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_CROKI_HARNESS_ID)),
   ),

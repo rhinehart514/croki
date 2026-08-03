@@ -56,6 +56,7 @@ function AutoSettleDaysInput({
 
 export function BetaSettingsPanel() {
   const canvasEnabled = useClientSettings((settings) => settings.canvasEnabled);
+  const parallelThreadsEnabled = useClientSettings((settings) => settings.parallelThreadsEnabled);
   const sidebarV2Enabled = useSidebarV2Enabled();
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
@@ -73,6 +74,19 @@ export function BetaSettingsPanel() {
               checked={canvasEnabled}
               onCheckedChange={(checked) => updateSettings({ canvasEnabled: Boolean(checked) })}
               aria-label="Enable the Canvas beta"
+            />
+          }
+        />
+        <SettingsRow
+          title="Parallel Threads"
+          description="Let an explicitly requested parallel investigation use native workers and converge in the current Thread. Switch off any time."
+          control={
+            <Switch
+              checked={parallelThreadsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ parallelThreadsEnabled: Boolean(checked) })
+              }
+              aria-label="Enable the Parallel Threads beta"
             />
           }
         />

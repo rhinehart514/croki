@@ -220,6 +220,7 @@ function appliedStatusLabel(receipt: CrokiContextReceipt): string {
 }
 
 function harnessLabel(receipt: CrokiContextReceipt): string {
+  if (receipt.harnessId === "venture-v1") return "Venture";
   if (receipt.harnessId === "product-v1") return "Product";
   if (receipt.harnessId === "gtm-v1") return "GTM";
   return "Native";

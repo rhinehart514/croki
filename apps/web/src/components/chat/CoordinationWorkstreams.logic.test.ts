@@ -180,4 +180,56 @@ describe("deriveCoordinationWorkstreams", () => {
       ]),
     ).toEqual([]);
   });
+
+  it("collapses Codex collaborator tool state into the provider-neutral workstream", () => {
+    const activities = [
+      makeActivity({
+        id: "spawn",
+        kind: "tool.completed",
+        turnId: "turn-1",
+        sequence: 1,
+        payload: {
+          itemType: "collab_agent_tool_call",
+          data: {
+            item: {
+              type: "collabAgentToolCall",
+              tool: "spawnAgent",
+              prompt: "Trace startup initialization",
+              model: "gpt-5.6-terra",
+              reasoningEffort: "high",
+              receiverThreadIds: ["agent-1"],
+              agentsStates: { "agent-1": { status: "running" } },
+            },
+          },
+        },
+      }),
+      makeActivity({
+        id: "wait",
+        kind: "tool.completed",
+        turnId: "turn-1",
+        sequence: 2,
+        payload: {
+          itemType: "collab_agent_tool_call",
+          data: {
+            item: {
+              type: "collabAgentToolCall",
+              tool: "wait",
+              receiverThreadIds: ["agent-1"],
+              agentsStates: { "agent-1": { status: "completed" } },
+            },
+          },
+        },
+      }),
+    ];
+
+    expect(deriveCoordinationWorkstreams(activities)).toEqual([
+      expect.objectContaining({
+        id: "turn-1:agent-1",
+        taskId: "agent-1",
+        title: "Trace startup initialization",
+        status: "completed",
+        actor: { id: "agent-1", model: "gpt-5.6-terra", reasoning: "high" },
+      }),
+    ]);
+  });
 });

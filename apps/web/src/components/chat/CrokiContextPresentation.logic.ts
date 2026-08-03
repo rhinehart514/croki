@@ -143,6 +143,7 @@ function parseCrokiContextReceipt(value: unknown): CrokiContextReceipt | null {
     typeof value.truncated !== "boolean" ||
     (value.harnessId !== undefined &&
       value.harnessId !== "native" &&
+      value.harnessId !== "venture-v1" &&
       value.harnessId !== "product-v1" &&
       value.harnessId !== "gtm-v1")
   ) {

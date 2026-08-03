@@ -1,4 +1,10 @@
-import type { OrchestrationThread, OrchestrationThreadActivity, ThreadId } from "@croki/contracts";
+import {
+  isCrokiEvidenceObservedActivityPayload,
+  type CrokiEvidenceObservation,
+  type OrchestrationThread,
+  type OrchestrationThreadActivity,
+  type ThreadId,
+} from "@croki/contracts";
 import {
   getCrokiCanvasArtifactFromActivity,
   parseCrokiCanvasPresentedActivityPayload,
@@ -254,6 +260,13 @@ function projectScene(
     relationships.push(
       relationship(threadObjectId, projected.object.id, "contains", activity.kind, revision),
     );
+    for (const evidence of evidenceFromActivity(activity)) {
+      const evidenceObject = projectEvidenceObservation(evidence, activity, revision, thread.id);
+      objects.push(evidenceObject);
+      relationships.push(
+        relationship(projected.object.id, evidenceObject.id, "observed", evidence.domain, revision),
+      );
+    }
     if (activity.turnId !== null) {
       relationships.push(
         relationship(
@@ -455,6 +468,47 @@ function projectActivity(
   };
 }
 
+function evidenceFromActivity(
+  activity: OrchestrationThreadActivity,
+): readonly CrokiEvidenceObservation[] {
+  if (activity.kind !== "croki.evidence.observed") return [];
+  return isCrokiEvidenceObservedActivityPayload(activity.payload)
+    ? activity.payload.observations
+    : [];
+}
+
+function projectEvidenceObservation(
+  evidence: CrokiEvidenceObservation,
+  activity: OrchestrationThreadActivity,
+  revision: number,
+  sourceThreadId: ThreadId,
+): CrokiSenseObject {
+  return {
+    id: `evidence:${evidence.id}`,
+    type: evidence.type,
+    title: evidence.title,
+    ...(evidence.summary ? { summary: evidence.summary } : {}),
+    state: "observed",
+    revision,
+    source: {
+      kind: evidence.source.kind,
+      id: evidence.source.id,
+      ...(evidence.source.uri ? { uri: evidence.source.uri } : {}),
+      activityId: String(activity.id),
+      sourceThreadId,
+      turnId: activity.turnId === null ? null : String(activity.turnId),
+      observedAt: evidence.observedAt,
+    },
+    affordances: [affordance("inspect", "Inspect evidence", "read")],
+    data: {
+      domain: evidence.domain,
+      evidenceType: evidence.type,
+      sourceLabel: evidence.source.label ?? evidence.source.kind,
+      ...(evidence.confidence !== undefined ? { confidence: evidence.confidence } : {}),
+    },
+  };
+}
+
 function projectArtifactNode(
   node: CrokiCanvasArtifactNode,
   artifact: CrokiCanvasArtifact,
@@ -560,6 +614,7 @@ function sourceForActivity(
 }
 
 function sourceFamily(kind: string, payload?: Record<string, unknown>): string {
+  if (kind === "croki.evidence.observed") return "evidence";
   if (kind.startsWith("croki.sense.")) return "sense";
   if (kind.startsWith("croki.canvas.")) return "canvas";
   if (kind.startsWith("preview.")) return "preview";

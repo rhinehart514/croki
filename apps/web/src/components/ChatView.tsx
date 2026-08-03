@@ -1600,6 +1600,7 @@ function ChatViewContent(props: ChatViewProps) {
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
   );
   const canvasEnabled = settings.canvasEnabled && activeThread !== undefined;
+  const parallelThreadsEnabled = settings.parallelThreadsEnabled;
   const activeFileSurface =
     activeRightPanelSurface?.kind === "file" ? activeRightPanelSurface : null;
   const activePreviewState = useThreadPreviewState(activeThreadRef);
@@ -5277,6 +5278,7 @@ function ChatViewContent(props: ChatViewProps) {
           runtimeMode,
           interactionMode,
           canvasEnabled,
+          parallelThreadsEnabled,
           harnessId: crokiHarnessId,
           ...(bootstrap ? { bootstrap } : {}),
           createdAt: messageCreatedAt,
@@ -5645,6 +5647,7 @@ function ChatViewContent(props: ChatViewProps) {
             runtimeMode,
             interactionMode: nextInteractionMode,
             canvasEnabled,
+            parallelThreadsEnabled,
             harnessId: crokiHarnessId,
             ...(nextInteractionMode === "default" && activeProposedPlan
               ? {
@@ -5714,6 +5717,7 @@ function ChatViewContent(props: ChatViewProps) {
       startThreadTurn,
       autoOpenPlanSidebar,
       canvasEnabled,
+      parallelThreadsEnabled,
       crokiHarnessId,
       environmentId,
       composerRef,
@@ -5801,6 +5805,7 @@ function ChatViewContent(props: ChatViewProps) {
           runtimeMode,
           interactionMode: "default",
           canvasEnabled,
+          parallelThreadsEnabled,
           harnessId: "native",
           sourceProposedPlan: {
             threadId: activeThread.id,
@@ -5869,6 +5874,7 @@ function ChatViewContent(props: ChatViewProps) {
     activeThread,
     beginLocalDispatch,
     canvasEnabled,
+    parallelThreadsEnabled,
     activeEnvironmentUnavailable,
     createThread,
     deleteThread,

@@ -107,7 +107,7 @@ export interface CrokiContextReceipt {
   readonly releaseVersion?: string;
   readonly releaseItemCount?: number;
   /** Absent only on receipts persisted before explicit turn behaviors shipped. */
-  readonly harnessId?: "native" | "product-v1" | "gtm-v1";
+  readonly harnessId?: "native" | "venture-v1" | "product-v1" | "gtm-v1";
   readonly errorCode?: CrokiContextParseErrorCode;
   readonly issueCount?: number;
   readonly includedCount?: number;

@@ -3161,19 +3161,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       <ComposerSelectControl
                         className={cn(
                           "font-medium",
-                          (crokiHarnessId as string) === "product-v1" &&
-                            "text-sky-300 hover:text-sky-200",
-                          crokiHarnessId === "gtm-v1" && "text-amber-400 hover:text-amber-300",
+                          crokiHarnessId === "venture-v1" && "text-amber-300 hover:text-amber-200",
                         )}
                         aria-label="Turn behavior"
                       >
                         <ComposerControlIcon icon={BotIcon} opticalSize="large" />
                         <SelectValue>
-                          {(crokiHarnessId as string) === "product-v1"
-                            ? "Product"
-                            : crokiHarnessId === "gtm-v1"
-                              ? "GTM"
-                              : "Native"}
+                          {crokiHarnessId === "venture-v1" ? "Venture" : "Native"}
                         </SelectValue>
                       </ComposerSelectControl>
                       <SelectPopup alignItemWithTrigger={false}>
@@ -3185,21 +3179,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             </span>
                           </div>
                         </SelectItem>
-                        <SelectItem value="product-v1" hideIndicator className="min-w-72 py-2">
+                        <SelectItem value="venture-v1" hideIndicator className="min-w-72 py-2">
                           <div className="grid gap-0.5">
-                            <span className="font-medium text-foreground">Product</span>
+                            <span className="font-medium text-foreground">Venture</span>
                             <span className="text-xs leading-4 text-muted-foreground">
-                              Product judgment with an optional visual Canvas artifact for this
-                              turn.
-                            </span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="gtm-v1" hideIndicator className="min-w-72 py-2">
-                          <div className="grid gap-0.5">
-                            <span className="font-medium text-foreground">GTM</span>
-                            <span className="text-xs leading-4 text-muted-foreground">
-                              Go-to-market judgment with an optional visual Canvas artifact for this
-                              turn.
+                              Join product reality, customer evidence, implementation, and market
+                              direction for this turn.
                             </span>
                           </div>
                         </SelectItem>

@@ -24,6 +24,18 @@ describe("ClientSettings Canvas beta", () => {
   });
 });
 
+describe("ClientSettings Parallel Threads beta", () => {
+  it("defaults off and preserves an explicit opt-in", () => {
+    expect(decodeClientSettings({}).parallelThreadsEnabled).toBe(false);
+    expect(decodeClientSettings({ parallelThreadsEnabled: true }).parallelThreadsEnabled).toBe(
+      true,
+    );
+    expect(decodeClientSettingsPatch({ parallelThreadsEnabled: true }).parallelThreadsEnabled).toBe(
+      true,
+    );
+  });
+});
+
 describe("ClientSettings word wrap", () => {
   it("defaults word wrap on", () => {
     expect(decodeClientSettings({}).wordWrap).toBe(true);

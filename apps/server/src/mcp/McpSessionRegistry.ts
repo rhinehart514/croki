@@ -275,5 +275,7 @@ export const __testing = {
 };
 
 function capabilitiesForHarness(harnessId: CrokiHarnessId): ReadonlySet<"preview" | "canvas"> {
-  return harnessId === "native" ? new Set(["preview"]) : new Set(["preview", "canvas"]);
+  return harnessId === "product-v1" || harnessId === "gtm-v1"
+    ? new Set(["preview", "canvas"])
+    : new Set(["preview"]);
 }

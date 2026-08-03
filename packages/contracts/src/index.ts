@@ -30,3 +30,4 @@ export * from "./previewAutomation.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./rpc.ts";
 export * from "./perception.ts";
+export * from "./evidence.ts";

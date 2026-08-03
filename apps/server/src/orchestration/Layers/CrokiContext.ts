@@ -21,10 +21,39 @@ import { CROKI_RELEASE_LIMITS } from "@croki/shared/crokiReleaseCandidate";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+
+const decodeUnknownJson = Schema.decodeUnknownOption(Schema.UnknownFromJsonString);
+const encodeUnknownJson = Schema.encodeUnknownSync(Schema.UnknownFromJsonString);
 
 export interface LoadedCrokiAgentContext {
   readonly prompt: string | null;
   readonly receipt: CrokiContextReceipt;
+}
+
+const CROKI_VENTURE_RELATIVE_PATH = ".croki/venture.json";
+const CROKI_VENTURE_SOURCE_BYTES = 64 * 1024;
+
+/** Reads founder-approved venture truth without repairing, migrating, or writing it. */
+export function loadCrokiVentureContext(
+  cwd: string,
+): Effect.Effect<string | null, never, FileSystem.FileSystem | Path.Path> {
+  return Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const filePath = path.join(cwd, CROKI_VENTURE_RELATIVE_PATH);
+    const exists = yield* fileSystem.exists(filePath).pipe(Effect.orElseSucceed(() => false));
+    if (!exists) return null;
+    const source = yield* fileSystem.readFileString(filePath).pipe(Effect.orElseSucceed(() => ""));
+    if (source.length === 0 || source.length > CROKI_VENTURE_SOURCE_BYTES) return null;
+    const parsed = Option.getOrNull(decodeUnknownJson(source));
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    const value = parsed as Record<string, unknown>;
+    const venture = value.venture;
+    if (value.version !== 1 || typeof venture !== "object" || venture === null) return null;
+    return `<croki_venture_context version="1" source="${CROKI_VENTURE_RELATIVE_PATH}">\n${encodeUnknownJson(parsed)}\n</croki_venture_context>`;
+  });
 }
 
 export const CROKI_PRODUCT_HARNESS_INSTRUCTION = `<croki_product_harness version="1">
@@ -34,6 +63,14 @@ Use the provider's native agent runtime, tools, authority, Review, and Croki Sen
 export const CROKI_GTM_HARNESS_INSTRUCTION = `<croki_gtm_harness version="1">
 Use the provider's native agent runtime, tools, authority, Review, and Croki Senses. For this turn, act as the founder's go-to-market judgment partner: clarify the decision behind the request; make assumptions, evidence, contradictions, consequences, and reversible tests explicit; and leave consequential judgment to the founder. Observe and inspect live sources when they materially improve your judgment. Do not ask the user to author or connect nodes, fill forms, maintain a Canvas, or treat agent proposals as canon. Canvas is Croki's automatic visual projection of sensed state, not another memory, runtime, source of truth, execution surface, or proposal inbox.
 </croki_gtm_harness>`;
+
+export const CROKI_VENTURE_HARNESS_INSTRUCTION = `<croki_venture_harness version="1">
+Use the provider's native runtime, tools, authority, Review, and Croki Senses. For this explicit turn, help the founder develop the product and its market as one reality. Inspect actual product behavior, implementation, customer evidence, current promise, market alternatives, and distribution evidence when they can change the outcome. Name contradictions between what is built, what is promised, and what sources support. When parallel investigation is useful and the user asks for it, give native workers bounded and meaningfully different assignments, keep research read-only by default, and converge conclusions with provenance in this Thread. Recommend or implement the strongest coherent result within the user's authority; do not stop at a strategy document when repository-local work can make the direction true. Leave consequential product, positioning, external-write, spending, and publication judgments to the founder. Never promote observations or agent inferences into .croki/venture.json without an explicit founder action. Do not create or maintain a Canvas, task board, CRM, marketing dashboard, or second workflow system.
+</croki_venture_harness>`;
+
+export const CROKI_PARALLEL_THREADS_INSTRUCTION = `<croki_parallel_threads_beta version="1">
+The user has enabled Croki's Parallel Threads beta. Only when the user explicitly asks to split, delegate, fan out, spin up multiple threads, investigate in parallel, or converge independent work, use the provider's native delegation tools. Keep the current Thread as the canonical conversation. Give each worker a bounded, meaningfully different assignment; default parallel investigation to read-only; use no more than five workers unless the user explicitly requests more; wait for every worker to reach a terminal state; then synthesize conclusions, evidence, disagreements, and source references back in this Thread. Do not create a second plan, coordinator, task board, or hidden workflow. Ordinary requests remain ordinary native turns.
+</croki_parallel_threads_beta>`;
 
 /**
  * Compiles one provider turn without creating a second Canvas conversation or
@@ -45,15 +82,24 @@ export function compileCrokiTurnInput(input: {
   readonly harnessId: CrokiHarnessId;
   readonly agentContext: string | null;
   readonly userInput: string | undefined;
+  readonly parallelThreadsEnabled?: boolean;
 }): string | undefined {
-  if (input.harnessId === "native") {
-    return prependCrokiAgentContext(input.agentContext, input.userInput);
-  }
+  const parallelInstruction = input.parallelThreadsEnabled
+    ? CROKI_PARALLEL_THREADS_INSTRUCTION
+    : null;
+  if (input.harnessId === "native")
+    return (
+      [parallelInstruction, input.agentContext, input.userInput]
+        .filter((value): value is string => Boolean(value))
+        .join("\n\n") || undefined
+    );
   const harnessInstruction =
-    input.harnessId === "product-v1"
-      ? CROKI_PRODUCT_HARNESS_INSTRUCTION
-      : CROKI_GTM_HARNESS_INSTRUCTION;
-  return [harnessInstruction, input.agentContext, input.userInput]
+    input.harnessId === "venture-v1"
+      ? CROKI_VENTURE_HARNESS_INSTRUCTION
+      : input.harnessId === "product-v1"
+        ? CROKI_PRODUCT_HARNESS_INSTRUCTION
+        : CROKI_GTM_HARNESS_INSTRUCTION;
+  return [harnessInstruction, parallelInstruction, input.agentContext, input.userInput]
     .filter((value): value is string => Boolean(value))
     .join("\n\n");
 }
@@ -248,6 +294,7 @@ export function isCrokiContextAppliedActivityPayload(
   const harnessIsValid =
     receipt.harnessId === undefined ||
     receipt.harnessId === "native" ||
+    receipt.harnessId === "venture-v1" ||
     receipt.harnessId === "product-v1" ||
     receipt.harnessId === "gtm-v1";
   const selectionIsValid =

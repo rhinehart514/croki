@@ -4,14 +4,52 @@ import { CROKI_CONTEXT_LIMITS, serializeCrokiContext } from "@croki/shared/croki
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 import {
+  CROKI_PARALLEL_THREADS_INSTRUCTION,
   compileCrokiTurnInput,
   CROKI_GTM_HARNESS_INSTRUCTION,
   CROKI_PRODUCT_HARNESS_INSTRUCTION,
+  CROKI_VENTURE_HARNESS_INSTRUCTION,
   isCrokiContextAppliedActivityPayload,
   loadCrokiAgentContext,
+  loadCrokiVentureContext,
 } from "./CrokiContext.ts";
+
+it("adds the reversible Parallel Threads beta contract only when enabled", () => {
+  const native = compileCrokiTurnInput({
+    harnessId: "native",
+    agentContext: null,
+    userInput: "Investigate the startup regression",
+    parallelThreadsEnabled: true,
+  });
+  assert.include(native ?? "", CROKI_PARALLEL_THREADS_INSTRUCTION);
+  assert.include(native ?? "", "Investigate the startup regression");
+
+  const disabled = compileCrokiTurnInput({
+    harnessId: "native",
+    agentContext: null,
+    userInput: "Investigate the startup regression",
+    parallelThreadsEnabled: false,
+  });
+  assert.equal(disabled, "Investigate the startup regression");
+});
+
+it("joins product and market reality in one explicit Venture turn", () => {
+  const compiled = compileCrokiTurnInput({
+    harnessId: "venture-v1",
+    agentContext: "<croki_venture_context>founder truth</croki_venture_context>",
+    userInput: "Make this direction true",
+  });
+
+  assert.isAtMost(CROKI_VENTURE_HARNESS_INSTRUCTION.length, 2_500);
+  assert.equal(compiled?.match(/<croki_venture_harness version="1">/g)?.length, 1);
+  assert.include(compiled ?? "", "develop the product and its market as one reality");
+  assert.include(compiled ?? "", "Never promote observations or agent inferences");
+  assert.include(compiled ?? "", "founder truth");
+  assert.isTrue(compiled?.endsWith("Make this direction true"));
+});
 
 it("keeps native provider turns free of a Croki behavior prompt", () => {
   const agentContext = "<croki_product_context>canon</croki_product_context>";
@@ -82,6 +120,36 @@ it("adds one bounded GTM harness without weakening founder authority", () => {
 });
 
 it.layer(NodeServices.layer)("Croki provider context", (it) => {
+  it.effect("loads founder-approved venture truth without writing or inferring", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "croki-venture-" });
+      yield* fileSystem.makeDirectory(path.join(cwd, ".croki"));
+      const source = yield* Schema.encodeUnknownEffect(Schema.UnknownFromJsonString)({
+        version: 1,
+        venture: {
+          name: "Croki",
+          outcome: "Product and market cohere",
+          audience: "founders",
+          promise: "Build the right thing",
+        },
+        principles: ["Founder authority"],
+        decisions: [],
+        unknowns: ["First distribution wedge"],
+        sources: [],
+      });
+      yield* fileSystem.writeFileString(path.join(cwd, ".croki", "venture.json"), source);
+
+      const prompt = yield* loadCrokiVentureContext(cwd);
+      assert.include(prompt ?? "", "Product and market cohere");
+      assert.equal(
+        yield* fileSystem.readFileString(path.join(cwd, ".croki", "venture.json")),
+        source,
+      );
+    }),
+  );
+
   it.effect("loads a bounded repository snapshot and content-free receipt", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;

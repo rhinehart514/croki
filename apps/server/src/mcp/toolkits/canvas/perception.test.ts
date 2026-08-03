@@ -3,7 +3,7 @@ import { ThreadId } from "@croki/contracts";
 
 import { inspectPerceptionObject, projectThreadPerception } from "./perception.ts";
 
-const thread = {
+const threadFixture = {
   id: ThreadId.make("thread-sense"),
   projectId: "project-sense",
   title: "Sense test",
@@ -41,7 +41,8 @@ const thread = {
       createdAt: "2026-08-02T18:00:03.000Z",
     },
   ],
-} as never;
+};
+const thread = threadFixture as never;
 
 it("projects stable semantic objects, relationships, affordances, and frame references", () => {
   const first = projectThreadPerception(thread);
@@ -77,4 +78,66 @@ it("returns bounded deltas and inspect neighborhoods from a revision cursor", ()
   const inspected = inspectPerceptionObject(observation, "activity:event-task", 1);
   expect(inspected.object?.source.activityId).toBe("event-task");
   expect(inspected.relationships.length).toBeGreaterThan(0);
+});
+
+it("projects product and GTM evidence as read-only source-grounded objects", () => {
+  const evidenceThread = {
+    ...threadFixture,
+    activities: [
+      ...threadFixture.activities,
+      {
+        id: "event-evidence",
+        tone: "info",
+        kind: "croki.evidence.observed",
+        summary: "Customer evidence observed",
+        payload: {
+          observations: [
+            {
+              id: "objection-17",
+              domain: "customer",
+              type: "customer-objection",
+              title: "Setup felt too technical",
+              summary: "The first useful result arrived after repository setup.",
+              observedAt: "2026-08-02T18:00:04.000Z",
+              source: {
+                kind: "customer-call",
+                id: "call-17",
+                label: "Activation interview",
+                uri: "notion://calls/17",
+              },
+              confidence: 0.9,
+              data: { privateTranscript: "must not enter the perception packet" },
+            },
+          ],
+        },
+        turnId: "turn-sense",
+        sequence: 6,
+        createdAt: "2026-08-02T18:00:04.000Z",
+      },
+    ],
+  } as never;
+
+  const observation = projectThreadPerception(evidenceThread);
+  const evidence = observation.objects.find((object) => object.id === "evidence:objection-17");
+  expect(evidence).toMatchObject({
+    type: "customer-objection",
+    title: "Setup felt too technical",
+    source: {
+      kind: "customer-call",
+      id: "call-17",
+      uri: "notion://calls/17",
+      sourceThreadId: "thread-sense",
+    },
+    affordances: [expect.objectContaining({ authority: "read" })],
+    data: { domain: "customer", confidence: 0.9, sourceLabel: "Activation interview" },
+  });
+  expect(JSON.stringify(evidence)).not.toContain("privateTranscript");
+  expect(
+    observation.relationships.some(
+      (relationship) =>
+        relationship.from === "activity:event-evidence" &&
+        relationship.to === "evidence:objection-17" &&
+        relationship.kind === "observed",
+    ),
+  ).toBe(true);
 });

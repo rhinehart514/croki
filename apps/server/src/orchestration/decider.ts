@@ -826,6 +826,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           runtimeMode: targetThread.runtimeMode,
           interactionMode: targetThread.interactionMode,
           canvasEnabled: command.canvasEnabled ?? false,
+          parallelThreadsEnabled: command.parallelThreadsEnabled ?? false,
           harnessId: command.harnessId ?? "native",
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
           createdAt: command.createdAt,
