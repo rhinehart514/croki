@@ -15,17 +15,20 @@ import {
   MessageId,
   NonNegativeInt,
   ProjectId,
+  PositiveInt,
   ProviderItemId,
   ThreadId,
   TrimmedNonEmptyString,
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
+import { CrokiProjectPerceptionSnapshot } from "./perception.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
+  getProjectPerception: "orchestration.getProjectPerception",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
@@ -182,6 +185,28 @@ export const ChatAttachment = Schema.Union([ChatImageAttachment]);
 export type ChatAttachment = typeof ChatAttachment.Type;
 const UploadChatAttachment = Schema.Union([UploadChatImageAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
+
+/** Preserve attachment order while preventing duplicate IDs during streaming. */
+export function mergeChatAttachments(
+  current: ReadonlyArray<ChatAttachment> | undefined,
+  incoming: ReadonlyArray<ChatAttachment> | undefined,
+): ReadonlyArray<ChatAttachment> | undefined {
+  if (incoming === undefined) {
+    return current;
+  }
+  if (incoming.length === 0) {
+    return current ?? [];
+  }
+  const merged = [...(current ?? [])];
+  const seen = new Set(merged.map((attachment) => attachment.id));
+  for (const attachment of incoming) {
+    if (!seen.has(attachment.id)) {
+      seen.add(attachment.id);
+      merged.push(attachment);
+    }
+  }
+  return merged;
+}
 
 export const ProjectScriptIcon = Schema.Literals([
   "play",
@@ -831,6 +856,7 @@ const ThreadMessageAssistantDeltaCommand = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   delta: Schema.String,
+  attachments: Schema.optional(Schema.Array(ChatAttachment)),
   turnId: Schema.optional(TurnId),
   createdAt: IsoDateTime,
 });
@@ -1401,6 +1427,14 @@ export type OrchestrationGetFullThreadDiffInput = typeof OrchestrationGetFullThr
 export const OrchestrationGetFullThreadDiffResult = ThreadTurnDiff;
 export type OrchestrationGetFullThreadDiffResult = typeof OrchestrationGetFullThreadDiffResult.Type;
 
+export const OrchestrationGetProjectPerceptionInput = Schema.Struct({
+  projectId: ProjectId,
+  sinceRevision: Schema.optionalKey(NonNegativeInt),
+  limit: Schema.optionalKey(PositiveInt.check(Schema.isLessThanOrEqualTo(200))),
+});
+export type OrchestrationGetProjectPerceptionInput =
+  typeof OrchestrationGetProjectPerceptionInput.Type;
+
 export const OrchestrationRpcSchemas = {
   dispatchCommand: {
     input: ClientOrchestrationCommand,
@@ -1413,6 +1447,10 @@ export const OrchestrationRpcSchemas = {
   getFullThreadDiff: {
     input: OrchestrationGetFullThreadDiffInput,
     output: OrchestrationGetFullThreadDiffResult,
+  },
+  getProjectPerception: {
+    input: OrchestrationGetProjectPerceptionInput,
+    output: Schema.NullOr(CrokiProjectPerceptionSnapshot),
   },
   getArchivedShellSnapshot: {
     input: Schema.Struct({}),

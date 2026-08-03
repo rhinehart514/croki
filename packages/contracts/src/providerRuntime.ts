@@ -89,6 +89,13 @@ const RuntimeContentStreamKind = Schema.Literals([
 ]);
 export type RuntimeContentStreamKind = typeof RuntimeContentStreamKind.Type;
 
+/**
+ * ACP image blocks carry base64 data before the provider runtime materializes
+ * them into the attachment store. Keep the wire bound finite even though the
+ * decoded byte limit is enforced by the ingestion layer.
+ */
+export const PROVIDER_RUNTIME_MAX_IMAGE_DATA_CHARS = 14_000_000;
+
 const RuntimeSessionExitKind = Schema.Literals(["graceful", "error"]);
 export type RuntimeSessionExitKind = typeof RuntimeSessionExitKind.Type;
 
@@ -170,6 +177,7 @@ const ProviderRuntimeEventType = Schema.Literals([
   "item.updated",
   "item.completed",
   "content.delta",
+  "content.image",
   "request.opened",
   "request.resolved",
   "user-input.requested",
@@ -220,6 +228,7 @@ const ItemStartedType = Schema.Literal("item.started");
 const ItemUpdatedType = Schema.Literal("item.updated");
 const ItemCompletedType = Schema.Literal("item.completed");
 const ContentDeltaType = Schema.Literal("content.delta");
+const ContentImageType = Schema.Literal("content.image");
 const RequestOpenedType = Schema.Literal("request.opened");
 const RequestResolvedType = Schema.Literal("request.resolved");
 const UserInputRequestedType = Schema.Literal("user-input.requested");
@@ -417,6 +426,14 @@ const ContentDeltaPayload = Schema.Struct({
   summaryIndex: Schema.optional(Schema.Int),
 });
 export type ContentDeltaPayload = typeof ContentDeltaPayload.Type;
+
+const ContentImagePayload = Schema.Struct({
+  /** Base64 payload from ACP. It is never copied into assistant message text. */
+  data: Schema.String.check(Schema.isMaxLength(PROVIDER_RUNTIME_MAX_IMAGE_DATA_CHARS)),
+  mimeType: TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(100)),
+  uri: Schema.optional(Schema.NullOr(TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(2_048)))),
+});
+export type ContentImagePayload = typeof ContentImagePayload.Type;
 
 const RequestOpenedPayload = Schema.Struct({
   requestType: CanonicalRequestType,
@@ -837,6 +854,13 @@ const ProviderRuntimeContentDeltaEvent = Schema.Struct({
 });
 export type ProviderRuntimeContentDeltaEvent = typeof ProviderRuntimeContentDeltaEvent.Type;
 
+const ProviderRuntimeContentImageEvent = Schema.Struct({
+  ...ProviderRuntimeEventBase.fields,
+  type: ContentImageType,
+  payload: ContentImagePayload,
+});
+export type ProviderRuntimeContentImageEvent = typeof ProviderRuntimeContentImageEvent.Type;
+
 const ProviderRuntimeRequestOpenedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: RequestOpenedType,
@@ -1035,6 +1059,7 @@ export const ProviderRuntimeEventV2 = Schema.Union([
   ProviderRuntimeItemUpdatedEvent,
   ProviderRuntimeItemCompletedEvent,
   ProviderRuntimeContentDeltaEvent,
+  ProviderRuntimeContentImageEvent,
   ProviderRuntimeRequestOpenedEvent,
   ProviderRuntimeRequestResolvedEvent,
   ProviderRuntimeUserInputRequestedEvent,

@@ -909,6 +909,19 @@ const handleSessionUpdate = ({
         });
         continue;
       }
+      if (event._tag === "ContentImage") {
+        const itemId = yield* ensureActiveAssistantSegment({
+          queue,
+          assistantSegmentRef,
+          sessionId: params.sessionId,
+          assistantItemRuntimeId,
+        });
+        yield* Queue.offer(queue, {
+          ...event,
+          itemId,
+        });
+        continue;
+      }
       yield* Queue.offer(queue, event);
     }
   });

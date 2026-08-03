@@ -5,6 +5,7 @@ import {
   ChevronRightIcon,
   CopyIcon,
   GlobeIcon,
+  ImageIcon,
   Maximize2Icon,
   Minimize2Icon,
   WrapTextIcon,
@@ -90,6 +91,13 @@ import {
   openUrlInPreview,
   BrowserPreviewUnavailableError,
 } from "../browser/openFileInPreview";
+import { useAssetUrlState } from "../assets/assetUrls";
+import {
+  chatMarkdownImageName,
+  resolveChatMarkdownImageSource,
+  type ChatMarkdownImageSource,
+} from "../chatMarkdownImages";
+import type { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 
 class CodeHighlightErrorBoundary extends React.Component<
   { fallback: ReactNode; children: ReactNode },
@@ -122,6 +130,7 @@ interface ChatMarkdownProps {
   className?: string;
   /** Treat single newlines as hard breaks — chat-style user input. */
   lineBreaks?: boolean;
+  onImageExpand?: (preview: ExpandedImagePreview) => void;
 }
 
 const EMPTY_MARKDOWN_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
@@ -1293,6 +1302,141 @@ function areMarkdownFileLinkPropsEqual(
   );
 }
 
+function MarkdownImageUnavailable(props: { readonly name: string; readonly source: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={`${props.name} unavailable`}
+      className="my-3 flex min-h-20 w-full max-w-2xl items-center gap-3 border border-border/70 bg-black px-4 py-3 text-left"
+      data-chat-image-state="unavailable"
+    >
+      <ImageIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="min-w-0">
+        <span className="block text-xs font-medium text-foreground">Image unavailable</span>
+        <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">
+          {props.source || props.name}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+function MarkdownImageFrame(props: {
+  readonly alt: string;
+  readonly name: string;
+  readonly src: string;
+  readonly onExpand?: ((preview: ExpandedImagePreview) => void) | undefined;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <MarkdownImageUnavailable name={props.name} source={props.src} />;
+
+  const image = (
+    <img
+      src={props.src}
+      alt={props.alt}
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      referrerPolicy="no-referrer"
+      className="block max-h-[34rem] w-full object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
+
+  return (
+    <span
+      className="my-3 block w-fit max-w-full overflow-hidden border border-border/70 bg-black"
+      data-chat-image-state="ready"
+    >
+      {props.onExpand ? (
+        <button
+          type="button"
+          className="block max-w-full cursor-zoom-in outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          aria-label={`Expand ${props.name}`}
+          onClick={() =>
+            props.onExpand?.({ images: [{ src: props.src, name: props.name }], index: 0 })
+          }
+        >
+          {image}
+        </button>
+      ) : (
+        image
+      )}
+    </span>
+  );
+}
+
+function WorkspaceMarkdownImage(props: {
+  readonly alt: string;
+  readonly name: string;
+  readonly path: string;
+  readonly threadRef: ScopedThreadRef;
+  readonly onExpand?: ((preview: ExpandedImagePreview) => void) | undefined;
+}) {
+  const assetUrl = useAssetUrlState(props.threadRef.environmentId, {
+    _tag: "workspace-file",
+    threadId: props.threadRef.threadId,
+    path: props.path,
+  });
+  if (assetUrl._tag === "Success") {
+    return (
+      <MarkdownImageFrame
+        alt={props.alt}
+        name={props.name}
+        src={assetUrl.url}
+        onExpand={props.onExpand}
+      />
+    );
+  }
+  if (assetUrl._tag === "Failure") {
+    return <MarkdownImageUnavailable name={props.name} source={props.path} />;
+  }
+  return (
+    <span
+      role="status"
+      className="my-3 flex min-h-20 w-full max-w-2xl items-center gap-3 border border-border/70 bg-black px-4 py-3 text-xs text-muted-foreground"
+      data-chat-image-state="loading"
+    >
+      <ImageIcon className="size-4 shrink-0" aria-hidden />
+      Loading {props.name}
+    </span>
+  );
+}
+
+function MarkdownImage(props: {
+  readonly alt: string | undefined;
+  readonly cwd: string | undefined;
+  readonly source: string | undefined;
+  readonly threadRef: ScopedThreadRef | undefined;
+  readonly onExpand?: ((preview: ExpandedImagePreview) => void) | undefined;
+}) {
+  const resolved = resolveChatMarkdownImageSource(props.source, props.cwd);
+  const name = chatMarkdownImageName(resolved, props.alt);
+  const alt = props.alt?.trim() || name;
+  if (resolved._tag === "remote") {
+    return (
+      <MarkdownImageFrame alt={alt} name={name} src={resolved.url} onExpand={props.onExpand} />
+    );
+  }
+  if (resolved._tag === "workspace" && props.threadRef) {
+    return (
+      <WorkspaceMarkdownImage
+        alt={alt}
+        name={name}
+        path={resolved.path}
+        threadRef={props.threadRef}
+        onExpand={props.onExpand}
+      />
+    );
+  }
+  return (
+    <MarkdownImageUnavailable
+      name={name}
+      source={resolved._tag === "workspace" ? resolved.path : resolved.source}
+    />
+  );
+}
+
 function ChatMarkdown({
   text,
   cwd,
@@ -1302,6 +1446,7 @@ function ChatMarkdown({
   skills = EMPTY_MARKDOWN_SKILLS,
   className,
   lineBreaks = false,
+  onImageExpand,
 }: ChatMarkdownProps) {
   const { resolvedTheme } = useTheme();
   const createAssetUrl = useAtomQueryRunner(assetEnvironment.createUrl, {
@@ -1490,6 +1635,17 @@ function ChatMarkdown({
           />
         );
       },
+      img({ node: _node, src, alt: imageAlt }) {
+        return (
+          <MarkdownImage
+            alt={imageAlt}
+            cwd={cwd}
+            source={src}
+            threadRef={threadRef}
+            onExpand={onImageExpand}
+          />
+        );
+      },
       a({ node, href, children, ...props }) {
         const normalizedHref = href ? normalizeMarkdownLinkHrefKey(href) : "";
         const fileLinkMeta = normalizedHref ? markdownFileLinkMetaByHref.get(normalizedHref) : null;
@@ -1627,6 +1783,7 @@ function ChatMarkdown({
     isStreaming,
     markdownFileLinkMetaByHref,
     onTaskListChange,
+    onImageExpand,
     openInPreferredEditor,
     openExternalLinkInPreview,
     openMarkdownFileInPreview,

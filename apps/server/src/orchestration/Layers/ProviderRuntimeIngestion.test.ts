@@ -948,6 +948,112 @@ describe("ProviderRuntimeIngestion", () => {
     expect(message?.streaming).toBe(false);
   });
 
+  it("materializes ACP image blocks onto the same assistant message as text", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-image-text"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-image"),
+      itemId: asItemId("item-image"),
+      payload: { streamKind: "assistant_text", delta: "before image" },
+    });
+    harness.emit({
+      type: "content.image",
+      eventId: asEventId("evt-image-block"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-image"),
+      itemId: asItemId("item-image"),
+      payload: {
+        data: "aGVsbG8=",
+        mimeType: "image/png",
+        uri: "file:///tmp/output.png",
+      },
+    });
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-image-text-after"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-image"),
+      itemId: asItemId("item-image"),
+      payload: { streamKind: "assistant_text", delta: " after image" },
+    });
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-image-completed"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-image"),
+      itemId: asItemId("item-image"),
+      payload: { itemType: "assistant_message", status: "completed" },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.messages.some(
+        (message: ProviderRuntimeTestMessage) =>
+          message.id === "assistant:item-image" && !message.streaming,
+      ),
+    );
+    const message = thread.messages.find(
+      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-image",
+    );
+    expect(message?.text).toBe("before image after image");
+    expect(message?.attachments).toHaveLength(1);
+    expect(message?.attachments?.[0]).toMatchObject({
+      type: "image",
+      name: "output.png",
+      mimeType: "image/png",
+      sizeBytes: 5,
+    });
+  });
+
+  it("drops malformed and unsupported ACP image blocks without putting data URLs in text", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const emitImage = (eventId: string, mimeType: string, data: string) =>
+      harness.emit({
+        type: "content.image",
+        eventId: asEventId(eventId),
+        provider: ProviderDriverKind.make("openclaw"),
+        createdAt: now,
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-invalid-image"),
+        itemId: asItemId("item-invalid-image"),
+        payload: { data, mimeType },
+      });
+
+    emitImage("evt-image-malformed", "image/png", "not-base64");
+    emitImage("evt-image-unsupported", "image/x-unknown", "aGVsbG8=");
+    emitImage("evt-image-too-large", "image/png", "A".repeat(14_000_001));
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-invalid-image-completed"),
+      provider: ProviderDriverKind.make("openclaw"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-invalid-image"),
+      itemId: asItemId("item-invalid-image"),
+      payload: { itemType: "assistant_message", status: "completed" },
+    });
+
+    await harness.drain();
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === asThreadId("thread-1"),
+    );
+    expect(thread?.messages.some((message) => message.id === "assistant:item-invalid-image")).toBe(
+      false,
+    );
+  });
+
   it("uses assistant item completion detail when no assistant deltas were streamed", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

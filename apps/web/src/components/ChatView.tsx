@@ -121,7 +121,11 @@ import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { buildTemporaryWorktreeBranchName } from "@croki/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
+import {
+  RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY,
+  rightPanelUsesSheet,
+  rightPanelUsesWorkspaceLayout,
+} from "../rightPanelLayout";
 import {
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
@@ -212,6 +216,7 @@ import { environmentCatalog } from "../connection/catalog";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { projectEnvironment } from "../state/projects";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { useEnvironmentQuery } from "../state/query";
 import {
   primaryServerAvailableEditorsAtom,
@@ -1594,7 +1599,7 @@ function ChatViewContent(props: ChatViewProps) {
   const activeRightPanelSurface = useRightPanelStore((state) =>
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
   );
-  const canvasEnabled = activeThread !== undefined;
+  const canvasEnabled = settings.canvasEnabled && activeThread !== undefined;
   const activeFileSurface =
     activeRightPanelSurface?.kind === "file" ? activeRightPanelSurface : null;
   const activePreviewState = useThreadPreviewState(activeThreadRef);
@@ -1612,10 +1617,25 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const previewPanelOpen = activeRightPanelKind === "preview" && isPreviewSupportedInRuntime();
   const rightPanelOpen = rightPanelState.isOpen;
-  const canMaximizeRightPanel = rightPanelOpen && !shouldUsePlanSidebarSheet;
+  const shouldUseRightPanelSheet = rightPanelUsesSheet(
+    shouldUsePlanSidebarSheet,
+    activeRightPanelSurface?.kind,
+  );
+  const canMaximizeRightPanel = rightPanelOpen && !shouldUseRightPanelSheet;
   const rightPanelMaximized =
-    canMaximizeRightPanel && maximizedRightPanelThreadKey === routeThreadKey;
-  const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUsePlanSidebarSheet;
+    canMaximizeRightPanel &&
+    rightPanelUsesWorkspaceLayout(
+      activeRightPanelSurface?.kind,
+      maximizedRightPanelThreadKey === routeThreadKey,
+    );
+  const canvasWorkspaceOpen = rightPanelMaximized && activeRightPanelSurface?.kind === "canvas";
+  const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUseRightPanelSheet;
+
+  useEffect(() => {
+    if (canvasEnabled || activeRightPanelSurface?.kind !== "canvas" || !activeThreadRef) return;
+    setCanvasSelectionState((current) => ({ ...current, artifactId: null, nodeIds: [] }));
+    useRightPanelStore.getState().close(activeThreadRef);
+  }, [activeRightPanelSurface?.kind, activeThreadRef, canvasEnabled]);
 
   useEffect(() => {
     if (!activeThreadRef) return;
@@ -2549,14 +2569,25 @@ function ChatViewContent(props: ChatViewProps) {
       threadActivities,
     ],
   );
-  const hasNativeCanvasPerception = canvasPerceptionFrame.objects.some(
+  const projectPerceptionQuery = useEnvironmentQuery(
+    canvasEnabled &&
+      activeProject &&
+      (activeRightPanelSurface?.kind === "canvas" || canvasSelectionNodeIds.length > 0)
+      ? orchestrationEnvironment.projectPerception({
+          environmentId: activeProject.environmentId,
+          input: { projectId: activeProject.id, limit: 200 },
+        })
+      : null,
+  );
+  const canvasWorkingModel = projectPerceptionQuery.data ?? canvasPerceptionFrame;
+  const hasNativeCanvasPerception = canvasWorkingModel.objects.some(
     (object) =>
       object.source.kind !== "thread" &&
       object.source.kind !== "canvas" &&
       object.source.kind !== "context",
   );
   const hasCanvasPerceptionSelection = canvasSelectionNodeIds.some((id) =>
-    canvasPerceptionFrame.objects.some((object) => object.id === id),
+    canvasWorkingModel.objects.some((object) => object.id === id),
   );
   const canvasPresentationsByActivityId = useMemo(
     () =>
@@ -3296,9 +3327,9 @@ function ChatViewContent(props: ChatViewProps) {
     useRightPanelStore.getState().open(activeThreadRef, "files");
   }, [activeProject, activeThreadRef]);
   const addCanvasSurface = useCallback(() => {
-    if (!activeThreadRef || !activeProject || !crokiWorkspaceRoot) return;
+    if (!canvasEnabled || !activeThreadRef || !activeProject || !crokiWorkspaceRoot) return;
     useRightPanelStore.getState().open(activeThreadRef, "canvas");
-  }, [activeProject, activeThreadRef, crokiWorkspaceRoot]);
+  }, [activeProject, activeThreadRef, canvasEnabled, crokiWorkspaceRoot]);
   const openReleaseCanvas = useCallback(() => {
     setCanvasViewedArtifactId(null);
     setCanvasBaseView("release");
@@ -3335,9 +3366,13 @@ function ChatViewContent(props: ChatViewProps) {
     [addCanvasSurface],
   );
   useRegisterCanvasCommand({
-    onOpenCanvas: activeProject && crokiWorkspaceRoot ? openReleaseCanvas : undefined,
-    unavailableReason:
-      activeProject && crokiWorkspaceRoot ? undefined : "Open a project workspace to use Canvas.",
+    onOpenCanvas:
+      canvasEnabled && activeProject && crokiWorkspaceRoot ? openReleaseCanvas : undefined,
+    unavailableReason: !canvasEnabled
+      ? "Enable Canvas in Settings → Beta → Beta features."
+      : activeProject && crokiWorkspaceRoot
+        ? undefined
+        : "Open a project workspace to use Canvas.",
   });
   const captureCanvasEvidence = useCallback(
     (reference: CrokiContextReference, title: string) => {
@@ -5059,7 +5094,7 @@ function ChatViewContent(props: ChatViewProps) {
     const messageTextWithPerceptionFocus = appendCrokiPerceptionFocusToPrompt(
       messageTextForSend,
       canvasSelectionNodeIds,
-      canvasPerceptionFrame,
+      canvasWorkingModel,
     );
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
@@ -5252,13 +5287,9 @@ function ChatViewContent(props: ChatViewProps) {
       } else {
         turnStartSucceeded = true;
         setCrokiHarnessId("native");
-        if (canvasSelectionSnapshot.length > 0) {
+        if (canvasSelectionNodeIds.length > 0) {
           setCanvasSelectionState((current) =>
-            current.nodeIds.some((nodeId) =>
-              canvasSelectionSnapshot.some((node) => node.id === nodeId),
-            )
-              ? { ...current, nodeIds: [] }
-              : current,
+            current.threadKey === activeThreadKey ? { ...current, nodeIds: [] } : current,
           );
         }
       }
@@ -5544,7 +5575,7 @@ function ChatViewContent(props: ChatViewProps) {
         text: appendCrokiPerceptionFocusToPrompt(
           planFollowUpText,
           canvasSelectionNodeIds,
-          canvasPerceptionFrame,
+          canvasWorkingModel,
         ),
       });
 
@@ -5631,7 +5662,7 @@ function ChatViewContent(props: ChatViewProps) {
 
       if (failure === null) {
         setCrokiHarnessId("native");
-        if (canvasSelectionSnapshot.length > 0) {
+        if (canvasSelectionNodeIds.length > 0) {
           setCanvasSelectionState((current) => ({ ...current, nodeIds: [] }));
         }
         // Optimistically open the plan sidebar when implementing (not refining).
@@ -5666,7 +5697,7 @@ function ChatViewContent(props: ChatViewProps) {
       appendCanvasSelectionToPrompt,
       appendCrokiPerceptionFocusToPrompt,
       beginLocalDispatch,
-      canvasPerceptionFrame,
+      canvasWorkingModel,
       canvasSelectionNodeIds,
       hasCanvasPerceptionSelection,
       hasNativeCanvasPerception,
@@ -5769,7 +5800,7 @@ function ChatViewContent(props: ChatViewProps) {
           titleSeed: nextThreadTitle,
           runtimeMode,
           interactionMode: "default",
-          canvasEnabled: true,
+          canvasEnabled,
           harnessId: "native",
           sourceProposedPlan: {
             threadId: activeThread.id,
@@ -5837,6 +5868,7 @@ function ChatViewContent(props: ChatViewProps) {
     activeThreadBranch,
     activeThread,
     beginLocalDispatch,
+    canvasEnabled,
     activeEnvironmentUnavailable,
     createThread,
     deleteThread,
@@ -6037,7 +6069,7 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const panelLayoutControls = (
     <div className="workspace-titlebar-controls z-50 gap-1 [-webkit-app-region:no-drag]">
-      {rightPanelOpen && !shouldUsePlanSidebarSheet ? (
+      {rightPanelOpen && !shouldUseRightPanelSheet && !canvasWorkspaceOpen ? (
         <RightPanelMaximizeControl
           maximized={rightPanelMaximized}
           onToggle={toggleRightPanelMaximized}
@@ -6086,11 +6118,14 @@ function ChatViewContent(props: ChatViewProps) {
           onAddCanvasEvidence={captureFileCanvasEvidence}
         />
       </Suspense>
-    ) : activeRightPanelSurface?.kind === "canvas" && activeProject && crokiWorkspaceRoot ? (
+    ) : canvasEnabled &&
+      activeRightPanelSurface?.kind === "canvas" &&
+      activeProject &&
+      crokiWorkspaceRoot ? (
       <CrokiCanvas
         activePlan={activePlan}
         activeThread={{ id: activeThread.id, title: activeThread.title }}
-        perceptionFrame={canvasPerceptionFrame}
+        perceptionFrame={canvasWorkingModel}
         environmentId={activeProject.environmentId}
         workspaceRoot={crokiWorkspaceRoot}
         productName={activeProject.title}
@@ -6119,6 +6154,10 @@ function ChatViewContent(props: ChatViewProps) {
               latestCanvasPresentation?.artifact?.id ??
               null,
           );
+          scheduleComposerFocus();
+        }}
+        onUseSelectionInThread={(nodeIds) => {
+          handleCanvasSelectionChange(nodeIds, null);
           scheduleComposerFocus();
         }}
         onViewArtifactRevision={(artifact) => {
@@ -6179,12 +6218,14 @@ function ChatViewContent(props: ChatViewProps) {
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-      {rightPanelOpen && !shouldUsePlanSidebarSheet ? panelLayoutControls : null}
+      {rightPanelOpen && !shouldUseRightPanelSheet ? panelLayoutControls : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
-          rightPanelMaximized ? "w-0 flex-none" : "flex-1",
+          rightPanelMaximized ? "invisible w-0 flex-none overflow-hidden" : "flex-1",
         )}
+        inert={rightPanelMaximized ? true : undefined}
+        aria-hidden={rightPanelMaximized ? true : undefined}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
       >
         {/* Top bar */}
@@ -6581,7 +6622,7 @@ function ChatViewContent(props: ChatViewProps) {
         ))}
       </div>
 
-      {!shouldUsePlanSidebarSheet && rightPanelOpen && activeThreadRef ? (
+      {!shouldUseRightPanelSheet && rightPanelOpen && activeThreadRef ? (
         <RightPanelTabs
           mode="inline"
           maximized={rightPanelMaximized}
@@ -6608,7 +6649,7 @@ function ChatViewContent(props: ChatViewProps) {
           {rightPanelContent}
         </RightPanelTabs>
       ) : null}
-      {shouldUsePlanSidebarSheet && rightPanelOpen && activeThreadRef ? (
+      {shouldUseRightPanelSheet && rightPanelOpen && activeThreadRef ? (
         <RightPanelSheet open onClose={planSidebarOpen ? closePlanSidebar : closePreviewPanel}>
           <RightPanelTabs
             mode="sheet"

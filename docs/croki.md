@@ -32,12 +32,21 @@ receipts or create a self-observing activity loop. Existing `croki.sense.*`
 activities remain parseable as compatibility input, while new frames are
 derived from the ordinary Thread activity stream.
 
-The human Canvas compresses that frame into a bounded working understanding:
-one current outcome, up to three semantic conclusions, one judgment or blocker,
-and one collapsed evidence group. Commands, context-window updates,
+The human Canvas maintains a bounded shared product model across a Project's
+Threads: one current outcome, up to three semantic conclusions, one judgment or
+blocker, and one collapsed evidence group. Commands, context-window updates,
 checkpoints, receipts, and other mechanical observations remain inspectable as
-source evidence but do not become first-class Canvas objects. Model-facing
-senses continue to receive the complete frame.
+source evidence but do not become first-class Canvas objects. The model is a
+durable server projection rebuilt from Thread activity, so work in one Thread
+can update Canvas while another Thread is open and the understanding survives a
+restart. Every object retains source-Thread provenance.
+
+Opening Canvas gives the model the workspace immediately at every viewport;
+there is no second maximize action or narrow side-sheet mode. The most urgent
+founder judgment is ordered before passive context, and `Address in Thread` is
+available on the object itself. Selection and the inspector remain optional
+for deeper evidence. A lone source Thread is rendered as provenance rather
+than promoted into a product section or mistaken for the outcome.
 
 The previous Release, Context, and agent-authored Artifact mode descriptions are
 historical migration notes, not the 0.4.2 product contract. In particular,
@@ -145,6 +154,13 @@ Canvas is zero-maintenance. It has no Save Canvas action, dirty draft, manual
 node/edge authoring, release board, or founder-authored scene. Layout, focus,
 selection, and zoom are local presentation state. They do not become project
 truth and do not constrain what a model can perceive or compose.
+
+Selecting an outcome, conclusion, judgment, or evidence group and choosing
+`Address in Thread` focuses the native composer on stable sensed IDs. The sent
+turn contains those IDs and source labels, not Canvas bodies or private runtime
+payloads. The provider can inspect the selected sources through read-only Croki
+Senses. A failed send retains the selection; a successfully started turn clears
+it.
 
 Actions selected from a projection route through native Threads, tools,
 approvals, and existing authority checks. External writes, destructive actions,

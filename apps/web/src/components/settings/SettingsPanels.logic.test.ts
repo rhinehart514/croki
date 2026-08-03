@@ -16,7 +16,28 @@ import {
   isProjectGroupingEnabled,
   projectGroupingModeFromToggle,
   resolveBackgroundActivityProfileOption,
+  resolveDefaultProviderInstance,
 } from "./SettingsPanels.logic";
+
+describe("default provider configuration", () => {
+  it("renders a new driver such as OpenClaw without creating an instance first", () => {
+    const driver = ProviderDriverKind.make("openclaw");
+    expect(resolveDefaultProviderInstance({ driver })).toEqual({
+      driver,
+      enabled: true,
+      config: {},
+    });
+  });
+
+  it("preserves an existing configured instance", () => {
+    const driver = ProviderDriverKind.make("openclaw");
+    const explicitInstance = {
+      driver,
+      config: { agentId: "sol" },
+    } satisfies ProviderInstanceConfig;
+    expect(resolveDefaultProviderInstance({ driver, explicitInstance })).toBe(explicitInstance);
+  });
+});
 
 describe("background activity settings restore", () => {
   it("detects legacy interval values even when the structured setting is at its default", () => {

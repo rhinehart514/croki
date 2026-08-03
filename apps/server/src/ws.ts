@@ -1110,6 +1110,23 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "orchestration" },
           ),
+        [ORCHESTRATION_WS_METHODS.getProjectPerception]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.getProjectPerception,
+            (
+              projectionSnapshotQuery.getProjectPerception?.(input) ?? Effect.succeed(Option.none())
+            ).pipe(
+              Effect.map(Option.getOrNull),
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationGetSnapshotError({
+                    message: "Failed to load project perception",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestration" },
+          ),
         [ORCHESTRATION_WS_METHODS.subscribeShell]: (input) =>
           observeRpcStreamEffect(
             ORCHESTRATION_WS_METHODS.subscribeShell,

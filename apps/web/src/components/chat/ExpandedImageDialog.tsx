@@ -13,6 +13,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   onClose,
 }: ExpandedImageDialogProps) {
   const [imageOffset, setImageOffset] = useState(0);
+  const [failedSource, setFailedSource] = useState<string | null>(null);
   const index = (preview.index + imageOffset + preview.images.length) % preview.images.length;
 
   const navigateImage = useCallback((direction: -1 | 1) => {
@@ -45,6 +46,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
 
   const item = preview.images[index];
   if (!item) return null;
+  const failed = failedSource === item.src;
 
   return (
     <div
@@ -82,12 +84,20 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
         >
           <XIcon />
         </Button>
-        <img
-          src={item.src}
-          alt={item.name}
-          className="max-h-[86vh] max-w-[92vw] select-none rounded-lg border border-border/70 bg-background object-contain shadow-2xl"
-          draggable={false}
-        />
+        {failed ? (
+          <div className="flex h-64 w-[min(42rem,88vw)] items-center justify-center border border-border/70 bg-black px-6 text-center text-sm text-muted-foreground">
+            This image could not be loaded.
+          </div>
+        ) : (
+          <img
+            src={item.src}
+            alt={item.name}
+            className="max-h-[86vh] max-w-[92vw] select-none border border-border/70 bg-background object-contain shadow-2xl"
+            draggable={false}
+            referrerPolicy="no-referrer"
+            onError={() => setFailedSource(item.src)}
+          />
+        )}
         <p className="mt-2 max-w-[92vw] truncate text-center text-xs text-muted-foreground/80">
           {item.name}
           {preview.images.length > 1 ? ` (${index + 1}/${preview.images.length})` : ""}

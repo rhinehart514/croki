@@ -8,7 +8,11 @@ import type { CrokiReleaseItem } from "@croki/shared/crokiReleaseCandidate";
 import type { ActivePlanState } from "~/session-logic";
 
 import type { CrokiCanvasArtifactLike } from "./crokiCanvasArtifactTypes";
-import type { CrokiPerceptionFrame, CrokiPerceptionObject } from "@croki/shared/crokiPerception";
+import type {
+  CrokiPerceptionFrame,
+  CrokiPerceptionObject,
+  CrokiProjectPerceptionSnapshot,
+} from "@croki/shared/crokiPerception";
 
 import { projectCrokiPerceptionFrame } from "./crokiCanvasPerceptionProjection";
 
@@ -62,11 +66,13 @@ export interface CrokiCanvasLiveScene {
   readonly revisionObjects: readonly CrokiCanvasLiveObject[];
   readonly updatedAt: string;
   readonly perceptionRevision?: number;
+  readonly perceptionScope?: "thread" | "project";
+  readonly perceptionStatus?: "ready" | "stale" | "rebuilding";
 }
 
 interface LiveSceneInput {
   readonly context: CrokiContext;
-  readonly perceptionFrame?: CrokiPerceptionFrame | null;
+  readonly perceptionFrame?: CrokiPerceptionFrame | CrokiProjectPerceptionSnapshot | null;
   readonly artifact?: CrokiCanvasArtifactLike | null;
   readonly latestArtifact?: CrokiCanvasArtifactLike | null;
   readonly artifacts?: readonly CrokiCanvasArtifactLike[];

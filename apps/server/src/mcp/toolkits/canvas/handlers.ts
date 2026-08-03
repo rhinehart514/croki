@@ -217,14 +217,47 @@ export const senseInspect = Effect.fn("CrokiSenseToolkit.inspect")(function* (
   input: CrokiSenseInspectInput,
 ) {
   const thread = yield* resolveSenseThread(input.threadId);
-  const observation = projectThreadPerception(thread);
+  let observation = projectThreadPerception(thread);
+  let inspected = inspectPerceptionObject(observation, input.objectId, input.depth ?? 0);
+
+  // A project Canvas can carry an object selected while another Thread is
+  // active. Resolve that stable id through the persisted project model, while
+  // keeping the invocation Thread as the authorization anchor.
+  if (!inspected.object) {
+    const query = yield* ProjectionSnapshotQuery;
+    const projectSnapshot = yield* (
+      query.getProjectPerception?.({ projectId: thread.projectId }) ?? Effect.succeed(Option.none())
+    ).pipe(
+      Effect.mapError(
+        () =>
+          new CrokiSenseError({
+            code: "persistence-failed",
+            message: "Could not load the project perception model.",
+          }),
+      ),
+    );
+    if (Option.isSome(projectSnapshot)) {
+      observation = {
+        threadId: String(thread.id),
+        revision: projectSnapshot.value.revision,
+        sourceRevision: projectSnapshot.value.sourceRevision,
+        changed: projectSnapshot.value.changed,
+        objects: projectSnapshot.value.objects,
+        relationships: projectSnapshot.value.relationships,
+        delta: projectSnapshot.value.delta,
+        latestActivityAt: projectSnapshot.value.latestActivityAt,
+        activeTurnId: thread.latestTurn?.turnId ?? null,
+        truncated: projectSnapshot.value.truncated,
+      };
+      inspected = inspectPerceptionObject(observation, input.objectId, input.depth ?? 0);
+    }
+  }
   if (input.revision !== undefined && input.revision !== observation.revision) {
     return yield* senseFail(
       "invalid-revision",
-      `The sensed Thread advanced from revision ${input.revision} to ${observation.revision}; observe again before inspecting.`,
+      `The sensed project advanced from revision ${input.revision} to ${observation.revision}; observe again before inspecting.`,
     );
   }
-  const inspected = inspectPerceptionObject(observation, input.objectId, input.depth ?? 0);
   if (!inspected.object) {
     return yield* senseFail(
       "object-not-found",

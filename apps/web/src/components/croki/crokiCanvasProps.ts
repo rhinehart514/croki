@@ -6,12 +6,15 @@ import type { ActivePlanState } from "~/session-logic";
 
 import type { CrokiCanvasView } from "./crokiCanvasLanguage";
 import type { CrokiCanvasArtifactLike, CrokiCanvasArtifactNodeLike } from "./CrokiCanvasArtifact";
-import type { CrokiPerceptionFrame } from "@croki/shared/crokiPerception";
+import type {
+  CrokiPerceptionFrame,
+  CrokiProjectPerceptionSnapshot,
+} from "@croki/shared/crokiPerception";
 
 export interface CrokiCanvasProps {
   readonly environmentId: EnvironmentId;
   /** Primary live sense packet. Legacy project data is only a fallback projection. */
-  readonly perceptionFrame?: CrokiPerceptionFrame | null;
+  readonly perceptionFrame?: CrokiPerceptionFrame | CrokiProjectPerceptionSnapshot | null;
   /** Legacy projections are accepted during migration and rendered into the same scene. */
   readonly artifact?: CrokiCanvasArtifactLike | null;
   readonly viewedRevision?: number;

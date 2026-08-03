@@ -8,6 +8,7 @@
  */
 import type {
   CheckpointRef,
+  CrokiProjectPerceptionSnapshot,
   OrchestrationCheckpointSummary,
   OrchestrationProject,
   OrchestrationProjectShell,
@@ -19,6 +20,7 @@ import type {
   ProjectId,
   ThreadId,
 } from "@croki/contracts";
+import type { OrchestrationGetProjectPerceptionInput } from "@croki/contracts";
 import * as Context from "effect/Context";
 import type * as Option from "effect/Option";
 import type * as Effect from "effect/Effect";
@@ -93,6 +95,11 @@ export interface ProjectionSnapshotQueryShape {
     OrchestrationShellSnapshot,
     ProjectionRepositoryError
   >;
+
+  /** Read the durable project-scoped Canvas working model. */
+  readonly getProjectPerception?: (
+    input: OrchestrationGetProjectPerceptionInput,
+  ) => Effect.Effect<Option.Option<CrokiProjectPerceptionSnapshot>, ProjectionRepositoryError>;
 
   /**
    * Read the latest projection snapshot sequence without hydrating read-model

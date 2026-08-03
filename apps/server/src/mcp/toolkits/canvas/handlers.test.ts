@@ -1,8 +1,10 @@
 import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
+  ProjectId,
   ProviderInstanceId,
   ThreadId,
+  type CrokiProjectPerceptionSnapshot,
   type OrchestrationCommand,
   type OrchestrationThread,
 } from "@croki/contracts";
@@ -62,6 +64,45 @@ const senseThread = {
   updatedAt: "2026-08-02T18:00:02.000Z",
   latestTurn: null,
 } as unknown as OrchestrationThread;
+
+const projectObjectId = "thread-origin:remote-runtime";
+const projectSnapshot = {
+  projectId: ProjectId.make("project-sense"),
+  revision: 12,
+  sourceRevision: 12,
+  changed: true,
+  objects: [
+    {
+      id: projectObjectId,
+      type: "runtime",
+      title: "Remote runtime",
+      revision: 1,
+      source: {
+        kind: "thread",
+        id: "thread-origin",
+        sourceThreadId: ThreadId.make("thread-origin"),
+        turnId: null,
+        observedAt: "2026-08-02T18:00:03.000Z",
+      },
+      affordances: [],
+    },
+  ],
+  relationships: [],
+  delta: {
+    sinceRevision: 0,
+    addedObjects: [],
+    updatedObjects: [],
+    removedObjectIds: [],
+    addedRelationships: [],
+    removedRelationshipIds: [],
+  },
+  latestActivityAt: "2026-08-02T18:00:03.000Z",
+  sourceThreadIds: [ThreadId.make("thread-origin")],
+  activeTurnIds: [],
+  truncated: false,
+  stale: false,
+  status: "ready",
+} satisfies CrokiProjectPerceptionSnapshot;
 
 it.effect("persists a bounded artifact in the originating Thread activity", () =>
   Effect.gen(function* () {
@@ -190,5 +231,27 @@ it.effect("reads semantic sense state without dispatching a Canvas or receipt ac
     expect(waited.changed).toBe(false);
     expect(waited.timedOut).toBe(true);
     expect(dispatches).toBe(0);
+  }),
+);
+
+it.effect("inspects a project object produced by a sibling Thread", () =>
+  Effect.gen(function* () {
+    const projection = Layer.mock(ProjectionSnapshotQuery)({
+      getThreadDetailById: () => Effect.succeed(Option.some(senseThread)),
+      getProjectPerception: () => Effect.succeed(Option.some(projectSnapshot)),
+    });
+
+    const inspection = yield* senseInspect({
+      objectId: projectObjectId,
+      revision: projectSnapshot.revision,
+      depth: 0,
+    }).pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+      Effect.provide(projection),
+    );
+
+    expect(inspection.observation.revision).toBe(projectSnapshot.revision);
+    expect(inspection.object.id).toBe(projectObjectId);
+    expect(inspection.object.source.sourceThreadId).toBe(ThreadId.make("thread-origin"));
   }),
 );

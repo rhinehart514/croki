@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
+import { ProjectId, ThreadId, TurnId } from "@croki/contracts";
 
-import type { CrokiPerceptionFrame, CrokiPerceptionObject } from "@croki/shared/crokiPerception";
+import type {
+  CrokiPerceptionFrame,
+  CrokiPerceptionObject,
+  CrokiProjectPerceptionSnapshot,
+} from "@croki/shared/crokiPerception";
 
 import { projectCrokiPerceptionFrame } from "./crokiCanvasPerceptionProjection";
 
@@ -141,7 +146,7 @@ describe("projectCrokiPerceptionFrame", () => {
       "artifact:warning",
       "evidence:collapsed",
     ]);
-    expect(scene.objects[0]).toMatchObject({ source: "outcome", authority: "Current task" });
+    expect(scene.objects[0]).toMatchObject({ source: "outcome", authority: "Current outcome" });
     expect(scene.attentionIds).toEqual(["artifact:warning"]);
     expect(scene.edges).toEqual([
       expect.objectContaining({ from: "artifact:focal", to: "artifact:warning" }),
@@ -180,5 +185,62 @@ describe("projectCrokiPerceptionFrame", () => {
           scene.objects.some((object) => object.id === edge.to),
       ),
     ).toBe(true);
+  });
+
+  it("keeps conclusions from sibling Threads in the shared project model", () => {
+    const snapshot: CrokiProjectPerceptionSnapshot = {
+      projectId: ProjectId.make("project-1"),
+      revision: 12,
+      sourceRevision: 12,
+      changed: true,
+      objects: [
+        {
+          ...object("thread:2", "thread", "Current project work", { revision: 12 }),
+          source: {
+            kind: "thread",
+            id: "thread-2",
+            sourceThreadId: ThreadId.make("thread-2"),
+            turnId: "turn-2",
+            observedAt,
+          },
+        },
+        object("artifact:thread-a", "focal", "Pricing route", {
+          artifactRevision: 2,
+          revision: 10,
+          role: "focal",
+        }),
+        object("artifact:thread-b", "route", "Onboarding route", {
+          artifactRevision: 9,
+          revision: 11,
+          role: "route",
+        }),
+      ],
+      relationships: [],
+      delta: {
+        sinceRevision: 11,
+        addedObjects: [],
+        updatedObjects: [],
+        removedObjectIds: [],
+        addedRelationships: [],
+        removedRelationshipIds: [],
+      },
+      latestActivityAt: observedAt,
+      sourceThreadIds: [ThreadId.make("thread-1"), ThreadId.make("thread-2")],
+      activeTurnIds: [TurnId.make("turn-2")],
+      truncated: false,
+      stale: true,
+      status: "stale",
+    };
+
+    const scene = projectCrokiPerceptionFrame(snapshot);
+
+    expect(scene.objects.map((item) => item.title)).toEqual([
+      "Onboarding route",
+      "Pricing route",
+      "Current project work",
+    ]);
+    expect(scene.objects.at(-1)).toMatchObject({ source: "agent", authority: "Source Thread" });
+    expect(scene.perceptionScope).toBe("project");
+    expect(scene.perceptionStatus).toBe("stale");
   });
 });

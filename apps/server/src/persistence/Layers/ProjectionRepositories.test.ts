@@ -1,4 +1,9 @@
-import { ProjectId, ThreadId, ProviderInstanceId } from "@croki/contracts";
+import {
+  CrokiProjectPerceptionSnapshot,
+  ProjectId,
+  ThreadId,
+  ProviderInstanceId,
+} from "@croki/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -8,13 +13,16 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { SqlitePersistenceMemory } from "./Sqlite.ts";
 import { ProjectionProjectRepositoryLive } from "./ProjectionProjects.ts";
 import { ProjectionThreadRepositoryLive } from "./ProjectionThreads.ts";
+import { ProjectionProjectPerceptionRepositoryLive } from "./ProjectionProjectPerception.ts";
 import { ProjectionProjectRepository } from "../Services/ProjectionProjects.ts";
 import { ProjectionThreadRepository } from "../Services/ProjectionThreads.ts";
+import { ProjectionProjectPerceptionRepository } from "../Services/ProjectionProjectPerception.ts";
 
 const projectionRepositoriesLayer = it.layer(
   Layer.mergeAll(
     ProjectionProjectRepositoryLive.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
     ProjectionThreadRepositoryLive.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
+    ProjectionProjectPerceptionRepositoryLive.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
     SqlitePersistenceMemory,
   ),
 );
@@ -195,6 +203,42 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       assert.strictEqual(updated?.settledAt, null);
       assert.strictEqual(updated?.snoozedUntil, null);
       assert.strictEqual(updated?.snoozedAt, null);
+    }),
+  );
+
+  it.effect("round-trips the bounded project perception cache", () =>
+    Effect.gen(function* () {
+      const repository = yield* ProjectionProjectPerceptionRepository;
+      const snapshot: CrokiProjectPerceptionSnapshot = {
+        projectId: ProjectId.make("project-perception-cache"),
+        revision: 4,
+        sourceRevision: 4,
+        changed: true,
+        objects: [],
+        relationships: [],
+        delta: {
+          sinceRevision: 0,
+          addedObjects: [],
+          updatedObjects: [],
+          removedObjectIds: [],
+          addedRelationships: [],
+          removedRelationshipIds: [],
+        },
+        latestActivityAt: null,
+        sourceThreadIds: [],
+        activeTurnIds: [],
+        truncated: false,
+        stale: false,
+        status: "ready",
+      };
+      yield* repository.upsert({
+        projectId: snapshot.projectId,
+        revision: 7,
+        snapshot,
+        updatedAt: "2026-08-03T00:00:00.000Z",
+      });
+      const persisted = yield* repository.getByProjectId({ projectId: snapshot.projectId });
+      assert.deepStrictEqual(Option.getOrNull(persisted)?.snapshot, snapshot);
     }),
   );
 });

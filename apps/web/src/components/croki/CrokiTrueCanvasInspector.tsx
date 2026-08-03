@@ -16,7 +16,12 @@ export function CrokiTrueCanvasInspector(props: CrokiTrueCanvasInspectorProps) {
   const object = props.objects[0];
   if (!object) return null;
 
-  const canUse = props.objects.some((candidate) => candidate.artifact && candidate.selectionId);
+  const canUse = props.objects.some(
+    (candidate) =>
+      (candidate.artifact && candidate.selectionId) ||
+      candidate.perceptionObject ||
+      candidate.perceptionObjects?.length,
+  );
   const canApprove =
     props.onApprove !== undefined &&
     props.objects.some((candidate) => candidate.status === "provisional");
@@ -91,7 +96,7 @@ export function CrokiTrueCanvasInspector(props: CrokiTrueCanvasInspectorProps) {
             className="w-full justify-between rounded-none"
             onClick={props.onUse}
           >
-            Use in Thread <ArrowRight className="size-3" aria-hidden />
+            Address in Thread <ArrowRight className="size-3" aria-hidden />
           </Button>
         ) : null}
         {canApprove ? (

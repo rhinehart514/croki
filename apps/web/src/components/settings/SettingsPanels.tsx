@@ -128,6 +128,7 @@ import {
   readLastEnabledProjectGroupingMode,
   rememberEnabledProjectGroupingMode,
   resolveBackgroundActivityProfileOption,
+  resolveDefaultProviderInstance,
 } from "./SettingsPanels.logic";
 import {
   SettingResetButton,
@@ -1862,26 +1863,20 @@ export function ProviderSettingsPanel() {
     const explicitInstance = settings.providerInstances?.[defaultInstanceId];
     const legacyConfig = legacyProviders[providerSettings.provider];
     const defaultLegacyConfig = defaultLegacyProviders[providerSettings.provider];
-    const legacyInstance: ProviderInstanceConfig | undefined =
-      legacyConfig === undefined
-        ? undefined
-        : {
-            driver,
-            enabled: legacyConfig.enabled,
-            config: legacyConfig,
-          };
-    const effectiveInstance = explicitInstance ?? legacyInstance;
-    if (effectiveInstance !== undefined) {
-      const isDirty =
-        explicitInstance !== undefined || !Equal.equals(legacyConfig, defaultLegacyConfig);
-      rows.push({
-        instanceId: defaultInstanceId,
-        instance: effectiveInstance,
-        driver,
-        isDefault: true,
-        isDirty,
-      });
-    }
+    const effectiveInstance = resolveDefaultProviderInstance({
+      driver,
+      explicitInstance,
+      legacyConfig,
+    });
+    const isDirty =
+      explicitInstance !== undefined || !Equal.equals(legacyConfig, defaultLegacyConfig);
+    rows.push({
+      instanceId: defaultInstanceId,
+      instance: effectiveInstance,
+      driver,
+      isDefault: true,
+      isDirty,
+    });
     for (const [id, instance] of instancesByDriver.get(providerSettings.provider) ?? []) {
       if (id === defaultInstanceId) continue;
       rows.push({ instanceId: id, instance, driver: instance.driver, isDefault: false });
@@ -1980,7 +1975,20 @@ export function ProviderSettingsPanel() {
     >;
     const defaultInstanceId = defaultInstanceIdForDriver(driverKind);
     const defaultLegacyProvider = defaultLegacyProviders[driverKind];
-    if (defaultLegacyProvider === undefined) return;
+    if (defaultLegacyProvider === undefined) {
+      updateSettings({
+        providerInstances: withoutProviderInstanceKey(
+          settings.providerInstances,
+          defaultInstanceId,
+        ),
+        providerModelPreferences: withoutProviderInstanceKey(
+          settings.providerModelPreferences,
+          defaultInstanceId,
+        ),
+        favorites: withoutProviderInstanceFavorites(settings.favorites ?? [], defaultInstanceId),
+      });
+      return;
+    }
     updateSettings({
       providers: {
         ...settings.providers,

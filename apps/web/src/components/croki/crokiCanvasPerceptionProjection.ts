@@ -2,6 +2,7 @@ import type {
   CrokiPerceptionFrame,
   CrokiPerceptionObject,
   CrokiPerceptionRelationship,
+  CrokiProjectPerceptionSnapshot,
 } from "@croki/shared/crokiPerception";
 
 import type {
@@ -18,14 +19,20 @@ const MAX_CONCLUSIONS = 3;
  * Raw observations remain attached to the evidence object for inspection, but
  * mechanical activity never becomes a first-class Canvas card.
  */
-export function projectCrokiPerceptionFrame(frame: CrokiPerceptionFrame): CrokiCanvasLiveScene {
+export function projectCrokiPerceptionFrame(
+  frame: CrokiPerceptionFrame | CrokiProjectPerceptionSnapshot,
+): CrokiCanvasLiveScene {
   const ordered = [...frame.objects].sort(compareNewestFirst);
-  const outcome = ordered.find((object) => object.type.toLowerCase() === "thread");
+  const projectScoped = "projectId" in frame;
+  const outcome = projectScoped
+    ? ordered.find(isProductOutcome)
+    : ordered.find((object) => object.type.toLowerCase() === "thread");
   const showOutcome = outcome !== undefined && !isEmptyThread(outcome, ordered.length);
   const latestArtifactRevision = latestSemanticArtifactRevision(ordered);
-  const semanticObjects = ordered.filter(
-    (object) => artifactRevision(object) === latestArtifactRevision,
-  );
+  const semanticObjects =
+    "projectId" in frame
+      ? ordered.filter((object) => !isMechanical(object))
+      : ordered.filter((object) => artifactRevision(object) === latestArtifactRevision);
 
   const judgment =
     semanticObjects.find(isJudgment) ??
@@ -36,13 +43,24 @@ export function projectCrokiPerceptionFrame(frame: CrokiPerceptionFrame): CrokiC
   const primaryIds = new Set(
     [outcome, ...conclusions, judgment].filter(isDefined).map((object) => object.id),
   );
+  const workstreams = projectScoped
+    ? ordered.filter(
+        (object) => object.type.toLowerCase() === "thread" && !isEmptyThread(object, 1),
+      )
+    : [];
+  for (const workstream of workstreams) primaryIds.add(workstream.id);
   const evidence = ordered.filter((object) => !primaryIds.has(object.id));
 
   const objects: CrokiCanvasLiveObject[] = [];
   if (showOutcome)
-    objects.push(toLiveObject(outcome, { source: "outcome", authority: "Current task" }));
+    objects.push(toLiveObject(outcome, { source: "outcome", authority: "Current outcome" }));
   objects.push(...conclusions.map((object) => toLiveObject(object, { source: "context" })));
   if (judgment) objects.push(toLiveObject(judgment, { source: "attention" }));
+  objects.push(
+    ...workstreams.map((object) =>
+      toLiveObject(object, { source: "agent", authority: workstreamAuthority(object) }),
+    ),
+  );
   if (evidence.length > 0) objects.push(collapsedEvidenceObject(evidence));
 
   const visibleIds = new Set(objects.map((object) => object.id));
@@ -60,7 +78,23 @@ export function projectCrokiPerceptionFrame(frame: CrokiPerceptionFrame): CrokiC
     revisionObjects: [],
     updatedAt,
     perceptionRevision: frame.revision,
+    perceptionScope: "projectId" in frame ? "project" : "thread",
+    ...("status" in frame ? { perceptionStatus: frame.status } : {}),
   };
+}
+
+function isProductOutcome(object: CrokiPerceptionObject): boolean {
+  const type = object.type.toLowerCase();
+  const role = semanticRole(object);
+  return (
+    type === "outcome" || type === "release" || type === "verified-outcome" || role === "outcome"
+  );
+}
+
+function workstreamAuthority(object: CrokiPerceptionObject): string {
+  if (object.state === "running" || object.state === "inProgress") return "In progress";
+  if (object.state === "blocked" || object.state === "error") return "Needs attention";
+  return "Source Thread";
 }
 
 function isEmptyThread(object: CrokiPerceptionObject, objectCount: number): boolean {
@@ -84,9 +118,11 @@ function toLiveObject(
     selectionId: object.id,
     perceptionObject: object,
     ...(object.source.uri ? { perceptionSourceUri: object.source.uri } : {}),
-    ...(object.source.kind === "thread" && object.source.id
-      ? { sourceThreadId: object.source.id }
-      : {}),
+    ...(object.source.sourceThreadId
+      ? { sourceThreadId: object.source.sourceThreadId }
+      : object.source.kind === "thread" && object.source.id
+        ? { sourceThreadId: object.source.id }
+        : {}),
     affordances: perceptionAffordances(object),
   };
 }

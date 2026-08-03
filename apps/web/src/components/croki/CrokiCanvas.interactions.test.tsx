@@ -65,6 +65,7 @@ vi.mock("./CrokiCanvasLiveField", () => ({
 }));
 
 import { CrokiCanvas } from "./CrokiCanvas";
+import { canvasThreadFocusIds } from "./crokiCanvasThreadFocus";
 
 describe("CrokiCanvas live perception interactions", () => {
   beforeEach(() => {
@@ -149,6 +150,40 @@ describe("CrokiCanvas live perception interactions", () => {
     expect(onSelectArtifactNodes).toHaveBeenLastCalledWith(["activity:preview-1"]);
     expect(mocks.selectNode).not.toHaveBeenCalled();
   });
+
+  it("addresses live conclusions and collapsed evidence through stable sensed ids", () => {
+    expect(
+      canvasThreadFocusIds([
+        {
+          selectionId: "conclusion:1",
+          perceptionObject: { id: "conclusion:1" },
+        },
+        {
+          perceptionObjects: [{ id: "source:1" }, { id: "source:2" }],
+        },
+      ]),
+    ).toEqual(["conclusion:1", "source:1", "source:2"]);
+  });
+
+  it("wires a direct Canvas row action to the native Thread focus bridge", () => {
+    const onUseSelectionInThread = vi.fn();
+    renderCanvas({ onUseSelectionInThread });
+    const field = mocks.fieldProps as {
+      readonly onAddress: (object: {
+        readonly id: string;
+        readonly selectionId: string;
+        readonly perceptionObject: { readonly id: string };
+      }) => void;
+    };
+
+    field.onAddress({
+      id: "artifact:judgment-1",
+      selectionId: "artifact:judgment-1",
+      perceptionObject: { id: "artifact:judgment-1" },
+    });
+
+    expect(onUseSelectionInThread).toHaveBeenLastCalledWith(["artifact:judgment-1"]);
+  });
 });
 
 function renderCanvas(
@@ -156,6 +191,7 @@ function renderCanvas(
     readonly artifact?: CrokiCanvasArtifactLike;
     readonly onOpenReference?: () => void;
     readonly onSelectArtifactNodes?: (ids: readonly string[]) => void;
+    readonly onUseSelectionInThread?: (ids: readonly string[]) => void;
   } = {},
 ) {
   return renderToStaticMarkup(

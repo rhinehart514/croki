@@ -55,6 +55,7 @@ function AutoSettleDaysInput({
 }
 
 export function BetaSettingsPanel() {
+  const canvasEnabled = useClientSettings((settings) => settings.canvasEnabled);
   const sidebarV2Enabled = useSidebarV2Enabled();
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
@@ -64,6 +65,17 @@ export function BetaSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection title="Beta features">
+        <SettingsRow
+          title="Canvas"
+          description="Show the project Canvas and let agent turns use Canvas context."
+          control={
+            <Switch
+              checked={canvasEnabled}
+              onCheckedChange={(checked) => updateSettings({ canvasEnabled: Boolean(checked) })}
+              aria-label="Enable the Canvas beta"
+            />
+          }
+        />
         <SettingsRow
           title="Sidebar v2"
           description="One flat thread list in creation order. Active work renders as rich cards; settled threads collapse to compact rows. Settling requires an up-to-date server — on older servers threads simply stay active. Switch back any time."

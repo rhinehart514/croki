@@ -1098,16 +1098,30 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+  const assistantImages = row.message.attachments ?? [];
 
   return (
     <>
       <div className="relative min-w-0 px-1 py-0.5">
+        {assistantImages.length > 0 ? (
+          <div className="mb-3 grid max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
+            {assistantImages.map((image) => (
+              <AssistantTimelineImage
+                key={image.id}
+                image={image}
+                images={assistantImages}
+                onExpand={ctx.onImageExpand}
+              />
+            ))}
+          </div>
+        ) : null}
         <ChatMarkdown
           text={messageText}
           cwd={ctx.markdownCwd}
           threadRef={ctx.threadRef ?? undefined}
           isStreaming={Boolean(row.message.streaming)}
           skills={ctx.skills}
+          onImageExpand={ctx.onImageExpand}
         />
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
@@ -1135,6 +1149,43 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         ) : null}
       </div>
     </>
+  );
+}
+
+function AssistantTimelineImage(props: {
+  readonly image: NonNullable<TimelineMessage["attachments"]>[number];
+  readonly images: NonNullable<TimelineMessage["attachments"]>;
+  readonly onExpand: (preview: ExpandedImagePreview) => void;
+}) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="overflow-hidden border border-border/70 bg-black">
+      {props.image.previewUrl && !failed ? (
+        <button
+          type="button"
+          className="block w-full cursor-zoom-in outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          aria-label={`Expand ${props.image.name}`}
+          onClick={() => {
+            const preview = buildExpandedImagePreview(props.images, props.image.id);
+            if (preview) props.onExpand(preview);
+          }}
+        >
+          <img
+            src={props.image.previewUrl}
+            alt={props.image.name}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            className="block max-h-[34rem] w-full object-contain"
+            onError={() => setFailed(true)}
+          />
+        </button>
+      ) : (
+        <div className="flex min-h-20 items-center justify-center px-3 py-4 text-xs text-muted-foreground">
+          {failed ? "Image unavailable" : props.image.name}
+        </div>
+      )}
+    </div>
   );
 }
 

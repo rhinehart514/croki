@@ -10,6 +10,7 @@ import { projectCrokiCanvasLiveScene } from "./crokiCanvasLiveScene";
 import { CrokiTrueCanvasHeader } from "./CrokiTrueCanvasHeader";
 import { CrokiTrueCanvasInspector } from "./CrokiTrueCanvasInspector";
 import { selectCrokiCanvasNode } from "./crokiCanvasDraftStore";
+import { canvasThreadFocusIds } from "./crokiCanvasThreadFocus";
 import { useCrokiCanvasController } from "./useCrokiCanvasController";
 
 /**
@@ -137,14 +138,20 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
       props.onViewRevision?.(object.artifact);
     }
   };
-  const useSelection = () => {
-    const nodes = selectedObjects.flatMap((object) => {
+  const addressObjects = (objects: readonly CrokiCanvasLiveObject[]) => {
+    const nodes = objects.flatMap((object) => {
       if (!object.artifact || !object.selectionId) return [];
       return object.artifact.nodes.filter((node) => node.id === object.selectionId);
     });
-    if (nodes.length === 0) return;
-    props.onUseArtifactSelection?.(nodes);
-    props.onUseSelectionInThread?.(nodes.map((node) => node.id));
+    if (nodes.length > 0) props.onUseArtifactSelection?.(nodes);
+    const ids = canvasThreadFocusIds(objects);
+    if (ids.length > 0) props.onUseSelectionInThread?.(ids);
+  };
+  const useSelection = () => {
+    addressObjects(selectedObjects);
+  };
+  const addressObject = (object: CrokiCanvasLiveObject) => {
+    addressObjects([object]);
   };
   const approveSelection = () => {
     const ids = selectedObjects.map((object) => object.selectionId ?? object.id);
@@ -229,6 +236,7 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
           focusMode="all"
           selectedIds={selectedIds}
           onClearSelection={clearSelection}
+          onAddress={addressObject}
           onOpen={openObject}
           onSelect={selectObject}
         />

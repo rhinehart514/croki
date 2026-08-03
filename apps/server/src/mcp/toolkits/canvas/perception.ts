@@ -1,4 +1,4 @@
-import type { OrchestrationThread, OrchestrationThreadActivity } from "@croki/contracts";
+import type { OrchestrationThread, OrchestrationThreadActivity, ThreadId } from "@croki/contracts";
 import {
   getCrokiCanvasArtifactFromActivity,
   parseCrokiCanvasPresentedActivityPayload,
@@ -183,6 +183,7 @@ function projectScene(
   const threadSource: CrokiSenseSource = {
     kind: "thread",
     id: String(thread.id),
+    sourceThreadId: thread.id,
     turnId: thread.latestTurn ? String(thread.latestTurn.turnId) : null,
     observedAt: thread.updatedAt,
   };
@@ -218,6 +219,7 @@ function projectScene(
       source: {
         kind: "turn",
         id: String(thread.latestTurn.turnId),
+        sourceThreadId: thread.id,
         turnId: String(thread.latestTurn.turnId),
         observedAt: thread.latestTurn.completedAt ?? thread.latestTurn.requestedAt,
       },
@@ -244,7 +246,7 @@ function projectScene(
     // A latest artifact is represented by its semantic nodes below. The
     // activity receipt itself remains useful as provenance, so retain it too.
     const revision = activityRevisions.get(String(activity.id)) ?? index + 1;
-    const projected = projectActivity(activity, revision);
+    const projected = projectActivity(activity, revision, thread.id);
     objects.push(projected.object);
     objectByActivityId.set(String(activity.id), projected.object.id);
     if (projected.taskId) objectByTaskId.set(projected.taskId, projected.object.id);
@@ -273,6 +275,7 @@ function projectScene(
     const checkpointSource: CrokiSenseSource = {
       kind: "checkpoint",
       id: String(checkpoint.checkpointRef),
+      sourceThreadId: thread.id,
       turnId: String(checkpoint.turnId),
       observedAt: checkpoint.completedAt,
     };
@@ -312,7 +315,7 @@ function projectScene(
     if (sourceFilter && !sourceFilter.has("canvas")) continue;
     const artifact = artifactRevision.artifact;
     const artifactObjectId = `artifact:${artifact.id}`;
-    const artifactSource = sourceForActivity(artifactRevision.activity, "canvas");
+    const artifactSource = sourceForActivity(artifactRevision.activity, "canvas", thread.id);
     objects.push({
       id: artifactObjectId,
       type: "canvas-artifact",
@@ -348,6 +351,7 @@ function projectScene(
           artifactRevision.activity,
           artifactRevision.revision,
           objectId,
+          thread.id,
         ),
       );
       relationships.push(
@@ -415,6 +419,7 @@ export const projectPerceptionFrame = projectThreadPerception;
 function projectActivity(
   activity: OrchestrationThreadActivity,
   revision: number,
+  sourceThreadId: ThreadId,
 ): ActivityProjection {
   const payload = record(activity.payload);
   const taskId = text(payload?.taskId);
@@ -431,7 +436,7 @@ function projectActivity(
       summary,
       state: activity.tone,
       revision,
-      source: sourceForActivity(activity),
+      source: sourceForActivity(activity, kind, sourceThreadId),
       affordances: affordancesForActivity(activity),
       data: {
         activityKind: activity.kind,
@@ -456,6 +461,7 @@ function projectArtifactNode(
   activity: OrchestrationThreadActivity,
   revision: number,
   objectId: string,
+  sourceThreadId: ThreadId,
 ): CrokiSenseObject {
   return {
     id: objectId,
@@ -464,7 +470,7 @@ function projectArtifactNode(
     ...(node.body ? { summary: node.body } : {}),
     state: "observed",
     revision,
-    source: sourceForActivity(activity, "canvas"),
+    source: sourceForActivity(activity, "canvas", sourceThreadId),
     affordances: [affordance("inspect", "Inspect evidence", "read")],
     data: {
       artifactId: String(artifact.id),
@@ -541,11 +547,13 @@ function relationship(
 function sourceForActivity(
   activity: OrchestrationThreadActivity,
   kind = sourceFamily(activity.kind, record(activity.payload)),
+  sourceThreadId?: ThreadId,
 ): CrokiSenseSource {
   return {
     kind,
     id: String(activity.id),
     activityId: String(activity.id),
+    ...(sourceThreadId !== undefined ? { sourceThreadId } : {}),
     turnId: activity.turnId === null ? null : String(activity.turnId),
     observedAt: activity.createdAt,
   };

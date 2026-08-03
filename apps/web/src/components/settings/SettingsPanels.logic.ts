@@ -190,3 +190,22 @@ export function buildProviderInstanceUpdatePatch(input: {
       : {}),
   };
 }
+
+/**
+ * Every built-in driver gets a usable default slot in Settings. Drivers that
+ * predate provider instances still inherit their legacy config; newer drivers
+ * such as OpenClaw render immediately and persist only after the user edits them.
+ */
+export function resolveDefaultProviderInstance(input: {
+  readonly driver: ProviderDriverKind;
+  readonly explicitInstance?: ProviderInstanceConfig | undefined;
+  readonly legacyConfig?: { readonly enabled: boolean } | undefined;
+}): ProviderInstanceConfig {
+  return (
+    input.explicitInstance ?? {
+      driver: input.driver,
+      enabled: input.legacyConfig?.enabled ?? true,
+      config: input.legacyConfig ?? {},
+    }
+  );
+}

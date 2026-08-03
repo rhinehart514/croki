@@ -171,7 +171,7 @@ export function appendCanvasSelectionToPrompt(
 export function appendCrokiPerceptionFocusToPrompt(
   prompt: string,
   selectedIds: readonly string[],
-  frame: CanvasPerceptionFrame | null | undefined,
+  frame: Pick<CanvasPerceptionFrame, "objects"> | null | undefined,
 ): string {
   if (!frame || selectedIds.length === 0) return prompt;
   const ids = new Set(selectedIds);

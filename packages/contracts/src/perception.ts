@@ -8,7 +8,14 @@
  */
 import * as Schema from "effect/Schema";
 
-import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  IsoDateTime,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+  TurnId,
+} from "./baseSchemas.ts";
 
 const PerceptionId = TrimmedNonEmptyString.check(Schema.isMaxLength(256));
 const PerceptionKind = TrimmedNonEmptyString.check(Schema.isMaxLength(128));
@@ -35,8 +42,10 @@ export const CrokiPerceptionProvenance = Schema.Struct({
   id: Schema.optional(Schema.String),
   uri: Schema.optional(Schema.String),
   activityId: Schema.optional(Schema.String),
+  /** The durable Thread that produced this observation. */
+  sourceThreadId: Schema.optional(ThreadId),
   turnId: Schema.NullOr(Schema.String),
-  observedAt: Schema.String,
+  observedAt: IsoDateTime,
 });
 export type CrokiPerceptionProvenance = typeof CrokiPerceptionProvenance.Type;
 
@@ -114,3 +123,31 @@ export const CrokiPerceptionFrame = Schema.Struct({
   truncated: Schema.Boolean,
 });
 export type CrokiPerceptionFrame = typeof CrokiPerceptionFrame.Type;
+
+/**
+ * The durable, project-scoped working model. It is a projection of source
+ * Thread activities, not a second activity stream or an authored document.
+ * `sourceThreadIds` and provenance on every source object let a client open
+ * the originating Thread without guessing from object ids.
+ */
+export const CrokiProjectPerceptionSnapshot = Schema.Struct({
+  projectId: ProjectId,
+  revision: PerceptionRevision,
+  sourceRevision: PerceptionRevision,
+  changed: Schema.Boolean,
+  objects: Schema.Array(CrokiPerceptionObject),
+  relationships: Schema.Array(CrokiPerceptionRelationship),
+  delta: CrokiPerceptionDelta,
+  latestActivityAt: Schema.NullOr(IsoDateTime),
+  sourceThreadIds: Schema.Array(ThreadId),
+  activeTurnIds: Schema.Array(TurnId),
+  truncated: Schema.Boolean,
+  /** A read can expose a lagging persisted projection without claiming it is current. */
+  stale: Schema.Boolean,
+  status: Schema.Literals(["ready", "stale", "rebuilding"]),
+});
+export type CrokiProjectPerceptionSnapshot = typeof CrokiProjectPerceptionSnapshot.Type;
+
+/** Compatibility spelling for callers that refer to the project model as a frame. */
+export const CrokiProjectPerceptionFrame = CrokiProjectPerceptionSnapshot;
+export type CrokiProjectPerceptionFrame = CrokiProjectPerceptionSnapshot;

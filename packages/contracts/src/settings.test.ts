@@ -16,6 +16,14 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 
+describe("ClientSettings Canvas beta", () => {
+  it("defaults off and preserves an explicit opt-in", () => {
+    expect(decodeClientSettings({}).canvasEnabled).toBe(false);
+    expect(decodeClientSettings({ canvasEnabled: true }).canvasEnabled).toBe(true);
+    expect(decodeClientSettingsPatch({ canvasEnabled: true }).canvasEnabled).toBe(true);
+  });
+});
+
 describe("ClientSettings word wrap", () => {
   it("defaults word wrap on", () => {
     expect(decodeClientSettings({}).wordWrap).toBe(true);

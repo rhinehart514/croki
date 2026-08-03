@@ -224,6 +224,45 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("renders assistant image attachments and markdown images inline", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "entry-assistant-image",
+            kind: "message",
+            createdAt: MESSAGE_CREATED_AT,
+            message: {
+              id: MessageId.make("message-assistant-image"),
+              role: "assistant",
+              text: "Rendered result\n\n![Remote result](https://example.com/result.png)",
+              attachments: [
+                {
+                  type: "image",
+                  id: "assistant-image-1",
+                  name: "generated-result.png",
+                  mimeType: "image/png",
+                  sizeBytes: 128,
+                  previewUrl: "https://example.com/attachment.png",
+                },
+              ],
+              turnId: null,
+              createdAt: MESSAGE_CREATED_AT,
+              updatedAt: MESSAGE_CREATED_AT,
+              streaming: false,
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('aria-label="Expand generated-result.png"');
+    expect(markup).toContain('data-chat-image-state="ready"');
+    expect(markup).toContain('aria-label="Expand Remote result"');
+    expect(markup).toContain('referrerPolicy="no-referrer"');
+  });
+
   it("uses the larger leading inset only when the top fade is enabled", () => {
     const timelineEntries = [buildUserTimelineEntry("Hello")];
 

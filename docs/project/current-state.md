@@ -1,7 +1,7 @@
 # Current project state
 
-Last audited: 2026-08-02
-Code baseline: Croki 0.4.3 working-understanding Canvas on `croki/main`
+Last audited: 2026-08-03
+Code baseline: Croki 0.4.3 shared-product-model Canvas on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow Croki overlay on Croki rather than a second agent runtime.
@@ -62,11 +62,24 @@ Sense calls are read-only and return frames directly. Canvas derives the same
 frame from ordinary Thread activity, so neither models nor founders maintain a
 second activity stream or scene.
 
-Canvas compresses that frame for a founder: one current outcome, up to three
-semantic conclusions, one judgment or blocker, and collapsed source evidence.
-Raw commands, context-window updates, checkpoints, and receipts remain
-inspectable without filling the field with runtime telemetry. The complete raw
-frame remains available to model-facing senses.
+Canvas compresses project activity for a founder: one current outcome, up to
+three semantic conclusions drawn across sibling Threads, one judgment or
+blocker, and collapsed source evidence. The server persists this derived model
+per Project and rebuilds it from durable Thread activity, so it survives restart
+and updates without opening the source Thread. Raw commands, context-window
+updates, checkpoints, and receipts remain inspectable without filling the field
+with runtime telemetry. Every visible object retains source-Thread provenance.
+
+Canvas owns the workspace as soon as it opens on desktop and narrow widths.
+Founder judgments come before passive context, a single source Thread collapses
+to provenance, and `Address in Thread` acts directly from the object without
+first opening an inspector.
+
+The founder can choose `Address in Thread` directly on any meaningful object.
+Croki focuses the native composer and carries only stable sensed IDs into the
+sent turn; the provider can inspect their sources through read-only Senses.
+Canvas never injects bodies, grants authority, or changes provider behavior.
+Failed sends preserve the focus and successful turn starts clear it.
 
 `.croki/context.json` remains repository-owned project truth. It may be projected
 into a frame when relevant, but Canvas does not write canon, promote proposals,

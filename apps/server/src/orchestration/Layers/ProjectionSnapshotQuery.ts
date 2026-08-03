@@ -1,6 +1,7 @@
 import {
   ChatAttachment,
   CheckpointRef,
+  CrokiProjectPerceptionSnapshot,
   IsoDateTime,
   MessageId,
   NonNegativeInt,
@@ -42,6 +43,8 @@ import {
   type ProjectionRepositoryError,
 } from "../../persistence/Errors.ts";
 import { ProjectionCheckpoint } from "../../persistence/Services/ProjectionCheckpoints.ts";
+import { ProjectionProjectPerceptionRepository } from "../../persistence/Services/ProjectionProjectPerception.ts";
+import { ProjectionProjectPerceptionRepositoryLive } from "../../persistence/Layers/ProjectionProjectPerception.ts";
 import { ProjectionProject } from "../../persistence/Services/ProjectionProjects.ts";
 import { ProjectionState } from "../../persistence/Services/ProjectionState.ts";
 import { ProjectionThreadActivity } from "../../persistence/Services/ProjectionThreadActivities.ts";
@@ -263,6 +266,7 @@ function toPersistenceSqlOrDecodeError(sqlOperation: string, decodeOperation: st
 
 const makeProjectionSnapshotQuery = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const projectPerceptionRepository = yield* ProjectionProjectPerceptionRepository;
   const repositoryIdentityResolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
   const repositoryIdentityResolutionConcurrency = 4;
   const resolveRepositoryIdentitiesForProjects = Effect.fn(
@@ -1775,6 +1779,46 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         ),
       );
 
+  const getProjectPerception: ProjectionSnapshotQueryShape["getProjectPerception"] = (input) =>
+    Effect.gen(function* () {
+      const row = yield* projectPerceptionRepository.getByProjectId({
+        projectId: input.projectId,
+      });
+      if (Option.isNone(row)) return Option.none<CrokiProjectPerceptionSnapshot>();
+
+      // `revision` is scoped to this project. An event in a sibling project
+      // must not make this row look stale merely because its global sequence
+      // is newer; the project projector updates this row for every event that
+      // can affect it.
+      const stale = row.value.snapshot.stale;
+      const status = row.value.snapshot.status;
+      const sinceRevision = input.sinceRevision ?? 0;
+      const limit = input.limit ?? 200;
+      const objects = row.value.snapshot.objects.slice(0, limit);
+      const visibleObjectIds = new Set(objects.map((object) => object.id));
+      const relationships = row.value.snapshot.relationships.filter(
+        (relationship) =>
+          visibleObjectIds.has(relationship.from) && visibleObjectIds.has(relationship.to),
+      );
+
+      return Option.some({
+        ...row.value.snapshot,
+        objects,
+        relationships,
+        changed: row.value.snapshot.revision > sinceRevision,
+        delta: {
+          sinceRevision,
+          addedObjects: row.value.snapshot.revision > sinceRevision ? objects : [],
+          updatedObjects: [],
+          removedObjectIds: [],
+          addedRelationships: row.value.snapshot.revision > sinceRevision ? relationships : [],
+          removedRelationshipIds: [],
+        },
+        stale,
+        status,
+      });
+    });
+
   const getProjectShellById: ProjectionSnapshotQueryShape["getProjectShellById"] = (projectId) =>
     getActiveProjectRowById({ projectId }).pipe(
       Effect.mapError(
@@ -2118,6 +2162,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getSnapshot,
     getShellSnapshot,
     getArchivedShellSnapshot,
+    getProjectPerception,
     getSnapshotSequence,
     getCounts,
     getActiveProjectByWorkspaceRoot,
@@ -2134,4 +2179,4 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 export const OrchestrationProjectionSnapshotQueryLive = Layer.effect(
   ProjectionSnapshotQuery,
   makeProjectionSnapshotQuery,
-);
+).pipe(Layer.provideMerge(ProjectionProjectPerceptionRepositoryLive));

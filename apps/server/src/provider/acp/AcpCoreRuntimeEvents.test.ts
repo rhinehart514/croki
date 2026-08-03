@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   makeAcpAssistantItemEvent,
   makeAcpContentDeltaEvent,
+  makeAcpContentImageEvent,
   makeAcpPlanUpdatedEvent,
   makeAcpRequestOpenedEvent,
   makeAcpRequestResolvedEvent,
@@ -131,6 +132,28 @@ describe("AcpCoreRuntimeEvents", () => {
       itemId: "assistant:session-1:segment:0",
       payload: {
         delta: "hello",
+      },
+    });
+
+    expect(
+      makeAcpContentImageEvent({
+        stamp,
+        provider: ProviderDriverKind.make("cursor"),
+        threadId: "thread-1" as never,
+        turnId,
+        itemId: "assistant:session-1:segment:0",
+        data: "aGVsbG8=",
+        mimeType: "image/png",
+        uri: "file:///tmp/output.png",
+        rawPayload: { data: "[redacted]" },
+      }),
+    ).toMatchObject({
+      type: "content.image",
+      itemId: "assistant:session-1:segment:0",
+      payload: {
+        data: "aGVsbG8=",
+        mimeType: "image/png",
+        uri: "file:///tmp/output.png",
       },
     });
 

@@ -8,6 +8,7 @@ import {
   OrchestrationThread,
   ThreadForkRequestedPayload,
   TurnId,
+  mergeChatAttachments,
 } from "@croki/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -618,7 +619,12 @@ export function projectEvent(
                     updatedAt: message.updatedAt,
                     turnId: message.turnId,
                     ...(message.attachments !== undefined
-                      ? { attachments: message.attachments }
+                      ? {
+                          attachments:
+                            message.streaming && entry.role === "assistant"
+                              ? mergeChatAttachments(entry.attachments, message.attachments)
+                              : message.attachments,
+                        }
                       : {}),
                   }
                 : entry,

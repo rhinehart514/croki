@@ -20,10 +20,19 @@ export function CrokiTrueCanvasHeader(props: CrokiTrueCanvasHeaderProps) {
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <h1 className="truncate text-[12px] font-medium tracking-[0.04em] text-white">Canvas</h1>
-          <span className="text-[10px] text-zinc-500">Working understanding</span>
+          <span className="text-[10px] text-zinc-500">
+            {props.scene.perceptionScope === "project"
+              ? "Shared product model"
+              : "Working understanding"}
+          </span>
         </div>
         <p className="mt-0.5 truncate text-[10px] text-zinc-600">
-          Updated {formatTime(props.scene.updatedAt)}
+          {props.scene.perceptionStatus === "stale"
+            ? "Last known"
+            : props.scene.perceptionStatus === "rebuilding"
+              ? "Rebuilding from Threads"
+              : "Updated"}{" "}
+          {formatTime(props.scene.updatedAt)}
           {props.scene.perceptionRevision !== undefined
             ? ` · r${props.scene.perceptionRevision}`
             : ""}

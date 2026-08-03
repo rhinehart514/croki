@@ -240,3 +240,34 @@ export function makeAcpContentDeltaEvent(input: {
     },
   };
 }
+
+export function makeAcpContentImageEvent(input: {
+  readonly stamp: AcpEventStamp;
+  readonly provider: ProviderDriverKind;
+  readonly threadId: ThreadId;
+  readonly turnId: TurnId | undefined;
+  readonly itemId?: string;
+  readonly data: string;
+  readonly mimeType: string;
+  readonly uri?: string | null;
+  readonly rawPayload: unknown;
+}): ProviderRuntimeEvent {
+  return {
+    type: "content.image",
+    ...input.stamp,
+    provider: input.provider,
+    threadId: input.threadId,
+    turnId: input.turnId,
+    ...(input.itemId ? { itemId: RuntimeItemId.make(input.itemId) } : {}),
+    payload: {
+      data: input.data,
+      mimeType: input.mimeType,
+      ...(input.uri !== undefined ? { uri: input.uri } : {}),
+    },
+    raw: {
+      source: "acp.jsonrpc",
+      method: "session/update",
+      payload: input.rawPayload,
+    },
+  };
+}
