@@ -87,4 +87,16 @@ describe("projectProjectPerception", () => {
     expect(changed.changed).toBe(true);
     expect(changed.delta.addedObjects.length).toBeGreaterThan(0);
   });
+
+  it("applies the requested limit after merging sibling Threads", () => {
+    const snapshot = projectProjectPerception(
+      projectId,
+      [thread("thread-a", "Thread A"), thread("thread-b", "Thread B")],
+      { revision: 11, limit: 1 },
+    );
+
+    expect(snapshot.objects).toHaveLength(1);
+    expect(snapshot.relationships).toEqual([]);
+    expect(snapshot.truncated).toBe(true);
+  });
 });

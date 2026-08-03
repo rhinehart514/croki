@@ -119,7 +119,7 @@ export function projectProjectPerception(
         right.source.observedAt.localeCompare(left.source.observedAt) ||
         left.id.localeCompare(right.id),
     )
-    .slice(0, MAX_PROJECT_OBJECTS);
+    .slice(0, Math.min(limit, MAX_PROJECT_OBJECTS));
   truncated ||= objects.length < objectsById.size;
   const visibleObjectIds = new Set(objects.map((object) => object.id));
   const relationships = [...relationshipsById.values()]
