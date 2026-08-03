@@ -232,4 +232,38 @@ describe("deriveCoordinationWorkstreams", () => {
       }),
     ]);
   });
+
+  it("maps Codex collaborator lifecycle states to visible workstream statuses", () => {
+    const activities = [
+      makeActivity({
+        id: "collab-statuses",
+        kind: "tool.completed",
+        turnId: "turn-1",
+        payload: {
+          itemType: "collab_agent_tool_call",
+          data: {
+            item: {
+              type: "collabAgentToolCall",
+              receiverThreadIds: ["pending-agent", "interrupted-agent", "missing-agent"],
+              agentsStates: {
+                "pending-agent": { status: "pendingInit" },
+                "interrupted-agent": { status: "interrupted" },
+                "missing-agent": { status: "notFound" },
+              },
+            },
+          },
+        },
+      }),
+    ];
+
+    expect(
+      deriveCoordinationWorkstreams(activities)
+        .map(({ taskId, status }) => ({ taskId, status }))
+        .toSorted((left, right) => left.taskId.localeCompare(right.taskId)),
+    ).toEqual([
+      { taskId: "interrupted-agent", status: "stopped" },
+      { taskId: "missing-agent", status: "failed" },
+      { taskId: "pending-agent", status: "waiting" },
+    ]);
+  });
 });

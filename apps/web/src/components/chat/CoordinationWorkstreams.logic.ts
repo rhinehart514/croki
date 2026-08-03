@@ -359,6 +359,7 @@ export function isCoordinationTaskActivity(activity: OrchestrationThreadActivity
 function collabAgentStatus(value: unknown): CoordinationWorkstreamStatus {
   switch (asString(value)?.toLowerCase()) {
     case "pending":
+    case "pendinginit":
       return "waiting";
     case "running":
       return "running";
@@ -366,6 +367,9 @@ function collabAgentStatus(value: unknown): CoordinationWorkstreamStatus {
       return "completed";
     case "errored":
       return "failed";
+    case "notfound":
+      return "failed";
+    case "interrupted":
     case "shutdown":
       return "stopped";
     default:
