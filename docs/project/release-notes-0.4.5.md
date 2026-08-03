@@ -14,6 +14,24 @@ completely. The command palette no longer shows a disabled **Open Canvas**
 action, and previously recorded Canvas presentations no longer appear in the
 Thread timeline. The setting remains available so Canvas can be enabled again.
 
+### Thread transitions and streamed responses are smoother
+
+Thread timelines now reveal as one surface after their virtualized rows mount,
+preventing cached and uncached conversations from flashing into place in
+different stages. Newly appended assistant text is paced in bounded chunks so
+large provider updates remain readable without falling behind the live turn.
+Reduced-motion preferences bypass the pacing and transition behavior.
+
+### Release media workflow is repository-owned
+
+The repository now includes an optional Remotion-based release-artifacts
+workspace, Croki project actions, selected product captures, provenance, review
+records, and validation scripts. Generated renders and dependency caches remain
+local. The workflow keeps external claims tied to inspected product evidence
+without adding media-production state to Canvas or the application runtime. Its
+validator continues to block final-media publication until founder review and
+the documented external motion-authoring handoff are complete.
+
 ### Parallel workers are inspectable child chats
 
 Codex parallel workers now persist as read-only child Threads nested beneath

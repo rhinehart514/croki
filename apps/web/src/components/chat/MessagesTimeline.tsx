@@ -121,6 +121,8 @@ import {
 import type { CrokiContextReceipt } from "@croki/shared/crokiContext";
 import { CrokiAppliedContextReceipt } from "./CrokiContextPresentation";
 import { CoordinationWorkstreams } from "./CoordinationWorkstreams";
+import { useSmoothStreamingText } from "./useSmoothStreamingText";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -521,7 +523,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   return (
     <TimelineRowCtx value={sharedState}>
       <TimelineRowActivityCtx value={activityState}>
-        <div ref={setTimelineViewportElement} className="relative h-full min-h-0">
+        <div
+          ref={setTimelineViewportElement}
+          className="thread-timeline-enter relative h-full min-h-0"
+        >
           <LegendList<MessagesTimelineRow>
             ref={listRef}
             data={rows}
@@ -1098,6 +1103,12 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const displayedMessageText = useSmoothStreamingText({
+    text: messageText,
+    streaming: Boolean(row.message.streaming),
+    reducedMotion,
+  });
   const assistantImages = row.message.attachments ?? [];
 
   return (
@@ -1116,7 +1127,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           </div>
         ) : null}
         <ChatMarkdown
-          text={messageText}
+          text={displayedMessageText}
           cwd={ctx.markdownCwd}
           threadRef={ctx.threadRef ?? undefined}
           isStreaming={Boolean(row.message.streaming)}

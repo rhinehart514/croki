@@ -7,6 +7,40 @@
       "command": "vp i && ln -sf $CROKI_PROJECT_ROOT/.env .env && ln -sf $CROKI_PROJECT_ROOT/infra/relay/.env infra/relay/.env",
       "icon": "configure",
       "runOnWorktreeCreate": true
+    },
+    {
+      "name": "Setup Release Artifacts",
+      "command": "corepack pnpm --dir experiments/release-artifacts install",
+      "icon": "configure"
+    },
+    {
+      "name": "Launch Studio",
+      "command": "corepack pnpm --dir experiments/release-artifacts studio",
+      "icon": "play",
+      "previewUrl": "http://localhost:3300",
+      "autoOpenPreview": true
+    },
+    {
+      "name": "Render Launch Draft",
+      "command": "corepack pnpm --dir experiments/release-artifacts render:draft && corepack pnpm --dir experiments/release-artifacts review:build",
+      "icon": "play"
+    },
+    {
+      "name": "Review Launch Draft",
+      "command": "corepack pnpm --dir experiments/release-artifacts review",
+      "icon": "play",
+      "previewUrl": "http://localhost:4173/review/",
+      "autoOpenPreview": true
+    },
+    {
+      "name": "Render Launch Final",
+      "command": "corepack pnpm --dir experiments/release-artifacts render:final",
+      "icon": "play"
+    },
+    {
+      "name": "Validate Release Artifacts",
+      "command": "corepack pnpm --dir experiments/release-artifacts validate",
+      "icon": "configure"
     }
   ]
 }

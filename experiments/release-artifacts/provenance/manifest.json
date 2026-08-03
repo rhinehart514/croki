@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "sourceCommit": "cb549169ea687ce1dc3b3c522a2ef0d08b4da3ea",
+  "production": {
+    "creativeStatus": "rejected",
+    "durationSeconds": 27,
+    "fps": 30,
+    "voice": "none",
+    "editor": "Remotion 4.0.502",
+    "mediaProcessing": "FFmpeg",
+    "font": "Inter v20 via @fontsource/inter 5.2.8 (OFL-1.1)",
+    "audio": "Deterministic FFmpeg synthesis normalized to -18 LUFS. No generated voice or licensed music.",
+    "audioTargetLufs": -18,
+    "maxTruePeakDbtp": -2
+  },
+  "claims": [
+    {
+      "text": "Croki is a coding environment for founders.",
+      "evidence": "README.md:3"
+    },
+    {
+      "text": "Threads are the durable spine.",
+      "evidence": "README.md:4"
+    },
+    {
+      "text": "Croki supports Codex, Claude, Cursor, Grok Build, and OpenCode.",
+      "evidence": "README.md:13"
+    },
+    {
+      "text": "Croki is open source.",
+      "evidence": "LICENSE"
+    }
+  ],
+  "captures": [
+    {
+      "id": "croki-thread-run",
+      "path": "public/captures/croki-thread-run.mp4",
+      "source": "Croki Preview recording browser-recording-ms9bb8n7",
+      "purpose": "Show the actual intent-to-agent-result loop."
+    },
+    {
+      "id": "croki-canvas-review",
+      "path": "public/captures/croki-canvas-review.mp4",
+      "source": "Croki Preview recording browser-recording-ms9bced1",
+      "purpose": "Show Thread and domain-agnostic Canvas context together."
+    },
+    {
+      "id": "croki-canvas-state",
+      "path": "public/captures/croki-canvas-state.png",
+      "source": "FFmpeg frame at 8 seconds from reviewed Croki Preview recording browser-recording-ms9bced1",
+      "purpose": "Preserve verified live-product evidence as a bounded inset without enlarging the low-resolution recording."
+    }
+  ],
+  "reviews": [
+    {
+      "id": "founder-review-01",
+      "date": "2026-07-31",
+      "status": "addressed",
+      "source": "Croki thread feedback",
+      "summary": "The first draft is too basic. Revision two must be driven by real Croki interaction and more immersive product-state motion."
+    },
+    {
+      "id": "founder-review-02",
+      "date": "2026-07-31",
+      "status": "addressed",
+      "source": "Croki thread feedback and Preview playback verification",
+      "summary": "The local review video did not play reliably. The server now supports HTTP byte ranges and HEAD requests; Croki Preview reported readyState 4 with playback advancing from 0 to 1.97 seconds without a media error."
+    },
+    {
+      "id": "founder-review-03",
+      "date": "2026-07-31",
+      "status": "in-progress",
+      "source": "Croki thread feedback",
+      "summary": "The current cut is visually rejected as ugly and hard to read. The replacement must use crisp legible product fragments and a genuine LottieLab-to-Remotion asset handoff."
+    }
+  ]
+}
