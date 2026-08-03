@@ -279,6 +279,17 @@ describe("MessagesTimeline", () => {
     expect(fadedMarkup).toContain("chat-timeline-scroll-fade");
   });
 
+  it("reveals a newly mounted thread timeline as one surface", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[buildUserTimelineEntry("Smooth handoff")]}
+      />,
+    );
+
+    expect(markup).toContain("thread-timeline-enter");
+  });
+
   it("attaches a content-free Canvas receipt to the matching sent message", () => {
     const receipt: CrokiContextReceipt = {
       status: "loaded",

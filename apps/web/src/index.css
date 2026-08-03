@@ -1496,6 +1496,30 @@ label:has(> select#reasoning-effort) select {
   }
 }
 
+/* A thread's virtualized rows can arrive a frame or two after its shell. Reveal
+   the finished timeline as one surface so cached and uncached thread switches
+   share the same quiet handoff. This runs only when the timeline mounts. */
+@keyframes thread-timeline-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.thread-timeline-enter {
+  animation: thread-timeline-enter 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-timeline-enter {
+    animation: none;
+  }
+}
+
 @keyframes provider-update-pill-countdown {
   from {
     transform: scaleX(1);
