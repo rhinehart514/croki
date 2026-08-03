@@ -563,19 +563,24 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
       ).pipe(Effect.forkScoped),
     );
   }
-  yield* waitForHttpReady({
-    executablePath: options.executablePath,
-    entryPath: options.entryPath,
-    cwd: options.cwd,
-    httpBaseUrl: options.httpBaseUrl,
-    timeout: options.readinessTimeout ?? DEFAULT_BACKEND_READINESS_TIMEOUT,
-  }).pipe(
-    Effect.tap(() => options.onReady?.() ?? Effect.void),
-    Effect.catchTags({
-      BackendReadinessTimeoutError: (error) => options.onReadinessFailure?.(error) ?? Effect.void,
-    }),
-    Effect.forkScoped,
-  );
+  const waitUntilReady = (): Effect.Effect<void, never, HttpClient.HttpClient> =>
+    waitForHttpReady({
+      executablePath: options.executablePath,
+      entryPath: options.entryPath,
+      cwd: options.cwd,
+      httpBaseUrl: options.httpBaseUrl,
+      timeout: options.readinessTimeout ?? DEFAULT_BACKEND_READINESS_TIMEOUT,
+    }).pipe(
+      Effect.tap(() => options.onReady?.() ?? Effect.void),
+      Effect.catchTag("BackendReadinessTimeoutError", (error) =>
+        (options.onReadinessFailure?.(error) ?? Effect.void).pipe(
+          // The child can still become healthy after a slow cold start. Keep
+          // probing until it does or its run scope closes when the child exits.
+          Effect.andThen(Effect.suspend(waitUntilReady)),
+        ),
+      ),
+    );
+  yield* waitUntilReady().pipe(Effect.forkScoped);
 
   const exit = yield* handle.exitCode.pipe(
     Effect.mapError(

@@ -221,8 +221,9 @@ export const senseInspect = Effect.fn("CrokiSenseToolkit.inspect")(function* (
   let inspected = inspectPerceptionObject(observation, input.objectId, input.depth ?? 0);
 
   // A project Canvas can carry an object selected while another Thread is
-  // active. Resolve that stable id through the persisted project model, while
-  // keeping the invocation Thread as the authorization anchor.
+  // active. Resolve that stable id through the project-wide model derived from
+  // durable Thread projections, while keeping the invocation Thread as the
+  // authorization anchor.
   if (!inspected.object) {
     const query = yield* ProjectionSnapshotQuery;
     const projectSnapshot = yield* (
