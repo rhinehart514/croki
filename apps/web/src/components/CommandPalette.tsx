@@ -401,14 +401,14 @@ interface CanvasCommandRegistrationContextValue {
 const CanvasCommandRegistrationContext =
   createContext<CanvasCommandRegistrationContextValue | null>(null);
 
-export function useRegisterCanvasCommand(registration: CanvasCommandRegistration): void {
+export function useRegisterCanvasCommand(registration: CanvasCommandRegistration | null): void {
   const context = useContext(CanvasCommandRegistrationContext);
   const ownerRef = useRef(Symbol("canvas-command-registration"));
 
   useEffect(() => {
-    if (!context) return;
+    if (!context || !registration) return;
     return context.register(ownerRef.current, registration);
-  }, [context, registration.onOpenCanvas, registration.unavailableReason]);
+  }, [context, registration?.onOpenCanvas, registration?.unavailableReason]);
 }
 
 export function CommandPalette({ children }: CommandPaletteProps) {
@@ -1334,13 +1334,15 @@ function OpenCommandPaletteDialog(props: {
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
-  actionItems.push(
-    buildOpenCanvasAction({
-      icon: <CircleDotIcon className={ITEM_ICON_CLASS} />,
-      onOpenCanvas: props.onOpenCanvas,
-      unavailableReason: props.canvasUnavailableReason,
-    }),
-  );
+  if (props.onOpenCanvas || props.canvasUnavailableReason) {
+    actionItems.push(
+      buildOpenCanvasAction({
+        icon: <CircleDotIcon className={ITEM_ICON_CLASS} />,
+        onOpenCanvas: props.onOpenCanvas,
+        unavailableReason: props.canvasUnavailableReason,
+      }),
+    );
+  }
 
   if (projects.length > 0) {
     const activeProjectTitle =

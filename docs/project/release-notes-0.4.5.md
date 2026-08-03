@@ -1,11 +1,34 @@
 # Croki 0.4.5 stabilization notes
 
-Status: Unreleased
+Status: Released 2026-08-03
 
 Croki 0.4.5 is a bug-fix release focused on making regular desktop startup,
 Founder Mode, and Parallel Threads dependable in daily use.
 
 ## Fixed
+
+### Canvas stays hidden when disabled
+
+Turning Canvas off in **Settings → Beta** now removes its product surfaces
+completely. The command palette no longer shows a disabled **Open Canvas**
+action, and previously recorded Canvas presentations no longer appear in the
+Thread timeline. The setting remains available so Canvas can be enabled again.
+
+### Parallel workers are inspectable child chats
+
+Codex parallel workers now persist as read-only child Threads nested beneath
+the canonical parent Thread in the side rail. Opening a worker shows its
+assignment and its own assistant transcript instead of mixing that output into
+the parent conversation. A **Continue in parent** action returns to the only
+Thread that accepts founder input.
+
+Child lineage is stored in the projection database, so worker chats survive a
+desktop restart and shell-snapshot reload. They remain part of the same project
+and workspace and do not create another runtime, coordinator, or writable task
+surface.
+
+The parent Thread remains canonical. Worker chats cannot be renamed, replied
+to, settled, snoozed, or managed independently from the side rail.
 
 ### Codex collaborator lifecycle states
 
@@ -53,7 +76,7 @@ Run the focused Workstreams, startup, projection, and release checks:
 pnpm --dir apps/web exec vp test run --project unit src/components/chat/CoordinationWorkstreams.logic.test.ts
 pnpm --dir apps/web run typecheck
 pnpm --filter @croki/desktop exec vitest run src/backend/DesktopBackendManager.test.ts
-pnpm --filter croki-server exec vitest run src/orchestration/Layers/ProjectionSnapshotQuery.test.ts src/orchestration/Layers/ProjectionPipeline.test.ts
+pnpm --filter croki-server exec vitest run src/orchestration/Layers/ProjectionSnapshotQuery.test.ts src/orchestration/Layers/ProjectionPipeline.test.ts src/orchestration/Layers/ProviderRuntimeIngestion.test.ts
 pnpm --filter croki-server run typecheck
 pnpm run check:croki
 npm run release:smoke

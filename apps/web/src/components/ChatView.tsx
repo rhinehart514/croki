@@ -1534,6 +1534,16 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThread],
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  const continueInParent = useCallback(() => {
+    if (!activeThread?.parentThreadId) return;
+    void navigate({
+      to: "/$environmentId/$threadId",
+      params: {
+        environmentId: activeThread.environmentId,
+        threadId: activeThread.parentThreadId,
+      },
+    });
+  }, [activeThread, navigate]);
   const [crokiHarnessSelection, setCrokiHarnessSelection] = useState<{
     readonly threadKey: string | null;
     readonly harnessId: CrokiHarnessId;
@@ -3366,15 +3376,17 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [addCanvasSurface],
   );
-  useRegisterCanvasCommand({
-    onOpenCanvas:
-      canvasEnabled && activeProject && crokiWorkspaceRoot ? openReleaseCanvas : undefined,
-    unavailableReason: !canvasEnabled
-      ? "Enable Canvas in Settings → Beta → Beta features."
-      : activeProject && crokiWorkspaceRoot
-        ? undefined
-        : "Open a project workspace to use Canvas.",
-  });
+  useRegisterCanvasCommand(
+    canvasEnabled
+      ? {
+          onOpenCanvas: activeProject && crokiWorkspaceRoot ? openReleaseCanvas : undefined,
+          unavailableReason:
+            activeProject && crokiWorkspaceRoot
+              ? undefined
+              : "Open a project workspace to use Canvas.",
+        }
+      : null,
+  );
   const captureCanvasEvidence = useCallback(
     (reference: CrokiContextReference, title: string) => {
       if (!activeProject || !crokiWorkspaceRoot) return;
@@ -6316,9 +6328,9 @@ function ChatViewContent(props: ChatViewProps) {
                 routeThreadKey={routeThreadKey}
                 onOpenTurnDiff={onOpenTurnDiff}
                 onPrepareCanvasUpdate={prepareTurnCanvasUpdate}
-                canvasPresentationsByActivityId={canvasPresentationsByActivityId}
+                {...(canvasEnabled ? { canvasPresentationsByActivityId } : {})}
                 coordinationActivities={threadActivities}
-                onOpenCanvasArtifact={openCanvasArtifact}
+                {...(canvasEnabled ? { onOpenCanvasArtifact: openCanvasArtifact } : {})}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
                 isRevertingCheckpoint={isRevertingCheckpoint}
@@ -6414,92 +6426,118 @@ function ChatViewContent(props: ChatViewProps) {
                     >
                       <div className="chat-composer-glass-host relative z-10 w-full rounded-[22px]">
                         <div ref={attachDraftHeroComposerAnchorRef} className="relative z-10">
-                          <ChatComposer
-                            composerRef={composerRef}
-                            composerDraftTarget={composerDraftTarget}
-                            environmentId={environmentId}
-                            routeKind={routeKind}
-                            routeThreadRef={routeThreadRef}
-                            draftId={draftId}
-                            activeThreadId={activeThreadId}
-                            activeThreadEnvironmentId={activeThread?.environmentId}
-                            activeThread={activeThread}
-                            isServerThread={isServerThread}
-                            isLocalDraftThread={isLocalDraftThread}
-                            forceExpandedOnMobile={forceExpandedMobileComposer && isDraftHeroState}
-                            projectSelectionRequired={isLocalDraftThread && activeProject === null}
-                            phase={phase}
-                            isConnecting={isConnecting}
-                            isSendBusy={isSendBusy}
-                            sendDisabledReason={threadDetailLoading ? "Messages loading" : null}
-                            isPreparingWorktree={isPreparingWorktree}
-                            environmentUnavailable={activeEnvironmentUnavailableState}
-                            activePendingApproval={activePendingApproval}
-                            pendingApprovals={pendingApprovals}
-                            pendingUserInputs={pendingUserInputs}
-                            activePendingProgress={activePendingProgress}
-                            activePendingResolvedAnswers={activePendingResolvedAnswers}
-                            activePendingIsResponding={activePendingIsResponding}
-                            activePendingDraftAnswers={activePendingDraftAnswers}
-                            activePendingQuestionIndex={activePendingQuestionIndex}
-                            respondingRequestIds={respondingRequestIds}
-                            showPlanFollowUpPrompt={showPlanFollowUpPrompt}
-                            activeProposedPlan={activeProposedPlan}
-                            activePlan={activePlan as { turnId?: TurnId } | null}
-                            sidebarProposedPlan={sidebarProposedPlan as { turnId?: TurnId } | null}
-                            planSidebarLabel={planSidebarLabel}
-                            planSidebarOpen={planSidebarOpen}
-                            runtimeMode={runtimeMode}
-                            interactionMode={interactionMode}
-                            crokiHarnessId={crokiHarnessId}
-                            lockedProvider={lockedProvider}
-                            providerStatuses={providerStatuses as ServerProvider[]}
-                            activeProjectDefaultModelSelection={
-                              activeProject?.defaultModelSelection
-                            }
-                            activeThreadModelSelection={activeThread?.modelSelection}
-                            activeThreadActivities={activeThread?.activities}
-                            canvasContext={crokiComposerContext}
-                            canvasSelection={selectedCanvasNodes}
-                            canvasWorkspaceKind="project"
-                            canvasWorkspaceRoot={crokiWorkspaceRoot}
-                            resolvedTheme={resolvedTheme}
-                            settings={settings}
-                            keybindings={keybindings}
-                            terminalOpen={Boolean(terminalUiState.terminalOpen)}
-                            gitCwd={gitCwd}
-                            promptRef={promptRef}
-                            composerImagesRef={composerImagesRef}
-                            composerTerminalContextsRef={composerTerminalContextsRef}
-                            composerElementContextsRef={composerElementContextsRef}
-                            onSend={onSend}
-                            onInterrupt={onInterrupt}
-                            onImplementPlanInNewThread={onImplementPlanInNewThread}
-                            onRespondToApproval={onRespondToApproval}
-                            onSelectActivePendingUserInputOption={
-                              onSelectActivePendingUserInputOption
-                            }
-                            onAdvanceActivePendingUserInput={onAdvanceActivePendingUserInput}
-                            onPreviousActivePendingUserInputQuestion={
-                              onPreviousActivePendingUserInputQuestion
-                            }
-                            onChangeActivePendingUserInputCustomAnswer={
-                              onChangeActivePendingUserInputCustomAnswer
-                            }
-                            onProviderModelSelect={onProviderModelSelect}
-                            getModelDisabledReason={getModelDisabledReason}
-                            toggleInteractionMode={toggleInteractionMode}
-                            handleRuntimeModeChange={handleRuntimeModeChange}
-                            handleInteractionModeChange={handleInteractionModeChange}
-                            onCrokiHarnessChange={setCrokiHarnessId}
-                            onClearCanvasSelection={clearCanvasSelection}
-                            onRemoveCanvasSelection={removeCanvasSelection}
-                            togglePlanSidebar={togglePlanSidebar}
-                            focusComposer={focusComposer}
-                            scheduleComposerFocus={scheduleComposerFocus}
-                            setThreadError={setThreadError}
-                            onExpandImage={onExpandTimelineImage}
-                          />
+                          {activeThread?.parentThreadId ? (
+                            <div className="flex min-h-20 items-center justify-between gap-4 rounded-[22px] border border-border bg-black px-5 py-4">
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-foreground">
+                                  Read-only worker chat
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  Continue the conversation in the parent Thread.
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={continueInParent}
+                                className="shrink-0 text-sm font-medium text-foreground hover:text-foreground/80"
+                              >
+                                Continue in parent
+                              </button>
+                            </div>
+                          ) : (
+                            <ChatComposer
+                              composerRef={composerRef}
+                              composerDraftTarget={composerDraftTarget}
+                              environmentId={environmentId}
+                              routeKind={routeKind}
+                              routeThreadRef={routeThreadRef}
+                              draftId={draftId}
+                              activeThreadId={activeThreadId}
+                              activeThreadEnvironmentId={activeThread?.environmentId}
+                              activeThread={activeThread}
+                              isServerThread={isServerThread}
+                              isLocalDraftThread={isLocalDraftThread}
+                              forceExpandedOnMobile={
+                                forceExpandedMobileComposer && isDraftHeroState
+                              }
+                              projectSelectionRequired={
+                                isLocalDraftThread && activeProject === null
+                              }
+                              phase={phase}
+                              isConnecting={isConnecting}
+                              isSendBusy={isSendBusy}
+                              sendDisabledReason={threadDetailLoading ? "Messages loading" : null}
+                              isPreparingWorktree={isPreparingWorktree}
+                              environmentUnavailable={activeEnvironmentUnavailableState}
+                              activePendingApproval={activePendingApproval}
+                              pendingApprovals={pendingApprovals}
+                              pendingUserInputs={pendingUserInputs}
+                              activePendingProgress={activePendingProgress}
+                              activePendingResolvedAnswers={activePendingResolvedAnswers}
+                              activePendingIsResponding={activePendingIsResponding}
+                              activePendingDraftAnswers={activePendingDraftAnswers}
+                              activePendingQuestionIndex={activePendingQuestionIndex}
+                              respondingRequestIds={respondingRequestIds}
+                              showPlanFollowUpPrompt={showPlanFollowUpPrompt}
+                              activeProposedPlan={activeProposedPlan}
+                              activePlan={activePlan as { turnId?: TurnId } | null}
+                              sidebarProposedPlan={
+                                sidebarProposedPlan as { turnId?: TurnId } | null
+                              }
+                              planSidebarLabel={planSidebarLabel}
+                              planSidebarOpen={planSidebarOpen}
+                              runtimeMode={runtimeMode}
+                              interactionMode={interactionMode}
+                              crokiHarnessId={crokiHarnessId}
+                              lockedProvider={lockedProvider}
+                              providerStatuses={providerStatuses as ServerProvider[]}
+                              activeProjectDefaultModelSelection={
+                                activeProject?.defaultModelSelection
+                              }
+                              activeThreadModelSelection={activeThread?.modelSelection}
+                              activeThreadActivities={activeThread?.activities}
+                              canvasContext={crokiComposerContext}
+                              canvasSelection={selectedCanvasNodes}
+                              canvasWorkspaceKind="project"
+                              canvasWorkspaceRoot={crokiWorkspaceRoot}
+                              resolvedTheme={resolvedTheme}
+                              settings={settings}
+                              keybindings={keybindings}
+                              terminalOpen={Boolean(terminalUiState.terminalOpen)}
+                              gitCwd={gitCwd}
+                              promptRef={promptRef}
+                              composerImagesRef={composerImagesRef}
+                              composerTerminalContextsRef={composerTerminalContextsRef}
+                              composerElementContextsRef={composerElementContextsRef}
+                              onSend={onSend}
+                              onInterrupt={onInterrupt}
+                              onImplementPlanInNewThread={onImplementPlanInNewThread}
+                              onRespondToApproval={onRespondToApproval}
+                              onSelectActivePendingUserInputOption={
+                                onSelectActivePendingUserInputOption
+                              }
+                              onAdvanceActivePendingUserInput={onAdvanceActivePendingUserInput}
+                              onPreviousActivePendingUserInputQuestion={
+                                onPreviousActivePendingUserInputQuestion
+                              }
+                              onChangeActivePendingUserInputCustomAnswer={
+                                onChangeActivePendingUserInputCustomAnswer
+                              }
+                              onProviderModelSelect={onProviderModelSelect}
+                              getModelDisabledReason={getModelDisabledReason}
+                              toggleInteractionMode={toggleInteractionMode}
+                              handleRuntimeModeChange={handleRuntimeModeChange}
+                              handleInteractionModeChange={handleInteractionModeChange}
+                              onCrokiHarnessChange={setCrokiHarnessId}
+                              onClearCanvasSelection={clearCanvasSelection}
+                              onRemoveCanvasSelection={removeCanvasSelection}
+                              togglePlanSidebar={togglePlanSidebar}
+                              focusComposer={focusComposer}
+                              scheduleComposerFocus={scheduleComposerFocus}
+                              setThreadError={setThreadError}
+                              onExpandImage={onExpandTimelineImage}
+                            />
+                          )}
                         </div>
                       </div>
                       <div className="min-h-0">

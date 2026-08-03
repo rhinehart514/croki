@@ -948,6 +948,62 @@ describe("ProviderRuntimeIngestion", () => {
     expect(message?.streaming).toBe(false);
   });
 
+  it("creates a durable child thread with its assignment and separate transcript", async () => {
+    const harness = await createHarness();
+    const childThreadId = asThreadId("codex-worker-1");
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "thread.started",
+      eventId: asEventId("evt-child-started"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: childThreadId,
+      parentThreadId: asThreadId("thread-1"),
+      childPrompt: "Investigate the startup regression",
+      payload: {},
+    });
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-child-delta"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: childThreadId,
+      parentThreadId: asThreadId("thread-1"),
+      childPrompt: "Investigate the startup regression",
+      turnId: asTurnId("child-turn-1"),
+      itemId: asItemId("child-item-1"),
+      payload: { streamKind: "assistant_text", delta: "The regression starts in bootstrap." },
+    });
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-child-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: childThreadId,
+      parentThreadId: asThreadId("thread-1"),
+      turnId: asTurnId("child-turn-1"),
+      itemId: asItemId("child-item-1"),
+      payload: { itemType: "assistant_message", status: "completed" },
+    });
+
+    const child = await waitForThread(
+      harness.readModel,
+      (thread) => thread.messages.some((message) => message.role === "assistant"),
+      2000,
+      childThreadId,
+    );
+    expect(child.parentThreadId).toBe("thread-1");
+    expect(child.title).toBe("Investigate the startup regression");
+    expect(child.messages.map(({ role, text }) => ({ role, text }))).toEqual([
+      { role: "user", text: "Investigate the startup regression" },
+      { role: "assistant", text: "The regression starts in bootstrap." },
+    ]);
+
+    const parent = (await harness.readModel()).threads.find((thread) => thread.id === "thread-1");
+    expect(parent?.messages).toEqual([]);
+  });
+
   it("materializes ACP image blocks onto the same assistant message as text", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

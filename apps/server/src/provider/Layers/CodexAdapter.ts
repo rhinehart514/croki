@@ -443,6 +443,8 @@ function runtimeEventBase(
     eventId: event.id,
     provider: event.provider,
     threadId: canonicalThreadId,
+    ...(event.parentThreadId ? { parentThreadId: event.parentThreadId } : {}),
+    ...(event.childPrompt ? { childPrompt: event.childPrompt } : {}),
     createdAt: event.createdAt,
     ...(event.turnId ? { turnId: event.turnId } : {}),
     ...(event.itemId ? { itemId: asRuntimeItemId(event.itemId) } : {}),
