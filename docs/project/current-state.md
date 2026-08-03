@@ -79,11 +79,11 @@ second activity stream or scene.
 
 Canvas compresses project activity for a founder: one current outcome, up to
 three semantic conclusions drawn across sibling Threads, one judgment or
-blocker, and collapsed source evidence. The server persists this derived model
-per Project and rebuilds it from durable Thread activity, so it survives restart
-and updates without opening the source Thread. Raw commands, context-window
-updates, checkpoints, and receipts remain inspectable without filling the field
-with runtime telemetry. Every visible object retains source-Thread provenance.
+blocker, and collapsed source evidence. The server derives this project model
+on demand from durable Thread projections, so it survives restart without a
+second cache or startup rebuild. Raw commands, context-window updates,
+checkpoints, and receipts remain inspectable without filling the field with
+runtime telemetry. Every visible object retains source-Thread provenance.
 
 Canvas owns the workspace as soon as it opens on desktop and narrow widths.
 Founder judgments come before passive context, a single source Thread collapses

@@ -1424,6 +1424,212 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
     }),
   );
 
+  it.effect("derives project perception lazily across sibling Threads", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM projection_project_perception`;
+      yield* sql`DELETE FROM projection_thread_activities`;
+      yield* sql`DELETE FROM projection_threads`;
+      yield* sql`DELETE FROM projection_projects`;
+      yield* sql`DELETE FROM orchestration_events`;
+
+      yield* sql`
+        INSERT INTO projection_projects (
+          project_id,
+          title,
+          workspace_root,
+          default_model_selection_json,
+          scripts_json,
+          created_at,
+          updated_at,
+          deleted_at
+        )
+        VALUES (
+          'project-perception',
+          'Project perception',
+          '/tmp/project-perception',
+          '{"provider":"codex","model":"gpt-5-codex"}',
+          '[]',
+          '2026-08-03T00:00:00.000Z',
+          '2026-08-03T00:00:00.000Z',
+          NULL
+        )
+      `;
+      yield* sql`
+        INSERT INTO projection_threads (
+          thread_id,
+          project_id,
+          title,
+          model_selection_json,
+          runtime_mode,
+          interaction_mode,
+          branch,
+          worktree_path,
+          latest_turn_id,
+          latest_user_message_at,
+          pending_approval_count,
+          pending_user_input_count,
+          has_actionable_proposed_plan,
+          created_at,
+          updated_at,
+          deleted_at
+        )
+        VALUES
+          (
+            'thread-perception-a',
+            'project-perception',
+            'Thread A',
+            '{"provider":"codex","model":"gpt-5-codex"}',
+            'full-access',
+            'default',
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            '2026-08-03T00:00:01.000Z',
+            '2026-08-03T00:00:01.000Z',
+            NULL
+          ),
+          (
+            'thread-perception-b',
+            'project-perception',
+            'Thread B',
+            '{"provider":"codex","model":"gpt-5-codex"}',
+            'full-access',
+            'default',
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            '2026-08-03T00:00:02.000Z',
+            '2026-08-03T00:00:02.000Z',
+            NULL
+          )
+      `;
+      yield* sql`
+        INSERT INTO projection_thread_activities (
+          activity_id,
+          thread_id,
+          turn_id,
+          tone,
+          kind,
+          summary,
+          payload_json,
+          sequence,
+          created_at
+        )
+        VALUES
+          (
+            'activity-perception-a',
+            'thread-perception-a',
+            NULL,
+            'tool',
+            'tool.read',
+            'Thread A evidence',
+            '{}',
+            2,
+            '2026-08-03T00:00:01.000Z'
+          ),
+          (
+            'activity-perception-b',
+            'thread-perception-b',
+            NULL,
+            'tool',
+            'tool.read',
+            'Thread B evidence',
+            '{}',
+            3,
+            '2026-08-03T00:00:02.000Z'
+          )
+      `;
+      yield* sql`
+        INSERT INTO orchestration_events (
+          event_id,
+          aggregate_kind,
+          stream_id,
+          stream_version,
+          event_type,
+          occurred_at,
+          command_id,
+          causation_event_id,
+          correlation_id,
+          actor_kind,
+          payload_json,
+          metadata_json
+        )
+        VALUES
+          (
+            'event-perception-project',
+            'project',
+            'project-perception',
+            1,
+            'project.created',
+            '2026-08-03T00:00:00.000Z',
+            'command-perception-project',
+            NULL,
+            NULL,
+            'server',
+            '{}',
+            '{}'
+          ),
+          (
+            'event-perception-a',
+            'thread',
+            'thread-perception-a',
+            1,
+            'thread.created',
+            '2026-08-03T00:00:01.000Z',
+            'command-perception-a',
+            NULL,
+            NULL,
+            'server',
+            '{}',
+            '{}'
+          ),
+          (
+            'event-perception-b',
+            'thread',
+            'thread-perception-b',
+            1,
+            'thread.created',
+            '2026-08-03T00:00:02.000Z',
+            'command-perception-b',
+            NULL,
+            NULL,
+            'server',
+            '{}',
+            '{}'
+          )
+      `;
+
+      const getProjectPerception = snapshotQuery.getProjectPerception;
+      assert.isDefined(getProjectPerception);
+      const result = yield* getProjectPerception({
+        projectId: asProjectId("project-perception"),
+        limit: 200,
+      });
+      assert.equal(result._tag, "Some");
+      if (result._tag === "None") return;
+
+      assert.equal(result.value.revision, 3);
+      assert.deepStrictEqual(result.value.sourceThreadIds, [
+        ThreadId.make("thread-perception-a"),
+        ThreadId.make("thread-perception-b"),
+      ]);
+      assert.equal(result.value.objects.filter((object) => object.type === "thread").length, 2);
+      const cacheRows = yield* sql`SELECT project_id FROM projection_project_perception`;
+      assert.deepStrictEqual(cacheRows, []);
+    }),
+  );
+
   it.effect("keeps deleted project and thread tombstones in the command read model", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
