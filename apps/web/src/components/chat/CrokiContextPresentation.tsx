@@ -1,42 +1,7 @@
 import type { CrokiContextReceipt } from "@croki/shared/crokiContext";
 import { CircleDot } from "lucide-react";
 
-import { cn } from "~/lib/utils";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import type { CrokiComposerContextState } from "./CrokiContextPresentation.logic";
-
-export function CrokiComposerContextIndicator(props: {
-  readonly compact: boolean;
-  readonly state: CrokiComposerContextState;
-  readonly workspaceKind?: "project" | "worktree" | undefined;
-  readonly workspaceRoot?: string | null | undefined;
-}) {
-  const presentation = composerPresentation(props.state, props.compact);
-  const workspaceDescription = props.workspaceRoot
-    ? ` Context source: active ${props.workspaceKind ?? "project"} ${props.workspaceRoot}.`
-    : "";
-  const description = `${presentation.description}${workspaceDescription}`;
-  return (
-    <div
-      aria-label={description}
-      title={description}
-      data-croki-workspace-root={props.workspaceRoot ?? undefined}
-      className={cn(
-        "flex h-8 min-w-0 max-w-64 shrink-0 items-center gap-1.5 px-2 text-xs",
-        presentation.problem ? "text-amber-500" : "text-muted-foreground/80",
-      )}
-    >
-      <CircleDot className="size-3.5 shrink-0" aria-hidden />
-      <span className="whitespace-nowrap">{presentation.label}</span>
-      {props.workspaceRoot ? (
-        <span className="truncate text-muted-foreground/60">
-          · {props.workspaceKind === "worktree" ? "worktree " : ""}
-          {workspaceLabel(props.workspaceRoot)}
-        </span>
-      ) : null}
-    </div>
-  );
-}
 
 export function CrokiAppliedContextReceipt(props: {
   readonly receipt: CrokiContextReceipt | null;
@@ -124,84 +89,6 @@ export function CrokiAppliedContextReceipt(props: {
   );
 }
 
-function composerPresentation(
-  state: CrokiComposerContextState,
-  compact: boolean,
-): { readonly description: string; readonly label: string; readonly problem: boolean } {
-  switch (state.status) {
-    case "partial": {
-      const counts = compact ? state.currentCount : `${state.currentCount} approved`;
-      return {
-        label: `Context ${counts} · ${state.issueCount} invalid`,
-        description: `The next turn will use valid approved project-context entries. Proposals stay excluded. ${state.issueCount} invalid entr${
-          state.issueCount === 1 ? "y was" : "ies were"
-        } omitted.`,
-        problem: true,
-      };
-    }
-    case "loaded": {
-      if (!state.included) {
-        return {
-          label: "Context empty",
-          description: "Project context has no approved entries for the next turn.",
-          problem: false,
-        };
-      }
-      const counts = compact ? state.currentCount : `${state.currentCount} approved`;
-      const suffix = state.promptTruncated ? " · partial" : "";
-      if (state.releaseVersion) {
-        return {
-          label: `Release ${state.releaseVersion}${suffix}`,
-          description: `The next turn will include the active ${state.releaseVersion} release candidate and ${state.currentCount} approved project-context item${state.currentCount === 1 ? "" : "s"}. ${state.provisionalCount} proposal${state.provisionalCount === 1 ? " is" : "s are"} excluded${state.promptTruncated ? ", and approved context is truncated to the provider limit" : ""}.`,
-          problem: false,
-        };
-      }
-      return {
-        label: `Context ${counts}${suffix}`,
-        description: `The next turn will include ${state.currentCount} approved project-context item${state.currentCount === 1 ? "" : "s"}. ${state.provisionalCount} proposal${state.provisionalCount === 1 ? " is" : "s are"} excluded${state.promptTruncated ? ", and approved context is truncated to the provider limit" : ""}.`,
-        problem: false,
-      };
-    }
-    case "loading":
-      return {
-        label: "Context checking",
-        description: "Checking project context for the next turn.",
-        problem: false,
-      };
-    case "absent":
-      return {
-        label: "No context",
-        description: "No project context will be included in the next turn.",
-        problem: false,
-      };
-    case "invalid":
-      return {
-        label: "Context invalid",
-        description: `Project context will not be included in the next turn because it is invalid (${state.errorCode}).`,
-        problem: true,
-      };
-    case "oversized":
-      return {
-        label: "Context oversized",
-        description: "Project context exceeds its source limit and will not be included.",
-        problem: true,
-      };
-    case "truncated":
-      return {
-        label: "Context truncated",
-        description:
-          "The workspace returned only part of project context, so it will not be included.",
-        problem: true,
-      };
-    case "unavailable":
-      return {
-        label: "Context unavailable",
-        description: "Project context could not be read. The next turn can continue without it.",
-        problem: true,
-      };
-  }
-}
-
 function appliedStatusLabel(receipt: CrokiContextReceipt): string {
   switch (receipt.status) {
     case "loaded":
@@ -234,9 +121,4 @@ function capabilityLabel(receipt: CrokiContextReceipt): string {
 
 function formatUpdatedAt(value: string): string {
   return value.slice(0, 16).replace("T", " ");
-}
-
-function workspaceLabel(root: string): string {
-  const normalized = root.replaceAll("\\", "/").replace(/\/+$/, "");
-  return normalized.slice(normalized.lastIndexOf("/") + 1) || root;
 }

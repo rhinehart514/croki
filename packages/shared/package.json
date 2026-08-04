@@ -95,6 +95,10 @@
       "types": "./src/crokiContext.ts",
       "import": "./src/crokiContext.ts"
     },
+    "./crokiApplication": {
+      "types": "./src/crokiApplication.ts",
+      "import": "./src/crokiApplication.ts"
+    },
     "./crokiCanvasActivity": {
       "types": "./src/crokiCanvasActivity.ts",
       "import": "./src/crokiCanvasActivity.ts"

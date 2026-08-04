@@ -8,7 +8,6 @@ import {
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
-  type OrchestrationThread,
   ThreadId,
   type ProviderSession,
   type RuntimeMode,
@@ -47,6 +46,7 @@ import {
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { loadCrokiApplication } from "./CrokiApplication.ts";
 import { compileCrokiTurnInput, loadCrokiVentureContext } from "./CrokiContext.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
@@ -647,16 +647,19 @@ const make = Effect.gen(function* () {
       thread,
       projects: project ? [project] : [],
     });
+    const applicationContext = yield* loadCrokiApplication(project?.workspaceRoot);
     const ventureContext =
       input.harnessId === "venture-v1" && workspaceCwd !== undefined
         ? yield* loadCrokiVentureContext(workspaceCwd)
         : null;
+    const agentContext = [applicationContext.prompt, ventureContext]
+      .filter((value): value is string => Boolean(value))
+      .join("\n\n");
     const providerInput = compileCrokiTurnInput({
       harnessId: input.harnessId,
-      // `.croki/context.json` is a legacy import/export format, not runtime
-      // provider context. Generic senses are emitted as typed Thread
-      // activities by the provider/tool runtime when available.
-      agentContext: ventureContext,
+      // Application lineage supplies factual project context without changing
+      // provider behavior. Generic senses remain typed runtime activities.
+      agentContext: agentContext || null,
       userInput: normalizedInput,
       parallelThreadsEnabled: input.parallelThreadsEnabled,
     });

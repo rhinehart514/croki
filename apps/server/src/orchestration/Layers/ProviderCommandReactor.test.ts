@@ -586,6 +586,78 @@ describe("ProviderCommandReactor", () => {
     ).toBe("");
   });
 
+  it("injects project application lineage into native worktree turns", async () => {
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "croki-reactor-"));
+    const workspaceRoot = NodePath.join(baseDir, "project");
+    NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".croki"), { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(workspaceRoot, ".croki", "application.json"),
+      JSON.stringify({
+        version: 1,
+        application: { name: "Croki" },
+        released: {
+          version: "0.4.5",
+          summary: "Native provider work remains durable and inspectable.",
+          product: [],
+          gtm: [],
+          learnings: [],
+          sources: [{ kind: "git-tag", ref: "v0.4.5" }],
+        },
+        building: {
+          version: "0.4.6",
+          intent: "Carry application reality into every project turn.",
+          product: [],
+          gtm: [],
+          successSignals: [],
+        },
+      }),
+    );
+    const harness = await createHarness({ baseDir, projectWorkspaceRoot: workspaceRoot });
+    const userText = "Build the next coherent state";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-application-worktree"),
+        threadId: ThreadId.make("thread-1"),
+        branch: "feature/application-lineage",
+        worktreePath: NodePath.join(baseDir, "worktree-without-application-file"),
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-application-lineage"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-application-lineage"),
+          role: "user",
+          text: userText,
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    const providerRequest = harness.sendTurn.mock.calls[0]?.[0] as { input?: string };
+    expect(providerRequest.input).toContain('<croki_application version="1"');
+    expect(providerRequest.input).toContain('"version":"0.4.5"');
+    expect(providerRequest.input).toContain('"version":"0.4.6"');
+    expect(providerRequest.input?.endsWith(userText)).toBe(true);
+
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+    expect(
+      thread?.messages.find(
+        (message) => message.id === asMessageId("user-message-application-lineage"),
+      )?.text,
+    ).toBe(userText);
+  });
+
   it("enables the strategy harness while ignoring invalid legacy context", async () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "croki-reactor-"));
     const workspaceRoot = NodePath.join(baseDir, "project");
