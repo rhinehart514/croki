@@ -105,8 +105,8 @@ import {
   renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
-import { CrokiComposerContextIndicator } from "./CrokiContextPresentation";
-import type { CrokiComposerContextState } from "./CrokiContextPresentation.logic";
+import { CrokiApplicationIndicator } from "./CrokiApplicationPresentation";
+import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
@@ -577,10 +577,9 @@ export interface ChatComposerProps {
 
   // Context window
   activeThreadActivities: Thread["activities"] | undefined;
-  canvasContext: CrokiComposerContextState | null;
+  applicationContext: CrokiApplicationState | null;
   canvasSelection?: readonly HarnessCanvasArtifactNode[];
-  canvasWorkspaceKind?: "project" | "worktree" | undefined;
-  canvasWorkspaceRoot?: string | null | undefined;
+  applicationWorkspaceRoot?: string | null | undefined;
 
   // Misc
   resolvedTheme: "light" | "dark";
@@ -678,10 +677,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeProjectDefaultModelSelection,
     activeThreadModelSelection,
     activeThreadActivities,
-    canvasContext,
+    applicationContext,
     canvasSelection = [],
-    canvasWorkspaceKind,
-    canvasWorkspaceRoot,
+    applicationWorkspaceRoot,
     resolvedTheme,
     settings,
     keybindings,
@@ -3191,12 +3189,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       </SelectPopup>
                     </Select>
                     <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-                    {canvasContext ? (
-                      <CrokiComposerContextIndicator
-                        compact={isComposerFooterCompact}
-                        state={canvasContext}
-                        workspaceKind={canvasWorkspaceKind}
-                        workspaceRoot={canvasWorkspaceRoot}
+                    {applicationContext ? (
+                      <CrokiApplicationIndicator
+                        state={applicationContext}
+                        workspaceRoot={applicationWorkspaceRoot}
                       />
                     ) : null}
                   </>

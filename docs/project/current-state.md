@@ -1,14 +1,15 @@
 # Current project state
 
 Last audited: 2026-08-03
-Code baseline: Croki 0.4.5 stabilization release on `croki/main`
+Code baseline: Croki 0.4.6 application lineage on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow Croki overlay on Croki rather than a second agent runtime.
 
-Croki 0.4.5 is the current release. See the [0.4.5 release
-notes](./release-notes-0.4.5.md) and [release ownership
-contract](../operations/release.md) for its independently gated destinations.
+Croki 0.4.6 is the current repository version; 0.4.5 remains the latest
+published baseline inherited by it. See the [0.4.6 release
+notes](./release-notes-0.4.6.md) and [release ownership contract](../operations/release.md)
+for independently gated publication destinations.
 
 ## Working product
 
@@ -28,8 +29,9 @@ Croki currently provides:
 - local and remote environment connection paths, including desktop-managed SSH
   and Croki Connect compatibility infrastructure;
 - Croki branding and completion feedback;
-- repository-owned project context at `.croki/context.json`; the true Canvas /
-  Croki Senses projection is the active 0.4.2 migration.
+- optional repository-owned application lineage at `.croki/application.json`,
+  which joins inherited released reality with the version currently being built;
+- the true Canvas / Croki Senses projection established by the 0.4.2 migration.
 
 Provider support means that an adapter and product surface exist. A provider is
 ready only when its required local CLI, authentication, model access, and
@@ -46,7 +48,7 @@ source provenance, confidence, read-only authority, and explicit separation
 from founder-approved canon.
 
 Source adapters may observe evidence; Threads may investigate and compare it;
-neither action promotes an inference into `.croki/context.json`. Raw customer
+neither action promotes an inference into `.croki/application.json`. Raw customer
 transcripts, private adapter payloads, and connector-specific data do not enter
 the perception packet. Consequential GTM writes remain outside Senses and still
 require native tools and explicit authority.
@@ -96,11 +98,26 @@ sent turn; the provider can inspect their sources through read-only Senses.
 Canvas never injects bodies, grants authority, or changes provider behavior.
 Failed sends preserve the focus and successful turn starts clear it.
 
-`.croki/context.json` remains repository-owned project truth. It may be projected
-into a frame when relevant, but Canvas does not write canon, promote proposals,
-retire decisions, or turn a frame into memory. The previous Release, Context,
-and agent-authored Artifact mode specifications are historical migration notes;
-they are superseded by the Senses and Perception Frame contract for 0.4.2.
+`.croki/application.json` is the active founder-approved product and GTM
+inheritance boundary. It records released reality and the version being built;
+Canvas may eventually project that lineage, but does not own or maintain it.
+The previous `.croki/context.json` Release, Context, and agent-authored Artifact
+specifications are historical migration notes. They are not provider context or
+the active application model.
+
+## Application lineage
+
+Croki 0.4.6 begins application-aware development. When
+`.croki/application.json` exists, the composer shows the released-to-building
+transition and every provider turn receives the same bounded factual product
+and GTM lineage. The stored user message remains unchanged, native provider
+behavior remains the default, and malformed or absent lineage never blocks a
+turn.
+
+The file belongs to the canonical project root and therefore applies across
+native worktrees. Git tags, hosted release URLs, and repository files can be
+recorded as provenance, but no Git remote or GitHub account is required. An
+empty project without lineage shows no negative context state.
 
 ## Selected native-provider rule
 
@@ -135,8 +152,9 @@ memory, skills, or model.
   for the planned 0.4.4 release. It reuses provider-native delegation and the
   parent Thread's existing Workstreams projection; provider support therefore
   depends on the selected runtime exposing native workers.
-- Legacy Release, Context, and Artifact code remains for compatibility reads;
-  the unified Canvas no longer routes users into those authoring surfaces.
+- Legacy Release, Context, and Artifact code remains only for compatibility
+  reads and historical receipts; the composer and provider runtime use
+  application lineage instead.
 - Additional native senses can expand beyond the initial Thread, preview,
   checkpoint, approval, and runtime sources without changing the frame model.
 - Production releases, Croki CLI publication, Croki-owned relay and web

@@ -42,10 +42,8 @@ import { CHAT_LIST_ANCHOR_OFFSET } from "@croki/shared/chatList";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@croki/shared/projectScripts";
 import { truncate } from "@croki/shared/String";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@croki/shared/terminalLabels";
-import {
-  CROKI_CONTEXT_RELATIVE_PATH,
-  type CrokiContextReference,
-} from "@croki/shared/crokiContext";
+import type { CrokiContextReference } from "@croki/shared/crokiContext";
+import { CROKI_APPLICATION_RELATIVE_PATH } from "@croki/shared/crokiApplication";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -251,10 +249,8 @@ import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
-import {
-  deriveCrokiComposerContextState,
-  deriveCrokiContextReceiptsByMessageId,
-} from "./chat/CrokiContextPresentation.logic";
+import { deriveCrokiContextReceiptsByMessageId } from "./chat/CrokiContextPresentation.logic";
+import { deriveCrokiApplicationState } from "./chat/CrokiApplicationPresentation.logic";
 import {
   buildCrokiGtmExplorationPrompt,
   buildCrokiRepositoryBootstrapPrompt,
@@ -2522,29 +2518,29 @@ function ChatViewContent(props: ChatViewProps) {
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
   const crokiWorkspaceRoot = activeProjectCwd ?? undefined;
-  const crokiContextFileQuery = useProjectFileQuery(
+  const crokiApplicationFileQuery = useProjectFileQuery(
     activeProject?.environmentId ?? environmentId,
     crokiWorkspaceRoot ?? ".",
-    CROKI_CONTEXT_RELATIVE_PATH,
+    CROKI_APPLICATION_RELATIVE_PATH,
     activeProject !== null && crokiWorkspaceRoot !== undefined,
   );
-  const crokiComposerContext = useMemo(
+  const crokiApplicationContext = useMemo(
     () =>
       activeProject && crokiWorkspaceRoot
-        ? deriveCrokiComposerContextState({
-            data: crokiContextFileQuery.data,
-            error: crokiContextFileQuery.error,
-            failure: crokiContextFileQuery.failure,
-            isPending: crokiContextFileQuery.isPending,
+        ? deriveCrokiApplicationState({
+            data: crokiApplicationFileQuery.data,
+            error: crokiApplicationFileQuery.error,
+            failure: crokiApplicationFileQuery.failure,
+            isPending: crokiApplicationFileQuery.isPending,
           })
         : null,
     [
       activeProject,
       crokiWorkspaceRoot,
-      crokiContextFileQuery.data,
-      crokiContextFileQuery.error,
-      crokiContextFileQuery.failure,
-      crokiContextFileQuery.isPending,
+      crokiApplicationFileQuery.data,
+      crokiApplicationFileQuery.error,
+      crokiApplicationFileQuery.failure,
+      crokiApplicationFileQuery.isPending,
     ],
   );
   const activeWorkspaceKey =
@@ -6496,10 +6492,9 @@ function ChatViewContent(props: ChatViewProps) {
                               }
                               activeThreadModelSelection={activeThread?.modelSelection}
                               activeThreadActivities={activeThread?.activities}
-                              canvasContext={crokiComposerContext}
+                              applicationContext={crokiApplicationContext}
                               canvasSelection={selectedCanvasNodes}
-                              canvasWorkspaceKind="project"
-                              canvasWorkspaceRoot={crokiWorkspaceRoot}
+                              applicationWorkspaceRoot={crokiWorkspaceRoot}
                               resolvedTheme={resolvedTheme}
                               settings={settings}
                               keybindings={keybindings}

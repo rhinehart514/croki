@@ -37,7 +37,7 @@ events into one orchestration model without creating a second agent runtime.
 
 - **Provider runtime**: The selected provider does the actual agent/session work. `ProviderService` resolves a configured provider instance and its adapter, then translates provider-native events into Croki's orchestration model. See [Provider architecture](./providers.md).
 
-- **Croki overlay**: Croki Senses derive disposable Perception Frames from native Thread, runtime, preview, checkpoint, approval, and source activity. Canvas projects those frames beside the Thread without reading or writing a Canvas document. It does not own a provider, conversation, worktree, Review, or execution runtime.
+- **Croki overlay**: Optional project-root application lineage supplies bounded released and building product/GTM facts to provider turns. Croki Senses derive disposable Perception Frames from native Thread, runtime, preview, checkpoint, approval, and source activity. Canvas may project those sources beside the Thread, but owns no provider, conversation, worktree, Review, memory, or execution runtime.
 
 - **Background workers**: Long-running async flows such as runtime ingestion, command reaction, and checkpoint processing run as queue-backed workers. This keeps work ordered, reduces timing races, and gives tests a deterministic way to wait for the system to go idle.
 
@@ -118,6 +118,13 @@ translate transport, persist threads, expose explicit tools, and attach visible
 context, but it must not add hidden personas, planning loops, delegation
 policies, or behavioral workflows. Those belong to explicit named harnesses
 that are off by default.
+
+When `.croki/application.json` exists, `ProviderCommandReactor` reads it from
+the canonical project root before every turn and prepends its bounded factual
+lineage to the provider input. This works identically for GitHub-hosted, local
+Git, and non-Git projects because release links and tags are optional evidence,
+not runtime dependencies. The stored user message is not modified. Missing,
+malformed, unsupported, oversized, or unreadable lineage fails open.
 
 Croki 0.4.2 keeps the native-provider rule for all runtimes. Product and GTM
 are explicit one-turn harnesses, while Canvas is the automatic projection of

@@ -79,7 +79,8 @@ When the product contract changes, update the copy, tests, docs, migrations, and
 - Runtime, context, tools, harnesses, and senses are separate. Opening, closing, selecting, or arranging Canvas must not change provider behavior or grant authority.
 - Canvas is a zero-maintenance projection of real project and Thread activity. It should help the founder understand the work, not become a second runtime, conversation, task board, context editor, memory database, or manually maintained scene.
 - Sense calls are read-only. Consequential actions still go through native Threads, tools, approvals, and authority checks.
-- `.croki/context.json` is repository-owned project truth. Agent-authored changes remain provisional. Never silently promote, retire, or rewrite founder-approved canon.
+- `.croki/application.json` is optional repository-owned application lineage. Released reality and building intent are founder-approved facts, not an agent-maintained memory. Never silently establish, promote, or rewrite them.
+- `.croki/context.json` is a legacy Canvas compatibility format. Do not revive its node, release-board, or provider-injection model.
 - Keep raw Canvas bodies, rendered prompts, private memory, and sensitive context out of receipts, logs, CI summaries, and artifacts.
 - Do not import or revive the archived standalone `brain`, `relay`, runtime, or workflow machinery unless an explicit migration requires it.
 - `main` mirrors `upstream/main`. Croki product work belongs on `croki/main`.
