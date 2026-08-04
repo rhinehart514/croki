@@ -107,6 +107,10 @@ import {
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { CrokiApplicationIndicator } from "./CrokiApplicationPresentation";
 import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic";
+import type {
+  CrokiApplicationObservation,
+  CrokiApplicationProgress,
+} from "@croki/shared/crokiApplicationProgress";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
@@ -578,6 +582,9 @@ export interface ChatComposerProps {
   // Context window
   activeThreadActivities: Thread["activities"] | undefined;
   applicationContext: CrokiApplicationState | null;
+  applicationProgress?: CrokiApplicationProgress | null;
+  onPrepareApplicationRelease?: (() => void) | undefined;
+  onOpenApplicationObservation?: ((observation: CrokiApplicationObservation) => void) | undefined;
   canvasSelection?: readonly HarnessCanvasArtifactNode[];
   applicationWorkspaceRoot?: string | null | undefined;
 
@@ -678,6 +685,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeThreadModelSelection,
     activeThreadActivities,
     applicationContext,
+    applicationProgress,
+    onPrepareApplicationRelease,
+    onOpenApplicationObservation,
     canvasSelection = [],
     applicationWorkspaceRoot,
     resolvedTheme,
@@ -3192,7 +3202,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     {applicationContext ? (
                       <CrokiApplicationIndicator
                         state={applicationContext}
+                        progress={applicationProgress ?? null}
                         workspaceRoot={applicationWorkspaceRoot}
+                        {...(onPrepareApplicationRelease
+                          ? { onPrepareRelease: onPrepareApplicationRelease }
+                          : {})}
+                        {...(onOpenApplicationObservation
+                          ? { onOpenObservation: onOpenApplicationObservation }
+                          : {})}
                       />
                     ) : null}
                   </>

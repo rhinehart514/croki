@@ -626,6 +626,35 @@ describe("ProviderCommandReactor", () => {
     );
     await Effect.runPromise(
       harness.engine.dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.make("cmd-application-progress-evidence"),
+        threadId: ThreadId.make("thread-1"),
+        activity: {
+          id: EventId.make("application-progress-runtime-success"),
+          tone: "tool",
+          kind: "croki.evidence.observed",
+          summary: "Private source envelope",
+          payload: {
+            observations: [
+              {
+                id: "customer-call-1",
+                domain: "customer",
+                type: "interview",
+                title: "Private customer transcript",
+                summary: "A customer disclosed sensitive information.",
+                observedAt: "2026-01-01T00:00:00.000Z",
+                source: { kind: "customer-call", id: "call-1", label: "Research interview" },
+              },
+            ],
+          },
+          turnId: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-application-lineage"),
         threadId: ThreadId.make("thread-1"),
@@ -644,6 +673,11 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.sendTurn.mock.calls.length === 1);
     const providerRequest = harness.sendTurn.mock.calls[0]?.[0] as { input?: string };
     expect(providerRequest.input).toContain('<croki_application version="1"');
+    expect(providerRequest.input).toContain('<croki_application_progress version="1"');
+    expect(providerRequest.input).toContain("Customer evidence observed");
+    expect(providerRequest.input).not.toContain("Private customer transcript");
+    expect(providerRequest.input).not.toContain("sensitive information");
+    expect(providerRequest.input).toContain("not founder-approved application facts");
     expect(providerRequest.input).toContain('"version":"0.4.5"');
     expect(providerRequest.input).toContain('"version":"0.4.6"');
     expect(providerRequest.input?.endsWith(userText)).toBe(true);

@@ -1,12 +1,19 @@
 import type { CrokiApplication, CrokiApplicationSource } from "@croki/shared/crokiApplication";
-import { CircleDot } from "lucide-react";
+import type {
+  CrokiApplicationObservation,
+  CrokiApplicationProgress,
+} from "@croki/shared/crokiApplicationProgress";
+import { ArrowRight, CircleDot } from "lucide-react";
 
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic";
 
 export function CrokiApplicationIndicator(props: {
   readonly state: CrokiApplicationState;
+  readonly progress?: CrokiApplicationProgress | null;
   readonly workspaceRoot?: string | null | undefined;
+  readonly onPrepareRelease?: (() => void) | undefined;
+  readonly onOpenObservation?: ((observation: CrokiApplicationObservation) => void) | undefined;
 }) {
   const workspace = props.workspaceRoot ? workspaceLabel(props.workspaceRoot) : null;
   if (props.state.status === "absent" || props.state.status === "loading") {
@@ -45,22 +52,52 @@ export function CrokiApplicationIndicator(props: {
       >
         <CircleDot className="size-3.5 shrink-0" aria-hidden />
         <span className="whitespace-nowrap tabular-nums">{versionLabel}</span>
+        {props.progress && props.progress.observations.length > 0 ? (
+          <span className="whitespace-nowrap text-muted-foreground/60">
+            · {props.progress.observations.filter((item) => item.state === "verified").length}{" "}
+            verified
+          </span>
+        ) : null}
         {workspace ? (
           <span className="truncate text-muted-foreground/60">· {workspace}</span>
         ) : null}
       </PopoverTrigger>
       <PopoverPopup align="start" side="bottom" className="w-80 p-0" viewportClassName="p-3">
-        <ApplicationDetails application={application} />
+        <CrokiApplicationDetails
+          application={application}
+          progress={props.progress ?? null}
+          {...(props.onPrepareRelease ? { onPrepareRelease: props.onPrepareRelease } : {})}
+          {...(props.onOpenObservation ? { onOpenObservation: props.onOpenObservation } : {})}
+        />
       </PopoverPopup>
     </Popover>
   );
 }
 
-function ApplicationDetails(props: { readonly application: CrokiApplication }) {
+export function CrokiApplicationDetails(props: {
+  readonly application: CrokiApplication;
+  readonly progress: CrokiApplicationProgress | null;
+  readonly onPrepareRelease?: (() => void) | undefined;
+  readonly onOpenObservation?: ((observation: CrokiApplicationObservation) => void) | undefined;
+}) {
   const { released, building } = props.application;
+  const observations = props.progress?.observations ?? [];
+  const verifiedCount = observations.filter(
+    (observation) => observation.state === "verified",
+  ).length;
+  const reportedCount = observations.filter(
+    (observation) => observation.state === "reported",
+  ).length;
   return (
     <div className="grid gap-3 text-xs">
-      <p className="font-medium text-foreground">{props.application.application.name}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-medium text-foreground">{props.application.application.name}</p>
+        {observations.length > 0 ? (
+          <p className="tabular-nums text-muted-foreground">
+            {verifiedCount} verified{reportedCount > 0 ? ` · ${reportedCount} reported` : ""}
+          </p>
+        ) : null}
+      </div>
       <dl className="grid grid-cols-[4.5rem_1fr] gap-x-3 gap-y-1.5 text-muted-foreground">
         {released ? (
           <>
@@ -84,6 +121,59 @@ function ApplicationDetails(props: { readonly application: CrokiApplication }) {
         </dd>
       </dl>
       {released ? <p className="leading-4 text-muted-foreground">{released.summary}</p> : null}
+      {observations.length > 0 ? (
+        <div className="grid gap-2 border-t border-border pt-3">
+          {observations.slice(0, 5).map((observation) => (
+            <button
+              key={observation.id}
+              type="button"
+              disabled={!observation.source.sourceThreadId || !props.onOpenObservation}
+              onClick={() => props.onOpenObservation?.(observation)}
+              className="grid grid-cols-[4.25rem_1fr] gap-2 text-left enabled:hover:opacity-80 disabled:cursor-default"
+            >
+              <span
+                className={
+                  observation.state === "verified"
+                    ? "text-emerald-400"
+                    : observation.state === "invalidated"
+                      ? "text-red-400"
+                      : "text-muted-foreground"
+                }
+              >
+                {observation.state}
+              </span>
+              <span className="min-w-0 text-foreground">{observation.summary}</span>
+            </button>
+          ))}
+          {props.progress?.truncated ? (
+            <p className="text-muted-foreground">Showing the most recent evidence.</p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="border-t border-border pt-3 text-muted-foreground">
+          No project evidence has accumulated yet.
+        </p>
+      )}
+      {building?.successSignals.length ? (
+        <div className="grid gap-2 border-t border-border pt-3">
+          {building.successSignals.map((signal) => (
+            <div key={signal} className="grid grid-cols-[4.25rem_1fr] gap-2">
+              <span className="text-muted-foreground">unproven</span>
+              <span className="text-foreground">{signal}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {building && props.onPrepareRelease ? (
+        <button
+          type="button"
+          onClick={props.onPrepareRelease}
+          className="flex items-center justify-between border-t border-border pt-3 text-left font-medium text-foreground hover:text-foreground/80"
+        >
+          Prepare {building.version} release lineage
+          <ArrowRight className="size-3.5" aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }

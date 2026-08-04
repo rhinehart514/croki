@@ -44,6 +44,10 @@ import { truncate } from "@croki/shared/String";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@croki/shared/terminalLabels";
 import type { CrokiContextReference } from "@croki/shared/crokiContext";
 import { CROKI_APPLICATION_RELATIVE_PATH } from "@croki/shared/crokiApplication";
+import {
+  deriveCrokiApplicationProgress,
+  type CrokiApplicationObservation,
+} from "@croki/shared/crokiApplicationProgress";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -254,6 +258,7 @@ import { deriveCrokiApplicationState } from "./chat/CrokiApplicationPresentation
 import {
   buildCrokiGtmExplorationPrompt,
   buildCrokiRepositoryBootstrapPrompt,
+  buildCrokiReleaseLineagePrompt,
   buildCrokiTurnUpdatePrompt,
   mergePreparedComposerPrompt,
 } from "./chat/CrokiProposalPrompts.logic";
@@ -2543,6 +2548,11 @@ function ChatViewContent(props: ChatViewProps) {
       crokiApplicationFileQuery.isPending,
     ],
   );
+  useEffect(() => {
+    if (latestTurnSettled && activeLatestTurn?.turnId) {
+      crokiApplicationFileQuery.refresh();
+    }
+  }, [activeLatestTurn?.turnId, crokiApplicationFileQuery.refresh, latestTurnSettled]);
   const activeWorkspaceKey =
     activeProject && activeWorkspaceRoot
       ? `${activeProject.environmentId}:${activeWorkspaceRoot}`
@@ -2577,9 +2587,10 @@ function ChatViewContent(props: ChatViewProps) {
     ],
   );
   const projectPerceptionQuery = useEnvironmentQuery(
-    canvasEnabled &&
-      activeProject &&
-      (activeRightPanelSurface?.kind === "canvas" || canvasSelectionNodeIds.length > 0)
+    activeProject &&
+      ((canvasEnabled &&
+        (activeRightPanelSurface?.kind === "canvas" || canvasSelectionNodeIds.length > 0)) ||
+        crokiApplicationContext?.status === "loaded")
       ? orchestrationEnvironment.projectPerception({
           environmentId: activeProject.environmentId,
           input: { projectId: activeProject.id, limit: 200 },
@@ -2587,6 +2598,16 @@ function ChatViewContent(props: ChatViewProps) {
       : null,
   );
   const canvasWorkingModel = projectPerceptionQuery.data ?? canvasPerceptionFrame;
+  const crokiApplicationProgress = useMemo(
+    () =>
+      crokiApplicationContext?.status === "loaded" && projectPerceptionQuery.data
+        ? deriveCrokiApplicationProgress(
+            crokiApplicationContext.application,
+            projectPerceptionQuery.data,
+          )
+        : null,
+    [crokiApplicationContext, projectPerceptionQuery.data],
+  );
   const hasNativeCanvasPerception = canvasWorkingModel.objects.some(
     (object) =>
       object.source.kind !== "thread" &&
@@ -2814,6 +2835,10 @@ function ChatViewContent(props: ChatViewProps) {
       useRightPanelStore.getState().close(activeThreadRef);
     }
   }, [activeThreadRef, crokiWorkspaceRoot, prepareCrokiComposerRequest]);
+  const prepareApplicationRelease = useCallback(() => {
+    if (!crokiWorkspaceRoot) return;
+    prepareCrokiComposerRequest(buildCrokiReleaseLineagePrompt(crokiWorkspaceRoot));
+  }, [crokiWorkspaceRoot, prepareCrokiComposerRequest]);
   const prepareCanvasGtmExploration = useCallback(() => {
     if (!crokiWorkspaceRoot) return;
     prepareCrokiComposerRequest(buildCrokiGtmExplorationPrompt(crokiWorkspaceRoot));
@@ -3358,6 +3383,14 @@ function ChatViewContent(props: ChatViewProps) {
       });
     },
     [activeProject, navigate],
+  );
+  const openApplicationObservation = useCallback(
+    (observation: CrokiApplicationObservation) => {
+      if (observation.source.sourceThreadId) {
+        openCanvasSourceThread(String(observation.source.sourceThreadId));
+      }
+    },
+    [openCanvasSourceThread],
   );
   const openCanvasArtifact = useCallback(
     (presentation: CanvasPresentationTimelineActivity) => {
@@ -6493,6 +6526,9 @@ function ChatViewContent(props: ChatViewProps) {
                               activeThreadModelSelection={activeThread?.modelSelection}
                               activeThreadActivities={activeThread?.activities}
                               applicationContext={crokiApplicationContext}
+                              applicationProgress={crokiApplicationProgress}
+                              onPrepareApplicationRelease={prepareApplicationRelease}
+                              onOpenApplicationObservation={openApplicationObservation}
                               canvasSelection={selectedCanvasNodes}
                               applicationWorkspaceRoot={crokiWorkspaceRoot}
                               resolvedTheme={resolvedTheme}
