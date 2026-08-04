@@ -29,8 +29,16 @@ export function HomeRouteScreen() {
   const { savedConnectionsById } = useSavedRemoteConnections();
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState("");
-  const { archiveThread, confirmDeleteThread, settleThread, unsettleThread } =
-    useThreadListActions();
+  const {
+    archiveThread,
+    confirmDeleteThread,
+    settleThread,
+    snoozeThread,
+    unsnoozeThread,
+    pinThread,
+    unpinThread,
+    unsettleThread,
+  } = useThreadListActions();
   const pendingTasks = usePendingNewTasks();
   const { openPendingTask, confirmDeletePendingTask } = usePendingTaskListActions();
   const environments = useMemo(() => {
@@ -138,6 +146,10 @@ export function HomeRouteScreen() {
           onDeleteThread={confirmDeleteThread}
           onSettleThread={settleThread}
           onUnsettleThread={unsettleThread}
+          onSnoozeThread={snoozeThread}
+          onUnsnoozeThread={unsnoozeThread}
+          onPinThread={pinThread}
+          onUnpinThread={unpinThread}
           onEnvironmentChange={setSelectedEnvironmentId}
           onProjectChange={setSelectedProjectKey}
           onOpenEnvironments={() =>
