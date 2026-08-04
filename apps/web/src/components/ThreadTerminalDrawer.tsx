@@ -46,7 +46,6 @@ import {
 import {
   isDiffToggleShortcut,
   isTerminalClearShortcut,
-  isTerminalCloseShortcut,
   isTerminalNewShortcut,
   isTerminalSplitShortcut,
   isTerminalSplitVerticalShortcut,
@@ -66,6 +65,7 @@ import { previewEnvironment } from "../state/preview";
 import { terminalEnvironment } from "../state/terminal";
 import { openTerminalLinkInPreview } from "./preview/openTerminalLinkInPreview";
 import { useAtomCommand } from "../state/use-atom-command";
+import { preventTerminalCloseShortcut } from "../lib/terminalCloseShortcut";
 
 const MIN_DRAWER_HEIGHT = 180;
 const MAX_DRAWER_HEIGHT_RATIO = 0.75;
@@ -528,12 +528,14 @@ export function TerminalViewport({
     terminal.attachCustomKeyEventHandler((event) => {
       const currentKeybindings = keybindingsRef.current;
       const options = { context: { terminalFocus: true, terminalOpen: true } };
+      if (preventTerminalCloseShortcut(event, currentKeybindings)) {
+        return false;
+      }
       if (
         isTerminalToggleShortcut(event, currentKeybindings, options) ||
         isTerminalSplitShortcut(event, currentKeybindings, options) ||
         isTerminalSplitVerticalShortcut(event, currentKeybindings, options) ||
         isTerminalNewShortcut(event, currentKeybindings, options) ||
-        isTerminalCloseShortcut(event, currentKeybindings, options) ||
         isDiffToggleShortcut(event, currentKeybindings, options)
       ) {
         return false;
