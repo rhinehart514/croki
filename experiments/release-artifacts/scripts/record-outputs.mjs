@@ -1,21 +1,21 @@
-import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const manifestPath = path.join(root, "provenance", "manifest.json");
-const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+const root = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
+const manifestPath = NodePath.join(root, "provenance", "manifest.json");
+const manifest = JSON.parse(NodeFS.readFileSync(manifestPath, "utf8"));
 const specifications = [
   { file: "croki-launch-16x9.mp4", composition: "CrokiLaunch16x9" },
   { file: "croki-launch-9x16.mp4", composition: "CrokiLaunch9x16" },
 ];
 
 manifest.production.outputs = specifications.map(({ file, composition }) => {
-  const target = path.join(root, "output", file);
+  const target = NodePath.join(root, "output", file);
   const probe = JSON.parse(
-    execFileSync(
+    NodeChildProcess.execFileSync(
       "ffprobe",
       [
         "-v",
@@ -35,7 +35,7 @@ manifest.production.outputs = specifications.map(({ file, composition }) => {
   return {
     file,
     composition,
-    sha256: createHash("sha256").update(readFileSync(target)).digest("hex"),
+    sha256: NodeCrypto.createHash("sha256").update(NodeFS.readFileSync(target)).digest("hex"),
     durationSeconds: Number(probe.format.duration),
     width: video.width,
     height: video.height,
@@ -47,5 +47,5 @@ manifest.production.outputs = specifications.map(({ file, composition }) => {
 });
 manifest.production.renderedAt = new Date().toISOString();
 
-writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+NodeFS.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 process.stdout.write("Recorded final output hashes and media metadata.\n");

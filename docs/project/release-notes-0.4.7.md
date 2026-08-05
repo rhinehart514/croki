@@ -76,6 +76,14 @@ intact until the founder chooses **Keep**, **Combine**, or **Discard**; integrat
 visible in Thread and inspectable in Review. Canvas remains optional and disappears
 from ordinary surfaces when its Beta is disabled.
 
+## Release artifact studio
+
+The repository includes the reproducible Remotion studio used to express this release.
+It carries source captures, motion provenance, landscape and portrait compositions,
+review generation, licensing notes, and deterministic validation. Croki-native project
+actions set up, launch, render, review, and validate the artifacts without restoring the
+retired `t3.json` configuration.
+
 ## The boundary
 
 The foundational ontology is deliberately small:

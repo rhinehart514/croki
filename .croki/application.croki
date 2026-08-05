@@ -12,61 +12,38 @@
   "venture": ".croki/venture.croki",
   "activeRelease": ".croki/releases/0.4.7.croki",
   "released": {
-    "version": "0.4.5",
-    "summary": "Croki is a founder-focused ADE where native coding-agent Threads remain the durable execution spine and project work stays inspectable through files, terminal, preview, Git, checkpoints, Review, Senses, and child Threads.",
+    "version": "0.4.7",
+    "summary": "Croki is an application-aware development environment where founders build through native coding-agent Threads, inspect real product behavior, explore ideas separately, and ship one coherent product.",
     "product": [
       "Configured Codex, Claude, Cursor, Grok, OpenCode, and OpenClaw providers retain their native behavior by default.",
-      "Parallel workers persist as read-only child Threads beneath one canonical founder conversation.",
-      "Croki Senses derives bounded project perception from real Thread and runtime activity.",
-      "Founder Mode explicitly joins product reality, implementation, customer evidence, market direction, positioning, and distribution for one turn."
+      "Application, Concept, Release, and Venture .croki objects open as generated visual product worlds and supply bounded factual perception to agents.",
+      "Separately explored Concepts inherit relevant parent reality while remaining isolated in native worktree Threads.",
+      "Preview preserves checked-screen history and offers a default-off Beta for App, Component, and Idea exploration.",
+      "Parallel workers persist as read-only child Threads beneath one canonical founder conversation."
     ],
     "gtm": [
       "Croki is for founders building real software with coding agents.",
-      "The credible promise is one coherent environment for directing, inspecting, verifying, and shipping native agent work.",
+      "The credible promise is building many ideas independently without losing the coherence of the application they belong to.",
       "Product and market claims must remain tied to observed behavior and source provenance."
     ],
     "learnings": [
-      "Canvas is useful as an automatic projection, not as manually maintained project memory or a second workflow system.",
-      "Delegated work must remain inspectable without creating another task database or writable conversation surface.",
-      "Project perception must be derived on demand rather than delaying startup with a second persistent cache."
+      "A .croki object earns its boundary only when an agent can enter, inherit context, work independently, and reconcile it with a parent.",
+      "Product and GTM are lenses of the same scope rather than separate object kinds.",
+      "Perception must be derived on demand from native work instead of becoming a second workflow database."
     ],
     "sources": [
       {
         "kind": "git-tag",
-        "ref": "v0.4.5"
+        "ref": "v0.4.7"
       },
       {
         "kind": "release-url",
-        "url": "https://github.com/rhinehart514/croki/releases/tag/v0.4.5"
+        "url": "https://github.com/rhinehart514/croki/releases/tag/v0.4.7"
       },
       {
         "kind": "file",
-        "path": "docs/project/release-notes-0.4.5.md"
+        "path": "docs/project/release-notes-0.4.7.md"
       }
-    ]
-  },
-  "building": {
-    "version": "0.4.7",
-    "intent": "Give developers application awareness without asking them to adopt another framework, while letting every coding agent return to interfaces it has actually checked.",
-    "product": [
-      "Preserve successful Preview snapshots as durable checked-screen evidence in the originating Thread.",
-      "Let providers with Croki MCP list and reopen prior checked screens through the read-only ui_history sense.",
-      "Show recent checked screens inside Preview without adding a design mode, dashboard, or second memory database.",
-      "Keep current snapshot delivery working when UI history persistence is unavailable.",
-      "Open Application, Concept, Release, and Venture .croki scopes as generated visual product worlds with source available on demand."
-    ],
-    "gtm": [
-      "Make Croki's design advantage concrete: models can return to UI they actually saw.",
-      "Describe preserved observations as UI history, checked screens, and checked flows rather than an abstract perception system.",
-      "Keep project design language authoritative instead of positioning Croki as a house UI kit.",
-      "Let founders explore many ideas independently while still shipping one coherent product story."
-    ],
-    "successSignals": [
-      "A successful preview_snapshot creates one durable checked screen with its PNG, route, dimensions, diagnostics, action count, and source turn.",
-      "A later provider can list UI history and reopen the exact image for one selected check.",
-      "Preview shows checked screens after Thread reload without replacing the live page.",
-      "Missing historical images and failed persistence remain explicit and never become verification claims.",
-      "Every referenced .croki scope validates, renders visually, and contributes only bounded factual perception to provider turns."
     ]
   }
 }

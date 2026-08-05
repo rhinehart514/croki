@@ -1,12 +1,14 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const draft = path.join(root, "output", "draft-16x9.mp4");
-const contactSheet = path.join(root, "review", "contact-sheet.jpg");
-const revisions = JSON.parse(readFileSync(path.join(root, "review", "revisions.json"), "utf8"));
+const root = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
+const draft = NodePath.join(root, "output", "draft-16x9.mp4");
+const contactSheet = NodePath.join(root, "review", "contact-sheet.jpg");
+const revisions = JSON.parse(
+  NodeFS.readFileSync(NodePath.join(root, "review", "revisions.json"), "utf8"),
+);
 const scenes = [
   { time: 2.5, label: "Agents" },
   { time: 7.5, label: "Intent" },
@@ -16,7 +18,7 @@ const scenes = [
 ];
 
 for (const [index, scene] of scenes.entries()) {
-  execFileSync(
+  NodeChildProcess.execFileSync(
     "ffmpeg",
     [
       "-y",
@@ -28,17 +30,20 @@ for (const [index, scene] of scenes.entries()) {
       "1",
       "-vf",
       "scale=640:-2",
-      path.join(root, "review", `frame-${index + 1}.jpg`),
+      NodePath.join(root, "review", `frame-${index + 1}.jpg`),
     ],
     { stdio: "ignore" },
   );
 }
 
-execFileSync(
+NodeChildProcess.execFileSync(
   "ffmpeg",
   [
     "-y",
-    ...scenes.flatMap((_, index) => ["-i", path.join(root, "review", `frame-${index + 1}.jpg`)]),
+    ...scenes.flatMap((_, index) => [
+      "-i",
+      NodePath.join(root, "review", `frame-${index + 1}.jpg`),
+    ]),
     "-filter_complex",
     `hstack=inputs=${scenes.length}`,
     contactSheet,
@@ -96,5 +101,5 @@ const html = `<!doctype html>
 <script>for(const button of document.querySelectorAll('[data-time]'))button.addEventListener('click',()=>{const video=document.querySelector('#draft');video.currentTime=Number(button.dataset.time);video.play()})</script>
 </html>`;
 
-writeFileSync(path.join(root, "review", "index.html"), html);
-process.stdout.write(`Review generated at ${path.join(root, "review", "index.html")}\n`);
+NodeFS.writeFileSync(NodePath.join(root, "review", "index.html"), html);
+process.stdout.write(`Review generated at ${NodePath.join(root, "review", "index.html")}\n`);

@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeChildProcess from "node:child_process";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const output = path.join(root, "public", "audio", "croki-score.wav");
+const root = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
+const output = NodePath.join(root, "public", "audio", "croki-score.wav");
 
 const inputs = [
   "anoisesrc=color=brown:amplitude=0.08:duration=27:sample_rate=48000",
@@ -32,7 +32,7 @@ const filter = [
   "[bed][bass][a2][a3][a4][a5][w1][w2][w3][w4]amix=inputs=10:normalize=0,highpass=f=35,lowpass=f=16000,loudnorm=I=-18:TP=-2:LRA=6[out]",
 ].join(";");
 
-execFileSync(
+NodeChildProcess.execFileSync(
   "ffmpeg",
   [
     "-y",

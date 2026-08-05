@@ -495,7 +495,7 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness({ baseDir, projectWorkspaceRoot: workspaceRoot });
     const userText = "Keep this exact user message";
 
-    await Effect.runPromise(
+    await harness.dispatch(
       harness.engine.dispatch({
         type: "thread.meta.update",
         commandId: CommandId.make("cmd-croki-context-worktree"),

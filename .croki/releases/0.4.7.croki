@@ -5,7 +5,7 @@
     "id": "croki-0.4.7",
     "name": "Croki 0.4.7",
     "version": "0.4.7",
-    "status": "integrating"
+    "status": "released"
   },
   "parent": {
     "application": "Croki",
@@ -18,7 +18,9 @@
   "intent": "Make a normal repository aware of the product it belongs to, and let agents return to real interfaces they have checked.",
   "concepts": [
     "application-sense",
-    "checked-screen-history"
+    "checked-screen-history",
+    "preview-exploration",
+    "release-artifacts"
   ],
   "product": {
     "before": [
@@ -34,7 +36,8 @@
       "The composer continuously shows application, release, and Concept scope.",
       "Developers can inspect visual .croki objects or open the exact structured source.",
       "Application, Concept, Release, and Venture scopes share one validated semantic model.",
-      "Preview records successful UI checks as durable evidence without replacing the live page."
+      "Preview records successful UI checks as durable evidence without replacing the live page.",
+      "Preview can discover components and develop provisional App, Component, and Idea options in the project’s real runtime."
     ],
     "removed": [
       "Manually synchronized concept indexes",
@@ -50,7 +53,8 @@
     "demoMoments": [
       "Open Croki’s application object and move visually from released reality into the 0.4.7 release story.",
       "Open a child Concept, inspect inherited truth, then return to its parent application.",
-      "Reopen a checked screen from UI history in a later Thread turn."
+      "Reopen a checked screen from UI history in a later Thread turn.",
+      "Launch the release-artifact studio and render the 0.4.7 product story in landscape or portrait."
     ]
   },
   "proof": [
