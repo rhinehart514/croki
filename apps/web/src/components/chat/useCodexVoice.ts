@@ -25,6 +25,7 @@ export function useCodexVoice(input: {
 }) {
   const { environmentId, threadId, onError } = input;
   const [state, setState] = useState<VoiceState>("idle");
+  const [eventsEnabled, setEventsEnabled] = useState(false);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const ownerRef = useRef<{ environmentId: EnvironmentId; threadId: ThreadId } | null>(null);
@@ -34,7 +35,7 @@ export function useCodexVoice(input: {
   const startVoice = useAtomCommand(codexVoice.start, { reportFailure: false });
   const stopVoice = useAtomCommand(codexVoice.stop, { reportFailure: false });
   const voiceEvent = useAtomValue(
-    state === "connecting" || state === "listening"
+    eventsEnabled
       ? codexVoice.eventsAtom({ environmentId, input: { threadId } })
       : dormantVoiceEventAtom,
   );
@@ -61,6 +62,7 @@ export function useCodexVoice(input: {
   const fail = useCallback(
     (message: string) => {
       attemptRef.current += 1;
+      setEventsEnabled(false);
       onErrorRef.current(`${message} You can keep typing normally.`);
       setState("error");
       void stopOwnedSession();
@@ -70,6 +72,7 @@ export function useCodexVoice(input: {
 
   const stop = useCallback(async () => {
     attemptRef.current += 1;
+    setEventsEnabled(false);
     setState("stopping");
     const result = await stopOwnedSession();
     if (result?._tag === "Failure") {
@@ -97,6 +100,7 @@ export function useCodexVoice(input: {
     } else if (event.type === "closed") {
       releaseBrowserAudio();
       ownerRef.current = null;
+      setEventsEnabled(false);
       if (event.reason) onErrorRef.current(`Voice ended: ${event.reason}`);
       setState("idle");
     }
@@ -160,6 +164,7 @@ export function useCodexVoice(input: {
         return;
       }
       if (result._tag === "Failure") throw Cause.squash(result.cause);
+      setEventsEnabled(true);
     } catch (cause) {
       if (!isCurrentAttempt()) return;
       const message = cause instanceof Error ? cause.message : "Codex voice could not start.";
@@ -171,6 +176,7 @@ export function useCodexVoice(input: {
     const owner = ownerRef.current;
     if (owner && (owner.environmentId !== environmentId || owner.threadId !== threadId)) {
       attemptRef.current += 1;
+      setEventsEnabled(false);
       void stopOwnedSession();
       setState("idle");
     }

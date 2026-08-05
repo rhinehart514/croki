@@ -12,6 +12,7 @@ it("loads the shared Croki context entry through the Node runtime", () => {
       'const context = await import("@croki/shared/crokiContext"); process.stdout.write(String(context.CROKI_CONTEXT_VERSION));',
     ],
     {
+      cwd: new URL("../../../", import.meta.url),
       encoding: "utf8",
     },
   );

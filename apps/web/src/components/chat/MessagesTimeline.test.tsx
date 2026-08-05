@@ -123,6 +123,11 @@ vi.mock("@pierre/diffs/react", () => {
   return { FileDiff: MockFileDiff };
 });
 
+vi.mock("~/assets/assetUrls", () => ({
+  useAssetUrls: (_environmentId: unknown, resources: ReadonlyArray<unknown>) =>
+    resources.map((_, index) => `https://example.com/checked-screen-${index + 1}.png`),
+}));
+
 function matchMedia() {
   return {
     matches: false,
@@ -224,6 +229,109 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("renders one plain completion receipt for a turn's checked screens", () => {
+    const turnId = TurnId.make("turn-ui-check");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "ui-check:turn-ui-check",
+            kind: "work",
+            createdAt: MESSAGE_CREATED_AT,
+            entry: {
+              id: "croki.ui.check:turn-ui-check",
+              label: "Checked 2 screens",
+              tone: "info",
+              turnId,
+              createdAt: MESSAGE_CREATED_AT,
+              sourceActivityKind: "croki.ui.check",
+              uiCheck: {
+                status: "checked",
+                turnId,
+                createdAt: MESSAGE_CREATED_AT,
+                visibleFiles: ["apps/web/src/ProjectOverview.tsx"],
+                issueCount: 1,
+                screens: [
+                  {
+                    id: "screen-desktop",
+                    attachmentId: "attachment-desktop",
+                    url: "http://localhost:5173/",
+                    title: "Project overview",
+                    observedAt: MESSAGE_CREATED_AT,
+                    width: 1_280,
+                    height: 800,
+                    interactiveElementCount: 8,
+                    consoleErrorCount: 0,
+                    networkFailureCount: 0,
+                    actionCount: 2,
+                  },
+                  {
+                    id: "screen-tablet",
+                    attachmentId: "attachment-tablet",
+                    url: "http://localhost:5173/",
+                    title: "Project overview",
+                    observedAt: MESSAGE_CREATED_AT,
+                    width: 768,
+                    height: 1_024,
+                    interactiveElementCount: 8,
+                    consoleErrorCount: 1,
+                    networkFailureCount: 0,
+                    actionCount: 2,
+                  },
+                ],
+              },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Checked 2 screens");
+    expect(markup).toContain("· 2 sizes · 1 browser issue");
+    expect(markup).toContain(
+      'aria-label="Checked 2 screens. 2 sizes · 1 browser issue. Open checked screens"',
+    );
+    expect(markup).not.toContain("Work Log");
+  });
+
+  it("renders visible work without evidence as a quiet non-interactive result", () => {
+    const turnId = TurnId.make("turn-ui-not-checked");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "ui-check:turn-ui-not-checked",
+            kind: "work",
+            createdAt: MESSAGE_CREATED_AT,
+            entry: {
+              id: "croki.ui.check:turn-ui-not-checked",
+              label: "Not checked",
+              tone: "info",
+              turnId,
+              createdAt: MESSAGE_CREATED_AT,
+              sourceActivityKind: "croki.ui.check",
+              uiCheck: {
+                status: "not-checked",
+                turnId,
+                createdAt: MESSAGE_CREATED_AT,
+                visibleFiles: ["apps/web/src/ProjectOverview.tsx"],
+                issueCount: 0,
+                screens: [],
+              },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Not checked");
+    expect(markup).toContain("Visible changes have no rendered evidence");
+    expect(markup).not.toContain("Open checked screens");
+    expect(markup).not.toContain("Work Log");
+  });
+
   it("renders assistant image attachments and markdown images inline", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline

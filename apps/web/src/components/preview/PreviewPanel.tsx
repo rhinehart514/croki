@@ -1,6 +1,6 @@
 "use client";
 
-import type { ScopedThreadRef } from "@croki/contracts";
+import type { OrchestrationThreadActivity, ScopedThreadRef } from "@croki/contracts";
 
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 
@@ -13,6 +13,7 @@ interface Props {
   tabId?: string | null;
   configuredUrls?: ReadonlyArray<string> | undefined;
   visible: boolean;
+  activities?: ReadonlyArray<OrchestrationThreadActivity> | undefined;
   onAddCanvasEvidence?: ((url: string) => void) | undefined;
 }
 
@@ -22,6 +23,7 @@ export function PreviewPanel({
   tabId,
   configuredUrls,
   visible,
+  activities,
   onAddCanvasEvidence,
 }: Props) {
   if (!isPreviewSupportedInRuntime()) {
@@ -43,6 +45,7 @@ export function PreviewPanel({
         {...(tabId !== undefined ? { tabId } : {})}
         configuredUrls={configuredUrls}
         visible={visible}
+        activities={activities}
         onAddCanvasEvidence={onAddCanvasEvidence}
       />
     </PreviewPanelShell>

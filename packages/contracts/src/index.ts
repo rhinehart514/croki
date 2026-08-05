@@ -32,3 +32,5 @@ export * from "./resourceTelemetry.ts";
 export * from "./rpc.ts";
 export * from "./perception.ts";
 export * from "./evidence.ts";
+export * from "./uiHistory.ts";
+export * from "./applicationAwareness.ts";

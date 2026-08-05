@@ -46,6 +46,7 @@ import {
   ChevronRightIcon,
   CircleAlertIcon,
   EyeIcon,
+  EyeOffIcon,
   GlobeIcon,
   HammerIcon,
   MessageCircleIcon,
@@ -123,6 +124,9 @@ import { CrokiAppliedContextReceipt } from "./CrokiContextPresentation";
 import { CoordinationWorkstreams } from "./CoordinationWorkstreams";
 import { useSmoothStreamingText } from "./useSmoothStreamingText";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { applicationAwarenessToolPreview } from "./applicationAwarenessPresentation";
+import { useAssetUrls } from "~/assets/assetUrls";
+import { uiHistoryEntryLabel } from "~/components/preview/uiHistory";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -1302,28 +1306,33 @@ const WorkGroupSection = memo(function WorkGroupSection({
     [groupedEntries],
   );
   const onlyToolEntries = nonEmptyEntries.every((entry) => workLogEntryIsToolLike(entry));
-  const groupLabel = onlyToolEntries
-    ? nonEmptyEntries.length === 1
-      ? "1 tool call"
-      : `${nonEmptyEntries.length} tool calls`
-    : "Work Log";
+  const onlyUiChecks = nonEmptyEntries.every((entry) => entry.uiCheck !== undefined);
+  const groupLabel = onlyUiChecks
+    ? "UI check"
+    : onlyToolEntries
+      ? nonEmptyEntries.length === 1
+        ? "1 tool call"
+        : `${nonEmptyEntries.length} tool calls`
+      : "Work Log";
 
   if (nonEmptyEntries.length === 0) return null;
 
   return (
     <section className="-mx-1 space-y-0.5 px-1 py-0.5" aria-label={groupLabel}>
-      {!onlyToolEntries && (
+      {!onlyToolEntries && !onlyUiChecks && (
         <p className="px-0.5 pb-0.5 font-medium text-[11px] text-muted-foreground/65">
           {groupLabel}
         </p>
       )}
       <div className="space-y-px">
         {nonEmptyEntries.map((workEntry) => (
-          <SimpleWorkEntryRow
-            key={workEntry.id}
-            workEntry={workEntry}
-            workspaceRoot={workspaceRoot}
-          />
+          <Fragment key={workEntry.id}>
+            {workEntry.uiCheck ? (
+              <UiCheckReceiptRow workEntry={workEntry} />
+            ) : (
+              <SimpleWorkEntryRow workEntry={workEntry} workspaceRoot={workspaceRoot} />
+            )}
+          </Fragment>
         ))}
       </div>
     </section>
@@ -1975,9 +1984,11 @@ function workToneIcon(tone: TimelineWorkEntry["tone"]): {
 }
 
 function workEntryPreview(
-  workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles">,
+  workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles" | "toolData">,
   workspaceRoot: string | undefined,
 ) {
+  const applicationPreview = applicationAwarenessToolPreview(workEntry.toolData);
+  if (applicationPreview) return applicationPreview;
   if (workEntry.command) return workEntry.command;
   if (workEntry.detail) return workEntry.detail;
   if ((workEntry.changedFiles?.length ?? 0) === 0) return null;
@@ -2231,5 +2242,93 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
         </div>
       ) : null}
     </div>
+  );
+});
+
+const UiCheckReceiptRow = memo(function UiCheckReceiptRow(props: { workEntry: TimelineWorkEntry }) {
+  const { activeThreadEnvironmentId, onImageExpand } = use(TimelineRowCtx);
+  const receipt = props.workEntry.uiCheck!;
+  const resources = useMemo(
+    () =>
+      receipt.screens.map((screen) => ({
+        _tag: "attachment" as const,
+        attachmentId: screen.attachmentId,
+      })),
+    [receipt.screens],
+  );
+  const assetUrls = useAssetUrls(activeThreadEnvironmentId, resources);
+  const images = useMemo(
+    () =>
+      receipt.screens.flatMap((screen, index) => {
+        const src = assetUrls[index];
+        return src
+          ? [
+              {
+                src,
+                name: `${uiHistoryEntryLabel(screen)} · ${screen.width}×${screen.height}`,
+              },
+            ]
+          : [];
+      }),
+    [assetUrls, receipt.screens],
+  );
+  const screenCount = receipt.screens.length;
+  const viewportCount = new Set(receipt.screens.map((screen) => `${screen.width}×${screen.height}`))
+    .size;
+  const label =
+    receipt.status === "checked"
+      ? `Checked ${screenCount} screen${screenCount === 1 ? "" : "s"}`
+      : receipt.status === "unavailable"
+        ? "Check unavailable"
+        : "Not checked";
+  const detail =
+    receipt.status === "checked"
+      ? [
+          `${viewportCount} size${viewportCount === 1 ? "" : "s"}`,
+          receipt.issueCount > 0
+            ? `${receipt.issueCount} browser issue${receipt.issueCount === 1 ? "" : "s"}`
+            : null,
+        ]
+          .filter((value): value is string => value !== null)
+          .join(" · ")
+      : receipt.status === "unavailable"
+        ? "Croki could not determine the final rendered state"
+        : "Visible changes have no rendered evidence";
+  const icon =
+    receipt.status === "checked" ? (
+      receipt.issueCount > 0 ? (
+        <CircleAlertIcon className="size-3.5 text-warning" aria-hidden />
+      ) : (
+        <CheckIcon className="size-3.5 text-muted-foreground" aria-hidden />
+      )
+    ) : receipt.status === "unavailable" ? (
+      <CircleAlertIcon className="size-3.5 text-warning" aria-hidden />
+    ) : (
+      <EyeOffIcon className="size-3.5 text-warning" aria-hidden />
+    );
+  const content = (
+    <>
+      <span className="flex size-5 shrink-0 items-center justify-center">{icon}</span>
+      <span className="min-w-0 flex-1 text-[12px] leading-5">
+        <span className="font-medium text-foreground/82">{label}</span>
+        <span className="ml-1.5 text-muted-foreground/55">· {detail}</span>
+      </span>
+      {images.length > 0 ? (
+        <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/55" aria-hidden />
+      ) : null}
+    </>
+  );
+
+  return images.length > 0 ? (
+    <button
+      type="button"
+      className="flex w-full cursor-pointer items-center gap-1.5 rounded-md px-0.5 py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+      aria-label={`${label}. ${detail}. Open checked screens`}
+      onClick={() => onImageExpand({ images, index: images.length - 1 })}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className="flex items-center gap-1.5 px-0.5 py-0.5">{content}</div>
   );
 });

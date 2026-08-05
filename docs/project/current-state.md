@@ -1,14 +1,16 @@
 # Current project state
 
-Last audited: 2026-08-03
-Code baseline: Croki 0.4.6 application lineage on `croki/main`
+Last audited: 2026-08-05
+Code baseline: Croki 0.4.7 UI history foundation on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow Croki overlay on Croki rather than a second agent runtime.
 
-Croki 0.4.6 is the current repository version; 0.4.5 remains the latest
+Croki 0.4.7 is the current repository version; 0.4.5 remains the latest
 published baseline inherited by it. See the [0.4.6 release
-notes](./release-notes-0.4.6.md) and [release ownership contract](../operations/release.md)
+notes](./release-notes-0.4.6.md), [0.4.7 UI history
+plan](./release-notes-0.4.7.md), [0.4.8 application awareness
+plan](./release-notes-0.4.8.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
 ## Working product
@@ -29,9 +31,53 @@ Croki currently provides:
 - local and remote environment connection paths, including desktop-managed SSH
   and Croki Connect compatibility infrastructure;
 - Croki branding and completion feedback;
-- optional repository-owned application lineage at `.croki/application.json`,
+- optional repository-owned application lineage at `.croki/application.croki`,
   which joins inherited released reality with the version currently being built;
 - the true Canvas / Croki Senses projection established by the 0.4.2 migration.
+
+## UI history
+
+Croki 0.4.7 preserves successful model-driven Preview snapshots as checked
+screens in the originating Thread. Each entry keeps the exact image and bounded
+page evidence, and the read-only `ui_history` model tool can list or reopen it
+in a later turn. Preview projects recent checked screens under **UI history**;
+there is no separate authored history database or design workflow.
+
+Likely user-visible turns now also receive one compact result after the answer.
+Same-turn snapshots collapse into **Checked _n_ screens** and open as a gallery;
+visible checkpoint files without a snapshot say **Not checked**; nonvisual turns
+add nothing. This receipt is derived from Croki-owned evidence and stays visible
+when turn internals fold. It proves only that those screens were captured during
+the turn, not complete design, flow, accessibility, breakpoint, or production
+coverage.
+
+UI history currently records individual screens. It does not yet compare
+checkpoints, connect action sequences into checked flows, discover missing
+states, sweep responsive widths, or import production behavior. Capture and the
+founder-facing history control currently share Preview's desktop-only boundary.
+Images follow Thread attachment cleanup, but rolling retention and
+deduplication are not yet needed or implemented for explicit model checks.
+
+## Application awareness
+
+The 0.4.8 foundation gives native providers with Croki MCP one read-only
+`application_observe` frame: project-declared direction, the invoking Thread's
+branch/worktree and latest checkpoint files, project-wide checked screens, and
+bounded Senses evidence. Every screen is qualified by source Thread and screen
+id so forked observations cannot resolve ambiguously. A model may select a
+baseline and target screen for factual diagnostic deltas, then reopen either
+exact PNG with `application_screen`.
+
+Croki does not author the product conclusion. Approval of the current direction
+file is explicitly unverified at read time, observed evidence stays separate
+from declaration, and missing or stale coverage remains visible. The provider
+uses its native reasoning and repository tools to judge user responsibility and
+mission continuity.
+
+MCP-backed application observation is not available to OpenClaw's current ACP
+bridge or external OpenCode sessions. Those paths still receive bounded
+application lineage and retain native file/Git inspection, but cannot yet reopen
+project-wide checked screens through this capability.
 
 Provider support means that an adapter and product surface exist. A provider is
 ready only when its required local CLI, authentication, model access, and
@@ -48,7 +94,7 @@ source provenance, confidence, read-only authority, and explicit separation
 from founder-approved canon.
 
 Source adapters may observe evidence; Threads may investigate and compare it;
-neither action promotes an inference into `.croki/application.json`. Raw customer
+neither action promotes an inference into `.croki/application.croki`. Raw customer
 transcripts, private adapter payloads, and connector-specific data do not enter
 the perception packet. Consequential GTM writes remain outside Senses and still
 require native tools and explicit authority.
@@ -98,7 +144,7 @@ sent turn; the provider can inspect their sources through read-only Senses.
 Canvas never injects bodies, grants authority, or changes provider behavior.
 Failed sends preserve the focus and successful turn starts clear it.
 
-`.croki/application.json` is the active founder-approved product and GTM
+`.croki/application.croki` is the active founder-approved product and GTM
 inheritance boundary. It records released reality and the version being built;
 Canvas may eventually project that lineage, but does not own or maintain it.
 The previous `.croki/context.json` Release, Context, and agent-authored Artifact
@@ -108,16 +154,65 @@ the active application model.
 ## Application lineage
 
 Croki 0.4.6 begins application-aware development. When
-`.croki/application.json` exists, the composer shows the released-to-building
-transition and every provider turn receives the same bounded factual product
-and GTM lineage. The stored user message remains unchanged, native provider
-behavior remains the default, and malformed or absent lineage never blocks a
-turn.
+`.croki/application.croki` exists, the Thread header shows the
+released-to-building transition beside the selected project and every provider
+turn receives the same bounded factual product and GTM lineage. The stored user
+message remains unchanged, native provider behavior remains the default, and
+malformed or absent lineage never blocks a turn.
 
 The file belongs to the canonical project root and therefore applies across
 native worktrees. Git tags, hosted release URLs, and repository files can be
 recorded as provenance, but no Git remote or GitHub account is required. An
-empty project without lineage shows no negative context state.
+empty project without lineage shows no negative context state. The project
+header offers **Set application direction** instead. Its popup prepares
+application identity and the current version from a root `package.json`,
+`pyproject.toml`, or `Cargo.toml`; a manifest description or recent project
+Thread titles supply a proposed building intent. The founder reviews the
+proposal and either confirms it or sends it into the current Thread under the
+Product behavior for evidence-backed revision. That action selects Product and
+focuses the composer without importing a generated prompt; the founder's own
+comment remains the request. Croki then creates
+`.croki/application.croki`; the write requires the file to remain
+absent and never releases, tags, publishes, or changes provider behavior.
+
+Product is the only behavior offered for ideation. It combines product, GTM,
+and Venture concerns into one founder-judgment turn. Historical Venture and
+split GTM turn metadata remains readable. A founder comment may become a
+proposed application-direction delta in the Thread; only explicit confirmation
+makes that proposal durable project truth.
+
+Application Sense now has four first-class `.croki` boundaries: Venture,
+Application, Release, and Concept. An Application can reference its active
+`.croki/releases/<version>.croki` transition and optional
+`.croki/venture.croki` parent. The server freshly validates and bounds both
+before provider turns. The ADE opens all four kinds as generated visual worlds;
+Release is a before-and-after shipping story and Venture is a restrained
+portfolio view. Raw source remains available on demand. Supporting evidence,
+relationships, Product and GTM lenses, Threads, worktrees, screenshots, plans,
+and prompts do not become more object kinds.
+
+Before each provider turn, Croki also derives a bounded project-activity
+snapshot from durable Thread projections. It includes at most five sibling
+Threads with their title, current state, branch, and latest checkpoint files,
+plus exact file overlaps with the invoking Thread. This observed activity is
+explicitly distinct from founder-approved application direction. Snapshot
+failure never blocks the turn, and sibling message bodies or private reasoning
+are never copied into provider context.
+
+Application Sense now includes scoped Concepts. From an application-aware
+Thread, **Explore separately** creates one
+`.croki/concepts/<id>.croki` object and prepares a worktree Thread on
+`croki/concept/<id>`. The active Concept appears as a breadcrumb beside the
+application transition. Its popover exposes intent, parent versions, branch,
+integration-review state, and archive control.
+
+Concept files are discovered individually and remain self-describing; the
+implementation deliberately has no central index. A Concept turn gets
+only its matching bounded scope plus application reality and relevant sibling
+Thread activity. Creating or requesting integration never rewrites
+`.croki/application.croki`, and no generated Concept prompt is inserted into the
+composer. Portable `.croki` packaging remains a later transport for this same
+object model rather than a second schema.
 
 ## Selected native-provider rule
 
@@ -157,6 +252,9 @@ memory, skills, or model.
   application lineage instead.
 - Additional native senses can expand beyond the initial Thread, preview,
   checkpoint, approval, and runtime sources without changing the frame model.
+- UI history preserves individual model snapshots, but checked-flow timelines,
+  semantic visual comparison, state discovery, responsive sweeps,
+  accessibility embodiment, and production-behavior adapters remain planned.
 - Production releases, Croki CLI publication, Croki-owned relay and web
   destinations, signing, and mobile production deployment remain disabled by
   ownership guards.

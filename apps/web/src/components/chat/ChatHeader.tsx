@@ -19,15 +19,21 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useCrokiProjectFileScripts } from "~/hooks/useCrokiProjectFileScripts";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { cn } from "~/lib/utils";
+import { CrokiApplicationControl } from "./CrokiApplicationControl";
+import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic";
+import { CrokiConceptControl } from "./CrokiConceptControl";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   draftId?: DraftId;
   activeThreadTitle: string;
+  activeThreadBranch: string | null;
   forkedFromThreadTitle: string | undefined;
   activeProjectName: string | undefined;
   activeProjectCwd: string | null;
+  applicationContext: CrokiApplicationState | null;
+  projectThreadTitles: readonly string[];
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
   preferredScriptId: string | null;
@@ -36,6 +42,9 @@ interface ChatHeaderProps {
   rightPanelOpen: boolean;
   gitCwd: string | null;
   onNewThreadInProject: () => void;
+  onExploreApplicationDirection: () => void;
+  onInspectApplicationSource: (relativePath: string) => void;
+  onStartConcept: (branch: string) => Promise<void>;
   onRunProjectScript: (script: ProjectScript) => void;
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<ProjectScriptActionResult>;
   onUpdateProjectScript: (
@@ -62,9 +71,12 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   draftId,
   activeThreadTitle,
+  activeThreadBranch,
   forkedFromThreadTitle,
   activeProjectName,
   activeProjectCwd,
+  applicationContext,
+  projectThreadTitles,
   openInCwd,
   activeProjectScripts,
   preferredScriptId,
@@ -73,6 +85,9 @@ export const ChatHeader = memo(function ChatHeader({
   rightPanelOpen,
   gitCwd,
   onNewThreadInProject,
+  onExploreApplicationDirection,
+  onInspectApplicationSource,
+  onStartConcept,
   onRunProjectScript,
   onAddProjectScript,
   onUpdateProjectScript,
@@ -116,6 +131,27 @@ export const ChatHeader = memo(function ChatHeader({
               </TooltipTrigger>
               <TooltipPopup side="top">New thread in {activeProjectName}</TooltipPopup>
             </Tooltip>
+            {applicationContext && activeProjectCwd ? (
+              <>
+                <CrokiApplicationControl
+                  environmentId={activeThreadEnvironmentId}
+                  state={applicationContext}
+                  workspaceRoot={activeProjectCwd}
+                  projectThreadTitles={projectThreadTitles}
+                  onExploreInThread={onExploreApplicationDirection}
+                  onInspectSource={onInspectApplicationSource}
+                />
+                <CrokiConceptControl
+                  environmentId={activeThreadEnvironmentId}
+                  workspaceRoot={activeProjectCwd}
+                  branch={activeThreadBranch}
+                  application={
+                    applicationContext.status === "loaded" ? applicationContext.application : null
+                  }
+                  onStartConcept={onStartConcept}
+                />
+              </>
+            ) : null}
             <span aria-hidden className="text-muted-foreground/40">
               /
             </span>

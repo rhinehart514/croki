@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { deriveCrokiApplicationState } from "./CrokiApplicationPresentation.logic";
+import {
+  deriveCrokiApplicationState,
+  deriveCrokiApplicationStateWithLegacy,
+} from "./CrokiApplicationPresentation.logic";
 
 const application = JSON.stringify({
   version: 1,
@@ -23,10 +26,38 @@ const application = JSON.stringify({
 });
 
 describe("Croki application presentation state", () => {
+  it("falls back to a legacy JSON file without displacing a native .croki object", () => {
+    const absentCurrent = {
+      data: null,
+      error: "missing",
+      failure: {
+        operation: "realpath-target",
+        relativePath: ".croki/application.croki",
+      },
+      isPending: false,
+    } as const;
+    const legacy = {
+      data: {
+        relativePath: ".croki/application.json",
+        contents: application,
+        byteLength: application.length,
+        truncated: false,
+      },
+      error: null,
+      failure: null,
+      isPending: false,
+    } as const;
+
+    expect(deriveCrokiApplicationStateWithLegacy(absentCurrent, legacy)).toMatchObject({
+      status: "loaded",
+      sourcePath: ".croki/application.json",
+    });
+  });
+
   it("derives released and building versions from the project-owned file", () => {
     const state = deriveCrokiApplicationState({
       data: {
-        relativePath: ".croki/application.json",
+        relativePath: ".croki/application.croki",
         contents: application,
         byteLength: application.length,
         truncated: false,
@@ -37,6 +68,7 @@ describe("Croki application presentation state", () => {
     });
     expect(state).toMatchObject({
       status: "loaded",
+      sourcePath: ".croki/application.croki",
       application: {
         released: { version: "0.4.5" },
         building: { version: "0.4.6" },
@@ -49,14 +81,14 @@ describe("Croki application presentation state", () => {
       deriveCrokiApplicationState({
         data: null,
         error: "missing",
-        failure: { operation: "realpath-target", relativePath: ".croki/application.json" },
+        failure: { operation: "realpath-target", relativePath: ".croki/application.croki" },
         isPending: false,
       }),
     ).toEqual({ status: "absent" });
     expect(
       deriveCrokiApplicationState({
         data: {
-          relativePath: ".croki/application.json",
+          relativePath: ".croki/application.croki",
           contents: "{}",
           byteLength: 2,
           truncated: false,
@@ -91,7 +123,7 @@ describe("Croki application presentation state", () => {
     expect(
       deriveCrokiApplicationState({
         data: {
-          relativePath: ".croki/application.json",
+          relativePath: ".croki/application.croki",
           contents: escaped,
           byteLength: escaped.length,
           truncated: false,

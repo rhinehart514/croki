@@ -386,11 +386,12 @@ describe("ProviderCommandReactor", () => {
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
       Layer.provideMerge(NodeServices.layer),
     );
-    runtime = ManagedRuntime.make(layer);
+    const managedRuntime = ManagedRuntime.make(layer);
+    runtime = managedRuntime;
 
-    const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
-    const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
-    const reactor = await runtime.runPromise(Effect.service(ProviderCommandReactor));
+    const engine = await managedRuntime.runPromise(Effect.service(OrchestrationEngineService));
+    const snapshotQuery = await managedRuntime.runPromise(Effect.service(ProjectionSnapshotQuery));
+    const reactor = await managedRuntime.runPromise(Effect.service(ProviderCommandReactor));
     scope = await Effect.runPromise(Scope.make("sequential"));
     await Effect.runPromise(reactor.start().pipe(Scope.provide(scope)));
     const drain = () => Effect.runPromise(reactor.drain);
@@ -424,6 +425,7 @@ describe("ProviderCommandReactor", () => {
 
     return {
       engine,
+      dispatch: <E>(effect: Effect.Effect<void, E>) => managedRuntime.runPromise(effect),
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       startSession,
       sendTurn,
@@ -446,7 +448,7 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
 
-    await Effect.runPromise(
+    await harness.dispatch(
       harness.engine.dispatch({
         type: "thread.turn.start",
         commandId: CommandId.make("cmd-turn-start-1"),
@@ -591,7 +593,7 @@ describe("ProviderCommandReactor", () => {
     const workspaceRoot = NodePath.join(baseDir, "project");
     NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".croki"), { recursive: true });
     NodeFS.writeFileSync(
-      NodePath.join(workspaceRoot, ".croki", "application.json"),
+      NodePath.join(workspaceRoot, ".croki", "application.croki"),
       JSON.stringify({
         version: 1,
         application: { name: "Croki" },

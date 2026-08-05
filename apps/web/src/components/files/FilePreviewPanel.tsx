@@ -39,6 +39,11 @@ import { previewEnvironment } from "~/state/preview";
 import { projectEnvironment } from "~/state/projects";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
+import { CrokiObjectSurface } from "~/components/croki/CrokiObjectSurface";
+import {
+  isCrokiObjectPath,
+  parseCrokiVisualObject,
+} from "~/components/croki/CrokiObjectSurface.logic";
 
 import FileBrowserPanel from "./FileBrowserPanel";
 import {
@@ -75,6 +80,7 @@ interface FilePreviewPanelProps {
   revealLine: number | null;
   revealRequestId: number;
   onOpenFile: (relativePath: string) => void;
+  onShapeApplication?: (() => void) | undefined;
   onPendingChange: (relativePath: string, pending: boolean) => void;
   onAddCanvasEvidence?: ((relativePath: string, line: number) => void) | undefined;
 }
@@ -674,6 +680,7 @@ export default function FilePreviewPanel({
   revealLine,
   revealRequestId,
   onOpenFile,
+  onShapeApplication,
   onPendingChange,
   onAddCanvasEvidence,
 }: FilePreviewPanelProps) {
@@ -690,6 +697,8 @@ export default function FilePreviewPanel({
   const isImage = relativePath !== null && isWorkspaceImagePreviewPath(relativePath);
   const file = useProjectFileQuery(environmentId, cwd, relativePath, !isImage);
   const [explorerOpen, setExplorerOpen] = useState(initialExplorerOpen);
+  const [crokiSourcePath, setCrokiSourcePath] = useState<string | null>(null);
+  const [crokiExplorerPath, setCrokiExplorerPath] = useState<string | null>(null);
   // Reading markdown rendered is a preference, not a property of one file. Keeping
   // it on the panel meant a thread switch dropped it and forced source back.
   const [renderMarkdownPreferred, setRenderMarkdownPreferred] = useLocalStorage(
@@ -705,6 +714,14 @@ export default function FilePreviewPanel({
   );
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const isMarkdown = relativePath ? isMarkdownPreviewFile(relativePath) : false;
+  const isCrokiObject = isCrokiObjectPath(relativePath);
+  const showCrokiSource = isCrokiObject && crokiSourcePath === relativePath;
+  const renderCrokiObject = isCrokiObject && !showCrokiSource;
+  const crokiExplorerOpen = isCrokiObject && crokiExplorerPath === relativePath;
+  const crokiVisualObject = useMemo(
+    () => (renderCrokiObject && file.data ? parseCrokiVisualObject(file.data.contents) : null),
+    [file.data, renderCrokiObject],
+  );
   // A reveal still wins over the preference: the line only exists in the source.
   const renderMarkdown =
     isMarkdown &&
@@ -738,6 +755,13 @@ export default function FilePreviewPanel({
       return next;
     });
   };
+  const toggleVisibleExplorer = () => {
+    if (!isCrokiObject) {
+      toggleExplorer();
+      return;
+    }
+    setCrokiExplorerPath((current) => (current === relativePath ? null : relativePath));
+  };
 
   const handleOpenInBrowser = useCallback(() => {
     if (!absolutePath || !environmentHttpBaseUrl) return;
@@ -767,39 +791,49 @@ export default function FilePreviewPanel({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {relativePath ? (
         <div className="surface-subheader gap-2 px-3" data-surface-subheader>
-          <ScrollArea
-            ref={breadcrumbRef}
-            hideScrollbars
-            scrollFade
-            className="min-w-0 flex-1 rounded-none"
-            data-file-breadcrumbs
-          >
-            <div className="flex h-full w-max min-w-full items-center text-xs">
-              {breadcrumbs.map((crumb, index) => (
-                <div
-                  key={crumb.path || "project"}
-                  className="flex min-w-0 shrink-0 items-center"
-                  data-current-file-crumb={crumb.kind === "file"}
-                >
-                  {index > 0 ? (
-                    <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground/60" />
-                  ) : null}
-                  <span
-                    className={cn(
-                      "max-w-40 truncate",
-                      crumb.kind === "file"
-                        ? "font-medium text-foreground"
-                        : "text-muted-foreground",
-                    )}
-                    title={crumb.path || projectName}
-                  >
-                    {crumb.label}
-                  </span>
-                </div>
-              ))}
+          {renderCrokiObject ? (
+            <div className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+              {crokiVisualObject?.kind === "application"
+                ? crokiVisualObject.application.application.name
+                : crokiVisualObject?.kind === "concept"
+                  ? `${crokiVisualObject.concept.parent.application} / ${crokiVisualObject.concept.concept.name}`
+                  : "Application"}
             </div>
-          </ScrollArea>
-          {absolutePath && environmentId === primaryEnvironmentId ? (
+          ) : (
+            <ScrollArea
+              ref={breadcrumbRef}
+              hideScrollbars
+              scrollFade
+              className="min-w-0 flex-1 rounded-none"
+              data-file-breadcrumbs
+            >
+              <div className="flex h-full w-max min-w-full items-center text-xs">
+                {breadcrumbs.map((crumb, index) => (
+                  <div
+                    key={crumb.path || "project"}
+                    className="flex min-w-0 shrink-0 items-center"
+                    data-current-file-crumb={crumb.kind === "file"}
+                  >
+                    {index > 0 ? (
+                      <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground/60" />
+                    ) : null}
+                    <span
+                      className={cn(
+                        "max-w-40 truncate",
+                        crumb.kind === "file"
+                          ? "font-medium text-foreground"
+                          : "text-muted-foreground",
+                      )}
+                      title={crumb.path || projectName}
+                    >
+                      {crumb.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+          {absolutePath && environmentId === primaryEnvironmentId && !renderCrokiObject ? (
             <OpenInPicker
               environmentId={environmentId}
               keybindings={keybindings}
@@ -808,6 +842,35 @@ export default function FilePreviewPanel({
               compact
               enableShortcut={false}
             />
+          ) : null}
+          {isCrokiObject ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    className="shrink-0"
+                    pressed={showCrokiSource}
+                    onPressedChange={(pressed) =>
+                      setCrokiSourcePath(pressed && relativePath ? relativePath : null)
+                    }
+                    aria-label={
+                      showCrokiSource ? "View .croki application" : "Inspect .croki source"
+                    }
+                    variant="ghost"
+                    size="sm"
+                  >
+                    {showCrokiSource ? (
+                      <Eye className="size-3.5" />
+                    ) : (
+                      <Code2 className="size-3.5" />
+                    )}
+                  </Toggle>
+                }
+              />
+              <TooltipPopup>
+                {showCrokiSource ? "View .croki application" : "Inspect .croki source"}
+              </TooltipPopup>
+            </Tooltip>
           ) : null}
           {isMarkdown ? (
             <Tooltip>
@@ -856,25 +919,37 @@ export default function FilePreviewPanel({
               <TooltipPopup>Open file in preview browser</TooltipPopup>
             </Tooltip>
           ) : null}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  className="shrink-0"
-                  pressed={explorerOpen}
-                  onPressedChange={toggleExplorer}
-                  aria-label={explorerOpen ? "Hide file explorer" : "Show file explorer"}
-                  variant="ghost"
-                  size="sm"
-                >
-                  <FolderTree className="size-3.5" />
-                </Toggle>
-              }
-            />
-            <TooltipPopup>
-              {explorerOpen ? "Hide file explorer" : "Show file explorer"}
-            </TooltipPopup>
-          </Tooltip>
+          {!renderCrokiObject ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    className="shrink-0"
+                    pressed={isCrokiObject ? crokiExplorerOpen : explorerOpen}
+                    onPressedChange={toggleVisibleExplorer}
+                    aria-label={
+                      isCrokiObject
+                        ? crokiExplorerOpen
+                          ? "Hide file explorer"
+                          : "Show file explorer"
+                        : explorerOpen
+                          ? "Hide file explorer"
+                          : "Show file explorer"
+                    }
+                    variant="ghost"
+                    size="sm"
+                  >
+                    <FolderTree className="size-3.5" />
+                  </Toggle>
+                }
+              />
+              <TooltipPopup>
+                {(isCrokiObject ? crokiExplorerOpen : explorerOpen)
+                  ? "Hide file explorer"
+                  : "Show file explorer"}
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
         </div>
       ) : null}
       {relativePath && file.data?.truncated ? (
@@ -889,7 +964,17 @@ export default function FilePreviewPanel({
             relativePath ? "flex" : "hidden",
           )}
         >
-          {relativePath && isImage && absolutePath ? (
+          {relativePath && file.data && renderCrokiObject ? (
+            <CrokiObjectSurface
+              environmentId={environmentId}
+              cwd={cwd}
+              relativePath={relativePath}
+              contents={file.data.contents}
+              onOpenFile={onOpenFile}
+              onShapeApplication={onShapeApplication}
+              onInspectSource={() => setCrokiSourcePath(relativePath)}
+            />
+          ) : relativePath && isImage && absolutePath ? (
             <WorkspaceImagePreview
               key={absolutePath}
               environmentId={environmentId}
@@ -959,7 +1044,7 @@ export default function FilePreviewPanel({
             )
           ) : null}
         </div>
-        {explorerOpen || relativePath === null ? (
+        {(!isCrokiObject && explorerOpen) || crokiExplorerOpen || relativePath === null ? (
           <aside
             className={cn(
               "flex min-h-0 shrink-0 bg-background",

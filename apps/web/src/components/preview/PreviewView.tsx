@@ -4,11 +4,12 @@ import { scopedThreadKey } from "@croki/client-runtime/environment";
 import { squashAtomCommandFailure } from "@croki/client-runtime/state/runtime";
 import {
   FILL_PREVIEW_VIEWPORT,
+  type OrchestrationThreadActivity,
   type PreviewViewportSetting,
   type ScopedThreadRef,
 } from "@croki/contracts";
 import { normalizePreviewUrl } from "@croki/shared/preview";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useComposerDraftStore } from "~/composerDraftStore";
 import { previewAnnotationScreenshotFile } from "~/lib/previewAnnotation";
@@ -54,14 +55,19 @@ import {
   useActiveBrowserRecordingTabIds,
 } from "~/browser/browserRecording";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+import { UiHistoryControl } from "./UiHistoryControl";
+import { deriveUiHistoryEntries } from "./uiHistory";
 
 interface Props {
   threadRef: ScopedThreadRef;
   tabId?: string | null;
   configuredUrls?: ReadonlyArray<string> | undefined;
   visible: boolean;
+  activities?: ReadonlyArray<OrchestrationThreadActivity> | undefined;
   onAddCanvasEvidence?: ((url: string) => void) | undefined;
 }
+
+const EMPTY_THREAD_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = [];
 
 const localApi = typeof window === "undefined" ? null : ensureLocalApi();
 
@@ -74,6 +80,7 @@ export function PreviewView({
   tabId: requestedTabId,
   configuredUrls,
   visible,
+  activities = EMPTY_THREAD_ACTIVITIES,
   onAddCanvasEvidence,
 }: Props) {
   const [focusUrlNonce, setFocusUrlNonce] = useState<number | undefined>(undefined);
@@ -91,6 +98,7 @@ export function PreviewView({
   const environmentHttpBaseUrl = useEnvironmentHttpBaseUrl(threadRef.environmentId);
   const open = useAtomCommand(previewEnvironment.open);
   const resize = useAtomCommand(previewEnvironment.resize, "preview viewport resize");
+  const uiHistoryEntries = useMemo(() => deriveUiHistoryEntries(activities), [activities]);
 
   usePreviewSession(threadRef);
 
@@ -611,6 +619,19 @@ export function PreviewView({
     });
   }, [handleRefresh, handleResetZoom, handleZoomIn, handleZoomOut, visible]);
 
+  const previewMoreMenu = previewBridge ? (
+    <PreviewMoreMenu
+      tabId={runtimeTabId}
+      hasWebContents={desktopOverlay?.hasWebContents ?? false}
+      zoomFactor={desktopOverlay?.zoomFactor ?? 1}
+      colorScheme={desktopOverlay?.colorScheme ?? "system"}
+      deviceToolbarVisible={viewport._tag !== "fill"}
+      onToggleDeviceToolbar={handleToggleDeviceToolbar}
+      nativePictureInPicture={desktopOverlay?.pictureInPicture ?? false}
+      onNativePictureInPicture={handleNativePictureInPicture}
+    />
+  ) : null;
+
   return (
     <div
       className="flex min-h-0 flex-1 flex-col bg-background"
@@ -649,18 +670,17 @@ export function PreviewView({
           isUnreachable ? "Page didn't load — pick unavailable until the page renders" : undefined
         }
         trailingActions={
-          previewBridge ? (
-            <PreviewMoreMenu
-              tabId={runtimeTabId}
-              hasWebContents={desktopOverlay?.hasWebContents ?? false}
-              zoomFactor={desktopOverlay?.zoomFactor ?? 1}
-              colorScheme={desktopOverlay?.colorScheme ?? "system"}
-              deviceToolbarVisible={viewport._tag !== "fill"}
-              onToggleDeviceToolbar={handleToggleDeviceToolbar}
-              nativePictureInPicture={desktopOverlay?.pictureInPicture ?? false}
-              onNativePictureInPicture={handleNativePictureInPicture}
-            />
-          ) : null
+          uiHistoryEntries.length > 0 ? (
+            <>
+              <UiHistoryControl
+                environmentId={threadRef.environmentId}
+                entries={uiHistoryEntries}
+              />
+              {previewMoreMenu}
+            </>
+          ) : (
+            previewMoreMenu
+          )
         }
       />
 

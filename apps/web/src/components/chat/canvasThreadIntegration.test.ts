@@ -123,6 +123,35 @@ describe("Canvas thread integration", () => {
     expect(frame.relationships.some((relationship) => relationship.kind === "contains")).toBe(true);
   });
 
+  it("keeps checked-screen attachment frames inspectable", () => {
+    const frame = deriveCanvasPerceptionFrame({
+      threadId: "thread-1",
+      activities: [
+        activity({
+          id: "checked-screen-1" as OrchestrationThreadActivity["id"],
+          kind: "preview.snapshot",
+          summary: "Checked Settings",
+          payload: {
+            frame: {
+              kind: "attachment",
+              ref: "thread-1-00000000-0000-4000-8000-000000000001",
+              mimeType: "image/png",
+              width: 1_280,
+              height: 800,
+            },
+          },
+        }),
+      ],
+      checkpoints: [],
+      activeTurnId: "turn-1",
+    });
+
+    expect(frame.frame).toMatchObject({
+      kind: "attachment",
+      ref: "thread-1-00000000-0000-4000-8000-000000000001",
+    });
+  });
+
   it("parses a sense observation while preserving compact receipts", () => {
     const senseActivity = activity({
       id: "sense-1" as OrchestrationThreadActivity["id"],

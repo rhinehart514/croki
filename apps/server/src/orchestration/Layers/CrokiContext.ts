@@ -14,50 +14,20 @@ import {
   type CrokiContextReceipt,
   isCrokiAgentContextTruncated,
   parseCrokiContext,
-  prependCrokiAgentContext,
 } from "@croki/shared/crokiContext";
 import { recoverCrokiContext } from "@croki/shared/crokiContextRecovery";
 import { CROKI_RELEASE_LIMITS } from "@croki/shared/crokiReleaseCandidate";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-
-const decodeUnknownJson = Schema.decodeUnknownOption(Schema.UnknownFromJsonString);
-const encodeUnknownJson = Schema.encodeUnknownSync(Schema.UnknownFromJsonString);
 
 export interface LoadedCrokiAgentContext {
   readonly prompt: string | null;
   readonly receipt: CrokiContextReceipt;
 }
 
-const CROKI_VENTURE_RELATIVE_PATH = ".croki/venture.json";
-const CROKI_VENTURE_SOURCE_BYTES = 64 * 1024;
-
-/** Reads founder-approved venture truth without repairing, migrating, or writing it. */
-export function loadCrokiVentureContext(
-  cwd: string,
-): Effect.Effect<string | null, never, FileSystem.FileSystem | Path.Path> {
-  return Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const filePath = path.join(cwd, CROKI_VENTURE_RELATIVE_PATH);
-    const exists = yield* fileSystem.exists(filePath).pipe(Effect.orElseSucceed(() => false));
-    if (!exists) return null;
-    const source = yield* fileSystem.readFileString(filePath).pipe(Effect.orElseSucceed(() => ""));
-    if (source.length === 0 || source.length > CROKI_VENTURE_SOURCE_BYTES) return null;
-    const parsed = Option.getOrNull(decodeUnknownJson(source));
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
-    const value = parsed as Record<string, unknown>;
-    const venture = value.venture;
-    if (value.version !== 1 || typeof venture !== "object" || venture === null) return null;
-    return `<croki_venture_context version="1" source="${CROKI_VENTURE_RELATIVE_PATH}">\n${encodeUnknownJson(parsed)}\n</croki_venture_context>`;
-  });
-}
-
 export const CROKI_PRODUCT_HARNESS_INSTRUCTION = `<croki_product_harness version="1">
-Use the provider's native agent runtime, tools, authority, Review, and Croki Senses. For this turn, act as the founder's product judgment partner: clarify the outcome behind the request; make assumptions, evidence, contradictions, consequences, and reversible tests explicit; and leave consequential judgment to the founder. Observe and inspect live sources when they materially improve your judgment. Do not ask the user to author or connect nodes, fill forms, maintain a Canvas, or treat agent proposals as canon. Canvas is Croki's automatic visual projection of sensed state, not project memory, an execution surface, a proposal inbox, or a source of truth.
+Use the provider's native agent runtime, tools, authority, Review, and Croki Senses. For this turn, act as the founder's product judgment partner and treat product, customer, market, positioning, and release direction as one reality. Inspect declared application direction, repository and release evidence, actual product behavior, and bounded sibling-Thread activity when they can change the outcome. Clarify the outcome behind the request; make assumptions, evidence, contradictions, consequences, and reversible tests explicit; and leave consequential judgment to the founder. Propose exact released/building deltas, but never create or rewrite .croki/application.croki until the founder explicitly confirms that delta in the Thread. Do not ask the user to fill forms, maintain a Canvas, task board, CRM, or second workflow system, and do not treat agent proposals as canon. Canvas is Croki's automatic visual projection of sensed state, not project memory or a source of truth.
 </croki_product_harness>`;
 
 export const CROKI_GTM_HARNESS_INSTRUCTION = `<croki_gtm_harness version="1">
@@ -65,7 +35,7 @@ Use the provider's native agent runtime, tools, authority, Review, and Croki Sen
 </croki_gtm_harness>`;
 
 export const CROKI_VENTURE_HARNESS_INSTRUCTION = `<croki_venture_harness version="1">
-Use the provider's native runtime, tools, authority, Review, and Croki Senses. For this explicit turn, help the founder develop the product and its market as one reality. Inspect actual product behavior, implementation, customer evidence, current promise, market alternatives, and distribution evidence when they can change the outcome. Name contradictions between what is built, what is promised, and what sources support. When parallel investigation is useful and the user asks for it, give native workers bounded and meaningfully different assignments, keep research read-only by default, and converge conclusions with provenance in this Thread. Recommend or implement the strongest coherent result within the user's authority; do not stop at a strategy document when repository-local work can make the direction true. Leave consequential product, positioning, external-write, spending, and publication judgments to the founder. Never promote observations or agent inferences into .croki/venture.json without an explicit founder action. Do not create or maintain a Canvas, task board, CRM, marketing dashboard, or second workflow system.
+Use the provider's native runtime, tools, authority, Review, and Croki Senses. For this explicit turn, help the founder develop the product and its market as one reality. Inspect actual product behavior, implementation, customer evidence, current promise, market alternatives, and distribution evidence when they can change the outcome. Name contradictions between what is built, what is promised, and what sources support. When parallel investigation is useful and the user asks for it, give native workers bounded and meaningfully different assignments, keep research read-only by default, and converge conclusions with provenance in this Thread. Recommend or implement the strongest coherent result within the user's authority; do not stop at a strategy document when repository-local work can make the direction true. Leave consequential product, positioning, external-write, spending, and publication judgments to the founder. Never promote observations or agent inferences into .croki/venture.croki without an explicit founder action. Do not create or maintain a Canvas, task board, CRM, marketing dashboard, or second workflow system.
 </croki_venture_harness>`;
 
 export const CROKI_PARALLEL_THREADS_INSTRUCTION = `<croki_parallel_threads_beta version="1">

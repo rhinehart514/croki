@@ -831,8 +831,9 @@ function parseFrameReference(value: unknown): CanvasPerceptionFrameReference | u
       ? { kind: "inline", ref: "activity:frame" }
       : undefined;
   }
+  const explicitKind = asTrimmedString(record.kind);
   return {
-    kind: asTrimmedString(record.url) ? "url" : "path",
+    kind: explicitKind ?? (asTrimmedString(record.url) ? "url" : "path"),
     ref,
     ...(asTrimmedString(record.mimeType) ? { mimeType: asTrimmedString(record.mimeType)! } : {}),
     ...(typeof record.width === "number" && Number.isFinite(record.width)

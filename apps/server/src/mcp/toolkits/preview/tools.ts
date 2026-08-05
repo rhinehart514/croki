@@ -104,7 +104,7 @@ export const PreviewSetAppearanceTool = safeBrowserTool(
 export const PreviewSnapshotTool = readonlyBrowserTool(
   Tool.make("preview_snapshot", {
     description:
-      "Inspect a page before interacting. Pass tabId to inspect a specific tab; omit it to use this agent session's current tab. Returns page state, semantic elements, diagnostics, action history, and a PNG screenshot.",
+      "Inspect a page before interacting or before reporting user-visible work complete. Pass tabId to inspect a specific tab; omit it to use this agent session's current tab. Returns page state, semantic elements, diagnostics, action history, and a PNG screenshot. A successful snapshot is preserved as this Thread's checked-screen evidence.",
     parameters: PreviewAutomationTabTargetInput,
     success: PreviewAutomationSnapshot,
     failure: PreviewAutomationError,

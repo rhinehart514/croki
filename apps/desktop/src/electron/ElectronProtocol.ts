@@ -42,6 +42,15 @@ export const DESKTOP_PRIVILEGED_SCHEMES: readonly Electron.CustomScheme[] = [
   },
 ];
 
+let desktopSchemesArePrivileged = false;
+
+/** Electron requires this synchronous registration before its ready event. */
+export function registerDesktopSchemesAsPrivileged(): void {
+  if (desktopSchemesArePrivileged) return;
+  Electron.protocol.registerSchemesAsPrivileged([...DESKTOP_PRIVILEGED_SCHEMES]);
+  desktopSchemesArePrivileged = true;
+}
+
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
 }
@@ -217,16 +226,10 @@ async function fetchWithTransientRetry(url: string, init: RequestInit): Promise<
 
 export const make = Effect.gen(function* () {
   const registered = yield* Ref.make(false);
-  const privilegedSchemesRegistered = yield* Ref.make(false);
 
-  const registerPrivilegedSchemes = Effect.gen(function* () {
-    if (yield* Ref.get(privilegedSchemesRegistered)) return;
-
-    yield* Effect.try({
-      try: () => Electron.protocol.registerSchemesAsPrivileged([...DESKTOP_PRIVILEGED_SCHEMES]),
-      catch: (cause) => new ElectronPrivilegedSchemeRegistrationError({ cause }),
-    });
-    yield* Ref.set(privilegedSchemesRegistered, true);
+  const registerPrivilegedSchemes = Effect.try({
+    try: registerDesktopSchemesAsPrivileged,
+    catch: (cause) => new ElectronPrivilegedSchemeRegistrationError({ cause }),
   }).pipe(Effect.withSpan("desktop.electron.protocol.registerPrivilegedSchemes"));
 
   const registerDesktopProtocol = Effect.fn("desktop.electron.protocol.registerDesktopProtocol")(

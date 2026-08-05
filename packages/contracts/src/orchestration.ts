@@ -51,9 +51,10 @@ export type ProviderSandboxMode = typeof ProviderSandboxMode.Type;
 /** Optional, one-turn Croki behavior layered over the provider's native agent runtime. */
 export const CrokiHarnessId = Schema.Literals([
   "native",
+  // Persisted Venture turns remain readable; Product is the only active ideation behavior.
   "venture-v1",
-  // Persisted 0.4.3 turns remain readable; new UI no longer offers these split behaviors.
   "product-v1",
+  // Persisted split GTM turns remain readable; new UI no longer offers this behavior.
   "gtm-v1",
 ]);
 export type CrokiHarnessId = typeof CrokiHarnessId.Type;

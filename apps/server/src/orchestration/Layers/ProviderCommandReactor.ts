@@ -47,7 +47,10 @@ import {
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { loadCrokiApplication } from "./CrokiApplication.ts";
-import { compileCrokiTurnInput, loadCrokiVentureContext } from "./CrokiContext.ts";
+import { loadCrokiConceptContext } from "./CrokiConcepts.ts";
+import { buildCrokiProjectActivityPrompt } from "./CrokiProjectActivity.ts";
+import { compileCrokiTurnInput } from "./CrokiContext.ts";
+import { loadCrokiParentScopes } from "./CrokiScopes.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
@@ -643,16 +646,29 @@ const make = Effect.gen(function* () {
     const normalizedInput = toNonEmptyProviderInput(input.messageText);
     const normalizedAttachments = input.attachments ?? [];
     const project = yield* resolveProject(thread.projectId);
-    const workspaceCwd = resolveThreadWorkspaceCwd({
-      thread,
-      projects: project ? [project] : [],
-    });
     const applicationContext = yield* loadCrokiApplication(project?.workspaceRoot);
-    const ventureContext =
-      input.harnessId === "venture-v1" && workspaceCwd !== undefined
-        ? yield* loadCrokiVentureContext(workspaceCwd)
-        : null;
-    const agentContext = [applicationContext.prompt, ventureContext]
+    const conceptContext = yield* loadCrokiConceptContext(project?.workspaceRoot, thread.branch);
+    const parentScopes = yield* loadCrokiParentScopes(
+      project?.workspaceRoot,
+      applicationContext.application ?? undefined,
+    );
+    const projectActivity = yield* (
+      projectionSnapshotQuery.getProjectPerception?.({ projectId: thread.projectId, limit: 100 }) ??
+      Effect.succeed(Option.none())
+    ).pipe(
+      Effect.match({
+        onFailure: () => null,
+        onSuccess: (snapshot) =>
+          buildCrokiProjectActivityPrompt(Option.getOrNull(snapshot), thread.id),
+      }),
+    );
+    const agentContext = [
+      parentScopes.venturePrompt,
+      applicationContext.prompt,
+      parentScopes.releasePrompt,
+      conceptContext,
+      projectActivity,
+    ]
       .filter((value): value is string => Boolean(value))
       .join("\n\n");
     const providerInput = compileCrokiTurnInput({

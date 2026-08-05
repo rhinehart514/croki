@@ -371,9 +371,11 @@ function deriveTurnFolds(input: {
     }
     const hiddenEntryIds = new Set<string>();
     for (const entry of group.entries) {
-      const isCanvasPresentation =
-        entry.kind === "work" && entry.entry.sourceActivityKind === "croki.canvas.presented";
-      if (entry.id !== group.terminalEntry?.id && !isCanvasPresentation) {
+      const isPersistentEvidence =
+        entry.kind === "work" &&
+        (entry.entry.sourceActivityKind === "croki.canvas.presented" ||
+          entry.entry.uiCheck !== undefined);
+      if (entry.id !== group.terminalEntry?.id && !isPersistentEvidence) {
         hiddenEntryIds.add(entry.id);
       }
     }

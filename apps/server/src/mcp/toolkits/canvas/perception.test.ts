@@ -69,6 +69,38 @@ it("projects stable semantic objects, relationships, affordances, and frame refe
   );
 });
 
+it("preserves attachment-backed UI history frames", () => {
+  const observation = projectThreadPerception({
+    ...threadFixture,
+    activities: [
+      ...threadFixture.activities,
+      {
+        id: "event-checked-screen",
+        tone: "info",
+        kind: "preview.snapshot",
+        summary: "Checked Settings",
+        payload: {
+          frame: {
+            kind: "attachment",
+            ref: "thread-sense-00000000-0000-4000-8000-000000000001",
+            mimeType: "image/png",
+            width: 1_280,
+            height: 800,
+          },
+        },
+        turnId: "turn-sense",
+        sequence: 6,
+        createdAt: "2026-08-02T18:00:04.000Z",
+      },
+    ],
+  } as never);
+
+  expect(observation.frame).toMatchObject({
+    kind: "attachment",
+    ref: "thread-sense-00000000-0000-4000-8000-000000000001",
+  });
+});
+
 it("returns bounded deltas and inspect neighborhoods from a revision cursor", () => {
   const observation = projectThreadPerception(thread, { sinceRevision: 4 });
   expect(observation.changed).toBe(true);

@@ -8,6 +8,8 @@ import {
   type OrchestrationSessionStatus,
   ThreadId,
   TurnId,
+  UI_HISTORY_ACTIVITY_KIND,
+  UiHistoryActivityPayload,
   mergeChatAttachments,
 } from "@croki/contracts";
 import * as Effect from "effect/Effect";
@@ -15,12 +17,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { toPersistenceSqlError, type ProjectionRepositoryError } from "../../persistence/Errors.ts";
 import { OrchestrationEventStore } from "../../persistence/Services/OrchestrationEventStore.ts";
-import { ProjectionCheckpointRepository } from "../../persistence/Services/ProjectionCheckpoints.ts";
 import { ProjectionPendingApprovalRepository } from "../../persistence/Services/ProjectionPendingApprovals.ts";
 import { ProjectionProjectRepository } from "../../persistence/Services/ProjectionProjects.ts";
 import { ProjectionStateRepository } from "../../persistence/Services/ProjectionState.ts";
@@ -112,6 +114,8 @@ interface AttachmentSideEffects {
   readonly deletedThreadIds: Set<string>;
   readonly prunedThreadRelativePaths: Map<string, Set<string>>;
 }
+
+const decodeUiHistoryActivityPayload = Schema.decodeUnknownOption(UiHistoryActivityPayload);
 
 function forkedEntityId(targetThreadId: ThreadId, sourceId: string): string {
   return `fork:${targetThreadId}:${sourceId}`;
@@ -404,6 +408,7 @@ function retainProjectionProposedPlansAfterRevert(
 function collectThreadAttachmentRelativePaths(
   threadId: string,
   messages: ReadonlyArray<ProjectionThreadMessage>,
+  activities: ReadonlyArray<ProjectionThreadActivity> = [],
 ): Set<string> {
   const threadSegment = toSafeThreadAttachmentSegment(threadId);
   if (!threadSegment) {
@@ -421,6 +426,14 @@ function collectThreadAttachmentRelativePaths(
       }
       relativePaths.add(attachmentRelativePath(attachment));
     }
+  }
+  for (const activity of activities) {
+    if (activity.kind !== UI_HISTORY_ACTIVITY_KIND) continue;
+    const payload = Option.getOrUndefined(decodeUiHistoryActivityPayload(activity.payload));
+    if (!payload) continue;
+    const attachmentThreadSegment = parseThreadSegmentFromAttachmentId(payload.entry.attachmentId);
+    if (!attachmentThreadSegment || attachmentThreadSegment !== threadSegment) continue;
+    relativePaths.add(`${payload.entry.attachmentId}.png`);
   }
   return relativePaths;
 }
@@ -554,7 +567,6 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     const projectionThreadSessionRepository = yield* ProjectionThreadSessionRepository;
     const projectionTurnRepository = yield* ProjectionTurnRepository;
     const projectionPendingApprovalRepository = yield* ProjectionPendingApprovalRepository;
-    const projectionCheckpointRepository = yield* ProjectionCheckpointRepository;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const serverConfig = yield* ServerConfig;
@@ -1123,34 +1135,45 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         }
 
         case "thread.reverted": {
-          const existingRows = yield* projectionThreadMessageRepository.listByThreadId({
-            threadId: event.payload.threadId,
-          });
-          if (existingRows.length === 0) {
-            return;
-          }
-
-          const existingTurns = yield* projectionTurnRepository.listByThreadId({
-            threadId: event.payload.threadId,
-          });
+          const [existingRows, existingActivities, existingTurns] = yield* Effect.all([
+            projectionThreadMessageRepository.listByThreadId({
+              threadId: event.payload.threadId,
+            }),
+            projectionThreadActivityRepository.listByThreadId({
+              threadId: event.payload.threadId,
+            }),
+            projectionTurnRepository.listByThreadId({
+              threadId: event.payload.threadId,
+            }),
+          ]);
           const keptRows = retainProjectionMessagesAfterRevert(
             existingRows,
             existingTurns,
             event.payload.turnCount,
           );
-          if (keptRows.length === existingRows.length) {
+          const keptActivities = retainProjectionActivitiesAfterRevert(
+            existingActivities,
+            existingTurns,
+            event.payload.turnCount,
+          );
+          if (
+            keptRows.length === existingRows.length &&
+            keptActivities.length === existingActivities.length
+          ) {
             return;
           }
 
-          yield* projectionThreadMessageRepository.deleteByThreadId({
-            threadId: event.payload.threadId,
-          });
-          yield* Effect.forEach(keptRows, projectionThreadMessageRepository.upsert, {
-            concurrency: 1,
-          }).pipe(Effect.asVoid);
+          if (keptRows.length !== existingRows.length) {
+            yield* projectionThreadMessageRepository.deleteByThreadId({
+              threadId: event.payload.threadId,
+            });
+            yield* Effect.forEach(keptRows, projectionThreadMessageRepository.upsert, {
+              concurrency: 1,
+            }).pipe(Effect.asVoid);
+          }
           attachmentSideEffects.prunedThreadRelativePaths.set(
             event.payload.threadId,
-            collectThreadAttachmentRelativePaths(event.payload.threadId, keptRows),
+            collectThreadAttachmentRelativePaths(event.payload.threadId, keptRows, keptActivities),
           );
           return;
         }
@@ -1261,14 +1284,43 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           yield* Effect.forEach(
             historicalActivities,
             (activity) =>
-              projectionThreadActivityRepository.upsert({
-                ...activity,
-                activityId: forkedActivityId(event.payload.threadId, activity.activityId),
-                threadId: event.payload.threadId,
-                turnId:
-                  activity.turnId === null
-                    ? null
-                    : forkedTurnId(event.payload.threadId, activity.turnId),
+              Effect.gen(function* () {
+                const historyPayload =
+                  activity.kind === UI_HISTORY_ACTIVITY_KIND
+                    ? Option.getOrUndefined(decodeUiHistoryActivityPayload(activity.payload))
+                    : undefined;
+                const payload = historyPayload
+                  ? yield* cloneAttachmentForFork(event.payload.threadId, {
+                      type: "image",
+                      id: historyPayload.entry.attachmentId,
+                      name: "ui-history.png",
+                      mimeType: "image/png",
+                      sizeBytes: 0,
+                    }).pipe(
+                      Effect.map((attachment) => ({
+                        ...historyPayload,
+                        entry: {
+                          ...historyPayload.entry,
+                          attachmentId: attachment.id,
+                        },
+                        frame: {
+                          ...historyPayload.frame,
+                          kind: "attachment",
+                          ref: attachment.id,
+                        },
+                      })),
+                    )
+                  : activity.payload;
+                yield* projectionThreadActivityRepository.upsert({
+                  ...activity,
+                  activityId: forkedActivityId(event.payload.threadId, activity.activityId),
+                  threadId: event.payload.threadId,
+                  payload,
+                  turnId:
+                    activity.turnId === null
+                      ? null
+                      : forkedTurnId(event.payload.threadId, activity.turnId),
+                });
               }),
             { concurrency: 1 },
           );

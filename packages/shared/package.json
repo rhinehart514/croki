@@ -99,6 +99,14 @@
       "types": "./src/crokiApplication.ts",
       "import": "./src/crokiApplication.ts"
     },
+    "./crokiConcepts": {
+      "types": "./src/crokiConcepts.ts",
+      "import": "./src/crokiConcepts.ts"
+    },
+    "./crokiScopes": {
+      "types": "./src/crokiScopes.ts",
+      "import": "./src/crokiScopes.ts"
+    },
     "./crokiCanvasActivity": {
       "types": "./src/crokiCanvasActivity.ts",
       "import": "./src/crokiCanvasActivity.ts"

@@ -302,6 +302,9 @@ describe("T3 browser developer instructions", () => {
       NodeAssert.match(instructions, /croki/);
       NodeAssert.match(instructions, /preview_status/);
       NodeAssert.match(instructions, /preview_open/);
+      NodeAssert.match(instructions, /changes what a user sees or does/);
+      NodeAssert.match(instructions, /checked-screen evidence/);
+      NodeAssert.match(instructions, /nonvisual work/);
       NodeAssert.match(instructions, /Do not switch to global browser skills/);
     }
   });

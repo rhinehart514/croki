@@ -16,8 +16,26 @@ it.effect("loads bounded application context and fails open", () =>
     assert.isNull(absent.prompt);
 
     const crokiDirectory = path.join(cwd, ".croki");
-    const applicationPath = path.join(crokiDirectory, "application.json");
+    const applicationPath = path.join(crokiDirectory, "application.croki");
     yield* fileSystem.makeDirectory(crokiDirectory);
+    const legacyApplicationPath = path.join(crokiDirectory, "application.json");
+    yield* fileSystem.writeFileString(
+      legacyApplicationPath,
+      `{
+        "version": 1,
+        "application": { "name": "Legacy Croki" },
+        "released": {
+          "version": "0.4.5", "summary": "Legacy input remains readable.",
+          "product": [], "gtm": [], "learnings": [], "sources": []
+        }
+      }`,
+    );
+    const legacy = yield* loadCrokiApplication(cwd);
+    assert.equal(legacy.status, "loaded");
+    assert.equal(legacy.sourcePath, ".croki/application.json");
+    assert.include(legacy.prompt ?? "", 'source=".croki/application.json"');
+    yield* fileSystem.remove(legacyApplicationPath);
+
     yield* fileSystem.writeFileString(
       applicationPath,
       `{
@@ -40,6 +58,8 @@ it.effect("loads bounded application context and fails open", () =>
     assert.equal(loaded.status, "loaded");
     assert.include(loaded.prompt ?? "", '"version":"0.4.5"');
     assert.include(loaded.prompt ?? "", '"version":"0.4.6"');
+    assert.include(loaded.prompt ?? "", 'source=".croki/application.croki"');
+    assert.equal(loaded.sourcePath, ".croki/application.croki");
 
     yield* fileSystem.writeFileString(applicationPath, "not json");
     const invalid = yield* loadCrokiApplication(cwd);

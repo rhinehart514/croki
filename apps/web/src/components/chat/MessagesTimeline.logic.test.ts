@@ -641,6 +641,90 @@ describe("deriveMessagesTimelineRows", () => {
     ).toBeDefined();
   });
 
+  it("keeps the UI check receipt visible when the finished turn folds", () => {
+    const turnId = "turn-ui" as never;
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "user-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:00Z",
+          message: {
+            id: "user-1" as never,
+            role: "user",
+            text: "Update Settings",
+            turnId: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-01T00:00:00Z",
+            streaming: false,
+          },
+        },
+        {
+          id: "work-entry",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:05Z",
+          entry: {
+            id: "work-1",
+            createdAt: "2026-01-01T00:00:05Z",
+            turnId,
+            label: "Changed files",
+            tone: "tool",
+          },
+        },
+        {
+          id: "assistant-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:10Z",
+          message: {
+            id: "assistant-1" as never,
+            role: "assistant",
+            text: "Settings is updated.",
+            turnId,
+            createdAt: "2026-01-01T00:00:10Z",
+            updatedAt: "2026-01-01T00:00:10Z",
+            streaming: false,
+          },
+        },
+        {
+          id: "croki.ui.check:turn-ui",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:11Z",
+          entry: {
+            id: "croki.ui.check:turn-ui",
+            createdAt: "2026-01-01T00:00:11Z",
+            turnId,
+            label: "Not checked",
+            tone: "info",
+            sourceActivityKind: "croki.ui.check",
+            uiCheck: {
+              status: "not-checked",
+              turnId,
+              createdAt: "2026-01-01T00:00:11Z",
+              screens: [],
+              visibleFiles: ["apps/web/src/Settings.tsx"],
+              issueCount: 0,
+            },
+          },
+        },
+      ],
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "user-entry",
+      "turn-fold:turn-ui",
+      "assistant-entry",
+      "croki.ui.check:turn-ui",
+    ]);
+    expect(rows.at(-1)).toMatchObject({
+      kind: "work",
+      groupedEntries: [{ label: "Not checked" }],
+    });
+  });
+
   it("derives a sane duration for a steer-superseded turn with one instant commentary message", () => {
     // A steer ends the previous turn early: its only message completes the
     // instant it is created, and trailing work entries land after it. The

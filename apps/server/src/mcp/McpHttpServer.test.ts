@@ -11,6 +11,7 @@ import { HttpBody, HttpClient, HttpRouter, HttpServerResponse } from "effect/uns
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
+import * as UiHistoryStore from "./UiHistoryStore.ts";
 
 const environmentId = EnvironmentId.make("environment-mcp-test");
 const threadId = ThreadId.make("thread-mcp-test");
@@ -34,9 +35,61 @@ const client = McpSchema.McpServerClient.of({
   },
   getClient: Effect.die("unused"),
 });
-const TestLayer = McpHttpServer.PreviewToolkitRegistrationLive.pipe(
+const historyEntry = {
+  id: "screen-history-test",
+  attachmentId: "thread-mcp-test-00000000-0000-4000-8000-000000000001",
+  url: "https://example.com/settings",
+  title: "Settings",
+  observedAt: "2026-08-05T12:00:00.000Z",
+  width: 10,
+  height: 5,
+  interactiveElementCount: 2,
+  consoleErrorCount: 0,
+  networkFailureCount: 0,
+  actionCount: 1,
+} as const;
+const projectScreen = {
+  ref: { sourceThreadId: String(threadId), id: historyEntry.id },
+  entry: historyEntry,
+  sourceThreadId: String(threadId),
+  sourceThreadTitle: "MCP test",
+  turnId: null,
+  sourceThreadBranchAtRead: "main",
+  sourceThreadWorktreeAtRead: null,
+  codeRevision: { kind: "unresolved" as const, reason: "no-checkpoint-for-source-turn" as const },
+  frame: {
+    kind: "attachment" as const,
+    ref: historyEntry.attachmentId,
+    mimeType: "image/png",
+    width: historyEntry.width,
+    height: historyEntry.height,
+  },
+};
+const UiHistoryTestLayer = UiHistoryStore.testingLayer({
+  record: () => Effect.succeed(historyEntry),
+  list: () => Effect.succeed({ entries: [historyEntry], truncated: false }),
+  read: (_threadId, id) =>
+    Effect.succeed(
+      id === historyEntry.id
+        ? { entry: historyEntry, data: new Uint8Array([137, 80, 78, 71]) }
+        : null,
+    ),
+  listProject: () => Effect.succeed({ screens: [projectScreen], truncated: false }),
+  readProject: (_threadId, ref) =>
+    Effect.succeed(
+      ref.sourceThreadId === projectScreen.ref.sourceThreadId && ref.id === historyEntry.id
+        ? { screen: projectScreen, data: new Uint8Array([137, 80, 78, 71]) }
+        : null,
+    ),
+});
+const TestLayer = Layer.mergeAll(
+  McpHttpServer.PreviewToolkitRegistrationLive,
+  McpHttpServer.UiHistoryRegistrationLive,
+  McpHttpServer.ApplicationScreenRegistrationLive,
+).pipe(
   Layer.provideMerge(McpServer.McpServer.layer),
   Layer.provideMerge(PreviewAutomationBroker.layer.pipe(Layer.provide(NodeServices.layer))),
+  Layer.provide(UiHistoryTestLayer),
 );
 
 it("normalizes empty successful notification responses to accepted", () => {
@@ -214,6 +267,16 @@ it.effect("registers annotated tools and preserves authenticated request context
       expect(snapshotTool?.tool.annotations?.idempotentHint).toBe(true);
       expect(snapshotTool?.tool.annotations?.openWorldHint).toBe(true);
 
+      const uiHistoryTool = server.tools.find(({ tool }) => tool.name === "ui_history");
+      expect(uiHistoryTool?.tool.annotations?.readOnlyHint).toBe(true);
+      expect(uiHistoryTool?.tool.annotations?.openWorldHint).toBe(false);
+
+      const applicationScreenTool = server.tools.find(
+        ({ tool }) => tool.name === "application_screen",
+      );
+      expect(applicationScreenTool?.tool.annotations?.readOnlyHint).toBe(true);
+      expect(applicationScreenTool?.tool.annotations?.openWorldHint).toBe(false);
+
       const clickTool = server.tools.find(({ tool }) => tool.name === "preview_click");
       expect(clickTool?.tool.annotations?.readOnlyHint).toBe(false);
       expect(clickTool?.tool.annotations?.destructiveHint).toBe(true);
@@ -253,10 +316,55 @@ it.effect("registers annotated tools and preserves authenticated request context
       expect(snapshot.content.some((content) => content.type === "image")).toBe(true);
       expect(snapshot.structuredContent).toMatchObject({
         screenshot: { mimeType: "image/png", width: 10, height: 5 },
+        uiHistory: { saved: true, id: historyEntry.id },
       });
       expect(routedRequests.find(({ operation }) => operation === "snapshot")?.tabId).toBe(
         alternateTabId,
       );
+
+      const history = yield* server
+        .callTool({ name: "ui_history", arguments: {} })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(history.isError).toBe(false);
+      expect(history.structuredContent).toMatchObject({
+        entries: [{ id: historyEntry.id, title: "Settings" }],
+        truncated: false,
+      });
+
+      const checkedScreen = yield* server
+        .callTool({ name: "ui_history", arguments: { id: historyEntry.id } })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(checkedScreen.isError).toBe(false);
+      expect(checkedScreen.content.some((content) => content.type === "image")).toBe(true);
+
+      const applicationScreen = yield* server
+        .callTool({ name: "application_screen", arguments: projectScreen.ref })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(applicationScreen.isError).toBe(false);
+      expect(applicationScreen.structuredContent).toMatchObject({
+        screen: { ref: projectScreen.ref, entry: { title: "Settings" } },
+      });
+      expect(applicationScreen.content.some((content) => content.type === "image")).toBe(true);
+
+      const ambiguousScreenId = yield* server
+        .callTool({
+          name: "application_screen",
+          arguments: { sourceThreadId: "thread-from-another-project", id: historyEntry.id },
+        })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(ambiguousScreenId.isError).toBe(true);
 
       const press = yield* server
         .callTool({ name: "preview_press", arguments: { key: "Enter" } })

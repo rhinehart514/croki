@@ -43,7 +43,10 @@ import { projectScriptCwd, projectScriptRuntimeEnv } from "@croki/shared/project
 import { truncate } from "@croki/shared/String";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@croki/shared/terminalLabels";
 import type { CrokiContextReference } from "@croki/shared/crokiContext";
-import { CROKI_APPLICATION_RELATIVE_PATH } from "@croki/shared/crokiApplication";
+import {
+  CROKI_APPLICATION_LEGACY_RELATIVE_PATH,
+  CROKI_APPLICATION_RELATIVE_PATH,
+} from "@croki/shared/crokiApplication";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -147,6 +150,7 @@ import {
 } from "../previewMiniPlayerStore";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { CrokiCanvas } from "./croki/CrokiCanvas";
+import { isCrokiObjectPath } from "./croki/CrokiObjectSurface.logic";
 import { addProvisionalCrokiEvidence } from "./croki/crokiCanvasEvidenceDraft";
 import {
   makeCrokiCanvasWorkspaceKey,
@@ -233,9 +237,11 @@ import {
   useThreadProposedPlans,
   useThreadRefs,
   useThreadShell,
+  useThreadShells,
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
+import { conceptThreadOptions } from "./chat/CrokiConceptControl.logic";
 import {
   appendCanvasSelectionToPrompt,
   appendCrokiPerceptionFocusToPrompt,
@@ -250,7 +256,7 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { deriveCrokiContextReceiptsByMessageId } from "./chat/CrokiContextPresentation.logic";
-import { deriveCrokiApplicationState } from "./chat/CrokiApplicationPresentation.logic";
+import { deriveCrokiApplicationStateWithLegacy } from "./chat/CrokiApplicationPresentation.logic";
 import {
   buildCrokiGtmExplorationPrompt,
   buildCrokiRepositoryBootstrapPrompt,
@@ -1722,6 +1728,21 @@ function ChatViewContent(props: ChatViewProps) {
   const handleNewThreadInActiveProject = useCallback(() => {
     startNewThreadForProject(activeProjectRef, handleNewThread);
   }, [activeProjectRef, handleNewThread]);
+  const startConceptThread = useCallback(
+    async (branch: string) => {
+      if (!activeProjectRef) throw new Error("Select a project before creating a concept.");
+      await handleNewThread(activeProjectRef, conceptThreadOptions(branch));
+    },
+    [activeProjectRef, handleNewThread],
+  );
+  const openCrokiApplication = useCallback(
+    (relativePath: string) => {
+      if (!activeThreadRef) return;
+      useRightPanelStore.getState().openFile(activeThreadRef, relativePath);
+      setMaximizedRightPanelThreadKey(routeThreadKey);
+    },
+    [activeThreadRef, routeThreadKey],
+  );
   const activeEnvironmentShell = useEnvironmentQuery(
     activeThread ? environmentShell.stateAtom(activeThread.environmentId) : null,
   );
@@ -2065,7 +2086,10 @@ function ChatViewContent(props: ChatViewProps) {
   const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
   const phase = derivePhase(activeThread?.session ?? null);
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
-  const workLogEntries = useMemo(() => deriveWorkLogEntries(threadActivities), [threadActivities]);
+  const workLogEntries = useMemo(
+    () => deriveWorkLogEntries(threadActivities, activeThread?.checkpoints ?? []),
+    [activeThread?.checkpoints, threadActivities],
+  );
   const crokiContextReceiptsByMessageId = useMemo(
     () => deriveCrokiContextReceiptsByMessageId(threadActivities),
     [threadActivities],
@@ -2524,24 +2548,58 @@ function ChatViewContent(props: ChatViewProps) {
     CROKI_APPLICATION_RELATIVE_PATH,
     activeProject !== null && crokiWorkspaceRoot !== undefined,
   );
-  const crokiApplicationContext = useMemo(
+  const legacyCrokiApplicationFileQuery = useProjectFileQuery(
+    activeProject?.environmentId ?? environmentId,
+    crokiWorkspaceRoot ?? ".",
+    CROKI_APPLICATION_LEGACY_RELATIVE_PATH,
+    activeProject !== null && crokiWorkspaceRoot !== undefined,
+  );
+  const crokiApplicationContext = useMemo(() => {
+    if (!activeProject || !crokiWorkspaceRoot) return null;
+    return deriveCrokiApplicationStateWithLegacy(
+      {
+        data: crokiApplicationFileQuery.data,
+        error: crokiApplicationFileQuery.error,
+        failure: crokiApplicationFileQuery.failure,
+        isPending: crokiApplicationFileQuery.isPending,
+      },
+      {
+        data: legacyCrokiApplicationFileQuery.data,
+        error: legacyCrokiApplicationFileQuery.error,
+        failure: legacyCrokiApplicationFileQuery.failure,
+        isPending: legacyCrokiApplicationFileQuery.isPending,
+      },
+    );
+  }, [
+    activeProject,
+    crokiWorkspaceRoot,
+    crokiApplicationFileQuery.data,
+    crokiApplicationFileQuery.error,
+    crokiApplicationFileQuery.failure,
+    crokiApplicationFileQuery.isPending,
+    legacyCrokiApplicationFileQuery.data,
+    legacyCrokiApplicationFileQuery.error,
+    legacyCrokiApplicationFileQuery.failure,
+    legacyCrokiApplicationFileQuery.isPending,
+  ]);
+  const projectThreadShells = useThreadShells();
+  const projectThreadTitles = useMemo(
     () =>
-      activeProject && crokiWorkspaceRoot
-        ? deriveCrokiApplicationState({
-            data: crokiApplicationFileQuery.data,
-            error: crokiApplicationFileQuery.error,
-            failure: crokiApplicationFileQuery.failure,
-            isPending: crokiApplicationFileQuery.isPending,
-          })
-        : null,
-    [
-      activeProject,
-      crokiWorkspaceRoot,
-      crokiApplicationFileQuery.data,
-      crokiApplicationFileQuery.error,
-      crokiApplicationFileQuery.failure,
-      crokiApplicationFileQuery.isPending,
-    ],
+      activeProject
+        ? projectThreadShells
+            .filter(
+              (thread) =>
+                thread.environmentId === activeProject.environmentId &&
+                thread.projectId === activeProject.id &&
+                thread.id !== activeThread?.id &&
+                thread.archivedAt === null &&
+                thread.title.trim().toLowerCase() !== "new thread",
+            )
+            .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+            .slice(0, 5)
+            .map((thread) => thread.title)
+        : [],
+    [activeProject, activeThread?.id, projectThreadShells],
   );
   const activeWorkspaceKey =
     activeProject && activeWorkspaceRoot
@@ -2800,6 +2858,10 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [composerDraftTarget, scheduleComposerFocus, setComposerDraftPrompt],
   );
+  const prepareApplicationDirectionExploration = useCallback(() => {
+    setCrokiHarnessId("product-v1");
+    scheduleComposerFocus();
+  }, [scheduleComposerFocus, setCrokiHarnessId]);
   const prepareTurnCanvasUpdate = useCallback(
     (turn: Pick<TurnDiffSummary, "turnId" | "files">) => {
       if (!crokiWorkspaceRoot) return;
@@ -3520,8 +3582,11 @@ function ChatViewContent(props: ChatViewProps) {
     (relativePath: string) => {
       if (!activeThreadRef || !activeProject) return;
       useRightPanelStore.getState().openFile(activeThreadRef, relativePath);
+      if (isCrokiObjectPath(relativePath)) {
+        setMaximizedRightPanelThreadKey(routeThreadKey);
+      }
     },
-    [activeProject, activeThreadRef],
+    [activeProject, activeThreadRef, routeThreadKey],
   );
   const togglePreviewPanel = useCallback(() => {
     if (!activeThreadRef || !isPreviewSupportedInRuntime()) return;
@@ -6100,6 +6165,7 @@ function ChatViewContent(props: ChatViewProps) {
           threadRef={activeThreadRef}
           tabId={activeRightPanelSurface.resourceId}
           configuredUrls={configuredPreviewUrls}
+          activities={threadActivities}
           visible
           onAddCanvasEvidence={capturePreviewCanvasEvidence}
         />
@@ -6223,6 +6289,7 @@ function ChatViewContent(props: ChatViewProps) {
           revealLine={activeFileSurface?.revealLine ?? null}
           revealRequestId={activeFileSurface?.revealRequestId ?? 0}
           onOpenFile={openFileSurface}
+          onShapeApplication={prepareApplicationDirectionExploration}
           onPendingChange={handleFilePendingChange}
           onAddCanvasEvidence={captureFileCanvasEvidence}
         />
@@ -6264,12 +6331,15 @@ function ChatViewContent(props: ChatViewProps) {
             activeThreadId={activeThread.id}
             {...(routeKind === "draft" && draftId ? { draftId } : {})}
             activeThreadTitle={activeThread.title}
+            activeThreadBranch={activeThread.branch}
             forkedFromThreadTitle={
               forkSourceThread?.title ??
               (activeServerThread?.forkedFromThreadId ? "deleted thread" : undefined)
             }
             activeProjectName={activeProject?.title}
             activeProjectCwd={activeProject?.workspaceRoot ?? null}
+            applicationContext={crokiApplicationContext}
+            projectThreadTitles={projectThreadTitles}
             openInCwd={gitCwd}
             activeProjectScripts={activeProject?.scripts}
             preferredScriptId={
@@ -6280,6 +6350,9 @@ function ChatViewContent(props: ChatViewProps) {
             rightPanelOpen={rightPanelOpen}
             gitCwd={gitCwd}
             onNewThreadInProject={handleNewThreadInActiveProject}
+            onExploreApplicationDirection={prepareApplicationDirectionExploration}
+            onInspectApplicationSource={openCrokiApplication}
+            onStartConcept={startConceptThread}
             onRunProjectScript={runProjectScript}
             onAddProjectScript={saveProjectScript}
             onUpdateProjectScript={updateProjectScript}
@@ -6492,8 +6565,6 @@ function ChatViewContent(props: ChatViewProps) {
                               }
                               activeThreadModelSelection={activeThread?.modelSelection}
                               activeThreadActivities={activeThread?.activities}
-                              applicationContext={crokiApplicationContext}
-                              applicationWorkspaceRoot={crokiWorkspaceRoot}
                               canvasSelection={selectedCanvasNodes}
                               resolvedTheme={resolvedTheme}
                               settings={settings}

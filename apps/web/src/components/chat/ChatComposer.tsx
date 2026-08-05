@@ -105,8 +105,6 @@ import {
   renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
-import { CrokiApplicationIndicator } from "./CrokiApplicationPresentation";
-import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
@@ -259,7 +257,7 @@ const ComposerBehaviorControls = memo(function ComposerBehaviorControls(props: {
   onTogglePlanSidebar: () => void;
 }) {
   const behaviorLabel = [
-    props.harnessId === "venture-v1" ? "Venture" : "Native",
+    props.harnessId === "product-v1" ? "Product" : "Native",
     props.interactionMode === "plan" ? "Plan" : "Build",
   ].join(" · ");
 
@@ -293,7 +291,7 @@ const ComposerBehaviorControls = memo(function ComposerBehaviorControls(props: {
             }}
           >
             <MenuRadioItem value="native">Native</MenuRadioItem>
-            <MenuRadioItem value="venture-v1">Venture</MenuRadioItem>
+            <MenuRadioItem value="product-v1">Product</MenuRadioItem>
           </MenuRadioGroup>
           {props.showInteractionModeToggle ? (
             <>
@@ -508,9 +506,7 @@ export interface ChatComposerProps {
 
   // Context window
   activeThreadActivities: Thread["activities"] | undefined;
-  applicationContext: CrokiApplicationState | null;
   canvasSelection?: readonly HarnessCanvasArtifactNode[];
-  applicationWorkspaceRoot?: string | null | undefined;
 
   // Misc
   resolvedTheme: "light" | "dark";
@@ -608,9 +604,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeProjectDefaultModelSelection,
     activeThreadModelSelection,
     activeThreadActivities,
-    applicationContext,
     canvasSelection = [],
-    applicationWorkspaceRoot,
     resolvedTheme,
     settings,
     keybindings,
@@ -3092,17 +3086,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   onToggleInteractionMode={toggleInteractionMode}
                   onTogglePlanSidebar={togglePlanSidebar}
                 />
-
-                {activeThread ? (
-                  <>
-                    {applicationContext ? (
-                      <CrokiApplicationIndicator
-                        state={applicationContext}
-                        workspaceRoot={applicationWorkspaceRoot}
-                      />
-                    ) : null}
-                  </>
-                ) : null}
               </div>
 
               {/* Right side: send / stop button */}

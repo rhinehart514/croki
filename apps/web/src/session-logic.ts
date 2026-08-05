@@ -3,6 +3,8 @@ import * as Arr from "effect/Array";
 import {
   ApprovalRequestId,
   isToolLifecycleItemType,
+  UI_HISTORY_ACTIVITY_KIND,
+  type OrchestrationCheckpointSummary,
   type OrchestrationLatestTurn,
   type OrchestrationThreadActivity,
   type OrchestrationProposedPlanId,
@@ -12,6 +14,12 @@ import {
   type ThreadId,
   type TurnId,
 } from "@croki/contracts";
+
+import {
+  deriveUiCheckReceipts,
+  UI_CHECK_RECEIPT_KIND,
+  type UiCheckReceipt,
+} from "./uiCheckReceipt";
 
 import type {
   ChatMessage,
@@ -84,6 +92,8 @@ export interface WorkLogEntry {
   toolLifecycleStatus?: WorkLogToolLifecycleStatus;
   /** Originating orchestration activity kind (e.g. `user-input.requested`) for row chrome. */
   sourceActivityKind?: OrchestrationThreadActivity["kind"];
+  /** One host-derived checked/not-checked result for user-visible work in this turn. */
+  uiCheck?: UiCheckReceipt;
 }
 
 interface DerivedWorkLogEntry extends WorkLogEntry {
@@ -632,6 +642,7 @@ export function hasActionableProposedPlan(
 
 export function deriveWorkLogEntries(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
+  checkpoints: ReadonlyArray<OrchestrationCheckpointSummary> = [],
 ): WorkLogEntry[] {
   const ordered = [...activities].toSorted(compareActivitiesByOrder);
   const entries: DerivedWorkLogEntry[] = [];
@@ -639,14 +650,32 @@ export function deriveWorkLogEntries(
     if (activity.kind === "tool.started") continue;
     if (activity.kind === "task.started") continue;
     if (activity.kind === "context-window.updated") continue;
+    if (activity.kind === UI_HISTORY_ACTIVITY_KIND) continue;
     if (activity.summary === "Checkpoint captured") continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     entries.push(toDerivedWorkLogEntry(activity));
   }
-  return collapseDerivedWorkLogEntries(entries).map((entry) => {
+  const workEntries = collapseDerivedWorkLogEntries(entries).map((entry) => {
     const { activityKind, collapseKey: _collapseKey, ...rest } = entry;
     return Object.assign(rest, { sourceActivityKind: activityKind });
   });
+  const uiChecks: WorkLogEntry[] = deriveUiCheckReceipts(activities, checkpoints).map(
+    (receipt) => ({
+      id: `${UI_CHECK_RECEIPT_KIND}:${receipt.turnId}`,
+      createdAt: receipt.createdAt,
+      turnId: receipt.turnId,
+      label:
+        receipt.status === "checked"
+          ? `Checked ${receipt.screens.length} screen${receipt.screens.length === 1 ? "" : "s"}`
+          : receipt.status === "unavailable"
+            ? "Check unavailable"
+            : "Not checked",
+      tone: "info",
+      sourceActivityKind: UI_CHECK_RECEIPT_KIND,
+      uiCheck: receipt,
+    }),
+  );
+  return [...workEntries, ...uiChecks];
 }
 
 function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): boolean {

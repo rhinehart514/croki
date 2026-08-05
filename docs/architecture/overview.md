@@ -37,11 +37,13 @@ events into one orchestration model without creating a second agent runtime.
 
 - **Provider runtime**: The selected provider does the actual agent/session work. `ProviderService` resolves a configured provider instance and its adapter, then translates provider-native events into Croki's orchestration model. See [Provider architecture](./providers.md).
 
-- **Croki overlay**: Optional project-root application lineage supplies bounded released and building product/GTM facts to provider turns. Croki Senses derive disposable Perception Frames from native Thread, runtime, preview, checkpoint, approval, and source activity. Canvas may project those sources beside the Thread, but owns no provider, conversation, worktree, Review, memory, or execution runtime.
+- **Croki overlay**: Optional project-root application lineage supplies bounded released and building product/GTM facts to provider turns. A separate bounded project-activity packet gives a turn source-labelled awareness of sibling Thread state, branches, latest checkpoint files, and exact overlap without copying transcripts. Croki Senses derive disposable Perception Frames from native Thread, runtime, preview, checkpoint, approval, and source activity. Canvas may project those sources beside the Thread, but owns no provider, conversation, worktree, Review, memory, or execution runtime.
 
 - **Background workers**: Long-running async flows such as runtime ingestion, command reaction, and checkpoint processing run as queue-backed workers. This keeps work ordered, reduces timing races, and gives tests a deterministic way to wait for the system to go idle.
 
 - **Runtime signals**: The server emits lightweight typed receipts when important async milestones finish, such as checkpoint capture, diff finalization, or a turn becoming fully quiescent. Tests and orchestration code wait on these signals instead of polling internal state.
+
+- **UI history**: A successful model-driven Preview snapshot is copied into the server attachment store and recorded as ordinary Thread activity. The activity keeps bounded page metadata plus an attachment frame reference. Preview projects those checked screens for the founder, while the read-only `ui_history` MCP tool lets a later provider turn list or reopen the exact image. The web client collapses same-turn snapshots and checkpoint evidence into at most one checked/not-checked receipt after the answer. UI history owns no execution authority and does not create a second event store.
 
 - **Server updates**: A connected environment advertises whether its server can replace itself. When client and server versions differ, the browser selects an automatic, desktop-managed, or manual update path without changing connection ownership. See [Server Update Architecture](./server-updates.md).
 
@@ -119,16 +121,33 @@ context, but it must not add hidden personas, planning loops, delegation
 policies, or behavioral workflows. Those belong to explicit named harnesses
 that are off by default.
 
-When `.croki/application.json` exists, `ProviderCommandReactor` reads it from
+When `.croki/application.croki` exists, `ProviderCommandReactor` reads it from
 the canonical project root before every turn and prepends its bounded factual
 lineage to the provider input. This works identically for GitHub-hosted, local
 Git, and non-Git projects because release links and tags are optional evidence,
 not runtime dependencies. The stored user message is not modified. Missing,
 malformed, unsupported, oversized, or unreadable lineage fails open.
 
-Croki 0.4.2 keeps the native-provider rule for all runtimes. Product and GTM
-are explicit one-turn harnesses, while Canvas is the automatic projection of
-native source activity through Croki Senses and does not change provider
+`ProviderCommandReactor` separately reads the current project perception before
+each turn and builds a bounded sibling-Thread activity packet. The packet
+contains observed coordination facts only, carries the project projection
+revision and freshness state, and excludes Thread message bodies. Missing or
+failed perception also fails open. This context helps native providers avoid
+duplicated or conflicting work without imposing a Croki workflow or changing
+the stored user message.
+
+For a Thread whose branch is `croki/concept/<id>`, the reactor also reads
+`.croki/concepts/<id>.croki` from the canonical project root before each turn.
+The Concept is a self-describing boundary, so no central index participates in
+resolution. The loader validates that file identity and branch agree, bounds
+source and rendered sizes, escapes repository text, excludes archived state,
+and fails open. This keeps Concept perception shared across worktrees without
+turning `.croki` data into instructions or changing the stored user message.
+
+Croki keeps the native-provider rule for all runtimes. Product is the single
+explicit one-turn ideation harness and combines product and market judgment;
+historical Venture and split GTM turns remain readable. Canvas is the automatic
+projection of native source activity through Croki Senses and does not change provider
 behavior. OpenClaw connects
 to the user's selected Gateway agent through ACP and does not impose a Croki
 coordination profile. See [Current project state](../project/current-state.md).
@@ -160,6 +179,37 @@ sequenceDiagram
 3. When a milestone completes, the server emits a typed receipt on [`RuntimeReceiptBus`][15], such as checkpoint completion or turn quiescence.
 4. Tests and orchestration code wait on those receipts instead of polling git state, projections, or timers.
 5. Any user-visible state changes produced by that async work still go back through `wsServer` and `ServerPushBus`.
+
+### UI history flow
+
+```mermaid
+sequenceDiagram
+    participant Provider as Native provider
+    participant MCP as Croki MCP
+    participant Preview as Desktop Preview host
+    participant History as UiHistoryStore
+    participant Engine as OrchestrationEngine
+    participant Client as Croki clients and Senses
+
+    Provider->>MCP: preview_snapshot
+    MCP->>Preview: Capture pixels and page evidence
+    Preview-->>MCP: PNG + semantics + diagnostics
+    MCP->>History: Preserve checked screen
+    History->>History: Write PNG attachment
+    History->>Engine: Append preview.snapshot activity
+    Engine-->>Client: Push durable checked-screen evidence
+    Client->>Client: Collapse checkpoint + same-turn screens into one receipt
+    MCP-->>Provider: Current snapshot + UI history id
+    Provider->>MCP: ui_history(id), later turn
+    MCP->>History: Read checked-screen attachment
+    History-->>Provider: Original PNG + bounded metadata
+```
+
+History persistence is best effort relative to the current snapshot: a storage
+failure is logged and reported as `saved: false`, but does not hide the page the
+provider just inspected. Missing historical images return an honest unavailable
+result. A checked receipt means at least one same-turn screen exists; it does
+not claim complete visual or interaction coverage.
 
 [8]: ../../apps/server/src/provider/Layers/ProviderService.ts
 [9]: ../../apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.ts

@@ -8,6 +8,8 @@ You are running inside Croki. The \`croki\` MCP server is the product-native col
 
 For browser work, first call \`preview_status\`. If no automation-capable preview is attached, call \`preview_open\` before concluding that the browser is unavailable. Then use \`preview_navigate\`, \`preview_snapshot\`, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
 
+When an implementation request changes what a user sees or does, inspect the relevant rendered result before reporting completion whenever an authorized local Preview is available. A successful \`preview_snapshot\` becomes the Thread's checked-screen evidence. Keep this proportional: do not add browser ceremony to nonvisual work, questions, or read-only reports. If the relevant surface cannot be rendered, say that it was not checked rather than implying visual verification.
+
 Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the Croki preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed Croki preview tool call should be inspected and retried with corrected arguments when the error is actionable.
 `;
 

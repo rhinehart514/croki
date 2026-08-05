@@ -407,11 +407,18 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
         const attachmentUuid = "12345678-1234-1234-1234-123456789abc";
         const sourceAttachmentId = `fork-source-${attachmentUuid}`;
         const targetAttachmentId = `fork-target-${attachmentUuid}`;
+        const historyAttachmentUuid = "87654321-4321-4321-4321-cba987654321";
+        const sourceHistoryAttachmentId = `fork-source-${historyAttachmentUuid}`;
+        const targetHistoryAttachmentId = `fork-target-${historyAttachmentUuid}`;
 
         yield* fileSystem.makeDirectory(serverConfig.attachmentsDir, { recursive: true });
         yield* fileSystem.writeFile(
           path.join(serverConfig.attachmentsDir, `${sourceAttachmentId}.png`),
           new Uint8Array([1, 2, 3]),
+        );
+        yield* fileSystem.writeFile(
+          path.join(serverConfig.attachmentsDir, `${sourceHistoryAttachmentId}.png`),
+          new Uint8Array([4, 5, 6]),
         );
 
         yield* eventStore.append({
@@ -516,6 +523,51 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
           },
         });
         yield* eventStore.append({
+          type: "thread.activity-appended",
+          eventId: EventId.make("evt-fork-ui-history"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-ui-history"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-ui-history"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            activity: {
+              id: EventId.make("activity-fork-ui-history"),
+              turnId: null,
+              tone: "info",
+              kind: "preview.snapshot",
+              summary: "Checked Settings",
+              payload: {
+                version: 1,
+                entry: {
+                  id: "screen-fork",
+                  attachmentId: sourceHistoryAttachmentId,
+                  url: "http://localhost:5173/settings",
+                  title: "Settings",
+                  observedAt: now,
+                  width: 1_280,
+                  height: 800,
+                  interactiveElementCount: 4,
+                  consoleErrorCount: 0,
+                  networkFailureCount: 0,
+                  actionCount: 1,
+                },
+                frame: {
+                  kind: "attachment",
+                  ref: sourceHistoryAttachmentId,
+                  mimeType: "image/png",
+                  width: 1_280,
+                  height: 800,
+                },
+              },
+              createdAt: now,
+            },
+          },
+        });
+        yield* eventStore.append({
           type: "thread.fork-requested",
           eventId: EventId.make("evt-fork-target"),
           aggregateKind: "thread",
@@ -565,14 +617,27 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
         `;
         assert.equal(messageRows[0]?.messageId, "fork:fork-target:fork-message");
         assert.equal(messageRows[0]?.attachmentId, targetAttachmentId);
-        const activityRows = yield* sql<{ readonly kind: string }>`
-          SELECT kind
+        const activityRows = yield* sql<{
+          readonly attachmentId: string | null;
+          readonly kind: string;
+        }>`
+          SELECT
+            kind,
+            json_extract(payload_json, '$.entry.attachmentId') AS "attachmentId"
           FROM projection_thread_activities
           WHERE thread_id = ${targetThreadId}
+          ORDER BY created_at, activity_id
         `;
-        assert.deepEqual(activityRows, [{ kind: "tool.completed" }]);
+        assert.deepEqual(activityRows, [
+          { attachmentId: null, kind: "tool.completed" },
+          { attachmentId: targetHistoryAttachmentId, kind: "preview.snapshot" },
+        ]);
         assert.equal(
           yield* exists(path.join(serverConfig.attachmentsDir, `${targetAttachmentId}.png`)),
+          true,
+        );
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${targetHistoryAttachmentId}.png`)),
           true,
         );
 
@@ -598,7 +663,15 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
           false,
         );
         assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${sourceHistoryAttachmentId}.png`)),
+          false,
+        );
+        assert.equal(
           yield* exists(path.join(serverConfig.attachmentsDir, `${targetAttachmentId}.png`)),
+          true,
+        );
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${targetHistoryAttachmentId}.png`)),
           true,
         );
       }),
@@ -1016,6 +1089,8 @@ it.layer(
       const threadId = ThreadId.make("Thread Revert.Files");
       const keepAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000001";
       const removeAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000002";
+      const keepHistoryAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000004";
+      const removeHistoryAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000005";
       const otherThreadAttachmentId =
         "thread-revert-files-extra-00000000-0000-4000-8000-000000000003";
 
@@ -1125,6 +1200,52 @@ it.layer(
       });
 
       yield* appendAndProject({
+        type: "thread.activity-appended",
+        eventId: EventId.make("evt-revert-files-4-history"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        occurredAt: now,
+        commandId: CommandId.make("cmd-revert-files-4-history"),
+        causationEventId: null,
+        correlationId: CorrelationId.make("cmd-revert-files-4-history"),
+        metadata: {},
+        payload: {
+          threadId,
+          activity: {
+            id: EventId.make("activity-revert-files-keep"),
+            turnId: TurnId.make("turn-keep"),
+            tone: "info",
+            kind: "preview.snapshot",
+            summary: "Checked kept screen",
+            payload: {
+              version: 1,
+              entry: {
+                id: "screen-keep",
+                attachmentId: keepHistoryAttachmentId,
+                url: "http://localhost:5173/keep",
+                title: "Keep",
+                observedAt: now,
+                width: 1_280,
+                height: 800,
+                interactiveElementCount: 1,
+                consoleErrorCount: 0,
+                networkFailureCount: 0,
+                actionCount: 1,
+              },
+              frame: {
+                kind: "attachment",
+                ref: keepHistoryAttachmentId,
+                mimeType: "image/png",
+                width: 1_280,
+                height: 800,
+              },
+            },
+            createdAt: now,
+          },
+        },
+      });
+
+      yield* appendAndProject({
         type: "thread.turn-diff-completed",
         eventId: EventId.make("evt-revert-files-5"),
         aggregateKind: "thread",
@@ -1177,15 +1298,67 @@ it.layer(
         },
       });
 
+      yield* appendAndProject({
+        type: "thread.activity-appended",
+        eventId: EventId.make("evt-revert-files-6-history"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        occurredAt: now,
+        commandId: CommandId.make("cmd-revert-files-6-history"),
+        causationEventId: null,
+        correlationId: CorrelationId.make("cmd-revert-files-6-history"),
+        metadata: {},
+        payload: {
+          threadId,
+          activity: {
+            id: EventId.make("activity-revert-files-remove"),
+            turnId: TurnId.make("turn-remove"),
+            tone: "info",
+            kind: "preview.snapshot",
+            summary: "Checked removed screen",
+            payload: {
+              version: 1,
+              entry: {
+                id: "screen-remove",
+                attachmentId: removeHistoryAttachmentId,
+                url: "http://localhost:5173/remove",
+                title: "Remove",
+                observedAt: now,
+                width: 1_280,
+                height: 800,
+                interactiveElementCount: 1,
+                consoleErrorCount: 0,
+                networkFailureCount: 0,
+                actionCount: 1,
+              },
+              frame: {
+                kind: "attachment",
+                ref: removeHistoryAttachmentId,
+                mimeType: "image/png",
+                width: 1_280,
+                height: 800,
+              },
+            },
+            createdAt: now,
+          },
+        },
+      });
+
       const keepPath = path.join(attachmentsDir, `${keepAttachmentId}.png`);
       const removePath = path.join(attachmentsDir, `${removeAttachmentId}.png`);
+      const keepHistoryPath = path.join(attachmentsDir, `${keepHistoryAttachmentId}.png`);
+      const removeHistoryPath = path.join(attachmentsDir, `${removeHistoryAttachmentId}.png`);
       yield* fileSystem.makeDirectory(attachmentsDir, { recursive: true });
       yield* fileSystem.writeFileString(keepPath, "keep");
       yield* fileSystem.writeFileString(removePath, "remove");
+      yield* fileSystem.writeFileString(keepHistoryPath, "keep history");
+      yield* fileSystem.writeFileString(removeHistoryPath, "remove history");
       const otherThreadPath = path.join(attachmentsDir, `${otherThreadAttachmentId}.png`);
       yield* fileSystem.writeFileString(otherThreadPath, "other");
       assert.isTrue(yield* exists(keepPath));
       assert.isTrue(yield* exists(removePath));
+      assert.isTrue(yield* exists(keepHistoryPath));
+      assert.isTrue(yield* exists(removeHistoryPath));
       assert.isTrue(yield* exists(otherThreadPath));
 
       yield* appendAndProject({
@@ -1206,6 +1379,8 @@ it.layer(
 
       assert.isTrue(yield* exists(keepPath));
       assert.isFalse(yield* exists(removePath));
+      assert.isTrue(yield* exists(keepHistoryPath));
+      assert.isFalse(yield* exists(removeHistoryPath));
       assert.isTrue(yield* exists(otherThreadPath));
     }),
   );

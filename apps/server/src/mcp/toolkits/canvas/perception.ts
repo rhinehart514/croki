@@ -19,7 +19,6 @@ import type {
   CrokiSenseDelta,
   CrokiSenseFrameReference,
   CrokiSenseObject,
-  CrokiSenseObservation,
   CrokiSenseRelationship,
   CrokiSenseSource,
 } from "./tools.ts";
@@ -673,12 +672,14 @@ function frameFromValue(value: unknown, activityId: string): CrokiSenseFrameRefe
   if (!object) return undefined;
   const ref = text(object.ref) ?? text(object.url) ?? text(object.path);
   if (ref) {
+    const width = number(object.width);
+    const height = number(object.height);
     return {
-      kind: text(object.url) ? "url" : "path",
+      kind: text(object.kind) ?? (text(object.url) ? "url" : "path"),
       ref,
       ...(text(object.mimeType) ? { mimeType: text(object.mimeType) } : {}),
-      ...(number(object.width) ? { width: number(object.width) } : {}),
-      ...(number(object.height) ? { height: number(object.height) } : {}),
+      ...(width !== undefined ? { width } : {}),
+      ...(height !== undefined ? { height } : {}),
     };
   }
   // A screenshot payload may only contain image bytes. Preserve a stable

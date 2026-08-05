@@ -1,4 +1,5 @@
 import {
+  CheckpointRef,
   EventId,
   MessageId,
   ThreadId,
@@ -691,6 +692,102 @@ describe("workEntryIndicatesToolFailure", () => {
 });
 
 describe("deriveWorkLogEntries", () => {
+  it("replaces raw checked-screen activity with one compact turn receipt", () => {
+    const entries = deriveWorkLogEntries(
+      [
+        makeActivity({
+          id: "screen-1",
+          createdAt: "2026-08-05T12:00:02.000Z",
+          turnId: "turn-ui",
+          kind: "preview.snapshot",
+          summary: "Checked Settings",
+          tone: "info",
+          payload: {
+            version: 1,
+            entry: {
+              id: "screen-1",
+              attachmentId: "thread-ui-00000000-0000-4000-8000-000000000001",
+              url: "http://localhost:5173/settings",
+              title: "Settings",
+              observedAt: "2026-08-05T12:00:02.000Z",
+              width: 1_280,
+              height: 800,
+              interactiveElementCount: 4,
+              consoleErrorCount: 0,
+              networkFailureCount: 0,
+              actionCount: 1,
+            },
+            frame: {
+              kind: "attachment",
+              ref: "thread-ui-00000000-0000-4000-8000-000000000001",
+              mimeType: "image/png",
+              width: 1_280,
+              height: 800,
+            },
+          },
+        }),
+      ],
+      [
+        {
+          turnId: TurnId.make("turn-ui"),
+          checkpointTurnCount: 1,
+          checkpointRef: CheckpointRef.make("checkpoint-ui"),
+          status: "ready",
+          files: [
+            {
+              path: "apps/web/src/Settings.tsx",
+              kind: "modified",
+              additions: 4,
+              deletions: 1,
+            },
+          ],
+          assistantMessageId: null,
+          completedAt: "2026-08-05T12:00:03.000Z",
+        },
+      ],
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      id: "croki.ui.check:turn-ui",
+      label: "Checked 1 screen",
+      sourceActivityKind: "croki.ui.check",
+      uiCheck: { status: "checked", issueCount: 0 },
+    });
+  });
+
+  it("adds one honest receipt when visible work was not checked", () => {
+    const entries = deriveWorkLogEntries(
+      [],
+      [
+        {
+          turnId: TurnId.make("turn-ui"),
+          checkpointTurnCount: 1,
+          checkpointRef: CheckpointRef.make("checkpoint-ui"),
+          status: "ready",
+          files: [
+            {
+              path: "apps/web/src/Settings.tsx",
+              kind: "modified",
+              additions: 4,
+              deletions: 1,
+            },
+          ],
+          assistantMessageId: null,
+          completedAt: "2026-08-05T12:00:03.000Z",
+        },
+      ],
+    );
+
+    expect(entries).toMatchObject([
+      {
+        label: "Not checked",
+        sourceActivityKind: "croki.ui.check",
+        uiCheck: { status: "not-checked", screens: [] },
+      },
+    ]);
+  });
+
   it("omits tool started entries and keeps completed entries", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
