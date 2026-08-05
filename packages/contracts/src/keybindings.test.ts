@@ -194,11 +194,11 @@ it.effect("drops resolved rules with commands this build does not know", () =>
     const parsed = yield* decode(ResolvedKeybindingsConfig, [
       { command: "terminal.toggle", shortcut },
       { command: "someFuture.toggle", shortcut },
-      { command: "filePicker.toggle", shortcut },
+      { command: "canvas.open", shortcut },
     ]);
     assert.deepEqual(
       parsed.map((rule) => rule.command),
-      ["terminal.toggle", "filePicker.toggle"],
+      ["terminal.toggle", "canvas.open"],
     );
   }),
 );

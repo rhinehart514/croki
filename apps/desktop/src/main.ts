@@ -62,6 +62,10 @@ import * as DesktopWindow from "./window/DesktopWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
 
+// Keep this synchronous and at module initialization: constructing the Effect
+// runtime can otherwise allow Electron to emit `ready` first in development.
+ElectronProtocol.registerDesktopSchemesAsPrivileged();
+
 const desktopEnvironmentLayer = Layer.unwrap(
   Effect.gen(function* () {
     const metadata = yield* Effect.service(ElectronApp.ElectronApp).pipe(
