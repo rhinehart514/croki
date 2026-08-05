@@ -33,6 +33,9 @@ The developer experience is a normal repository that has gained product awarenes
 - Worker nesting uses indentation and a quiet rule, not a second navigation section or dashboard.
 - Long titles truncate in the rail and remain available in the Thread view. Keyboard focus and status labels remain explicit.
 - UI history stays inside Preview and Review evidence. Its completion receipt sits directly after the answer, survives folded turn internals, and replaces duplicate raw snapshot rows. It must not become a dashboard or compete with the live result.
+- Preview exploration is a default-off Beta with direct **App**, **Component**, and **Idea** entry points. It uses the project’s real framework, dependencies, styles, development server, and repository-native fixtures; it never substitutes generated static HTML for working product code.
+- Croki may derive a component catalog from exported React, Vue, and Svelte sources. Choosing a component carries its exact source identity into the current Thread without requiring the founder to compose a prompt or adopt Storybook.
+- Materially different Preview options remain provisional until the founder chooses **Keep**, **Combine**, or **Discard**. The original remains intact, integration stays visible in Thread and Review, and no option appears accepted or verified merely because it rendered.
 - Application evidence is disclosed through the model's ordinary answer and exact source tools, not a Product mode, alignment score, or Croki-authored verdict.
 
 ## Stack

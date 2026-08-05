@@ -214,6 +214,21 @@ Thread activity. Creating or requesting integration never rewrites
 composer. Portable `.croki` packaging remains a later transport for this same
 object model rather than a second schema.
 
+Croki derives a bounded application-progress view from the project's existing
+Thread, activity, runtime, review, and checkpoint perception. The composer
+shows verified, reported, and invalidated observations beside the released-to-
+building transition, and native provider turns receive the same explicitly
+non-authoritative evidence. This view is disposable and provenance-preserving;
+it does not write `.croki/application.json`, create another project database,
+or promote agent reports into founder-approved truth.
+
+`Prepare release lineage` carries that evidence into the current native
+Thread. The selected provider inspects the canonical application file, Git
+history, tests, previews, source Threads, and release notes, then proposes
+ordinary repository edits through Review. Release truth therefore stays an
+explicit founder-visible Git change while daily progress requires no manual
+lineage maintenance.
+
 ## Selected native-provider rule
 
 The default Croki experience must preserve each provider's native behavior.
@@ -250,6 +265,10 @@ memory, skills, or model.
 - Legacy Release, Context, and Artifact code remains only for compatibility
   reads and historical receipts; the composer and provider runtime use
   application lineage instead.
+- Application progress is a bounded current evidence sample rather than a
+  complete historical ledger. Reported observations remain unverified until a
+  stronger project source supports them, and release promotion still requires
+  the normal native Thread and Review path.
 - Additional native senses can expand beyond the initial Thread, preview,
   checkpoint, approval, and runtime sources without changing the frame model.
 - UI history preserves individual model snapshots, but checked-flow timelines,

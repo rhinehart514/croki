@@ -57,6 +57,7 @@ function AutoSettleDaysInput({
 export function BetaSettingsPanel() {
   const canvasEnabled = useClientSettings((settings) => settings.canvasEnabled);
   const parallelThreadsEnabled = useClientSettings((settings) => settings.parallelThreadsEnabled);
+  const previewIdeationEnabled = useClientSettings((settings) => settings.previewIdeationEnabled);
   const sidebarV2Enabled = useSidebarV2Enabled();
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
@@ -87,6 +88,19 @@ export function BetaSettingsPanel() {
                 updateSettings({ parallelThreadsEnabled: Boolean(checked) })
               }
               aria-label="Enable the Parallel Threads beta"
+            />
+          }
+        />
+        <SettingsRow
+          title="Preview exploration"
+          description="Build real component previews and explore interactive code-backed options in the existing Preview surface. Switch off any time."
+          control={
+            <Switch
+              checked={previewIdeationEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ previewIdeationEnabled: Boolean(checked) })
+              }
+              aria-label="Enable the Preview exploration beta"
             />
           }
         />

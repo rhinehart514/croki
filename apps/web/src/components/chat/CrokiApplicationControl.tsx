@@ -4,6 +4,7 @@ import {
 } from "@croki/client-runtime/state/runtime";
 import type { EnvironmentId } from "@croki/contracts";
 import { CROKI_APPLICATION_RELATIVE_PATH } from "@croki/shared/crokiApplication";
+import type { CrokiApplicationProgress } from "@croki/shared/crokiApplicationProgress";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -37,6 +38,7 @@ const EMPTY_DRAFT: ApplicationLineageDraft = {
 export function CrokiApplicationControl(props: {
   readonly environmentId: EnvironmentId;
   readonly state: CrokiApplicationState;
+  readonly progress: CrokiApplicationProgress | null;
   readonly workspaceRoot: string;
   readonly projectThreadTitles?: readonly string[];
   readonly onExploreInThread: () => void;
@@ -179,6 +181,7 @@ export function CrokiApplicationControl(props: {
     <>
       <CrokiApplicationIndicator
         state={props.state}
+        progress={props.progress}
         onSetup={props.state.status === "absent" ? () => setOpen(true) : undefined}
         onExplore={props.state.status === "loaded" ? exploreInThread : undefined}
         onInspectSource={

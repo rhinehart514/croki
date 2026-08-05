@@ -1,4 +1,5 @@
 import type { CrokiApplication } from "@croki/shared/crokiApplication";
+import type { CrokiApplicationProgress } from "@croki/shared/crokiApplicationProgress";
 import { ArrowRight, CircleDot } from "lucide-react";
 import { useState } from "react";
 
@@ -8,6 +9,7 @@ import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic
 
 export function CrokiApplicationIndicator(props: {
   readonly state: CrokiApplicationState;
+  readonly progress?: CrokiApplicationProgress | null;
   readonly workspaceRoot?: string | null | undefined;
   readonly onSetup?: (() => void) | undefined;
   readonly onExplore?: (() => void) | undefined;
@@ -58,6 +60,12 @@ export function CrokiApplicationIndicator(props: {
       >
         <CircleDot className="size-3.5 shrink-0" aria-hidden />
         <span className="whitespace-nowrap tabular-nums">{versionLabel}</span>
+        {props.progress?.observations.length ? (
+          <span className="whitespace-nowrap text-muted-foreground/60">
+            · {props.progress.observations.filter((item) => item.state === "verified").length}{" "}
+            verified
+          </span>
+        ) : null}
         {workspace ? (
           <span className="truncate text-muted-foreground/60">· {workspace}</span>
         ) : null}

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildCrokiGtmExplorationPrompt,
   buildCrokiRepositoryBootstrapPrompt,
+  buildCrokiReleaseLineagePrompt,
   buildCrokiTurnUpdatePrompt,
   buildCrokiWorkflowCompositionPrompt,
   mergePreparedComposerPrompt,
@@ -48,6 +49,14 @@ describe("Croki proposal prompts", () => {
     expect(buildCrokiWorkflowCompositionPrompt(workspaceRoot)).toContain(
       "Do not create a second workflow engine",
     );
+  });
+
+  it("prepares release promotion through the native Thread and normal Review path", () => {
+    const prompt = buildCrokiReleaseLineagePrompt(workspaceRoot);
+    expect(prompt).toContain("verified project evidence");
+    expect(prompt).toContain(".croki/application.json");
+    expect(prompt).toContain("Do not promote Thread reports");
+    expect(prompt).toContain("normal repository and Review path");
   });
 
   it("preserves an existing draft and deduplicates prepared requests", () => {

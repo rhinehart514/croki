@@ -36,6 +36,18 @@ describe("ClientSettings Parallel Threads beta", () => {
   });
 });
 
+describe("ClientSettings Preview exploration beta", () => {
+  it("defaults off and preserves an explicit opt-in", () => {
+    expect(decodeClientSettings({}).previewIdeationEnabled).toBe(false);
+    expect(decodeClientSettings({ previewIdeationEnabled: true }).previewIdeationEnabled).toBe(
+      true,
+    );
+    expect(decodeClientSettingsPatch({ previewIdeationEnabled: true }).previewIdeationEnabled).toBe(
+      true,
+    );
+  });
+});
+
 describe("ClientSettings word wrap", () => {
   it("defaults word wrap on", () => {
     expect(decodeClientSettings({}).wordWrap).toBe(true);

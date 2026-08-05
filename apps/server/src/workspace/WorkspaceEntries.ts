@@ -14,6 +14,8 @@ import type {
   FilesystemBrowseResult,
   ProjectListEntriesInput,
   ProjectListEntriesResult,
+  ProjectListComponentsInput,
+  ProjectListComponentsResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
 } from "@croki/contracts";
@@ -22,6 +24,7 @@ import { isExplicitRelativePath, isWindowsAbsolutePath } from "@croki/shared/pat
 
 import * as WorkspacePaths from "./WorkspacePaths.ts";
 import * as WorkspaceSearchIndex from "./WorkspaceSearchIndex.ts";
+import { buildComponentCatalog } from "./WorkspaceComponentCatalog.ts";
 
 export class WorkspaceEntriesWindowsPathUnsupportedError extends Schema.TaggedErrorClass<WorkspaceEntriesWindowsPathUnsupportedError>()(
   "WorkspaceEntriesWindowsPathUnsupportedError",
@@ -90,6 +93,9 @@ export class WorkspaceEntries extends Context.Service<
     readonly list: (
       input: ProjectListEntriesInput,
     ) => Effect.Effect<ProjectListEntriesResult, WorkspaceEntriesError>;
+    readonly listComponents: (
+      input: ProjectListComponentsInput,
+    ) => Effect.Effect<ProjectListComponentsResult, WorkspaceEntriesError>;
     readonly search: (
       input: ProjectSearchEntriesInput,
     ) => Effect.Effect<ProjectSearchEntriesResult, WorkspaceEntriesError>;
@@ -251,7 +257,22 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  return WorkspaceEntries.of({ browse, list, refresh, search });
+  const listComponents: WorkspaceEntries["Service"]["listComponents"] = Effect.fn(
+    "WorkspaceEntries.listComponents",
+  )(function* (input) {
+    const normalizedCwd = yield* normalizeWorkspaceRoot(input.cwd);
+    const listing = yield* Effect.gen(function* () {
+      const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
+      return yield* searchIndex.list();
+    }).pipe(Effect.provide(workspaceSearchIndexes.get(normalizedCwd)));
+    return yield* Effect.promise(() =>
+      buildComponentCatalog(listing.entries, (relativePath) =>
+        NodeFSP.readFile(path.join(normalizedCwd, relativePath), "utf8"),
+      ),
+    );
+  });
+
+  return WorkspaceEntries.of({ browse, list, listComponents, refresh, search });
 });
 
 export const layer = Layer.effect(WorkspaceEntries, make).pipe(

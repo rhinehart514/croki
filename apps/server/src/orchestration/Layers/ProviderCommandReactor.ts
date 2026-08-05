@@ -44,6 +44,10 @@ import {
   resolveSourceControlWriterModelSelection,
   ServerSettingsService,
 } from "../../serverSettings.ts";
+import {
+  buildCrokiApplicationProgressPrompt,
+  deriveCrokiApplicationProgress,
+} from "@croki/shared/crokiApplicationProgress";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { loadCrokiApplication } from "./CrokiApplication.ts";
@@ -662,19 +666,39 @@ const make = Effect.gen(function* () {
           buildCrokiProjectActivityPrompt(Option.getOrNull(snapshot), thread.id),
       }),
     );
+    const loadedApplication =
+      applicationContext.status === "loaded" ? applicationContext.application : null;
+    const applicationProgressPrompt =
+      loadedApplication !== null && projectionSnapshotQuery.getProjectPerception !== undefined
+        ? yield* projectionSnapshotQuery
+            .getProjectPerception({ projectId: thread.projectId, limit: 200 })
+            .pipe(
+              Effect.map((snapshotOption) =>
+                Option.isSome(snapshotOption)
+                  ? buildCrokiApplicationProgressPrompt(
+                      deriveCrokiApplicationProgress(loadedApplication, snapshotOption.value),
+                    )
+                  : null,
+              ),
+              // Project perception is optional evidence. A stale or failed
+              // read must never prevent a native provider turn.
+              Effect.orElseSucceed(() => null),
+            )
+        : null;
     const agentContext = [
       parentScopes.venturePrompt,
       applicationContext.prompt,
       parentScopes.releasePrompt,
       conceptContext,
       projectActivity,
+      applicationProgressPrompt,
     ]
       .filter((value): value is string => Boolean(value))
       .join("\n\n");
     const providerInput = compileCrokiTurnInput({
       harnessId: input.harnessId,
-      // Application lineage supplies factual project context without changing
-      // provider behavior. Generic senses remain typed runtime activities.
+      // Application lineage is founder-approved fact; progress is explicitly
+      // labeled derived evidence. Neither changes native provider behavior.
       agentContext: agentContext || null,
       userInput: normalizedInput,
       parallelThreadsEnabled: input.parallelThreadsEnabled,

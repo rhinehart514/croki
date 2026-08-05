@@ -107,6 +107,10 @@
       "types": "./src/crokiScopes.ts",
       "import": "./src/crokiScopes.ts"
     },
+    "./crokiApplicationProgress": {
+      "types": "./src/crokiApplicationProgress.ts",
+      "import": "./src/crokiApplicationProgress.ts"
+    },
     "./crokiCanvasActivity": {
       "types": "./src/crokiCanvasActivity.ts",
       "import": "./src/crokiCanvasActivity.ts"

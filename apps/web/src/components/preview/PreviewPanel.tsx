@@ -1,10 +1,15 @@
 "use client";
 
-import type { OrchestrationThreadActivity, ScopedThreadRef } from "@croki/contracts";
+import type {
+  OrchestrationThreadActivity,
+  ProjectComponentEntry,
+  ScopedThreadRef,
+} from "@croki/contracts";
 
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 
 import { PreviewPanelShell, type PreviewPanelMode } from "./PreviewPanelShell";
+import type { PreviewExplorationState } from "./PreviewDecisionBar";
 import { PreviewView } from "./PreviewView";
 
 interface Props {
@@ -15,6 +20,16 @@ interface Props {
   visible: boolean;
   activities?: ReadonlyArray<OrchestrationThreadActivity> | undefined;
   onAddCanvasEvidence?: ((url: string) => void) | undefined;
+  onBuildIdea?: ((idea: string) => void) | undefined;
+  workspaceRoot?: string | undefined;
+  onPreviewComponent?: ((component: ProjectComponentEntry) => void) | undefined;
+  onExploreOptions?: ((annotationId: string) => void) | undefined;
+  explorationState?: PreviewExplorationState | undefined;
+  onKeepOption?: ((url: string) => void) | undefined;
+  onCombineOption?: ((url: string, direction: string) => void) | undefined;
+  onDiscardOptions?: ((url: string) => void) | undefined;
+  onStopExploration?: (() => void) | undefined;
+  optionLabel?: string | undefined;
 }
 
 export function PreviewPanel({
@@ -25,6 +40,16 @@ export function PreviewPanel({
   visible,
   activities,
   onAddCanvasEvidence,
+  onBuildIdea,
+  workspaceRoot,
+  onPreviewComponent,
+  onExploreOptions,
+  explorationState,
+  onKeepOption,
+  onCombineOption,
+  onDiscardOptions,
+  onStopExploration,
+  optionLabel,
 }: Props) {
   if (!isPreviewSupportedInRuntime()) {
     return (
@@ -47,6 +72,16 @@ export function PreviewPanel({
         visible={visible}
         activities={activities}
         onAddCanvasEvidence={onAddCanvasEvidence}
+        onBuildIdea={onBuildIdea}
+        workspaceRoot={workspaceRoot}
+        onPreviewComponent={onPreviewComponent}
+        onExploreOptions={onExploreOptions}
+        explorationState={explorationState}
+        onKeepOption={onKeepOption}
+        onCombineOption={onCombineOption}
+        onDiscardOptions={onDiscardOptions}
+        onStopExploration={onStopExploration}
+        optionLabel={optionLabel}
       />
     </PreviewPanelShell>
   );

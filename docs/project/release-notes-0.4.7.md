@@ -62,6 +62,20 @@ Checked means Croki preserved a screen the model inspected. It is evidence, not 
 automatic design verdict or claim of complete state, accessibility, breakpoint, or
 production coverage.
 
+## Preview exploration
+
+A default-off Beta turns Preview into a direct product workbench. **App**, **Component**,
+and **Idea** entry points reuse the project’s real framework, dependencies, styles,
+development server, browser automation, annotations, screenshots, and recordings.
+Croki can discover exported React, Vue, and Svelte components and carry the exact
+source identity into the selected native provider without making the founder prepare a
+prompt.
+
+Materially different options remain interactive and provisional. The original stays
+intact until the founder chooses **Keep**, **Combine**, or **Discard**; integration is
+visible in Thread and inspectable in Review. Canvas remains optional and disappears
+from ordinary surfaces when its Beta is disabled.
+
 ## The boundary
 
 The foundational ontology is deliberately small:

@@ -12,7 +12,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@croki/client-runtime/state/runtime";
-import { ChevronRight, Code2, Eye, FolderTree, Globe2, LoaderCircle } from "lucide-react";
+import { ChevronRight, Code2, Eye, FolderTree, Globe2, LoaderCircle, Sparkles } from "lucide-react";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -28,6 +28,7 @@ import { cn } from "~/lib/utils";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 import { resolvePathLinkTarget } from "~/terminal-links";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { Button } from "~/components/ui/button";
 import { Toggle } from "~/components/ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
@@ -44,6 +45,7 @@ import {
   isCrokiObjectPath,
   parseCrokiVisualObject,
 } from "~/components/croki/CrokiObjectSurface.logic";
+import { isPreviewableComponentSource } from "~/components/preview/previewIdeationPrompts";
 
 import FileBrowserPanel from "./FileBrowserPanel";
 import {
@@ -83,6 +85,7 @@ interface FilePreviewPanelProps {
   onShapeApplication?: (() => void) | undefined;
   onPendingChange: (relativePath: string, pending: boolean) => void;
   onAddCanvasEvidence?: ((relativePath: string, line: number) => void) | undefined;
+  onPreviewComponent?: ((relativePath: string) => void) | undefined;
 }
 
 const FILE_EXPLORER_STORAGE_KEY = "croki.fileExplorerOpen";
@@ -683,6 +686,7 @@ export default function FilePreviewPanel({
   onShapeApplication,
   onPendingChange,
   onAddCanvasEvidence,
+  onPreviewComponent,
 }: FilePreviewPanelProps) {
   const { resolvedTheme } = useTheme();
   const wordWrap = useClientSettings((settings) => settings.wordWrap);
@@ -730,6 +734,10 @@ export default function FilePreviewPanel({
       (handledReveal?.path === relativePath && handledReveal.requestId === revealRequestId));
   const canOpenInBrowser =
     relativePath !== null && isPreviewSupportedInRuntime() && isBrowserPreviewFile(relativePath);
+  const canPreviewComponent =
+    relativePath !== null &&
+    onPreviewComponent !== undefined &&
+    isPreviewableComponentSource(relativePath);
   const absolutePath = relativePath ? resolvePathLinkTarget(relativePath, cwd) : null;
   const breadcrumbs = useMemo(
     () => (relativePath ? fileBreadcrumbs(projectName, relativePath) : []),
@@ -949,6 +957,18 @@ export default function FilePreviewPanel({
                   : "Show file explorer"}
               </TooltipPopup>
             </Tooltip>
+          ) : null}
+          {canPreviewComponent ? (
+            <Button
+              type="button"
+              className="h-7 shrink-0 px-2 text-xs"
+              variant="outline"
+              size="sm"
+              onClick={() => onPreviewComponent(relativePath)}
+            >
+              <Sparkles className="size-3.5" />
+              Preview component
+            </Button>
           ) : null}
         </div>
       ) : null}

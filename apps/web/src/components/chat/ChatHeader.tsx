@@ -21,6 +21,7 @@ import { ProjectFavicon } from "../ProjectFavicon";
 import { cn } from "~/lib/utils";
 import { CrokiApplicationControl } from "./CrokiApplicationControl";
 import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic";
+import type { CrokiApplicationProgress } from "@croki/shared/crokiApplicationProgress";
 import { CrokiConceptControl } from "./CrokiConceptControl";
 
 interface ChatHeaderProps {
@@ -33,6 +34,7 @@ interface ChatHeaderProps {
   activeProjectName: string | undefined;
   activeProjectCwd: string | null;
   applicationContext: CrokiApplicationState | null;
+  applicationProgress: CrokiApplicationProgress | null;
   projectThreadTitles: readonly string[];
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
@@ -76,6 +78,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeProjectName,
   activeProjectCwd,
   applicationContext,
+  applicationProgress,
   projectThreadTitles,
   openInCwd,
   activeProjectScripts,
@@ -136,6 +139,7 @@ export const ChatHeader = memo(function ChatHeader({
                 <CrokiApplicationControl
                   environmentId={activeThreadEnvironmentId}
                   state={applicationContext}
+                  progress={applicationProgress}
                   workspaceRoot={activeProjectCwd}
                   projectThreadTitles={projectThreadTitles}
                   onExploreInThread={onExploreApplicationDirection}
