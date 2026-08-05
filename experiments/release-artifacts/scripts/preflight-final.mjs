@@ -1,10 +1,9 @@
-import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
-import * as NodeURL from "node:url";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
-const readJson = (relativePath) =>
-  JSON.parse(NodeFS.readFileSync(NodePath.join(root, relativePath), "utf8"));
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const readJson = (relativePath) => JSON.parse(readFileSync(path.join(root, relativePath), "utf8"));
 
 const provenance = readJson("provenance/manifest.json");
 const reviews = readJson("review/revisions.json");

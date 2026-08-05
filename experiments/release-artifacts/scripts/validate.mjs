@@ -1,32 +1,25 @@
-import * as NodeChildProcess from "node:child_process";
-import * as NodeCrypto from "node:crypto";
-import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
-import * as NodeURL from "node:url";
+import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
-const repositoryRoot = NodePath.resolve(root, "../..");
-const manifest = JSON.parse(
-  NodeFS.readFileSync(NodePath.join(root, "provenance", "manifest.json"), "utf8"),
-);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repositoryRoot = path.resolve(root, "../..");
+const manifest = JSON.parse(readFileSync(path.join(root, "provenance", "manifest.json"), "utf8"));
 const captureManifest = JSON.parse(
-  NodeFS.readFileSync(NodePath.join(root, "public", "captures", "manifest.json"), "utf8"),
+  readFileSync(path.join(root, "public", "captures", "manifest.json"), "utf8"),
 );
 const reviewManifest = JSON.parse(
-  NodeFS.readFileSync(NodePath.join(root, "review", "revisions.json"), "utf8"),
+  readFileSync(path.join(root, "review", "revisions.json"), "utf8"),
 );
 const lottieManifest = JSON.parse(
-  NodeFS.readFileSync(
-    NodePath.join(root, "public", "motion", "lottielab", "manifest.json"),
-    "utf8",
-  ),
+  readFileSync(path.join(root, "public", "motion", "lottielab", "manifest.json"), "utf8"),
 );
-const projectConfig = JSON.parse(
-  NodeFS.readFileSync(NodePath.join(repositoryRoot, "croki.json"), "utf8"),
-);
-const fontPackagePath = NodePath.join(root, "node_modules", "@fontsource", "inter", "package.json");
-const fontPackage = NodeFS.existsSync(fontPackagePath)
-  ? JSON.parse(NodeFS.readFileSync(fontPackagePath, "utf8"))
+const projectConfig = JSON.parse(readFileSync(path.join(repositoryRoot, "t3.json"), "utf8"));
+const fontPackagePath = path.join(root, "node_modules", "@fontsource", "inter", "package.json");
+const fontPackage = existsSync(fontPackagePath)
+  ? JSON.parse(readFileSync(fontPackagePath, "utf8"))
   : undefined;
 const expected = [
   ["croki-launch-16x9.mp4", 1920, 1080],
@@ -37,11 +30,10 @@ const errors = [];
 if (fontPackage.version !== "5.2.8" || fontPackage.license !== "OFL-1.1") {
   errors.push("The deterministic Inter font dependency is missing or has changed.");
 }
-const hashFile = (target) =>
-  NodeCrypto.createHash("sha256").update(NodeFS.readFileSync(target)).digest("hex");
+const hashFile = (target) => createHash("sha256").update(readFileSync(target)).digest("hex");
 const probeMedia = (target) =>
   JSON.parse(
-    NodeChildProcess.execFileSync(
+    execFileSync(
       "ffprobe",
       [
         "-v",
@@ -56,7 +48,7 @@ const probeMedia = (target) =>
     ),
   );
 const measureLoudness = (target) => {
-  const result = NodeChildProcess.spawnSync(
+  const result = spawnSync(
     "ffmpeg",
     [
       "-hide_banner",
@@ -79,8 +71,8 @@ const measureLoudness = (target) => {
 };
 
 for (const [file, width, height] of expected) {
-  const target = NodePath.join(root, "output", file);
-  if (!NodeFS.existsSync(target)) {
+  const target = path.join(root, "output", file);
+  if (!existsSync(target)) {
     errors.push(`Missing ${file}`);
     continue;
   }
@@ -126,8 +118,8 @@ for (const [file, width, height] of expected) {
 if (manifest.captures.length === 0)
   errors.push("No deterministic product captures recorded in provenance.");
 for (const capture of captureManifest.captures) {
-  const target = NodePath.join(root, "public", "captures", capture.path);
-  if (!NodeFS.existsSync(target)) {
+  const target = path.join(root, "public", "captures", capture.path);
+  if (!existsSync(target)) {
     errors.push(`Missing capture ${capture.path}`);
     continue;
   }
@@ -164,13 +156,13 @@ if (
 
 for (const claim of manifest.claims) {
   const match = claim.evidence.match(/^(.+?)(?::(\d+))?$/);
-  const evidencePath = match ? NodePath.join(repositoryRoot, match[1]) : "";
-  if (!match || !NodeFS.existsSync(evidencePath)) {
+  const evidencePath = match ? path.join(repositoryRoot, match[1]) : "";
+  if (!match || !existsSync(evidencePath)) {
     errors.push(`Missing evidence for claim: ${claim.text}`);
     continue;
   }
   if (match[2]) {
-    const line = NodeFS.readFileSync(evidencePath, "utf8").split(/\r?\n/)[Number(match[2]) - 1];
+    const line = readFileSync(evidencePath, "utf8").split(/\r?\n/)[Number(match[2]) - 1];
     if (!line?.trim()) errors.push(`Claim evidence line is empty or missing: ${claim.evidence}`);
   }
 }
@@ -187,22 +179,22 @@ if (manifest.production.creativeStatus !== "accepted") {
 if (lottieManifest.authoringStatus !== "export-verified") {
   errors.push("LottieLab authoring and export round trip is incomplete.");
 } else {
-  const lottieExport = NodePath.join(
+  const lottieExport = path.join(
     root,
     "public",
     "motion",
     "lottielab",
     lottieManifest.expectedExport,
   );
-  if (!NodeFS.existsSync(lottieExport)) {
+  if (!existsSync(lottieExport)) {
     errors.push(`Missing verified LottieLab export ${lottieManifest.expectedExport}`);
   } else if (!lottieManifest.export?.sha256) {
     errors.push("LottieLab export hash is missing from its manifest.");
   } else {
     if (hashFile(lottieExport) !== lottieManifest.export.sha256)
       errors.push("LottieLab export hash mismatch.");
-    const componentSource = NodeFS.readFileSync(
-      NodePath.join(root, "src", "components", "LottieLabMotion.tsx"),
+    const componentSource = readFileSync(
+      path.join(root, "src", "components", "LottieLabMotion.tsx"),
       "utf8",
     );
     if (!componentSource.includes(lottieManifest.expectedExport)) {
@@ -225,13 +217,13 @@ for (const action of requiredActions) {
 }
 
 for (const required of [
-  NodePath.join(root, "README.md"),
-  NodePath.join(root, "LICENSING.md"),
-  NodePath.join(root, "provenance", "brief.md"),
-  NodePath.join(root, "provenance", "completion-audit.md"),
-  NodePath.join(repositoryRoot, ".agents", "skills", "release-artifacts", "SKILL.md"),
+  path.join(root, "README.md"),
+  path.join(root, "LICENSING.md"),
+  path.join(root, "provenance", "brief.md"),
+  path.join(root, "provenance", "completion-audit.md"),
+  path.join(repositoryRoot, ".agents", "skills", "release-artifacts", "SKILL.md"),
 ]) {
-  if (!NodeFS.existsSync(required)) errors.push(`Missing workflow documentation: ${required}`);
+  if (!existsSync(required)) errors.push(`Missing workflow documentation: ${required}`);
 }
 
 if (errors.length > 0) {
