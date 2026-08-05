@@ -1,15 +1,16 @@
 # Current project state
 
-Last audited: 2026-08-03
-Code baseline: Croki 0.4.6 application lineage on `croki/main`
+Last audited: 2026-08-05
+Code baseline: Croki 0.4.7 release candidate, not yet published
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow Croki overlay on Croki rather than a second agent runtime.
 
-Croki 0.4.6 is the current repository version; 0.4.5 remains the latest
-published baseline inherited by it. See the [0.4.6 release
-notes](./release-notes-0.4.6.md) and [release ownership contract](../operations/release.md)
-for independently gated publication destinations.
+Croki 0.4.7 is the current source candidate; 0.4.5 remains the latest published
+baseline inherited by it. See the [0.4.7 release candidate
+notes](./release-notes-0.4.7.md) and [release ownership
+contract](../operations/release.md) for independently gated publication
+destinations.
 
 ## Working product
 
@@ -29,6 +30,11 @@ Croki currently provides:
 - local and remote environment connection paths, including desktop-managed SSH
   and Croki Connect compatibility infrastructure;
 - Croki branding and completion feedback;
+- native Codex voice beside the Thread composer, with explicit connection,
+  listening, stopping, failure, and typing-fallback states;
+- durable generated Thread titles with an explicit regeneration action;
+- nested, read-only worker Threads that remain adjacent to their canonical
+  parent in the left rail;
 - optional repository-owned application lineage at `.croki/application.json`,
   which joins inherited released reality with the version currently being built;
 - the true Canvas / Croki Senses projection established by the 0.4.2 migration.
@@ -148,10 +154,10 @@ memory, skills, or model.
 - Venture evidence now has a typed observation and provenance boundary, but
   source adapters for customer conversations, analytics, CRM, campaigns, and
   market research have not landed yet.
-- Parallel Threads is implemented behind a default-off Settings → Beta toggle
-  for the planned 0.4.4 release. It reuses provider-native delegation and the
-  parent Thread's existing Workstreams projection; provider support therefore
-  depends on the selected runtime exposing native workers.
+- Parallel Threads remains behind a default-off Settings → Beta toggle. It
+  reuses provider-native delegation and the parent Thread's existing Workstreams
+  projection; provider support therefore depends on the selected runtime
+  exposing native workers.
 - Legacy Release, Context, and Artifact code remains only for compatibility
   reads and historical receipts; the composer and provider runtime use
   application lineage instead.

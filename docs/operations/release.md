@@ -6,13 +6,14 @@ CLI, relay, hosted web, signing, Discord, and mobile destinations remain off.
 Every enabled destination still fails closed unless its own Croki-owned
 configuration is complete.
 
-## 0.4.3 source candidate
+## 0.4.7 source candidate
 
-The 0.4.3 source candidate aligns the four manifests updated by the release
+The 0.4.7 source candidate aligns the four manifests updated by the release
 workflow (`apps/server`, `apps/desktop`, `apps/web`, and `packages/contracts`).
-It compresses Croki Senses into a bounded working-understanding Canvas while
-preserving complete model-facing Perception Frames. See the [0.4.3 release
-notes](../project/release-notes-0.4.3.md) for the product summary.
+It adds native Codex voice, completes worker Thread navigation, makes generated
+titles durable and repairable, and incorporates the upstream runtime, Git,
+preview, terminal, and compatibility fixes listed in the [0.4.7 release
+candidate notes](../project/release-notes-0.4.7.md).
 
 ## Current behavior
 

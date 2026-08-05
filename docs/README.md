@@ -1,10 +1,11 @@
 # Documentation
 
 - [Current project state](./project/current-state.md)
-- [0.4.2 release notes](./project/release-notes-0.4.2.md)
-- [0.4.4 release plan](./project/release-notes-0.4.4.md)
+- [0.4.7 release candidate](./project/release-notes-0.4.7.md)
 - [0.4.6 application lineage](./project/release-notes-0.4.6.md)
 - [0.4.5 stabilization notes](./project/release-notes-0.4.5.md)
+- [0.4.4 release plan](./project/release-notes-0.4.4.md)
+- [0.4.2 release notes](./project/release-notes-0.4.2.md)
 - [Release Canvas product specification](./project/release-canvas-spec.md)
 - [Harness visual-artifact specification](./project/harness-canvas-spec.md)
 - [Croki product and overlay contract](./croki.md)

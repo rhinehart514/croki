@@ -38,24 +38,27 @@
     ]
   },
   "building": {
-    "version": "0.4.6",
-    "intent": "Make every application legible to its coding agents as an inherited released reality and a version currently being built, with product and GTM understanding carried together without requiring Canvas or GitHub.",
+    "version": "0.4.7",
+    "intent": "Make Croki's core Thread loop more natural to direct, easier to navigate, and safer under long-running daily use while preserving native provider behavior.",
     "product": [
-      "Replace the composer context indicator with the released-to-building application lineage.",
-      "Inject bounded factual application lineage into every provider turn without changing native behavior.",
-      "Keep absent lineage silent and malformed lineage nonblocking.",
-      "Use one project-root application state across native worktrees."
+      "Add native realtime Codex voice beside the Thread composer with honest connection, listening, stopping, failure, and typing-fallback states.",
+      "Keep durable worker Threads nested beneath their canonical parent and make worker transcripts explicitly read-only.",
+      "Generate durable initial Thread titles and let the founder regenerate a weak generated title without overwriting a manual rename.",
+      "Bound Thread replay and renderer memory growth so long-running projects remain usable.",
+      "Keep pull requests, dedicated worktrees, preview actions, terminal history, and close shortcuts tied to the Thread the founder is actually operating.",
+      "Carry released-to-building application lineage into every provider turn without changing native behavior."
     ],
     "gtm": [
-      "Let released product evidence constrain what agents can credibly claim about the application.",
-      "Treat GitHub releases as optional provenance rather than required infrastructure.",
-      "Allow local Git and non-Git applications to adopt the same lineage contract."
+      "Strengthen the credible promise that one founder can direct, inspect, recover, and ship agent work from one environment.",
+      "Keep claims tied to released evidence while allowing the 0.4.7 candidate to remain explicitly unpublished.",
+      "Keep publication destinations independently gated under Croki ownership."
     ],
     "successSignals": [
-      "Croki shows 0.4.5 → 0.4.6 where stale Canvas context status previously appeared.",
-      "A native worktree turn receives project-root product and GTM lineage while its stored user message stays unchanged.",
-      "Projects without application.json continue normally without No context UI.",
-      "GitHub, local-tag-only, and non-Git source configurations parse and render without network dependency."
+      "A Codex Thread can start and stop an audio-only realtime session while typing remains available after every failure.",
+      "Worker Threads remain grouped with their parent across active, snoozed, and settled rail states and route back to the parent conversation.",
+      "Generated titles survive restart and can be regenerated from the current conversation without replacing a manual title.",
+      "Long Thread catch-up does not require full-database hydration or unbounded sidebar subscriptions.",
+      "The Croki ownership check, release smoke test, affected package tests, typechecks, and desktop production build pass before publication."
     ]
   }
 }
