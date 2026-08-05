@@ -137,6 +137,7 @@ import {
 } from "../rightPanelStore";
 import {
   isPreviewSupportedInRuntime,
+  readThreadPreviewState,
   setActivePreviewTab,
   useThreadPreviewState,
 } from "../previewStateStore";
@@ -145,6 +146,13 @@ import { closePreviewSession } from "./preview/closePreviewSession";
 import { ThreadPreviewMiniPlayer } from "./preview/ThreadPreviewMiniPlayer";
 import { subscribePreviewAction } from "./preview/previewActionBus";
 import { getConfiguredPreviewUrls } from "./preview/previewEmptyStateLogic";
+import {
+  buildPreviewDecisionPrompt,
+  buildPreviewIdeaPrompt,
+  buildPreviewOptionsPrompt,
+  selectPreviewRequestContext,
+} from "./preview/previewIdeationPrompts";
+import type { PreviewExplorationState } from "./preview/PreviewDecisionBar";
 import {
   selectThreadPreviewMiniPlayer,
   usePreviewMiniPlayerStore,
@@ -1313,6 +1321,12 @@ function ChatViewContent(props: ChatViewProps) {
   const composerRef = useComposerHandleContext() ?? localComposerRef;
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
+  const [previewExplorationState, setPreviewExplorationState] =
+    useState<PreviewExplorationState>("idle");
+  const [previewOptionTabIds, setPreviewOptionTabIds] = useState<string[]>([]);
+  const previewExplorationObservedBusyRef = useRef(false);
+  const previewExplorationCanceledRef = useRef(false);
+  const previewExplorationBaselineTabIdsRef = useRef<Set<string>>(new Set());
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<ChatMessage[]>([]);
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
   optimisticUserMessagesRef.current = optimisticUserMessages;
@@ -1611,10 +1625,24 @@ function ChatViewContent(props: ChatViewProps) {
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
   );
   const canvasEnabled = settings.canvasEnabled && activeThread !== undefined;
+  const visibleRightPanelSurfaces = canvasEnabled
+    ? rightPanelState.surfaces
+    : rightPanelState.surfaces.filter((surface) => surface.kind !== "canvas");
   const parallelThreadsEnabled = settings.parallelThreadsEnabled;
+  const previewIdeationEnabled = settings.previewIdeationEnabled;
   const activeFileSurface =
     activeRightPanelSurface?.kind === "file" ? activeRightPanelSurface : null;
   const activePreviewState = useThreadPreviewState(activeThreadRef);
+  useEffect(() => {
+    if (previewOptionTabIds.length === 0) return;
+    const existingTabIds = new Set(Object.keys(activePreviewState.sessions));
+    const remainingOptionTabIds = previewOptionTabIds.filter((tabId) => existingTabIds.has(tabId));
+    if (remainingOptionTabIds.length === previewOptionTabIds.length) return;
+    setPreviewOptionTabIds(remainingOptionTabIds);
+    if (remainingOptionTabIds.length === 0 && previewExplorationState === "options-ready") {
+      setPreviewExplorationState("idle");
+    }
+  }, [activePreviewState.sessions, previewExplorationState, previewOptionTabIds]);
   const activePreviewMiniPlayer = usePreviewMiniPlayerStore((state) =>
     selectThreadPreviewMiniPlayer(state.byThreadKey, activeThreadRef),
   );
@@ -1644,10 +1672,16 @@ function ChatViewContent(props: ChatViewProps) {
   const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUseRightPanelSheet;
 
   useEffect(() => {
-    if (canvasEnabled || activeRightPanelSurface?.kind !== "canvas" || !activeThreadRef) return;
+    if (
+      canvasEnabled ||
+      !activeThreadRef ||
+      !rightPanelState.surfaces.some((surface) => surface.kind === "canvas")
+    ) {
+      return;
+    }
     setCanvasSelectionState((current) => ({ ...current, artifactId: null, nodeIds: [] }));
-    useRightPanelStore.getState().close(activeThreadRef);
-  }, [activeRightPanelSurface?.kind, activeThreadRef, canvasEnabled]);
+    useRightPanelStore.getState().closeSurface(activeThreadRef, "canvas");
+  }, [activeThreadRef, canvasEnabled, rightPanelState.surfaces]);
 
   useEffect(() => {
     if (!activeThreadRef) return;
@@ -2161,6 +2195,74 @@ function ChatViewContent(props: ChatViewProps) {
     threadError,
   });
   const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  useEffect(() => {
+    const explorationThreadRef = activeThreadRef;
+    if (!explorationThreadRef) return;
+    if (previewExplorationState === "idle") {
+      previewExplorationObservedBusyRef.current = false;
+      return;
+    }
+    if (isWorking) {
+      previewExplorationObservedBusyRef.current = true;
+      return;
+    }
+    if (!previewExplorationObservedBusyRef.current) return;
+
+    if (previewExplorationCanceledRef.current) {
+      previewExplorationObservedBusyRef.current = false;
+      previewExplorationCanceledRef.current = false;
+      setPreviewExplorationState("idle");
+      return;
+    }
+    if (previewExplorationState === "options-working") {
+      const optionTabIds = Object.keys(activePreviewState.sessions).filter(
+        (tabId) => !previewExplorationBaselineTabIdsRef.current.has(tabId),
+      );
+      if (optionTabIds.length >= 3 && !threadError) {
+        previewExplorationObservedBusyRef.current = false;
+        setPreviewOptionTabIds(optionTabIds);
+        setPreviewExplorationState("options-ready");
+        return;
+      }
+      const readinessTimer = window.setTimeout(() => {
+        const latestOptionTabIds = Object.keys(
+          readThreadPreviewState(explorationThreadRef).sessions,
+        ).filter((tabId) => !previewExplorationBaselineTabIdsRef.current.has(tabId));
+        previewExplorationObservedBusyRef.current = false;
+        if (latestOptionTabIds.length >= 3 && !threadError) {
+          setPreviewOptionTabIds(latestOptionTabIds);
+          setPreviewExplorationState("options-ready");
+          return;
+        }
+        setPreviewExplorationState("idle");
+        toastManager.add({
+          type: "error",
+          title: "No Preview alternatives opened",
+          description:
+            threadError ??
+            `Expected three new live options, but ${latestOptionTabIds.length} opened.`,
+        });
+      }, 1_500);
+      return () => window.clearTimeout(readinessTimer);
+    }
+    previewExplorationObservedBusyRef.current = false;
+    setPreviewOptionTabIds([]);
+    setPreviewExplorationState("idle");
+  }, [
+    activePreviewState.sessions,
+    activeThreadRef,
+    isWorking,
+    previewExplorationState,
+    threadError,
+  ]);
+
+  useEffect(() => {
+    setPreviewExplorationState("idle");
+    setPreviewOptionTabIds([]);
+    previewExplorationObservedBusyRef.current = false;
+    previewExplorationCanceledRef.current = false;
+    previewExplorationBaselineTabIdsRef.current = new Set();
+  }, [activeThreadKey]);
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -4975,7 +5077,14 @@ function ChatViewContent(props: ChatViewProps) {
     ],
   );
 
-  const onSend = async (e?: { preventDefault: () => void }) => {
+  const onSend = async (
+    e?: { preventDefault: () => void },
+    previewRequest?: {
+      prompt: string;
+      annotationIds: readonly string[];
+      titleSeed: string;
+    },
+  ) => {
     e?.preventDefault();
     if (
       !activeThread ||
@@ -4986,25 +5095,39 @@ function ChatViewContent(props: ChatViewProps) {
       sendInFlightRef.current
     )
       return;
-    if (activePendingProgress) {
+    if (!previewRequest && activePendingProgress) {
       onAdvanceActivePendingUserInput();
       return;
     }
     const sendCtx = composerRef.current?.getSendContext();
     if (!sendCtx?.providerAvailable) return;
     const {
-      images: composerImages,
-      terminalContexts: composerTerminalContexts,
-      elementContexts: composerElementContexts,
-      previewAnnotations: composerPreviewAnnotations,
-      reviewComments: composerReviewComments,
+      images: draftComposerImages,
+      terminalContexts: draftComposerTerminalContexts,
+      elementContexts: draftComposerElementContexts,
+      previewAnnotations: draftComposerPreviewAnnotations,
+      reviewComments: draftComposerReviewComments,
       selectedProvider: ctxSelectedProvider,
       selectedModel: ctxSelectedModel,
       selectedProviderModels: ctxSelectedProviderModels,
       selectedPromptEffort: ctxSelectedPromptEffort,
       selectedModelSelection: ctxSelectedModelSelection,
     } = sendCtx;
-    const promptForSend = promptRef.current;
+    const previewContext = previewRequest
+      ? selectPreviewRequestContext(
+          draftComposerImages,
+          draftComposerPreviewAnnotations,
+          previewRequest.annotationIds,
+        )
+      : null;
+    const composerPreviewAnnotations =
+      previewContext?.annotations ?? draftComposerPreviewAnnotations;
+    const composerImages = previewContext?.images ?? draftComposerImages;
+    const composerTerminalContexts = previewRequest ? [] : draftComposerTerminalContexts;
+    const composerElementContexts = previewRequest ? [] : draftComposerElementContexts;
+    const composerReviewComments = previewRequest ? [] : draftComposerReviewComments;
+    const promptForSend = previewRequest?.prompt ?? promptRef.current;
+    const interactionModeForSend = previewRequest ? DEFAULT_INTERACTION_MODE : interactionMode;
     const {
       trimmedPrompt: trimmed,
       sendableTerminalContexts: sendableComposerTerminalContexts,
@@ -5019,7 +5142,7 @@ function ChatViewContent(props: ChatViewProps) {
         composerPreviewAnnotations.length +
         composerReviewComments.length,
     });
-    if (showPlanFollowUpPrompt && activeProposedPlan) {
+    if (!previewRequest && showPlanFollowUpPrompt && activeProposedPlan) {
       const followUp = resolvePlanFollowUpSubmission({
         draftText: trimmed,
         planMarkdown: activeProposedPlan.planMarkdown,
@@ -5113,7 +5236,7 @@ function ChatViewContent(props: ChatViewProps) {
     const composerElementContextsSnapshot = [...composerElementContexts];
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
     const composerReviewCommentsSnapshot: ReviewCommentContext[] = [...composerReviewComments];
-    const canvasSelectionSnapshot = [...selectedCanvasNodes];
+    const canvasSelectionSnapshot = previewRequest ? [] : [...selectedCanvasNodes];
     const messageTextWithContexts = appendElementContextsToPrompt(
       appendTerminalContextsToPrompt(promptForSend, composerTerminalContextsSnapshot),
       composerElementContextsSnapshot,
@@ -5135,7 +5258,7 @@ function ChatViewContent(props: ChatViewProps) {
     );
     const messageTextWithPerceptionFocus = appendCrokiPerceptionFocusToPrompt(
       messageTextForSend,
-      canvasSelectionNodeIds,
+      previewRequest ? [] : canvasSelectionNodeIds,
       canvasWorkingModel,
     );
     const messageIdForSend = newMessageId();
@@ -5205,9 +5328,11 @@ function ChatViewContent(props: ChatViewProps) {
         }),
       );
     }
-    promptRef.current = "";
-    clearComposerDraftContent(composerDraftTarget);
-    composerRef.current?.resetCursorState();
+    if (!previewRequest) {
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+    }
 
     let firstComposerImageName: string | null = null;
     if (composerImagesSnapshot.length > 0) {
@@ -5216,7 +5341,7 @@ function ChatViewContent(props: ChatViewProps) {
         firstComposerImageName = firstComposerImage.name;
       }
     }
-    let titleSeed = trimmed;
+    let titleSeed = previewRequest?.titleSeed ?? trimmed;
     if (!titleSeed) {
       if (firstComposerImageName) {
         titleSeed = `Image: ${firstComposerImageName}`;
@@ -5259,7 +5384,7 @@ function ChatViewContent(props: ChatViewProps) {
           ? { branch: localCheckoutBranchMismatch.currentBranch }
           : {}),
         runtimeMode,
-        interactionMode,
+        interactionMode: interactionModeForSend,
       });
       if (settingsResult._tag === "Failure") {
         failure = settingsResult;
@@ -5283,7 +5408,7 @@ function ChatViewContent(props: ChatViewProps) {
                       title,
                       modelSelection: threadCreateModelSelection,
                       runtimeMode,
-                      interactionMode,
+                      interactionMode: interactionModeForSend,
                       branch: activeThreadBranch,
                       worktreePath: activeThread.worktreePath,
                       createdAt: activeThread.createdAt,
@@ -5317,7 +5442,7 @@ function ChatViewContent(props: ChatViewProps) {
           modelSelection: ctxSelectedModelSelection,
           titleSeed: title,
           runtimeMode,
-          interactionMode,
+          interactionMode: interactionModeForSend,
           canvasEnabled,
           parallelThreadsEnabled,
           harnessId: crokiHarnessId,
@@ -5329,8 +5454,17 @@ function ChatViewContent(props: ChatViewProps) {
         failure = startResult;
       } else {
         turnStartSucceeded = true;
+        if (previewRequest) {
+          const draftStore = useComposerDraftStore.getState();
+          for (const annotation of composerPreviewAnnotationsSnapshot) {
+            draftStore.removePreviewAnnotation(composerDraftTarget, annotation.id);
+          }
+          for (const image of composerImagesSnapshot) {
+            draftStore.removeImage(composerDraftTarget, image.id);
+          }
+        }
         setCrokiHarnessId("native");
-        if (canvasSelectionNodeIds.length > 0) {
+        if (!previewRequest && canvasSelectionNodeIds.length > 0) {
           setCanvasSelectionState((current) =>
             current.threadKey === activeThreadKey ? { ...current, nodeIds: [] } : current,
           );
@@ -5340,6 +5474,7 @@ function ChatViewContent(props: ChatViewProps) {
 
     if (failure !== null) {
       if (
+        !previewRequest &&
         promptRef.current.length === 0 &&
         composerImagesRef.current.length === 0 &&
         composerTerminalContextsRef.current.length === 0 &&
@@ -5389,6 +5524,112 @@ function ChatViewContent(props: ChatViewProps) {
       );
       resetLocalDispatch();
     }
+    return turnStartSucceeded;
+  };
+
+  const runPreviewRequest = (
+    request: string,
+    nextState: Exclude<PreviewExplorationState, "idle" | "options-ready">,
+    annotationIds: readonly string[] = [],
+    titleSeed = "Preview exploration",
+  ) => {
+    if (previewExplorationState === "options-ready") {
+      toastManager.add({
+        type: "warning",
+        title: "Choose the current Preview options first",
+        description: "Keep, combine, or discard them before starting another exploration.",
+      });
+      return false;
+    }
+    if (
+      isWorking ||
+      sendInFlightRef.current ||
+      activePendingProgress !== null ||
+      activePendingApproval !== null
+    ) {
+      toastManager.add({
+        type: "warning",
+        title: "Agent is already working",
+        description: "Stop or finish the current turn before starting another Preview change.",
+      });
+      return false;
+    }
+    if (!composerRef.current?.getSendContext().providerAvailable) {
+      toastManager.add({
+        type: "error",
+        title: "No provider available",
+        description: "Connect a coding provider before building in Preview.",
+      });
+      return false;
+    }
+
+    setPreviewExplorationState(nextState);
+    queueMicrotask(() => {
+      void onSend(undefined, {
+        prompt: request,
+        annotationIds,
+        titleSeed,
+      }).then((started) => {
+        if (!started) setPreviewExplorationState("idle");
+      });
+    });
+    return true;
+  };
+
+  const buildPreviewIdea = (idea: string) => {
+    if (!crokiWorkspaceRoot) return;
+    setPreviewOptionTabIds([]);
+    runPreviewRequest(
+      buildPreviewIdeaPrompt(crokiWorkspaceRoot, { idea }),
+      "building",
+      [],
+      `Preview: ${idea}`,
+    );
+  };
+
+  const buildComponentPreview = (component: {
+    readonly path: string;
+    readonly exportName: string;
+    readonly displayName: string;
+  }) => {
+    if (!crokiWorkspaceRoot) return;
+    setPreviewOptionTabIds([]);
+    const started = runPreviewRequest(
+      buildPreviewIdeaPrompt(crokiWorkspaceRoot, {
+        sourcePath: component.path,
+        exportName: component.exportName,
+      }),
+      "building",
+      [],
+      `Preview: ${component.displayName}`,
+    );
+    if (started) createBrowserSurface();
+  };
+
+  const explorePreviewOptions = (annotationId: string) => {
+    if (!crokiWorkspaceRoot) return;
+    previewExplorationBaselineTabIdsRef.current = new Set(Object.keys(activePreviewState.sessions));
+    setPreviewOptionTabIds([]);
+    runPreviewRequest(
+      buildPreviewOptionsPrompt(crokiWorkspaceRoot),
+      "options-working",
+      [annotationId],
+      "Preview alternatives",
+    );
+  };
+
+  const decidePreviewOption = (
+    decision: "keep" | "combine" | "discard",
+    url: string,
+    direction?: string,
+  ) => {
+    if (!crokiWorkspaceRoot) return;
+    runPreviewRequest(
+      buildPreviewDecisionPrompt(crokiWorkspaceRoot, decision, url, direction),
+      "applying",
+      [],
+      `${decision === "discard" ? "Discard" : decision === "combine" ? "Combine" : "Keep"} Preview option`,
+    );
   };
 
   const onInterrupt = async () => {
@@ -5404,6 +5645,11 @@ function ChatViewContent(props: ChatViewProps) {
         error instanceof Error ? error.message : "Failed to interrupt the current turn.",
       );
     }
+  };
+
+  const stopPreviewExploration = () => {
+    previewExplorationCanceledRef.current = true;
+    void onInterrupt();
   };
 
   const onRespondToApproval = useCallback(
@@ -6102,6 +6348,15 @@ function ChatViewContent(props: ChatViewProps) {
     return <NoActiveThreadState />;
   }
 
+  const activePreviewOptionIndex =
+    activeRightPanelSurface?.kind === "preview" && activeRightPanelSurface.resourceId
+      ? previewOptionTabIds.indexOf(activeRightPanelSurface.resourceId)
+      : -1;
+  const activePreviewOptionLabel =
+    activePreviewOptionIndex >= 0
+      ? `provisional option ${activePreviewOptionIndex + 1} of ${previewOptionTabIds.length}`
+      : undefined;
+
   const panelToggleControls = (
     <PanelLayoutControls
       terminalAvailable={activeProject !== null}
@@ -6134,7 +6389,29 @@ function ChatViewContent(props: ChatViewProps) {
           tabId={activeRightPanelSurface.resourceId}
           configuredUrls={configuredPreviewUrls}
           visible
-          onAddCanvasEvidence={capturePreviewCanvasEvidence}
+          onAddCanvasEvidence={canvasEnabled ? capturePreviewCanvasEvidence : undefined}
+          onBuildIdea={previewIdeationEnabled && crokiWorkspaceRoot ? buildPreviewIdea : undefined}
+          workspaceRoot={previewIdeationEnabled ? crokiWorkspaceRoot : undefined}
+          onPreviewComponent={
+            previewIdeationEnabled && crokiWorkspaceRoot ? buildComponentPreview : undefined
+          }
+          onExploreOptions={
+            previewIdeationEnabled && crokiWorkspaceRoot ? explorePreviewOptions : undefined
+          }
+          explorationState={previewExplorationState}
+          onKeepOption={
+            previewIdeationEnabled ? (url) => decidePreviewOption("keep", url) : undefined
+          }
+          onCombineOption={
+            previewIdeationEnabled
+              ? (url, direction) => decidePreviewOption("combine", url, direction)
+              : undefined
+          }
+          onDiscardOptions={
+            previewIdeationEnabled ? (url) => decidePreviewOption("discard", url) : undefined
+          }
+          onStopExploration={stopPreviewExploration}
+          optionLabel={activePreviewOptionLabel}
         />
       </Suspense>
     ) : activeRightPanelSurface?.kind === "terminal" ? (
@@ -6162,7 +6439,7 @@ function ChatViewContent(props: ChatViewProps) {
           mode="embedded"
           composerDraftTarget={composerDraftTarget}
           initialGitScope={initialDiffPanelGitScope}
-          onAddCanvasEvidence={captureFileCanvasEvidence}
+          onAddCanvasEvidence={canvasEnabled ? captureFileCanvasEvidence : undefined}
         />
       </Suspense>
     ) : canvasEnabled &&
@@ -6257,7 +6534,17 @@ function ChatViewContent(props: ChatViewProps) {
           revealRequestId={activeFileSurface?.revealRequestId ?? 0}
           onOpenFile={openFileSurface}
           onPendingChange={handleFilePendingChange}
-          onAddCanvasEvidence={captureFileCanvasEvidence}
+          onAddCanvasEvidence={canvasEnabled ? captureFileCanvasEvidence : undefined}
+          onPreviewComponent={
+            previewIdeationEnabled && crokiWorkspaceRoot
+              ? (relativePath) =>
+                  buildComponentPreview({
+                    path: relativePath,
+                    exportName: "default",
+                    displayName: relativePath.slice(relativePath.lastIndexOf("/") + 1),
+                  })
+              : undefined
+          }
         />
       </Suspense>
     ) : null
@@ -6701,7 +6988,7 @@ function ChatViewContent(props: ChatViewProps) {
         <RightPanelTabs
           mode="inline"
           maximized={rightPanelMaximized}
-          surfaces={rightPanelState.surfaces}
+          surfaces={visibleRightPanelSurfaces}
           activeSurfaceId={activeRightPanelSurface?.id ?? null}
           pendingSurfaceIds={pendingSurfaceIds}
           previewSessions={activePreviewState.sessions}
@@ -6717,6 +7004,9 @@ function ChatViewContent(props: ChatViewProps) {
           onAddDiff={addDiffSurface}
           onAddFiles={addFilesSurface}
           onAddCanvas={openReleaseCanvas}
+          canvasAvailable={canvasEnabled}
+          previewIdeationAvailable={previewIdeationEnabled}
+          previewOptionTabIds={previewOptionTabIds}
           browserAvailable={isPreviewSupportedInRuntime()}
           diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
@@ -6729,7 +7019,7 @@ function ChatViewContent(props: ChatViewProps) {
           <RightPanelTabs
             mode="sheet"
             layoutControls={panelToggleControls}
-            surfaces={rightPanelState.surfaces}
+            surfaces={visibleRightPanelSurfaces}
             activeSurfaceId={activeRightPanelSurface?.id ?? null}
             pendingSurfaceIds={pendingSurfaceIds}
             previewSessions={activePreviewState.sessions}
@@ -6745,6 +7035,9 @@ function ChatViewContent(props: ChatViewProps) {
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
             onAddCanvas={openReleaseCanvas}
+            canvasAvailable={canvasEnabled}
+            previewIdeationAvailable={previewIdeationEnabled}
+            previewOptionTabIds={previewOptionTabIds}
             browserAvailable={isPreviewSupportedInRuntime()}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}

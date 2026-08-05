@@ -39,6 +39,30 @@ export const ProjectListEntriesResult = Schema.Struct({
 });
 export type ProjectListEntriesResult = typeof ProjectListEntriesResult.Type;
 
+export const ProjectComponentFramework = Schema.Literals(["react", "vue", "svelte"]);
+export type ProjectComponentFramework = typeof ProjectComponentFramework.Type;
+
+export const ProjectComponentEntry = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  path: TrimmedNonEmptyString,
+  exportName: TrimmedNonEmptyString,
+  displayName: TrimmedNonEmptyString,
+  framework: ProjectComponentFramework,
+  isDefaultExport: Schema.Boolean,
+});
+export type ProjectComponentEntry = typeof ProjectComponentEntry.Type;
+
+export const ProjectListComponentsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+});
+export type ProjectListComponentsInput = typeof ProjectListComponentsInput.Type;
+
+export const ProjectListComponentsResult = Schema.Struct({
+  components: Schema.Array(ProjectComponentEntry),
+  truncated: Schema.Boolean,
+});
+export type ProjectListComponentsResult = typeof ProjectListComponentsResult.Type;
+
 export const ProjectEntriesFailure = Schema.Literals([
   "workspace_root_not_found",
   "workspace_root_create_failed",
@@ -114,6 +138,29 @@ export class ProjectListEntriesError extends Schema.TaggedErrorClass<ProjectList
       ...props,
       message:
         decodedProjectErrorMessage(props) ?? `Failed to list workspace entries in '${props.cwd}'.`,
+    } as any);
+  }
+}
+
+export class ProjectListComponentsError extends Schema.TaggedErrorClass<ProjectListComponentsError>()(
+  "ProjectListComponentsError",
+  {
+    cwd: Schema.optional(TrimmedNonEmptyString),
+    failure: Schema.optional(ProjectEntriesFailure),
+    normalizedCwd: Schema.optional(TrimmedNonEmptyString),
+    timeout: Schema.optional(TrimmedNonEmptyString),
+    detail: Schema.optional(TrimmedNonEmptyString),
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
+  constructor(props: ProjectEntriesFailureContext & { readonly cwd: string }) {
+    super({
+      ...props,
+      message:
+        decodedProjectErrorMessage(props) ??
+        `Failed to find workspace components in '${props.cwd}'.`,
     } as any);
   }
 }

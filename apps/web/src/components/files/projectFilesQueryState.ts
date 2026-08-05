@@ -2,6 +2,7 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
   ProjectListEntriesResult,
+  ProjectListComponentsResult,
   ProjectReadFileResult,
 } from "@croki/contracts";
 import * as Cause from "effect/Cause";
@@ -31,6 +32,10 @@ interface ProjectQueryState<A> {
 
 export function getProjectEntriesQueryAtom(environmentId: EnvironmentId, cwd: string) {
   return projectEnvironment.listEntries({ environmentId, input: { cwd } });
+}
+
+export function getProjectComponentsQueryAtom(environmentId: EnvironmentId, cwd: string) {
+  return projectEnvironment.listComponents({ environmentId, input: { cwd } });
 }
 
 export function getProjectFileQueryAtom(
@@ -130,6 +135,23 @@ export function useProjectEntriesQuery(
   cwd: string,
 ): ProjectQueryState<ProjectListEntriesResult> {
   const atom = getProjectEntriesQueryAtom(environmentId, cwd);
+  const result = useAtomValue(atom);
+  const refreshAtom = useAtomRefresh(atom);
+  const refresh = useCallback(() => refreshAtom(), [refreshAtom]);
+  return {
+    data: Option.getOrNull(AsyncResult.value(result)),
+    error: errorMessage(result),
+    failure: queryFailure(result),
+    isPending: result.waiting,
+    refresh,
+  };
+}
+
+export function useProjectComponentsQuery(
+  environmentId: EnvironmentId,
+  cwd: string,
+): ProjectQueryState<ProjectListComponentsResult> {
+  const atom = getProjectComponentsQueryAtom(environmentId, cwd);
   const result = useAtomValue(atom);
   const refreshAtom = useAtomRefresh(atom);
   const refresh = useCallback(() => refreshAtom(), [refreshAtom]);

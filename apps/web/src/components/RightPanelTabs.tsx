@@ -54,6 +54,9 @@ interface RightPanelTabsProps {
   onAddDiff: () => void;
   onAddFiles: () => void;
   onAddCanvas: () => void;
+  canvasAvailable: boolean;
+  previewIdeationAvailable?: boolean | undefined;
+  previewOptionTabIds?: readonly string[] | undefined;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
@@ -96,28 +99,36 @@ function SurfaceMenuItem(props: {
   return <DisabledReasonTooltip reason={props.disabledReason} trigger={item} />;
 }
 
-function RightPanelEmptyState(props: {
+export function RightPanelEmptyState(props: {
   onAddBrowser: () => void;
   onAddTerminal: () => void;
   onAddDiff: () => void;
   onAddFiles: () => void;
   onAddCanvas: () => void;
+  canvasAvailable: boolean;
+  previewIdeationAvailable?: boolean | undefined;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
 }) {
   const actions = [
+    ...(props.canvasAvailable
+      ? [
+          {
+            label: "Canvas",
+            description: "See live agent perception and source relationships.",
+            icon: CircleDot,
+            available: props.filesAvailable,
+            disabledReason: SURFACE_DISABLED_REASONS.files,
+            onClick: props.onAddCanvas,
+          },
+        ]
+      : []),
     {
-      label: "Canvas",
-      description: "See live agent perception and source relationships.",
-      icon: CircleDot,
-      available: props.filesAvailable,
-      disabledReason: SURFACE_DISABLED_REASONS.files,
-      onClick: props.onAddCanvas,
-    },
-    {
-      label: "Browser",
-      description: "Open a local app or URL.",
+      label: "Preview",
+      description: props.previewIdeationAvailable
+        ? "Open an app, component, or product idea."
+        : "Open and interact with a running app.",
       icon: Globe2,
       available: props.browserAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.browser,
@@ -147,7 +158,7 @@ function RightPanelEmptyState(props: {
       disabledReason: SURFACE_DISABLED_REASONS.diff,
       onClick: props.onAddDiff,
     },
-  ] as const;
+  ];
 
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
@@ -194,7 +205,7 @@ function RightPanelEmptyState(props: {
             return (
               <DisabledReasonTooltip
                 key={action.label}
-                reason={action.disabledReason}
+                reason={action.disabledReason ?? "This surface is unavailable."}
                 trigger={disabledCard}
               />
             );
@@ -209,6 +220,7 @@ function surfaceTitle(
   surface: RightPanelSurface,
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>,
   terminalLabelsById: ReadonlyMap<string, string>,
+  previewOptionTabIds: readonly string[],
 ): string {
   switch (surface.kind) {
     case "diff":
@@ -227,13 +239,15 @@ function surfaceTitle(
     case "plan":
       return "Plan";
     case "preview": {
+      const optionIndex = surface.resourceId ? previewOptionTabIds.indexOf(surface.resourceId) : -1;
+      if (optionIndex >= 0) return `Option ${optionIndex + 1}`;
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
-      if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
+      if (!snapshot || snapshot.navStatus._tag === "Idle") return "Preview";
       if (snapshot.navStatus.title.trim().length > 0) return snapshot.navStatus.title;
       try {
-        return new URL(snapshot.navStatus.url).host || "Browser";
+        return new URL(snapshot.navStatus.url).host || "Preview";
       } catch {
-        return "Browser";
+        return "Preview";
       }
     }
   }
@@ -406,7 +420,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             {props.surfaces.map((surface) => {
               const active = surface.id === props.activeSurfaceId;
               const pending = props.pendingSurfaceIds.has(surface.id);
-              const title = surfaceTitle(surface, props.previewSessions, props.terminalLabelsById);
+              const title = surfaceTitle(
+                surface,
+                props.previewSessions,
+                props.terminalLabelsById,
+                props.previewOptionTabIds ?? [],
+              );
               return (
                 <div
                   key={surface.id}
@@ -474,21 +493,23 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                   <Plus className="size-4" />
                 </MenuTrigger>
                 <MenuPopup align="start" side="bottom" sideOffset={6} className="min-w-44">
-                  <SurfaceMenuItem
-                    available={props.filesAvailable}
-                    disabledReason={SURFACE_DISABLED_REASONS.files}
-                    onClick={props.onAddCanvas}
-                  >
-                    <CircleDot />
-                    Canvas
-                  </SurfaceMenuItem>
+                  {props.canvasAvailable ? (
+                    <SurfaceMenuItem
+                      available={props.filesAvailable}
+                      disabledReason={SURFACE_DISABLED_REASONS.files}
+                      onClick={props.onAddCanvas}
+                    >
+                      <CircleDot />
+                      Canvas
+                    </SurfaceMenuItem>
+                  ) : null}
                   <SurfaceMenuItem
                     available={props.browserAvailable}
                     disabledReason={SURFACE_DISABLED_REASONS.browser}
                     onClick={props.onAddBrowser}
                   >
                     <Globe2 />
-                    Browser
+                    Preview
                   </SurfaceMenuItem>
                   <SurfaceMenuItem available onClick={props.onAddTerminal}>
                     <TerminalSquare />
@@ -521,6 +542,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
         {props.activeSurfaceId === null ? (
           <RightPanelEmptyState
             onAddCanvas={props.onAddCanvas}
+            canvasAvailable={props.canvasAvailable}
+            previewIdeationAvailable={props.previewIdeationAvailable}
             onAddBrowser={props.onAddBrowser}
             onAddTerminal={props.onAddTerminal}
             onAddDiff={props.onAddDiff}
