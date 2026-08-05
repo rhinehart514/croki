@@ -84,6 +84,11 @@ this dependency to accept a skipped CLI job. Without the package, automatic
 server update capability must stay unavailable and the client must offer the
 manual path.
 
+GitHub Release publication uses the repository-scoped workflow token so shared
+Release App API limits cannot strand artifact upload. The Croki Release App
+credentials remain reserved for the stable finalize job that writes aligned
+versions back to `croki/main`.
+
 The Windows artifact workflow is safe for local testing because it omits
 inherited updater repository metadata. It should remain unsigned until Croki's
 Windows signing identity is configured.
