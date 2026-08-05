@@ -803,10 +803,11 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       env,
       extendEnv: false,
       shell: spawnCommand.shell,
-      // Keep Vite+ in the same process group so terminal signals (Ctrl+C)
-      // reach it directly. Effect defaults to detached: true on non-Windows,
-      // which would put the runner in a new group and require manual forwarding.
-      detached: false,
+      // Keep Effect's platform-aware process-group default. On POSIX, Vite+
+      // becomes the group leader so the scoped finalizer can terminate its
+      // entire task tree; on Windows the spawner uses taskkill /T. Putting the
+      // child back in this runner's group makes that cleanup target nonexistent
+      // and leaves Vite, pack watchers, and Electron supervisors orphaned.
       forceKillAfter: "1500 millis",
     }).pipe(
       Effect.mapError(

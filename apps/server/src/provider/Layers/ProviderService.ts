@@ -45,7 +45,11 @@ import {
   providerTurnMetricAttributes,
   withMetrics,
 } from "../../observability/Metrics.ts";
-import { type ProviderAdapterError, ProviderValidationError } from "../Errors.ts";
+import {
+  type ProviderAdapterError,
+  ProviderAdapterValidationError,
+  ProviderValidationError,
+} from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
@@ -1154,6 +1158,67 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     yield* analytics.flush;
   });
 
+  const voice: NonNullable<ProviderService.ProviderService["Service"]["voice"]> = {
+    start: (input) =>
+      resolveRoutableSession({
+        threadId: input.threadId,
+        operation: "ProviderService.voice.start",
+        allowRecovery: true,
+      }).pipe(
+        Effect.flatMap(({ adapter }) =>
+          adapter.voice
+            ? adapter.voice.start(input)
+            : Effect.fail(
+                new ProviderAdapterValidationError({
+                  provider: adapter.provider,
+                  operation: "voice.start",
+                  issue: "The selected provider does not support native voice.",
+                }),
+              ),
+        ),
+      ),
+    stop: (threadId) =>
+      resolveRoutableSession({
+        threadId,
+        operation: "ProviderService.voice.stop",
+        allowRecovery: false,
+      }).pipe(
+        Effect.flatMap(({ adapter, isActive }) =>
+          !isActive
+            ? Effect.void
+            : adapter.voice
+              ? adapter.voice.stop(threadId)
+              : Effect.fail(
+                  new ProviderAdapterValidationError({
+                    provider: adapter.provider,
+                    operation: "voice.stop",
+                    issue: "The selected provider does not support native voice.",
+                  }),
+                ),
+        ),
+      ),
+    events: (threadId) =>
+      Stream.unwrap(
+        resolveRoutableSession({
+          threadId,
+          operation: "ProviderService.voice.events",
+          allowRecovery: true,
+        }).pipe(
+          Effect.flatMap(({ adapter }) =>
+            adapter.voice
+              ? Effect.succeed(adapter.voice.events(threadId))
+              : Effect.fail(
+                  new ProviderAdapterValidationError({
+                    provider: adapter.provider,
+                    operation: "voice.events",
+                    issue: "The selected provider does not support native voice.",
+                  }),
+                ),
+          ),
+        ),
+      ),
+  };
+
   yield* Effect.addFinalizer(() =>
     runStopAll().pipe(
       Effect.catchCause((cause) =>
@@ -1165,6 +1230,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   );
 
   return {
+    voice,
     startSession,
     sendTurn,
     interruptTurn,

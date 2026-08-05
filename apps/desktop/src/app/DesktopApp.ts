@@ -8,6 +8,7 @@ import * as NetService from "@croki/shared/Net";
 import * as Crypto from "effect/Crypto";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
+import * as ElectronPermissions from "../electron/ElectronPermissions.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import { installDesktopIpcHandlers } from "../ipc/DesktopIpcHandlers.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
@@ -219,7 +220,9 @@ const startup = Effect.gen(function* () {
   const appIdentity = yield* DesktopAppIdentity.DesktopAppIdentity;
   const applicationMenu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
   const electronApp = yield* ElectronApp.ElectronApp;
+  const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
   const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
+  const electronPermissions = yield* ElectronPermissions.ElectronPermissions;
   const clerk = yield* DesktopClerk.DesktopClerk;
   const shellEnvironment = yield* DesktopShellEnvironment.DesktopShellEnvironment;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
@@ -237,6 +240,9 @@ const startup = Effect.gen(function* () {
   }
 
   yield* appIdentity.configure;
+  // Custom schemes must be privileged before Electron emits `ready`; without
+  // the secure flag the Croki renderer cannot access mediaDevices.
+  yield* electronProtocol.registerPrivilegedSchemes;
   yield* lifecycle.register;
   yield* clerk.configure;
 
@@ -245,6 +251,9 @@ const startup = Effect.gen(function* () {
     Effect.catchCause((cause) => fatalStartupCause("whenReady", cause)),
   );
   yield* logStartupInfo("app ready");
+  yield* electronPermissions.configure(
+    ElectronProtocol.getDesktopOrigin(environment.isDevelopment),
+  );
   yield* appIdentity.configure;
   yield* applicationMenu.configure;
   yield* updates.configure;

@@ -40,6 +40,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
   triggerAriaLabel?: string;
+  triggerMeta?: string | null;
   onOpenChange?: (open: boolean) => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
@@ -178,6 +179,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           <Tooltip>
             <TooltipTrigger render={<span className="min-w-0 flex-1 overflow-hidden truncate" />}>
               {triggerTitle}
+              {props.triggerMeta ? (
+                <span className="text-muted-foreground/55"> · {props.triggerMeta}</span>
+              ) : null}
             </TooltipTrigger>
             <TooltipPopup side="top">{triggerLabel}</TooltipPopup>
           </Tooltip>

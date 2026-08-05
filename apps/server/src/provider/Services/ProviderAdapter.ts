@@ -9,6 +9,8 @@
  */
 import type {
   ApprovalRequestId,
+  CodexVoiceEvent,
+  CodexVoiceStartInput,
   ProviderApprovalDecision,
   ProviderDriverKind,
   ProviderUserInputAnswers,
@@ -59,6 +61,11 @@ export interface ProviderAdapterShape<TError> {
    */
   readonly provider: ProviderDriverKind;
   readonly capabilities: ProviderAdapterCapabilities;
+  readonly voice?: {
+    readonly start: (input: CodexVoiceStartInput) => Effect.Effect<void, TError>;
+    readonly stop: (threadId: ThreadId) => Effect.Effect<void, TError>;
+    readonly events: (threadId: ThreadId) => Stream.Stream<CodexVoiceEvent, TError>;
+  };
 
   /**
    * Start a provider-backed session.

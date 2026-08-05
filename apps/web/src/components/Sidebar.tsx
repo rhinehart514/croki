@@ -184,6 +184,7 @@ import {
   resolveThreadRowClassName,
   resolveThreadStatusPill,
   orderItemsByPreferredIds,
+  orderThreadsWithChildren,
   shouldClearThreadSelectionOnMouseDown,
   sortProjectsForSidebar,
   useThreadJumpHintVisibility,
@@ -307,6 +308,8 @@ function buildThreadJumpLabelMap(input: {
 
 interface SidebarThreadRowProps {
   thread: SidebarThreadSummary;
+  isChildThread: boolean;
+  hasChildThreads: boolean;
   projectCwd: string | null;
   orderedProjectThreadKeys: readonly string[];
   isActive: boolean;
@@ -368,6 +371,8 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     attemptArchiveThread,
     openPrLink,
     thread,
+    isChildThread,
+    hasChildThreads,
   } = props;
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
@@ -491,6 +496,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   );
   const handleRowDoubleClick = useCallback(
     (event: React.MouseEvent) => {
+      if (isChildThread) return;
       // Already renaming this row: a double-click on the row chrome (outside the
       // input) must not restart and discard the in-progress edit.
       if (renamingThreadKey === threadKey) return;
@@ -505,7 +511,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       event.preventDefault();
       startThreadRename(threadKey, thread.title);
     },
-    [isMobile, renamingThreadKey, startThreadRename, threadKey, thread.title],
+    [isChildThread, isMobile, renamingThreadKey, startThreadRename, threadKey, thread.title],
   );
   const handleRowKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -517,6 +523,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   );
   const handleRowContextMenu = useCallback(
     (event: React.MouseEvent) => {
+      if (isChildThread) return;
       event.preventDefault();
       const hasSelection = useThreadSelectionStore.getState().hasSelection();
       if (hasSelection && isSelected) {
@@ -563,7 +570,14 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
         }
       })();
     },
-    [clearSelection, handleMultiSelectContextMenu, handleThreadContextMenu, isSelected, threadRef],
+    [
+      clearSelection,
+      handleMultiSelectContextMenu,
+      handleThreadContextMenu,
+      isChildThread,
+      isSelected,
+      threadRef,
+    ],
   );
   const handlePrClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -662,7 +676,10 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
 
   return (
     <SidebarMenuSubItem
-      className="w-full"
+      className={
+        isChildThread ? "ml-4 w-[calc(100%-1rem)] border-l border-sidebar-border/70 pl-1" : "w-full"
+      }
+      data-parallel-child-thread={isChildThread || undefined}
       data-thread-item
       onMouseLeave={handleMouseLeave}
       onBlurCapture={handleBlurCapture}
@@ -789,7 +806,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
               >
                 Confirm
               </button>
-            ) : !isThreadRunning ? (
+            ) : !isChildThread && !hasChildThreads && !isThreadRunning ? (
               appSettingsConfirmThreadArchive ? (
                 <div className="pointer-events-none absolute top-1/2 right-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100">
                   <button
@@ -969,6 +986,10 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
   } = props;
   const showMoreButtonRender = useMemo(() => <button type="button" />, []);
   const showLessButtonRender = useMemo(() => <button type="button" />, []);
+  const orderedRenderedThreads = useMemo(
+    () => orderThreadsWithChildren(renderedThreads),
+    [renderedThreads],
+  );
 
   return (
     <SidebarMenuSub
@@ -986,12 +1007,18 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
         </SidebarMenuSubItem>
       ) : null}
       {shouldShowThreadPanel &&
-        renderedThreads.map((thread) => {
+        orderedRenderedThreads.map((thread) => {
           const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
           return (
             <SidebarThreadRow
               key={threadKey}
               thread={thread}
+              isChildThread={thread.parentThreadId != null}
+              hasChildThreads={orderedRenderedThreads.some(
+                (candidate) =>
+                  candidate.environmentId === thread.environmentId &&
+                  candidate.parentThreadId === thread.id,
+              )}
               projectCwd={projectCwd}
               orderedProjectThreadKeys={orderedProjectThreadKeys}
               isActive={activeRouteThreadKey === threadKey}
@@ -1321,11 +1348,19 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
       ),
     );
-    const renderedThreads = pinnedCollapsedThread
-      ? [pinnedCollapsedThread]
-      : visibleProjectThreads.filter((thread) =>
-          visibleThreadKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
-        );
+    // Parent and worker rows are one rail unit. Preview limits and a collapsed
+    // project may choose either member first, but never render an orphaned row.
+    for (const thread of visibleProjectThreads) {
+      const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+      const parentKey = thread.parentThreadId
+        ? scopedThreadKey(scopeThreadRef(thread.environmentId, thread.parentThreadId))
+        : null;
+      if (visibleThreadKeys.has(threadKey) && parentKey) visibleThreadKeys.add(parentKey);
+      if (parentKey && visibleThreadKeys.has(parentKey)) visibleThreadKeys.add(threadKey);
+    }
+    const renderedThreads = visibleProjectThreads.filter((thread) =>
+      visibleThreadKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
+    );
     const hiddenThreads = visibleProjectThreads.filter(
       (thread) =>
         !visibleThreadKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),

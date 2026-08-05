@@ -16,6 +16,7 @@ import {
   isContextMenuPointerDown,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
+  orderThreadsWithChildren,
   resolveProjectStatusIndicator,
   resolveSidebarStageBadgeLabel,
   resolveThreadRowClassName,
@@ -99,6 +100,19 @@ describe("shouldNavigateAfterProjectRemoval", () => {
         projectDraftId: null,
       }),
     ).toBe(false);
+  });
+});
+
+describe("orderThreadsWithChildren", () => {
+  it("places workers beneath their parent and preserves orphan visibility", () => {
+    const parent = { environmentId: "env", id: "parent", parentThreadId: null };
+    const other = { environmentId: "env", id: "other", parentThreadId: null };
+    const child = { environmentId: "env", id: "child", parentThreadId: "parent" };
+    const orphan = { environmentId: "env", id: "orphan", parentThreadId: "missing" };
+
+    expect(
+      orderThreadsWithChildren([child, other, orphan, parent]).map((thread) => thread.id),
+    ).toEqual(["other", "parent", "child", "orphan"]);
   });
 });
 

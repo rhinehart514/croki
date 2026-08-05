@@ -59,6 +59,8 @@ const asEventId = (value: string): EventId => EventId.make(value);
 const asItemId = (value: string): ProviderItemId => ProviderItemId.make(value);
 
 class FakeCodexRuntime implements CodexSessionRuntimeShape {
+  readonly startVoice = vi.fn(() => Effect.void);
+  readonly stopVoice = Effect.void;
   private readonly eventQueue = Effect.runSync(Queue.unbounded<ProviderEvent>());
   private readonly now = "2026-01-01T00:00:00.000Z";
 
@@ -292,6 +294,23 @@ validationLayer("CodexAdapterLive validation", (it) => {
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
       });
+    }),
+  );
+  it.effect("routes native voice start to the active Codex runtime", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      const threadId = asThreadId("voice-thread");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        runtimeMode: "approval-required",
+      });
+
+      yield* adapter.voice!.start({ threadId, sdp: "v=0\r\nvoice-offer" });
+
+      NodeAssert.deepStrictEqual(validationRuntimeFactory.lastRuntime?.startVoice.mock.calls, [
+        [{ sdp: "v=0\r\nvoice-offer" }],
+      ]);
     }),
   );
 });

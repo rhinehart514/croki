@@ -1460,11 +1460,22 @@ export default function SidebarV2() {
       // memo exactly at the next wake boundary.
       void snoozeWakeTick;
       const preciseNow = new Date().toISOString();
+      const isInProjectScope = (thread: EnvironmentThreadShell) =>
+        scopedProjectKeys === null ||
+        scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`);
+      const visibleChildParentKeys = new Set(
+        threads
+          .filter(
+            (thread) =>
+              thread.archivedAt === null && thread.parentThreadId && isInProjectScope(thread),
+          )
+          .map((thread) => `${thread.environmentId}:${thread.parentThreadId}`),
+      );
       const visible = threads.filter(
         (thread) =>
-          thread.archivedAt === null &&
-          (scopedProjectKeys === null ||
-            scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
+          isInProjectScope(thread) &&
+          (thread.archivedAt === null ||
+            visibleChildParentKeys.has(`${thread.environmentId}:${thread.id}`)),
       );
       const childThreadsByParentKey = new Map<string, EnvironmentThreadShell[]>();
       for (const child of visible) {
@@ -1579,15 +1590,25 @@ export default function SidebarV2() {
   );
   const [settledShelfExpanded, setSettledShelfExpanded] = useState(true);
   const toggleSettledShelf = useCallback(() => setSettledShelfExpanded((value) => !value), []);
-  const renderedSettledThreads = useMemo(() => {
-    if (settledShelfExpanded) return visibleSettledThreads;
-    if (routeThreadKey === null) return [];
-    const routeThread = visibleSettledThreads.find(
+  const routeParentThreadKey = useMemo(() => {
+    if (routeThreadKey === null) return null;
+    const routeThread = threads.find(
       (thread) =>
         scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
     );
+    return routeThread?.parentThreadId
+      ? scopedThreadKey(scopeThreadRef(routeThread.environmentId, routeThread.parentThreadId))
+      : routeThreadKey;
+  }, [routeThreadKey, threads]);
+  const renderedSettledThreads = useMemo(() => {
+    if (settledShelfExpanded) return visibleSettledThreads;
+    if (routeParentThreadKey === null) return [];
+    const routeThread = visibleSettledThreads.find(
+      (thread) =>
+        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeParentThreadKey,
+    );
     return routeThread === undefined ? [] : [routeThread];
-  }, [routeThreadKey, settledShelfExpanded, visibleSettledThreads]);
+  }, [routeParentThreadKey, settledShelfExpanded, visibleSettledThreads]);
 
   // The snoozed shelf is collapsed by default: out of the way, never gone.
   // Collapsed threads don't render (and so don't participate in jump
@@ -1600,13 +1621,13 @@ export default function SidebarV2() {
     // snoozed thread reached by route (deep link, open before snoozing
     // elsewhere) keeps its row — with highlight and wake affordance — same
     // exception the settled tail's "Show more" makes.
-    if (routeThreadKey === null) return [];
+    if (routeParentThreadKey === null) return [];
     const routeThread = snoozedThreads.find(
       (thread) =>
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
+        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeParentThreadKey,
     );
     return routeThread === undefined ? [] : [routeThread];
-  }, [routeThreadKey, snoozedShelfExpanded, snoozedThreads]);
+  }, [routeParentThreadKey, snoozedShelfExpanded, snoozedThreads]);
 
   const orderedThreads = useMemo(
     () =>

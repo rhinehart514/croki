@@ -3,15 +3,22 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import { beforeEach, vi } from "vite-plus/test";
 
-const { handleMock, netFetchMock, unhandleMock } = vi.hoisted(() => ({
-  handleMock: vi.fn(),
-  netFetchMock: vi.fn(),
-  unhandleMock: vi.fn(),
-}));
+const { handleMock, netFetchMock, registerSchemesAsPrivilegedMock, unhandleMock } = vi.hoisted(
+  () => ({
+    handleMock: vi.fn(),
+    netFetchMock: vi.fn(),
+    registerSchemesAsPrivilegedMock: vi.fn(),
+    unhandleMock: vi.fn(),
+  }),
+);
 
 vi.mock("electron", () => ({
   net: { fetch: netFetchMock },
-  protocol: { handle: handleMock, unhandle: unhandleMock },
+  protocol: {
+    handle: handleMock,
+    registerSchemesAsPrivileged: registerSchemesAsPrivilegedMock,
+    unhandle: unhandleMock,
+  },
 }));
 
 import * as ElectronProtocol from "./ElectronProtocol.ts";
@@ -20,8 +27,43 @@ describe("ElectronProtocol", () => {
   beforeEach(() => {
     handleMock.mockReset();
     netFetchMock.mockReset();
+    registerSchemesAsPrivilegedMock.mockReset();
     unhandleMock.mockReset();
   });
+
+  it.effect("registers Croki renderer schemes as secure before protocol handling", () =>
+    Effect.gen(function* () {
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      yield* protocol.registerPrivilegedSchemes;
+
+      assert.deepEqual(registerSchemesAsPrivilegedMock.mock.calls, [
+        [
+          [
+            {
+              scheme: "croki",
+              privileges: {
+                standard: true,
+                secure: true,
+                supportFetchAPI: true,
+                corsEnabled: true,
+                stream: true,
+              },
+            },
+            {
+              scheme: "croki-dev",
+              privileges: {
+                standard: true,
+                secure: true,
+                supportFetchAPI: true,
+                corsEnabled: true,
+                stream: true,
+              },
+            },
+          ],
+        ],
+      ]);
+    }).pipe(Effect.provide(ElectronProtocol.layer)),
+  );
 
   it.effect("proxies the stable renderer origin to the current app server", () =>
     Effect.gen(function* () {

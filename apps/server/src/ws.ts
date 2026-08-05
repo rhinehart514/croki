@@ -16,6 +16,7 @@ import {
   type AuthEnvironmentScope,
   AuthSessionId,
   CommandId,
+  CodexVoiceError,
   type DiscoveredLocalServerList,
   EventId,
   type OrchestrationCommand,
@@ -75,6 +76,7 @@ import {
   observeRpcStreamEffect as instrumentRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
+import * as ProviderService from "./provider/Services/ProviderService.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -364,6 +366,11 @@ const makeWsRpcLayer = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      // Some router seam tests intentionally omit provider execution. Voice is
+      // unavailable there, while production supplies ProviderService.
+      const providerService = Option.getOrUndefined(
+        yield* Effect.serviceOption(ProviderService.ProviderService),
+      );
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
@@ -1016,6 +1023,66 @@ const makeWsRpcLayer = (
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
       return WsRpcGroup.of({
+        [WS_METHODS.codexVoiceStart]: (input) =>
+          providerService?.voice
+            ? providerService.voice.start(input).pipe(
+                Effect.mapError(
+                  (error) =>
+                    new CodexVoiceError({
+                      kind:
+                        error._tag === "ProviderValidationError" ? "unsupported" : "provider-error",
+                      message: error.message,
+                      fallback: "dictation",
+                    }),
+                ),
+              )
+            : Effect.fail(
+                new CodexVoiceError({
+                  kind: "unsupported",
+                  message: "Codex voice is unavailable in this environment.",
+                  fallback: "dictation",
+                }),
+              ),
+        [WS_METHODS.codexVoiceStop]: ({ threadId }) =>
+          providerService?.voice
+            ? providerService.voice.stop(threadId).pipe(
+                Effect.mapError(
+                  (error) =>
+                    new CodexVoiceError({
+                      kind:
+                        error._tag === "ProviderValidationError" ? "unsupported" : "provider-error",
+                      message: error.message,
+                      fallback: "dictation",
+                    }),
+                ),
+              )
+            : Effect.fail(
+                new CodexVoiceError({
+                  kind: "unsupported",
+                  message: "Codex voice is unavailable in this environment.",
+                  fallback: "dictation",
+                }),
+              ),
+        [WS_METHODS.codexVoiceSubscribe]: ({ threadId }) =>
+          providerService?.voice
+            ? providerService.voice.events(threadId).pipe(
+                Stream.mapError(
+                  (error) =>
+                    new CodexVoiceError({
+                      kind:
+                        error._tag === "ProviderValidationError" ? "unsupported" : "provider-error",
+                      message: error.message,
+                      fallback: "dictation",
+                    }),
+                ),
+              )
+            : Stream.fail(
+                new CodexVoiceError({
+                  kind: "unsupported",
+                  message: "Codex voice is unavailable in this environment.",
+                  fallback: "dictation",
+                }),
+              ),
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.dispatchCommand,

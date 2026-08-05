@@ -12,6 +12,8 @@
  * @module ProviderService
  */
 import type {
+  CodexVoiceEvent,
+  CodexVoiceStartInput,
   ProviderInterruptTurnInput,
   ProviderInstanceId,
   ProviderRespondToRequestInput,
@@ -36,6 +38,11 @@ import type { ProviderInstanceRoutingInfo } from "./ProviderAdapterRegistry.ts";
  * ProviderServiceShape - Service API for provider session and turn orchestration.
  */
 export interface ProviderServiceShape {
+  readonly voice?: {
+    readonly start: (input: CodexVoiceStartInput) => Effect.Effect<void, ProviderServiceError>;
+    readonly stop: (threadId: ThreadId) => Effect.Effect<void, ProviderServiceError>;
+    readonly events: (threadId: ThreadId) => Stream.Stream<CodexVoiceEvent, ProviderServiceError>;
+  };
   /**
    * Start a provider session.
    */

@@ -17,7 +17,7 @@ import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import {
   checkPortAvailabilityOnHosts,
@@ -791,6 +791,30 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
   });
 
   describe("runDevRunnerWithInput", () => {
+    it.effect("leaves process-group ownership with the platform spawner", () => {
+      let spawnedCommand: ChildProcess.Command | undefined;
+      const spawnerLayer = Layer.succeed(
+        ChildProcessSpawner.ChildProcessSpawner,
+        ChildProcessSpawner.make((command) => {
+          spawnedCommand = command;
+          return Effect.succeed(mockProcess(0));
+        }),
+      );
+
+      return Effect.gen(function* () {
+        yield* runDevRunnerWithInput(devServerInput).pipe(
+          Effect.provide(Layer.mergeAll(emptyConfigLayer, netServiceLayer, spawnerLayer)),
+          Effect.provideService(HostProcessPlatform, "linux"),
+        );
+
+        if (!spawnedCommand || !ChildProcess.isStandardCommand(spawnedCommand)) {
+          assert.fail("Expected the dev runner to spawn one standard command");
+        }
+        assert.equal(spawnedCommand.options.detached, undefined);
+        assert.equal(spawnedCommand.options.forceKillAfter, "1500 millis");
+      });
+    });
+
     it.effect("preserves invalid configuration as the exact cause", () =>
       Effect.gen(function* () {
         const error = yield* runDevRunnerWithInput({ ...devServerInput, dryRun: true }).pipe(

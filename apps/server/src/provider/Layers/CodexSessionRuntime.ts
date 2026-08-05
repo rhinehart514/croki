@@ -120,6 +120,11 @@ export interface CodexSessionRuntimeSendTurnInput {
   readonly interactionMode?: ProviderInteractionMode;
 }
 
+export interface CodexSessionRuntimeVoiceStartInput {
+  readonly sdp: string;
+  readonly voice?: string;
+}
+
 export interface CodexThreadTurnSnapshot {
   readonly id: TurnId;
   readonly items: ReadonlyArray<CodexThreadItem>;
@@ -137,6 +142,10 @@ export interface CodexSessionRuntimeShape {
     input: CodexSessionRuntimeSendTurnInput,
   ) => Effect.Effect<ProviderTurnStartResult, CodexSessionRuntimeError>;
   readonly interruptTurn: (turnId?: TurnId) => Effect.Effect<void, CodexSessionRuntimeError>;
+  readonly startVoice: (
+    input: CodexSessionRuntimeVoiceStartInput,
+  ) => Effect.Effect<void, CodexSessionRuntimeError>;
+  readonly stopVoice: Effect.Effect<void, CodexSessionRuntimeError>;
   readonly readThread: Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
   readonly rollbackThread: (
     numTurns: number,
@@ -1330,6 +1339,21 @@ export const makeCodexSessionRuntime = (
             turnId: effectiveTurnId,
           });
         }),
+      startVoice: (input) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          yield* client.raw.request("thread/realtime/start", {
+            threadId: providerThreadId,
+            outputModality: "audio",
+            version: "v3",
+            transport: { type: "webrtc", sdp: input.sdp },
+            ...(input.voice ? { voice: input.voice } : {}),
+          });
+        }),
+      stopVoice: Effect.gen(function* () {
+        const providerThreadId = yield* readProviderThreadId;
+        yield* client.raw.request("thread/realtime/stop", { threadId: providerThreadId });
+      }),
       readThread: Effect.gen(function* () {
         const providerThreadId = yield* readProviderThreadId;
         const response = yield* client.request("thread/read", {

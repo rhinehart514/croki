@@ -6493,8 +6493,8 @@ function ChatViewContent(props: ChatViewProps) {
                               activeThreadModelSelection={activeThread?.modelSelection}
                               activeThreadActivities={activeThread?.activities}
                               applicationContext={crokiApplicationContext}
-                              canvasSelection={selectedCanvasNodes}
                               applicationWorkspaceRoot={crokiWorkspaceRoot}
+                              canvasSelection={selectedCanvasNodes}
                               resolvedTheme={resolvedTheme}
                               settings={settings}
                               keybindings={keybindings}

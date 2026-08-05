@@ -636,6 +636,8 @@ interface StagePackageJson {
 
 export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
 export const DESKTOP_ELECTRON_LANGUAGES = ["en-US"] as const;
+export const DESKTOP_MACOS_MICROPHONE_USAGE_DESCRIPTION =
+  "Croki uses the microphone for voice dictation.";
 export const DESKTOP_FILE_EXCLUSIONS = [
   // Croki always passes the user's installed Claude executable to the SDK,
   // so the SDK's optional platform packages (each a ~200MB bundled executable)
@@ -1580,6 +1582,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
+      extendInfo: {
+        NSMicrophoneUsageDescription: DESKTOP_MACOS_MICROPHONE_USAGE_DESCRIPTION,
+      },
       // Squirrel.Mac requires every auto-updatable app to be signed. An ad-hoc
       // signature provides that compatibility without an Apple Developer ID;
       // users still approve the unnotarized app on first install.

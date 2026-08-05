@@ -860,3 +860,38 @@ export function sortScopedProjectsForSidebar<
       left.id.localeCompare(right.id),
   );
 }
+
+/** Keeps durable worker Threads adjacent to their canonical parent. */
+export function orderThreadsWithChildren<
+  TThread extends {
+    readonly environmentId: string;
+    readonly id: string;
+    readonly parentThreadId?: string | null | undefined;
+  },
+>(threads: readonly TThread[]): TThread[] {
+  const childKeys = new Set(
+    threads
+      .filter((thread) => thread.parentThreadId != null)
+      .map((thread) => `${thread.environmentId}\0${thread.id}`),
+  );
+  const childrenByParent = new Map<string, TThread[]>();
+  for (const thread of threads) {
+    if (!thread.parentThreadId) continue;
+    const parentKey = `${thread.environmentId}\0${thread.parentThreadId}`;
+    const children = childrenByParent.get(parentKey) ?? [];
+    children.push(thread);
+    childrenByParent.set(parentKey, children);
+  }
+
+  const ordered: TThread[] = [];
+  for (const thread of threads) {
+    const threadKey = `${thread.environmentId}\0${thread.id}`;
+    if (childKeys.has(threadKey)) continue;
+    ordered.push(thread, ...(childrenByParent.get(threadKey) ?? []));
+  }
+  for (const thread of threads) {
+    const threadKey = `${thread.environmentId}\0${thread.id}`;
+    if (childKeys.has(threadKey) && !ordered.includes(thread)) ordered.push(thread);
+  }
+  return ordered;
+}

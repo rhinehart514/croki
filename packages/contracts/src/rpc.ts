@@ -156,6 +156,12 @@ import {
   SourceControlRepositoryLookupInput,
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
+import {
+  CodexVoiceError,
+  CodexVoiceEvent,
+  CodexVoiceStartInput,
+  CodexVoiceThreadInput,
+} from "./codexVoice.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -173,6 +179,10 @@ export const WS_METHODS = {
   // Filesystem methods
   filesystemBrowse: "filesystem.browse",
   assetsCreateUrl: "assets.createUrl",
+
+  // Codex native voice methods
+  codexVoiceStart: "codexVoice.start",
+  codexVoiceStop: "codexVoice.stop",
 
   // VCS methods
   vcsPull: "vcs.pull",
@@ -254,6 +264,7 @@ export const WS_METHODS = {
   subscribeAuthAccess: "subscribeAuthAccess",
   subscribeBackgroundPolicy: "subscribeBackgroundPolicy",
   subscribeResourceTelemetry: "subscribeResourceTelemetry",
+  codexVoiceSubscribe: "codexVoice.subscribe",
 } as const;
 
 export const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -763,7 +774,29 @@ export const WsSubscribeResourceTelemetryRpc = Rpc.make(WS_METHODS.subscribeReso
   stream: true,
 });
 
+export const WsCodexVoiceStartRpc = Rpc.make(WS_METHODS.codexVoiceStart, {
+  payload: CodexVoiceStartInput,
+  success: Schema.Void,
+  error: CodexVoiceError,
+});
+
+export const WsCodexVoiceStopRpc = Rpc.make(WS_METHODS.codexVoiceStop, {
+  payload: CodexVoiceThreadInput,
+  success: Schema.Void,
+  error: CodexVoiceError,
+});
+
+export const WsCodexVoiceSubscribeRpc = Rpc.make(WS_METHODS.codexVoiceSubscribe, {
+  payload: CodexVoiceThreadInput,
+  success: CodexVoiceEvent,
+  error: CodexVoiceError,
+  stream: true,
+});
+
 export const WsRpcGroup = RpcGroup.make(
+  WsCodexVoiceStartRpc,
+  WsCodexVoiceStopRpc,
+  WsCodexVoiceSubscribeRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,

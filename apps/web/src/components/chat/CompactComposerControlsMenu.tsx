@@ -1,27 +1,17 @@
-import { ProviderInteractionMode, RuntimeMode } from "@croki/contracts";
-import { memo, type ReactNode } from "react";
-import { EllipsisIcon, ListTodoIcon } from "lucide-react";
+import { RuntimeMode } from "@croki/contracts";
+import { memo } from "react";
 import { Button } from "../ui/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator as MenuDivider,
-  MenuTrigger,
-} from "../ui/menu";
+import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "../ui/menu";
+
+const runtimePresentation = {
+  "approval-required": "Supervised",
+  "auto-accept-edits": "Auto-accept",
+  auto: "Auto",
+  "full-access": "Full access",
+} satisfies Record<RuntimeMode, string>;
 
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
-  activePlan: boolean;
-  interactionMode: ProviderInteractionMode;
-  planSidebarLabel: string;
-  planSidebarOpen: boolean;
   runtimeMode: RuntimeMode;
-  showInteractionModeToggle: boolean;
-  traitsMenuContent?: ReactNode;
-  onToggleInteractionMode: () => void;
-  onTogglePlanSidebar: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
   return (
@@ -31,36 +21,20 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
           <Button
             size="sm"
             variant="ghost"
-            className="shrink-0 px-2 text-muted-foreground/70 hover:text-foreground/80"
-            aria-label="More composer controls"
+            className="shrink-0 gap-1.5 bg-transparent! px-1.5 text-muted-foreground/60 transition-colors duration-150 hover:bg-transparent! hover:text-foreground/80 motion-reduce:transition-none"
+            aria-label="Access"
           />
         }
       >
-        <EllipsisIcon aria-hidden="true" className="size-4" />
+        <span aria-hidden="true" className="opacity-45">
+          ·
+        </span>
+        <span>{runtimePresentation[props.runtimeMode]}</span>
       </MenuTrigger>
-      <MenuPopup align="start">
-        {props.traitsMenuContent ? (
-          <>
-            {props.traitsMenuContent}
-            <MenuDivider />
-          </>
-        ) : null}
-        {props.showInteractionModeToggle ? (
-          <>
-            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Mode</div>
-            <MenuRadioGroup
-              value={props.interactionMode}
-              onValueChange={(value) => {
-                if (!value || value === props.interactionMode) return;
-                props.onToggleInteractionMode();
-              }}
-            >
-              <MenuRadioItem value="default">Chat</MenuRadioItem>
-              <MenuRadioItem value="plan">Plan</MenuRadioItem>
-            </MenuRadioGroup>
-            <MenuDivider />
-          </>
-        ) : null}
+      <MenuPopup
+        align="start"
+        className="translate-y-0 transition-[opacity,translate] duration-100 ease-out data-ending-style:translate-y-0.5 data-ending-style:opacity-0 data-starting-style:translate-y-0.5 data-starting-style:opacity-0 motion-reduce:transition-none"
+      >
         <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Access</div>
         <MenuRadioGroup
           value={props.runtimeMode}
@@ -69,22 +43,31 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
             props.onRuntimeModeChange(value as RuntimeMode);
           }}
         >
-          <MenuRadioItem value="approval-required">Supervised</MenuRadioItem>
-          <MenuRadioItem value="auto-accept-edits">Auto-accept edits</MenuRadioItem>
-          <MenuRadioItem value="auto">Auto</MenuRadioItem>
-          <MenuRadioItem value="full-access">Full access</MenuRadioItem>
+          <MenuRadioItem
+            value="approval-required"
+            className="transition-colors duration-100 motion-reduce:transition-none"
+          >
+            Supervised
+          </MenuRadioItem>
+          <MenuRadioItem
+            value="auto-accept-edits"
+            className="transition-colors duration-100 motion-reduce:transition-none"
+          >
+            Auto-accept edits
+          </MenuRadioItem>
+          <MenuRadioItem
+            value="auto"
+            className="transition-colors duration-100 motion-reduce:transition-none"
+          >
+            Auto
+          </MenuRadioItem>
+          <MenuRadioItem
+            value="full-access"
+            className="transition-colors duration-100 motion-reduce:transition-none"
+          >
+            Full access
+          </MenuRadioItem>
         </MenuRadioGroup>
-        {props.activePlan ? (
-          <>
-            <MenuDivider />
-            <MenuItem onClick={props.onTogglePlanSidebar}>
-              <ListTodoIcon className="size-4 shrink-0" />
-              {props.planSidebarOpen
-                ? `Hide ${props.planSidebarLabel.toLowerCase()} sidebar`
-                : `Show ${props.planSidebarLabel.toLowerCase()} sidebar`}
-            </MenuItem>
-          </>
-        ) : null}
       </MenuPopup>
     </Menu>
   );

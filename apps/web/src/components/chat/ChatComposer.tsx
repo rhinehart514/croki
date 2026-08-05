@@ -93,15 +93,15 @@ import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
+import { CodexVoiceButton } from "./CodexVoiceButton";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
-import { ComposerControl, ComposerControlIcon, ComposerSelectControl } from "./ComposerControl";
+import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
 import {
   getComposerPromptInjectionState,
   getComposerProviderState,
-  renderProviderTraitsMenuContent,
   renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
@@ -110,7 +110,14 @@ import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
-import { Separator } from "../ui/separator";
+import {
+  Menu,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuTrigger,
+} from "../ui/menu";
 
 function ComposerCommandMenuLayer(props: { anchor: HTMLElement | null; children: ReactNode }) {
   const [position, setPosition] = useState<{
@@ -170,21 +177,9 @@ function ComposerCommandMenuLayer(props: { anchor: HTMLElement | null; children:
   );
 }
 import { Button } from "../ui/button";
-import { Select, SelectItem, SelectPopup, SelectValue } from "../ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
-import {
-  BotIcon,
-  CircleAlertIcon,
-  ListTodoIcon,
-  PencilRulerIcon,
-  type LucideIcon,
-  LockIcon,
-  LockOpenIcon,
-  PenLineIcon,
-  SparklesIcon,
-  XIcon,
-} from "lucide-react";
+import { CircleAlertIcon, ListTodoIcon, XIcon } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
 import { getProviderDisplayName, getProviderInteractionModeToggle } from "../../providerModels";
 import {
@@ -212,33 +207,6 @@ import type { ReviewCommentContext } from "../../reviewCommentContext";
 
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
 
-const runtimeModeConfig: Record<
-  RuntimeMode,
-  { label: string; description: string; icon: LucideIcon }
-> = {
-  "approval-required": {
-    label: "Supervised",
-    description: "Ask before commands and file changes.",
-    icon: LockIcon,
-  },
-  "auto-accept-edits": {
-    label: "Auto-accept edits",
-    description: "Auto-approve edits, ask before other actions.",
-    icon: PenLineIcon,
-  },
-  auto: {
-    label: "Auto",
-    description: "An AI reviewer approves routine actions; risky ones still ask.",
-    icon: SparklesIcon,
-  },
-  "full-access": {
-    label: "Full access",
-    description: "Allow commands and edits without prompts.",
-    icon: LockOpenIcon,
-  },
-};
-
-const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
 const COMPOSER_FLOATING_LAYER_SELECTOR = [
   '[data-slot="popover-popup"]',
   '[data-slot="menu-popup"]',
@@ -279,130 +247,93 @@ function isInsideComposerFloatingLayer(element: Element): boolean {
   return element.closest(COMPOSER_FLOATING_LAYER_SELECTOR) !== null;
 }
 
-const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
-  showInteractionModeToggle: boolean;
+const ComposerBehaviorControls = memo(function ComposerBehaviorControls(props: {
+  harnessId: CrokiHarnessId;
   interactionMode: ProviderInteractionMode;
-  runtimeMode: RuntimeMode;
+  showInteractionModeToggle: boolean;
   showPlanToggle: boolean;
   planSidebarLabel: string;
   planSidebarOpen: boolean;
+  onHarnessChange: (harnessId: CrokiHarnessId) => void;
   onToggleInteractionMode: () => void;
-  onRuntimeModeChange: (mode: RuntimeMode) => void;
   onTogglePlanSidebar: () => void;
 }) {
-  const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
-  const RuntimeModeIcon = runtimeModeOption.icon;
-  const interactionModeTooltip =
-    props.interactionMode === "plan"
-      ? "Plan mode — click to return to normal build mode"
-      : "Default mode — click to enter plan mode";
-  const planSidebarTooltip = props.planSidebarOpen
-    ? `Hide ${props.planSidebarLabel.toLowerCase()} sidebar`
-    : `Show ${props.planSidebarLabel.toLowerCase()} sidebar`;
-
-  const interactionModeToggle = props.showInteractionModeToggle ? (
-    <>
-      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <ComposerControl
-              className={cn(
-                "shrink-0 whitespace-nowrap",
-                props.interactionMode === "plan"
-                  ? "bg-blue-500/10 text-blue-400 hover:bg-blue-500/15 hover:text-blue-300"
-                  : "text-muted-foreground/70 hover:text-foreground/80",
-              )}
-              type="button"
-              onClick={props.onToggleInteractionMode}
-              aria-label={interactionModeTooltip}
-            />
-          }
-        >
-          {props.interactionMode === "plan" ? (
-            <ComposerControlIcon icon={PencilRulerIcon} className="text-current opacity-100" />
-          ) : (
-            <ComposerControlIcon icon={BotIcon} opticalSize="large" />
-          )}
-          <span className="sr-only sm:not-sr-only">
-            {props.interactionMode === "plan" ? "Plan" : "Build"}
-          </span>
-        </TooltipTrigger>
-        <TooltipPopup side="top">{interactionModeTooltip}</TooltipPopup>
-      </Tooltip>
-    </>
-  ) : null;
+  const behaviorLabel = [
+    props.harnessId === "venture-v1" ? "Venture" : "Native",
+    props.interactionMode === "plan" ? "Plan" : "Build",
+  ].join(" · ");
 
   return (
     <>
-      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-
-      <Tooltip>
-        <Select
-          value={props.runtimeMode}
-          onValueChange={(value) => props.onRuntimeModeChange(value!)}
+      <Menu>
+        <MenuTrigger
+          render={
+            <ComposerControl
+              type="button"
+              className="shrink-0 text-muted-foreground/65 transition-colors duration-150 hover:text-foreground/85 motion-reduce:transition-none"
+              aria-label="Behavior"
+            />
+          }
         >
-          <TooltipTrigger
-            render={<ComposerSelectControl className="font-medium" aria-label="Runtime mode" />}
+          <span aria-hidden="true" className="opacity-45">
+            ·
+          </span>
+          {behaviorLabel}
+        </MenuTrigger>
+        <MenuPopup
+          align="start"
+          className="translate-y-0 transition-[opacity,translate] duration-100 ease-out data-ending-style:translate-y-0.5 data-ending-style:opacity-0 data-starting-style:translate-y-0.5 data-starting-style:opacity-0 motion-reduce:transition-none"
+        >
+          <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Behavior</div>
+          <MenuRadioGroup
+            value={props.harnessId}
+            onValueChange={(value) => {
+              if (!value || value === props.harnessId) return;
+              props.onHarnessChange(value as CrokiHarnessId);
+            }}
           >
-            <ComposerControlIcon icon={RuntimeModeIcon} />
-            <SelectValue>{runtimeModeOption.label}</SelectValue>
-          </TooltipTrigger>
-          <SelectPopup alignItemWithTrigger={false}>
-            {runtimeModeOptions.map((mode) => {
-              const option = runtimeModeConfig[mode];
-              const OptionIcon = option.icon;
-              return (
-                <SelectItem key={mode} value={mode} hideIndicator className="min-w-64 py-2">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid min-w-0 flex-1 gap-0.5">
-                      <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                        <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                        {option.label}
-                      </span>
-                      <span className="text-muted-foreground text-xs leading-4">
-                        {option.description}
-                      </span>
-                    </div>
-                  </div>
-                </SelectItem>
-              );
-            })}
-          </SelectPopup>
-        </Select>
-        <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
-      </Tooltip>
-
-      {interactionModeToggle}
+            <MenuRadioItem value="native">Native</MenuRadioItem>
+            <MenuRadioItem value="venture-v1">Venture</MenuRadioItem>
+          </MenuRadioGroup>
+          {props.showInteractionModeToggle ? (
+            <>
+              <MenuSeparator />
+              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Mode</div>
+              <MenuRadioGroup
+                value={props.interactionMode}
+                onValueChange={(value) => {
+                  if (!value || value === props.interactionMode) return;
+                  props.onToggleInteractionMode();
+                }}
+              >
+                <MenuRadioItem value="default">Build</MenuRadioItem>
+                <MenuRadioItem value="plan">Plan</MenuRadioItem>
+              </MenuRadioGroup>
+            </>
+          ) : null}
+        </MenuPopup>
+      </Menu>
 
       {props.showPlanToggle ? (
-        <>
-          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <ComposerControl
-                  className={cn(
-                    "shrink-0 whitespace-nowrap",
-                    props.planSidebarOpen
-                      ? "bg-blue-500/10 text-blue-400 hover:bg-blue-500/15 hover:text-blue-300"
-                      : "text-muted-foreground/70 hover:text-foreground/80",
-                  )}
-                  type="button"
-                  onClick={props.onTogglePlanSidebar}
-                  aria-label={planSidebarTooltip}
-                />
-              }
-            >
-              <ComposerControlIcon
-                icon={ListTodoIcon}
-                className={props.planSidebarOpen ? "text-current opacity-100" : undefined}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <ComposerControl
+                type="button"
+                onClick={props.onTogglePlanSidebar}
+                aria-label={`${props.planSidebarOpen ? "Hide" : "Show"} ${props.planSidebarLabel.toLowerCase()}`}
               />
-              <span className="sr-only sm:not-sr-only">{props.planSidebarLabel}</span>
-            </TooltipTrigger>
-            <TooltipPopup side="top">{planSidebarTooltip}</TooltipPopup>
-          </Tooltip>
-        </>
+            }
+          >
+            <ComposerControlIcon icon={ListTodoIcon} />
+            <span>{props.planSidebarLabel}</span>
+          </TooltipTrigger>
+          <TooltipPopup side="top">
+            {props.planSidebarOpen
+              ? `Hide ${props.planSidebarLabel.toLowerCase()} sidebar`
+              : `Show ${props.planSidebarLabel.toLowerCase()} sidebar`}
+          </TooltipPopup>
+        </Tooltip>
       ) : null}
     </>
   );
@@ -1205,9 +1136,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       : "No matching command.";
   }, [composerTriggerKind]);
 
-  // ------------------------------------------------------------------
-  // Provider traits UI
-  // ------------------------------------------------------------------
   const setPromptFromTraits = useCallback(
     (nextPrompt: string) => {
       if (nextPrompt === promptRef.current) {
@@ -1224,17 +1152,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [composerDraftTarget, promptRef, scheduleComposerFocus, setComposerDraftPrompt],
   );
 
-  const providerTraitsMenuContent = renderProviderTraitsMenuContent({
-    provider: selectedProvider,
-    instanceId: selectedInstanceId,
-    ...(routeKind === "server" ? { threadRef: routeThreadRef } : {}),
-    ...(routeKind === "draft" && draftId ? { draftId } : {}),
-    model: selectedModel,
-    models: selectedProviderModels,
-    modelOptions: composerModelOptions?.[selectedInstanceId],
-    prompt,
-    onPromptChange: setPromptFromTraits,
-  });
   const providerTraitsPicker = renderProviderTraitsPicker({
     provider: selectedProvider,
     instanceId: selectedInstanceId,
@@ -1246,6 +1163,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     prompt,
     onPromptChange: setPromptFromTraits,
   });
+
   const pendingPrimaryAction = useMemo(
     () =>
       activePendingProgress
@@ -2645,7 +2563,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           ref={composerSurfaceRef}
           data-chat-composer-mobile-collapsed={isComposerCollapsedMobile ? "true" : "false"}
           className={cn(
-            "rounded-[20px] transition-[background-color] duration-200",
+            "rounded-[20px] bg-background/90 shadow-[inset_0_1px_0_rgb(255_255_255/0.035)] backdrop-blur-xl transition-[background-color] duration-200",
             isDragOverComposer ? "bg-accent/45 ring-1 ring-primary/70" : null,
             projectSelectionRequired ? "opacity-75" : null,
             composerProviderState.composerSurfaceClassName,
@@ -3149,46 +3067,34 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   />
                 )}
 
+                {providerTraitsPicker ? (
+                  <span className="flex items-center">
+                    <span aria-hidden="true" className="text-muted-foreground/30">
+                      ·
+                    </span>
+                    {providerTraitsPicker}
+                  </span>
+                ) : null}
+
+                <CompactComposerControlsMenu
+                  runtimeMode={runtimeMode}
+                  onRuntimeModeChange={handleRuntimeModeChange}
+                />
+
+                <ComposerBehaviorControls
+                  harnessId={crokiHarnessId}
+                  interactionMode={interactionMode}
+                  showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
+                  showPlanToggle={showPlanSidebarToggle}
+                  planSidebarLabel={planSidebarLabel}
+                  planSidebarOpen={planSidebarOpen}
+                  onHarnessChange={onCrokiHarnessChange}
+                  onToggleInteractionMode={toggleInteractionMode}
+                  onTogglePlanSidebar={togglePlanSidebar}
+                />
+
                 {activeThread ? (
                   <>
-                    <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-                    <Select
-                      value={crokiHarnessId}
-                      onValueChange={(value) => onCrokiHarnessChange(value!)}
-                    >
-                      <ComposerSelectControl
-                        className={cn(
-                          "font-medium",
-                          crokiHarnessId === "venture-v1" && "text-amber-300 hover:text-amber-200",
-                        )}
-                        aria-label="Turn behavior"
-                      >
-                        <ComposerControlIcon icon={BotIcon} opticalSize="large" />
-                        <SelectValue>
-                          {crokiHarnessId === "venture-v1" ? "Venture" : "Native"}
-                        </SelectValue>
-                      </ComposerSelectControl>
-                      <SelectPopup alignItemWithTrigger={false}>
-                        <SelectItem value="native" hideIndicator className="min-w-72 py-2">
-                          <div className="grid gap-0.5">
-                            <span className="font-medium text-foreground">Native</span>
-                            <span className="text-xs leading-4 text-muted-foreground">
-                              Provider agent as configured for this turn.
-                            </span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="venture-v1" hideIndicator className="min-w-72 py-2">
-                          <div className="grid gap-0.5">
-                            <span className="font-medium text-foreground">Venture</span>
-                            <span className="text-xs leading-4 text-muted-foreground">
-                              Join product reality, customer evidence, implementation, and market
-                              direction for this turn.
-                            </span>
-                          </div>
-                        </SelectItem>
-                      </SelectPopup>
-                    </Select>
-                    <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
                     {applicationContext ? (
                       <CrokiApplicationIndicator
                         state={applicationContext}
@@ -3197,41 +3103,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     ) : null}
                   </>
                 ) : null}
-
-                {isComposerFooterCompact ? (
-                  <CompactComposerControlsMenu
-                    activePlan={showPlanSidebarToggle}
-                    interactionMode={interactionMode}
-                    planSidebarLabel={planSidebarLabel}
-                    planSidebarOpen={planSidebarOpen}
-                    runtimeMode={runtimeMode}
-                    showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
-                    traitsMenuContent={providerTraitsMenuContent}
-                    onToggleInteractionMode={toggleInteractionMode}
-                    onTogglePlanSidebar={togglePlanSidebar}
-                    onRuntimeModeChange={handleRuntimeModeChange}
-                  />
-                ) : (
-                  <>
-                    {providerTraitsPicker ? (
-                      <>
-                        <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-                        {providerTraitsPicker}
-                      </>
-                    ) : null}
-                    <ComposerFooterModeControls
-                      showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
-                      interactionMode={interactionMode}
-                      runtimeMode={runtimeMode}
-                      showPlanToggle={showPlanSidebarToggle}
-                      planSidebarLabel={planSidebarLabel}
-                      planSidebarOpen={planSidebarOpen}
-                      onToggleInteractionMode={toggleInteractionMode}
-                      onRuntimeModeChange={handleRuntimeModeChange}
-                      onTogglePlanSidebar={togglePlanSidebar}
-                    />
-                  </>
-                )}
               </div>
 
               {/* Right side: send / stop button */}
@@ -3242,6 +3113,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 }
                 className="flex shrink-0 flex-nowrap items-center justify-end gap-2"
               >
+                {activeThreadId && selectedProvider === ProviderDriverKind.make("codex") ? (
+                  <CodexVoiceButton
+                    key={`${environmentId}:${activeThreadId}`}
+                    environmentId={environmentId}
+                    threadId={activeThreadId}
+                    onError={(message) => setThreadError(activeThreadId, message)}
+                  />
+                ) : null}
                 <ComposerFooterPrimaryActions
                   compact={isComposerPrimaryActionsCompact}
                   activeContextWindow={activeContextWindow}

@@ -14,6 +14,7 @@ import {
   createStagePatchedDependencies,
   createBuildConfig,
   DESKTOP_ELECTRON_LANGUAGES,
+  DESKTOP_MACOS_MICROPHONE_USAGE_DESCRIPTION,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
   InvalidMacPasskeyRpDomainError,
@@ -365,6 +366,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
       }
+
+      assert.deepStrictEqual((mac.mac as Record<string, unknown>).extendInfo, {
+        NSMicrophoneUsageDescription: DESKTOP_MACOS_MICROPHONE_USAGE_DESCRIPTION,
+      });
 
       assert.deepStrictEqual((mac.mac as Record<string, unknown>).protocols, [
         { name: "Croki", schemes: ["croki"] },

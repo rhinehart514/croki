@@ -8,6 +8,7 @@
  * @module CodexAdapterLive
  */
 import {
+  type CodexVoiceEvent,
   type CanonicalItemType,
   type CanonicalRequestType,
   type CodexSettings,
@@ -30,6 +31,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Queue from "effect/Queue";
+import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -1374,6 +1376,10 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   const managedNativeEventLogger =
     options?.nativeEventLogger === undefined ? nativeEventLogger : undefined;
   const runtimeEventQueue = yield* Queue.unbounded<ProviderRuntimeEvent>();
+  const voiceEventPubSub = yield* PubSub.unbounded<{
+    readonly threadId: ThreadId;
+    readonly event: CodexVoiceEvent;
+  }>();
   const sessions = new Map<ThreadId, CodexAdapterSessionContext>();
 
   const startSession: CodexAdapterShape["startSession"] = (input) =>
@@ -1451,6 +1457,66 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
 
         const eventFiber = yield* Stream.runForEach(runtime.events, (event) =>
           Effect.gen(function* () {
+            if (event.method.startsWith("thread/realtime/")) {
+              const payload =
+                typeof event.payload === "object" && event.payload !== null
+                  ? (event.payload as Record<string, unknown>)
+                  : {};
+              const voiceEvent: CodexVoiceEvent | undefined =
+                event.method === "thread/realtime/sdp" && typeof payload.sdp === "string"
+                  ? { type: "sdp", sdp: payload.sdp }
+                  : event.method === "thread/realtime/started"
+                    ? {
+                        type: "started",
+                        ...(typeof payload.realtimeSessionId === "string"
+                          ? { realtimeSessionId: payload.realtimeSessionId }
+                          : {}),
+                      }
+                    : event.method === "thread/realtime/transcript/delta" &&
+                        typeof payload.delta === "string"
+                      ? {
+                          type: "transcript.delta",
+                          role: typeof payload.role === "string" ? payload.role : "assistant",
+                          delta: payload.delta,
+                        }
+                      : event.method === "thread/realtime/transcript/done" &&
+                          typeof (payload.text ?? payload.transcript) === "string"
+                        ? {
+                            type: "transcript.done",
+                            role: typeof payload.role === "string" ? payload.role : "assistant",
+                            text: String(payload.text ?? payload.transcript),
+                          }
+                        : event.method === "thread/realtime/error"
+                          ? {
+                              type: "error",
+                              message:
+                                typeof payload.message === "string"
+                                  ? payload.message
+                                  : (event.message ?? "Codex voice failed."),
+                            }
+                          : event.method === "thread/realtime/closed"
+                            ? {
+                                type: "closed",
+                                ...(typeof payload.reason === "string"
+                                  ? { reason: payload.reason }
+                                  : {}),
+                              }
+                            : undefined;
+              if (voiceEvent) {
+                yield* PubSub.publish(voiceEventPubSub, {
+                  threadId: event.threadId,
+                  event: voiceEvent,
+                });
+              }
+              if (
+                event.method === "thread/realtime/sdp" ||
+                event.method === "thread/realtime/transcript/delta" ||
+                event.method === "thread/realtime/transcript/done" ||
+                event.method === "thread/realtime/outputAudio/delta"
+              ) {
+                return;
+              }
+            }
             yield* writeNativeEvent(event);
             const runtimeEvents = mapToRuntimeEvents(event, event.threadId);
             if (runtimeEvents.length === 0) {
@@ -1714,6 +1780,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   yield* Effect.acquireRelease(Effect.void, () =>
     stopAll().pipe(
       Effect.andThen(Queue.shutdown(runtimeEventQueue)),
+      Effect.andThen(PubSub.shutdown(voiceEventPubSub)),
       Effect.andThen(managedNativeEventLogger?.close() ?? Effect.void),
       Effect.ignore,
     ),
@@ -1737,6 +1804,36 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     listSessions,
     hasSession,
     stopAll,
+    voice: {
+      start: (input) =>
+        requireSession(input.threadId).pipe(
+          Effect.flatMap((session) =>
+            session.runtime.startVoice({
+              sdp: input.sdp,
+              ...(input.voice ? { voice: input.voice } : {}),
+            }),
+          ),
+          Effect.mapError((cause) =>
+            cause._tag === "ProviderAdapterSessionNotFoundError"
+              ? cause
+              : mapCodexRuntimeError(input.threadId, "thread/realtime/start", cause),
+          ),
+        ),
+      stop: (threadId) =>
+        requireSession(threadId).pipe(
+          Effect.flatMap((session) => session.runtime.stopVoice),
+          Effect.mapError((cause) =>
+            cause._tag === "ProviderAdapterSessionNotFoundError"
+              ? cause
+              : mapCodexRuntimeError(threadId, "thread/realtime/stop", cause),
+          ),
+        ),
+      events: (threadId) =>
+        Stream.fromPubSub(voiceEventPubSub).pipe(
+          Stream.filter(({ threadId: eventThreadId }) => eventThreadId === threadId),
+          Stream.map(({ event }) => event),
+        ),
+    },
     get streamEvents() {
       return Stream.fromQueue(runtimeEventQueue);
     },
