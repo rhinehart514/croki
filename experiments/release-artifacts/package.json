@@ -1,0 +1,30 @@
+{
+  "name": "croki-release-artifacts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts --port 3300",
+    "audio:build": "node scripts/build-audio.mjs",
+    "render:draft": "node scripts/build-audio.mjs && remotion render src/index.ts CrokiLaunch16x9 output/draft-16x9.mp4 --codec h264 --crf 22 && remotion render src/index.ts CrokiLaunch9x16 output/draft-9x16.mp4 --codec h264 --crf 22",
+    "render:final": "node scripts/preflight-final.mjs && node scripts/build-audio.mjs && remotion render src/index.ts CrokiLaunch16x9 output/croki-launch-16x9.mp4 --codec h264 --crf 16 && remotion render src/index.ts CrokiLaunch9x16 output/croki-launch-9x16.mp4 --codec h264 --crf 16 && node scripts/record-outputs.mjs",
+    "review": "node scripts/serve-review.mjs",
+    "review:build": "node scripts/build-review.mjs",
+    "typecheck": "tsc --noEmit",
+    "validate": "node scripts/validate.mjs"
+  },
+  "dependencies": {
+    "@fontsource/inter": "5.2.8",
+    "@remotion/cli": "4.0.502",
+    "@remotion/lottie": "4.0.502",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "remotion": "4.0.502"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.3"
+  }
+}
