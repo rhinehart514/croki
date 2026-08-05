@@ -10,6 +10,12 @@ Croki is for people directing serious software work across long-running Threads.
 - Ordinary work must not expose worker or orchestration chrome when no delegation exists.
 - Native Codex voice lives beside the Thread composer only for Codex Threads. Spoken turns act directly in the native realtime session; they do not populate the unsent draft. Croki exposes honest connecting, listening, stopping, and typing-fallback states without relaying or persisting raw audio.
 
+## Workspace integrations
+
+- Workspace integrations may remove environment friction through discovery, file presentation, app handoff, and generic recovery.
+- Recognizing an application workspace must not select a persona, inject instructions, start a provider turn, create a parallel knowledge model, or otherwise change native provider behavior.
+- Recovery for ordinary folders belongs to the ADE and is stored in Croki application data; Croki does not add version-control metadata to a user's workspace without an explicit action.
+
 ## Interface direction
 
 - Preserve the existing true-black, dense workspace with white primary text.

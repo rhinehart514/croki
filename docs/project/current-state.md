@@ -1,14 +1,14 @@
 # Current project state
 
-Last audited: 2026-08-03
-Code baseline: Croki 0.4.6 application lineage on `croki/main`
+Last audited: 2026-08-05
+Code baseline: Croki 0.4.7 on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow Croki overlay on Croki rather than a second agent runtime.
 
-Croki 0.4.6 is the current repository version; 0.4.5 remains the latest
-published baseline inherited by it. See the [0.4.6 release
-notes](./release-notes-0.4.6.md) and [release ownership contract](../operations/release.md)
+Croki 0.4.7 is the current repository version; 0.4.5 remains the latest
+published baseline inherited by it. See the [0.4.7 release
+notes](./release-notes-0.4.7.md) and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
 ## Working product
@@ -19,6 +19,8 @@ Croki currently provides:
 - native project and worktree execution with Git diff, restore, commit, push,
   and pull-request paths;
 - terminal, files, preview, plans, approvals, project scripts, and recovery;
+- repository-native checkpoints plus Croki-managed checkpoints for ordinary folders, stored outside the workspace;
+- desktop discovery of existing Obsidian vaults and direct handoff from a Markdown file to Obsidian, without changing provider behavior;
 - web, Electron desktop, and mobile clients;
 - multiple configured instances of Codex, Claude, Cursor, Grok Build,
   OpenCode, and OpenClaw;

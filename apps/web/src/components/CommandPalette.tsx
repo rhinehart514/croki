@@ -16,6 +16,7 @@ import {
 } from "@croki/client-runtime/state/runtime";
 import {
   type DesktopWslState,
+  type DesktopDiscoveredObsidianVault,
   type EnvironmentId,
   type FilesystemBrowseResult,
   type ProjectId,
@@ -30,6 +31,7 @@ import {
   ArrowDownIcon,
   ArrowLeftIcon,
   ArrowUpIcon,
+  BookOpenIcon,
   CircleDotIcon,
   CornerLeftUpIcon,
   FolderIcon,
@@ -594,6 +596,12 @@ function OpenCommandPaletteDialog(props: {
     null,
   );
   const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
+  const [obsidianVaults, setObsidianVaults] = useState<readonly DesktopDiscoveredObsidianVault[]>(
+    [],
+  );
+  const addDiscoveredWorkspaceRef = useRef<
+    (environmentId: EnvironmentId, path: string) => Promise<void>
+  >(async () => {});
   const [addProjectCloneFlow, setAddProjectCloneFlow] = useState<AddProjectCloneFlow | null>(null);
   const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
   const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
@@ -601,6 +609,23 @@ function OpenCommandPaletteDialog(props: {
     () => selectProjectGroupingSettings(clientSettings),
     [clientSettings],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const api = readLocalApi();
+    if (!api) return;
+    void api.workspace
+      .discoverObsidianVaults()
+      .then((vaults) => {
+        if (!cancelled) setObsidianVaults(vaults);
+      })
+      .catch(() => {
+        if (!cancelled) setObsidianVaults([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const environmentLabelById = useMemo(
     () =>
@@ -1183,9 +1208,49 @@ function OpenCommandPaletteDialog(props: {
         });
       }
 
-      return [{ value: `sources:${environmentId}`, label: "Sources", items: sourceItems }];
+      const existingWorkspaceRoots = new Set(
+        projects
+          .filter((project) => project.environmentId === environmentId)
+          .map((project) => project.workspaceRoot),
+      );
+      const availableVaults =
+        environmentId === primaryEnvironmentId
+          ? obsidianVaults.filter((vault) => !existingWorkspaceRoots.has(vault.path))
+          : [];
+      const vaultGroup: CommandPaletteView["groups"] =
+        availableVaults.length === 0
+          ? []
+          : [
+              {
+                value: `obsidian-vaults:${environmentId}`,
+                label: "Obsidian vaults",
+                items: availableVaults.map((vault) => ({
+                  kind: "action" as const,
+                  value: `action:add-project:${environmentId}:obsidian:${vault.id}`,
+                  searchTerms: ["obsidian", "vault", vault.name, vault.path],
+                  title: vault.name,
+                  description: vault.isOpen ? "Currently open in Obsidian" : vault.path,
+                  icon: <BookOpenIcon className={ITEM_ICON_CLASS} />,
+                  run: async () => {
+                    await addDiscoveredWorkspaceRef.current(environmentId, vault.path);
+                  },
+                })),
+              },
+            ];
+
+      return [
+        ...vaultGroup,
+        { value: `sources:${environmentId}`, label: "Sources", items: sourceItems },
+      ];
     },
-    [openSourceControlSettings, startAddProjectBrowse, startAddProjectClone],
+    [
+      obsidianVaults,
+      openSourceControlSettings,
+      primaryEnvironmentId,
+      projects,
+      startAddProjectBrowse,
+      startAddProjectClone,
+    ],
   );
 
   const startAddProjectSourceSelection = useCallback(
@@ -1605,6 +1670,20 @@ function OpenCommandPaletteDialog(props: {
       threads,
     ],
   );
+
+  useLayoutEffect(() => {
+    addDiscoveredWorkspaceRef.current = async (environmentId, path) => {
+      const environment = environments.find(
+        (candidate) => candidate.environmentId === environmentId,
+      );
+      await handleAddProjectForEnvironment({
+        environmentId,
+        rawCwd: path,
+        platform: getEnvironmentBrowsePlatform(environment?.serverConfig?.environment.platform.os),
+        currentProjectCwd: null,
+      });
+    };
+  }, [environments, handleAddProjectForEnvironment]);
 
   const handleAddProject = useCallback(
     async (rawCwd: string) => {

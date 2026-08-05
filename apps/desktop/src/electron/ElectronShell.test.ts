@@ -36,6 +36,30 @@ describe("ElectronShell", () => {
     }).pipe(Effect.provide(ElectronShell.layer)),
   );
 
+  it.effect("opens Obsidian note links", () =>
+    Effect.gen(function* () {
+      openExternalMock.mockResolvedValue(undefined);
+
+      const electronShell = yield* ElectronShell.ElectronShell;
+      const result = yield* electronShell.openObsidianNote("/Users/Jacob/Notes/Atlas.md");
+
+      assert.equal(result, true);
+      assert.deepEqual(openExternalMock.mock.calls, [
+        ["obsidian://open?path=%2FUsers%2FJacob%2FNotes%2FAtlas.md"],
+      ]);
+    }).pipe(Effect.provide(ElectronShell.layer)),
+  );
+
+  it.effect("rejects relative and non-Markdown Obsidian paths", () =>
+    Effect.gen(function* () {
+      const electronShell = yield* ElectronShell.ElectronShell;
+
+      assert.equal(yield* electronShell.openObsidianNote("Atlas.md"), false);
+      assert.equal(yield* electronShell.openObsidianNote("/Users/Jacob/Notes/Atlas.canvas"), false);
+      assert.equal(openExternalMock.mock.calls.length, 0);
+    }).pipe(Effect.provide(ElectronShell.layer)),
+  );
+
   it.effect("does not open unsafe external URLs", () =>
     Effect.gen(function* () {
       const electronShell = yield* ElectronShell.ElectronShell;

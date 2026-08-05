@@ -32,11 +32,13 @@ import {
 } from "./methods/updates.ts";
 import {
   confirm,
+  discoverObsidianVaults,
   getAppBranding,
   getLocalEnvironmentBootstraps,
   getLocalEnvironmentBearerToken,
   getWindowFullscreenState,
   openExternal,
+  openObsidianNote,
   pickFolder,
   setTheme,
   showContextMenu,
@@ -78,6 +80,8 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setWslDistro);
   yield* ipc.handle(setWslOnly);
 
+  yield* ipc.handle(discoverObsidianVaults);
+  yield* ipc.handle(openObsidianNote);
   yield* ipc.handle(pickFolder);
   yield* ipc.handle(confirm);
   yield* ipc.handle(setTheme);

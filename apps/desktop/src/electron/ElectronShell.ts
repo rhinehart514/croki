@@ -1,9 +1,11 @@
+// @effect-diagnostics nodeBuiltinImport:off
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import * as Electron from "electron";
+import * as NodePath from "node:path";
 
 const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:"]);
 
@@ -24,6 +26,7 @@ export class ElectronShell extends Context.Service<
   ElectronShell,
   {
     readonly openExternal: (rawUrl: unknown) => Effect.Effect<boolean>;
+    readonly openObsidianNote: (absolutePath: unknown) => Effect.Effect<boolean>;
     readonly copyText: (text: string) => Effect.Effect<void>;
   }
 >()("@croki/desktop/electron/ElectronShell") {}
@@ -40,6 +43,23 @@ export const make = ElectronShell.of({
           ),
         ),
     }),
+  openObsidianNote: (absolutePath) => {
+    if (
+      typeof absolutePath !== "string" ||
+      !NodePath.isAbsolute(absolutePath) ||
+      !absolutePath.toLowerCase().endsWith(".md")
+    ) {
+      return Effect.succeed(false);
+    }
+    const url = new URL("obsidian://open");
+    url.searchParams.set("path", absolutePath);
+    return Effect.promise(() =>
+      Electron.shell.openExternal(url.href).then(
+        () => true,
+        () => false,
+      ),
+    );
+  },
   copyText: (text) =>
     Effect.sync(() => {
       Electron.clipboard.writeText(text);

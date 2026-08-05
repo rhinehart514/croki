@@ -12,7 +12,15 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@croki/client-runtime/state/runtime";
-import { ChevronRight, Code2, Eye, FolderTree, Globe2, LoaderCircle } from "lucide-react";
+import {
+  BookOpenIcon,
+  ChevronRight,
+  Code2,
+  Eye,
+  FolderTree,
+  Globe2,
+  LoaderCircle,
+} from "lucide-react";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -25,6 +33,8 @@ import { useTheme } from "~/hooks/useTheme";
 import { getLocalStorageItem, setLocalStorageItem, useLocalStorage } from "~/hooks/useLocalStorage";
 import { resolveDiffThemeName } from "~/lib/diffRendering";
 import { cn } from "~/lib/utils";
+import { readLocalApi } from "~/localApi";
+import { isDiscoveredObsidianVault } from "~/obsidian";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 import { resolvePathLinkTarget } from "~/terminal-links";
 import { ScrollArea } from "~/components/ui/scroll-area";
@@ -690,6 +700,7 @@ export default function FilePreviewPanel({
   const isImage = relativePath !== null && isWorkspaceImagePreviewPath(relativePath);
   const file = useProjectFileQuery(environmentId, cwd, relativePath, !isImage);
   const [explorerOpen, setExplorerOpen] = useState(initialExplorerOpen);
+  const [isObsidianVault, setIsObsidianVault] = useState(false);
   // Reading markdown rendered is a preference, not a property of one file. Keeping
   // it on the panel meant a thread switch dropped it and forced source back.
   const [renderMarkdownPreferred, setRenderMarkdownPreferred] = useLocalStorage(
@@ -719,6 +730,27 @@ export default function FilePreviewPanel({
     [projectName, relativePath],
   );
   const onFilePostRender = useFileLineReveal(relativePath, revealLine, revealRequestId);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (environmentId !== primaryEnvironmentId) {
+      setIsObsidianVault(false);
+      return;
+    }
+    const api = readLocalApi();
+    if (!api) return;
+    void api.workspace
+      .discoverObsidianVaults()
+      .then((vaults) => {
+        if (!cancelled) setIsObsidianVault(isDiscoveredObsidianVault(cwd, vaults));
+      })
+      .catch(() => {
+        if (!cancelled) setIsObsidianVault(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cwd, environmentId, primaryEnvironmentId]);
 
   useEffect(() => {
     const currentCrumb = breadcrumbRef.current?.querySelector<HTMLElement>(
@@ -762,6 +794,21 @@ export default function FilePreviewPanel({
       );
     })();
   }, [absolutePath, createAssetUrl, environmentHttpBaseUrl, openPreview, threadRef]);
+
+  const handleOpenInObsidian = useCallback(() => {
+    if (!absolutePath) return;
+    void readLocalApi()
+      ?.workspace.openObsidianNote(absolutePath)
+      .catch((error) => {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Unable to open note in Obsidian",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
+        );
+      });
+  }, [absolutePath]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
@@ -808,6 +855,25 @@ export default function FilePreviewPanel({
               compact
               enableShortcut={false}
             />
+          ) : null}
+          {isMarkdown && isObsidianVault ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    className="shrink-0"
+                    pressed={false}
+                    onPressedChange={handleOpenInObsidian}
+                    aria-label="Open note in Obsidian"
+                    variant="ghost"
+                    size="sm"
+                  >
+                    <BookOpenIcon className="size-3.5" />
+                  </Toggle>
+                }
+              />
+              <TooltipPopup>Open in Obsidian</TooltipPopup>
+            </Tooltip>
           ) : null}
           {isMarkdown ? (
             <Tooltip>

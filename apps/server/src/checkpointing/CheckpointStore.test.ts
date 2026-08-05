@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -115,6 +116,42 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
   });
 
   describe("diffCheckpoints", () => {
+    it.effect("captures, diffs, and restores a folder without adding Git metadata", () =>
+      Effect.gen(function* () {
+        const tmp = yield* makeTmpDir("checkpoint-store-managed-");
+        const checkpointStore = yield* CheckpointStore.CheckpointStore;
+        const threadId = ThreadId.make("thread-managed-workspace");
+        const baselineRef = checkpointRefForThreadTurn(threadId, 0);
+        const changedRef = checkpointRefForThreadTurn(threadId, 1);
+        const notePath = NodePath.join(tmp, "Atlas.md");
+
+        yield* writeTextFile(notePath, "# Atlas\n\nBefore\n");
+        yield* checkpointStore.captureCheckpoint({ cwd: tmp, checkpointRef: baselineRef });
+        yield* writeTextFile(notePath, "# Atlas\n\nAfter\n");
+        yield* writeTextFile(NodePath.join(tmp, "New note.md"), "New\n");
+        yield* checkpointStore.captureCheckpoint({ cwd: tmp, checkpointRef: changedRef });
+
+        const diff = yield* checkpointStore.diffCheckpoints({
+          cwd: tmp,
+          fromCheckpointRef: baselineRef,
+          toCheckpointRef: changedRef,
+          ignoreWhitespace: false,
+        });
+        expect(diff).toContain("diff --git");
+        expect(diff).toContain("+After");
+        expect(NodeFS.existsSync(NodePath.join(tmp, ".git"))).toBe(false);
+
+        expect(
+          yield* checkpointStore.restoreCheckpoint({
+            cwd: tmp,
+            checkpointRef: baselineRef,
+          }),
+        ).toBe(true);
+        expect(NodeFS.readFileSync(notePath, "utf8")).toBe("# Atlas\n\nBefore\n");
+        expect(NodeFS.existsSync(NodePath.join(tmp, "New note.md"))).toBe(false);
+      }),
+    );
+
     it.effect("returns full oversized checkpoint diffs without truncation", () =>
       Effect.gen(function* () {
         const tmp = yield* makeTmpDir();

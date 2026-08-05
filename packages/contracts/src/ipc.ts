@@ -435,6 +435,22 @@ export const PickFolderOptionsSchema = Schema.Struct({
   targetEnvironmentId: Schema.optionalKey(Schema.String),
 });
 
+export interface DesktopDiscoveredObsidianVault {
+  id: string;
+  name: string;
+  path: string;
+  lastOpenedAt: number | null;
+  isOpen: boolean;
+}
+
+export const DesktopDiscoveredObsidianVaultSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  path: Schema.String,
+  lastOpenedAt: Schema.NullOr(Schema.Number),
+  isOpen: Schema.Boolean,
+});
+
 export interface DesktopWslDistro {
   name: string;
   isDefault: boolean;
@@ -1013,6 +1029,8 @@ export interface DesktopBridge {
   setWslBackendEnabled: (enabled: boolean) => Promise<DesktopWslState>;
   setWslDistro: (distro: string | null) => Promise<DesktopWslState>;
   setWslOnly: (enabled: boolean) => Promise<DesktopWslState>;
+  discoverObsidianVaults: () => Promise<readonly DesktopDiscoveredObsidianVault[]>;
+  openObsidianNote: (absolutePath: string) => Promise<boolean>;
   pickFolder: (options?: PickFolderOptions) => Promise<string | null>;
   confirm: (message: string) => Promise<boolean>;
   setTheme: (theme: DesktopTheme) => Promise<void>;
@@ -1120,6 +1138,10 @@ export interface DesktopPreviewBridge {
  * concepts.
  */
 export interface LocalApi {
+  workspace: {
+    discoverObsidianVaults: () => Promise<readonly DesktopDiscoveredObsidianVault[]>;
+    openObsidianNote: (absolutePath: string) => Promise<void>;
+  };
   dialogs: {
     pickFolder: (options?: PickFolderOptions) => Promise<string | null>;
     confirm: (message: string) => Promise<boolean>;

@@ -8,6 +8,17 @@ let cachedApi: LocalApi | undefined;
 
 function createBrowserLocalApi(): LocalApi {
   return {
+    workspace: {
+      discoverObsidianVaults: async () => {
+        if (!window.desktopBridge) return [];
+        return window.desktopBridge.discoverObsidianVaults();
+      },
+      openObsidianNote: async (absolutePath) => {
+        if (!window.desktopBridge || !(await window.desktopBridge.openObsidianNote(absolutePath))) {
+          throw new Error("Unable to open note in Obsidian.");
+        }
+      },
+    },
     dialogs: {
       pickFolder: async (options) => {
         if (!window.desktopBridge) return null;

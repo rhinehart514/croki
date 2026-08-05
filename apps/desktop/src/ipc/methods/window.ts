@@ -1,6 +1,7 @@
 import {
   ContextMenuItemSchema,
   DesktopAppBrandingSchema,
+  DesktopDiscoveredObsidianVaultSchema,
   DesktopEnvironmentBootstrapSchema,
   DesktopThemeSchema,
   PickFolderOptionsSchema,
@@ -29,6 +30,7 @@ import {
   resolveWslPickFolderDefaultPath,
   wslUncPathToLinuxPath,
 } from "../../wsl/wslPathParsing.ts";
+import { discoverObsidianVaultsFromConfig } from "../../obsidian/ObsidianVaultDiscovery.ts";
 
 const ContextMenuPosition = Schema.Struct({
   x: Schema.Number,
@@ -212,6 +214,28 @@ export const pickFolder = DesktopIpc.makeIpcMethod({
       selectedPath.value,
     );
     return Option.getOrElse(converted, () => selectedPath.value);
+  }),
+});
+
+export const discoverObsidianVaults = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.DISCOVER_OBSIDIAN_VAULTS_CHANNEL,
+  payload: Schema.Void,
+  result: Schema.Array(DesktopDiscoveredObsidianVaultSchema),
+  handler: Effect.fn("desktop.ipc.window.discoverObsidianVaults")(function* () {
+    const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    return discoverObsidianVaultsFromConfig(
+      environment.path.join(environment.appDataDirectory, "obsidian", "obsidian.json"),
+    );
+  }),
+});
+
+export const openObsidianNote = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.OPEN_OBSIDIAN_NOTE_CHANNEL,
+  payload: Schema.String,
+  result: Schema.Boolean,
+  handler: Effect.fn("desktop.ipc.window.openObsidianNote")(function* (absolutePath) {
+    const shell = yield* ElectronShell.ElectronShell;
+    return yield* shell.openObsidianNote(absolutePath);
   }),
 });
 

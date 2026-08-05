@@ -19,8 +19,11 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import type { CheckpointStoreError } from "./Errors.ts";
+import { makeManagedWorkspaceCheckpoints } from "./ManagedWorkspaceCheckpoints.ts";
+import * as ServerConfig from "../config.ts";
 import type { VcsCheckpointOps } from "../vcs/VcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import * as VcsProcess from "../vcs/VcsProcess.ts";
 
 export interface CaptureCheckpointInput {
   readonly cwd: string;
@@ -98,12 +101,21 @@ export class CheckpointStore extends Context.Service<
 
 export const make = Effect.gen(function* () {
   const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
+  const process = yield* VcsProcess.VcsProcess;
+  const config = yield* ServerConfig.ServerConfig;
+  const managedCheckpoints = yield* makeManagedWorkspaceCheckpoints({
+    stateDir: config.stateDir,
+    process,
+  });
 
   const resolveCheckpoints = Effect.fn("CheckpointStore.resolveCheckpoints")(function* (
     operation: string,
     cwd: string,
   ) {
-    const handle = yield* vcsRegistry.resolve({ cwd });
+    const handle = yield* vcsRegistry.detect({ cwd });
+    if (!handle) {
+      return managedCheckpoints;
+    }
     if (!handle.driver.checkpoints) {
       return yield* new VcsUnsupportedOperationError({
         operation,
