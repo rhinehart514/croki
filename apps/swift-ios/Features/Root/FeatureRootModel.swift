@@ -32,6 +32,7 @@ public final class FeatureRootModel {
     public private(set) var threadSearchMatches: [FeatureThreadSearchMatch] = []
     public private(set) var threadSearchQuery = ""
     public private(set) var isSearchingThreads = false
+    public private(set) var threadSearchNotice: FeatureThreadSearchNotice?
     public var errorMessage: String?
 
     let client: any FeatureClient
@@ -288,18 +289,25 @@ public final class FeatureRootModel {
         guard normalized.count >= 2 else {
             threadSearchMatches = []
             isSearchingThreads = false
+            threadSearchNotice = nil
             return
         }
         isSearchingThreads = true
         threadSearchMatches = []
+        threadSearchNotice = nil
         do {
-            let matches = try await client.searchThreads(query: normalized, limitPerEnvironment: 30)
+            let result = try await client.searchThreads(query: normalized, limitPerEnvironment: 30)
             guard threadSearchQuery == normalized else { return }
-            threadSearchMatches = matches
+            threadSearchMatches = result.matches
+            if !result.unavailableEnvironmentNames.isEmpty {
+                threadSearchNotice = .partial(
+                    unavailableEnvironmentNames: result.unavailableEnvironmentNames
+                )
+            }
         } catch {
             guard threadSearchQuery == normalized else { return }
             threadSearchMatches = []
-            errorMessage = "Conversation search failed. \(error.localizedDescription)"
+            threadSearchNotice = .failed(message: error.localizedDescription)
         }
         if threadSearchQuery == normalized { isSearchingThreads = false }
     }

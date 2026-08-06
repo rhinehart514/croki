@@ -941,6 +941,75 @@ struct FeatureRootModelTests {
     }
 
     @Test
+    func partialConversationSearchKeepsResultsAndNamesUnavailableServers() async {
+        let client = FeatureClientStub()
+        client.threadSearchResult = FeatureThreadSearchResult(
+            matches: [
+                FeatureThreadSearchMatch(
+                    threadID: "thread-1",
+                    projectID: "project-1",
+                    parentThreadID: nil,
+                    source: .assistant,
+                    snippet: "Found on Studio",
+                    messageCreatedAt: nil
+                ),
+            ],
+            unavailableEnvironmentNames: ["Office"]
+        )
+        let model = testRootModel(client: client)
+
+        await model.searchThreads("found")
+
+        #expect(model.threadSearchMatches.map(\.threadID) == ["thread-1"])
+        #expect(
+            model.threadSearchNotice
+                == .partial(unavailableEnvironmentNames: ["Office"])
+        )
+    }
+
+    @Test
+    func totalConversationSearchFailureIsRecoverableAndNeverBecomesEmptyResults() async {
+        let client = FeatureClientStub()
+        client.threadSearchError = FeatureClientStubError.searchUnavailable
+        let model = testRootModel(client: client)
+
+        await model.searchThreads("needle")
+
+        guard case let .failed(message) = model.threadSearchNotice else {
+            Issue.record("Expected a failed conversation-search state")
+            return
+        }
+        #expect(message == "Search unavailable")
+        #expect(model.threadSearchMatches.isEmpty)
+        #expect(model.errorMessage == nil)
+
+        client.threadSearchError = nil
+        client.threadSearchResult = FeatureThreadSearchResult()
+        await model.searchThreads("needle")
+        #expect(model.threadSearchNotice == nil)
+    }
+
+    @Test
+    func workerActionBoundaryRejectsParentMutationsBeforeCallingTheClient() async {
+        let client = FeatureClientStub()
+        client.snapshot = FeatureSnapshot(threads: [
+            FeatureThread(
+                id: "worker",
+                projectID: "project",
+                parentThreadID: "parent",
+                title: "Worker"
+            ),
+        ])
+        let model = testRootModel(client: client)
+        await model.reload()
+
+        await model.renameThread("worker", title: "Unsafe rename")
+
+        #expect(client.renameThreadCallCount == 0)
+        #expect(model.errorMessage == "Worker chats are read-only. Continue in the parent thread to act.")
+    }
+
+    @Test
     func destructiveDetailEventRequestsAuthoritativeSnapshot() {
         let thread = orchestrationThread()
         let event = orchestrationEvent(
@@ -1039,6 +1108,9 @@ private final class FeatureClientStub: FeatureClient {
     var loadThreadError: (any Error)?
     var resolvedInputID: String?
     var resolvedInputAnswers: [String: FeatureInputAnswer]?
+    var renameThreadCallCount = 0
+    var threadSearchResult = FeatureThreadSearchResult()
+    var threadSearchError: FeatureClientStubError?
 
     init() {
         let pair = AsyncStream<FeatureEvent>.makeStream()
@@ -1127,7 +1199,15 @@ private final class FeatureClientStub: FeatureClient {
         return createdThread
     }
 
-    func renameThread(id: String, title: String) async throws {}
+    func renameThread(id: String, title: String) async throws {
+        renameThreadCallCount += 1
+    }
+    func searchThreads(query: String, limitPerEnvironment: Int) async throws
+        -> FeatureThreadSearchResult
+    {
+        if let threadSearchError { throw threadSearchError }
+        return threadSearchResult
+    }
     func setThreadArchived(id: String, archived: Bool) async throws {}
     func deleteThread(id: String) async throws {}
 
@@ -1158,4 +1238,10 @@ private final class FeatureClientStub: FeatureClient {
         resolvedInputAnswers = answers
     }
     func saveSettings(_ settings: FeatureSettings) async throws {}
+}
+
+private enum FeatureClientStubError: LocalizedError {
+    case searchUnavailable
+
+    var errorDescription: String? { "Search unavailable" }
 }

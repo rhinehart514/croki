@@ -7,6 +7,7 @@ struct HomeThreadCollectionView: UIViewRepresentable {
     let presentation: HomePresentation
     let query: String
     let isSearchingContent: Bool
+    let searchNotice: FeatureThreadSearchNotice?
     let selectedThreadID: String?
     let forceRichRows: Bool
     let isSnoozedExpanded: Bool
@@ -18,6 +19,7 @@ struct HomeThreadCollectionView: UIViewRepresentable {
     let onToggleSettled: () -> Void
     let onToggleArchive: () -> Void
     let onShowMoreSettled: () -> Void
+    let onRetrySearch: () -> Void
     let onRename: (FeatureThread) -> Void
     let onRegenerateTitle: (FeatureThread) -> Void
     let onArchive: (FeatureThread, Bool) -> Void
@@ -166,6 +168,9 @@ struct HomeThreadCollectionView: UIViewRepresentable {
             case .showMoreSettled:
                 collectionView.deselectItem(at: indexPath, animated: false)
                 parent.onShowMoreSettled()
+            case .searchPartial, .searchFailure:
+                collectionView.deselectItem(at: indexPath, animated: false)
+                parent.onRetrySearch()
             case .empty, .searchEmpty, .searchLoading, .pinnedDivider:
                 collectionView.deselectItem(at: indexPath, animated: false)
             }
@@ -320,6 +325,15 @@ struct HomeThreadCollectionView: UIViewRepresentable {
                 cell.accessibilityValue = nil
                 cell.accessibilityHint = nil
                 cell.onAccessibilityActivate = nil
+            case let .searchPartial(message), let .searchFailure(message):
+                cell.isAccessibilityElement = true
+                cell.accessibilityTraits = .button
+                cell.accessibilityLabel = message
+                cell.accessibilityValue = "Retry"
+                cell.accessibilityHint = "Retries conversation search"
+                cell.onAccessibilityActivate = { [weak self] in
+                    self?.parent.onRetrySearch()
+                }
             case .pinnedDivider:
                 cell.isAccessibilityElement = false
                 cell.onAccessibilityActivate = nil
@@ -331,6 +345,9 @@ struct HomeThreadCollectionView: UIViewRepresentable {
             context: HomeThreadRowContext
         ) -> String {
             var values = [thread.homeStatusLabel ?? "Ready", "Project \(context.projectName)"]
+            if let workerProvenance = context.workerProvenance {
+                values.insert(workerProvenance, at: 0)
+            }
             values.append("Harness \(context.providerName)")
             if let duration = thread.homeWorkingDuration(at: .now) {
                 values.append("for \(duration)")
@@ -484,12 +501,25 @@ struct HomeThreadCollectionView: UIViewRepresentable {
     private var collectionItems: [HomeCollectionItem] {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !normalizedQuery.isEmpty {
-            if presentation.searchResults.isEmpty {
-                return [isSearchingContent
-                    ? .searchLoading(normalizedQuery)
-                    : .searchEmpty(normalizedQuery)]
+            var items: [HomeCollectionItem] = []
+            if let searchNotice {
+                switch searchNotice {
+                case .partial:
+                    items.append(.searchPartial(searchNotice.homeMessage))
+                case .failed:
+                    items.append(.searchFailure(searchNotice.homeMessage))
+                }
             }
-            return presentation.searchResults.map {
+            if presentation.searchResults.isEmpty {
+                if searchNotice != nil { return items }
+                items.append(
+                    isSearchingContent
+                        ? .searchLoading(normalizedQuery)
+                        : .searchEmpty(normalizedQuery)
+                )
+                return items
+            }
+            items.append(contentsOf: presentation.searchResults.map {
                 .thread(
                     $0,
                     presentation.rowContexts[$0.id] ?? .fallback,
@@ -498,7 +528,8 @@ struct HomeThreadCollectionView: UIViewRepresentable {
                     forceRichRows,
                     presentation.searchMatchesByThreadID[$0.id]
                 )
-            }
+            })
+            return items
         }
 
         var items = presentation.pinned.map {
@@ -633,6 +664,8 @@ private enum HomeCollectionItem: Equatable {
         case showMoreSettled
         case searchEmpty
         case searchLoading
+        case searchPartial
+        case searchFailure
         case pinnedDivider
 
         var threadID: String? {
@@ -654,6 +687,8 @@ private enum HomeCollectionItem: Equatable {
     case showMoreSettled(Int)
     case searchEmpty(String)
     case searchLoading(String)
+    case searchPartial(String)
+    case searchFailure(String)
     case pinnedDivider
 
     var id: ID {
@@ -664,6 +699,8 @@ private enum HomeCollectionItem: Equatable {
         case .showMoreSettled: .showMoreSettled
         case .searchEmpty: .searchEmpty
         case .searchLoading: .searchLoading
+        case .searchPartial: .searchPartial
+        case .searchFailure: .searchFailure
         case .pinnedDivider: .pinnedDivider
         }
     }
@@ -724,6 +761,10 @@ private struct HomeCollectionCellContent: View {
             .font(T3Typography.supporting)
             .foregroundStyle(T3Colors.textSecondary)
             .frame(maxWidth: .infinity, minHeight: 100)
+        case let .searchPartial(message):
+            searchNotice(message, systemImage: "exclamationmark.triangle")
+        case let .searchFailure(message):
+            searchNotice(message, systemImage: "wifi.exclamationmark")
         case .pinnedDivider:
             Rectangle()
                 .fill(T3Colors.textTertiary.opacity(0.18))
@@ -731,6 +772,22 @@ private struct HomeCollectionCellContent: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 3)
         }
+    }
+
+    private func searchNotice(_ message: String, systemImage: String) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: systemImage)
+                .foregroundStyle(T3Colors.warning)
+            Text(message)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("Retry")
+                .fontWeight(.semibold)
+                .foregroundStyle(T3Colors.textPrimary)
+        }
+        .font(T3Typography.supporting)
+        .foregroundStyle(T3Colors.textSecondary)
+        .padding(.horizontal, 14)
+        .frame(minHeight: T3Metrics.minimumTapTarget)
     }
 }
 

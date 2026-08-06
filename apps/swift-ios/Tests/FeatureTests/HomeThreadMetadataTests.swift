@@ -54,7 +54,22 @@ struct HomeThreadMetadataTests {
     }
 
     @Test
-    func workerPresentationIsMutuallyExclusiveAndSearchRevealsTheMatchedFamily() {
+    func searchNoticesPreservePartialAndFailedEvidenceForRetry() {
+        let partial = FeatureThreadSearchNotice.partial(
+            unavailableEnvironmentNames: ["Office"]
+        )
+        let failed = FeatureThreadSearchNotice.failed(
+            message: "Conversation search failed on Studio. Check that server and retry."
+        )
+
+        #expect(partial.homeMessage.contains("Office"))
+        #expect(partial.homeMessage.contains("incomplete"))
+        #expect(failed.homeMessage.contains("retry"))
+        #expect(!failed.homeMessage.contains("No matching tasks"))
+    }
+
+    @Test
+    func nativeWorkerPresentationKeepsCompleteSeparateChatsAndSearchRevealsTheFamily() {
         var parent = FeatureThread(
             id: "parent",
             projectID: "project",
@@ -85,14 +100,15 @@ struct HomeThreadMetadataTests {
 
         parent.workerView = .activity
         snapshot.threads = [parent, worker]
-        let inline = HomePresentation(
+        let serverRequestedInline = HomePresentation(
             snapshot: snapshot,
             query: "",
             contentMatches: [],
             projectID: nil,
             now: now
         )
-        #expect(inline.active.map(\.id) == ["parent"])
+        #expect(serverRequestedInline.active.map(\.id) == ["parent", "worker"])
+        #expect(parent.supportsWorkerView != true)
 
         let match = FeatureThreadSearchMatch(
             threadID: worker.id,
@@ -113,6 +129,10 @@ struct HomeThreadMetadataTests {
         #expect(search.searchMatchesByThreadID[worker.id]?.speakerLabel == "Worker")
         #expect(worker.canTogglePin == false)
         #expect(worker.canRegenerateTitle == false)
+
+        let contexts = HomeThreadRowContext.index(snapshot: snapshot)
+        #expect(contexts[worker.id]?.parentThreadTitle == "Ship Croki")
+        #expect(contexts[worker.id]?.workerProvenance == "Worker of Ship Croki")
     }
 
     @Test

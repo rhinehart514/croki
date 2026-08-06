@@ -1112,50 +1112,74 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
     }
 
     func searchThreads(query: String, limitPerEnvironment: Int) async throws
-        -> [FeatureThreadSearchMatch]
+        -> FeatureThreadSearchResult
     {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalized.count >= 2 else { return [] }
+        guard normalized.count >= 2 else { return FeatureThreadSearchResult() }
         let environments = try await runtime.environments()
         var probes: [(Environment, T3Client)] = []
+        var unavailableEnvironmentNames = environments.compactMap { environment in
+            environmentConnectionStates[environment.id] == .disconnected
+                ? environment.label
+                : nil
+        }
         for environment in environments
         where environmentConnectionStates[environment.id] != .disconnected {
             probes.append((environment, await runtime.ephemeralClient(for: environment)))
         }
         let results = await withTaskGroup(
-            of: (Environment, OrchestrationSearchThreadsResult?).self
+            of: EnvironmentThreadSearchOutcome.self
         ) { group in
             for (environment, probe) in probes {
                 group.addTask {
                     await probe.connect()
-                    let result = try? await probe.searchThreads(
-                        query: normalized,
-                        limit: limitPerEnvironment
-                    )
-                    await probe.disconnect()
-                    return (environment, result)
+                    do {
+                        let result = try await probe.searchThreads(
+                            query: normalized,
+                            limit: limitPerEnvironment
+                        )
+                        await probe.disconnect()
+                        return EnvironmentThreadSearchOutcome(
+                            environment: environment,
+                            result: result
+                        )
+                    } catch {
+                        await probe.disconnect()
+                        return EnvironmentThreadSearchOutcome(
+                            environment: environment,
+                            result: nil
+                        )
+                    }
                 }
             }
-            var values: [(Environment, OrchestrationSearchThreadsResult?)] = []
+            var values: [EnvironmentThreadSearchOutcome] = []
             for await value in group { values.append(value) }
             return values
         }
         var matches: [FeatureThreadSearchMatch] = []
+        var successfulEnvironmentCount = 0
 
-        for (environment, result) in results {
-            guard let result else { continue }
+        for outcome in results {
+            guard let result = outcome.result else {
+                unavailableEnvironmentNames.append(outcome.environment.label)
+                continue
+            }
+            successfulEnvironmentCount += 1
             matches.append(contentsOf: result.matches.map { match in
                 FeatureThreadSearchMatch(
                     threadID: FeatureScopedID.thread(
-                        environmentID: environment.id,
+                        environmentID: outcome.environment.id,
                         wireID: match.threadId
                     ),
                     projectID: FeatureScopedID.project(
-                        environmentID: environment.id,
+                        environmentID: outcome.environment.id,
                         wireID: match.projectId
                     ),
                     parentThreadID: match.parentThreadId.map {
-                        FeatureScopedID.thread(environmentID: environment.id, wireID: $0)
+                        FeatureScopedID.thread(
+                            environmentID: outcome.environment.id,
+                            wireID: $0
+                        )
                     },
                     source: match.source == .user ? .user : .assistant,
                     snippet: match.snippet,
@@ -1164,9 +1188,18 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             })
         }
 
-        return Array(matches.sorted {
-            ($0.messageCreatedAt ?? .distantPast) > ($1.messageCreatedAt ?? .distantPast)
-        }.prefix(100))
+        let unavailable = Array(Set(unavailableEnvironmentNames)).sorted()
+        guard successfulEnvironmentCount > 0 else {
+            throw NativeFeatureClientError.threadSearchUnavailable(
+                environmentNames: unavailable
+            )
+        }
+        return FeatureThreadSearchResult(
+            matches: Array(matches.sorted {
+                ($0.messageCreatedAt ?? .distantPast) > ($1.messageCreatedAt ?? .distantPast)
+            }.prefix(100)),
+            unavailableEnvironmentNames: unavailable
+        )
     }
 
     func loadThread(id: String) async throws -> FeatureThreadDetail {
@@ -1351,6 +1384,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func cancelTurn(threadID: String) async throws {
         let route = try threadRoute(for: threadID)
+        try requireParentThread(threadID)
         let turnID = shellsByEnvironmentID[route.environmentID]?.threads
             .first(where: { $0.id == route.wireID })?
             .latestTurn?
@@ -1364,6 +1398,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             throw NativeFeatureClientError.approvalNotFound
         }
         let route = try threadRoute(for: request.threadID)
+        try requireParentThread(route.uiID)
         let wireDecision = switch decision {
         case .allowOnce: "accept"
         case .allowForSession: "acceptForSession"
@@ -1384,6 +1419,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             throw NativeFeatureClientError.inputRequestNotFound
         }
         let route = try threadRoute(for: request.threadID)
+        try requireParentThread(route.uiID)
         _ = try await route.client.respondToUserInput(
             threadID: route.wireID,
             requestID: request.wireID,
@@ -1547,6 +1583,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         message: String?
     ) async throws -> FeatureSourceControlStatus {
         let route = try threadRoute(for: threadID)
+        try requireParentThread(route.uiID)
         let client = route.client
         let context = try workspaceContext(route: route)
 
@@ -1656,6 +1693,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func openTerminal(threadID: String, columns: Int, rows: Int) async throws {
         let route = try threadRoute(for: threadID)
+        try requireParentThread(route.uiID)
         let client = route.client
         let environmentID = route.environmentID
         let generation = environmentGeneration
@@ -1682,6 +1720,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func writeTerminal(threadID: String, data: String) async throws {
         let route = try threadRoute(for: threadID)
+        try requireParentThread(route.uiID)
         let terminalID = try requireTerminalID(threadID: route.uiID)
         try await route.client.writeTerminal(
             threadID: route.wireID,
@@ -1692,6 +1731,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func resizeTerminal(threadID: String, columns: Int, rows: Int) async throws {
         let route = try threadRoute(for: threadID)
+        try requireParentThread(route.uiID)
         let terminalID = try requireTerminalID(threadID: route.uiID)
         try await route.client.resizeTerminal(
             threadID: route.wireID,
@@ -1703,6 +1743,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func closeTerminal(threadID: String) async throws {
         let route = try threadRoute(for: threadID)
+        try requireParentThread(route.uiID)
         let client = route.client
         let environmentID = route.environmentID
         let generation = environmentGeneration
@@ -3282,7 +3323,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             parentThreadID: thread.parentThreadId.map {
                 FeatureScopedID.thread(environmentID: environment.id, wireID: $0)
             },
-            workerView: thread.workerView == .activity ? .activity : .threads,
+            workerView: .threads,
             environmentID: environment.id,
             environmentName: environment.label,
             title: thread.title,
@@ -3317,7 +3358,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             supportsPinning: environment.descriptor?.capabilities.threadPinning,
             supportsTitleRegeneration:
                 environment.descriptor?.capabilities.threadTitleRegeneration,
-            supportsWorkerView: environment.descriptor?.capabilities.workerView,
+            supportsWorkerView: false,
             titleRegeneration: thread.titleRegeneration.map {
                 FeatureTitleRegeneration(
                     requestID: $0.requestId,
@@ -3355,7 +3396,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             parentThreadID: thread.parentThreadId.map {
                 FeatureScopedID.thread(environmentID: environment.id, wireID: $0)
             },
-            workerView: thread.workerView == .activity ? .activity : .threads,
+            workerView: .threads,
             environmentID: environment.id,
             environmentName: environment.label,
             title: thread.title,
@@ -3391,7 +3432,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             supportsPinning: environment.descriptor?.capabilities.threadPinning,
             supportsTitleRegeneration:
                 environment.descriptor?.capabilities.threadTitleRegeneration,
-            supportsWorkerView: environment.descriptor?.capabilities.workerView,
+            supportsWorkerView: false,
             titleRegeneration: thread.titleRegeneration.map {
                 FeatureTitleRegeneration(
                     requestID: $0.requestId,
@@ -5064,6 +5105,7 @@ private enum NativeFeatureClientError: LocalizedError {
     case titleRegenerationUnavailable
     case workerViewUnavailable
     case openPullRequest(number: Int)
+    case threadSearchUnavailable(environmentNames: [String])
 
     var errorDescription: String? {
         switch self {
@@ -5085,6 +5127,17 @@ private enum NativeFeatureClientError: LocalizedError {
         case .workerViewUnavailable: "This environment cannot change the worker presentation yet."
         case let .openPullRequest(number):
             "Pull request #\(number) is still open. Merge or close it before settling this thread."
+        case let .threadSearchUnavailable(environmentNames):
+            if environmentNames.isEmpty {
+                "No connected environment could search conversations. Task titles are still searched locally. Check your servers and retry."
+            } else {
+                "Conversation search failed on \(environmentNames.joined(separator: ", ")). Task titles are still searched locally. Check those servers and retry."
+            }
         }
     }
+}
+
+private struct EnvironmentThreadSearchOutcome: Sendable {
+    let environment: Environment
+    let result: OrchestrationSearchThreadsResult?
 }

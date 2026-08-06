@@ -484,6 +484,17 @@ extension FeatureThread {
     }
 }
 
+extension FeatureThreadSearchNotice {
+    var homeMessage: String {
+        switch self {
+        case let .partial(unavailableEnvironmentNames):
+            "Some servers couldn’t be searched: \(unavailableEnvironmentNames.joined(separator: ", ")). Results may be incomplete."
+        case let .failed(message):
+            message
+        }
+    }
+}
+
 struct DailyUXModelOption: Identifiable, Equatable, Hashable {
     let provider: FeatureProvider
     let model: FeatureModel

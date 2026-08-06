@@ -62,7 +62,7 @@ public protocol FeatureClient: AnyObject {
     func setInteractionMode(id: String, mode: FeatureInteractionMode) async throws
     func deleteThread(id: String) async throws
     func searchThreads(query: String, limitPerEnvironment: Int) async throws
-        -> [FeatureThreadSearchMatch]
+        -> FeatureThreadSearchResult
 
     func loadThread(id: String) async throws -> FeatureThreadDetail
     func releaseThread(id: String)
@@ -145,9 +145,9 @@ public extension FeatureClient {
     func regenerateThreadTitle(id: String) async throws {}
     func setWorkerView(id: String, workerView: FeatureWorkerView) async throws {}
     func searchThreads(query: String, limitPerEnvironment: Int) async throws
-        -> [FeatureThreadSearchMatch]
+        -> FeatureThreadSearchResult
     {
-        []
+        FeatureThreadSearchResult()
     }
     func setRuntimeMode(id: String, mode: FeatureRuntimeMode) async throws {}
     func setInteractionMode(id: String, mode: FeatureInteractionMode) async throws {}

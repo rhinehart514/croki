@@ -167,9 +167,14 @@ public struct ThreadDetailView: View {
 
             HStack(spacing: 5) {
                 HStack(spacing: 5) {
-                    Image(systemName: "arrow.triangle.branch")
-                    Text(headerBranch)
-                        .lineLimit(1)
+                    if let workerProvenance {
+                        Text(workerProvenance)
+                            .lineLimit(1)
+                    } else {
+                        Image(systemName: "arrow.triangle.branch")
+                        Text(headerBranch)
+                            .lineLimit(1)
+                    }
                     if let environmentName = currentThread.homeEnvironmentLabel(in: model.snapshot) {
                         Text("·")
                         Text(environmentName)
@@ -222,45 +227,23 @@ public struct ThreadDetailView: View {
 
     private var threadActionsMenu: some View {
         Menu {
-            Section("Workspace") {
-                Button { toolSurface = .files } label: {
-                    Label("Files", systemImage: "folder")
-                }
-                Button { toolSurface = .review } label: {
-                    Label("Review changes", systemImage: "doc.text.magnifyingglass")
-                }
-                Button { toolSurface = .sourceControl } label: {
-                    Label("Source Control", systemImage: "arrow.triangle.branch")
-                }
-                Button { toolSurface = .terminal } label: {
-                    Label("Terminal", systemImage: "terminal")
+            if currentThread.parentThreadID == nil {
+                Section("Workspace") {
+                    Button { toolSurface = .files } label: {
+                        Label("Files", systemImage: "folder")
+                    }
+                    Button { toolSurface = .review } label: {
+                        Label("Review changes", systemImage: "doc.text.magnifyingglass")
+                    }
+                    Button { toolSurface = .sourceControl } label: {
+                        Label("Source Control", systemImage: "arrow.triangle.branch")
+                    }
+                    Button { toolSurface = .terminal } label: {
+                        Label("Terminal", systemImage: "terminal")
+                    }
                 }
             }
             Section {
-                if currentThread.parentThreadID == nil,
-                   !workerThreads.isEmpty,
-                   currentThread.supportsWorkerView == true {
-                    Menu("Workers") {
-                        Button {
-                            Task { await model.setWorkerView(thread.id, workerView: .threads) }
-                        } label: {
-                            Label(
-                                "Separate chats",
-                                systemImage: currentThread.workerView == .threads
-                                    ? "checkmark" : "bubble.left.and.bubble.right"
-                            )
-                        }
-                        Button {
-                            Task { await model.setWorkerView(thread.id, workerView: .activity) }
-                        } label: {
-                            Label(
-                                "In Thread",
-                                systemImage: currentThread.workerView == .activity
-                                    ? "checkmark" : "text.bubble"
-                            )
-                        }
-                    }
-                }
                 if currentThread.canTogglePin, !currentThread.isArchived {
                     Button {
                         Task {
@@ -375,94 +358,74 @@ public struct ThreadDetailView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let parentID = currentThread.parentThreadID {
-                Button {
-                    onContinueInParent(parentID)
-                } label: {
-                    Label("Continue in parent", systemImage: "arrow.turn.up.left")
-                        .font(T3Typography.control)
-                        .frame(maxWidth: .infinity, minHeight: T3Metrics.minimumTapTarget)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Read-only worker chat")
+                        .font(T3Typography.supportingStrong)
+                        .foregroundStyle(T3Colors.textPrimary)
+                    Text(workerProvenance ?? "Parent Thread unavailable")
+                        .font(T3Typography.supporting)
+                        .foregroundStyle(T3Colors.textSecondary)
+                        .lineLimit(1)
+                    Button {
+                        onContinueInParent(parentID)
+                    } label: {
+                        Label("Continue in parent", systemImage: "arrow.turn.up.left")
+                            .font(T3Typography.control)
+                            .frame(
+                                maxWidth: .infinity,
+                                minHeight: T3Metrics.minimumTapTarget
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(T3Colors.textPrimary)
+                    .background(T3Colors.input)
+                    .accessibilityLabel(
+                        parentThread.map { "Continue in parent, \($0.title)" }
+                            ?? "Continue in parent"
+                    )
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(T3Colors.textPrimary)
-                .background(T3Colors.input)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(T3Colors.surface)
                 .overlay(alignment: .top) { Divider().overlay(T3Colors.border) }
             } else {
-                VStack(spacing: 0) {
-                    if currentThread.workerView == .activity, !workerThreads.isEmpty {
-                        inlineWorkstreams
+                FeatureComposerView(
+                    text: $draft,
+                    selection: $selection,
+                    attachments: $attachments,
+                    providers: threadProviders,
+                    threadSelection: currentSelection,
+                    isSending: isSending,
+                    isWorking: detail.thread.state == .working
+                        || detail.thread.state == .queued,
+                    focused: $composerFocused,
+                    onSend: send,
+                    onStop: {
+                        Task { await model.cancelTurn(threadID: thread.id) }
+                    },
+                    pendingApprovals: detail.approvals,
+                    pendingUserInputs: detail.userInputs,
+                    isResolvingRequest: model.isPerformingAction,
+                    powerFeatures: composerPowerFeatures,
+                    onApprovalDecision: { id, decision in
+                        Task { await model.resolveApproval(id, decision: decision) }
+                    },
+                    onUserInputSubmit: { id, answers in
+                        Task { await model.resolveUserInput(id, answers: answers) }
                     }
-                    FeatureComposerView(
-                        text: $draft,
-                        selection: $selection,
-                        attachments: $attachments,
-                        providers: threadProviders,
-                        threadSelection: currentSelection,
-                        isSending: isSending,
-                        isWorking: detail.thread.state == .working
-                            || detail.thread.state == .queued,
-                        focused: $composerFocused,
-                        onSend: send,
-                        onStop: {
-                            Task { await model.cancelTurn(threadID: thread.id) }
-                        },
-                        pendingApprovals: detail.approvals,
-                        pendingUserInputs: detail.userInputs,
-                        isResolvingRequest: model.isPerformingAction,
-                        powerFeatures: composerPowerFeatures,
-                        onApprovalDecision: { id, decision in
-                            Task { await model.resolveApproval(id, decision: decision) }
-                        },
-                        onUserInputSubmit: { id, answers in
-                            Task { await model.resolveUserInput(id, answers: answers) }
-                        }
-                    )
-                    .simultaneousGesture(composerKeyboardDismissGesture)
-                }
+                )
+                .simultaneousGesture(composerKeyboardDismissGesture)
             }
         }
     }
 
-    private var workerThreads: [FeatureThread] {
-        model.snapshot.threads
-            .filter { $0.parentThreadID == currentThread.id }
-            .sorted {
-                if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
-                return $0.id < $1.id
-            }
+    private var parentThread: FeatureThread? {
+        guard let parentID = currentThread.parentThreadID else { return nil }
+        return model.snapshot.threads.first { $0.id == parentID }
     }
 
-    private var inlineWorkstreams: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("Workstreams")
-                .font(T3Typography.homeMetadata.weight(.semibold))
-                .foregroundStyle(T3Colors.textTertiary)
-            ForEach(workerThreads.prefix(5)) { worker in
-                Button { onContinueInParent(worker.id) } label: {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(worker.homeStatus == .failed ? T3Colors.danger : T3Colors.textTertiary)
-                            .frame(width: 6, height: 6)
-                        Text(worker.title)
-                            .lineLimit(1)
-                        Spacer()
-                        Text(worker.homeStatusLabel ?? "Ready")
-                            .foregroundStyle(T3Colors.textTertiary)
-                    }
-                    .font(T3Typography.supporting)
-                    .foregroundStyle(T3Colors.textSecondary)
-                }
-                .buttonStyle(.plain)
-            }
-            if workerThreads.count > 5 {
-                Text("\(workerThreads.count - 5) more workstreams")
-                    .font(T3Typography.supporting)
-                    .foregroundStyle(T3Colors.textTertiary)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(T3Colors.background)
-        .overlay(alignment: .top) { Divider().overlay(T3Colors.border) }
+    private var workerProvenance: String? {
+        parentThread.map { "Worker of \($0.title)" }
     }
 
     private var composerKeyboardDismissGesture: some Gesture {

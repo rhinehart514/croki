@@ -51,9 +51,11 @@ the active selection are stored separately in Application Support.
 - Remote filesystem browsing, source discovery, repository cloning, project
   creation, plus server-backed title and conversation search, title regeneration,
   pinning, creation, rename, archive, restore, delete, settle, and snooze.
-- Durable worker Threads with a parent-scoped choice between nested read-only
-  chats and bounded inline Workstreams. Worker transcripts never copy into the
-  parent, and every worker chat returns through **Continue in parent**.
+- Durable worker Threads as complete nested read-only chats. Worker transcripts
+  never copy into the parent, and every worker chat names its parent and returns
+  through **Continue in parent**. The native client decodes the server's worker
+  presentation field but does not offer **In Thread** until it can anchor every
+  Workstream at the real spawn activity without truncation.
 - Provider/model selection, synchronized conversation history, rich Markdown,
   photo/camera/file image attachments, turn cancellation, approval decisions, and
   structured user-input requests.

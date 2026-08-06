@@ -230,6 +230,7 @@ public struct WorkspaceView: View {
                 presentation: presentation,
                 query: searchText,
                 isSearchingContent: model.isSearchingThreads,
+                searchNotice: model.threadSearchNotice,
                 selectedThreadID: selectedThreadID,
                 forceRichRows: dynamicTypeSize.isAccessibilitySize,
                 isSnoozedExpanded: isSnoozedExpanded,
@@ -241,6 +242,9 @@ public struct WorkspaceView: View {
                 onToggleSettled: { isSettledExpanded.toggle() },
                 onToggleArchive: { isArchiveExpanded.toggle() },
                 onShowMoreSettled: { settledLimit += 25 },
+                onRetrySearch: {
+                    Task { await model.searchThreads(searchText) }
+                },
                 onRename: { thread in
                     renameTitle = thread.title
                     renamingThread = thread
@@ -789,7 +793,6 @@ struct HomePresentation {
             thread.parentThreadID.map { ($0, thread) }
         }, by: \.0)
         return parents.flatMap { parent in
-            guard parent.workerView != .activity else { return [parent] }
             let workers = (children[parent.id] ?? []).map(\.1).sorted {
                 if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
                 return $0.id < $1.id
@@ -871,6 +874,7 @@ struct HomeShelfHeader: View {
 
 struct HomeThreadRowContext: Equatable {
     let projectName: String
+    let parentThreadTitle: String?
     let environmentLabel: String?
     let providerID: String
     let providerDriver: String
@@ -879,6 +883,7 @@ struct HomeThreadRowContext: Equatable {
 
     static let fallback = HomeThreadRowContext(
         projectName: "Project",
+        parentThreadTitle: nil,
         environmentLabel: nil,
         providerID: "agent",
         providerDriver: "",
@@ -895,6 +900,10 @@ struct HomeThreadRowContext: Equatable {
             || normalized.contains("open")
     }
 
+    var workerProvenance: String? {
+        parentThreadTitle.map { "Worker of \($0)" }
+    }
+
     static func index(snapshot: FeatureSnapshot) -> [String: HomeThreadRowContext] {
         let projectByID = snapshot.projects.reduce(into: [String: FeatureProject]()) {
             $0[$1.id] = $1
@@ -906,6 +915,9 @@ struct HomeThreadRowContext: Equatable {
             $0[$1.id] = $1
         }
         let activeEnvironmentID = snapshot.environments.first(where: \.isActive)?.id
+        let threadTitleByID = Dictionary(
+            uniqueKeysWithValues: snapshot.threads.map { ($0.id, $0.title) }
+        )
 
         return snapshot.threads.reduce(into: [String: HomeThreadRowContext]()) { result, thread in
             let project = projectByID[thread.projectID]
@@ -935,6 +947,7 @@ struct HomeThreadRowContext: Equatable {
 
             result[thread.id] = HomeThreadRowContext(
                 projectName: project?.name ?? "Project",
+                parentThreadTitle: thread.parentThreadID.flatMap { threadTitleByID[$0] },
                 environmentLabel: environmentLabel?.isEmpty == false ? environmentLabel : nil,
                 providerID: providerID,
                 providerDriver: providerDriver,
@@ -1028,6 +1041,14 @@ struct FeatureThreadRow: View, Equatable {
                 .lineLimit(allowsMultilineTitle ? 2 : 1)
                 .padding(.top, 4)
 
+            if let workerProvenance = context.workerProvenance {
+                Text(workerProvenance)
+                    .font(T3Typography.supporting)
+                    .foregroundStyle(T3Colors.textTertiary)
+                    .lineLimit(1)
+                    .padding(.top, 2)
+            }
+
             if thread.titleRegeneration != nil {
                 Text("Regenerating title…")
                     .font(T3Typography.supporting)
@@ -1094,10 +1115,18 @@ struct FeatureThreadRow: View, Equatable {
             ProjectBadge(name: context.projectName)
                 .saturation(0)
                 .opacity(0.48)
-            Text(thread.title)
-                .font(T3Typography.homeTitle)
-                .foregroundStyle(T3Colors.textSecondary)
-                .lineLimit(allowsMultilineTitle ? 2 : 1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(thread.title)
+                    .font(T3Typography.homeTitle)
+                    .foregroundStyle(T3Colors.textSecondary)
+                    .lineLimit(allowsMultilineTitle ? 2 : 1)
+                if let workerProvenance = context.workerProvenance {
+                    Text(workerProvenance)
+                        .font(T3Typography.supporting)
+                        .foregroundStyle(T3Colors.textTertiary)
+                        .lineLimit(1)
+                }
+            }
             Spacer(minLength: 8)
             if thread.pinnedAt != nil {
                 Image(systemName: "pin.fill")
@@ -1215,6 +1244,9 @@ struct FeatureThreadRow: View, Equatable {
 
     private func accessibilityValue(at now: Date) -> String {
         var values = [thread.homeStatusLabel ?? "Ready", "Project \(context.projectName)"]
+        if let workerProvenance = context.workerProvenance {
+            values.insert(workerProvenance, at: 0)
+        }
         values.append("Harness \(context.providerName)")
         if let duration = thread.homeWorkingDuration(at: now) {
             values.append("for \(duration)")

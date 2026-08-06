@@ -295,6 +295,24 @@ public struct FeatureThreadSearchMatch: Identifiable, Sendable, Equatable, Hasha
     }
 }
 
+public struct FeatureThreadSearchResult: Sendable, Equatable {
+    public let matches: [FeatureThreadSearchMatch]
+    public let unavailableEnvironmentNames: [String]
+
+    public init(
+        matches: [FeatureThreadSearchMatch] = [],
+        unavailableEnvironmentNames: [String] = []
+    ) {
+        self.matches = matches
+        self.unavailableEnvironmentNames = unavailableEnvironmentNames
+    }
+}
+
+public enum FeatureThreadSearchNotice: Sendable, Equatable {
+    case partial(unavailableEnvironmentNames: [String])
+    case failed(message: String)
+}
+
 public enum FeatureMessageRole: String, Sendable, Codable {
     case user
     case assistant
