@@ -10,7 +10,7 @@ on:
 jobs:
   croki:
     name: Croki Overlay
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout
@@ -63,7 +63,7 @@ jobs:
 
   check:
     name: Check
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -104,7 +104,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -131,7 +131,7 @@ jobs:
 
   mobile_native_static_analysis:
     name: Mobile Native Static Analysis
-    runs-on: blacksmith-12vcpu-macos-26
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -152,7 +152,7 @@ jobs:
 
   swift_ios:
     name: Swift iOS
-    runs-on: blacksmith-12vcpu-macos-26
+    runs-on: macos-15
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -163,7 +163,7 @@ jobs:
 
   release_smoke:
     name: Release Smoke
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout

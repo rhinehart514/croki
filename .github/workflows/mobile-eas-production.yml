@@ -91,7 +91,7 @@ jobs:
     name: EAS Production ${{ inputs.mode }}
     needs: release_guard
     if: needs.release_guard.result == 'success' && inputs.mode != 'dry-run'
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
