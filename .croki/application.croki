@@ -4,32 +4,29 @@
   "application": {
     "id": "croki",
     "name": "Croki",
-    "promise": "Build at agent speed without losing the coherence of the application.",
+    "promise": "Direct native coding agents through real software work without losing the state, evidence, or control needed to ship.",
     "users": [
       "Founders building real software with coding agents"
     ]
   },
-  "venture": ".croki/venture.croki",
-  "activeRelease": ".croki/releases/0.4.7.croki",
   "released": {
     "version": "0.4.7",
-    "summary": "Croki is an application-aware development environment where founders build through native coding-agent Threads, inspect real product behavior, explore ideas separately, and ship one coherent product.",
+    "summary": "Croki is an application-aware development environment where founders direct native coding-agent Threads and verify the resulting software through files, terminal, Preview, Review, Git, and durable checked screens.",
     "product": [
-      "Configured Codex, Claude, Cursor, Grok, OpenCode, and OpenClaw providers retain their native behavior by default.",
-      "Application, Concept, Release, and Venture .croki objects open as generated visual product worlds and supply bounded factual perception to agents.",
-      "Separately explored Concepts inherit relevant parent reality while remaining isolated in native worktree Threads.",
-      "Preview preserves checked-screen history and offers a default-off Beta for App, Component, and Idea exploration.",
+      "The selected coding provider remains the agent and retains its native reasoning, planning, delegation, memory, tools, and response behavior by default.",
+      "Croki owns the durable development environment around the provider: Threads, worker representation, repositories, worktrees, files, terminal, Preview, Review, Git, permissions, receipts, evidence, and recovery.",
+      "Application context is bounded, source-backed, and injected into project turns without changing the founder's message.",
+      "Preview preserves checked-screen history as durable Thread evidence.",
       "Parallel workers persist as read-only child Threads beneath one canonical founder conversation."
     ],
     "gtm": [
       "Croki is for founders building real software with coding agents.",
-      "The credible promise is building many ideas independently without losing the coherence of the application they belong to.",
-      "Product and market claims must remain tied to observed behavior and source provenance."
+      "The promise is agent-speed development without losing product coherence."
     ],
     "learnings": [
-      "A .croki object earns its boundary only when an agent can enter, inherit context, work independently, and reconcile it with a parent.",
-      "Product and GTM are lenses of the same scope rather than separate object kinds.",
-      "Perception must be derived on demand from native work instead of becoming a second workflow database."
+      "Croki should make native agent work easier to understand, resume, verify, and ship without becoming an implicit agent harness.",
+      "Application direction should guide native development work without becoming a second workflow system.",
+      "Observed evidence must remain distinct from founder-approved product direction and from a Croki-authored verdict."
     ],
     "sources": [
       {
@@ -37,13 +34,36 @@
         "ref": "v0.4.7"
       },
       {
-        "kind": "release-url",
-        "url": "https://github.com/rhinehart514/croki/releases/tag/v0.4.7"
-      },
-      {
         "kind": "file",
         "path": "docs/project/release-notes-0.4.7.md"
       }
+    ]
+  },
+  "building": {
+    "version": "0.4.8",
+    "intent": "Make native agent work legible as one founder-controlled path from direction through evidence and Git, while removing Croki-owned workflow machinery.",
+    "product": [
+      ".croki/application.croki is the single repository-owned application brief and appears as one compact focus in the Thread header.",
+      "Threads, files, terminal, Preview, Review, Git, and pull requests remain the primary development environment.",
+      "A completed provider turn may receive one factual Croki result derived from changed files, observed checks, checked screens, pending founder input, and Git state; Croki does not grade the work or rewrite the provider answer.",
+      "Environment evidence opens the relevant existing surface and can return to the canonical Thread as a stable founder-selected reference.",
+      "Provider readiness and capability differences are shown honestly beside the affected control, with direct recovery actions and no silent provider switching.",
+      "Remote and terminal authority narrows to the active environment, project, worktree, Thread or provider session, tool family, and lifetime without changing provider reasoning.",
+      "Preview opens and checks running applications without a second ideation workflow.",
+      "Historical Concept, Release, and Venture schemas remain readable without dedicated workspace UI."
+    ],
+    "gtm": [
+      "Describe Croki as the ADE around native coding agents, not an agent runtime, orchestration system, or product-management system.",
+      "Public platform and release claims must match enabled Croki-owned destinations."
+    ],
+    "successSignals": [
+      "Every project turn can inherit the same bounded application direction.",
+      "The founder can see the current application focus and open its source from the Thread header.",
+      "After a turn, the founder can identify what changed, what Croki observed, what remains unverified, and the current Git state without reconstructing several surfaces.",
+      "Blocked provider and environment states preserve the draft and lead directly to setup, reconnect, or retry.",
+      "Opening, closing, or arranging Croki surfaces never changes provider behavior, authority, or harness selection.",
+      "Every factual result traces to a checkpoint, command, Preview, approval, provider, environment, or Git source.",
+      "Ordinary development never requires a setup form, object browser, progress model, Concept workflow, Croki-authored plan, or completion score."
     ]
   }
 }

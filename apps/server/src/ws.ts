@@ -69,6 +69,7 @@ import {
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
 import { normalizeDispatchCommand } from "./orchestration/Normalizer.ts";
+import * as ProviderCommandReactor from "./orchestration/Services/ProviderCommandReactor.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
@@ -371,6 +372,9 @@ const makeWsRpcLayer = (
       // unavailable there, while production supplies ProviderService.
       const providerService = Option.getOrUndefined(
         yield* Effect.serviceOption(ProviderService.ProviderService),
+      );
+      const providerCommandReactor = Option.getOrUndefined(
+        yield* Effect.serviceOption(ProviderCommandReactor.ProviderCommandReactor),
       );
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
@@ -1025,8 +1029,12 @@ const makeWsRpcLayer = (
 
       return WsRpcGroup.of({
         [WS_METHODS.codexVoiceStart]: (input) =>
-          providerService?.voice
-            ? providerService.voice.start(input).pipe(
+          providerService?.voice && providerCommandReactor
+            ? nowIso.pipe(
+                Effect.flatMap((createdAt) =>
+                  providerCommandReactor.prepareSession(input.threadId, createdAt),
+                ),
+                Effect.andThen(providerService.voice.start(input)),
                 Effect.mapError(
                   (error) =>
                     new CodexVoiceError({

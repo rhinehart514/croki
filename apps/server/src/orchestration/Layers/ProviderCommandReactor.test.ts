@@ -444,6 +444,39 @@ describe("ProviderCommandReactor", () => {
     };
   }
 
+  it("prepares a provider session for voice before the first text turn", async () => {
+    const harness = await createHarness();
+    if (!runtime) throw new Error("Provider command reactor runtime was not created.");
+    const reactor = await runtime.runPromise(Effect.service(ProviderCommandReactor));
+
+    const preparedThreadId = await runtime.runPromise(
+      reactor.prepareSession(ThreadId.make("thread-1"), "2026-01-01T00:00:01.000Z"),
+    );
+
+    expect(preparedThreadId).toBe(ThreadId.make("thread-1"));
+    expect(harness.startSession).toHaveBeenCalledTimes(1);
+    expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+      cwd: "/tmp/provider-project",
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "gpt-5-codex",
+      },
+      runtimeMode: "approval-required",
+    });
+    expect(harness.sendTurn).not.toHaveBeenCalled();
+
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+    expect(thread?.session).toMatchObject({
+      threadId: "thread-1",
+      status: "ready",
+      providerName: "codex",
+      providerInstanceId: "codex",
+      runtimeMode: "approval-required",
+    });
+  });
+
   it("reacts to thread.turn.start by ensuring session and sending provider turn", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

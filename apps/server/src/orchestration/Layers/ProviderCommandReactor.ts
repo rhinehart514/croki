@@ -1295,6 +1295,7 @@ const make = Effect.gen(function* () {
   return {
     start,
     drain: worker.drain,
+    prepareSession: (threadId, createdAt) => ensureSessionForThread(threadId, createdAt),
   } satisfies ProviderCommandReactorShape;
 });
 

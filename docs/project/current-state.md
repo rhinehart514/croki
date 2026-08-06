@@ -4,12 +4,13 @@ Last audited: 2026-08-05
 Code baseline: Croki 0.4.7 UI history foundation on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
-a narrow Croki overlay on Croki rather than a second agent runtime.
+a narrow application-aware overlay on the development environment rather than
+a second agent runtime.
 
 Croki 0.4.7 is the current repository version; 0.4.5 remains the latest
 published baseline inherited by it. See the [0.4.6 release
 notes](./release-notes-0.4.6.md), [0.4.7 UI history
-plan](./release-notes-0.4.7.md), [0.4.8 application awareness
+plan](./release-notes-0.4.7.md), [0.4.8 quality-of-life
 plan](./release-notes-0.4.8.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
@@ -31,9 +32,25 @@ Croki currently provides:
 - local and remote environment connection paths, including desktop-managed SSH
   and Croki Connect compatibility infrastructure;
 - Croki branding and completion feedback;
-- optional repository-owned application lineage at `.croki/application.croki`,
-  which joins inherited released reality with the version currently being built;
+- one repository-owned application brief at `.croki/application.croki`, carried
+  as bounded direction into project Threads;
 - the true Canvas / Croki Senses projection established by the 0.4.2 migration.
+
+## 0.4.8 boundary
+
+0.4.8 is a quality-of-life patch over 0.4.7 focused on finding and resuming the
+right work without reconstructing it. Project and conversation retrieval,
+durable Thread titles, bounded catch-up, renderer recovery, and pull-request
+continuity strengthen the existing project and Thread model. `.croki` collapses
+to one application brief and one compact released-to-building focus in the
+Thread header. The setup action, progress model, Concept workflow, generated
+object views, and automatic panel expansion disappear. The brief opens as
+ordinary source and remains bounded direction for project Threads. The patch
+does not add another application-awareness layer, prompt surface, `.croki`
+kind, or future product-direction commitment. Preview also returns to one job:
+opening and checking a running app. Its component catalog, idea form,
+alternatives flow, and Beta setting disappear while checked-screen history
+remains.
 
 ## UI history
 
@@ -60,7 +77,7 @@ deduplication are not yet needed or implemented for explicit model checks.
 
 ## Application awareness
 
-The 0.4.8 foundation gives native providers with Croki MCP one read-only
+The 0.4.7 application foundation gives native providers with Croki MCP one read-only
 `application_observe` frame: project-declared direction, the invoking Thread's
 branch/worktree and latest checkpoint files, project-wide checked screens, and
 bounded Senses evidence. Every screen is qualified by source Thread and screen
@@ -144,52 +161,28 @@ sent turn; the provider can inspect their sources through read-only Senses.
 Canvas never injects bodies, grants authority, or changes provider behavior.
 Failed sends preserve the focus and successful turn starts clear it.
 
-`.croki/application.croki` is the active founder-approved product and GTM
-inheritance boundary. It records released reality and the version being built;
-Canvas may eventually project that lineage, but does not own or maintain it.
+`.croki/application.croki` is the single repository-owned application brief.
+It remains bounded, founder-approved direction and never becomes Canvas state.
+Normal files, Git, and Review own its changes.
 The previous `.croki/context.json` Release, Context, and agent-authored Artifact
 specifications are historical migration notes. They are not provider context or
 the active application model.
 
-## Application lineage
+## Application context
 
-Croki 0.4.6 begins application-aware development. When
-`.croki/application.croki` exists, the Thread header shows the
-released-to-building transition beside the selected project and every provider
-turn receives the same bounded factual product and GTM lineage. The stored user
-message remains unchanged, native provider behavior remains the default, and
-malformed or absent lineage never blocks a turn.
+Croki 0.4.6 and 0.4.7 introduced repository-owned application lineage and
+Application, Concept, Release, and Venture schemas. 0.4.8 keeps the useful
+center and removes the hierarchy: `.croki/application.croki` is the only active
+application brief. The Thread header presents one compact released-to-building
+focus with a direct path to its source. Croki has no `.croki` setup form,
+progress model, Concept worktree action, or generated object representation. A
+`.croki` file opens in the same editor and panel size as any other project file.
 
-The file belongs to the canonical project root and therefore applies across
-native worktrees. Git tags, hosted release URLs, and repository files can be
-recorded as provenance, but no Git remote or GitHub account is required. An
-empty project without lineage shows no negative context state. The project
-header offers **Set application direction** instead. Its popup prepares
-application identity and the current version from a root `package.json`,
-`pyproject.toml`, or `Cargo.toml`; a manifest description or recent project
-Thread titles supply a proposed building intent. The founder reviews the
-proposal and either confirms it or sends it into the current Thread under the
-Product behavior for evidence-backed revision. That action selects Product and
-focuses the composer without importing a generated prompt; the founder's own
-comment remains the request. Croki then creates
-`.croki/application.croki`; the write requires the file to remain
-absent and never releases, tags, publishes, or changes provider behavior.
-
-Product is the only behavior offered for ideation. It combines product, GTM,
-and Venture concerns into one founder-judgment turn. Historical Venture and
-split GTM turn metadata remains readable. A founder comment may become a
-proposed application-direction delta in the Thread; only explicit confirmation
-makes that proposal durable project truth.
-
-Application Sense now has four first-class `.croki` boundaries: Venture,
-Application, Release, and Concept. An Application can reference its active
-`.croki/releases/<version>.croki` transition and optional
-`.croki/venture.croki` parent. The server freshly validates and bounds both
-before provider turns. The ADE opens all four kinds as generated visual worlds;
-Release is a before-and-after shipping story and Venture is a restrained
-portfolio view. Raw source remains available on demand. Supporting evidence,
-relationships, Product and GTM lenses, Threads, worktrees, screenshots, plans,
-and prompts do not become more object kinds.
+The server bounds and validates the brief before treating it as factual project
+direction. Malformed, absent, unsupported, or oversized data fails open, the
+stored user message remains unchanged, and native provider behavior remains the
+default. Product remains an optional Composer behavior, not a metadata
+maintenance flow.
 
 Before each provider turn, Croki also derives a bounded project-activity
 snapshot from durable Thread projections. It includes at most five sibling
@@ -199,35 +192,9 @@ explicitly distinct from founder-approved application direction. Snapshot
 failure never blocks the turn, and sibling message bodies or private reasoning
 are never copied into provider context.
 
-Application Sense now includes scoped Concepts. From an application-aware
-Thread, **Explore separately** creates one
-`.croki/concepts/<id>.croki` object and prepares a worktree Thread on
-`croki/concept/<id>`. The active Concept appears as a breadcrumb beside the
-application transition. Its popover exposes intent, parent versions, branch,
-integration-review state, and archive control.
-
-Concept files are discovered individually and remain self-describing; the
-implementation deliberately has no central index. A Concept turn gets
-only its matching bounded scope plus application reality and relevant sibling
-Thread activity. Creating or requesting integration never rewrites
-`.croki/application.croki`, and no generated Concept prompt is inserted into the
-composer. Portable `.croki` packaging remains a later transport for this same
-object model rather than a second schema.
-
-Croki derives a bounded application-progress view from the project's existing
-Thread, activity, runtime, review, and checkpoint perception. The composer
-shows verified, reported, and invalidated observations beside the released-to-
-building transition, and native provider turns receive the same explicitly
-non-authoritative evidence. This view is disposable and provenance-preserving;
-it does not write `.croki/application.json`, create another project database,
-or promote agent reports into founder-approved truth.
-
-`Prepare release lineage` carries that evidence into the current native
-Thread. The selected provider inspects the canonical application file, Git
-history, tests, previews, source Threads, and release notes, then proposes
-ordinary repository edits through Review. Release truth therefore stays an
-explicit founder-visible Git change while daily progress requires no manual
-lineage maintenance.
+Historical Concept, Release, and Venture parsers remain only to keep older
+repositories readable. They are not active navigation, ideation, release, or
+portfolio objects.
 
 ## Selected native-provider rule
 
@@ -255,20 +222,12 @@ memory, skills, or model.
 
 ## Known implementation gaps
 
-- Venture evidence now has a typed observation and provenance boundary, but
-  source adapters for customer conversations, analytics, CRM, campaigns, and
-  market research have not landed yet.
 - Parallel Threads is implemented behind a default-off Settings → Beta toggle
   for the planned 0.4.4 release. It reuses provider-native delegation and the
   parent Thread's existing Workstreams projection; provider support therefore
   depends on the selected runtime exposing native workers.
-- Legacy Release, Context, and Artifact code remains only for compatibility
-  reads and historical receipts; the composer and provider runtime use
-  application lineage instead.
-- Application progress is a bounded current evidence sample rather than a
-  complete historical ledger. Reported observations remain unverified until a
-  stronger project source supports them, and release promotion still requires
-  the normal native Thread and Review path.
+- Historical `.croki` scope schemas and legacy Canvas objects remain only for
+  compatibility reads and old receipts. The application brief remains active.
 - Additional native senses can expand beyond the initial Thread, preview,
   checkpoint, approval, and runtime sources without changing the frame model.
 - UI history preserves individual model snapshots, but checked-flow timelines,

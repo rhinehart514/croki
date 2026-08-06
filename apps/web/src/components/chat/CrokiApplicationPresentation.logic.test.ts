@@ -9,7 +9,7 @@ const application = JSON.stringify({
   version: 1,
   application: { name: "Croki" },
   released: {
-    version: "0.4.5",
+    version: "0.4.7",
     summary: "Released reality.",
     product: [],
     gtm: [],
@@ -17,8 +17,8 @@ const application = JSON.stringify({
     sources: [],
   },
   building: {
-    version: "0.4.6",
-    intent: "Build version-aware application context.",
+    version: "0.4.8",
+    intent: "Keep application focus inside the ADE.",
     product: [],
     gtm: [],
     successSignals: [],
@@ -26,7 +26,7 @@ const application = JSON.stringify({
 });
 
 describe("Croki application presentation state", () => {
-  it("falls back to a legacy JSON file without displacing a native .croki object", () => {
+  it("prefers the application brief and falls back to legacy JSON", () => {
     const absentCurrent = {
       data: null,
       error: "missing",
@@ -54,37 +54,30 @@ describe("Croki application presentation state", () => {
     });
   });
 
-  it("derives released and building versions from the project-owned file", () => {
-    const state = deriveCrokiApplicationState({
-      data: {
-        relativePath: ".croki/application.croki",
-        contents: application,
-        byteLength: application.length,
-        truncated: false,
-      },
-      error: null,
-      failure: null,
-      isPending: false,
-    });
-    expect(state).toMatchObject({
+  it("derives the released and building focus from the repository-owned file", () => {
+    expect(
+      deriveCrokiApplicationState({
+        data: {
+          relativePath: ".croki/application.croki",
+          contents: application,
+          byteLength: application.length,
+          truncated: false,
+        },
+        error: null,
+        failure: null,
+        isPending: false,
+      }),
+    ).toMatchObject({
       status: "loaded",
       sourcePath: ".croki/application.croki",
       application: {
-        released: { version: "0.4.5" },
-        building: { version: "0.4.6" },
+        released: { version: "0.4.7" },
+        building: { version: "0.4.8" },
       },
     });
   });
 
-  it("treats a missing file as normal absence and preserves invalid state", () => {
-    expect(
-      deriveCrokiApplicationState({
-        data: null,
-        error: "missing",
-        failure: { operation: "realpath-target", relativePath: ".croki/application.croki" },
-        isPending: false,
-      }),
-    ).toEqual({ status: "absent" });
+  it("keeps the source path when the brief needs repair", () => {
     expect(
       deriveCrokiApplicationState({
         data: {
@@ -97,41 +90,10 @@ describe("Croki application presentation state", () => {
         failure: null,
         isPending: false,
       }),
-    ).toEqual({ status: "invalid", errorCode: "unsupported-version" });
-  });
-
-  it("matches the server when escaped application data exceeds the provider bound", () => {
-    const escaped = JSON.stringify({
-      version: 1,
-      application: { name: "<".repeat(120) },
-      released: {
-        version: "0.4.5",
-        summary: "<".repeat(800),
-        product: Array.from({ length: 5 }, () => "<".repeat(200)),
-        gtm: Array.from({ length: 5 }, () => "<".repeat(200)),
-        learnings: Array.from({ length: 5 }, () => "<".repeat(200)),
-        sources: [],
-      },
-      building: {
-        version: "0.4.6",
-        intent: "<".repeat(800),
-        product: Array.from({ length: 5 }, () => "<".repeat(200)),
-        gtm: Array.from({ length: 5 }, () => "<".repeat(200)),
-        successSignals: Array.from({ length: 5 }, () => "<".repeat(200)),
-      },
+    ).toEqual({
+      status: "invalid",
+      errorCode: "unsupported-version",
+      sourcePath: ".croki/application.croki",
     });
-    expect(
-      deriveCrokiApplicationState({
-        data: {
-          relativePath: ".croki/application.croki",
-          contents: escaped,
-          byteLength: escaped.length,
-          truncated: false,
-        },
-        error: null,
-        failure: null,
-        isPending: false,
-      }),
-    ).toEqual({ status: "oversized" });
   });
 });

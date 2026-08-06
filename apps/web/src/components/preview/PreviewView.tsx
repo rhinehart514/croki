@@ -5,7 +5,6 @@ import { squashAtomCommandFailure } from "@croki/client-runtime/state/runtime";
 import {
   FILL_PREVIEW_VIEWPORT,
   type OrchestrationThreadActivity,
-  type ProjectComponentEntry,
   type PreviewViewportSetting,
   type ScopedThreadRef,
 } from "@croki/contracts";
@@ -31,7 +30,6 @@ import { previewBridge } from "./previewBridge";
 import { subscribePreviewAction } from "./previewActionBus";
 import { openPreviewSession } from "./openPreviewSession";
 import { PreviewChromeRow } from "./PreviewChromeRow";
-import { PreviewDecisionBar, type PreviewExplorationState } from "./PreviewDecisionBar";
 import { formatPreviewUrl } from "./previewUrlPresentation";
 import { PreviewEmptyState } from "./PreviewEmptyState";
 import { PreviewMoreMenu } from "./PreviewMoreMenu";
@@ -67,16 +65,6 @@ interface Props {
   visible: boolean;
   activities?: ReadonlyArray<OrchestrationThreadActivity> | undefined;
   onAddCanvasEvidence?: ((url: string) => void) | undefined;
-  onBuildIdea?: ((idea: string) => void) | undefined;
-  workspaceRoot?: string | undefined;
-  onPreviewComponent?: ((component: ProjectComponentEntry) => void) | undefined;
-  onExploreOptions?: ((annotationId: string) => void) | undefined;
-  explorationState?: PreviewExplorationState | undefined;
-  onKeepOption?: ((url: string) => void) | undefined;
-  onCombineOption?: ((url: string, direction: string) => void) | undefined;
-  onDiscardOptions?: ((url: string) => void) | undefined;
-  onStopExploration?: (() => void) | undefined;
-  optionLabel?: string | undefined;
 }
 
 const EMPTY_THREAD_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = [];
@@ -94,22 +82,11 @@ export function PreviewView({
   visible,
   activities = EMPTY_THREAD_ACTIVITIES,
   onAddCanvasEvidence,
-  onBuildIdea,
-  workspaceRoot,
-  onPreviewComponent,
-  onExploreOptions,
-  explorationState = "idle",
-  onKeepOption,
-  onCombineOption,
-  onDiscardOptions,
-  onStopExploration,
-  optionLabel,
 }: Props) {
   const [focusUrlNonce, setFocusUrlNonce] = useState<number | undefined>(undefined);
   const [pickActive, setPickActive] = useState(false);
   const activeRecordingTabIds = useActiveBrowserRecordingTabIds();
   const pickActiveRef = useRef(false);
-  const exploreAfterPickRef = useRef(false);
   const isMountedRef = useRef(true);
   const previewState = useThreadPreviewState(threadRef);
   const miniPlayer = usePreviewMiniPlayerStore((state) =>
@@ -576,12 +553,10 @@ export function PreviewView({
             file: screenshotFile,
           });
         }
-        if (exploreAfterPickRef.current) onExploreOptions?.(annotation.id);
       } catch {
         // Picker failed (e.g. webview navigated). Treat as silent cancel.
       } finally {
         pickActiveRef.current = false;
-        exploreAfterPickRef.current = false;
         // Avoid `setState on unmounted component` if the panel/thread closed
         // while the pick was in flight.
         if (isMountedRef.current) setPickActive(false);
@@ -601,13 +576,7 @@ export function PreviewView({
         }
       }
     })();
-  }, [addImage, addPreviewAnnotation, onExploreOptions, runtimeTabId, threadRef]);
-
-  const handleExploreOptions = useCallback(() => {
-    if (!previewBridge || !runtimeTabId) return;
-    exploreAfterPickRef.current = true;
-    handlePickElement();
-  }, [handlePickElement, runtimeTabId]);
+  }, [addImage, addPreviewAnnotation, runtimeTabId, threadRef]);
 
   // If the active tab changes mid-pick (close, thread switch, hot restart),
   // tell main to tear down the in-flight session AND reset our local toggle
@@ -700,12 +669,6 @@ export function PreviewView({
         pickDisabledReason={
           isUnreachable ? "Page didn't load — pick unavailable until the page renders" : undefined
         }
-        onExploreOptions={
-          previewBridge && tabId && onExploreOptions ? handleExploreOptions : undefined
-        }
-        exploreOptionsDisabled={
-          !tabId || isUnreachable || pickActive || explorationState !== "idle"
-        }
         trailingActions={
           uiHistoryEntries.length > 0 ? (
             <>
@@ -736,10 +699,6 @@ export function PreviewView({
             configuredUrls={configuredUrls}
             recentlySeenUrls={previewState.recentlySeenUrls}
             onOpenUrl={(next) => void handleOpenServerUrl(next)}
-            onBuildIdea={onBuildIdea}
-            workspaceRoot={workspaceRoot}
-            onPreviewComponent={onPreviewComponent}
-            explorationBusy={explorationState === "building"}
           />
         ) : null}
         {snapshot && desktopOverlay ? (
@@ -766,30 +725,6 @@ export function PreviewView({
               onReload={handleRefresh}
             />
           </div>
-        ) : null}
-        {explorationState === "building" ||
-        explorationState === "options-working" ||
-        explorationState === "applying" ? (
-          <PreviewDecisionBar
-            state={explorationState}
-            onKeep={() => undefined}
-            onCombine={() => undefined}
-            onDiscard={() => undefined}
-            onStop={onStopExploration}
-          />
-        ) : !isUnreachable &&
-          url &&
-          optionLabel &&
-          onKeepOption &&
-          onCombineOption &&
-          onDiscardOptions ? (
-          <PreviewDecisionBar
-            state={explorationState}
-            optionLabel={optionLabel}
-            onKeep={() => onKeepOption(url)}
-            onCombine={(direction) => onCombineOption(url, direction)}
-            onDiscard={() => onDiscardOptions(url)}
-          />
         ) : null}
       </div>
     </div>

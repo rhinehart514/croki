@@ -54,7 +54,7 @@ describe("Croki proposal prompts", () => {
   it("prepares release promotion through the native Thread and normal Review path", () => {
     const prompt = buildCrokiReleaseLineagePrompt(workspaceRoot);
     expect(prompt).toContain("verified project evidence");
-    expect(prompt).toContain(".croki/application.json");
+    expect(prompt).toContain(".croki/application.croki");
     expect(prompt).toContain("Do not promote Thread reports");
     expect(prompt).toContain("normal repository and Review path");
   });

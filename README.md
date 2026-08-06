@@ -4,15 +4,16 @@ Croki is an agentic development environment (ADE) for founders building real
 products with coding agents. It is a working daily development environment, not
 a standalone agent runtime or a replacement for the provider behind the work.
 
-Croki is a narrow product overlay on Croki. It preserves native threads,
-providers, worktrees, checkpoints, recovery, Git, terminal, preview, files,
-plans, project scripts, desktop, web, and mobile clients. Canvas adds optional,
-repository-owned product understanding that survives individual conversations.
+Croki is a narrow product overlay on the underlying development environment. It
+preserves native threads, providers, worktrees, checkpoints, recovery, Git,
+terminal, preview, files, plans, project scripts, desktop, web, and mobile
+clients. Canvas adds optional, repository-owned product understanding that
+survives individual conversations.
 
 The primary product rule is **native providers by default**. Croki-specific
 personas, planning loops, delegation policies, and behavioral prompts belong in
 explicit named harnesses that are off by default, visible, scoped, and
-reversible. The web composer now defaults to Native and offers GTM v1 for one
+reversible. The web composer now defaults to Native and offers Product for one
 turn. Approved Canvas context attaches independently of panel visibility, while
 proposals remain excluded. See [current project state](./docs/project/current-state.md)
 for the remaining provider and release gaps.

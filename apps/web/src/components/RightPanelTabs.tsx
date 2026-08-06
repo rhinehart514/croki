@@ -55,8 +55,6 @@ interface RightPanelTabsProps {
   onAddFiles: () => void;
   onAddCanvas: () => void;
   canvasAvailable: boolean;
-  previewIdeationAvailable?: boolean | undefined;
-  previewOptionTabIds?: readonly string[] | undefined;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
@@ -106,7 +104,6 @@ export function RightPanelEmptyState(props: {
   onAddFiles: () => void;
   onAddCanvas: () => void;
   canvasAvailable: boolean;
-  previewIdeationAvailable?: boolean | undefined;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
@@ -126,9 +123,7 @@ export function RightPanelEmptyState(props: {
       : []),
     {
       label: "Preview",
-      description: props.previewIdeationAvailable
-        ? "Open an app, component, or product idea."
-        : "Open and interact with a running app.",
+      description: "Open and interact with a running app.",
       icon: Globe2,
       available: props.browserAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.browser,
@@ -220,7 +215,6 @@ function surfaceTitle(
   surface: RightPanelSurface,
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>,
   terminalLabelsById: ReadonlyMap<string, string>,
-  previewOptionTabIds: readonly string[],
 ): string {
   switch (surface.kind) {
     case "diff":
@@ -239,8 +233,6 @@ function surfaceTitle(
     case "plan":
       return "Plan";
     case "preview": {
-      const optionIndex = surface.resourceId ? previewOptionTabIds.indexOf(surface.resourceId) : -1;
-      if (optionIndex >= 0) return `Option ${optionIndex + 1}`;
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Preview";
       if (snapshot.navStatus.title.trim().length > 0) return snapshot.navStatus.title;
@@ -420,12 +412,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             {props.surfaces.map((surface) => {
               const active = surface.id === props.activeSurfaceId;
               const pending = props.pendingSurfaceIds.has(surface.id);
-              const title = surfaceTitle(
-                surface,
-                props.previewSessions,
-                props.terminalLabelsById,
-                props.previewOptionTabIds ?? [],
-              );
+              const title = surfaceTitle(surface, props.previewSessions, props.terminalLabelsById);
               return (
                 <div
                   key={surface.id}
@@ -543,7 +530,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           <RightPanelEmptyState
             onAddCanvas={props.onAddCanvas}
             canvasAvailable={props.canvasAvailable}
-            previewIdeationAvailable={props.previewIdeationAvailable}
             onAddBrowser={props.onAddBrowser}
             onAddTerminal={props.onAddTerminal}
             onAddDiff={props.onAddDiff}

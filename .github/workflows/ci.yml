@@ -150,6 +150,17 @@ jobs:
       - name: Lint mobile native sources
         run: vp run lint:mobile
 
+  swift_ios:
+    name: Swift iOS
+    runs-on: blacksmith-12vcpu-macos-26
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Test native iOS client
+        run: apps/swift-ios/Scripts/ci-test.sh
+
   release_smoke:
     name: Release Smoke
     runs-on: blacksmith-8vcpu-ubuntu-2404

@@ -64,7 +64,7 @@ export function buildCrokiReleaseLineagePrompt(workspaceRoot: string): string {
   return [
     "Prepare the next application release from the verified project evidence Croki has derived.",
     "",
-    `The canonical project root is ${JSON.stringify(workspaceRoot)} and its application lineage is .croki/application.json.`,
+    `The canonical project root is ${JSON.stringify(workspaceRoot)} and its application brief is .croki/application.croki.`,
     "Inspect the current application lineage, relevant source Threads, checkpoints, Git diff and history, focused test results, preview evidence, and release notes before editing anything.",
     "Update the released and building application facts only when the repository evidence supports them. Do not promote Thread reports into released truth without verification.",
     "Keep the provider's native behavior, preserve the original user request, and make the lineage edit through the normal repository and Review path.",
