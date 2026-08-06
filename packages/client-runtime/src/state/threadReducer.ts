@@ -112,6 +112,7 @@ export function applyThreadDetailEvent(
         thread: {
           ...thread,
           archivedAt: event.payload.archivedAt,
+          titleRegeneration: null,
           updatedAt: event.payload.updatedAt,
         },
       };
@@ -166,6 +167,26 @@ export function applyThreadDetailEvent(
         },
       };
 
+    case "thread.pinned":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          pinnedAt: event.payload.pinnedAt,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
+    case "thread.unpinned":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          pinnedAt: null,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     // ── Thread metadata ─────────────────────────────────────────────
     case "thread.meta-updated":
       return {
@@ -173,6 +194,9 @@ export function applyThreadDetailEvent(
         thread: {
           ...thread,
           ...(event.payload.title !== undefined ? { title: event.payload.title } : {}),
+          ...(event.payload.titleRegeneration !== undefined
+            ? { titleRegeneration: event.payload.titleRegeneration }
+            : {}),
           ...(event.payload.modelSelection !== undefined
             ? { modelSelection: event.payload.modelSelection }
             : {}),

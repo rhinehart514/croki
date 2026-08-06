@@ -29,6 +29,21 @@ const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 // QUEUED_TURN_START_GRACE_MS in client-runtime threadSettled.ts.
 const QUEUED_TURN_START_GRACE_MS = 2 * 60 * 1_000;
 
+function requireCanonicalThreadLifecycle(input: {
+  readonly commandType: string;
+  readonly threadId: string;
+  readonly parentThreadId: string | null | undefined;
+}) {
+  return input.parentThreadId == null
+    ? Effect.void
+    : Effect.fail(
+        new OrchestrationCommandInvariantError({
+          commandType: input.commandType,
+          detail: `worker thread ${input.threadId} follows its parent lifecycle`,
+        }),
+      );
+}
+
 /**
  * Blocked-on-you work derived from the thread's retained activities: an
  * approval or user-input request with no later resolution for the same
@@ -499,6 +514,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
+      });
       // Server-side twin of the client's canSettle session check: a stale
       // or raced client must not settle a thread whose session is coming
       // alive or working.
@@ -535,14 +555,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // settledAt: the engine rejects zero-event commands, and bulk-settle /
       // double-click must stay silent no-ops rather than surface errors.
       const alreadySettled = thread.settledOverride === "settled" && thread.settledAt !== null;
-      return {
+      const settledEvent = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
           occurredAt,
           commandId: command.commandId,
         })),
-        type: "thread.settled",
+        type: "thread.settled" as const,
         payload: {
           threadId: command.threadId,
           settledAt: alreadySettled ? thread.settledAt : occurredAt,
@@ -552,6 +572,29 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: alreadySettled ? thread.updatedAt : occurredAt,
         },
       };
+      // Settling is "I'm done with this": it clears a pin the same way it
+      // parks the thread. Without this, settling a pinned thread would only
+      // stamp invisible state — the pin would hold the card in place until
+      // a separate unpin.
+      if (thread.pinnedAt == null) {
+        return settledEvent;
+      }
+      return [
+        settledEvent,
+        {
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.unpinned" as const,
+          payload: {
+            threadId: command.threadId,
+            updatedAt: occurredAt,
+          },
+        },
+      ];
     }
 
     case "thread.unsettle": {
@@ -559,6 +602,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         readModel,
         command,
         threadId: command.threadId,
+      });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
       });
       // Idempotent by re-emission (see thread.settle): reducing the event a
       // second time lands on the same override state. A re-emission keeps
@@ -586,6 +634,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         readModel,
         command,
         threadId: command.threadId,
+      });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
       });
       const occurredAt = yield* nowIso;
       // A wake time in the past would create a thread that is snoozed and
@@ -657,6 +710,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
+      });
       // Idempotent by re-emission (see thread.settle): waking a thread that
       // is not snoozed lands on the same null state without churning
       // updatedAt.
@@ -678,12 +736,121 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.pin": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
+      });
+      const occurredAt = yield* nowIso;
+      // Re-pinning an already-pinned thread is a duplicate (double-click,
+      // raced clients): re-emit with the original timestamps so the
+      // projection is a no-op. Pinning has no lifecycle invariants — a pin
+      // only ever promotes visibility, so it can never hide pending work.
+      const existingPinnedAt = thread.pinnedAt ?? null;
+      const pinnedEvent = {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.pinned" as const,
+        payload: {
+          threadId: command.threadId,
+          pinnedAt: existingPinnedAt ?? occurredAt,
+          updatedAt: existingPinnedAt !== null ? thread.updatedAt : occurredAt,
+        },
+      };
+      // Pinning is a promotion: it clears the parked states rather than
+      // silently outranking them. An explicit settle un-settles (reason
+      // "user", same override the un-settle button stamps), and a snooze's
+      // return ticket is spent — the thread is on top NOW, not on Tuesday.
+      const promotionEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      if (thread.settledOverride === "settled") {
+        promotionEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.unsettled",
+          payload: {
+            threadId: command.threadId,
+            reason: "user",
+            updatedAt: occurredAt,
+          },
+        });
+      }
+      if (thread.snoozedUntil != null) {
+        promotionEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.unsnoozed",
+          payload: {
+            threadId: command.threadId,
+            reason: "user",
+            updatedAt: occurredAt,
+          },
+        });
+      }
+      return promotionEvents.length > 0 ? [pinnedEvent, ...promotionEvents] : pinnedEvent;
+    }
+
+    case "thread.unpin": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
+      });
+      // Idempotent by re-emission (see thread.settle): unpinning a thread
+      // that is not pinned lands on the same null state without churning
+      // updatedAt.
+      const alreadyUnpinned = thread.pinnedAt == null;
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.unpinned",
+        payload: {
+          threadId: command.threadId,
+          updatedAt: alreadyUnpinned ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
     case "thread.meta.update": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+      if (command.regenerateTitle === true) {
+        yield* requireCanonicalThreadLifecycle({
+          commandType: command.type,
+          threadId: command.threadId,
+          parentThreadId: thread.parentThreadId,
+        });
+      }
       const branch =
         command.branch !== undefined &&
         command.expectedBranch !== undefined &&
@@ -702,12 +869,50 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           ...(command.title !== undefined ? { title: command.title } : {}),
+          ...(command.regenerateTitle === true
+            ? {
+                regenerateTitle: true as const,
+                previousTitle: thread.title,
+                titleRegeneration: {
+                  requestId: command.commandId,
+                  startedAt: occurredAt,
+                },
+              }
+            : {}),
+          ...(command.title !== undefined && thread.titleRegeneration != null
+            ? { titleRegeneration: null }
+            : {}),
           ...(command.modelSelection !== undefined
             ? { modelSelection: command.modelSelection }
             : {}),
           ...(branch !== undefined ? { branch } : {}),
           ...(command.worktreePath !== undefined ? { worktreePath: command.worktreePath } : {}),
           updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "thread.title.regeneration.complete": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const requestIsCurrent = thread.titleRegeneration?.requestId === command.requestId;
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.meta-updated",
+        payload: {
+          threadId: command.threadId,
+          ...(requestIsCurrent && command.title !== undefined ? { title: command.title } : {}),
+          ...(requestIsCurrent ? { titleRegeneration: null } : {}),
+          updatedAt: requestIsCurrent ? occurredAt : thread.updatedAt,
         },
       };
     }

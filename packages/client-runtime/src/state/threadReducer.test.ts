@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   CheckpointRef,
+  CommandId,
   EventId,
   MessageId,
   ProjectId,
@@ -123,8 +124,15 @@ describe("applyThreadDetailEvent", () => {
   });
 
   describe("thread.archived / thread.unarchived", () => {
-    it("sets archivedAt", () => {
-      const result = applyThreadDetailEvent(baseThread, {
+    it("sets archivedAt and clears title regeneration", () => {
+      const regeneratingThread: OrchestrationThread = {
+        ...baseThread,
+        titleRegeneration: {
+          requestId: CommandId.make("regenerate-title"),
+          startedAt: "2026-04-01T02:00:00.000Z",
+        },
+      };
+      const result = applyThreadDetailEvent(regeneratingThread, {
         ...baseEventFields,
         sequence: 3,
         occurredAt: "2026-04-01T03:00:00.000Z",
@@ -141,6 +149,7 @@ describe("applyThreadDetailEvent", () => {
       expect(result.kind).toBe("updated");
       if (result.kind === "updated") {
         expect(result.thread.archivedAt).toBe("2026-04-01T03:00:00.000Z");
+        expect(result.thread.titleRegeneration).toBeNull();
       }
     });
 
@@ -218,6 +227,55 @@ describe("applyThreadDetailEvent", () => {
       if (result.kind === "updated") {
         expect(result.thread.settledOverride).toBe(settledOverride);
         expect(result.thread.settledAt).toBeNull();
+      }
+    });
+  });
+
+  describe("thread.pinned / thread.unpinned", () => {
+    it("sets pinnedAt", () => {
+      const pinnedAt = "2026-04-01T05:00:00.000Z";
+      const result = applyThreadDetailEvent(baseThread, {
+        ...baseEventFields,
+        sequence: 5,
+        occurredAt: pinnedAt,
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.pinned",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          pinnedAt,
+          updatedAt: pinnedAt,
+        },
+      });
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.pinnedAt).toBe(pinnedAt);
+      }
+    });
+
+    it("clears pinnedAt", () => {
+      const pinnedThread: OrchestrationThread = {
+        ...baseThread,
+        pinnedAt: "2026-04-01T05:00:00.000Z",
+      };
+      const updatedAt = "2026-04-01T06:00:00.000Z";
+      const result = applyThreadDetailEvent(pinnedThread, {
+        ...baseEventFields,
+        sequence: 6,
+        occurredAt: updatedAt,
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.unpinned",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          updatedAt,
+        },
+      });
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.pinnedAt).toBeNull();
       }
     });
   });

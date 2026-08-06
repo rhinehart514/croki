@@ -1,5 +1,6 @@
 import type { EnvironmentProject, EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
 import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@croki/contracts";
+import { threadSearchMatchKey } from "@croki/client-runtime/state/thread-search";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -656,6 +657,33 @@ describe("buildHomeThreadGroups", () => {
     expect(group?.recentThreads.map((thread) => thread.id)).toEqual(
       group?.threads.map((thread) => thread.id),
     );
+  });
+
+  it("includes a thread matched by message content", () => {
+    const environmentId = EnvironmentId.make("environment-1");
+    const project = makeProject({
+      environmentId,
+      id: ProjectId.make("project-1"),
+      title: "Croki",
+    });
+    const thread = makeThread({
+      environmentId,
+      id: ThreadId.make("thread-content"),
+      projectId: project.id,
+      title: "Unrelated title",
+    });
+
+    const groups = buildGroups([project], [thread], {
+      searchQuery: "relay reconnect",
+      matchedThreadKeys: new Set([
+        threadSearchMatchKey({
+          environmentId,
+          threadId: thread.id,
+        }),
+      ]),
+    });
+
+    expect(groups[0]?.threads.map((candidate) => candidate.id)).toEqual(["thread-content"]);
   });
 
   it("targets quick new threads at the group member with the newest thread", () => {
