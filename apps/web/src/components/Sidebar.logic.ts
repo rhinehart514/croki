@@ -871,6 +871,7 @@ export function orderThreadsWithChildren<
     readonly environmentId: string;
     readonly id: string;
     readonly parentThreadId?: string | null | undefined;
+    readonly workerView?: "threads" | "activity" | undefined;
   },
 >(threads: readonly TThread[]): TThread[] {
   const childKeys = new Set(
@@ -878,10 +879,18 @@ export function orderThreadsWithChildren<
       .filter((thread) => thread.parentThreadId != null)
       .map((thread) => `${thread.environmentId}\0${thread.id}`),
   );
+  const suppressedChildKeys = new Set<string>();
   const childrenByParent = new Map<string, TThread[]>();
+  const threadByKey = new Map(
+    threads.map((thread) => [`${thread.environmentId}\0${thread.id}`, thread]),
+  );
   for (const thread of threads) {
     if (!thread.parentThreadId) continue;
     const parentKey = `${thread.environmentId}\0${thread.parentThreadId}`;
+    if ((threadByKey.get(parentKey)?.workerView ?? "threads") !== "threads") {
+      suppressedChildKeys.add(`${thread.environmentId}\0${thread.id}`);
+      continue;
+    }
     const children = childrenByParent.get(parentKey) ?? [];
     children.push(thread);
     childrenByParent.set(parentKey, children);
@@ -895,7 +904,13 @@ export function orderThreadsWithChildren<
   }
   for (const thread of threads) {
     const threadKey = `${thread.environmentId}\0${thread.id}`;
-    if (childKeys.has(threadKey) && !ordered.includes(thread)) ordered.push(thread);
+    if (
+      childKeys.has(threadKey) &&
+      !suppressedChildKeys.has(threadKey) &&
+      !ordered.includes(thread)
+    ) {
+      ordered.push(thread);
+    }
   }
   return ordered;
 }

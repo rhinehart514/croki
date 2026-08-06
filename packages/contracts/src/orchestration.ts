@@ -378,6 +378,10 @@ export const OrchestrationLatestTurn = Schema.Struct({
 });
 export type OrchestrationLatestTurn = typeof OrchestrationLatestTurn.Type;
 
+export const WorkerView = Schema.Literals(["threads", "activity"]);
+export type WorkerView = typeof WorkerView.Type;
+export const DEFAULT_WORKER_VIEW: WorkerView = "threads";
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -385,6 +389,7 @@ export const OrchestrationThread = Schema.Struct({
   forkedFromThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   // Native provider workers are durable read-only child conversations.
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  workerView: Schema.optional(WorkerView),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -444,6 +449,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   // Optional while historical shell snapshots without lineage remain readable.
   forkedFromThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  workerView: Schema.optional(WorkerView),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -673,6 +679,7 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   expectedBranch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  workerView: Schema.optional(WorkerView),
 });
 
 const ThreadRuntimeModeSetCommand = Schema.Struct({
@@ -1082,6 +1089,7 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   modelSelection: Schema.optional(ModelSelection),
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  workerView: Schema.optional(WorkerView),
   updatedAt: IsoDateTime,
 });
 

@@ -211,18 +211,54 @@ export function buildThreadListV2Items(input: {
     ? new Set(input.projectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`))
     : null;
 
+  const scopedThreads = input.threads.filter(
+    (thread) =>
+      (input.environmentId === null || thread.environmentId === input.environmentId) &&
+      (projectKeys === null || projectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
+  );
   const active: EnvironmentThreadShell[] = [];
   const settled: EnvironmentThreadShell[] = [];
+  const threadByKey = new Map(
+    scopedThreads.map((thread) => [`${thread.environmentId}:${thread.id}`, thread]),
+  );
+  const matchingChildParentKeys = new Set(
+    scopedThreads
+      .filter((thread) => {
+        if (
+          !thread.parentThreadId ||
+          (query.length > 0 && !thread.title.toLocaleLowerCase().includes(query))
+        ) {
+          return false;
+        }
+        const parentKey = `${thread.environmentId}:${thread.parentThreadId}`;
+        return (threadByKey.get(parentKey)?.workerView ?? "threads") === "threads";
+      })
+      .map((thread) => `${thread.environmentId}:${thread.parentThreadId}`),
+  );
+  const childrenByParentKey = new Map<string, EnvironmentThreadShell[]>();
   let snoozedCount = 0;
   let nextSnoozeWakeAt: string | null = null;
-  for (const thread of input.threads) {
+  for (const thread of scopedThreads) {
     // Callers pass live (unarchived) shells; settled threads are among them
     // and partition into the tail via effectiveSettled.
-    if (input.environmentId !== null && thread.environmentId !== input.environmentId) continue;
-    if (projectKeys !== null && !projectKeys.has(`${thread.environmentId}:${thread.projectId}`)) {
+    if (thread.parentThreadId) {
+      if (query.length > 0 && !thread.title.toLocaleLowerCase().includes(query)) continue;
+      const parentKey = `${thread.environmentId}:${thread.parentThreadId}`;
+      if ((threadByKey.get(parentKey)?.workerView ?? "threads") === "threads") {
+        const children = childrenByParentKey.get(parentKey) ?? [];
+        children.push(thread);
+        childrenByParentKey.set(parentKey, children);
+      }
       continue;
     }
-    if (query.length > 0 && !thread.title.toLocaleLowerCase().includes(query)) continue;
+    const parentKey = `${thread.environmentId}:${thread.id}`;
+    if (
+      query.length > 0 &&
+      !thread.title.toLocaleLowerCase().includes(query) &&
+      !matchingChildParentKeys.has(parentKey)
+    ) {
+      continue;
+    }
     const supportsSettlement = input.settlementEnvironmentIds?.has(thread.environmentId) ?? true;
     const supportsSnooze = input.snoozeEnvironmentIds?.has(thread.environmentId) ?? true;
     const changeRequestState =
@@ -264,6 +300,11 @@ export function buildThreadListV2Items(input: {
   const items: ThreadListV2Item[] = [];
   for (const thread of orderedActive) {
     items.push({ thread, variant: "card", showSettledDivider: false, isLast: false });
+    for (const child of sortThreadsForListV2(
+      childrenByParentKey.get(`${thread.environmentId}:${thread.id}`) ?? [],
+    )) {
+      items.push({ thread: child, variant: "card", showSettledDivider: false, isLast: false });
+    }
   }
   for (const [index, thread] of visibleSettled.entries()) {
     items.push({
@@ -272,6 +313,16 @@ export function buildThreadListV2Items(input: {
       showSettledDivider: index === 0,
       isLast: false,
     });
+    for (const child of sortThreadsForListV2(
+      childrenByParentKey.get(`${thread.environmentId}:${thread.id}`) ?? [],
+    )) {
+      items.push({
+        thread: child,
+        variant: "slim",
+        showSettledDivider: false,
+        isLast: false,
+      });
+    }
   }
   const last = items.at(-1);
   if (last) {

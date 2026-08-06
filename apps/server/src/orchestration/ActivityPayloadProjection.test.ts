@@ -207,4 +207,24 @@ describe("projectActivityPayload", () => {
     const projected = projectActivityPayload(source);
     expect(projected.payload).toEqual(source.payload);
   });
+
+  it("preserves worker attribution through tool payload slimming", () => {
+    const projected = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        agentId: "worker-123",
+        parentToolUseId: "toolu-parent",
+        data: {
+          toolName: "Bash",
+          command: "pnpm test",
+          rawOutput: { content: "x".repeat(10) },
+          somethingClientNeverReads: { big: "blob" },
+        },
+      }),
+    );
+    const payload = projected.payload as Record<string, unknown>;
+    expect(payload.agentId).toBe("worker-123");
+    expect(payload.parentToolUseId).toBe("toolu-parent");
+    expect((payload.data as Record<string, unknown>).somethingClientNeverReads).toBeUndefined();
+  });
 });

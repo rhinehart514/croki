@@ -261,7 +261,10 @@ memory, skills, or model.
 - Parallel Threads is implemented behind a default-off Settings → Beta toggle
   for the planned 0.4.4 release. It reuses provider-native delegation and the
   parent Thread's existing Workstreams projection; provider support therefore
-  depends on the selected runtime exposing native workers.
+  depends on the selected runtime exposing native workers. Once real child
+  Threads exist, the founder can persist either nested read-only worker chats
+  or bounded inline Workstreams on the parent. The two presentations are
+  mutually exclusive and worker transcripts remain owned by the children.
 - Legacy Release, Context, and Artifact code remains only for compatibility
   reads and historical receipts; the composer and provider runtime use
   application lineage instead.

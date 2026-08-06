@@ -4,6 +4,7 @@ import {
   type ProjectScript,
   type ResolvedKeybindingsConfig,
   type ThreadId,
+  type WorkerView,
 } from "@croki/contracts";
 import { scopeThreadRef } from "@croki/client-runtime/environment";
 import { memo } from "react";
@@ -23,6 +24,7 @@ import { CrokiApplicationControl } from "./CrokiApplicationControl";
 import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic";
 import type { CrokiApplicationProgress } from "@croki/shared/crokiApplicationProgress";
 import { CrokiConceptControl } from "./CrokiConceptControl";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -42,6 +44,8 @@ interface ChatHeaderProps {
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
   rightPanelOpen: boolean;
+  workerCount: number;
+  workerView: WorkerView;
   gitCwd: string | null;
   onNewThreadInProject: () => void;
   onExploreApplicationDirection: () => void;
@@ -54,6 +58,7 @@ interface ChatHeaderProps {
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+  onWorkerViewChange: (view: WorkerView) => void;
 }
 
 export function shouldShowOpenInPicker(input: {
@@ -86,6 +91,8 @@ export const ChatHeader = memo(function ChatHeader({
   keybindings,
   availableEditors,
   rightPanelOpen,
+  workerCount,
+  workerView,
   gitCwd,
   onNewThreadInProject,
   onExploreApplicationDirection,
@@ -95,6 +102,7 @@ export const ChatHeader = memo(function ChatHeader({
   onAddProjectScript,
   onUpdateProjectScript,
   onDeleteProjectScript,
+  onWorkerViewChange,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const fileScripts = useCrokiProjectFileScripts(
@@ -187,6 +195,28 @@ export const ChatHeader = memo(function ChatHeader({
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
+        {workerCount > 0 ? (
+          <Select
+            value={workerView}
+            onValueChange={(value) => {
+              if (value === "threads" || value === "activity") onWorkerViewChange(value);
+            }}
+          >
+            <SelectTrigger
+              aria-label="Workers"
+              className="w-auto max-w-40"
+              size="xs"
+              variant="ghost"
+            >
+              <span className="text-muted-foreground">Workers</span>
+              <SelectValue>{workerView === "threads" ? "Separate chats" : "In Thread"}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              <SelectItem value="threads">Separate chats</SelectItem>
+              <SelectItem value="activity">In Thread</SelectItem>
+            </SelectPopup>
+          </Select>
+        ) : null}
         {activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}

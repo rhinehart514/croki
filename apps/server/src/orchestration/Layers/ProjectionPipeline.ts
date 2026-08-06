@@ -728,6 +728,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             worktreePath: event.payload.worktreePath,
             forkedFromThreadId: null,
             parentThreadId: event.payload.parentThreadId ?? null,
+            workerView: "threads",
             latestTurnId: null,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
@@ -896,6 +897,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...(event.payload.branch !== undefined ? { branch: event.payload.branch } : {}),
             ...(event.payload.worktreePath !== undefined
               ? { worktreePath: event.payload.worktreePath }
+              : {}),
+            ...(event.payload.workerView !== undefined
+              ? { workerView: event.payload.workerView }
               : {}),
             updatedAt: event.payload.updatedAt,
           });

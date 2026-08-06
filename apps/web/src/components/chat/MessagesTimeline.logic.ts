@@ -201,6 +201,10 @@ export interface StableMessagesTimelineRowsState {
   result: MessagesTimelineRow[];
 }
 
+function isTaskWorkEntry(entry: WorkLogEntry): boolean {
+  return entry.sourceActivityKind?.startsWith("task.") === true;
+}
+
 export function computeMessageDurationStart(
   messages: ReadonlyArray<TimelineDurationMessage>,
 ): Map<string, string> {
@@ -439,16 +443,22 @@ export function deriveMessagesTimelineRows(input: {
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
-  const durationStartByMessageId = computeMessageDurationStart(
-    input.timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
+  // Native task lifecycle has exactly one product home: Workstreams when
+  // supplied by the parent view. Filtering before turn folding prevents
+  // hidden worker rows from leaving behind a duplicate "Worked" fold.
+  const timelineEntries = input.timelineEntries.filter(
+    (entry) => entry.kind !== "work" || !isTaskWorkEntry(entry.entry),
   );
-  const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(input.timelineEntries);
+  const durationStartByMessageId = computeMessageDurationStart(
+    timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
+  );
+  const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(timelineEntries);
   const unsettledTurnId = deriveUnsettledTurnId(
     input.latestTurn ?? null,
     input.runningTurnId ?? null,
   );
   const foldsByAnchorEntryId = deriveTurnFolds({
-    timelineEntries: input.timelineEntries,
+    timelineEntries,
     terminalAssistantMessageIds,
     latestTurn: input.latestTurn ?? null,
     unsettledTurnId,
@@ -474,8 +484,8 @@ export function deriveMessagesTimelineRows(input: {
     coordinationGroups.set(scope, group);
   }
 
-  for (let index = 0; index < input.timelineEntries.length; index += 1) {
-    const timelineEntry = input.timelineEntries[index];
+  for (let index = 0; index < timelineEntries.length; index += 1) {
+    const timelineEntry = timelineEntries[index];
     if (!timelineEntry) {
       continue;
     }
@@ -497,13 +507,6 @@ export function deriveMessagesTimelineRows(input: {
     }
 
     if (timelineEntry.kind === "work") {
-      if (
-        timelineEntry.entry.sourceActivityKind === "task.started" ||
-        timelineEntry.entry.sourceActivityKind === "task.progress" ||
-        timelineEntry.entry.sourceActivityKind === "task.completed"
-      ) {
-        continue;
-      }
       const presentation = input.canvasPresentationsByActivityId?.get(timelineEntry.entry.id);
       if (presentation) {
         nextRows.push({
@@ -519,14 +522,11 @@ export function deriveMessagesTimelineRows(input: {
     if (timelineEntry.kind === "work") {
       const groupedEntries = [timelineEntry.entry];
       let cursor = index + 1;
-      while (cursor < input.timelineEntries.length) {
-        const nextEntry = input.timelineEntries[cursor];
+      while (cursor < timelineEntries.length) {
+        const nextEntry = timelineEntries[cursor];
         if (
           !nextEntry ||
           nextEntry.kind !== "work" ||
-          nextEntry.entry.sourceActivityKind === "task.started" ||
-          nextEntry.entry.sourceActivityKind === "task.progress" ||
-          nextEntry.entry.sourceActivityKind === "task.completed" ||
           input.canvasPresentationsByActivityId?.has(nextEntry.entry.id) === true ||
           collapsedEntryIds.has(nextEntry.id) ||
           foldsByAnchorEntryId.has(nextEntry.id)

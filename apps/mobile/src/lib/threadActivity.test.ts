@@ -532,3 +532,114 @@ describe("buildThreadFeed", () => {
     });
   });
 });
+
+describe("quiet timeline: nested agents", () => {
+  it("keeps a nested agent's terminal row but hides its background work", () => {
+    const thread = makeThread({
+      id: ThreadId.make("thread-nested"),
+      projectId: ProjectId.make("project-1"),
+      title: "Nested agents",
+      workerView: "activity",
+      activities: [
+        // A subagent's own shell: internal, covered by the owner's liveness.
+        makeActivity({
+          id: EventId.make("shell-done"),
+          kind: "task.completed",
+          summary: "Task completed",
+          createdAt: "2026-04-01T00:00:02.000Z",
+          payload: { taskId: "sh-1", agentId: "owner", agentKind: "background" },
+        }),
+        // A nested AGENT's completion: mobile has no Agents sheet, so this
+        // terminal row is the only signal it ever finished.
+        makeActivity({
+          id: EventId.make("nested-done"),
+          kind: "task.completed",
+          summary: "Task completed",
+          createdAt: "2026-04-01T00:00:03.000Z",
+          payload: { taskId: "n-1", agentId: "owner", agentKind: "agent" },
+        }),
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+    const ids = feed.flatMap((entry) =>
+      entry.type === "activity-group" ? entry.activities.map((row) => row.id) : [],
+    );
+    expect(ids).toContain("nested-done");
+    expect(ids).not.toContain("shell-done");
+  });
+
+  it("keeps task lifecycle out of the parent feed in separate-chats view", () => {
+    const thread = makeThread({
+      id: ThreadId.make("thread-workers"),
+      projectId: ProjectId.make("project-1"),
+      title: "Separate worker chats",
+      workerView: "threads",
+      activities: [
+        makeActivity({
+          id: EventId.make("worker-start"),
+          kind: "task.started",
+          summary: "Worker started",
+          createdAt: "2026-04-01T00:00:02.000Z",
+          payload: { taskId: "worker-1" },
+        }),
+        makeActivity({
+          id: EventId.make("worker-done"),
+          kind: "task.completed",
+          summary: "Worker completed",
+          createdAt: "2026-04-01T00:00:03.000Z",
+          payload: { taskId: "worker-1", status: "completed" },
+        }),
+      ],
+    });
+
+    expect(buildThreadFeed(thread)).toEqual([]);
+  });
+
+  it("collapses active worker lifecycle into one In Thread row", () => {
+    const thread = makeThread({
+      id: ThreadId.make("thread-inline-workers"),
+      projectId: ProjectId.make("project-1"),
+      title: "Inline worker activity",
+      workerView: "activity",
+      activities: [
+        makeActivity({
+          id: EventId.make("worker-start"),
+          kind: "task.started",
+          summary: "Task started",
+          createdAt: "2026-04-01T00:00:01.000Z",
+          payload: {
+            taskId: "worker-1",
+            description: "Inspect persistence",
+            agentKind: "agent",
+            timelineBypass: true,
+          },
+        }),
+        makeActivity({
+          id: EventId.make("worker-progress"),
+          kind: "task.progress",
+          summary: "Task progress",
+          createdAt: "2026-04-01T00:00:02.000Z",
+          payload: {
+            taskId: "worker-1",
+            description: "Inspect persistence",
+            summary: "Reading migrations",
+            agentKind: "agent",
+            timelineBypass: true,
+          },
+        }),
+      ],
+    });
+
+    const rows = buildThreadFeed(thread).flatMap((entry) =>
+      entry.type === "activity-group" ? entry.activities : [],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: "worker-progress",
+      createdAt: "2026-04-01T00:00:01.000Z",
+      summary: "Reading migrations",
+      status: "neutral",
+    });
+  });
+});
