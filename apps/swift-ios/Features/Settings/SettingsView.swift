@@ -135,6 +135,12 @@ public struct SettingsView: View {
                                 .font(T3Typography.supporting)
                                 .foregroundStyle(T3Colors.textSecondary)
                                 .lineLimit(1)
+                            if let serverVersion = environment.serverVersion {
+                                Text("Server \(serverVersion) · \(serverUpdateLabel(environment))")
+                                    .font(T3Typography.supporting)
+                                    .foregroundStyle(T3Colors.textTertiary)
+                                    .lineLimit(1)
+                            }
                         }
                         Spacer()
                         let status = environmentStatus(for: environment)
@@ -227,7 +233,28 @@ public struct SettingsView: View {
         Section("About") {
             LabeledContent("App", value: "Croki Native")
             LabeledContent("Platform", value: "Native SwiftUI")
+            LabeledContent("Version", value: nativeVersion)
+            Text("Croki Native updates through TestFlight or the App Store. Server updates follow each environment's host-managed update path.")
+                .font(T3Typography.supporting)
+                .foregroundStyle(T3Colors.textSecondary)
             Link("Open source", destination: URL(string: "https://github.com/rhinehart514/croki")!)
+        }
+    }
+
+    private var nativeVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+            as? String ?? "Development"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        return build.map { "\(version) (\($0))" } ?? version
+    }
+
+    private func serverUpdateLabel(_ environment: FeatureEnvironment) -> String {
+        switch environment.serverUpdateMode {
+        case "automatic": "automatic updates"
+        case "desktop-managed": "desktop managed"
+        case "manual": "manual updates"
+        case .some: "host managed"
+        case nil: "update on host"
         }
     }
 

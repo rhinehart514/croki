@@ -69,6 +69,19 @@ public enum JSONValue: Codable, Equatable, Sendable {
         return value
     }
 
+    /// ACP providers may use numeric request identifiers. Keep them actionable
+    /// instead of dropping an otherwise valid approval request.
+    public var identifierValue: String? {
+        switch self {
+        case let .string(value): value
+        case let .integer(value): String(value)
+        case let .unsignedInteger(value): String(value)
+        case let .number(value) where value.rounded() == value:
+            String(format: "%.0f", value)
+        default: nil
+        }
+    }
+
     public static func encode<T: Encodable & Sendable>(
         _ value: T,
         encoder: JSONEncoder = .t3

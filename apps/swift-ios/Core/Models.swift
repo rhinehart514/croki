@@ -44,6 +44,7 @@ public struct EnvironmentDescriptor: Codable, Equatable, Sendable {
         public let threadSnooze: Bool?
         public let threadPinning: Bool?
         public let threadTitleRegeneration: Bool?
+        public let workerView: Bool?
         public let serverSelfUpdate: String?
         public let serverSelfUpdateProgress: Bool?
 
@@ -54,6 +55,7 @@ public struct EnvironmentDescriptor: Codable, Equatable, Sendable {
             case threadSnooze
             case threadPinning
             case threadTitleRegeneration
+            case workerView
             case serverSelfUpdate
             case serverSelfUpdateProgress
         }
@@ -70,6 +72,7 @@ public struct EnvironmentDescriptor: Codable, Equatable, Sendable {
                 Bool.self,
                 forKey: .threadTitleRegeneration
             )
+            workerView = try container.decodeIfPresent(Bool.self, forKey: .workerView)
             serverSelfUpdate = try container.decodeIfPresent(String.self, forKey: .serverSelfUpdate)
             serverSelfUpdateProgress = try container.decodeIfPresent(
                 Bool.self,
@@ -308,6 +311,21 @@ public struct OrchestrationLatestTurn: Codable, Equatable, Sendable {
     public let assistantMessageId: String?
 }
 
+public struct ThreadTitleRegeneration: Codable, Equatable, Sendable {
+    public let requestId: String
+    public let startedAt: String
+}
+
+public enum WorkerView: String, Codable, Equatable, Sendable {
+    case threads
+    case activity
+}
+
+public enum ThreadBackgroundLiveness: String, Codable, Equatable, Sendable {
+    case working
+    case monitoring
+}
+
 public struct OrchestrationSession: Codable, Equatable, Sendable {
     public let threadId: String
     public let status: String
@@ -322,6 +340,8 @@ public struct OrchestrationSession: Codable, Equatable, Sendable {
 public struct OrchestrationThreadShell: Codable, Identifiable, Equatable, Sendable {
     public let id: String
     public let projectId: String
+    public var parentThreadId: String? = nil
+    public var workerView: WorkerView? = nil
     public let title: String
     public let modelSelection: ModelSelection
     public let runtimeMode: RuntimeMode
@@ -337,11 +357,13 @@ public struct OrchestrationThreadShell: Codable, Identifiable, Equatable, Sendab
     public let snoozedUntil: String?
     public let snoozedAt: String?
     public let pinnedAt: String?
+    public var titleRegeneration: ThreadTitleRegeneration? = nil
     public let session: OrchestrationSession?
     public let latestUserMessageAt: String?
     public let hasPendingApprovals: Bool
     public let hasPendingUserInput: Bool
     public let hasActionableProposedPlan: Bool
+    public var backgroundLiveness: ThreadBackgroundLiveness? = nil
 }
 
 public struct OrchestrationMessage: Codable, Identifiable, Equatable, Sendable {
@@ -394,6 +416,8 @@ public struct CheckpointSummary: Codable, Equatable, Sendable {
 public struct OrchestrationThread: Codable, Identifiable, Equatable, Sendable {
     public let id: String
     public let projectId: String
+    public var parentThreadId: String? = nil
+    public var workerView: WorkerView? = nil
     public let title: String
     public let modelSelection: ModelSelection
     public let runtimeMode: RuntimeMode
@@ -409,11 +433,30 @@ public struct OrchestrationThread: Codable, Identifiable, Equatable, Sendable {
     public let snoozedUntil: String?
     public let snoozedAt: String?
     public let pinnedAt: String?
+    public var titleRegeneration: ThreadTitleRegeneration? = nil
     public let deletedAt: String?
     public let messages: [OrchestrationMessage]
     public let activities: [OrchestrationActivity]
     public let checkpoints: [CheckpointSummary]
     public let session: OrchestrationSession?
+}
+
+public enum OrchestrationThreadSearchSource: String, Codable, Equatable, Sendable {
+    case user
+    case assistant
+}
+
+public struct OrchestrationThreadSearchMatch: Codable, Equatable, Sendable {
+    public let threadId: String
+    public let projectId: String
+    public let parentThreadId: String?
+    public let source: OrchestrationThreadSearchSource
+    public let snippet: String
+    public let messageCreatedAt: String?
+}
+
+public struct OrchestrationSearchThreadsResult: Codable, Equatable, Sendable {
+    public let matches: [OrchestrationThreadSearchMatch]
 }
 
 public struct OrchestrationShellSnapshot: Codable, Equatable, Sendable {

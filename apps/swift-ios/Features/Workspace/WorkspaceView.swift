@@ -179,6 +179,14 @@ public struct WorkspaceView: View {
                 return
             }
         }
+        .task(id: searchText) {
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if query.count >= 2 {
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            guard !Task.isCancelled else { return }
+            await model.searchThreads(query)
+        }
     }
 
     private var sidebar: some View {
@@ -208,6 +216,10 @@ public struct WorkspaceView: View {
             snapshot: model.snapshot,
             revision: model.homePresentationRevision,
             query: searchText,
+            contentMatches: model.threadSearchQuery
+                == searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                ? model.threadSearchMatches
+                : [],
             projectID: selectedProjectID,
             now: sidebarBoundaryNow
         )
@@ -217,6 +229,7 @@ public struct WorkspaceView: View {
             HomeThreadCollectionView(
                 presentation: presentation,
                 query: searchText,
+                isSearchingContent: model.isSearchingThreads,
                 selectedThreadID: selectedThreadID,
                 forceRichRows: dynamicTypeSize.isAccessibilitySize,
                 isSnoozedExpanded: isSnoozedExpanded,
@@ -231,6 +244,9 @@ public struct WorkspaceView: View {
                 onRename: { thread in
                     renameTitle = thread.title
                     renamingThread = thread
+                },
+                onRegenerateTitle: { thread in
+                    Task { await model.regenerateThreadTitle(thread.id) }
                 },
                 onArchive: { thread, archived in
                     Task { await model.setArchived(thread.id, archived: archived) }
@@ -260,7 +276,8 @@ public struct WorkspaceView: View {
                 model: model,
                 thread: thread,
                 submitMessage: submitMessage,
-                onNavigateBack: closeSelectedThread
+                onNavigateBack: closeSelectedThread,
+                onContinueInParent: openThread
             )
             .id(id)
         } else {
@@ -479,16 +496,15 @@ public struct WorkspaceView: View {
                         Text("All projects")
                     }
                 }
-                ForEach(model.snapshot.projects) { project in
-                    Button {
-                        selectedProjectID = project.id
-                    } label: {
-                        let title = projectMenuTitle(project)
-                        if selectedProjectID == project.id {
-                            Label(title, systemImage: "checkmark")
-                        } else {
-                            Text(title)
+                ForEach(logicalProjectGroups) { group in
+                    if group.projects.count > 1 {
+                        Section(group.name) {
+                            ForEach(group.projects) { project in
+                                projectFilterButton(project)
+                            }
                         }
+                    } else if let project = group.projects.first {
+                        projectFilterButton(project)
                     }
                 }
             } label: {
@@ -527,6 +543,36 @@ public struct WorkspaceView: View {
 
     private var selectedProject: FeatureProject? {
         model.snapshot.projects.first { $0.id == selectedProjectID }
+    }
+
+    @ViewBuilder
+    private func projectFilterButton(_ project: FeatureProject) -> some View {
+        Button {
+            selectedProjectID = project.id
+        } label: {
+            let title = projectMenuTitle(project)
+            if selectedProjectID == project.id {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+
+    private var logicalProjectGroups: [LogicalProjectGroup] {
+        let grouped = Dictionary(grouping: model.snapshot.projects) {
+            $0.logicalRepositoryKey ?? "physical:\($0.id)"
+        }
+        return grouped.map { key, projects in
+            LogicalProjectGroup(
+                id: key,
+                name: projects.map(\.name).sorted().first ?? "Project",
+                projects: projects.sorted {
+                    projectMenuTitle($0).localizedCaseInsensitiveCompare(projectMenuTitle($1))
+                        == .orderedAscending
+                }
+            )
+        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private var creationProjects: [FeatureProject] {
@@ -647,6 +693,12 @@ public struct WorkspaceView: View {
     }
 }
 
+private struct LogicalProjectGroup: Identifiable {
+    let id: String
+    let name: String
+    let projects: [FeatureProject]
+}
+
 private extension FeatureDraftAttachment {
     var uploadValue: FeatureUploadAttachment {
         FeatureUploadAttachment(data: data, name: filename, mimeType: mimeType)
@@ -660,38 +712,90 @@ struct HomePresentation {
     let settled: [FeatureThread]
     let archived: [FeatureThread]
     let searchResults: [FeatureThread]
+    let searchMatchesByThreadID: [String: FeatureThreadSearchMatch]
     let rowContexts: [String: HomeThreadRowContext]
 
-    init(snapshot: FeatureSnapshot, query: String, projectID: String?, now: Date) {
+    init(
+        snapshot: FeatureSnapshot,
+        query: String,
+        contentMatches: [FeatureThreadSearchMatch],
+        projectID: String?,
+        now: Date
+    ) {
         let index = DailyUXSidebarIndex(
             snapshot: snapshot,
             query: "",
             projectID: projectID,
             now: now
         )
-        let archived = snapshot.threads
+        let archivedParents = snapshot.threads
             .filter { thread in
-                thread.isArchived && (projectID == nil || thread.projectID == projectID)
+                thread.isArchived && thread.parentThreadID == nil
+                    && (projectID == nil || thread.projectID == projectID)
             }
             .sorted {
                 if $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
                 return $0.id < $1.id
             }
 
-        pinned = index.pinned
-        active = index.active
-        snoozed = index.snoozed
-        settled = index.settled
-        self.archived = archived
+        pinned = Self.expandingWorkers(index.pinned.filter { $0.parentThreadID == nil }, in: snapshot)
+        active = Self.expandingWorkers(index.active.filter { $0.parentThreadID == nil }, in: snapshot)
+        snoozed = Self.expandingWorkers(index.snoozed.filter { $0.parentThreadID == nil }, in: snapshot)
+        settled = Self.expandingWorkers(index.settled.filter { $0.parentThreadID == nil }, in: snapshot)
+        archived = Self.expandingWorkers(archivedParents, in: snapshot)
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        searchResults = normalizedQuery.isEmpty
-            ? []
-            : DailyUXSidebarIndex.matchingThreads(
-                index.pinned + index.active + index.snoozed + index.settled + archived,
+        let scopedMatches = contentMatches.filter { match in
+            projectID == nil || match.projectID == projectID
+        }
+        searchMatchesByThreadID = Dictionary(
+            scopedMatches.map { ($0.threadID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        if normalizedQuery.isEmpty {
+            searchResults = []
+        } else {
+            let candidates = index.pinned + index.active + index.snoozed + index.settled + archived
+            let local = DailyUXSidebarIndex.matchingThreads(
+                candidates,
                 snapshot: snapshot,
                 query: normalizedQuery
             )
+            let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.id, $0) })
+            var ordered: [FeatureThread] = []
+            for match in scopedMatches {
+                if let parentID = match.parentThreadID,
+                   let parent = byID[parentID],
+                   !ordered.contains(where: { $0.id == parent.id }) {
+                    ordered.append(parent)
+                }
+                if let thread = byID[match.threadID],
+                   !ordered.contains(where: { $0.id == thread.id }) {
+                    ordered.append(thread)
+                }
+            }
+            for thread in local where !ordered.contains(where: { $0.id == thread.id }) {
+                ordered.append(thread)
+            }
+            searchResults = ordered
+        }
         rowContexts = HomeThreadRowContext.index(snapshot: snapshot)
+    }
+
+    private static func expandingWorkers(
+        _ parents: [FeatureThread],
+        in snapshot: FeatureSnapshot
+    ) -> [FeatureThread] {
+        let children = Dictionary(grouping: snapshot.threads.compactMap { thread in
+            thread.parentThreadID.map { ($0, thread) }
+        }, by: \.0)
+        return parents.flatMap { parent in
+            guard parent.workerView != .activity else { return [parent] }
+            let workers = (children[parent.id] ?? []).map(\.1).sorted {
+                if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+                return $0.id < $1.id
+            }
+            return [parent] + workers
+        }
     }
 }
 
@@ -700,6 +804,7 @@ private final class HomePresentationCache {
     private struct Key: Equatable {
         let revision: UInt64
         let query: String
+        let contentMatches: [FeatureThreadSearchMatch]
         let projectID: String?
         let now: Date
     }
@@ -711,12 +816,14 @@ private final class HomePresentationCache {
         snapshot: FeatureSnapshot,
         revision: UInt64,
         query: String,
+        contentMatches: [FeatureThreadSearchMatch],
         projectID: String?,
         now: Date
     ) -> HomePresentation {
         let key = Key(
             revision: revision,
             query: query,
+            contentMatches: contentMatches,
             projectID: projectID,
             now: now
         )
@@ -727,6 +834,7 @@ private final class HomePresentationCache {
         let presentation = HomePresentation(
             snapshot: snapshot,
             query: query,
+            contentMatches: contentMatches,
             projectID: projectID,
             now: now
         )
@@ -849,6 +957,7 @@ struct FeatureThreadRow: View, Equatable {
     let style: Style
     let now: Date
     let allowsMultilineTitle: Bool
+    let searchMatch: FeatureThreadSearchMatch?
 
     init(
         thread: FeatureThread,
@@ -856,7 +965,8 @@ struct FeatureThreadRow: View, Equatable {
         isSelected: Bool = false,
         style: Style = .rich,
         now: Date = .now,
-        allowsMultilineTitle: Bool = false
+        allowsMultilineTitle: Bool = false,
+        searchMatch: FeatureThreadSearchMatch? = nil
     ) {
         self.thread = thread
         self.context = context
@@ -864,6 +974,7 @@ struct FeatureThreadRow: View, Equatable {
         self.style = style
         self.now = now
         self.allowsMultilineTitle = allowsMultilineTitle
+        self.searchMatch = searchMatch
     }
 
     var body: some View {
@@ -885,6 +996,16 @@ struct FeatureThreadRow: View, Equatable {
             }
         }
         .contentShape(Rectangle())
+        .padding(.leading, thread.parentThreadID == nil ? 0 : 18)
+        .overlay(alignment: .leading) {
+            if thread.parentThreadID != nil {
+                Rectangle()
+                    .fill(T3Colors.border)
+                    .frame(width: 1)
+                    .padding(.leading, 11)
+                    .padding(.vertical, 5)
+            }
+        }
     }
 
     private func richRow(at now: Date) -> some View {
@@ -906,6 +1027,25 @@ struct FeatureThreadRow: View, Equatable {
                 .foregroundStyle(T3Colors.textPrimary)
                 .lineLimit(allowsMultilineTitle ? 2 : 1)
                 .padding(.top, 4)
+
+            if thread.titleRegeneration != nil {
+                Text("Regenerating title…")
+                    .font(T3Typography.supporting)
+                    .foregroundStyle(T3Colors.warning)
+                    .padding(.top, 2)
+            }
+
+            if let searchMatch {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(searchMatch.speakerLabel)
+                        .fontWeight(.semibold)
+                    Text(searchMatch.snippet)
+                        .lineLimit(2)
+                }
+                .font(T3Typography.supporting)
+                .foregroundStyle(T3Colors.textSecondary)
+                .padding(.top, 3)
+            }
 
             HStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.branch")
@@ -1001,6 +1141,7 @@ struct FeatureThreadRow: View, Equatable {
     private var statusIcon: String? {
         switch thread.homeStatus {
         case .working: "circle.dotted"
+        case .monitoring: "eye"
         case .done: "checkmark.circle"
         case .failed: "exclamationmark.circle"
         case .approval, .input, .ready: nil
@@ -1010,6 +1151,7 @@ struct FeatureThreadRow: View, Equatable {
     private var statusColor: Color {
         switch thread.homeStatus {
         case .working: Color(red: 0.22, green: 0.74, blue: 0.97)
+        case .monitoring: Color(red: 0.67, green: 0.72, blue: 0.82)
         case .approval: Color(red: 0.99, green: 0.77, blue: 0.27)
         case .input: Color(red: 0.65, green: 0.71, blue: 0.99)
         case .failed: T3Colors.danger

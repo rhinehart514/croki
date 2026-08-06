@@ -6,6 +6,7 @@ import UIKit
 struct HomeThreadCollectionView: UIViewRepresentable {
     let presentation: HomePresentation
     let query: String
+    let isSearchingContent: Bool
     let selectedThreadID: String?
     let forceRichRows: Bool
     let isSnoozedExpanded: Bool
@@ -18,6 +19,7 @@ struct HomeThreadCollectionView: UIViewRepresentable {
     let onToggleArchive: () -> Void
     let onShowMoreSettled: () -> Void
     let onRename: (FeatureThread) -> Void
+    let onRegenerateTitle: (FeatureThread) -> Void
     let onArchive: (FeatureThread, Bool) -> Void
     let onSettle: (FeatureThread, Bool) -> Void
     let onSnooze: (FeatureThread, Date?) -> Void
@@ -150,7 +152,7 @@ struct HomeThreadCollectionView: UIViewRepresentable {
         func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
             guard let item = item(at: indexPath) else { return }
             switch item {
-            case let .thread(thread, _, _, _, _):
+            case let .thread(thread, _, _, _, _, _):
                 let previousSelection = selectedThreadID
                 selectedThreadID = thread.id
                 parent.onOpen(thread.id)
@@ -164,7 +166,7 @@ struct HomeThreadCollectionView: UIViewRepresentable {
             case .showMoreSettled:
                 collectionView.deselectItem(at: indexPath, animated: false)
                 parent.onShowMoreSettled()
-            case .empty, .searchEmpty, .pinnedDivider:
+            case .empty, .searchEmpty, .searchLoading, .pinnedDivider:
                 collectionView.deselectItem(at: indexPath, animated: false)
             }
         }
@@ -174,7 +176,8 @@ struct HomeThreadCollectionView: UIViewRepresentable {
             contextMenuConfigurationForItemAt indexPath: IndexPath,
             point: CGPoint
         ) -> UIContextMenuConfiguration? {
-            guard case let .thread(thread, _, _, isArchived, _) = item(at: indexPath) else {
+            guard case let .thread(thread, _, _, isArchived, _, _) = item(at: indexPath),
+                  thread.parentThreadID == nil else {
                 return nil
             }
 
@@ -185,7 +188,8 @@ struct HomeThreadCollectionView: UIViewRepresentable {
         }
 
         func trailingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-            guard case let .thread(thread, _, _, isArchived, _) = item(at: indexPath) else {
+            guard case let .thread(thread, _, _, isArchived, _, _) = item(at: indexPath),
+                  thread.parentThreadID == nil else {
                 return nil
             }
 
@@ -256,13 +260,16 @@ struct HomeThreadCollectionView: UIViewRepresentable {
 
         private func configureAccessibility(_ cell: HomeCollectionCell, item: HomeCollectionItem) {
             switch item {
-            case let .thread(thread, context, _, _, _):
+            case let .thread(thread, context, _, _, _, match):
                 cell.isAccessibilityElement = true
                 cell.accessibilityTraits = selectedThreadID == thread.id
                     ? [.button, .selected]
                     : .button
                 cell.accessibilityLabel = thread.title
-                cell.accessibilityValue = threadAccessibilityValue(thread, context: context)
+                cell.accessibilityValue = [
+                    threadAccessibilityValue(thread, context: context),
+                    match.map { "\($0.speakerLabel): \($0.snippet)" },
+                ].compactMap { $0 }.joined(separator: ". ")
                 cell.accessibilityHint = "Opens task"
                 cell.onAccessibilityActivate = { [weak self] in
                     guard let self else { return }
@@ -303,6 +310,13 @@ struct HomeThreadCollectionView: UIViewRepresentable {
                 cell.isAccessibilityElement = true
                 cell.accessibilityTraits = .staticText
                 cell.accessibilityLabel = "No matching tasks"
+                cell.accessibilityValue = nil
+                cell.accessibilityHint = nil
+                cell.onAccessibilityActivate = nil
+            case .searchLoading:
+                cell.isAccessibilityElement = true
+                cell.accessibilityTraits = [.staticText, .updatesFrequently]
+                cell.accessibilityLabel = "Searching conversations"
                 cell.accessibilityValue = nil
                 cell.accessibilityHint = nil
                 cell.onAccessibilityActivate = nil
@@ -378,6 +392,18 @@ struct HomeThreadCollectionView: UIViewRepresentable {
             }
 
             var actions: [UIMenuElement] = [rename, archive]
+            if !isArchived, thread.canRegenerateTitle {
+                let regeneration = UIAction(
+                    title: thread.titleRegeneration == nil
+                        ? "Regenerate title"
+                        : "Regenerating title…",
+                    image: UIImage(systemName: "arrow.clockwise")
+                ) { [weak self] _ in
+                    self?.parent.onRegenerateTitle(thread)
+                }
+                if thread.titleRegeneration != nil { regeneration.attributes = .disabled }
+                actions.insert(regeneration, at: 1)
+            }
             if !isArchived {
                 if thread.canTogglePin {
                     let isPinned = thread.pinnedAt != nil
@@ -445,7 +471,7 @@ struct HomeThreadCollectionView: UIViewRepresentable {
 
             for indexPath in collectionView.indexPathsForVisibleItems {
                 guard let identifier = dataSource.itemIdentifier(for: indexPath),
-                      case let .thread(thread, _, _, _, _) = itemsByID[identifier],
+                      case let .thread(thread, _, _, _, _, _) = itemsByID[identifier],
                       refreshRelativeAges || thread.homeStatus == .working,
                       let cell = collectionView.cellForItem(at: indexPath) as? HomeCollectionCell else {
                     continue
@@ -459,7 +485,9 @@ struct HomeThreadCollectionView: UIViewRepresentable {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !normalizedQuery.isEmpty {
             if presentation.searchResults.isEmpty {
-                return [.searchEmpty(normalizedQuery)]
+                return [isSearchingContent
+                    ? .searchLoading(normalizedQuery)
+                    : .searchEmpty(normalizedQuery)]
             }
             return presentation.searchResults.map {
                 .thread(
@@ -467,7 +495,8 @@ struct HomeThreadCollectionView: UIViewRepresentable {
                     presentation.rowContexts[$0.id] ?? .fallback,
                     .rich,
                     $0.isArchived,
-                    forceRichRows
+                    forceRichRows,
+                    presentation.searchMatchesByThreadID[$0.id]
                 )
             }
         }
@@ -478,7 +507,8 @@ struct HomeThreadCollectionView: UIViewRepresentable {
                 presentation.rowContexts[$0.id] ?? .fallback,
                 .rich,
                 false,
-                forceRichRows
+                forceRichRows,
+                nil
             )
         }
         if !presentation.pinned.isEmpty, !presentation.active.isEmpty {
@@ -493,12 +523,19 @@ struct HomeThreadCollectionView: UIViewRepresentable {
                     presentation.rowContexts[$0.id] ?? .fallback,
                     .rich,
                     false,
-                    forceRichRows
+                    forceRichRows,
+                    nil
                 )
             })
         }
 
-        items.append(.shelfHeader(.snoozed, presentation.snoozed.count, isSnoozedExpanded))
+        items.append(
+            .shelfHeader(
+                .snoozed,
+                presentation.snoozed.filter { $0.parentThreadID == nil }.count,
+                isSnoozedExpanded
+            )
+        )
         if isSnoozedExpanded {
             items.append(contentsOf: presentation.snoozed.isEmpty
                 ? [.empty(.snoozed)]
@@ -508,12 +545,19 @@ struct HomeThreadCollectionView: UIViewRepresentable {
                         presentation.rowContexts[$0.id] ?? .fallback,
                         forceRichRows ? .rich : .slim,
                         false,
-                        forceRichRows
+                        forceRichRows,
+                        nil
                     )
                 })
         }
 
-        items.append(.shelfHeader(.settled, presentation.settled.count, isSettledExpanded))
+        items.append(
+            .shelfHeader(
+                .settled,
+                presentation.settled.filter { $0.parentThreadID == nil }.count,
+                isSettledExpanded
+            )
+        )
         if isSettledExpanded {
             items.append(contentsOf: presentation.settled.prefix(settledLimit).map {
                 .thread(
@@ -521,7 +565,8 @@ struct HomeThreadCollectionView: UIViewRepresentable {
                     presentation.rowContexts[$0.id] ?? .fallback,
                     forceRichRows ? .rich : .slim,
                     false,
-                    forceRichRows
+                    forceRichRows,
+                    nil
                 )
             })
             if presentation.settled.count > settledLimit {
@@ -530,7 +575,13 @@ struct HomeThreadCollectionView: UIViewRepresentable {
         }
 
         if !presentation.archived.isEmpty {
-            items.append(.shelfHeader(.archived, presentation.archived.count, isArchiveExpanded))
+            items.append(
+                .shelfHeader(
+                    .archived,
+                    presentation.archived.filter { $0.parentThreadID == nil }.count,
+                    isArchiveExpanded
+                )
+            )
             if isArchiveExpanded {
                 items.append(contentsOf: presentation.archived.map {
                     .thread(
@@ -538,7 +589,8 @@ struct HomeThreadCollectionView: UIViewRepresentable {
                         presentation.rowContexts[$0.id] ?? .fallback,
                         forceRichRows ? .rich : .slim,
                         true,
-                        forceRichRows
+                        forceRichRows,
+                        nil
                     )
                 })
             }
@@ -580,6 +632,7 @@ private enum HomeCollectionItem: Equatable {
         case empty(HomeShelf)
         case showMoreSettled
         case searchEmpty
+        case searchLoading
         case pinnedDivider
 
         var threadID: String? {
@@ -588,20 +641,29 @@ private enum HomeCollectionItem: Equatable {
         }
     }
 
-    case thread(FeatureThread, HomeThreadRowContext, FeatureThreadRow.Style, Bool, Bool)
+    case thread(
+        FeatureThread,
+        HomeThreadRowContext,
+        FeatureThreadRow.Style,
+        Bool,
+        Bool,
+        FeatureThreadSearchMatch?
+    )
     case shelfHeader(HomeShelf, Int, Bool)
     case empty(HomeShelf)
     case showMoreSettled(Int)
     case searchEmpty(String)
+    case searchLoading(String)
     case pinnedDivider
 
     var id: ID {
         switch self {
-        case let .thread(thread, _, _, _, _): .thread(thread.id)
+        case let .thread(thread, _, _, _, _, _): .thread(thread.id)
         case let .shelfHeader(shelf, _, _): .shelfHeader(shelf)
         case let .empty(shelf): .empty(shelf)
         case .showMoreSettled: .showMoreSettled
         case .searchEmpty: .searchEmpty
+        case .searchLoading: .searchLoading
         case .pinnedDivider: .pinnedDivider
         }
     }
@@ -615,14 +677,15 @@ private struct HomeCollectionCellContent: View {
     @ViewBuilder
     var body: some View {
         switch item {
-        case let .thread(thread, context, style, _, allowsMultilineTitle):
+        case let .thread(thread, context, style, _, allowsMultilineTitle, match):
             FeatureThreadRow(
                 thread: thread,
                 context: context,
                 isSelected: isSelected,
                 style: style,
                 now: now,
-                allowsMultilineTitle: allowsMultilineTitle
+                allowsMultilineTitle: allowsMultilineTitle,
+                searchMatch: match
             )
             .equatable()
         case let .shelfHeader(shelf, count, isExpanded):
@@ -653,6 +716,14 @@ private struct HomeCollectionCellContent: View {
             ContentUnavailableView("No matching tasks", systemImage: "magnifyingglass")
                 .foregroundStyle(T3Colors.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 160)
+        case .searchLoading:
+            HStack(spacing: 9) {
+                ProgressView().controlSize(.small)
+                Text("Searching conversations…")
+            }
+            .font(T3Typography.supporting)
+            .foregroundStyle(T3Colors.textSecondary)
+            .frame(maxWidth: .infinity, minHeight: 100)
         case .pinnedDivider:
             Rectangle()
                 .fill(T3Colors.textTertiary.opacity(0.18))

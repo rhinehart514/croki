@@ -272,7 +272,7 @@ final class NativeContractExpansionTests: XCTestCase {
         XCTAssertFalse(settings.newWorktreesStartFromOrigin)
     }
 
-    func testProviderArraysDropOnlyUnknownProviderEntries() throws {
+    func testProviderArraysKeepProvidersWithFutureOptionKinds() throws {
         let providers = """
         [{
           "instanceId": "future-provider",
@@ -321,7 +321,12 @@ final class NativeContractExpansionTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(snapshot.providers.map(\.instanceId), ["codex"])
+        XCTAssertEqual(snapshot.providers.map(\.instanceId), ["future-provider", "codex"])
+        guard case let .unknown(type)? = snapshot.providers.first?.models.first?
+            .capabilities?.optionDescriptors?.first else {
+            return XCTFail("Expected the future option to remain a non-rendered descriptor")
+        }
+        XCTAssertEqual(type, "future-option")
         XCTAssertEqual(snapshot.settings?.defaultThreadEnvMode, .worktree)
 
         let event = try JSONDecoder.t3.decode(
@@ -338,7 +343,94 @@ final class NativeContractExpansionTests: XCTestCase {
         guard case let .providerStatuses(decodedProviders) = event else {
             return XCTFail("Expected provider statuses")
         }
-        XCTAssertEqual(decodedProviders.map(\.instanceId), ["codex"])
+        XCTAssertEqual(decodedProviders.map(\.instanceId), ["future-provider", "codex"])
+    }
+
+    func testWorkerMetadataAndForwardLivenessDecodeWithoutAffectingOlderPayloads() throws {
+        let shell = try JSONDecoder.t3.decode(
+            OrchestrationThreadShell.self,
+            from: Data(
+                """
+                {
+                  "id":"worker-1","projectId":"project-1","parentThreadId":"parent-1",
+                  "workerView":"activity","title":"Audit updater","modelSelection":{"instanceId":"codex","model":"gpt"},
+                  "runtimeMode":"full-access","interactionMode":"default","branch":null,"worktreePath":null,
+                  "latestTurn":null,"createdAt":"2026-08-06T12:00:00Z","updatedAt":"2026-08-06T12:01:00Z",
+                  "archivedAt":null,"settledOverride":null,"settledAt":null,"snoozedUntil":null,
+                  "snoozedAt":null,"pinnedAt":null,"titleRegeneration":{"requestId":"regen-1","startedAt":"2026-08-06T12:01:00Z"},
+                  "session":null,"latestUserMessageAt":null,"hasPendingApprovals":false,
+                  "hasPendingUserInput":false,"hasActionableProposedPlan":false,"backgroundLiveness":"monitoring"
+                }
+                """.utf8
+            )
+        )
+
+        XCTAssertEqual(shell.parentThreadId, "parent-1")
+        XCTAssertEqual(shell.workerView, .activity)
+        XCTAssertEqual(shell.titleRegeneration?.requestId, "regen-1")
+        XCTAssertEqual(shell.backgroundLiveness, .monitoring)
+
+        let legacyShell = try JSONDecoder.t3.decode(
+            OrchestrationThreadShell.self,
+            from: Data(
+                """
+                {
+                  "id":"thread-1","projectId":"project-1","title":"Legacy thread",
+                  "modelSelection":{"instanceId":"codex","model":"gpt"},
+                  "runtimeMode":"full-access","interactionMode":"default","branch":null,
+                  "worktreePath":null,"latestTurn":null,"createdAt":"2026-08-06T12:00:00Z",
+                  "updatedAt":"2026-08-06T12:01:00Z","archivedAt":null,"settledOverride":null,
+                  "settledAt":null,"snoozedUntil":null,"snoozedAt":null,"pinnedAt":null,
+                  "session":null,"latestUserMessageAt":null,"hasPendingApprovals":false,
+                  "hasPendingUserInput":false,"hasActionableProposedPlan":false
+                }
+                """.utf8
+            )
+        )
+        XCTAssertNil(legacyShell.parentThreadId)
+        XCTAssertNil(legacyShell.workerView)
+        XCTAssertNil(legacyShell.titleRegeneration)
+        XCTAssertNil(legacyShell.backgroundLiveness)
+    }
+
+    func testConversationSearchResultDecodesWorkerAttributionAndSnippet() throws {
+        let result = try JSONDecoder.t3.decode(
+            OrchestrationSearchThreadsResult.self,
+            from: Data(
+                """
+                {
+                  "matches": [{
+                    "threadId":"worker-1","projectId":"project-1",
+                    "parentThreadId":"parent-1","source":"assistant",
+                    "snippet":"Updater rollback is safe",
+                    "messageCreatedAt":"2026-08-06T12:02:00Z"
+                  }]
+                }
+                """.utf8
+            )
+        )
+
+        XCTAssertEqual(result.matches.first?.threadId, "worker-1")
+        XCTAssertEqual(result.matches.first?.parentThreadId, "parent-1")
+        XCTAssertEqual(result.matches.first?.source, .assistant)
+        XCTAssertEqual(result.matches.first?.snippet, "Updater rollback is safe")
+    }
+
+    func testWorkerAndTitleCommandsUseExistingMetadataCommand() {
+        let regeneration = OrchestrationCommands.regenerateTitle(
+            threadID: "thread-1",
+            commandID: "regen-1"
+        )
+        let workerView = OrchestrationCommands.setWorkerView(
+            threadID: "thread-1",
+            workerView: .activity,
+            commandID: "workers-1"
+        )
+
+        XCTAssertEqual(regeneration["type"]?.stringValue, "thread.meta.update")
+        XCTAssertEqual(regeneration["regenerateTitle"], .bool(true))
+        XCTAssertEqual(workerView["workerView"]?.stringValue, "activity")
+        XCTAssertEqual(JSONValue.number(42).identifierValue, "42")
     }
 }
 

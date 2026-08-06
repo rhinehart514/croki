@@ -73,6 +73,19 @@ public actor T3Client {
         )
     }
 
+    public func searchThreads(query: String, limit: Int = 50) async throws
+        -> OrchestrationSearchThreadsResult
+    {
+        try await rpc.request(
+            RPCMethod.searchThreads.rawValue,
+            payload: .object([
+                "query": .string(query),
+                "limit": .number(Double(min(max(limit, 1), 50))),
+            ]),
+            as: OrchestrationSearchThreadsResult.self
+        )
+    }
+
     public func threadSnapshot(id: String) async throws -> OrchestrationThreadDetailSnapshot {
         try await api.threadSnapshot(id: id, environment: environment)
     }
@@ -313,6 +326,20 @@ public actor T3Client {
     @discardableResult
     public func rename(threadID: String, title: String) async throws -> DispatchResult {
         try await dispatch(OrchestrationCommands.rename(threadID: threadID, title: title))
+    }
+
+    @discardableResult
+    public func regenerateTitle(threadID: String) async throws -> DispatchResult {
+        try await dispatch(OrchestrationCommands.regenerateTitle(threadID: threadID))
+    }
+
+    @discardableResult
+    public func setWorkerView(threadID: String, workerView: WorkerView) async throws
+        -> DispatchResult
+    {
+        try await dispatch(
+            OrchestrationCommands.setWorkerView(threadID: threadID, workerView: workerView)
+        )
     }
 
     @discardableResult
@@ -1139,6 +1166,7 @@ public enum RPCMethod: String, Sendable {
     case serverGetConfig = "server.getConfig"
     case dispatchCommand = "orchestration.dispatchCommand"
     case getArchivedShellSnapshot = "orchestration.getArchivedShellSnapshot"
+    case searchThreads = "orchestration.searchThreads"
     case subscribeShell = "orchestration.subscribeShell"
     case subscribeThread = "orchestration.subscribeThread"
     case projectsListEntries = "projects.listEntries"
@@ -1348,6 +1376,31 @@ public enum OrchestrationCommands {
             "commandId": .string(commandID),
             "threadId": .string(threadID),
             "title": .string(title),
+        ])
+    }
+
+    public static func regenerateTitle(
+        threadID: String,
+        commandID: String = UUID().uuidString
+    ) -> JSONValue {
+        .object([
+            "type": .string("thread.meta.update"),
+            "commandId": .string(commandID),
+            "threadId": .string(threadID),
+            "regenerateTitle": .bool(true),
+        ])
+    }
+
+    public static func setWorkerView(
+        threadID: String,
+        workerView: WorkerView,
+        commandID: String = UUID().uuidString
+    ) -> JSONValue {
+        .object([
+            "type": .string("thread.meta.update"),
+            "commandId": .string(commandID),
+            "threadId": .string(threadID),
+            "workerView": .string(workerView.rawValue),
         ])
     }
 

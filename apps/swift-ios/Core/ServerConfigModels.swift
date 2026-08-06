@@ -33,6 +33,9 @@ public struct ServerBooleanOptionDescriptor: Codable, Identifiable, Equatable, S
 public enum ServerProviderOptionDescriptor: Codable, Equatable, Sendable {
     case select(ServerSelectOptionDescriptor)
     case boolean(ServerBooleanOptionDescriptor)
+    /// Provider catalogues are forward-compatible. A new option kind must not
+    /// make the provider, its models, or the rest of the environment disappear.
+    case unknown(type: String)
 
     private enum CodingKeys: String, CodingKey { case type }
 
@@ -44,11 +47,7 @@ public enum ServerProviderOptionDescriptor: Codable, Equatable, Sendable {
         case "boolean":
             self = .boolean(try ServerBooleanOptionDescriptor(from: decoder))
         case let type:
-            throw DecodingError.dataCorruptedError(
-                forKey: .type,
-                in: container,
-                debugDescription: "Unknown provider option type \(type)"
-            )
+            self = .unknown(type: type)
         }
     }
 
@@ -62,6 +61,9 @@ public enum ServerProviderOptionDescriptor: Codable, Equatable, Sendable {
             try value.encode(to: encoder)
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode("boolean", forKey: .type)
+        case let .unknown(type):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(type, forKey: .type)
         }
     }
 }

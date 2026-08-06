@@ -203,7 +203,10 @@ public enum PairingURL {
         ) != nil {
             normalized = withoutLeadingSlashes
         } else {
-            normalized = "https://\(withoutLeadingSlashes)"
+            // Local Croki servers commonly advertise a bare LAN IP and do not
+            // terminate TLS. Hostnames keep the safer HTTPS default.
+            let scheme = looksLikeBareIPAddress(withoutLeadingSlashes) ? "http" : "https"
+            normalized = "\(scheme)://\(withoutLeadingSlashes)"
         }
         guard var components = URLComponents(string: normalized),
               components.url != nil
@@ -217,6 +220,17 @@ public enum PairingURL {
         components.fragment = nil
         guard let base = components.url else { throw PairingURLError.invalidURL }
         return base
+    }
+
+    private static func looksLikeBareIPAddress(_ value: String) -> Bool {
+        let host = value.split(separator: "/", maxSplits: 1).first.map(String.init) ?? value
+        if host.hasPrefix("[") { return host.contains("]") }
+        let candidate = host.split(separator: ":", maxSplits: 1).first.map(String.init) ?? host
+        let octets = candidate.split(separator: ".")
+        return octets.count == 4 && octets.allSatisfy {
+            guard let number = Int($0) else { return false }
+            return (0...255).contains(number)
+        }
     }
 
     private static func strictURLComponents(_ value: String) -> URLComponents? {

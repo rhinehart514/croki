@@ -31,6 +31,91 @@ struct HomeThreadMetadataTests {
     }
 
     @Test
+    func backgroundLivenessRemainsVisibleAfterTheTurnSettles() {
+        let working = FeatureThread(
+            id: "working-background",
+            projectID: "project",
+            title: "Background work",
+            state: .idle,
+            backgroundLiveness: .working
+        )
+        let monitoring = FeatureThread(
+            id: "monitoring-background",
+            projectID: "project",
+            title: "Watch CI",
+            state: .completed,
+            backgroundLiveness: .monitoring
+        )
+
+        #expect(working.homeStatus == .working)
+        #expect(working.homeStatusLabel == "Working")
+        #expect(monitoring.homeStatus == .monitoring)
+        #expect(monitoring.homeStatusLabel == "Monitoring")
+    }
+
+    @Test
+    func workerPresentationIsMutuallyExclusiveAndSearchRevealsTheMatchedFamily() {
+        var parent = FeatureThread(
+            id: "parent",
+            projectID: "project",
+            workerView: .threads,
+            title: "Ship Croki"
+        )
+        let worker = FeatureThread(
+            id: "worker",
+            projectID: "project",
+            parentThreadID: parent.id,
+            title: "Audit updater"
+        )
+        let project = FeatureProject(
+            id: "project",
+            environmentID: "environment",
+            name: "Croki",
+            path: "/work/croki"
+        )
+        var snapshot = FeatureSnapshot(projects: [project], threads: [parent, worker])
+        let separate = HomePresentation(
+            snapshot: snapshot,
+            query: "",
+            contentMatches: [],
+            projectID: nil,
+            now: now
+        )
+        #expect(separate.active.map(\.id) == ["parent", "worker"])
+
+        parent.workerView = .activity
+        snapshot.threads = [parent, worker]
+        let inline = HomePresentation(
+            snapshot: snapshot,
+            query: "",
+            contentMatches: [],
+            projectID: nil,
+            now: now
+        )
+        #expect(inline.active.map(\.id) == ["parent"])
+
+        let match = FeatureThreadSearchMatch(
+            threadID: worker.id,
+            projectID: project.id,
+            parentThreadID: parent.id,
+            source: .assistant,
+            snippet: "Updater rollback is safe",
+            messageCreatedAt: now
+        )
+        let search = HomePresentation(
+            snapshot: snapshot,
+            query: "rollback",
+            contentMatches: [match],
+            projectID: nil,
+            now: now
+        )
+        #expect(search.searchResults.map(\.id) == ["parent", "worker"])
+        #expect(search.searchMatchesByThreadID[worker.id]?.speakerLabel == "Worker")
+        #expect(worker.canTogglePin == false)
+        #expect(worker.canRegenerateTitle == false)
+    }
+
+    @Test
     func workingDurationMatchesTheCompactWebFormatAndClampsFutureDates() {
         let thread = FeatureThread(
             id: "working",

@@ -358,6 +358,7 @@ enum HomeThreadStatus: String, Sendable, Equatable {
     case approval
     case input
     case working
+    case monitoring
     case failed
     case done
     case ready
@@ -375,6 +376,8 @@ enum HomeWorkingDuration {
 
 extension FeatureThread {
     var homeStatus: HomeThreadStatus {
+        if backgroundLiveness == .working { return .working }
+        if backgroundLiveness == .monitoring { return .monitoring }
         switch state {
         case .queued, .working:
             .working
@@ -396,6 +399,7 @@ extension FeatureThread {
         case .approval: "Approval"
         case .input: "Input"
         case .working: "Working"
+        case .monitoring: "Monitoring"
         case .failed: "Failed"
         case .done: "Done"
         case .ready: nil

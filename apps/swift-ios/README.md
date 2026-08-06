@@ -44,12 +44,16 @@ the active selection are stored separately in Application Support.
 - Local-network preflight, direct pairing links, QR scanning, token exchange,
   Keychain credentials, saved environment management, and optional Croki Connect
   account and relay discovery.
-- A merged Web V2 home across saved environments, with per-device reachability,
-  collision-safe identities, last-known rows, live active-device updates, and
-  low-frequency passive refresh.
+- A merged home across saved environments, with logical repository grouping,
+  physical target attribution, per-device reachability, collision-safe
+  identities, last-known rows, live active-device updates, and low-frequency
+  passive refresh.
 - Remote filesystem browsing, source discovery, repository cloning, project
-  creation, plus thread search, creation, rename, archive, restore, delete,
-  settle, and snooze.
+  creation, plus server-backed title and conversation search, title regeneration,
+  pinning, creation, rename, archive, restore, delete, settle, and snooze.
+- Durable worker Threads with a parent-scoped choice between nested read-only
+  chats and bounded inline Workstreams. Worker transcripts never copy into the
+  parent, and every worker chat returns through **Continue in parent**.
 - Provider/model selection, synchronized conversation history, rich Markdown,
   photo/camera/file image attachments, turn cancellation, approval decisions, and
   structured user-input requests.
@@ -64,6 +68,10 @@ the active selection are stored separately in Application Support.
 
 The app speaks the existing HTTP and Effect RPC WebSocket contracts directly. It
 does not embed a JavaScript runtime.
+
+Croki Native itself updates through TestFlight or the App Store. Connected
+servers continue to advertise their own host-managed update mode and version;
+the native client does not replace its signed binary with the desktop updater.
 
 ## Build configuration
 

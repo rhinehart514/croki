@@ -29,6 +29,9 @@ public final class FeatureRootModel {
     public private(set) var isLoading = true
     public private(set) var isPerformingAction = false
     public private(set) var isManagingConnections = false
+    public private(set) var threadSearchMatches: [FeatureThreadSearchMatch] = []
+    public private(set) var threadSearchQuery = ""
+    public private(set) var isSearchingThreads = false
     public var errorMessage: String?
 
     let client: any FeatureClient
@@ -247,6 +250,10 @@ public final class FeatureRootModel {
     }
 
     public func renameThread(_ id: String, title: String) async {
+        guard snapshot.threads.first(where: { $0.id == id })?.parentThreadID == nil else {
+            errorMessage = "Worker chats are read-only. Continue in the parent thread to act."
+            return
+        }
         let environment = currentEnvironmentIdentity
         await perform {
             try await client.renameThread(id: id, title: title)
@@ -255,7 +262,50 @@ public final class FeatureRootModel {
         }
     }
 
+    public func regenerateThreadTitle(_ id: String) async {
+        guard let thread = snapshot.threads.first(where: { $0.id == id }),
+              thread.parentThreadID == nil,
+              thread.canRegenerateTitle,
+              thread.titleRegeneration == nil else { return }
+        await perform {
+            try await client.regenerateThreadTitle(id: id)
+        }
+    }
+
+    public func setWorkerView(_ id: String, workerView: FeatureWorkerView) async {
+        guard let thread = snapshot.threads.first(where: { $0.id == id }),
+              thread.parentThreadID == nil,
+              thread.supportsWorkerView == true else { return }
+        await perform {
+            try await client.setWorkerView(id: id, workerView: workerView)
+            mutateThread(id: id) { $0.workerView = workerView }
+        }
+    }
+
+    public func searchThreads(_ query: String) async {
+        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        threadSearchQuery = normalized
+        guard normalized.count >= 2 else {
+            threadSearchMatches = []
+            isSearchingThreads = false
+            return
+        }
+        isSearchingThreads = true
+        threadSearchMatches = []
+        do {
+            let matches = try await client.searchThreads(query: normalized, limitPerEnvironment: 30)
+            guard threadSearchQuery == normalized else { return }
+            threadSearchMatches = matches
+        } catch {
+            guard threadSearchQuery == normalized else { return }
+            threadSearchMatches = []
+            errorMessage = "Conversation search failed. \(error.localizedDescription)"
+        }
+        if threadSearchQuery == normalized { isSearchingThreads = false }
+    }
+
     public func setArchived(_ id: String, archived: Bool) async {
+        guard snapshot.threads.first(where: { $0.id == id })?.parentThreadID == nil else { return }
         let environment = currentEnvironmentIdentity
         await perform {
             try await client.setThreadArchived(id: id, archived: archived)
@@ -265,6 +315,7 @@ public final class FeatureRootModel {
     }
 
     public func setSettled(_ id: String, settled: Bool) async {
+        guard snapshot.threads.first(where: { $0.id == id })?.parentThreadID == nil else { return }
         let environment = currentEnvironmentIdentity
         await perform {
             try await client.setThreadSettled(id: id, settled: settled)
@@ -282,6 +333,7 @@ public final class FeatureRootModel {
     }
 
     public func setSnoozed(_ id: String, until: Date?) async {
+        guard snapshot.threads.first(where: { $0.id == id })?.parentThreadID == nil else { return }
         let environment = currentEnvironmentIdentity
         await perform {
             try await client.setThreadSnoozed(id: id, until: until)
@@ -295,6 +347,7 @@ public final class FeatureRootModel {
     }
 
     public func setPinned(_ id: String, pinned: Bool) async {
+        guard snapshot.threads.first(where: { $0.id == id })?.parentThreadID == nil else { return }
         let environment = currentEnvironmentIdentity
         await perform {
             try await client.setThreadPinned(id: id, pinned: pinned)
@@ -315,6 +368,7 @@ public final class FeatureRootModel {
     }
 
     public func setRuntimeMode(_ id: String, mode: FeatureRuntimeMode) async {
+        guard snapshot.threads.first(where: { $0.id == id })?.parentThreadID == nil else { return }
         let mode = mode.mobileNormalized
         let environment = currentEnvironmentIdentity
         await perform {
@@ -325,6 +379,7 @@ public final class FeatureRootModel {
     }
 
     public func setInteractionMode(_ id: String, mode: FeatureInteractionMode) async {
+        guard snapshot.threads.first(where: { $0.id == id })?.parentThreadID == nil else { return }
         let mode = mode.mobileNormalized
         let environment = currentEnvironmentIdentity
         await perform {
@@ -335,6 +390,7 @@ public final class FeatureRootModel {
     }
 
     public func deleteThread(_ id: String) async {
+        guard snapshot.threads.first(where: { $0.id == id })?.parentThreadID == nil else { return }
         let environment = currentEnvironmentIdentity
         await perform {
             try await client.deleteThread(id: id)

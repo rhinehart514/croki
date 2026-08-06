@@ -35,6 +35,8 @@ public struct FeatureEnvironment: Identifiable, Sendable, Equatable, Hashable, C
     /// has not probed this saved environment yet.
     public var connectionState: FeatureConnection.State?
     public var connectionDetail: String?
+    public var serverVersion: String?
+    public var serverUpdateMode: String?
 
     public init(
         id: String,
@@ -42,7 +44,9 @@ public struct FeatureEnvironment: Identifiable, Sendable, Equatable, Hashable, C
         endpoint: String,
         isActive: Bool = false,
         connectionState: FeatureConnection.State? = nil,
-        connectionDetail: String? = nil
+        connectionDetail: String? = nil,
+        serverVersion: String? = nil,
+        serverUpdateMode: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -50,6 +54,8 @@ public struct FeatureEnvironment: Identifiable, Sendable, Equatable, Hashable, C
         self.isActive = isActive
         self.connectionState = connectionState
         self.connectionDetail = connectionDetail
+        self.serverVersion = serverVersion
+        self.serverUpdateMode = serverUpdateMode
     }
 }
 
@@ -63,6 +69,9 @@ public struct FeatureProject: Identifiable, Sendable, Equatable, Hashable, Codab
     public var path: String
     public var threadCount: Int
     public var defaultSelection: FeatureSelection?
+    /// Stable repository identity shared by physical checkouts on different
+    /// Croki environments. The physical project id remains the action target.
+    public var logicalRepositoryKey: String?
 
     public init(
         id: String,
@@ -71,7 +80,8 @@ public struct FeatureProject: Identifiable, Sendable, Equatable, Hashable, Codab
         name: String,
         path: String,
         threadCount: Int = 0,
-        defaultSelection: FeatureSelection? = nil
+        defaultSelection: FeatureSelection? = nil,
+        logicalRepositoryKey: String? = nil
     ) {
         self.id = id
         self.wireID = wireID
@@ -80,6 +90,7 @@ public struct FeatureProject: Identifiable, Sendable, Equatable, Hashable, Codab
         self.path = path
         self.threadCount = threadCount
         self.defaultSelection = defaultSelection
+        self.logicalRepositoryKey = logicalRepositoryKey
     }
 }
 
@@ -91,6 +102,21 @@ public enum FeatureThreadState: String, Sendable, Codable {
     case waitingForInput
     case failed
     case completed
+}
+
+public enum FeatureWorkerView: String, Sendable, Codable, CaseIterable {
+    case threads
+    case activity
+}
+
+public enum FeatureBackgroundLiveness: String, Sendable, Codable {
+    case working
+    case monitoring
+}
+
+public struct FeatureTitleRegeneration: Sendable, Equatable, Hashable, Codable {
+    public let requestID: String
+    public let startedAt: Date
 }
 
 public enum FeatureRuntimeMode: String, CaseIterable, Sendable, Codable {
@@ -124,6 +150,8 @@ public struct FeatureThread: Identifiable, Sendable, Equatable, Hashable, Codabl
     /// The environment-local identifier sent over the wire.
     public var wireID: String?
     public var projectID: String
+    public var parentThreadID: String?
+    public var workerView: FeatureWorkerView?
     public var environmentID: String?
     public var environmentName: String?
     public var title: String
@@ -146,6 +174,10 @@ public struct FeatureThread: Identifiable, Sendable, Equatable, Hashable, Codabl
     public var snoozedAt: Date?
     public var pinnedAt: Date?
     public var supportsPinning: Bool?
+    public var supportsTitleRegeneration: Bool?
+    public var supportsWorkerView: Bool?
+    public var titleRegeneration: FeatureTitleRegeneration?
+    public var backgroundLiveness: FeatureBackgroundLiveness?
     public var attentionAt: Date?
     public var workingStartedAt: Date?
     public var latestTurnCompletedAt: Date?
@@ -156,6 +188,8 @@ public struct FeatureThread: Identifiable, Sendable, Equatable, Hashable, Codabl
         id: String,
         wireID: String? = nil,
         projectID: String,
+        parentThreadID: String? = nil,
+        workerView: FeatureWorkerView? = .threads,
         environmentID: String? = nil,
         environmentName: String? = nil,
         title: String,
@@ -178,6 +212,10 @@ public struct FeatureThread: Identifiable, Sendable, Equatable, Hashable, Codabl
         snoozedAt: Date? = nil,
         pinnedAt: Date? = nil,
         supportsPinning: Bool? = nil,
+        supportsTitleRegeneration: Bool? = nil,
+        supportsWorkerView: Bool? = nil,
+        titleRegeneration: FeatureTitleRegeneration? = nil,
+        backgroundLiveness: FeatureBackgroundLiveness? = nil,
         attentionAt: Date? = nil,
         workingStartedAt: Date? = nil,
         latestTurnCompletedAt: Date? = nil,
@@ -187,6 +225,8 @@ public struct FeatureThread: Identifiable, Sendable, Equatable, Hashable, Codabl
         self.id = id
         self.wireID = wireID
         self.projectID = projectID
+        self.parentThreadID = parentThreadID
+        self.workerView = workerView
         self.environmentID = environmentID
         self.environmentName = environmentName
         self.title = title
@@ -209,6 +249,10 @@ public struct FeatureThread: Identifiable, Sendable, Equatable, Hashable, Codabl
         self.snoozedAt = snoozedAt
         self.pinnedAt = pinnedAt
         self.supportsPinning = supportsPinning
+        self.supportsTitleRegeneration = supportsTitleRegeneration
+        self.supportsWorkerView = supportsWorkerView
+        self.titleRegeneration = titleRegeneration
+        self.backgroundLiveness = backgroundLiveness
         self.attentionAt = attentionAt
         self.workingStartedAt = workingStartedAt
         self.latestTurnCompletedAt = latestTurnCompletedAt
@@ -219,7 +263,35 @@ public struct FeatureThread: Identifiable, Sendable, Equatable, Hashable, Codabl
     /// Capability absence means the connected server predates pin commands. An
     /// existing pin remains reversible if a cached descriptor loses the flag.
     public var canTogglePin: Bool {
-        pinnedAt != nil || supportsPinning == true
+        parentThreadID == nil && (pinnedAt != nil || supportsPinning == true)
+    }
+
+    public var canRegenerateTitle: Bool {
+        parentThreadID == nil && supportsTitleRegeneration == true
+    }
+}
+
+public enum FeatureThreadSearchSource: String, Sendable, Codable {
+    case user
+    case assistant
+}
+
+public struct FeatureThreadSearchMatch: Identifiable, Sendable, Equatable, Hashable, Codable {
+    public var id: String {
+        "\(threadID):\(source.rawValue):\(messageCreatedAt?.timeIntervalSince1970 ?? 0):\(snippet)"
+    }
+    public let threadID: String
+    public let projectID: String
+    public let parentThreadID: String?
+    public let source: FeatureThreadSearchSource
+    public let snippet: String
+    public let messageCreatedAt: Date?
+
+    public var speakerLabel: String {
+        if parentThreadID != nil {
+            return source == .user ? "Assignment" : "Worker"
+        }
+        return source == .user ? "You" : "Agent"
     }
 }
 

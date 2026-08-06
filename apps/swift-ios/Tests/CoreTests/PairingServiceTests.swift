@@ -3,6 +3,16 @@ import XCTest
 
 @MainActor
 final class PairingServiceTests: XCTestCase {
+    func testBareLANIPAddressUsesHTTPWhileBareHostnameKeepsHTTPS() throws {
+        let lan = try PairingURL.resolve(host: "192.168.1.24:3773", pairingCode: "code-123")
+        let hostname = try PairingURL.resolve(host: "croki.example", pairingCode: "code-123")
+
+        XCTAssertEqual(lan.httpBaseURL.absoluteString, "http://192.168.1.24:3773/")
+        XCTAssertEqual(lan.webSocketBaseURL.scheme, "ws")
+        XCTAssertEqual(hostname.httpBaseURL.scheme, "https")
+        XCTAssertEqual(hostname.webSocketBaseURL.scheme, "wss")
+    }
+
     func testPairingExchangesTokenAndPersistsSecretSeparately() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("t3-swift-pairing-\(UUID().uuidString)", isDirectory: true)

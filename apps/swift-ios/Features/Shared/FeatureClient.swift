@@ -52,6 +52,8 @@ public protocol FeatureClient: AnyObject {
         refresh: Bool
     ) async throws -> [FeatureWorkspaceBranch]
     func renameThread(id: String, title: String) async throws
+    func regenerateThreadTitle(id: String) async throws
+    func setWorkerView(id: String, workerView: FeatureWorkerView) async throws
     func setThreadArchived(id: String, archived: Bool) async throws
     func setThreadSettled(id: String, settled: Bool) async throws
     func setThreadSnoozed(id: String, until: Date?) async throws
@@ -59,6 +61,8 @@ public protocol FeatureClient: AnyObject {
     func setRuntimeMode(id: String, mode: FeatureRuntimeMode) async throws
     func setInteractionMode(id: String, mode: FeatureInteractionMode) async throws
     func deleteThread(id: String) async throws
+    func searchThreads(query: String, limitPerEnvironment: Int) async throws
+        -> [FeatureThreadSearchMatch]
 
     func loadThread(id: String) async throws -> FeatureThreadDetail
     func releaseThread(id: String)
@@ -138,6 +142,13 @@ public extension FeatureClient {
     func setThreadSettled(id: String, settled: Bool) async throws {}
     func setThreadSnoozed(id: String, until: Date?) async throws {}
     func setThreadPinned(id: String, pinned: Bool) async throws {}
+    func regenerateThreadTitle(id: String) async throws {}
+    func setWorkerView(id: String, workerView: FeatureWorkerView) async throws {}
+    func searchThreads(query: String, limitPerEnvironment: Int) async throws
+        -> [FeatureThreadSearchMatch]
+    {
+        []
+    }
     func setRuntimeMode(id: String, mode: FeatureRuntimeMode) async throws {}
     func setInteractionMode(id: String, mode: FeatureInteractionMode) async throws {}
     func loadReviewFileContents(

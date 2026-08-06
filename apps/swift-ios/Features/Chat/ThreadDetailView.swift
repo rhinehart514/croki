@@ -10,6 +10,7 @@ public struct ThreadDetailView: View {
     let thread: FeatureThread
     let submitMessage: (FeatureMessageSubmission) async -> Bool
     let onNavigateBack: () -> Void
+    let onContinueInParent: (String) -> Void
     private let draftStore: FeatureComposerDraftStore
 
     @State private var draft = ""
@@ -28,12 +29,14 @@ public struct ThreadDetailView: View {
         thread: FeatureThread,
         submitMessage: @escaping (FeatureMessageSubmission) async -> Bool,
         onNavigateBack: @escaping () -> Void = {},
+        onContinueInParent: @escaping (String) -> Void = { _ in },
         draftStore: FeatureComposerDraftStore = .shared
     ) {
         self.model = model
         self.thread = thread
         self.submitMessage = submitMessage
         self.onNavigateBack = onNavigateBack
+        self.onContinueInParent = onContinueInParent
         self.draftStore = draftStore
     }
 
@@ -172,6 +175,12 @@ public struct ThreadDetailView: View {
                         Text(environmentName)
                             .lineLimit(1)
                     }
+                    if currentThread.titleRegeneration != nil {
+                        Text("·")
+                        Text("Regenerating title…")
+                            .foregroundStyle(T3Colors.warning)
+                            .lineLimit(1)
+                    }
                 }
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -228,6 +237,30 @@ public struct ThreadDetailView: View {
                 }
             }
             Section {
+                if currentThread.parentThreadID == nil,
+                   !workerThreads.isEmpty,
+                   currentThread.supportsWorkerView == true {
+                    Menu("Workers") {
+                        Button {
+                            Task { await model.setWorkerView(thread.id, workerView: .threads) }
+                        } label: {
+                            Label(
+                                "Separate chats",
+                                systemImage: currentThread.workerView == .threads
+                                    ? "checkmark" : "bubble.left.and.bubble.right"
+                            )
+                        }
+                        Button {
+                            Task { await model.setWorkerView(thread.id, workerView: .activity) }
+                        } label: {
+                            Label(
+                                "In Thread",
+                                systemImage: currentThread.workerView == .activity
+                                    ? "checkmark" : "text.bubble"
+                            )
+                        }
+                    }
+                }
                 if currentThread.canTogglePin, !currentThread.isArchived {
                     Button {
                         Task {
@@ -248,17 +281,31 @@ public struct ThreadDetailView: View {
                 } label: {
                     Label("Reload", systemImage: "arrow.clockwise")
                 }
-                Button {
-                    Task {
-                        await model.setArchived(thread.id, archived: !currentThread.isArchived)
+                if currentThread.parentThreadID == nil {
+                    if currentThread.canRegenerateTitle, !currentThread.isArchived {
+                        Button {
+                            Task { await model.regenerateThreadTitle(thread.id) }
+                        } label: {
+                            Label(
+                                currentThread.titleRegeneration == nil
+                                    ? "Regenerate title" : "Regenerating title…",
+                                systemImage: "arrow.clockwise"
+                            )
+                        }
+                        .disabled(currentThread.titleRegeneration != nil)
                     }
-                } label: {
-                    Label(
-                        currentThread.isArchived ? "Restore" : "Archive",
-                        systemImage: currentThread.isArchived
-                            ? "arrow.uturn.backward"
-                            : "archivebox"
-                    )
+                    Button {
+                        Task {
+                            await model.setArchived(thread.id, archived: !currentThread.isArchived)
+                        }
+                    } label: {
+                        Label(
+                            currentThread.isArchived ? "Restore" : "Archive",
+                            systemImage: currentThread.isArchived
+                                ? "arrow.uturn.backward"
+                                : "archivebox"
+                        )
+                    }
                 }
             }
         } label: {
@@ -286,6 +333,7 @@ public struct ThreadDetailView: View {
     private var headerStatusIcon: String? {
         switch currentThread.homeStatus {
         case .working: "circle.dotted"
+        case .monitoring: "eye"
         case .done: "checkmark.circle"
         case .failed: "exclamationmark.circle"
         case .approval, .input, .ready: nil
@@ -295,6 +343,7 @@ public struct ThreadDetailView: View {
     private var headerStatusColor: Color {
         switch currentThread.homeStatus {
         case .working: T3Colors.statusRunning
+        case .monitoring: T3Colors.textSecondary
         case .approval: T3Colors.warning
         case .input: Color(red: 0.65, green: 0.71, blue: 0.99)
         case .failed: T3Colors.danger
@@ -325,32 +374,95 @@ public struct ThreadDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            FeatureComposerView(
-                text: $draft,
-                selection: $selection,
-                attachments: $attachments,
-                providers: threadProviders,
-                threadSelection: currentSelection,
-                isSending: isSending,
-                isWorking: detail.thread.state == .working || detail.thread.state == .queued,
-                focused: $composerFocused,
-                onSend: send,
-                onStop: {
-                    Task { await model.cancelTurn(threadID: thread.id) }
-                },
-                pendingApprovals: detail.approvals,
-                pendingUserInputs: detail.userInputs,
-                isResolvingRequest: model.isPerformingAction,
-                powerFeatures: composerPowerFeatures,
-                onApprovalDecision: { id, decision in
-                    Task { await model.resolveApproval(id, decision: decision) }
-                },
-                onUserInputSubmit: { id, answers in
-                    Task { await model.resolveUserInput(id, answers: answers) }
+            if let parentID = currentThread.parentThreadID {
+                Button {
+                    onContinueInParent(parentID)
+                } label: {
+                    Label("Continue in parent", systemImage: "arrow.turn.up.left")
+                        .font(T3Typography.control)
+                        .frame(maxWidth: .infinity, minHeight: T3Metrics.minimumTapTarget)
                 }
-            )
-            .simultaneousGesture(composerKeyboardDismissGesture)
+                .buttonStyle(.plain)
+                .foregroundStyle(T3Colors.textPrimary)
+                .background(T3Colors.input)
+                .overlay(alignment: .top) { Divider().overlay(T3Colors.border) }
+            } else {
+                VStack(spacing: 0) {
+                    if currentThread.workerView == .activity, !workerThreads.isEmpty {
+                        inlineWorkstreams
+                    }
+                    FeatureComposerView(
+                        text: $draft,
+                        selection: $selection,
+                        attachments: $attachments,
+                        providers: threadProviders,
+                        threadSelection: currentSelection,
+                        isSending: isSending,
+                        isWorking: detail.thread.state == .working
+                            || detail.thread.state == .queued,
+                        focused: $composerFocused,
+                        onSend: send,
+                        onStop: {
+                            Task { await model.cancelTurn(threadID: thread.id) }
+                        },
+                        pendingApprovals: detail.approvals,
+                        pendingUserInputs: detail.userInputs,
+                        isResolvingRequest: model.isPerformingAction,
+                        powerFeatures: composerPowerFeatures,
+                        onApprovalDecision: { id, decision in
+                            Task { await model.resolveApproval(id, decision: decision) }
+                        },
+                        onUserInputSubmit: { id, answers in
+                            Task { await model.resolveUserInput(id, answers: answers) }
+                        }
+                    )
+                    .simultaneousGesture(composerKeyboardDismissGesture)
+                }
+            }
         }
+    }
+
+    private var workerThreads: [FeatureThread] {
+        model.snapshot.threads
+            .filter { $0.parentThreadID == currentThread.id }
+            .sorted {
+                if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+                return $0.id < $1.id
+            }
+    }
+
+    private var inlineWorkstreams: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Workstreams")
+                .font(T3Typography.homeMetadata.weight(.semibold))
+                .foregroundStyle(T3Colors.textTertiary)
+            ForEach(workerThreads.prefix(5)) { worker in
+                Button { onContinueInParent(worker.id) } label: {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(worker.homeStatus == .failed ? T3Colors.danger : T3Colors.textTertiary)
+                            .frame(width: 6, height: 6)
+                        Text(worker.title)
+                            .lineLimit(1)
+                        Spacer()
+                        Text(worker.homeStatusLabel ?? "Ready")
+                            .foregroundStyle(T3Colors.textTertiary)
+                    }
+                    .font(T3Typography.supporting)
+                    .foregroundStyle(T3Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+            if workerThreads.count > 5 {
+                Text("\(workerThreads.count - 5) more workstreams")
+                    .font(T3Typography.supporting)
+                    .foregroundStyle(T3Colors.textTertiary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(T3Colors.background)
+        .overlay(alignment: .top) { Divider().overlay(T3Colors.border) }
     }
 
     private var composerKeyboardDismissGesture: some Gesture {

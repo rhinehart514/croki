@@ -988,13 +988,37 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func renameThread(id: String, title: String) async throws {
         let route = try threadRoute(for: id)
+        try requireParentThread(id)
         _ = try await route.client.rename(threadID: route.wireID, title: title)
         updateCachedArchivedThread(id: route.uiID) { $0.title = title }
         try? await refresh(client: route.client)
     }
 
+    func regenerateThreadTitle(id: String) async throws {
+        let route = try threadRoute(for: id)
+        let thread = try requireParentThread(id)
+        guard thread.supportsTitleRegeneration == true else {
+            throw NativeFeatureClientError.titleRegenerationUnavailable
+        }
+        guard thread.titleRegeneration == nil else { return }
+        _ = try await route.client.regenerateTitle(threadID: route.wireID)
+        try? await refresh(client: route.client)
+    }
+
+    func setWorkerView(id: String, workerView: FeatureWorkerView) async throws {
+        let route = try threadRoute(for: id)
+        let thread = try requireParentThread(id)
+        guard thread.supportsWorkerView == true else {
+            throw NativeFeatureClientError.workerViewUnavailable
+        }
+        let coreView: WorkerView = workerView == .threads ? .threads : .activity
+        _ = try await route.client.setWorkerView(threadID: route.wireID, workerView: coreView)
+        try? await refresh(client: route.client)
+    }
+
     func setThreadArchived(id: String, archived: Bool) async throws {
         let route = try threadRoute(for: id)
+        try requireParentThread(id)
         let cached = cachedThread(id: route.uiID)
         _ = try await route.client.archive(threadID: route.wireID, archived: archived)
         reconcileArchivedCache(thread: cached, route: route, archived: archived)
@@ -1004,24 +1028,36 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func setThreadSettled(id: String, settled: Bool) async throws {
         let route = try threadRoute(for: id)
+        try requireParentThread(id)
+        if settled {
+            let context = try workspaceContext(route: route)
+            if let status = try? await route.client.refreshVCSStatus(cwd: context.cwd),
+               let pullRequest = status.pr,
+               pullRequest.state.caseInsensitiveCompare("open") == .orderedSame {
+                throw NativeFeatureClientError.openPullRequest(number: pullRequest.number)
+            }
+        }
         _ = try await route.client.settle(threadID: route.wireID, settled: settled)
         try? await refresh(client: route.client)
     }
 
     func setThreadSnoozed(id: String, until: Date?) async throws {
         let route = try threadRoute(for: id)
+        try requireParentThread(id)
         _ = try await route.client.snooze(threadID: route.wireID, until: until)
         try? await refresh(client: route.client)
     }
 
     func setThreadPinned(id: String, pinned: Bool) async throws {
         let route = try threadRoute(for: id)
+        try requireParentThread(id)
         _ = try await route.client.pin(threadID: route.wireID, pinned: pinned)
         try? await refresh(client: route.client)
     }
 
     func setRuntimeMode(id: String, mode: FeatureRuntimeMode) async throws {
         let route = try threadRoute(for: id)
+        try requireParentThread(id)
         _ = try await route.client.setRuntimeMode(
             threadID: route.wireID,
             mode: coreRuntimeMode(mode)
@@ -1034,6 +1070,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func setInteractionMode(id: String, mode: FeatureInteractionMode) async throws {
         let route = try threadRoute(for: id)
+        try requireParentThread(id)
         _ = try await route.client.setInteractionMode(
             threadID: route.wireID,
             mode: coreInteractionMode(mode)
@@ -1046,6 +1083,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func deleteThread(id: String) async throws {
         let route = try threadRoute(for: id)
+        try requireParentThread(id)
         _ = try await route.client.delete(threadID: route.wireID)
         archivedThreadsByEnvironmentID[route.environmentID]?.removeAll {
             $0.id == route.uiID
@@ -1071,6 +1109,64 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         detailRenderCaches[route.uiID] = nil
         await emitCachedSnapshot(for: route.environmentID)
         try? await refresh(client: route.client, includeArchived: true)
+    }
+
+    func searchThreads(query: String, limitPerEnvironment: Int) async throws
+        -> [FeatureThreadSearchMatch]
+    {
+        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count >= 2 else { return [] }
+        let environments = try await runtime.environments()
+        var probes: [(Environment, T3Client)] = []
+        for environment in environments
+        where environmentConnectionStates[environment.id] != .disconnected {
+            probes.append((environment, await runtime.ephemeralClient(for: environment)))
+        }
+        let results = await withTaskGroup(
+            of: (Environment, OrchestrationSearchThreadsResult?).self
+        ) { group in
+            for (environment, probe) in probes {
+                group.addTask {
+                    await probe.connect()
+                    let result = try? await probe.searchThreads(
+                        query: normalized,
+                        limit: limitPerEnvironment
+                    )
+                    await probe.disconnect()
+                    return (environment, result)
+                }
+            }
+            var values: [(Environment, OrchestrationSearchThreadsResult?)] = []
+            for await value in group { values.append(value) }
+            return values
+        }
+        var matches: [FeatureThreadSearchMatch] = []
+
+        for (environment, result) in results {
+            guard let result else { continue }
+            matches.append(contentsOf: result.matches.map { match in
+                FeatureThreadSearchMatch(
+                    threadID: FeatureScopedID.thread(
+                        environmentID: environment.id,
+                        wireID: match.threadId
+                    ),
+                    projectID: FeatureScopedID.project(
+                        environmentID: environment.id,
+                        wireID: match.projectId
+                    ),
+                    parentThreadID: match.parentThreadId.map {
+                        FeatureScopedID.thread(environmentID: environment.id, wireID: $0)
+                    },
+                    source: match.source == .user ? .user : .assistant,
+                    snippet: match.snippet,
+                    messageCreatedAt: match.messageCreatedAt.map(parseDate)
+                )
+            })
+        }
+
+        return Array(matches.sorted {
+            ($0.messageCreatedAt ?? .distantPast) > ($1.messageCreatedAt ?? .distantPast)
+        }.prefix(100))
     }
 
     func loadThread(id: String) async throws -> FeatureThreadDetail {
@@ -1166,6 +1262,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         submissionIdentity: FeatureSubmissionIdentity?
     ) async throws {
         let route = try threadRoute(for: threadID)
+        try requireParentThread(threadID)
         let client = route.client
         let environmentID = route.environmentID
         let generation = environmentGeneration
@@ -1693,6 +1790,17 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
                 .first(where: { $0.id == id })
     }
 
+    @discardableResult
+    private func requireParentThread(_ id: String) throws -> FeatureThread {
+        guard let thread = cachedThread(id: id) else {
+            throw NativeFeatureClientError.threadNotFound
+        }
+        guard thread.parentThreadID == nil else {
+            throw NativeFeatureClientError.workerThreadReadOnly
+        }
+        return thread
+    }
+
     private func updateCachedArchivedThread(
         id: String,
         update: (inout FeatureThread) -> Void
@@ -1762,6 +1870,8 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         OrchestrationThreadShell(
             id: thread.id,
             projectId: thread.projectId,
+            parentThreadId: thread.parentThreadId,
+            workerView: thread.workerView,
             title: thread.title,
             modelSelection: thread.modelSelection,
             runtimeMode: thread.runtimeMode,
@@ -1777,11 +1887,13 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             snoozedUntil: thread.snoozedUntil,
             snoozedAt: thread.snoozedAt,
             pinnedAt: thread.pinnedAt,
+            titleRegeneration: thread.titleRegeneration,
             session: thread.session,
             latestUserMessageAt: thread.latestUserMessageAt,
             hasPendingApprovals: thread.hasPendingApprovals,
             hasPendingUserInput: thread.hasPendingUserInput,
-            hasActionableProposedPlan: thread.hasActionableProposedPlan
+            hasActionableProposedPlan: thread.hasActionableProposedPlan,
+            backgroundLiveness: thread.backgroundLiveness
         )
     }
 
@@ -3094,7 +3206,8 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
                     name: project.title,
                     path: project.workspaceRoot,
                     threadCount: threadCountByProjectID[uiID, default: 0],
-                    defaultSelection: project.defaultModelSelection.map(mapSelection)
+                    defaultSelection: project.defaultModelSelection.map(mapSelection),
+                    logicalRepositoryKey: project.repositoryIdentity?.canonicalKey
                 )
             }
         }
@@ -3149,7 +3262,9 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             endpoint: environment.httpBaseURL.absoluteString,
             isActive: environment.id == activeID,
             connectionState: environmentConnectionStates[environment.id],
-            connectionDetail: environmentConnectionDetails[environment.id]
+            connectionDetail: environmentConnectionDetails[environment.id],
+            serverVersion: environment.descriptor?.serverVersion,
+            serverUpdateMode: environment.descriptor?.capabilities.serverSelfUpdate
         )
     }
 
@@ -3164,6 +3279,10 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
                 environmentID: environment.id,
                 wireID: thread.projectId
             ),
+            parentThreadID: thread.parentThreadId.map {
+                FeatureScopedID.thread(environmentID: environment.id, wireID: $0)
+            },
+            workerView: thread.workerView == .activity ? .activity : .threads,
             environmentID: environment.id,
             environmentName: environment.label,
             title: thread.title,
@@ -3196,6 +3315,18 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             snoozedAt: thread.snoozedAt.map(parseDate),
             pinnedAt: thread.pinnedAt.map(parseDate),
             supportsPinning: environment.descriptor?.capabilities.threadPinning,
+            supportsTitleRegeneration:
+                environment.descriptor?.capabilities.threadTitleRegeneration,
+            supportsWorkerView: environment.descriptor?.capabilities.workerView,
+            titleRegeneration: thread.titleRegeneration.map {
+                FeatureTitleRegeneration(
+                    requestID: $0.requestId,
+                    startedAt: parseDate($0.startedAt)
+                )
+            },
+            backgroundLiveness: thread.backgroundLiveness.map {
+                $0 == .working ? .working : .monitoring
+            },
             attentionAt: failureDate(
                 latestTurn: thread.latestTurn,
                 session: thread.session
@@ -3221,6 +3352,10 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
                 environmentID: environment.id,
                 wireID: thread.projectId
             ),
+            parentThreadID: thread.parentThreadId.map {
+                FeatureScopedID.thread(environmentID: environment.id, wireID: $0)
+            },
+            workerView: thread.workerView == .activity ? .activity : .threads,
             environmentID: environment.id,
             environmentName: environment.label,
             title: thread.title,
@@ -3254,6 +3389,15 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             snoozedAt: thread.snoozedAt.map(parseDate),
             pinnedAt: thread.pinnedAt.map(parseDate),
             supportsPinning: environment.descriptor?.capabilities.threadPinning,
+            supportsTitleRegeneration:
+                environment.descriptor?.capabilities.threadTitleRegeneration,
+            supportsWorkerView: environment.descriptor?.capabilities.workerView,
+            titleRegeneration: thread.titleRegeneration.map {
+                FeatureTitleRegeneration(
+                    requestID: $0.requestId,
+                    startedAt: parseDate($0.startedAt)
+                )
+            },
             attentionAt: failureDate(
                 latestTurn: thread.latestTurn,
                 session: thread.session
@@ -3385,7 +3529,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         var accumulator = cache.workLogsByGroupID[groupID] ?? NativeWorkLogAccumulator()
         accumulator.append(
             activity,
-            preview: previewText(activity.payload["detail"]?.stringValue),
+            preview: workLogPreview(activity),
             createdAt: parseDate(activity.createdAt)
         )
         cache.workLogsByGroupID[groupID] = accumulator
@@ -3406,7 +3550,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             var accumulator = cache.workLogsByGroupID[groupID] ?? NativeWorkLogAccumulator()
             accumulator.append(
                 activity,
-                preview: previewText(activity.payload["detail"]?.stringValue),
+                preview: workLogPreview(activity),
                 createdAt: parseDate(activity.createdAt)
             )
             cache.workLogsByGroupID[groupID] = accumulator
@@ -3419,7 +3563,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         environment: Environment,
         cache: NativeDetailRenderCache
     ) {
-        guard let requestID = activity.payload["requestId"]?.stringValue else { return }
+        guard let requestID = activity.payload["requestId"]?.identifierValue else { return }
         let uiRequestID = FeatureScopedID.approval(
             environmentID: environment.id,
             wireID: requestID
@@ -3466,7 +3610,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         environment: Environment,
         cache: NativeDetailRenderCache
     ) {
-        guard let requestID = activity.payload["requestId"]?.stringValue else { return }
+        guard let requestID = activity.payload["requestId"]?.identifierValue else { return }
         let uiRequestID = FeatureScopedID.input(
             environmentID: environment.id,
             wireID: requestID
@@ -3563,7 +3707,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             }
             lines.append(
                 contentsOf: visible.map { activity in
-                    let detail = previewText(activity.payload["detail"]?.stringValue)
+                    let detail = workLogPreview(activity)
                     return "• \(detail ?? activity.summary)"
                 }
             )
@@ -3590,7 +3734,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         for activity in thread.activities.sorted(by: {
             parseDate($0.createdAt) < parseDate($1.createdAt)
         }) {
-            let requestID = activity.payload["requestId"]?.stringValue
+            let requestID = activity.payload["requestId"]?.identifierValue
             let uiRequestID = requestID.map {
                 FeatureScopedID.approval(environmentID: environment.id, wireID: $0)
             }
@@ -3645,7 +3789,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         for activity in thread.activities.sorted(by: {
             parseDate($0.createdAt) < parseDate($1.createdAt)
         }) {
-            let requestID = activity.payload["requestId"]?.stringValue
+            let requestID = activity.payload["requestId"]?.identifierValue
             let uiRequestID = requestID.map {
                 FeatureScopedID.input(environmentID: environment.id, wireID: $0)
             }
@@ -3789,7 +3933,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
                         provider.requiresNewThreadForModelChange ?? false,
                     models: provider.models.map { model in
                         let options = (model.capabilities?.optionDescriptors ?? [])
-                            .map(mapOptionDescriptor)
+                            .compactMap(mapOptionDescriptor)
                         return FeatureModel(
                             id: model.slug,
                             name: model.name,
@@ -4015,7 +4159,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     private func mapOptionDescriptor(
         _ descriptor: ServerProviderOptionDescriptor
-    ) -> FeatureModelOptionDescriptor {
+    ) -> FeatureModelOptionDescriptor? {
         switch descriptor {
         case let .select(value):
             let defaultValue = value.currentValue
@@ -4043,6 +4187,8 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
                 kind: .boolean,
                 defaultValue: value.currentValue.map(FeatureModelOptionValue.boolean)
             )
+        case .unknown:
+            return nil
         }
     }
 
@@ -4332,6 +4478,18 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         let compact = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         guard !compact.isEmpty else { return nil }
         return compact.count > 160 ? "\(compact.prefix(157))..." : compact
+    }
+
+    /// Read-model MCP results are deliberately slimmed. Prefer their explicit
+    /// summary and never present it as the complete tool evidence.
+    private func workLogPreview(_ activity: OrchestrationActivity) -> String? {
+        if let detail = previewText(activity.payload["detail"]?.stringValue) {
+            return detail
+        }
+        let data = activity.payload["data"]
+        let result = data?["item"]?["result"] ?? data?["result"]
+        guard let summary = previewText(result?["summary"]?.stringValue) else { return nil }
+        return result?["truncated"] == .bool(true) ? "\(summary) (summary)" : summary
     }
 
     private func loadSettings() -> FeatureSettings {
@@ -4747,6 +4905,8 @@ enum NativeThreadDetailReducer {
         OrchestrationThread(
             id: thread.id,
             projectId: thread.projectId,
+            parentThreadId: thread.parentThreadId,
+            workerView: thread.workerView,
             title: thread.title,
             modelSelection: thread.modelSelection,
             runtimeMode: thread.runtimeMode,
@@ -4762,6 +4922,7 @@ enum NativeThreadDetailReducer {
             snoozedUntil: thread.snoozedUntil,
             snoozedAt: thread.snoozedAt,
             pinnedAt: thread.pinnedAt,
+            titleRegeneration: thread.titleRegeneration,
             deletedAt: thread.deletedAt,
             messages: messages ?? thread.messages,
             activities: activities ?? thread.activities,
@@ -4899,6 +5060,10 @@ private enum NativeFeatureClientError: LocalizedError {
     case deviceSessionNotFound
     case missingScope(String)
     case tooManyAttachments
+    case workerThreadReadOnly
+    case titleRegenerationUnavailable
+    case workerViewUnavailable
+    case openPullRequest(number: Int)
 
     var errorDescription: String? {
         switch self {
@@ -4915,6 +5080,11 @@ private enum NativeFeatureClientError: LocalizedError {
         case .deviceSessionNotFound: "That device session is no longer active."
         case .missingScope: "This connection does not have permission to manage devices."
         case .tooManyAttachments: "You can attach up to 8 images per message."
+        case .workerThreadReadOnly: "Worker chats are read-only. Continue in the parent thread to act."
+        case .titleRegenerationUnavailable: "This environment cannot regenerate thread titles yet."
+        case .workerViewUnavailable: "This environment cannot change the worker presentation yet."
+        case let .openPullRequest(number):
+            "Pull request #\(number) is still open. Merge or close it before settling this thread."
         }
     }
 }
