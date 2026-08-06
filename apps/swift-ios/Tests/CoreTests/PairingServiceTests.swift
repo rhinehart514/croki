@@ -55,6 +55,63 @@ final class PairingServiceTests: XCTestCase {
         // fails with scope_not_granted.
         XCTAssertFalse(form.contains("scope="))
     }
+
+    func testFailedRepairingRestoresPreviousEnvironmentAndCredential() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t3-swift-repairing-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: directory.path
+            )
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let oldEnvironment = Environment(
+            id: "environment-1",
+            label: "Previous Studio",
+            httpBaseURL: URL(string: "https://previous.example")!,
+            webSocketBaseURL: URL(string: "wss://previous.example")!
+        )
+        let oldCredential = EnvironmentCredential(accessToken: "previous-access-token")
+        let credentials = InMemoryCredentialStore(
+            credentials: [oldEnvironment.id: oldCredential]
+        )
+        let environments = EnvironmentStore(
+            fileURL: directory.appendingPathComponent("environments.json")
+        )
+        try await environments.save([oldEnvironment])
+        try await environments.setActiveEnvironment(id: oldEnvironment.id)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o500],
+            ofItemAtPath: directory.path
+        )
+
+        let service = PairingService(
+            transport: PairingHTTPTransport(),
+            environmentStore: environments,
+            credentialStore: credentials
+        )
+
+        do {
+            _ = try await service.pair(
+                url: "https://studio.example/#token=pair-again",
+                label: "Theo's iPhone"
+            )
+            XCTFail("Expected the read-only environment catalog to reject the update")
+        } catch {
+            let storedCredential = await credentials.credential(for: oldEnvironment.id)
+            let storedEnvironments = try await environments.load()
+            let activeEnvironmentID = try await environments.activeEnvironmentID()
+            XCTAssertEqual(storedCredential?.accessToken, oldCredential.accessToken)
+            XCTAssertEqual(storedEnvironments, [oldEnvironment])
+            XCTAssertEqual(activeEnvironmentID, oldEnvironment.id)
+        }
+    }
 }
 
 private actor PairingHTTPTransport: HTTPTransport {
