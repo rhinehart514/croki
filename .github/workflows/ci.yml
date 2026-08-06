@@ -152,7 +152,7 @@ jobs:
 
   swift_ios:
     name: Swift iOS
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 15
     steps:
       - name: Checkout
