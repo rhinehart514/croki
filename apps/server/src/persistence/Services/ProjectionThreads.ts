@@ -16,6 +16,7 @@ import {
   RuntimeMode,
   ThreadId,
   TurnId,
+  WorkerView,
 } from "@croki/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -35,6 +36,7 @@ export const ProjectionThread = Schema.Struct({
   worktreePath: Schema.NullOr(Schema.String),
   forkedFromThreadId: Schema.NullOr(ThreadId),
   parentThreadId: Schema.NullOr(ThreadId),
+  workerView: WorkerView,
   latestTurnId: Schema.NullOr(TurnId),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

@@ -16,7 +16,7 @@ import type {
 } from "@croki/contracts";
 import * as Haptics from "expo-haptics";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Platform, View, type GestureResponderEvent } from "react-native";
+import { Platform, Pressable, Text, View, type GestureResponderEvent } from "react-native";
 import { KeyboardController, KeyboardStickyView } from "react-native-keyboard-controller";
 import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -97,6 +97,7 @@ export interface ThreadDetailScreenProps {
   ) => void;
   readonly onSubmitUserInput: () => Promise<unknown>;
   readonly showContent?: boolean;
+  readonly readOnlyWorker: { readonly onContinue: () => void } | null;
 }
 
 function latestStreamingAssistantMessage(
@@ -416,35 +417,55 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               ) : null}
             </View>
 
-            <ThreadComposer
-              editorRef={composerEditorRef}
-              draftMessage={props.draftMessage}
-              draftAttachments={props.draftAttachments}
-              placeholder="Ask the repo agent, or run a command…"
-              contentMaxWidth={contentMaxWidth}
-              connectionState={props.connectionStateLabel}
-              connectionError={props.connectionError}
-              environmentLabel={props.environmentLabel}
-              threadSyncPhase={threadSyncPhase}
-              selectedThread={props.selectedThread}
-              serverConfig={props.serverConfig}
-              queueCount={props.selectedThreadQueueCount}
-              activeThreadBusy={props.activeThreadBusy}
-              environmentId={props.environmentId}
-              projectCwd={props.projectWorkspaceRoot}
-              bottomInset={composerBottomInset}
-              onChangeDraftMessage={props.onChangeDraftMessage}
-              onPickDraftImages={props.onPickDraftImages}
-              onNativePasteImages={props.onNativePasteImages}
-              onRemoveDraftImage={props.onRemoveDraftImage}
-              onStopThread={props.onStopThread}
-              onSendMessage={handleSendMessage}
-              onReconnectEnvironment={props.onReconnectEnvironment}
-              onUpdateModelSelection={props.onUpdateThreadModelSelection}
-              onUpdateRuntimeMode={props.onUpdateThreadRuntimeMode}
-              onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
-              onExpandedChange={setComposerExpanded}
-            />
+            {props.readOnlyWorker ? (
+              <View className="border-border bg-screen mx-4 mb-3 flex-row items-center justify-between border px-4 py-3">
+                <View className="mr-4 flex-1">
+                  <Text className="text-sm font-medium text-foreground">Read-only worker chat</Text>
+                  <Text className="mt-1 text-xs text-foreground-tertiary">
+                    Continue the conversation in the parent Thread.
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityLabel="Continue in parent Thread"
+                  accessibilityRole="button"
+                  className="min-h-11 justify-center px-3"
+                  hitSlop={4}
+                  onPress={props.readOnlyWorker.onContinue}
+                >
+                  <Text className="text-sm font-semibold text-foreground">Continue in parent</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <ThreadComposer
+                editorRef={composerEditorRef}
+                draftMessage={props.draftMessage}
+                draftAttachments={props.draftAttachments}
+                placeholder="Ask the repo agent, or run a command…"
+                contentMaxWidth={contentMaxWidth}
+                connectionState={props.connectionStateLabel}
+                connectionError={props.connectionError}
+                environmentLabel={props.environmentLabel}
+                threadSyncPhase={threadSyncPhase}
+                selectedThread={props.selectedThread}
+                serverConfig={props.serverConfig}
+                queueCount={props.selectedThreadQueueCount}
+                activeThreadBusy={props.activeThreadBusy}
+                environmentId={props.environmentId}
+                projectCwd={props.projectWorkspaceRoot}
+                bottomInset={composerBottomInset}
+                onChangeDraftMessage={props.onChangeDraftMessage}
+                onPickDraftImages={props.onPickDraftImages}
+                onNativePasteImages={props.onNativePasteImages}
+                onRemoveDraftImage={props.onRemoveDraftImage}
+                onStopThread={props.onStopThread}
+                onSendMessage={handleSendMessage}
+                onReconnectEnvironment={props.onReconnectEnvironment}
+                onUpdateModelSelection={props.onUpdateThreadModelSelection}
+                onUpdateRuntimeMode={props.onUpdateThreadRuntimeMode}
+                onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
+                onExpandedChange={setComposerExpanded}
+              />
+            )}
           </View>
         </KeyboardStickyView>
       ) : null}

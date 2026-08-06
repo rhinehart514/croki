@@ -7,7 +7,7 @@ import {
 } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as Option from "effect/Option";
-import { EnvironmentId, ThreadId, type ProjectScript } from "@croki/contracts";
+import { EnvironmentId, ThreadId, type ProjectScript, type WorkerView } from "@croki/contracts";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@croki/shared/projectScripts";
 import { Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,6 +59,7 @@ import { useSelectedThreadRequests } from "../../state/use-selected-thread-reque
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useThreadComposerState } from "../../state/use-thread-composer-state";
 import { threadEnvironment } from "../../state/threads";
+import { useThreadShells } from "../../state/entities";
 import { projectThreadContentPresentation } from "./threadContentPresentation";
 import {
   useAdaptiveWorkspaceLayout,
@@ -72,6 +73,7 @@ import {
   ThreadInspectorContentStack,
   type ThreadInspectorMode,
 } from "./thread-inspector-content-stack";
+import { WorkerViewControl } from "./WorkerViewControl";
 
 interface ThreadInspectorSelection {
   readonly routeThreadIdentity: string | null;
@@ -197,6 +199,11 @@ function ThreadRouteContent(
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, "thread interrupt");
+  const updateThreadMetadata = useAtomCommand(
+    threadEnvironment.updateMetadata,
+    "worker view update",
+  );
+  const threadShells = useThreadShells();
   const navigation = useNavigation();
   const params = props.route.params;
   const environmentIdRaw = firstRouteParam(params.environmentId);
@@ -204,6 +211,86 @@ function ThreadRouteContent(
   const threadId = firstRouteParam(params.threadId);
   const routeThreadIdentity =
     environmentIdRaw !== null && threadId !== null ? `${environmentIdRaw}:${threadId}` : null;
+  const routeEnvironmentRuntime = useRemoteEnvironmentRuntime(environmentId);
+  const routeConnectionState =
+    routeEnvironmentRuntime?.connectionState ?? (environmentId ? "available" : connectionState);
+  const routeConnectionError = routeEnvironmentRuntime?.connectionError ?? null;
+  const childThreads = useMemo(
+    () =>
+      selectedThread
+        ? threadShells.filter(
+            (thread) =>
+              thread.environmentId === selectedThread.environmentId &&
+              thread.parentThreadId === selectedThread.id &&
+              thread.archivedAt === null,
+          )
+        : [],
+    [selectedThread, threadShells],
+  );
+  const workerView = selectedThread?.workerView ?? "threads";
+  const showWorkerViewControl =
+    childThreads.length > 0 &&
+    !selectedThread?.parentThreadId &&
+    routeEnvironmentRuntime?.serverConfig?.environment.capabilities.workerView === true;
+  const handleWorkerViewChange = useCallback(
+    (nextWorkerView: WorkerView) => {
+      if (!selectedThread || nextWorkerView === workerView) return;
+      void updateThreadMetadata({
+        environmentId: selectedThread.environmentId,
+        input: { threadId: selectedThread.id, workerView: nextWorkerView },
+      });
+    },
+    [selectedThread, updateThreadMetadata, workerView],
+  );
+  const workerHeaderItems = useMemo<NativeHeaderItems>(
+    () =>
+      showWorkerViewControl
+        ? [
+            {
+              accessibilityLabel: `Workers, ${workerView === "threads" ? "Separate chats" : "In Thread"}`,
+              icon: { name: "person.crop.circle", type: "sfSymbol" as const },
+              identifier: "thread-workers",
+              label: "Workers",
+              menu: {
+                title: "Workers",
+                items: [
+                  {
+                    icon: {
+                      name: workerView === "threads" ? "checkmark" : "text.bubble",
+                      type: "sfSymbol" as const,
+                    },
+                    label: "Separate chats",
+                    onPress: () => handleWorkerViewChange("threads"),
+                    type: "action" as const,
+                  },
+                  {
+                    icon: {
+                      name: workerView === "activity" ? "checkmark" : "text.bubble",
+                      type: "sfSymbol" as const,
+                    },
+                    label: "In Thread",
+                    onPress: () => handleWorkerViewChange("activity"),
+                    type: "action" as const,
+                  },
+                ],
+              },
+              sharesBackground: true,
+              type: "menu" as const,
+              variant: "plain" as const,
+            },
+          ]
+        : [],
+    [handleWorkerViewChange, showWorkerViewControl, workerView],
+  );
+  const continueInParent = useCallback(() => {
+    if (!selectedThread?.parentThreadId) return;
+    navigation.dispatch(
+      StackActions.replace("Thread", {
+        environmentId: String(selectedThread.environmentId),
+        threadId: String(selectedThread.parentThreadId),
+      }),
+    );
+  }, [navigation, selectedThread]);
   const [inspectorSelection, setInspectorSelection] = useState<ThreadInspectorSelection | null>(
     () => (props.renderInspector ? { routeThreadIdentity, mode: "route" } : null),
   );
@@ -265,10 +352,6 @@ function ThreadRouteContent(
       };
     }, [props.renderInspector]),
   );
-  const routeEnvironmentRuntime = useRemoteEnvironmentRuntime(environmentId);
-  const routeConnectionState =
-    routeEnvironmentRuntime?.connectionState ?? (environmentId ? "available" : connectionState);
-  const routeConnectionError = routeEnvironmentRuntime?.connectionError ?? null;
   const selectedThreadWithDraftSettings = useMemo(
     () =>
       selectedThread
@@ -844,6 +927,7 @@ function ThreadRouteContent(
           onSelectUserInputOption={requests.onSelectUserInputOption}
           onChangeUserInputCustomAnswer={requests.onChangeUserInputCustomAnswer}
           onSubmitUserInput={requests.onSubmitUserInput}
+          readOnlyWorker={selectedThread.parentThreadId ? { onContinue: continueInParent } : null}
         />
       </View>
     </>
@@ -853,6 +937,7 @@ function ThreadRouteContent(
     <>
       {activeInspectorRenderer ? <InspectorPaneRoleActivation /> : null}
       <NativeStackScreenOptions
+        optionsVersion={[showWorkerViewControl, workerView]}
         options={{
           // Android draws its own in-flow header (AndroidScreenHeader below);
           // the native stack header stays iOS-only.
@@ -882,7 +967,10 @@ function ThreadRouteContent(
           // reserved for future breadcrumbs/status).
           unstable_headerRightItems:
             Platform.OS === "ios"
-              ? () => (layout.usesSplitView ? threadCenterHeaderItems : compactRightHeaderItems)
+              ? () => [
+                  ...workerHeaderItems,
+                  ...(layout.usesSplitView ? threadCenterHeaderItems : compactRightHeaderItems),
+                ]
               : undefined,
           unstable_headerSubtitle: usesNativeHeaderGlass ? headerSubtitle : undefined,
         }}
@@ -894,6 +982,11 @@ function ThreadRouteContent(
           subtitle={headerSubtitle}
           onBack={layout.usesSplitView ? undefined : () => navigation.goBack()}
           actions={androidHeaderActions}
+          trailing={
+            showWorkerViewControl ? (
+              <WorkerViewControl value={workerView} onChange={handleWorkerViewChange} />
+            ) : undefined
+          }
         />
       ) : null}
 

@@ -39,6 +39,7 @@ describe("isCoordinationTaskActivity", () => {
     ).toBe(false);
     expect(isCoordinationTaskActivity(makeActivity({ kind: "task.started" }))).toBe(true);
     expect(isCoordinationTaskActivity(makeActivity({ kind: "task.progress" }))).toBe(true);
+    expect(isCoordinationTaskActivity(makeActivity({ kind: "task.updated" }))).toBe(true);
     expect(isCoordinationTaskActivity(makeActivity({ kind: "task.completed" }))).toBe(true);
   });
 });
@@ -264,6 +265,33 @@ describe("deriveCoordinationWorkstreams", () => {
       { taskId: "interrupted-agent", status: "stopped" },
       { taskId: "missing-agent", status: "failed" },
       { taskId: "pending-agent", status: "waiting" },
+    ]);
+  });
+
+  it("treats terminal task.updated states as the worker's final state", () => {
+    const workstreams = deriveCoordinationWorkstreams([
+      makeActivity({
+        id: "started",
+        kind: "task.started",
+        sequence: 1,
+        payload: { taskId: "worker-1", description: "Inspect persistence" },
+      }),
+      makeActivity({
+        id: "idle",
+        kind: "task.updated",
+        sequence: 2,
+        createdAt: "2026-08-02T00:00:02.000Z",
+        payload: { taskId: "worker-1", status: "idle", summary: "Inspection complete" },
+      }),
+    ]);
+
+    expect(workstreams).toEqual([
+      expect.objectContaining({
+        taskId: "worker-1",
+        status: "completed",
+        completedAt: "2026-08-02T00:00:02.000Z",
+        summary: "Inspection complete",
+      }),
     ]);
   });
 });

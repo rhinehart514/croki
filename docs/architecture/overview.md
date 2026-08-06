@@ -41,6 +41,8 @@ events into one orchestration model without creating a second agent runtime.
 
 - **Background workers**: Long-running async flows such as runtime ingestion, command reaction, and checkpoint processing run as queue-backed workers. This keeps work ordered, reduces timing races, and gives tests a deterministic way to wait for the system to go idle.
 
+- **Delegated workers**: Provider-native delegated conversations persist as child Threads with their own transcript and parent lineage. The parent stores only a `workerView` presentation choice: nested child chats or bounded Workstreams derived from parent lifecycle activity. Switching views never copies messages or changes provider behavior.
+
 - **Runtime signals**: The server emits lightweight typed receipts when important async milestones finish, such as checkpoint capture, diff finalization, or a turn becoming fully quiescent. Tests and orchestration code wait on these signals instead of polling internal state.
 
 - **UI history**: A successful model-driven Preview snapshot is copied into the server attachment store and recorded as ordinary Thread activity. The activity keeps bounded page metadata plus an attachment frame reference. Preview projects those checked screens for the founder, while the read-only `ui_history` MCP tool lets a later provider turn list or reopen the exact image. The web client collapses same-turn snapshots and checkpoint evidence into at most one checked/not-checked receipt after the answer. UI history owns no execution authority and does not create a second event store.

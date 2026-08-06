@@ -1522,9 +1522,13 @@ export default function SidebarV2() {
           visibleChildParentKeys.has(`${thread.environmentId}:${thread.id}`)),
     );
     const childThreadsByParentKey = new Map<string, EnvironmentThreadShell[]>();
+    const visibleByThreadKey = new Map(
+      visible.map((thread) => [`${thread.environmentId}:${thread.id}`, thread]),
+    );
     for (const child of visible) {
       if (!child.parentThreadId) continue;
       const key = `${child.environmentId}:${child.parentThreadId}`;
+      if ((visibleByThreadKey.get(key)?.workerView ?? "threads") !== "threads") continue;
       const existing = childThreadsByParentKey.get(key) ?? [];
       existing.push(child);
       childThreadsByParentKey.set(key, existing);

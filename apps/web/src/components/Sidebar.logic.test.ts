@@ -115,6 +115,34 @@ describe("orderThreadsWithChildren", () => {
       orderThreadsWithChildren([child, other, orphan, parent]).map((thread) => thread.id),
     ).toEqual(["other", "parent", "child", "orphan"]);
   });
+
+  it("shows worker rows only in the parent's separate-chats view", () => {
+    const child = { environmentId: "env", id: "child", parentThreadId: "parent" };
+
+    expect(
+      orderThreadsWithChildren([
+        child,
+        {
+          environmentId: "env",
+          id: "parent",
+          parentThreadId: null,
+          workerView: "activity" as const,
+        },
+      ]).map((thread) => thread.id),
+    ).toEqual(["parent"]);
+
+    expect(
+      orderThreadsWithChildren([
+        child,
+        {
+          environmentId: "env",
+          id: "parent",
+          parentThreadId: null,
+          workerView: "threads" as const,
+        },
+      ]).map((thread) => thread.id),
+    ).toEqual(["parent", "child"]);
+  });
 });
 
 describe("archiveSelectedThreadEntries", () => {

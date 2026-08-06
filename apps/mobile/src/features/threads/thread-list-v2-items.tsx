@@ -409,6 +409,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const pressedBackgroundColor = useThemeColor("--color-subtle");
   const selectedBackgroundColor = useThemeColor("--color-user-bubble");
   const pinTintColor = useThemeColor("--color-foreground-muted");
+  const workerRuleColor = useThemeColor("--color-border-subtle");
   const sidebarPane = props.pane === "sidebar";
   const selected = props.selected === true;
 
@@ -759,10 +760,18 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                     ? pressedBackgroundColor
                     : drawerColor,
                 borderRadius: SIDEBAR_V2_ROW_RADIUS,
+                borderLeftColor: workerRuleColor,
+                borderLeftWidth: thread.parentThreadId ? 1 : 0,
+                marginLeft: thread.parentThreadId ? 18 : 0,
                 paddingHorizontal: 12,
                 paddingVertical: 10,
               })
-            : ({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })
+            : ({ pressed }) => ({
+                borderLeftColor: workerRuleColor,
+                borderLeftWidth: thread.parentThreadId ? 1 : 0,
+                marginLeft: thread.parentThreadId ? 18 : 0,
+                opacity: pressed ? 0.7 : 1,
+              })
         }
       >
         {sidebarPane ? (
@@ -798,8 +807,16 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                     ? pressedBackgroundColor
                     : drawerColor,
                 borderRadius: SIDEBAR_V2_ROW_RADIUS,
+                borderLeftColor: workerRuleColor,
+                borderLeftWidth: thread.parentThreadId ? 1 : 0,
+                marginLeft: thread.parentThreadId ? 18 : 0,
               })
-            : ({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })
+            : ({ pressed }) => ({
+                borderLeftColor: workerRuleColor,
+                borderLeftWidth: thread.parentThreadId ? 1 : 0,
+                marginLeft: thread.parentThreadId ? 18 : 0,
+                opacity: pressed ? 0.7 : 1,
+              })
         }
       >
         {/* Settled history recedes: dimmed favicon + muted title. */}

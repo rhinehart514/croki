@@ -378,6 +378,121 @@ describe("buildThreadListV2Items", () => {
 
     expect(items.map((item) => item.thread.id)).toEqual(["local", "remote"]);
   });
+
+  it("nests workers only when their parent uses separate chats", () => {
+    const child = makeThread({
+      id: ThreadId.make("worker"),
+      parentThreadId: ThreadId.make("parent"),
+      title: "Worker",
+    });
+    const parent = makeThread({
+      id: ThreadId.make("parent"),
+      title: "Parent",
+      workerView: "threads",
+    });
+
+    expect(
+      buildThreadListV2Items({
+        threads: [child, parent],
+        environmentId: null,
+        searchQuery: "",
+        now: NOW,
+      }).items.map((item) => item.thread.id),
+    ).toEqual(["parent", "worker"]);
+
+    expect(
+      buildThreadListV2Items({
+        threads: [child, { ...parent, workerView: "activity" }],
+        environmentId: null,
+        searchQuery: "",
+        now: NOW,
+      }).items.map((item) => item.thread.id),
+    ).toEqual(["parent"]);
+  });
+
+  it("keeps a matching worker reachable when its parent title does not match", () => {
+    const { items } = buildThreadListV2Items({
+      threads: [
+        makeThread({ id: ThreadId.make("parent"), title: "Release planning" }),
+        makeThread({
+          id: ThreadId.make("worker"),
+          parentThreadId: ThreadId.make("parent"),
+          title: "Inspect SQLite migration",
+        }),
+      ],
+      environmentId: null,
+      searchQuery: "sqlite",
+      now: NOW,
+    });
+
+    expect(items.map((item) => item.thread.id)).toEqual(["parent", "worker"]);
+  });
+
+  it("keeps workers attached to a pinned parent", () => {
+    const { items } = buildThreadListV2Items({
+      threads: [
+        makeThread({
+          id: ThreadId.make("worker"),
+          parentThreadId: ThreadId.make("parent"),
+          title: "Worker",
+        }),
+        makeThread({
+          id: ThreadId.make("parent"),
+          title: "Parent",
+          pinnedAt: NOW,
+        }),
+        makeThread({ id: ThreadId.make("active"), title: "Active" }),
+      ],
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+    });
+
+    expect(items.map((item) => item.thread.id)).toEqual(["parent", "worker", "active"]);
+    expect(items.map((item) => item.pinned)).toEqual([true, false, false]);
+  });
+
+  it("promotes a worker family for a message-content match", () => {
+    const worker = makeThread({
+      id: ThreadId.make("worker"),
+      parentThreadId: ThreadId.make("parent"),
+      title: "Unrelated worker title",
+    });
+    const { items } = buildThreadListV2Items({
+      threads: [
+        makeThread({ id: ThreadId.make("parent"), title: "Unrelated parent title" }),
+        worker,
+      ],
+      environmentId: null,
+      searchQuery: "sqlite details",
+      matchedThreadKeys: new Set([threadSearchMatchKey({ environmentId, threadId: worker.id })]),
+      now: NOW,
+    });
+
+    expect(items.map((item) => item.thread.id)).toEqual(["parent", "worker"]);
+  });
+
+  it("does not promote a parent for a hidden In Thread worker match", () => {
+    const { items } = buildThreadListV2Items({
+      threads: [
+        makeThread({
+          id: ThreadId.make("parent"),
+          title: "Release planning",
+          workerView: "activity",
+        }),
+        makeThread({
+          id: ThreadId.make("worker"),
+          parentThreadId: ThreadId.make("parent"),
+          title: "Inspect SQLite migration",
+        }),
+      ],
+      environmentId: null,
+      searchQuery: "sqlite",
+      now: NOW,
+    });
+
+    expect(items).toEqual([]);
+  });
 });
 
 describe("buildThreadListV2Items settled paging", () => {

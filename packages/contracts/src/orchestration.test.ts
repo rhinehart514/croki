@@ -323,7 +323,7 @@ it.effect("decodes thread.created runtime mode for historical events", () =>
   }),
 );
 
-it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
+it.effect("decodes thread.meta-updated payloads with explicit provider and worker view", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeThreadMetaUpdatedPayload({
       threadId: "thread-1",
@@ -337,11 +337,13 @@ it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
         provider: "claudeAgent",
         model: "claude-opus-4-6",
       },
+      workerView: "activity",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.previousTitle, "Previous title");
     assert.strictEqual(parsed.titleRegeneration?.requestId, "cmd-title-regenerate");
     assert.strictEqual(parsed.modelSelection?.instanceId, "claudeAgent");
+    assert.strictEqual(parsed.workerView, "activity");
   }),
 );
 

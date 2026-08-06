@@ -2753,6 +2753,37 @@ function ChatViewContent(props: ChatViewProps) {
     legacyCrokiApplicationFileQuery.isPending,
   ]);
   const projectThreadShells = useThreadShells();
+  const activeWorkerThreads = useMemo(
+    () =>
+      activeThread
+        ? projectThreadShells.filter(
+            (thread) =>
+              thread.environmentId === activeThread.environmentId &&
+              thread.parentThreadId === activeThread.id &&
+              thread.archivedAt === null,
+          )
+        : [],
+    [activeThread, projectThreadShells],
+  );
+  const workerView = activeThread?.workerView ?? "threads";
+  const updateWorkerView = useCallback(
+    (nextWorkerView: "threads" | "activity") => {
+      if (!activeServerThread || nextWorkerView === workerView) return;
+      void updateThreadMetadata({
+        environmentId: activeServerThread.environmentId,
+        input: { threadId: activeServerThread.id, workerView: nextWorkerView },
+      }).then((result) => {
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          toastManager.add({
+            type: "error",
+            title: "Workers view could not be changed",
+            description: chatActionErrorMessage(squashAtomCommandFailure(result)),
+          });
+        }
+      });
+    },
+    [activeServerThread, updateThreadMetadata, workerView],
+  );
   const projectThreadTitles = useMemo(
     () =>
       activeProject
@@ -6720,6 +6751,13 @@ function ChatViewContent(props: ChatViewProps) {
             keybindings={keybindings}
             availableEditors={availableEditors}
             rightPanelOpen={rightPanelOpen}
+            workerCount={
+              !activeThread.parentThreadId &&
+              serverConfig?.environment.capabilities.workerView === true
+                ? activeWorkerThreads.length
+                : 0
+            }
+            workerView={workerView}
             gitCwd={gitCwd}
             onNewThreadInProject={handleNewThreadInActiveProject}
             onExploreApplicationDirection={prepareApplicationDirectionExploration}
@@ -6729,6 +6767,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddProjectScript={saveProjectScript}
             onUpdateProjectScript={updateProjectScript}
             onDeleteProjectScript={deleteProjectScript}
+            onWorkerViewChange={updateWorkerView}
           />
         </header>
 
@@ -6770,7 +6809,7 @@ function ChatViewContent(props: ChatViewProps) {
                 onOpenTurnDiff={onOpenTurnDiff}
                 onPrepareCanvasUpdate={prepareTurnCanvasUpdate}
                 {...(canvasEnabled ? { canvasPresentationsByActivityId } : {})}
-                coordinationActivities={threadActivities}
+                {...(workerView === "activity" ? { coordinationActivities: threadActivities } : {})}
                 {...(canvasEnabled ? { onOpenCanvasArtifact: openCanvasArtifact } : {})}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}

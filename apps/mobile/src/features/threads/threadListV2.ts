@@ -353,28 +353,52 @@ export function buildThreadListV2Items(input: {
     ? new Set(input.projectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`))
     : null;
 
+  const scopedThreads = input.threads.filter(
+    (thread) =>
+      (input.environmentId === null || thread.environmentId === input.environmentId) &&
+      (projectKeys === null || projectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
+  );
+  const matchesSearch = (thread: EnvironmentThreadShell) =>
+    query.length === 0 ||
+    thread.title.toLocaleLowerCase().includes(query) ||
+    input.matchedThreadKeys?.has(
+      threadSearchMatchKey({ environmentId: thread.environmentId, threadId: thread.id }),
+    ) === true;
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
   const settled: EnvironmentThreadShell[] = [];
   const snoozed: EnvironmentThreadShell[] = [];
+  const threadByKey = new Map(
+    scopedThreads.map((thread) => [`${thread.environmentId}:${thread.id}`, thread]),
+  );
+  const matchingChildParentKeys = new Set(
+    scopedThreads
+      .filter((thread) => {
+        if (!thread.parentThreadId || !matchesSearch(thread)) {
+          return false;
+        }
+        const parentKey = `${thread.environmentId}:${thread.parentThreadId}`;
+        return (threadByKey.get(parentKey)?.workerView ?? "threads") === "threads";
+      })
+      .map((thread) => `${thread.environmentId}:${thread.parentThreadId}`),
+  );
+  const childrenByParentKey = new Map<string, EnvironmentThreadShell[]>();
   let nextSnoozeWakeAt: string | null = null;
-  for (const thread of input.threads) {
+  for (const thread of scopedThreads) {
     // Callers pass live (unarchived) shells; settled threads are among them
     // and partition into the tail via effectiveSettled.
-    if (input.environmentId !== null && thread.environmentId !== input.environmentId) continue;
-    if (projectKeys !== null && !projectKeys.has(`${thread.environmentId}:${thread.projectId}`)) {
+    if (thread.parentThreadId) {
+      if (!matchesSearch(thread)) continue;
+      const parentKey = `${thread.environmentId}:${thread.parentThreadId}`;
+      if ((threadByKey.get(parentKey)?.workerView ?? "threads") === "threads") {
+        const children = childrenByParentKey.get(parentKey) ?? [];
+        children.push(thread);
+        childrenByParentKey.set(parentKey, children);
+      }
       continue;
     }
-    if (
-      query.length > 0 &&
-      !thread.title.toLocaleLowerCase().includes(query) &&
-      input.matchedThreadKeys?.has(
-        threadSearchMatchKey({
-          environmentId: thread.environmentId,
-          threadId: thread.id,
-        }),
-      ) !== true
-    ) {
+    const parentKey = `${thread.environmentId}:${thread.id}`;
+    if (!matchesSearch(thread) && !matchingChildParentKeys.has(parentKey)) {
       continue;
     }
     const supportsSettlement = input.settlementEnvironmentIds?.has(thread.environmentId) ?? true;
@@ -418,11 +442,16 @@ export function buildThreadListV2Items(input: {
       parseTimestampMs(left.snoozedUntil ?? "") - parseTimestampMs(right.snoozedUntil ?? ""),
   );
   const selectedThreadKey = input.selectedThreadKey ?? null;
+  const selectedThread =
+    selectedThreadKey === null ? undefined : threadByKey.get(selectedThreadKey);
+  const selectedFamilyRootKey = selectedThread?.parentThreadId
+    ? `${selectedThread.environmentId}:${selectedThread.parentThreadId}`
+    : selectedThreadKey;
   const visibleSnoozed =
     input.snoozedShelfExpanded === true
       ? orderedSnoozed
       : orderedSnoozed.filter(
-          (thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey,
+          (thread) => `${thread.environmentId}:${thread.id}` === selectedFamilyRootKey,
         );
   const orderedSettled = [...settled].sort(
     (left, right) =>
@@ -434,16 +463,33 @@ export function buildThreadListV2Items(input: {
     orderedSettled.length > settledLimit ? orderedSettled.slice(0, settledLimit) : orderedSettled;
   const selectedSettled = orderedSettled
     .slice(pagedSettled.length)
-    .find((thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey);
+    .find((thread) => `${thread.environmentId}:${thread.id}` === selectedFamilyRootKey);
   if (selectedSettled !== undefined) pagedSettled.push(selectedSettled);
   const visibleSettled =
     input.settledShelfExpanded !== false
       ? pagedSettled
       : pagedSettled.filter(
-          (thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey,
+          (thread) => `${thread.environmentId}:${thread.id}` === selectedFamilyRootKey,
         );
 
   const items: ThreadListV2Item[] = [];
+  const pushChildren = (
+    thread: EnvironmentThreadShell,
+    variant: ThreadListV2Item["variant"],
+    snoozed: boolean,
+  ) => {
+    for (const child of sortThreadsForListV2(
+      childrenByParentKey.get(`${thread.environmentId}:${thread.id}`) ?? [],
+    )) {
+      items.push({
+        thread: child,
+        variant,
+        snoozed,
+        pinned: false,
+        isLast: false,
+      });
+    }
+  };
   for (const thread of sortThreadsForListV2(pinned)) {
     items.push({
       thread,
@@ -452,6 +498,7 @@ export function buildThreadListV2Items(input: {
       pinned: true,
       isLast: false,
     });
+    pushChildren(thread, "card", false);
   }
   for (const thread of orderedActive) {
     items.push({
@@ -461,6 +508,7 @@ export function buildThreadListV2Items(input: {
       pinned: false,
       isLast: false,
     });
+    pushChildren(thread, "card", false);
   }
   const snoozedShelfHeaderIndex = orderedSnoozed.length > 0 ? items.length : null;
   for (const thread of visibleSnoozed) {
@@ -471,6 +519,7 @@ export function buildThreadListV2Items(input: {
       pinned: false,
       isLast: false,
     });
+    pushChildren(thread, "slim", true);
   }
   const settledShelfHeaderIndex = orderedSettled.length > 0 ? items.length : null;
   for (const thread of visibleSettled) {
@@ -481,6 +530,7 @@ export function buildThreadListV2Items(input: {
       pinned: false,
       isLast: false,
     });
+    pushChildren(thread, "slim", false);
   }
   const last = items.at(-1);
   if (last) {

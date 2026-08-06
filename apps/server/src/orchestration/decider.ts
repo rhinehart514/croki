@@ -887,6 +887,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             : {}),
           ...(branch !== undefined ? { branch } : {}),
           ...(command.worktreePath !== undefined ? { worktreePath: command.worktreePath } : {}),
+          ...(command.workerView !== undefined ? { workerView: command.workerView } : {}),
           updatedAt: occurredAt,
         },
       };
