@@ -9,6 +9,7 @@ The developer experience is a normal repository that has gained product awarenes
 - A **Thread** is the canonical conversation and unit of work.
 - Explicitly delegated parallel work creates durable **worker Threads** beneath the parent Thread. Worker Threads have their own transcript and lifecycle, survive reloads, and never become competing canonical conversations.
 - The left rail nests worker Threads directly beneath their parent. Selecting a worker opens its read-only transcript; **Continue in parent** returns to the canonical Thread.
+- After a parent has real worker Threads, **Workers** lets the founder choose one durable presentation: **Separate chats** nests those transcripts, while **In Thread** hides the child rows and shows bounded Workstreams at their spawn point. Croki never renders both full representations or copies worker messages into the parent.
 - Ordinary work must not expose worker or orchestration chrome when no delegation exists.
 - **UI history** is the durable record of screens Croki's models actually checked in Preview. It belongs to the originating Thread, preserves the observed image and bounded page evidence, and remains read-only. Its images follow normal Thread fork, revert, and deletion ownership. The founder sees **checked screens** and, later, **checked flows**; Croki does not expose a perception graph, authored state database, or design mode.
 - A turn that changes likely user-visible files ends with at most one inline UI-check receipt. Same-turn snapshots collapse into **Checked _n_ screens** and open as one gallery; visible changes with no rendered evidence say **Not checked**. Nonvisual turns add no receipt. Checked means Croki preserved at least one screen the model inspected during that turn, not that every state, flow, breakpoint, or production condition passed.
@@ -23,11 +24,17 @@ The developer experience is a normal repository that has gained product awarenes
 ## Interface direction
 
 - Preserve the existing true-black, dense workspace with white primary text.
+- Mobile is a full-parity Croki client. Its navigation and controls may be
+  native to iOS and Android, but founders must be able to direct, inspect,
+  intervene in, and resume the same project and Thread work as desktop.
 - Status belongs beside the work it describes. Avoid decorative pills and explanatory chrome.
 - When an application brief exists, the Thread header shows one compact released-to-building focus beside the project. Opening it reveals the application promise and current intent, with one action to open `.croki/application.croki`. It does not show setup, progress, scores, or Concept scope.
 - Opening a `.croki` file uses the ordinary file editor and ordinary panel size. Croki does not generate a second visual representation of repository metadata.
 - Worker nesting uses indentation and a quiet rule, not a second navigation section or dashboard.
+- The Workers choice lives in the Thread header only after delegation. **Separate chats** is never offered for inferred activity without real child Threads.
 - Long titles truncate in the rail and remain available in the Thread view. Keyboard focus and status labels remain explicit.
+- **Search** is one cross-environment entry point for Thread titles and canonical conversation content. Parent matches identify **You** or **Agent**; worker matches identify **Assignment** or **Worker**. Checked-screen/UI-history activity is evidence, not searchable conversation content.
+- Pinning, title regeneration, settle, and snooze are lifecycle controls for canonical parent Threads only. Worker Threads remain nested beneath their parent and follow the parent lifecycle. Web and mobile expose the same parent-Thread navigation actions when the connected server supports them.
 - UI history stays inside Preview and Review evidence. Its completion receipt sits directly after the answer, survives folded turn internals, and replaces duplicate raw snapshot rows. It must not become a dashboard or compete with the live result.
 - Preview has one job: open, inspect, and capture the running product. Product creation and alternatives stay in the canonical Thread instead of creating App, Component, and Idea modes inside Preview.
 - Application direction is visible through the compact header focus, its ordinary source file, and the model's source-grounded answer. Croki does not add a setup workflow, alignment score, progress model, or Croki-authored verdict.

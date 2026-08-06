@@ -475,6 +475,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     }
     return mapping.size > 0 ? mapping : EMPTY_MODEL_JUMP_LABELS;
   }, [keybindings, modelJumpCommandByKey, modelJumpShortcutContext]);
+  const modelListExtraData = useMemo(
+    () => ({ favoritesSet, modelJumpLabelByKey }),
+    [favoritesSet, modelJumpLabelByKey],
+  );
 
   useEffect(() => {
     const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -627,7 +631,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                 <LegendList<string>
                   ref={modelListRef}
                   data={filteredModelKeys}
-                  extraData={favoritesSet}
+                  extraData={modelListExtraData}
                   keyExtractor={(modelKey) => modelKey}
                   renderItem={({ item: modelKey, index }) => {
                     const model = filteredModelByKey.get(modelKey);

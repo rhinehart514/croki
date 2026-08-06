@@ -55,12 +55,13 @@ export interface CoordinationWorkstream {
   readonly failure?: string;
 }
 
-type ActivityKind = "task.started" | "task.progress" | "task.completed";
+type ActivityKind = "task.started" | "task.progress" | "task.updated" | "task.completed";
 type RecordValue = Record<string, unknown>;
 
 const TASK_ACTIVITY_KINDS: ReadonlySet<string> = new Set([
   "task.started",
   "task.progress",
+  "task.updated",
   "task.completed",
 ]);
 
@@ -123,6 +124,8 @@ function parseStatus(value: unknown): CoordinationWorkstreamStatus | undefined {
   if (status === "cancelled" || status === "canceled") {
     return "stopped";
   }
+  if (status === "idle") return "completed";
+  if (status === "interrupted") return "stopped";
   if (STATUS_VALUES.has(status as CoordinationWorkstreamStatus)) {
     return status as CoordinationWorkstreamStatus;
   }
@@ -521,7 +524,10 @@ export function deriveCoordinationWorkstreams(
     current.startedAt = minTimestamp(current.startedAt, activity.createdAt);
     current.updatedAt = maxTimestamp(current.updatedAt, activity.createdAt);
 
-    if (kind === "task.completed") {
+    if (
+      kind === "task.completed" ||
+      (kind === "task.updated" && eventStatus !== undefined && TERMINAL_STATUSES.has(eventStatus))
+    ) {
       const completedStatus =
         eventStatus && TERMINAL_STATUSES.has(eventStatus) ? eventStatus : "completed";
       if (current.terminalOrder === null || order >= current.terminalOrder) {

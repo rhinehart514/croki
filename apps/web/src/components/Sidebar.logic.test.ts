@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   archiveSelectedThreadEntries,
+  buildBulkTitleRegenerationContextMenuItem,
   buildMultiSelectThreadContextMenuItems,
   buildForkThreadContextMenuItem,
   canForkSidebarThread,
@@ -114,6 +115,34 @@ describe("orderThreadsWithChildren", () => {
       orderThreadsWithChildren([child, other, orphan, parent]).map((thread) => thread.id),
     ).toEqual(["other", "parent", "child", "orphan"]);
   });
+
+  it("shows worker rows only in the parent's separate-chats view", () => {
+    const child = { environmentId: "env", id: "child", parentThreadId: "parent" };
+
+    expect(
+      orderThreadsWithChildren([
+        child,
+        {
+          environmentId: "env",
+          id: "parent",
+          parentThreadId: null,
+          workerView: "activity" as const,
+        },
+      ]).map((thread) => thread.id),
+    ).toEqual(["parent"]);
+
+    expect(
+      orderThreadsWithChildren([
+        child,
+        {
+          environmentId: "env",
+          id: "parent",
+          parentThreadId: null,
+          workerView: "threads" as const,
+        },
+      ]).map((thread) => thread.id),
+    ).toEqual(["parent", "child"]);
+  });
 });
 
 describe("archiveSelectedThreadEntries", () => {
@@ -166,6 +195,42 @@ describe("archiveSelectedThreadEntries", () => {
       mutationFailure: null,
       followupFailures: [failure],
     });
+  });
+});
+
+describe("buildBulkTitleRegenerationContextMenuItem", () => {
+  it("counts only threads that can start a new regeneration", () => {
+    expect(
+      buildBulkTitleRegenerationContextMenuItem({
+        supportedCount: 4,
+        actionableCount: 3,
+      }),
+    ).toEqual({
+      id: "regenerate-title",
+      label: "Regenerate titles (3)",
+    });
+  });
+
+  it("shows a disabled progress item when every supported thread is pending", () => {
+    expect(
+      buildBulkTitleRegenerationContextMenuItem({
+        supportedCount: 2,
+        actionableCount: 0,
+      }),
+    ).toEqual({
+      id: "regenerate-title",
+      label: "Regenerating… (2)",
+      disabled: true,
+    });
+  });
+
+  it("omits the action when no selected environment supports it", () => {
+    expect(
+      buildBulkTitleRegenerationContextMenuItem({
+        supportedCount: 0,
+        actionableCount: 0,
+      }),
+    ).toBeNull();
   });
 });
 

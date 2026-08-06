@@ -1,5 +1,6 @@
 import type { EnvironmentProject, EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
 import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@croki/contracts";
+import { threadSearchMatchKey } from "@croki/client-runtime/state/thread-search";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -371,7 +372,7 @@ describe("buildHomeThreadGroups", () => {
     ).toHaveLength(2);
   });
 
-  it("uses the repository label for a singleton repository scope", () => {
+  it("uses the physical project title for a singleton scope", () => {
     const project = makeProject({
       environmentId: EnvironmentId.make("environment-1"),
       id: ProjectId.make("project-1"),
@@ -404,8 +405,8 @@ describe("buildHomeThreadGroups", () => {
       ],
     );
 
-    expect(scopes[0]?.title).toBe("codething-mvp");
-    expect(groups[0]?.title).toBe("codething-mvp");
+    expect(scopes[0]?.title).toBe("local-worktree-name");
+    expect(groups[0]?.title).toBe("local-worktree-name");
   });
 
   it("sorts the newest thread first regardless of snapshot order", () => {
@@ -561,10 +562,16 @@ describe("buildHomeThreadGroups", () => {
     );
 
     expect(buildGroups(projects, threads, { projectGroupingMode: "repository" })).toHaveLength(1);
-    expect(buildGroups(projects, threads, { projectGroupingMode: "repository_path" })).toHaveLength(
-      2,
-    );
-    expect(buildGroups(projects, threads, { projectGroupingMode: "separate" })).toHaveLength(2);
+    expect(
+      buildGroups(projects, threads, { projectGroupingMode: "repository_path" }).map(
+        (group) => group.title,
+      ),
+    ).toEqual(["Mobile", "Web"]);
+    expect(
+      buildGroups(projects, threads, { projectGroupingMode: "separate" }).map(
+        (group) => group.title,
+      ),
+    ).toEqual(["Mobile", "Web"]);
   });
 
   it("default view shows only threads from the last 5 days", () => {
@@ -656,6 +663,33 @@ describe("buildHomeThreadGroups", () => {
     expect(group?.recentThreads.map((thread) => thread.id)).toEqual(
       group?.threads.map((thread) => thread.id),
     );
+  });
+
+  it("includes a thread matched by message content", () => {
+    const environmentId = EnvironmentId.make("environment-1");
+    const project = makeProject({
+      environmentId,
+      id: ProjectId.make("project-1"),
+      title: "Croki",
+    });
+    const thread = makeThread({
+      environmentId,
+      id: ThreadId.make("thread-content"),
+      projectId: project.id,
+      title: "Unrelated title",
+    });
+
+    const groups = buildGroups([project], [thread], {
+      searchQuery: "relay reconnect",
+      matchedThreadKeys: new Set([
+        threadSearchMatchKey({
+          environmentId,
+          threadId: thread.id,
+        }),
+      ]),
+    });
+
+    expect(groups[0]?.threads.map((candidate) => candidate.id)).toEqual(["thread-content"]);
   });
 
   it("targets quick new threads at the group member with the newest thread", () => {

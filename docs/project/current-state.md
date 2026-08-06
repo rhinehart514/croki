@@ -31,6 +31,12 @@ Croki currently provides:
   provision or replace an agent.
 - local and remote environment connection paths, including desktop-managed SSH
   and Croki Connect compatibility infrastructure;
+- rollback-safe automatic updates for launcher-managed Linux servers, with
+  exact-version package staging, database snapshots around migration trials,
+  correlated reconnect outcomes, and automatic return to the previous server
+  when a trial cannot prepare;
+- matching server-update actions on web, desktop, and mobile. Mobile OTA checks
+  remain disabled unless a non-inherited `CROKI_EAS_PROJECT_ID` is supplied;
 - Croki branding and completion feedback;
 - one repository-owned application brief at `.croki/application.croki`, carried
   as bounded direction into project Threads;
@@ -222,10 +228,17 @@ memory, skills, or model.
 
 ## Known implementation gaps
 
+- Automatic update production destinations remain intentionally unavailable
+  until Croki-owned npm, EAS, signing, and hosting credentials are configured.
+  Client release gates require the exact `croki-server` version to publish
+  before any update-capable client is exposed.
 - Parallel Threads is implemented behind a default-off Settings → Beta toggle
   for the planned 0.4.4 release. It reuses provider-native delegation and the
   parent Thread's existing Workstreams projection; provider support therefore
-  depends on the selected runtime exposing native workers.
+  depends on the selected runtime exposing native workers. Once real child
+  Threads exist, the founder can persist either nested read-only worker chats
+  or bounded inline Workstreams on the parent. The two presentations are
+  mutually exclusive and worker transcripts remain owned by the children.
 - Historical `.croki` scope schemas and legacy Canvas objects remain only for
   compatibility reads and old receipts. The application brief remains active.
 - Additional native senses can expand beyond the initial Thread, preview,

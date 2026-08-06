@@ -58,6 +58,8 @@ import {
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetProjectPerceptionInput,
   OrchestrationGetSnapshotError,
+  OrchestrationSearchThreadsError,
+  OrchestrationSearchThreadsInput,
   OrchestrationGetTurnDiffError,
   OrchestrationGetTurnDiffInput,
   OrchestrationRpcSchemas,
@@ -131,6 +133,7 @@ import {
   ServerProviderUpdatedPayload,
   ServerSelfUpdateError,
   ServerSelfUpdateInput,
+  ServerSelfUpdateProgressEvent,
   ServerSelfUpdateResult,
   ServerTraceDiagnosticsResult,
   ServerProcessDiagnosticsResult,
@@ -233,6 +236,7 @@ export const WS_METHODS = {
   serverRefreshProviders: "server.refreshProviders",
   serverUpdateProvider: "server.updateProvider",
   serverUpdateServer: "server.updateServer",
+  serverUpdateServerWithProgress: "server.updateServerWithProgress",
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverRemoveKeybinding: "server.removeKeybinding",
   serverGetSettings: "server.getSettings",
@@ -320,6 +324,16 @@ export const WsServerUpdateServerRpc = Rpc.make(WS_METHODS.serverUpdateServer, {
   success: ServerSelfUpdateResult,
   error: Schema.Union([ServerSelfUpdateError, EnvironmentAuthorizationError]),
 });
+
+export const WsServerUpdateServerWithProgressRpc = Rpc.make(
+  WS_METHODS.serverUpdateServerWithProgress,
+  {
+    payload: ServerSelfUpdateInput,
+    success: ServerSelfUpdateProgressEvent,
+    error: Schema.Union([ServerSelfUpdateError, EnvironmentAuthorizationError]),
+    stream: true,
+  },
+);
 
 export const WsServerGetSettingsRpc = Rpc.make(WS_METHODS.serverGetSettings, {
   payload: Schema.Struct({}),
@@ -709,6 +723,12 @@ export const WsOrchestrationGetProjectPerceptionRpc = Rpc.make(
   },
 );
 
+export const WsOrchestrationSearchThreadsRpc = Rpc.make(ORCHESTRATION_WS_METHODS.searchThreads, {
+  payload: OrchestrationSearchThreadsInput,
+  success: OrchestrationRpcSchemas.searchThreads.output,
+  error: Schema.Union([OrchestrationSearchThreadsError, EnvironmentAuthorizationError]),
+});
+
 export const WsOrchestrationGetArchivedShellSnapshotRpc = Rpc.make(
   ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot,
   {
@@ -812,6 +832,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,
   WsServerUpdateServerRpc,
+  WsServerUpdateServerWithProgressRpc,
   WsServerUpsertKeybindingRpc,
   WsServerRemoveKeybindingRpc,
   WsServerGetSettingsRpc,
@@ -882,6 +903,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationGetTurnDiffRpc,
   WsOrchestrationGetFullThreadDiffRpc,
   WsOrchestrationGetProjectPerceptionRpc,
+  WsOrchestrationSearchThreadsRpc,
   WsOrchestrationGetArchivedShellSnapshotRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,

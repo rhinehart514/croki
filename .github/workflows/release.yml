@@ -853,24 +853,12 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [preflight, build, publish_cli]
-    if: ${{ always() && !cancelled() && vars.CROKI_RELEASE_ENABLED == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && (needs.publish_cli.result == 'success' || needs.publish_cli.result == 'skipped') }}
+    if: ${{ always() && !cancelled() && vars.CROKI_RELEASE_ENABLED == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && needs.publish_cli.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
-    env:
-      CROKI_RELEASE_APP_ID: ${{ secrets.CROKI_RELEASE_APP_ID }}
-      CROKI_RELEASE_APP_PRIVATE_KEY: ${{ secrets.CROKI_RELEASE_APP_PRIVATE_KEY }}
     steps:
-      - id: app_token
-        name: Mint release app token
-        if: ${{ env.CROKI_RELEASE_APP_ID != '' && env.CROKI_RELEASE_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.CROKI_RELEASE_APP_ID }}
-          private-key: ${{ secrets.CROKI_RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -934,7 +922,7 @@ jobs:
 
       - name: Publish release
         if: needs.preflight.outputs.previous_tag != ''
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.preflight.outputs.tag }}
           target_commitish: ${{ needs.preflight.outputs.ref }}
@@ -951,11 +939,11 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: true
-          token: ${{ steps.app_token.outputs.token || github.token }}
+          token: ${{ github.token }}
 
       - name: Publish first release
         if: needs.preflight.outputs.previous_tag == ''
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.preflight.outputs.tag }}
           target_commitish: ${{ needs.preflight.outputs.ref }}
@@ -971,7 +959,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: true
-          token: ${{ steps.app_token.outputs.token || github.token }}
+          token: ${{ github.token }}
 
   deploy_web:
     name: Deploy hosted web app

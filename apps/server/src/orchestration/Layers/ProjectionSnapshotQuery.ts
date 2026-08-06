@@ -8,6 +8,7 @@ import {
   OrchestrationCheckpointFile,
   OrchestrationProposedPlanId,
   OrchestrationReadModel,
+  OrchestrationThreadSearchSource,
   OrchestrationShellSnapshot,
   OrchestrationThread,
   OrchestrationThreadDetailSnapshot,
@@ -113,6 +114,18 @@ const ProjectionCountsRowSchema = Schema.Struct({
 const ProjectPerceptionRevisionRowSchema = Schema.Struct({
   revision: NonNegativeInt,
 });
+const ProjectionThreadSearchRequest = Schema.Struct({
+  pattern: Schema.String,
+  limit: Schema.Int,
+});
+const ProjectionThreadSearchRow = Schema.Struct({
+  threadId: ThreadId,
+  projectId: ProjectId,
+  parentThreadId: Schema.NullOr(ThreadId),
+  source: OrchestrationThreadSearchSource,
+  matchText: Schema.String,
+  messageCreatedAt: Schema.NullOr(IsoDateTime),
+});
 const WorkspaceRootLookupInput = Schema.Struct({
   workspaceRoot: Schema.String,
 });
@@ -160,6 +173,31 @@ function maxIso(left: string | null, right: string): string {
     return right;
   }
   return left > right ? left : right;
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replaceAll("!", "!!").replaceAll("%", "!%").replaceAll("_", "!_");
+}
+
+function foldAsciiCase(value: string): string {
+  return value.replace(/[A-Z]/g, (character) => character.toLowerCase());
+}
+
+function buildSearchSnippet(text: string, query: string): string {
+  const normalizedText = text.replace(/\s+/g, " ").trim();
+  if (normalizedText.length <= 240) {
+    return normalizedText;
+  }
+
+  const normalizedQuery = foldAsciiCase(query.replace(/\s+/g, " ").trim());
+  const matchIndex = foldAsciiCase(normalizedText).indexOf(normalizedQuery);
+  const bodyLength = 236;
+  const idealStart = Math.max(0, matchIndex - 72);
+  const start = Math.min(idealStart, normalizedText.length - bodyLength);
+  const end = Math.min(normalizedText.length, start + bodyLength);
+  return `${start > 0 ? "…" : ""}${normalizedText.slice(start, end)}${
+    end < normalizedText.length ? "…" : ""
+  }`;
 }
 
 function computeSnapshotSequence(
@@ -212,6 +250,15 @@ function mapLatestTurn(
         }
       : {}),
   };
+}
+
+function mapTitleRegeneration(row: Schema.Schema.Type<typeof ProjectionThreadDbRowSchema>) {
+  return row.titleRegenerationRequestId != null && row.titleRegenerationStartedAt != null
+    ? {
+        requestId: row.titleRegenerationRequestId,
+        startedAt: row.titleRegenerationStartedAt,
+      }
+    : null;
 }
 
 function mapSessionRow(
@@ -337,6 +384,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           forked_from_thread_id AS "forkedFromThreadId",
           parent_thread_id AS "parentThreadId",
+          worker_view AS "workerView",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -345,6 +393,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           settled_at AS "settledAt",
           snoozed_until AS "snoozedUntil",
           snoozed_at AS "snoozedAt",
+          pinned_at AS "pinnedAt",
+          title_regeneration_request_id AS "titleRegenerationRequestId",
+          title_regeneration_started_at AS "titleRegenerationStartedAt",
           latest_user_message_at AS "latestUserMessageAt",
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
@@ -371,6 +422,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           forked_from_thread_id AS "forkedFromThreadId",
           parent_thread_id AS "parentThreadId",
+          worker_view AS "workerView",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -379,6 +431,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           settled_at AS "settledAt",
           snoozed_until AS "snoozedUntil",
           snoozed_at AS "snoozedAt",
+          pinned_at AS "pinnedAt",
+          title_regeneration_request_id AS "titleRegenerationRequestId",
+          title_regeneration_started_at AS "titleRegenerationStartedAt",
           latest_user_message_at AS "latestUserMessageAt",
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
@@ -407,6 +462,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           forked_from_thread_id AS "forkedFromThreadId",
           parent_thread_id AS "parentThreadId",
+          worker_view AS "workerView",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -415,6 +471,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           settled_at AS "settledAt",
           snoozed_until AS "snoozedUntil",
           snoozed_at AS "snoozedAt",
+          pinned_at AS "pinnedAt",
+          title_regeneration_request_id AS "titleRegenerationRequestId",
+          title_regeneration_started_at AS "titleRegenerationStartedAt",
           latest_user_message_at AS "latestUserMessageAt",
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
@@ -443,6 +502,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           forked_from_thread_id AS "forkedFromThreadId",
           parent_thread_id AS "parentThreadId",
+          worker_view AS "workerView",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -451,6 +511,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           settled_at AS "settledAt",
           snoozed_until AS "snoozedUntil",
           snoozed_at AS "snoozedAt",
+          pinned_at AS "pinnedAt",
+          title_regeneration_request_id AS "titleRegenerationRequestId",
+          title_regeneration_started_at AS "titleRegenerationStartedAt",
           latest_user_message_at AS "latestUserMessageAt",
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
@@ -792,6 +855,76 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  const searchActiveThreadRows = SqlSchema.findAll({
+    Request: ProjectionThreadSearchRequest,
+    Result: ProjectionThreadSearchRow,
+    execute: ({ pattern, limit }) =>
+      sql`
+        WITH ranked AS (
+          SELECT
+            threads.thread_id AS thread_id,
+            threads.project_id AS project_id,
+            threads.parent_thread_id AS parent_thread_id,
+            CASE messages.role
+              WHEN 'user' THEN 'user'
+              ELSE 'assistant'
+            END AS source,
+            messages.text AS match_text,
+            messages.created_at AS message_created_at,
+            CASE messages.role
+              WHEN 'user' THEN 0
+              ELSE 1
+            END AS match_rank,
+            threads.updated_at AS thread_updated_at,
+            ROW_NUMBER() OVER (
+              PARTITION BY threads.thread_id
+              ORDER BY
+                CASE messages.role
+                  WHEN 'user' THEN 0
+                  ELSE 1
+                END ASC,
+                messages.created_at DESC,
+                messages.message_id ASC
+            ) AS thread_match_rank
+          FROM projection_thread_messages AS messages
+          INNER JOIN projection_threads AS threads
+            ON threads.thread_id = messages.thread_id
+          INNER JOIN projection_projects AS projects
+            ON projects.project_id = threads.project_id
+          WHERE threads.deleted_at IS NULL
+            AND threads.archived_at IS NULL
+            AND projects.deleted_at IS NULL
+            AND messages.is_streaming = 0
+            AND (
+              messages.role = 'user'
+              OR (
+                messages.role = 'assistant'
+                AND messages.message_id IN (
+                  SELECT turns.assistant_message_id
+                  FROM projection_turns AS turns
+                  WHERE turns.assistant_message_id IS NOT NULL
+                )
+              )
+            )
+            AND messages.text LIKE ${pattern} ESCAPE '!'
+        )
+        SELECT
+          thread_id AS "threadId",
+          project_id AS "projectId",
+          parent_thread_id AS "parentThreadId",
+          source,
+          match_text AS "matchText",
+          message_created_at AS "messageCreatedAt"
+        FROM ranked
+        WHERE thread_match_rank = 1
+        ORDER BY
+          match_rank ASC,
+          thread_updated_at DESC,
+          thread_id ASC
+        LIMIT ${limit}
+      `,
+  });
+
   const getActiveProjectRowByWorkspaceRoot = SqlSchema.findOneOption({
     Request: WorkspaceRootLookupInput,
     Result: ProjectionProjectLookupRowSchema,
@@ -907,6 +1040,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           forked_from_thread_id AS "forkedFromThreadId",
           parent_thread_id AS "parentThreadId",
+          worker_view AS "workerView",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -915,6 +1049,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           settled_at AS "settledAt",
           snoozed_until AS "snoozedUntil",
           snoozed_at AS "snoozedAt",
+          pinned_at AS "pinnedAt",
+          title_regeneration_request_id AS "titleRegenerationRequestId",
+          title_regeneration_started_at AS "titleRegenerationStartedAt",
           latest_user_message_at AS "latestUserMessageAt",
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
@@ -1345,6 +1482,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 worktreePath: row.worktreePath,
                 forkedFromThreadId: row.forkedFromThreadId,
                 parentThreadId: row.parentThreadId,
+                workerView: row.workerView,
                 latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
@@ -1353,6 +1491,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 settledAt: row.settledAt,
                 snoozedUntil: row.snoozedUntil,
                 snoozedAt: row.snoozedAt,
+                pinnedAt: row.pinnedAt,
+                titleRegeneration: mapTitleRegeneration(row),
                 deletedAt: row.deletedAt,
                 messages: messagesByThread.get(row.threadId) ?? [],
                 proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
@@ -1549,6 +1689,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   worktreePath: row.worktreePath,
                   forkedFromThreadId: row.forkedFromThreadId,
                   parentThreadId: row.parentThreadId,
+                  workerView: row.workerView,
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
@@ -1557,6 +1698,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   settledAt: row.settledAt,
                   snoozedUntil: row.snoozedUntil,
                   snoozedAt: row.snoozedAt,
+                  pinnedAt: row.pinnedAt,
+                  titleRegeneration: mapTitleRegeneration(row),
                   deletedAt: row.deletedAt,
                   messages: [],
                   proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
@@ -1684,6 +1827,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                       worktreePath: row.worktreePath,
                       forkedFromThreadId: row.forkedFromThreadId,
                       parentThreadId: row.parentThreadId,
+                      workerView: row.workerView,
                       latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                       createdAt: row.createdAt,
                       updatedAt: row.updatedAt,
@@ -1692,6 +1836,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                       settledAt: row.settledAt,
                       snoozedUntil: row.snoozedUntil,
                       snoozedAt: row.snoozedAt,
+                      pinnedAt: row.pinnedAt,
+                      titleRegeneration: mapTitleRegeneration(row),
                       session: sessionByThread.get(row.threadId) ?? null,
                       latestUserMessageAt: row.latestUserMessageAt,
                       hasPendingApprovals: row.pendingApprovalCount > 0,
@@ -1824,6 +1970,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   worktreePath: row.worktreePath,
                   forkedFromThreadId: row.forkedFromThreadId,
                   parentThreadId: row.parentThreadId,
+                  workerView: row.workerView,
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
@@ -1832,6 +1979,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   settledAt: row.settledAt,
                   snoozedUntil: row.snoozedUntil,
                   snoozedAt: row.snoozedAt,
+                  pinnedAt: row.pinnedAt,
+                  titleRegeneration: mapTitleRegeneration(row),
                   session: sessionByThread.get(row.threadId) ?? null,
                   latestUserMessageAt: row.latestUserMessageAt,
                   hasPendingApprovals: row.pendingApprovalCount > 0,
@@ -1889,6 +2038,33 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         }),
       ),
     );
+
+  const searchThreads: ProjectionSnapshotQueryShape["searchThreads"] = Effect.fn(
+    "ProjectionSnapshotQuery.searchThreads",
+  )(function* (input) {
+    const escapedQuery = escapeLikePattern(input.query);
+    const rows = yield* searchActiveThreadRows({
+      pattern: `%${escapedQuery}%`,
+      limit: input.limit ?? 50,
+    }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.searchThreads:query",
+          "ProjectionSnapshotQuery.searchThreads:decodeRows",
+        ),
+      ),
+    );
+    return {
+      matches: rows.map((row) => ({
+        threadId: row.threadId,
+        projectId: row.projectId,
+        parentThreadId: row.parentThreadId,
+        source: row.source,
+        snippet: buildSearchSnippet(row.matchText, input.query),
+        messageCreatedAt: row.messageCreatedAt,
+      })),
+    };
+  });
 
   const getActiveProjectByWorkspaceRoot: ProjectionSnapshotQueryShape["getActiveProjectByWorkspaceRoot"] =
     (workspaceRoot) =>
@@ -1987,6 +2163,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                     worktreePath: row.worktreePath,
                     forkedFromThreadId: row.forkedFromThreadId,
                     parentThreadId: row.parentThreadId,
+                    workerView: row.workerView,
                     latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                     createdAt: row.createdAt,
                     updatedAt: row.updatedAt,
@@ -1995,6 +2172,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                     settledAt: row.settledAt,
                     snoozedUntil: row.snoozedUntil,
                     snoozedAt: row.snoozedAt,
+                    pinnedAt: row.pinnedAt,
+                    titleRegeneration: mapTitleRegeneration(row),
                     deletedAt: null,
                     messages: [],
                     proposedPlans: [],
@@ -2185,6 +2364,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         worktreePath: threadRow.value.worktreePath,
         forkedFromThreadId: threadRow.value.forkedFromThreadId,
         parentThreadId: threadRow.value.parentThreadId,
+        workerView: threadRow.value.workerView,
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,
@@ -2193,6 +2373,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         settledAt: threadRow.value.settledAt,
         snoozedUntil: threadRow.value.snoozedUntil,
         snoozedAt: threadRow.value.snoozedAt,
+        pinnedAt: threadRow.value.pinnedAt,
+        titleRegeneration: mapTitleRegeneration(threadRow.value),
         session: Option.isSome(sessionRow) ? mapSessionRow(sessionRow.value) : null,
         latestUserMessageAt: threadRow.value.latestUserMessageAt,
         hasPendingApprovals: threadRow.value.pendingApprovalCount > 0,
@@ -2285,6 +2467,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         worktreePath: threadRow.value.worktreePath,
         forkedFromThreadId: threadRow.value.forkedFromThreadId,
         parentThreadId: threadRow.value.parentThreadId,
+        workerView: threadRow.value.workerView,
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,
@@ -2293,6 +2476,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         settledAt: threadRow.value.settledAt,
         snoozedUntil: threadRow.value.snoozedUntil,
         snoozedAt: threadRow.value.snoozedAt,
+        pinnedAt: threadRow.value.pinnedAt,
+        titleRegeneration: mapTitleRegeneration(threadRow.value),
         deletedAt: null,
         messages: messageRows.map((row) => {
           const message = {
@@ -2381,6 +2566,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getShellSnapshot,
     getArchivedShellSnapshot,
     getProjectPerception,
+    searchThreads,
     getSnapshotSequence,
     getCounts,
     getActiveProjectByWorkspaceRoot,

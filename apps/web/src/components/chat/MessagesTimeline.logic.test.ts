@@ -330,6 +330,14 @@ describe("deriveMessagesTimelineRows", () => {
       summary: "Inspecting provider events",
       createdAt: "2026-01-01T00:00:02Z",
     };
+    const updated = {
+      ...started,
+      id: "task-updated" as never,
+      kind: "task.updated" as const,
+      summary: "Inspection complete",
+      payload: { ...started.payload, status: "idle" },
+      createdAt: "2026-01-01T00:00:03Z",
+    };
     const rows = deriveMessagesTimelineRows({
       timelineEntries: [
         {
@@ -345,8 +353,21 @@ describe("deriveMessagesTimelineRows", () => {
             sourceActivityKind: "task.progress",
           },
         },
+        {
+          id: "task-updated",
+          kind: "work",
+          createdAt: updated.createdAt,
+          entry: {
+            id: "task-updated",
+            createdAt: updated.createdAt,
+            turnId,
+            label: updated.summary,
+            tone: "info",
+            sourceActivityKind: "task.updated",
+          },
+        },
       ],
-      coordinationActivities: [started, progress] as never,
+      coordinationActivities: [started, progress, updated] as never,
       runningTurnId: turnId,
       isWorking: false,
       activeTurnStartedAt: null,
@@ -357,8 +378,34 @@ describe("deriveMessagesTimelineRows", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.kind).toBe("coordination");
     if (rows[0]?.kind === "coordination") {
-      expect(rows[0].activities).toHaveLength(2);
+      expect(rows[0].activities).toHaveLength(3);
     }
+  });
+
+  it("keeps native task lifecycle out of the transcript without Workstreams", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "task-updated",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:03Z",
+          entry: {
+            id: "task-updated",
+            createdAt: "2026-01-01T00:00:03Z",
+            turnId: "turn-workstreams" as never,
+            label: "Inspection complete",
+            tone: "info",
+            sourceActivityKind: "task.updated",
+          },
+        },
+      ],
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows).toEqual([]);
   });
 
   it("only enables assistant copy for the terminal assistant message in a turn", () => {
