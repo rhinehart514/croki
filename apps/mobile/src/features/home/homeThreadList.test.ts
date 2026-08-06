@@ -664,7 +664,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Croki",
     });
     const thread = makeThread({
       environmentId,

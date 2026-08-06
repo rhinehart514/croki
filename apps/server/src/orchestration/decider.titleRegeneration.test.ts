@@ -4,7 +4,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -45,6 +45,14 @@ const readModel: OrchestrationReadModel = {
   updatedAt: UPDATED_AT,
 };
 
+const workerReadModel: OrchestrationReadModel = {
+  ...readModel,
+  threads: readModel.threads.map((thread) => ({
+    ...thread,
+    parentThreadId: ThreadId.make("thread-parent"),
+  })),
+};
+
 it.layer(NodeServices.layer)("title regeneration decider", (it) => {
   it.effect("preserves updatedAt for a stale completion", () =>
     Effect.gen(function* () {
@@ -67,6 +75,22 @@ it.layer(NodeServices.layer)("title regeneration decider", (it) => {
           updatedAt: UPDATED_AT,
         });
       }
+    }),
+  );
+
+  it.effect("rejects title regeneration for worker threads", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.meta.update",
+          commandId: CommandId.make("cmd-regenerate-worker-title"),
+          threadId: ThreadId.make("thread-1"),
+          regenerateTitle: true,
+        },
+        readModel: workerReadModel,
+      }).pipe(Effect.flip);
+
+      expect(error._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
 });

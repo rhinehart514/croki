@@ -5768,6 +5768,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   {
                     threadId: ThreadId.make("thread-1"),
                     projectId: ProjectId.make("project-a"),
+                    parentThreadId: null,
                     source: "assistant",
                     snippet: "Search reached the final response.",
                     messageCreatedAt: now,
@@ -5843,6 +5844,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         {
           threadId: ThreadId.make("thread-1"),
           projectId: ProjectId.make("project-a"),
+          parentThreadId: null,
           source: "assistant",
           snippet: "Search reached the final response.",
           messageCreatedAt: now,

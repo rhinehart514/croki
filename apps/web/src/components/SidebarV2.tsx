@@ -1496,98 +1496,93 @@ export default function SidebarV2() {
     settledThreads,
     childThreadsByParentKey,
     snoozeNow,
-  } =
-    useMemo(() => {
-      const now = `${nowMinute}:00.000Z`;
-      // Snooze classification uses a REAL clock, not the quantized minute:
-      // wake times are second-precise and a woken thread must not linger on
-      // the shelf for the rest of the minute. snoozeWakeTick re-runs this
-      // memo exactly at the next wake boundary.
-      void snoozeWakeTick;
-      const preciseNow = new Date().toISOString();
-      const isInProjectScope = (thread: EnvironmentThreadShell) =>
-        scopedProjectKeys === null ||
-        scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`);
-      const visibleChildParentKeys = new Set(
-        threads
-          .filter(
-            (thread) =>
-              thread.archivedAt === null && thread.parentThreadId && isInProjectScope(thread),
-          )
-          .map((thread) => `${thread.environmentId}:${thread.parentThreadId}`),
-      );
-      const visible = threads.filter(
-        (thread) =>
-          isInProjectScope(thread) &&
-          (thread.archivedAt === null ||
-            visibleChildParentKeys.has(`${thread.environmentId}:${thread.id}`)),
-      );
-      const childThreadsByParentKey = new Map<string, EnvironmentThreadShell[]>();
-      for (const child of visible) {
-        if (!child.parentThreadId) continue;
-        const key = `${child.environmentId}:${child.parentThreadId}`;
-        const existing = childThreadsByParentKey.get(key) ?? [];
-        existing.push(child);
-        childThreadsByParentKey.set(key, existing);
+  } = useMemo(() => {
+    const now = `${nowMinute}:00.000Z`;
+    // Snooze classification uses a REAL clock, not the quantized minute:
+    // wake times are second-precise and a woken thread must not linger on
+    // the shelf for the rest of the minute. snoozeWakeTick re-runs this
+    // memo exactly at the next wake boundary.
+    void snoozeWakeTick;
+    const preciseNow = new Date().toISOString();
+    const isInProjectScope = (thread: EnvironmentThreadShell) =>
+      scopedProjectKeys === null ||
+      scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`);
+    const visibleChildParentKeys = new Set(
+      threads
+        .filter(
+          (thread) =>
+            thread.archivedAt === null && thread.parentThreadId && isInProjectScope(thread),
+        )
+        .map((thread) => `${thread.environmentId}:${thread.parentThreadId}`),
+    );
+    const visible = threads.filter(
+      (thread) =>
+        isInProjectScope(thread) &&
+        (thread.archivedAt === null ||
+          visibleChildParentKeys.has(`${thread.environmentId}:${thread.id}`)),
+    );
+    const childThreadsByParentKey = new Map<string, EnvironmentThreadShell[]>();
+    for (const child of visible) {
+      if (!child.parentThreadId) continue;
+      const key = `${child.environmentId}:${child.parentThreadId}`;
+      const existing = childThreadsByParentKey.get(key) ?? [];
+      existing.push(child);
+      childThreadsByParentKey.set(key, existing);
+    }
+    const parentThreads = visible.filter((thread) => !thread.parentThreadId);
+    const pinned: EnvironmentThreadShell[] = [];
+    const active: EnvironmentThreadShell[] = [];
+    const snoozed: EnvironmentThreadShell[] = [];
+    const settled: EnvironmentThreadShell[] = [];
+    for (const thread of parentThreads) {
+      // Threads on servers without the settlement capability (old server,
+      // or descriptor not loaded yet) never classify as settled: the user
+      // could neither un-settle nor pin them, so auto-settling them would
+      // strand rows in a tail with no working affordances.
+      const supportsSettlement =
+        serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSettlement === true;
+      const supportsSnooze =
+        serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true;
+      const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+      const changeRequestState = changeRequestStateByKey.get(threadKey) ?? null;
+      // Snooze outranks settled classification: an explicitly snoozed thread
+      // belongs to the shelf even if it would also auto-settle (the shelf's
+      // wake time is a stronger statement about when it matters again).
+      if (supportsSnooze && effectiveSnoozed(thread, { now: preciseNow })) {
+        snoozed.push(thread);
+      } else if (thread.pinnedAt != null) {
+        pinned.push(thread);
+      } else if (
+        supportsSettlement &&
+        effectiveSettled(thread, { now, autoSettleAfterDays, changeRequestState })
+      ) {
+        settled.push(thread);
+      } else {
+        active.push(thread);
       }
-      const parentThreads = visible.filter((thread) => !thread.parentThreadId);
-      const pinned: EnvironmentThreadShell[] = [];
-      const active: EnvironmentThreadShell[] = [];
-      const snoozed: EnvironmentThreadShell[] = [];
-      const settled: EnvironmentThreadShell[] = [];
-      for (const thread of parentThreads) {
-        // Threads on servers without the settlement capability (old server,
-        // or descriptor not loaded yet) never classify as settled: the user
-        // could neither un-settle nor pin them, so auto-settling them would
-        // strand rows in a tail with no working affordances.
-        const supportsSettlement =
-          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSettlement ===
-          true;
-        const supportsSnooze =
-          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true;
-        const supportsPinning =
-          thread.parentThreadId == null &&
-          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinning === true;
-        const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-        const changeRequestState = changeRequestStateByKey.get(threadKey) ?? null;
-        // Snooze outranks settled classification: an explicitly snoozed thread
-        // belongs to the shelf even if it would also auto-settle (the shelf's
-        // wake time is a stronger statement about when it matters again).
-        if (supportsSnooze && effectiveSnoozed(thread, { now: preciseNow })) {
-          snoozed.push(thread);
-        } else if (thread.pinnedAt != null) {
-          pinned.push(thread);
-        } else if (
-          supportsSettlement &&
-          effectiveSettled(thread, { now, autoSettleAfterDays, changeRequestState })
-        ) {
-          settled.push(thread);
-        } else {
-          active.push(thread);
-        }
-      }
-      return {
-        pinnedThreads: sortThreadsForSidebarV2(pinned),
-        activeThreads: sortThreadsForSidebarV2(active),
-        // Soonest wake first: "what comes back next" is the shelf's question.
-        snoozedThreads: snoozed.toSorted(
-          (left, right) =>
-            firstValidTimestampMs(left.snoozedUntil ?? null) -
-            firstValidTimestampMs(right.snoozedUntil ?? null),
-        ),
-        settledThreads: sortSettledThreadsForSidebarV2(settled),
-        childThreadsByParentKey,
-        snoozeNow: preciseNow,
-      };
-    }, [
-      autoSettleAfterDays,
-      changeRequestStateByKey,
-      nowMinute,
-      scopedProjectKeys,
-      serverConfigs,
-      snoozeWakeTick,
-      threads,
-    ]);
+    }
+    return {
+      pinnedThreads: sortThreadsForSidebarV2(pinned),
+      activeThreads: sortThreadsForSidebarV2(active),
+      // Soonest wake first: "what comes back next" is the shelf's question.
+      snoozedThreads: snoozed.toSorted(
+        (left, right) =>
+          firstValidTimestampMs(left.snoozedUntil ?? null) -
+          firstValidTimestampMs(right.snoozedUntil ?? null),
+      ),
+      settledThreads: sortSettledThreadsForSidebarV2(settled),
+      childThreadsByParentKey,
+      snoozeNow: preciseNow,
+    };
+  }, [
+    autoSettleAfterDays,
+    changeRequestStateByKey,
+    nowMinute,
+    scopedProjectKeys,
+    serverConfigs,
+    snoozeWakeTick,
+    threads,
+  ]);
 
   // Arm a timeout for the earliest upcoming wake so the shelf empties the
   // moment a snooze expires instead of on the next minute tick. Sorted
@@ -1689,9 +1684,9 @@ export default function SidebarV2() {
         ...visibleSnoozedThreads,
         ...renderedSettledThreads,
       ].flatMap((thread) => [
-          thread,
-          ...(childThreadsByParentKey.get(`${thread.environmentId}:${thread.id}`) ?? []),
-        ]),
+        thread,
+        ...(childThreadsByParentKey.get(`${thread.environmentId}:${thread.id}`) ?? []),
+      ]),
     [
       activeThreads,
       childThreadsByParentKey,
@@ -2252,6 +2247,9 @@ export default function SidebarV2() {
           true;
         const supportsSnooze =
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true;
+        const supportsPinning =
+          thread.parentThreadId == null &&
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinning === true;
         const providers = serverConfigs.get(thread.environmentId)?.providers ?? [];
         const canFork = canForkSidebarThread(thread, providers);
         const forkBlocked = isSidebarThreadForkBlocked(thread);
@@ -2835,9 +2833,9 @@ export default function SidebarV2() {
                     />,
                   );
                 }
-                items.push(...activeThreads.flatMap((thread) =>
-                  renderThreadWithChildren(thread, "active"),
-                ));
+                items.push(
+                  ...activeThreads.flatMap((thread) => renderThreadWithChildren(thread, "active")),
+                );
                 // Snoozed shelf: between the inbox and Settled — out of the
                 // way, never gone. The header always renders while anything
                 // is snoozed (the count is the whole footprint when
@@ -2915,7 +2913,10 @@ export default function SidebarV2() {
               ) : null}
             </ul>
           </TooltipProvider>
-          {pinnedThreads.length + activeThreads.length + snoozedThreads.length + settledThreads.length ===
+          {pinnedThreads.length +
+            activeThreads.length +
+            snoozedThreads.length +
+            settledThreads.length ===
           0 ? (
             <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-xs text-muted-foreground/60">
               {projects.length === 0 ? (

@@ -22,6 +22,15 @@ export interface CommandPaletteThreadContentMatch {
   readonly isWorker: boolean;
 }
 
+export function threadContentSpeaker(
+  match: Pick<CommandPaletteThreadContentMatch, "isWorker" | "source">,
+): "Agent" | "Assignment" | "Worker" | "You" {
+  if (match.isWorker) {
+    return match.source === "user" ? "Assignment" : "Worker";
+  }
+  return match.source === "user" ? "You" : "Agent";
+}
+
 export interface CommandPaletteItem {
   readonly kind: "action" | "submenu";
   readonly value: string;

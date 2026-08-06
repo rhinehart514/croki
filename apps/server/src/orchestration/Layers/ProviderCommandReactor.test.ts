@@ -420,9 +420,6 @@ describe("ProviderCommandReactor", () => {
     const engine = await managedRuntime.runPromise(Effect.service(OrchestrationEngineService));
     const snapshotQuery = await managedRuntime.runPromise(Effect.service(ProjectionSnapshotQuery));
     const reactor = await managedRuntime.runPromise(Effect.service(ProviderCommandReactor));
-    scope = await Effect.runPromise(Scope.make("sequential"));
-    await Effect.runPromise(reactor.start().pipe(Scope.provide(scope)));
-    const drain = () => Effect.runPromise(reactor.drain);
     const runEffect = <A, E>(effect: Effect.Effect<A, E>) => managedRuntime.runPromise(effect);
 
     await Effect.runPromise(

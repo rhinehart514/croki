@@ -3,7 +3,7 @@ import {
   ProjectId,
   ThreadId,
   type OrchestrationSearchThreadsResult,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { expect, it } from "vite-plus/test";
@@ -55,6 +55,7 @@ it("merges successful environments and silently ignores failures", () => {
       {
         threadId: ThreadId.make("thread-a"),
         projectId: ProjectId.make("project-a"),
+        parentThreadId: null,
         source: "user",
         snippet: "needle",
         messageCreatedAt: "2026-07-30T00:00:00.000Z",

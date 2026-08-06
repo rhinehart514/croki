@@ -32,7 +32,7 @@ const QUEUED_TURN_START_GRACE_MS = 2 * 60 * 1_000;
 function requireCanonicalThreadLifecycle(input: {
   readonly commandType: string;
   readonly threadId: string;
-  readonly parentThreadId?: string | null;
+  readonly parentThreadId: string | null | undefined;
 }) {
   return input.parentThreadId == null
     ? Effect.void

@@ -1,8 +1,5 @@
 import { isLiquidGlassSupported, LiquidGlassView } from "@callstack/liquid-glass";
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@croki/client-runtime/state/shell";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
 import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
@@ -207,6 +204,7 @@ function ThreadNavigationSidebarPane(
     unsettleThread,
     pinThread,
     unpinThread,
+    regenerateThreadTitle,
   } = useThreadListActions();
   const threadListV2Enabled = useThreadListV2Enabled();
   const pendingTasks = usePendingNewTasks();
@@ -779,6 +777,7 @@ function ThreadNavigationSidebarPane(
       projectByKey,
       projectCwdByKey,
       projectTitleByProjectKey,
+      regenerateThreadTitle,
       savedConnectionsById,
       serverConfigs,
       snoozePresetMinute: nowMinute,
@@ -789,6 +788,7 @@ function ThreadNavigationSidebarPane(
       projectByKey,
       projectCwdByKey,
       projectTitleByProjectKey,
+      regenerateThreadTitle,
       savedConnectionsById,
       serverConfigs,
       nowMinute,
@@ -940,6 +940,12 @@ function ThreadNavigationSidebarPane(
               onUnsettleThread={unsettleThread}
               onPinThread={pinThread}
               onUnpinThread={unpinThread}
+              titleRegenerationSupported={
+                thread.parentThreadId == null &&
+                serverConfigs.get(thread.environmentId)?.environment.capabilities
+                  .threadTitleRegeneration === true
+              }
+              onRegenerateThreadTitle={regenerateThreadTitle}
               onChangeRequestState={handleChangeRequestState}
               projectCwd={projectCwdByKey.get(scopeKey) ?? null}
               onSwipeableClose={handleSwipeableClose}
@@ -1039,6 +1045,12 @@ function ThreadNavigationSidebarPane(
               fullSwipeWidth={props.width - 20}
               onArchiveThread={archiveThread}
               onDeleteThread={confirmDeleteThread}
+              titleRegenerationSupported={
+                thread.parentThreadId == null &&
+                serverConfigs.get(thread.environmentId)?.environment.capabilities
+                  .threadTitleRegeneration === true
+              }
+              onRegenerateThreadTitle={regenerateThreadTitle}
               onSelectThread={handleSelectThread}
               onSwipeableClose={handleSwipeableClose}
               onSwipeableWillOpen={handleSwipeableWillOpen}
@@ -1072,6 +1084,7 @@ function ThreadNavigationSidebarPane(
       projectByKey,
       projectCwdByKey,
       projectTitleByProjectKey,
+      regenerateThreadTitle,
       props.onNewThreadInProject,
       props.searchQuery,
       props.selectedThreadKey,

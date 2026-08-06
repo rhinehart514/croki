@@ -1,7 +1,4 @@
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@croki/client-runtime/state/shell";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
 import type { EnvironmentThreadSearchMatch } from "@croki/client-runtime/state/thread-search";
 import { canSnooze, resolveSnoozePresets } from "@croki/client-runtime/state/thread-settled";
 import type { MenuAction } from "@react-native-menu/menu";
@@ -87,6 +84,22 @@ const LEGACY_MENU_ACTIONS: MenuAction[] = [
   { id: "archive", title: "Archive", image: "archivebox" },
   { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true } },
 ];
+
+function withTitleRegeneration(
+  actions: readonly MenuAction[],
+  options: { readonly supported: boolean; readonly pending: boolean },
+): MenuAction[] {
+  if (!options.supported) return [...actions];
+  const deleteIndex = actions.findIndex((action) => action.id === "delete");
+  const item: MenuAction = {
+    id: "regenerate-title",
+    title: options.pending ? "Regenerating title…" : "Regenerate title",
+    image: "arrow.clockwise",
+    attributes: options.pending ? { disabled: true } : undefined,
+  };
+  if (deleteIndex < 0) return [...actions, item];
+  return [...actions.slice(0, deleteIndex), item, ...actions.slice(deleteIndex)];
+}
 
 /** Rounded-row radius shared with the v1 sidebar rows. */
 const SIDEBAR_V2_ROW_RADIUS = 12;
@@ -348,6 +361,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly snoozeSupported: boolean;
   /** False on servers that predate thread.pin/unpin. */
   readonly pinningSupported: boolean;
+  readonly titleRegenerationSupported: boolean;
+  readonly onRegenerateThreadTitle: (thread: EnvironmentThreadShell) => void;
   readonly onSwipeableWillOpen: (methods: SwipeableMethods) => void;
   readonly onSwipeableClose: (methods: SwipeableMethods) => void;
   /** Reports this row's live PR state up so the partition can auto-settle
@@ -376,6 +391,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onArchiveThread,
     onPinThread,
     onUnpinThread,
+    onRegenerateThreadTitle,
     onChangeRequestState,
   } = props;
   const snoozedRow = props.snoozed === true;
@@ -410,6 +426,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const handleUnsettle = useCallback(() => onUnsettleThread(thread), [onUnsettleThread, thread]);
   const handlePin = useCallback(() => onPinThread(thread), [onPinThread, thread]);
   const handleUnpin = useCallback(() => onUnpinThread(thread), [onUnpinThread, thread]);
+  const handleRegenerateTitle = useCallback(
+    () => onRegenerateThreadTitle(thread),
+    [onRegenerateThreadTitle, thread],
+  );
   const handleArchive = useCallback(() => onArchiveThread(thread), [onArchiveThread, thread]);
 
   // Swipe: the v2 primary action is the lifecycle transition. Every settled
@@ -485,6 +505,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "unsnooze") handleUnsnooze();
       if (nativeEvent.event === "pin") handlePin();
       if (nativeEvent.event === "unpin") handleUnpin();
+      if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
       if (nativeEvent.event === "archive") handleArchive();
       if (nativeEvent.event === "delete") handleDelete();
       const snoozeSelection = resolveThreadListV2SnoozeMenuSelection({
@@ -502,6 +523,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleArchive,
       handleDelete,
       handlePin,
+      handleRegenerateTitle,
       handleSettle,
       handleSnooze,
       handleUnpin,
@@ -568,6 +590,30 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : null,
     [handleMenuAction, snoozePresetActions, swipeActions.secondary, thread.title],
   );
+  const menuActions = useMemo(() => {
+    const base = snoozedRow
+      ? SNOOZED_MENU_ACTIONS
+      : !props.settlementSupported
+        ? LEGACY_MENU_ACTIONS
+        : canUnsettle
+          ? SLIM_MENU_ACTIONS
+          : swipeActions.secondary === "snooze"
+            ? snoozableCardMenuActions
+            : cardMenuActions;
+    return withTitleRegeneration(base, {
+      supported: props.titleRegenerationSupported,
+      pending: thread.titleRegeneration != null,
+    });
+  }, [
+    canUnsettle,
+    cardMenuActions,
+    props.settlementSupported,
+    props.titleRegenerationSupported,
+    snoozableCardMenuActions,
+    snoozedRow,
+    swipeActions.secondary,
+    thread.titleRegeneration,
+  ]);
   const swipeAccessibilityHint =
     secondaryAction === null
       ? `Opens the thread. Swipe left to ${primaryAction.label.toLowerCase()}.`
@@ -834,17 +880,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       >
         {(close) => (
           <ControlPillMenu
-            actions={
-              snoozedRow
-                ? SNOOZED_MENU_ACTIONS
-                : !props.settlementSupported
-                  ? LEGACY_MENU_ACTIONS
-                  : canUnsettle
-                    ? SLIM_MENU_ACTIONS
-                    : swipeActions.secondary === "snooze"
-                      ? snoozableCardMenuActions
-                      : cardMenuActions
-            }
+            actions={menuActions}
             onPressAction={handleMenuAction}
             shouldOpenOnLongPress
           >

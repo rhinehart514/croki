@@ -1801,6 +1801,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         INSERT INTO projection_threads (
           thread_id,
           project_id,
+          parent_thread_id,
           title,
           model_selection_json,
           runtime_mode,
@@ -1821,6 +1822,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           (
             'thread-active',
             'project-search',
+            'thread-percent-decoy',
             'Literal 100% fix',
             '{"provider":"codex","model":"gpt-5-codex"}',
             'full-access',
@@ -1840,6 +1842,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           (
             'thread-percent-decoy',
             'project-search',
+            NULL,
             'Literal 100x fix',
             '{"provider":"codex","model":"gpt-5-codex"}',
             'full-access',
@@ -1859,6 +1862,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           (
             'thread-hidden',
             'project-search',
+            NULL,
             'Archived search',
             '{"provider":"codex","model":"gpt-5-codex"}',
             'full-access',
@@ -1994,6 +1998,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       const user = yield* snapshotQuery.searchThreads({ query: "user needle" });
       assert.equal(user.matches[0]?.source, "user");
+      assert.equal(user.matches[0]?.parentThreadId, ThreadId.make("thread-percent-decoy"));
       assert.match(user.matches[0]?.snippet ?? "", /USER needle/);
 
       const assistant = yield* snapshotQuery.searchThreads({ query: "FINAL NEEDLE" });

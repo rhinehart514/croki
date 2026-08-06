@@ -265,7 +265,7 @@ describe("buildThreadListV2Items", () => {
       ["settled", "slim"],
       ["settled-2", "slim"],
     ]);
-    expect(items.map((item) => item.showSettledDivider)).toEqual([false, true, false]);
+    expect(items.map((item) => item.pinned)).toEqual([false, false, false]);
     expect(items.map((item) => item.isLast)).toEqual([false, false, true]);
   });
 
@@ -471,13 +471,20 @@ describe("buildThreadListV2ListItems", () => {
     const items = buildThreadListV2ListItems({
       items: layout.items,
       pendingTasks: [makePendingTask("queued-1"), makePendingTask("queued-2")],
+      settledCount: layout.settledCount,
+      settledShelfExpanded: true,
+      settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
     });
 
     expect(
       items.map((item) =>
-        item.type === "v2-pending" ? item.pendingTask.title : item.item.thread.id,
+        item.type === "v2-pending"
+          ? item.pendingTask.title
+          : item.type === "v2-thread"
+            ? item.item.thread.id
+            : item.type,
       ),
-    ).toEqual(["active", "queued-1", "queued-2", "settled"]);
+    ).toEqual(["active", "queued-1", "queued-2", "v2-settled-shelf", "settled"]);
     // Only the leading queued row labels the section, exactly like Settled.
     expect(
       items.filter((item) => item.type === "v2-pending" && item.showPendingDivider),

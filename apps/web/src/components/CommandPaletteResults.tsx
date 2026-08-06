@@ -5,6 +5,7 @@ import {
   type CommandPaletteActionItem,
   type CommandPaletteGroup,
   type CommandPaletteSubmenuItem,
+  threadContentSpeaker,
 } from "./CommandPalette.logic";
 import {
   CommandCollection,
@@ -69,18 +70,10 @@ function ThreadContentMatch(props: {
   match: NonNullable<CommandPaletteActionItem["threadContentMatch"]>;
 }) {
   const isUser = props.match.source === "user";
-  const speaker = props.match.isWorker
-    ? isUser
-      ? "Assignment"
-      : "Worker"
-    : isUser
-      ? "You"
-      : "Agent";
+  const speaker = threadContentSpeaker(props.match);
   return (
     <span className="truncate text-xs text-muted-foreground/85">
-      <span className={isUser ? "text-blue-400" : "text-emerald-400"}>
-        {speaker}:
-      </span>{" "}
+      <span className={isUser ? "text-blue-400" : "text-emerald-400"}>{speaker}:</span>{" "}
       <HighlightedSearchText text={props.match.snippet} query={props.match.query} />
     </span>
   );

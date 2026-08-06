@@ -7,6 +7,7 @@ import {
   buildThreadActionItems,
   enumerateCommandPaletteItems,
   filterCommandPaletteGroups,
+  threadContentSpeaker,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
 
@@ -201,13 +202,14 @@ describe("buildThreadActionItems", () => {
   it("keeps message excerpts searchable without replacing thread metadata", () => {
     const [item] = buildThreadActionItems({
       threads: [makeThread({ branch: "feat/search" })],
-      projectTitleById: new Map([[PROJECT_ID, "T3 Code"]]),
+      projectTitleById: new Map([[PROJECT_ID, "Croki"]]),
       sortOrder: "updated_at",
       icon: null,
       getContentMatch: () => ({
         source: "assistant",
         snippet: "The relay reconnect is now bounded.",
         query: "reconnect",
+        isWorker: false,
       }),
       runThread: async (_thread) => undefined,
     });
@@ -217,8 +219,9 @@ describe("buildThreadActionItems", () => {
       source: "assistant",
       snippet: "The relay reconnect is now bounded.",
       query: "reconnect",
+      isWorker: false,
     });
-    expect(item?.description).toBe("T3 Code · #feat/search");
+    expect(item?.description).toBe("Croki · #feat/search");
   });
 
   it("filters archived threads out of thread search items", () => {
@@ -244,6 +247,15 @@ describe("buildThreadActionItems", () => {
     });
 
     expect(items.map((item) => item.value)).toEqual(["thread:thread-active"]);
+  });
+});
+
+describe("threadContentSpeaker", () => {
+  it("distinguishes canonical conversation and worker evidence", () => {
+    expect(threadContentSpeaker({ source: "user", isWorker: false })).toBe("You");
+    expect(threadContentSpeaker({ source: "assistant", isWorker: false })).toBe("Agent");
+    expect(threadContentSpeaker({ source: "user", isWorker: true })).toBe("Assignment");
+    expect(threadContentSpeaker({ source: "assistant", isWorker: true })).toBe("Worker");
   });
 });
 

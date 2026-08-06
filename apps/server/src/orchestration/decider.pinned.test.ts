@@ -4,7 +4,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -17,6 +17,7 @@ const PINNED_AT = "1969-12-30T00:00:00.000Z";
 function makeReadModel(input: {
   readonly pinnedAt?: string | null;
   readonly archivedAt?: string | null;
+  readonly parentThreadId?: string | null;
   readonly settledOverride?: "settled" | "active" | null;
   readonly settledAt?: string | null;
   readonly snoozedUntil?: string | null;
@@ -35,6 +36,7 @@ function makeReadModel(input: {
         interactionMode: "default",
         branch: null,
         worktreePath: null,
+        parentThreadId: input.parentThreadId == null ? null : ThreadId.make(input.parentThreadId),
         latestTurn: null,
         createdAt: NOW,
         updatedAt: NOW,
@@ -221,6 +223,31 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         readModel: makeReadModel({ archivedAt: NOW }),
       }).pipe(Effect.flip);
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
+    }),
+  );
+
+  it.effect("rejects pinning and settling worker threads", () =>
+    Effect.gen(function* () {
+      const readModel = makeReadModel({ parentThreadId: "thread-parent" });
+      const pinError = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.pin",
+          commandId: CommandId.make("cmd-pin-worker"),
+          threadId: ThreadId.make("thread-1"),
+        },
+        readModel,
+      }).pipe(Effect.flip);
+      const settleError = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.settle",
+          commandId: CommandId.make("cmd-settle-worker"),
+          threadId: ThreadId.make("thread-1"),
+        },
+        readModel,
+      }).pipe(Effect.flip);
+
+      expect(pinError._tag).toBe("OrchestrationCommandInvariantError");
+      expect(settleError._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
 });
