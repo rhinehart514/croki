@@ -741,12 +741,25 @@ struct HomePresentation {
                 if $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
                 return $0.id < $1.id
             }
+        let knownThreadIDs = Set(snapshot.threads.map(\.id))
+        let isOrphanWorker: (FeatureThread) -> Bool = { thread in
+            guard let parentThreadID = thread.parentThreadID else { return false }
+            return !knownThreadIDs.contains(parentThreadID)
+        }
 
         pinned = Self.expandingWorkers(index.pinned.filter { $0.parentThreadID == nil }, in: snapshot)
+            + index.pinned.filter(isOrphanWorker)
         active = Self.expandingWorkers(index.active.filter { $0.parentThreadID == nil }, in: snapshot)
+            + index.active.filter(isOrphanWorker)
         snoozed = Self.expandingWorkers(index.snoozed.filter { $0.parentThreadID == nil }, in: snapshot)
+            + index.snoozed.filter(isOrphanWorker)
         settled = Self.expandingWorkers(index.settled.filter { $0.parentThreadID == nil }, in: snapshot)
+            + index.settled.filter(isOrphanWorker)
         archived = Self.expandingWorkers(archivedParents, in: snapshot)
+            + snapshot.threads.filter { thread in
+                thread.isArchived && isOrphanWorker(thread)
+                    && (projectID == nil || thread.projectID == projectID)
+            }
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let scopedMatches = contentMatches.filter { match in
             projectID == nil || match.projectID == projectID
@@ -874,6 +887,7 @@ struct HomeShelfHeader: View {
 
 struct HomeThreadRowContext: Equatable {
     let projectName: String
+    let workerParentThreadID: String?
     let parentThreadTitle: String?
     let environmentLabel: String?
     let providerID: String
@@ -883,6 +897,7 @@ struct HomeThreadRowContext: Equatable {
 
     static let fallback = HomeThreadRowContext(
         projectName: "Project",
+        workerParentThreadID: nil,
         parentThreadTitle: nil,
         environmentLabel: nil,
         providerID: "agent",
@@ -901,7 +916,9 @@ struct HomeThreadRowContext: Equatable {
     }
 
     var workerProvenance: String? {
-        parentThreadTitle.map { "Worker of \($0)" }
+        guard workerParentThreadID != nil else { return nil }
+        return parentThreadTitle.map { "Worker of \($0)" }
+            ?? "Worker, parent unavailable"
     }
 
     static func index(snapshot: FeatureSnapshot) -> [String: HomeThreadRowContext] {
@@ -947,6 +964,7 @@ struct HomeThreadRowContext: Equatable {
 
             result[thread.id] = HomeThreadRowContext(
                 projectName: project?.name ?? "Project",
+                workerParentThreadID: thread.parentThreadID,
                 parentThreadTitle: thread.parentThreadID.flatMap { threadTitleByID[$0] },
                 environmentLabel: environmentLabel?.isEmpty == false ? environmentLabel : nil,
                 providerID: providerID,

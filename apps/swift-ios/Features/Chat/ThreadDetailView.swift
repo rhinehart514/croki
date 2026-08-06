@@ -339,12 +339,21 @@ public struct ThreadDetailView: View {
         let isWorking = detail.thread.state == .working || detail.thread.state == .queued
         return Group {
             if detail.messages.isEmpty, !isWorking {
-                ContentUnavailableView(
-                    "Ready for a task",
-                    systemImage: "sparkles",
-                    description: Text("Tell the agent what you want to build.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if workerRecovery != nil {
+                    ContentUnavailableView(
+                        "No worker transcript yet",
+                        systemImage: "bubble.left",
+                        description: Text("This read-only worker chat has not reported a message.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ContentUnavailableView(
+                        "Ready for a task",
+                        systemImage: "sparkles",
+                        description: Text("Tell the agent what you want to build.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
                 FeatureTranscriptCollectionView(
                     threadID: thread.id,
@@ -357,32 +366,62 @@ public struct ThreadDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let parentID = currentThread.parentThreadID {
+            if let workerRecovery {
                 VStack(alignment: .leading, spacing: 7) {
                     Text("Read-only worker chat")
                         .font(T3Typography.supportingStrong)
                         .foregroundStyle(T3Colors.textPrimary)
-                    Text(workerProvenance ?? "Parent Thread unavailable")
+                    Text(workerRecovery.provenance)
                         .font(T3Typography.supporting)
                         .foregroundStyle(T3Colors.textSecondary)
                         .lineLimit(1)
-                    Button {
-                        onContinueInParent(parentID)
-                    } label: {
-                        Label("Continue in parent", systemImage: "arrow.turn.up.left")
-                            .font(T3Typography.control)
-                            .frame(
-                                maxWidth: .infinity,
-                                minHeight: T3Metrics.minimumTapTarget
-                            )
+                    switch workerRecovery.action {
+                    case .continueInParent:
+                        Button {
+                            onContinueInParent(workerRecovery.parentThreadID)
+                        } label: {
+                            Label("Continue in parent", systemImage: "arrow.turn.up.left")
+                                .font(T3Typography.control)
+                                .frame(
+                                    maxWidth: .infinity,
+                                    minHeight: T3Metrics.minimumTapTarget
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(T3Colors.textPrimary)
+                        .background(T3Colors.input)
+                        .accessibilityLabel(
+                            "Continue in parent, \(workerRecovery.parentTitle ?? "parent Thread")"
+                        )
+                    case .reloadAndReturnToTasks:
+                        HStack(spacing: 10) {
+                            Button {
+                                Task {
+                                    await model.reload()
+                                    _ = await model.detail(for: thread.id, force: true)
+                                }
+                            } label: {
+                                Label("Reload", systemImage: "arrow.clockwise")
+                                    .frame(
+                                        maxWidth: .infinity,
+                                        minHeight: T3Metrics.minimumTapTarget
+                                    )
+                            }
+                            Button {
+                                onNavigateBack()
+                            } label: {
+                                Label("Return to tasks", systemImage: "list.bullet")
+                                    .frame(
+                                        maxWidth: .infinity,
+                                        minHeight: T3Metrics.minimumTapTarget
+                                    )
+                            }
+                        }
+                        .font(T3Typography.control)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(T3Colors.textPrimary)
+                        .background(T3Colors.input)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(T3Colors.textPrimary)
-                    .background(T3Colors.input)
-                    .accessibilityLabel(
-                        parentThread.map { "Continue in parent, \($0.title)" }
-                            ?? "Continue in parent"
-                    )
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -419,13 +458,12 @@ public struct ThreadDetailView: View {
         }
     }
 
-    private var parentThread: FeatureThread? {
-        guard let parentID = currentThread.parentThreadID else { return nil }
-        return model.snapshot.threads.first { $0.id == parentID }
+    private var workerRecovery: WorkerChatRecovery? {
+        WorkerChatRecovery(worker: currentThread, threads: model.snapshot.threads)
     }
 
     private var workerProvenance: String? {
-        parentThread.map { "Worker of \($0.title)" }
+        workerRecovery?.provenance
     }
 
     private var composerKeyboardDismissGesture: some Gesture {
@@ -596,7 +634,28 @@ public struct ThreadDetailView: View {
             selection: selection
         )
     }
+}
 
+struct WorkerChatRecovery: Equatable {
+    enum Action: Equatable {
+        case continueInParent
+        case reloadAndReturnToTasks
+    }
+
+    let parentThreadID: String
+    let parentTitle: String?
+    let provenance: String
+    let action: Action
+
+    init?(worker: FeatureThread, threads: [FeatureThread]) {
+        guard let parentThreadID = worker.parentThreadID else { return nil }
+        let parent = threads.first { $0.id == parentThreadID }
+        self.parentThreadID = parentThreadID
+        parentTitle = parent?.title
+        provenance = parent.map { "Worker of \($0.title)" }
+            ?? "Worker, parent unavailable"
+        action = parent == nil ? .reloadAndReturnToTasks : .continueInParent
+    }
 }
 
 private enum FeatureThreadToolSurface: String, Identifiable {

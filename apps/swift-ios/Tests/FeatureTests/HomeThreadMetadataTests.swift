@@ -136,6 +136,54 @@ struct HomeThreadMetadataTests {
     }
 
     @Test
+    func orphanWorkerRemainsVisibleAndExposesHonestRecovery() {
+        let orphan = FeatureThread(
+            id: "orphan-worker",
+            projectID: "project",
+            parentThreadID: "missing-parent",
+            title: "Audit release"
+        )
+        let snapshot = FeatureSnapshot(threads: [orphan])
+
+        let presentation = HomePresentation(
+            snapshot: snapshot,
+            query: "",
+            contentMatches: [],
+            projectID: nil,
+            now: now
+        )
+        let context = HomeThreadRowContext.index(snapshot: snapshot)[orphan.id]
+        let recovery = WorkerChatRecovery(worker: orphan, threads: snapshot.threads)
+
+        #expect(presentation.active.map(\.id) == [orphan.id])
+        #expect(context?.workerProvenance == "Worker, parent unavailable")
+        #expect(recovery?.provenance == "Worker, parent unavailable")
+        #expect(recovery?.action == .reloadAndReturnToTasks)
+        #expect(recovery?.parentThreadID == "missing-parent")
+    }
+
+    @Test
+    func workerRecoveryReturnsToTheNamedParentWhenItReappears() {
+        let parent = FeatureThread(
+            id: "parent",
+            projectID: "project",
+            title: "Ship release"
+        )
+        let worker = FeatureThread(
+            id: "worker",
+            projectID: "project",
+            parentThreadID: parent.id,
+            title: "Audit release"
+        )
+
+        let recovery = WorkerChatRecovery(worker: worker, threads: [parent, worker])
+
+        #expect(recovery?.provenance == "Worker of Ship release")
+        #expect(recovery?.action == .continueInParent)
+        #expect(recovery?.parentTitle == "Ship release")
+    }
+
+    @Test
     func workingDurationMatchesTheCompactWebFormatAndClampsFutureDates() {
         let thread = FeatureThread(
             id: "working",

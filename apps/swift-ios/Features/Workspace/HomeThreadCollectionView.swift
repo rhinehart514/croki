@@ -563,7 +563,7 @@ struct HomeThreadCollectionView: UIViewRepresentable {
         items.append(
             .shelfHeader(
                 .snoozed,
-                presentation.snoozed.filter { $0.parentThreadID == nil }.count,
+                familyCount(presentation.snoozed),
                 isSnoozedExpanded
             )
         )
@@ -585,7 +585,7 @@ struct HomeThreadCollectionView: UIViewRepresentable {
         items.append(
             .shelfHeader(
                 .settled,
-                presentation.settled.filter { $0.parentThreadID == nil }.count,
+                familyCount(presentation.settled),
                 isSettledExpanded
             )
         )
@@ -609,7 +609,7 @@ struct HomeThreadCollectionView: UIViewRepresentable {
             items.append(
                 .shelfHeader(
                     .archived,
-                    presentation.archived.filter { $0.parentThreadID == nil }.count,
+                    familyCount(presentation.archived),
                     isArchiveExpanded
                 )
             )
@@ -627,6 +627,13 @@ struct HomeThreadCollectionView: UIViewRepresentable {
             }
         }
         return items
+    }
+
+    private func familyCount(_ threads: [FeatureThread]) -> Int {
+        threads.filter { thread in
+            thread.parentThreadID == nil
+                || presentation.rowContexts[thread.id]?.parentThreadTitle == nil
+        }.count
     }
 }
 
