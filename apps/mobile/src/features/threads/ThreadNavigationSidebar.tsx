@@ -1049,6 +1049,7 @@ function ThreadNavigationSidebarPane(
   );
   // Snoozed threads need no special case: the shelf header is a list row
   // even while collapsed.
+  const snoozedCount = threadListV2Layout.snoozedCount;
   const listEmpty = (
     <Text className="px-2 py-4 text-sm text-foreground-muted">
       {catalogState.isLoadingConnections

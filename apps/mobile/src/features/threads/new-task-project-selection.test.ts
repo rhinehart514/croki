@@ -1,7 +1,7 @@
-import { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId } from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentProject } from "@croki/client-runtime/state/shell";
 import type { HomeProjectScope } from "../home/homeThreadList";
 import {
   getOnlySelectableProject,
@@ -25,7 +25,7 @@ function makeProject(id: string): EnvironmentProject {
 function makeScope(projects: ReadonlyArray<EnvironmentProject>): HomeProjectScope {
   return {
     key: "github.com/t3tools/t3code",
-    title: "T3 Code",
+    title: "Croki",
     representative: projects[0]!,
     projects,
     projectRefs: projects.map((project) => ({

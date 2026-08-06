@@ -1,5 +1,4 @@
 import type { EnvironmentProject, EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
-import type { EnvironmentThreadSearchMatch } from "@croki/client-runtime/state/thread-search";
 import { canSnooze, resolveSnoozePresets } from "@croki/client-runtime/state/thread-settled";
 import type { MenuAction } from "@react-native-menu/menu";
 import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
@@ -24,7 +23,6 @@ import { useThemeColor } from "../../lib/useThemeColor";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { useThreadPr } from "../../state/use-thread-pr";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
-import { resolveThreadListV2Status, type ThreadListV2Status } from "./threadListV2";
 import {
   resolveThreadListV2SnoozeMenuSelection,
   resolveThreadListV2SnoozeGateExpiryMs,
@@ -32,7 +30,6 @@ import {
   resolveThreadListV2SwipeActions,
   type ThreadListV2Status,
 } from "./threadListV2";
-import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 
 /**
  * Thread List v2 renders one flat native list: rich edge-to-edge rows for

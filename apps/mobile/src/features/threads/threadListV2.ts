@@ -8,7 +8,6 @@ import {
 } from "@croki/client-runtime/state/thread-settled";
 import type { SnoozePreset } from "@croki/client-runtime/state/thread-settled";
 import type { EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
-import { threadSearchMatchKey } from "@croki/client-runtime/state/thread-search";
 import type { EnvironmentId, ProjectId } from "@croki/contracts";
 
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";

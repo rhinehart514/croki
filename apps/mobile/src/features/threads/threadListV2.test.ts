@@ -1,5 +1,4 @@
 import type { EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
-import { threadSearchMatchKey } from "@croki/client-runtime/state/thread-search";
 import { resolveSnoozePresets } from "@croki/client-runtime/state/thread-settled";
 import {
   CommandId,
