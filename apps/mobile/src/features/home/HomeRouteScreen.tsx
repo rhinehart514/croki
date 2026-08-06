@@ -151,9 +151,9 @@ export function HomeRouteScreen() {
           onArchiveThread={archiveThread}
           onDeleteThread={confirmDeleteThread}
           onSettleThread={settleThread}
-          onUnsettleThread={unsettleThread}
           onSnoozeThread={snoozeThread}
           onUnsnoozeThread={unsnoozeThread}
+          onUnsettleThread={unsettleThread}
           onPinThread={pinThread}
           onUnpinThread={unpinThread}
           onRegenerateThreadTitle={regenerateThreadTitle}

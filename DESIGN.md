@@ -26,6 +26,9 @@ The developer experience is a normal repository that has gained product awarenes
 ## Interface direction
 
 - Preserve the existing true-black, dense workspace with white primary text.
+- Mobile is a full-parity Croki client. Its navigation and controls may be
+  native to iOS and Android, but founders must be able to direct, inspect,
+  intervene in, and resume the same project and Thread work as desktop.
 - Status belongs beside the work it describes. Avoid decorative pills and explanatory chrome.
 - Application direction belongs beside the selected project in the Thread header. Initial approval uses a focused popup and never occupies the composer.
 - The application-direction popup is an editorial release cover, not a fact inspector: one market-facing headline, one supporting intent, up to three changes, and a compact proof/market footer. Opening any `.croki` object presents its generated visual world in the existing right-panel workspace and expands that workspace by default. Applications show released reality, building intent, Concepts, and their larger Release/Venture story. Concepts show their isolated hypothesis and inherited boundary. Releases read as a sparse before-and-after shipping narrative. Ventures show a portfolio and its shared advantages without becoming a dashboard. Raw structured data is available only through **Inspect .croki source** from that view. Users never maintain graph coordinates, nodes, or connections, and the popup contains no accordions or database-like field lists.
