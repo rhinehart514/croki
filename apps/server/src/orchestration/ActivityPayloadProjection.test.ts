@@ -164,7 +164,7 @@ describe("projectActivityPayload", () => {
     expect(item.server).toBe("github");
     expect(item.arguments).toEqual({ pr: 42 });
     expect(item._meta).toBeUndefined();
-    expect(item.result).toEqual({ content: "PR body line one" });
+    expect(item.result).toEqual({ summary: "PR body line one", truncated: true });
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 
@@ -186,7 +186,7 @@ describe("projectActivityPayload", () => {
     const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
     expect(data.toolName).toBe("mcp__github__fetch_pr");
     expect(data.input).toEqual({ pr: 42 });
-    expect(data.result).toEqual({ content: "first line of output" });
+    expect(data.result).toEqual({ summary: "first line of output", truncated: true });
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 

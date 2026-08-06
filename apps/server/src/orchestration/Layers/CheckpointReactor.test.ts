@@ -607,7 +607,7 @@ describe("CheckpointReactor", () => {
     const harness = await createHarness({
       seedFilesystemCheckpoints: false,
       threadBranch: "t3code/original-branch",
-      localStatusRefName: "t3code/0a1b2c3d",
+      localStatusRefName: "croki/0a1b2c3d",
     });
 
     harness.provider.emit({

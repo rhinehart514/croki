@@ -189,7 +189,9 @@ function summarizeMcpResult(result: unknown): Record<string, unknown> | undefine
   }
   const text = extractMcpResultText(result);
   const summary = text ? summarizeToolTextOutput(text) : null;
-  return summary ? { content: summary } : undefined;
+  // This read-model projection intentionally omits the persisted tool result.
+  // Label the visible value so clients cannot mistake it for complete evidence.
+  return summary ? { summary, truncated: true } : undefined;
 }
 
 /**
