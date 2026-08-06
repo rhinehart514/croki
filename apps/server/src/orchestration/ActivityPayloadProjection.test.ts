@@ -4,12 +4,25 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationReadModel,
+  type OrchestrationThreadActivity,
 } from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { projectActivityPayload, projectReadModelSnapshot } from "./ActivityPayloadProjection.ts";
 
 const now = "2026-07-30T00:00:00.000Z";
+
+function activity(payload: Record<string, unknown>): OrchestrationThreadActivity {
+  return {
+    id: EventId.make("activity-1"),
+    tone: "tool",
+    kind: "tool.completed",
+    summary: "Tool",
+    payload,
+    turnId: null,
+    createdAt: now,
+  } as OrchestrationThreadActivity;
+}
 
 function makeReadModelWithActivity(
   activity: OrchestrationReadModel["threads"][number]["activities"][number],
@@ -121,5 +134,77 @@ describe("projectActivityPayload", () => {
       receipt: { status: "loaded" },
     });
     expect(JSON.stringify(projected)).not.toContain("private product context");
+  });
+
+  it("slims Codex-shaped mcp_tool_call items to rendered fields plus a result summary", () => {
+    const projected = projectActivityPayload(
+      activity({
+        itemType: "mcp_tool_call",
+        data: {
+          item: {
+            type: "mcpToolCall",
+            id: "item-1",
+            tool: "fetch_pr",
+            server: "github",
+            status: "completed",
+            arguments: { pr: 42 },
+            durationMs: 1200,
+            result: {
+              content: [{ type: "text", text: `PR body line one\n${"x".repeat(5000)}` }],
+              structuredContent: { huge: "y".repeat(5000) },
+            },
+            _meta: { internal: true },
+          },
+        },
+      }),
+    );
+    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+    const item = data.item as Record<string, unknown>;
+    expect(item.tool).toBe("fetch_pr");
+    expect(item.server).toBe("github");
+    expect(item.arguments).toEqual({ pr: 42 });
+    expect(item._meta).toBeUndefined();
+    expect(item.result).toEqual({ content: "PR body line one" });
+    expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
+  });
+
+  it("slims Claude-shaped mcp_tool_call data (toolName/input/result block)", () => {
+    const projected = projectActivityPayload(
+      activity({
+        itemType: "mcp_tool_call",
+        data: {
+          toolName: "mcp__github__fetch_pr",
+          input: { pr: 42 },
+          result: {
+            type: "tool_result",
+            tool_use_id: "toolu_1",
+            content: [{ type: "text", text: `first line of output\n${"z".repeat(5000)}` }],
+          },
+        },
+      }),
+    );
+    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+    expect(data.toolName).toBe("mcp__github__fetch_pr");
+    expect(data.input).toEqual({ pr: 42 });
+    expect(data.result).toEqual({ content: "first line of output" });
+    expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
+  });
+
+  it("passes task lifecycle payloads (no data field) through untouched", () => {
+    const source = activity({
+      taskId: "task-9",
+      title: "Audit auth",
+      role: "explorer",
+      model: "opus",
+      effort: "high",
+      workflowName: "audit-flow",
+      phases: [{ index: 0, title: "Audit" }],
+      typedUsage: { totalTokens: 1200 },
+      runHandles: { runId: "run-1", scriptPath: "/tmp/wf.js" },
+      timelineBypass: true,
+    });
+
+    const projected = projectActivityPayload(source);
+    expect(projected.payload).toEqual(source.payload);
   });
 });
