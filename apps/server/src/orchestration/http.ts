@@ -40,14 +40,12 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           // and activity payload in the database has OOM-killed servers, and
           // the route's only consumer (the project CLI) reads projects alone —
           // UI clients load the shell and per-thread snapshots instead.
-          return yield* projectionSnapshotQuery
-            .getCommandReadModel()
-            .pipe(
-              Effect.map(projectReadModelSnapshot),
-              Effect.catch((cause) =>
-                failEnvironmentInternal("orchestration_snapshot_failed", cause),
-              ),
-            );
+          return yield* projectionSnapshotQuery.getCommandReadModel().pipe(
+            Effect.map(projectReadModelSnapshot),
+            Effect.catch((cause) =>
+              failEnvironmentInternal("orchestration_snapshot_failed", cause),
+            ),
+          );
         }),
       )
       .handle(
