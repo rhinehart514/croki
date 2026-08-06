@@ -50,6 +50,7 @@ import {
 } from "@croki/shared/crokiApplicationProgress";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { forkParked } from "../../serverActivation.ts";
 import { loadCrokiApplication } from "./CrokiApplication.ts";
 import { loadCrokiConceptContext } from "./CrokiConcepts.ts";
 import { buildCrokiProjectActivityPrompt } from "./CrokiProjectActivity.ts";
@@ -1287,9 +1288,7 @@ const make = Effect.gen(function* () {
       }
     });
 
-    yield* Effect.forkScoped(
-      Stream.runForEach(orchestrationEngine.streamDomainEvents, processEvent),
-    );
+    yield* forkParked(Stream.runForEach(orchestrationEngine.streamDomainEvents, processEvent));
   });
 
   return {

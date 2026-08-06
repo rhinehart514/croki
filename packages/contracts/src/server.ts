@@ -544,9 +544,21 @@ export const ServerConfigStreamEvent = Schema.Union([
 ]);
 export type ServerConfigStreamEvent = typeof ServerConfigStreamEvent.Type;
 
+/** Terminal selection recorded by the service launcher for one update. */
+export const ServerSelfUpdateOutcome = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  fromVersion: TrimmedNonEmptyString,
+  targetVersion: TrimmedNonEmptyString,
+  status: Schema.Literals(["committed", "rolled-back", "failed"]),
+  reason: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export type ServerSelfUpdateOutcome = typeof ServerSelfUpdateOutcome.Type;
+
 export const ServerLifecycleReadyPayload = Schema.Struct({
   at: IsoDateTime,
   environment: ExecutionEnvironmentDescriptor,
+  /** Present when this process resumed a launcher-managed update. */
+  updateOutcome: Schema.optionalKey(ServerSelfUpdateOutcome),
 });
 export type ServerLifecycleReadyPayload = typeof ServerLifecycleReadyPayload.Type;
 
@@ -606,7 +618,7 @@ export class ServerProviderUpdateError extends Schema.TaggedErrorClass<ServerPro
 }
 
 export const ServerSelfUpdateInput = Schema.Struct({
-  /** Exact npm version of the `t3` package to install (never a dist-tag, so
+  /** Exact npm version of the `croki-server` package to install (never a dist-tag, so
       the server and the acknowledging client agree on what was requested). */
   targetVersion: TrimmedNonEmptyString,
 });
@@ -617,8 +629,25 @@ export type ServerSelfUpdateInput = typeof ServerSelfUpdateInput.Type;
 export const ServerSelfUpdateResult = Schema.Struct({
   targetVersion: TrimmedNonEmptyString,
   method: ServerSelfUpdateMethod,
+  /** Launcher-generated correlation ID. Absent when talking to older servers. */
+  updateId: Schema.optionalKey(TrimmedNonEmptyString),
 });
 export type ServerSelfUpdateResult = typeof ServerSelfUpdateResult.Type;
+
+export const ServerSelfUpdateProgressStage = Schema.Literals(["downloading", "installing"]);
+export type ServerSelfUpdateProgressStage = typeof ServerSelfUpdateProgressStage.Type;
+
+export const ServerSelfUpdateProgressEvent = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("progress"),
+    stage: ServerSelfUpdateProgressStage,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("complete"),
+    result: ServerSelfUpdateResult,
+  }),
+]);
+export type ServerSelfUpdateProgressEvent = typeof ServerSelfUpdateProgressEvent.Type;
 
 export class ServerSelfUpdateError extends Schema.TaggedErrorClass<ServerSelfUpdateError>()(
   "ServerSelfUpdateError",

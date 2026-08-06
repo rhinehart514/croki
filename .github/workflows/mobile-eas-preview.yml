@@ -18,6 +18,8 @@ jobs:
       CROKI_RELEASE_BRANCH: ${{ vars.CROKI_RELEASE_BRANCH }}
       CROKI_EAS_PROJECT_ID: ${{ vars.CROKI_EAS_PROJECT_ID }}
       CROKI_EXPO_TOKEN: ${{ secrets.CROKI_EXPO_TOKEN }}
+      CROKI_CLI_PUBLISH_ENABLED: ${{ vars.CROKI_CLI_PUBLISH_ENABLED }}
+      CROKI_CLI_PACKAGE: ${{ vars.CROKI_CLI_PACKAGE }}
       CROKI_PR_BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
     steps:
       - name: Checkout
@@ -51,10 +53,6 @@ jobs:
             echo "Missing CROKI_EXPO_TOKEN." >&2
             exit 1
           fi
-          if grep -Eq 'owner: "rhinehart514"|com\.croki\.croki|slug: "croki"' apps/mobile/app.config.ts; then
-            echo "Inherited T3 EAS owner, slug, or application identifiers must be replaced before preview deploys." >&2
-            exit 1
-          fi
 
   preview:
     name: EAS Preview
@@ -68,6 +66,7 @@ jobs:
       pull-requests: write
     env:
       APP_VARIANT: preview
+      CROKI_EAS_PROJECT_ID: ${{ vars.CROKI_EAS_PROJECT_ID }}
       NODE_OPTIONS: --max-old-space-size=8192
       MOBILE_VERSION_POLICY: fingerprint
     steps:
@@ -129,6 +128,20 @@ jobs:
           )"
           if [[ "$actual_project_id" != "$EXPECTED_EAS_PROJECT_ID" ]]; then
             echo "EAS project mismatch: expected $EXPECTED_EAS_PROJECT_ID, got ${actual_project_id:-<missing>}." >&2
+            exit 1
+          fi
+
+      - name: Verify exact Croki server package exists
+        if: steps.expo-token.outputs.present == 'true'
+        working-directory: apps/mobile
+        env:
+          CROKI_CLI_PACKAGE: ${{ vars.CROKI_CLI_PACKAGE }}
+        run: |
+          set -euo pipefail
+          client_version="$(pnpm exec expo config --json | node -e 'let body=""; process.stdin.on("data", chunk => body += chunk); process.stdin.on("end", () => process.stdout.write(JSON.parse(body).version ?? ""));')"
+          published_version="$(npm view "${CROKI_CLI_PACKAGE:?Missing CROKI_CLI_PACKAGE}@${client_version:?Missing client version}" version)"
+          if [[ "$published_version" != "$client_version" ]]; then
+            echo "Croki mobile preview requires ${CROKI_CLI_PACKAGE}@${client_version} before it can update connected servers." >&2
             exit 1
           fi
 

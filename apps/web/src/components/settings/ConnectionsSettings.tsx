@@ -5,8 +5,8 @@ import {
   QrCodeIcon,
   RefreshCwIcon,
   TerminalIcon,
-  TriangleAlertIcon,
 } from "lucide-react";
+import { useAtomValue } from "@effect/atom-react";
 import { type ReactNode, memo, useCallback, useMemo, useState } from "react";
 import {
   AuthAccessReadScope,
@@ -131,8 +131,9 @@ import {
   usePrimaryEnvironment,
 } from "~/state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { serverEnvironment } from "~/state/server";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
-import { ServerUpdateAction } from "../ServerUpdateAction";
+import { ServerUpdateAction, ServerUpdateProgress } from "../ServerUpdateAction";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
 
@@ -1389,6 +1390,9 @@ function SavedBackendListRow({
     [copyTraceIdToClipboard],
   );
   const versionMismatch = resolveServerConfigVersionMismatch(environment.serverConfig);
+  const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
+  const resumingServerUpdate =
+    serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
   const sshTarget =
     environment.entry.target._tag === "SshConnectionTarget" &&
     Option.isSome(environment.entry.profile) &&
@@ -1425,14 +1429,29 @@ function SavedBackendListRow({
           {metadataBits.length > 0 ? (
             <p className="text-xs text-muted-foreground">{metadataBits.join(" · ")}</p>
           ) : null}
-          {versionMismatch ? (
-            <p className="flex items-center gap-1 text-warning text-xs">
-              <TriangleAlertIcon className="size-3.5 shrink-0" />
-              Version drift: client {versionMismatch.clientVersion}, server{" "}
-              {versionMismatch.serverVersion}.
-            </p>
+          {serverUpdateState.status !== "idle" ? (
+            <div className="max-w-md">
+              <ServerUpdateProgress state={serverUpdateState} />
+            </div>
+          ) : versionMismatch ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="w-fit cursor-help rounded-sm text-left text-muted-foreground text-xs"
+                  >
+                    Server update available
+                  </button>
+                }
+              />
+              <TooltipPopup side="top">
+                {versionMismatch.serverVersion} <span aria-hidden="true">→</span>{" "}
+                {versionMismatch.clientVersion}
+              </TooltipPopup>
+            </Tooltip>
           ) : null}
-          {environment.connection.error ? (
+          {environment.connection.error && !resumingServerUpdate ? (
             <p className="flex min-w-0 items-center gap-2 text-destructive text-xs">
               <span className="truncate">{connectionStatusText(environment.connection)}</span>
               {errorTraceId ? (
@@ -1448,12 +1467,14 @@ function SavedBackendListRow({
           ) : null}
         </div>
         <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
-          {versionMismatch ? (
+          {versionMismatch &&
+          (serverUpdateState.status === "idle" || serverUpdateState.status === "failed") ? (
             <ServerUpdateAction
               environmentId={environmentId}
               serverLabel={`${environment.label} server`}
               selfUpdate={resolveServerSelfUpdateCapability(environment.serverConfig)}
               targetVersion={versionMismatch.clientVersion}
+              label={serverUpdateState.status === "failed" ? "Retry" : "Update"}
             />
           ) : null}
           {isWslEnvironment ? (
@@ -1834,6 +1855,9 @@ export function ConnectionsSettings() {
   >(null);
   const primaryServerConfig = primaryEnvironment?.serverConfig ?? null;
   const primaryVersionMismatch = resolveServerConfigVersionMismatch(primaryServerConfig);
+  const primaryServerUpdateState = useAtomValue(
+    serverEnvironment.updateStateAtom(primaryEnvironmentId),
+  );
   const [isAdvertisedEndpointListExpanded, setIsAdvertisedEndpointListExpanded] = useState(false);
   const defaultAdvertisedEndpointKey = useUiStateStore(
     (state) => state.defaultAdvertisedEndpointKey,
@@ -2980,24 +3004,44 @@ export function ConnectionsSettings() {
       {canManageLocalBackend ? (
         <>
           <SettingsSection title="This environment">
-            {primaryVersionMismatch ? (
+            {primaryVersionMismatch || primaryServerUpdateState.status !== "idle" ? (
               <SettingsRow
-                title="Version drift"
+                title={
+                  primaryServerUpdateState.status === "failed"
+                    ? "Update failed"
+                    : primaryServerUpdateState.status === "running"
+                      ? "Updating server"
+                      : "Server update available"
+                }
                 description={
-                  <span className="flex items-center gap-1 text-warning">
-                    <TriangleAlertIcon className="size-3.5 shrink-0" />
-                    Client {primaryVersionMismatch.clientVersion}, server{" "}
-                    {primaryVersionMismatch.serverVersion}. Sync them if RPC calls or reconnects
-                    fail.
-                  </span>
+                  primaryServerUpdateState.status !== "idle" ? (
+                    <ServerUpdateProgress state={primaryServerUpdateState} />
+                  ) : primaryVersionMismatch ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button type="button" className="w-fit cursor-help rounded-sm text-left">
+                            Update to match this client.
+                          </button>
+                        }
+                      />
+                      <TooltipPopup side="top">
+                        {primaryVersionMismatch.serverVersion} <span aria-hidden="true">→</span>{" "}
+                        {primaryVersionMismatch.clientVersion}
+                      </TooltipPopup>
+                    </Tooltip>
+                  ) : null
                 }
                 control={
-                  primaryEnvironmentId !== null ? (
+                  primaryVersionMismatch &&
+                  primaryEnvironmentId !== null &&
+                  primaryServerUpdateState.status !== "running" ? (
                     <ServerUpdateAction
                       environmentId={primaryEnvironmentId}
                       serverLabel={primaryEnvironment?.label ?? "this server"}
                       selfUpdate={resolveServerSelfUpdateCapability(primaryServerConfig)}
                       targetVersion={primaryVersionMismatch.clientVersion}
+                      label={primaryServerUpdateState.status === "failed" ? "Retry" : "Update"}
                     />
                   ) : undefined
                 }

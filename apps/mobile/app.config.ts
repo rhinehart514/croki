@@ -2,6 +2,8 @@ import type { ExpoConfig } from "expo/config";
 
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
+import contractsPackageJson from "../../packages/contracts/package.json" with { type: "json" };
+import { resolveCrokiEasUpdates } from "./crokiEasUpdates.ts";
 
 type AppVariant = "development" | "preview" | "production";
 
@@ -10,6 +12,9 @@ Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const isIosPersonalTeamBuild = repoEnv.CROKI_IOS_PERSONAL_TEAM === "1";
+// OTA is deliberately absent from unconfigured builds. This prevents a local,
+// preview, or release build from discovering updates from an inherited project.
+const { projectId: easProjectId, updates } = resolveCrokiEasUpdates(repoEnv.CROKI_EAS_PROJECT_ID);
 
 const personalTeamBundleIdentifier = repoEnv.CROKI_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
@@ -161,7 +166,7 @@ const config: ExpoConfig = {
   slug: "croki",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
-  version: "0.4.0",
+  version: repoEnv.APP_VERSION?.trim() || contractsPackageJson.version,
   runtimeVersion: {
     // Fingerprint (not appVersion) so an OTA only reaches binaries whose native
     // project — native deps, config plugins, AND patches/ — matches the update.
@@ -172,12 +177,7 @@ const config: ExpoConfig = {
   orientation: "portrait",
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
-  updates: {
-    enabled: true,
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    checkAutomatically: "ON_LOAD",
-    fallbackToCacheTimeout: 0,
-  },
+  updates,
   ios: {
     icon: variant.assets.iosIcon,
     supportsTablet: true,
@@ -344,9 +344,7 @@ const config: ExpoConfig = {
       tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
-    eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    },
+    ...(easProjectId === null ? {} : { eas: { projectId: easProjectId } }),
   },
   owner: "rhinehart514",
 };

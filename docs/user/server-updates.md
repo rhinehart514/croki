@@ -3,12 +3,6 @@
 The Croki web or desktop app and the server it connects to work best when they use the same
 version. If they do not match, Croki shows a warning with the right update option for that server.
 
-> [!WARNING]
-> Croki 0.4.2 has no Croki-owned CLI release channel. Automatic self-update and
-> copied `npx croki-server@<version>` commands still target the inherited upstream npm
-> package. Use desktop-managed local backends or rebuild and restart the same
-> Croki source revision until the CLI is renamed and published by Croki.
-
 ## Where to Find the Update
 
 You may see the warning in either of these places:
@@ -30,29 +24,46 @@ The update does not remove saved threads, settings, or project files.
 
 | Action                     | What to do                                                                                                                                                                |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Update server**          | Select the button and leave Croki open. It prepares the matching version, restarts the server, and reconnects automatically. This can take several minutes.               |
+| **Update server**          | Available for the Croki Linux background service. Select the button and leave Croki open while it prepares, tests, restarts, and reconnects.                              |
 | **Update the desktop app** | Open the Croki desktop app on the machine that runs the server and install the app update there. Reopen it if needed.                                                     |
 | **Copy update command**    | Copy the command, open a terminal on the server machine, stop the current Croki server, and relaunch it with the copied command and any startup options you normally use. |
 
 The available action depends on how that server was started. Croki does not update connected
 servers silently in the background.
 
-The inherited background-service update command is retained for reference:
+An older background-service launcher may ask you to run the exact
+`npx croki-server@<version> service update` command on the server machine. That one local update installs the
+rollback support needed for later remote updates, including versions that change the database.
+
+After selecting **Update**, the notice becomes a live status line: **Downloading…** while the new
+version is fetched and verified, then **Restarting…** while the server restarts into it. The same
+status appears in the conversation and in Connections, so navigating between them does not lose the
+update. A failure remains visible with its error and an option to retry.
+
+**Copy update command** gives you `npx croki-server@<client-version>`, which relaunches the server directly
+at the matching version. Add whatever startup options you normally use.
+
+If the server instead runs as the Croki background service, update the service on the host and
+pin the same version:
 
 ```sh
-npx croki-server@latest service update
+npx croki-server@<client-version> service update
 ```
+
+`service update` installs the version of the CLI that invoked it, so `npx croki-server@latest service update`
+only resolves the skew when your client happens to be on the latest release. The exact version from
+the warning always works.
 
 See [Running Croki in the Background](./background-service.md) for install, status, and removal
 commands.
 
 ## After the Update
 
-Keep the web or desktop app open while the server restarts. When it reconnects with the matching
-version, the warning and update action disappear.
+Keep the web or desktop app open while the server restarts. The update completes only after the
+service launcher reports that exact update committed and the replacement server is ready to accept
+commands. A rollback is reported immediately instead of waiting for a generic reconnect timeout.
 
-If the client reports a timeout, the server may still be finishing the update. Wait a minute, then
-reconnect or open **Settings** → **Connections** again. If the warning remains:
+If a step fails:
 
 1. Retry the offered action once.
 2. Make sure you updated the machine named in the warning, not only the device you are using.

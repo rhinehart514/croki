@@ -45,7 +45,7 @@ events into one orchestration model without creating a second agent runtime.
 
 - **UI history**: A successful model-driven Preview snapshot is copied into the server attachment store and recorded as ordinary Thread activity. The activity keeps bounded page metadata plus an attachment frame reference. Preview projects those checked screens for the founder, while the read-only `ui_history` MCP tool lets a later provider turn list or reopen the exact image. The web client collapses same-turn snapshots and checkpoint evidence into at most one checked/not-checked receipt after the answer. UI history owns no execution authority and does not create a second event store.
 
-- **Server updates**: A connected environment advertises whether its server can replace itself. When client and server versions differ, the browser selects an automatic, desktop-managed, or manual update path without changing connection ownership. See [Server Update Architecture](./server-updates.md).
+- **Server updates**: A connected environment advertises whether its server can replace itself. When client and server versions differ, web, desktop, and mobile select an automatic, desktop-managed, or manual update path without changing connection ownership. Launcher-managed servers stage the exact Croki package, park runtime roots, snapshot SQLite around migration trials, and commit or roll back before clients report completion. See [Server Update Architecture](./server-updates.md).
 
 Related design:
 

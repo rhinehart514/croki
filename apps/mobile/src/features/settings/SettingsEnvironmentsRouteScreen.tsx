@@ -22,6 +22,7 @@ import {
   SHOWCASE_CONNECTED_CLOUD_ENVIRONMENTS,
 } from "../showcase/showcaseEnvironmentRows";
 import { markNativeShowcaseReady } from "../showcase/nativeShowcaseScene";
+import { MobileServerUpdateRows } from "../updates/MobileServerUpdateRows";
 
 const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
 
@@ -160,6 +161,8 @@ export function SettingsEnvironmentsRouteScreen() {
             </Text>
           </View>
         )}
+
+        <MobileServerUpdateRows environments={connectedEnvironments} />
 
         {hasCloudPublicConfig() || SHOWCASE_ENABLED ? (
           <CloudEnvironmentRows

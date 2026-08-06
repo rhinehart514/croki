@@ -1,127 +1,103 @@
 # Server Update Architecture
 
-Croki can update a connected server to the exact version of the client that detected version
-drift. This path exists primarily for remote environments, where the user may not have a terminal
-open on the server machine.
+> For maintainers. Using Croki? See [docs/user](../user/).
 
-The mechanism is implemented, but Croki 0.4.2 cannot use it as a production
-Croki update channel because the pinned runtime still installs the inherited
-`croki-server@<version>` npm package. Keep self-update disabled for Croki releases until
-the CLI package is renamed, owned, and published by Croki.
+Remote server updates use one stable systemd launcher. Foreground CLI processes do not self-update,
+and a running server never edits its systemd unit or durable service state.
 
-The feature has three boundaries:
+## Ownership
 
-- the server advertises whether and how it can be replaced;
-- the client chooses the matching user action;
-- the server installs and verifies the replacement before handing off the process.
+The service files under `<baseDir>/runtime` are:
 
-## Detection and Presentation
+- `service-launcher.mjs`, the stable process selected by systemd;
+- `service-state.json`, the launcher's durable selection state;
+- `versions/<version>`, immutable exact-version npm installs.
 
-`ExecutionEnvironmentDescriptor` includes the server version and an optional
-`capabilities.serverSelfUpdate` value. The client compares that version with `APP_VERSION` after
-loading server config.
+The launcher is the only runtime writer of `service-state.json`. `croki-server service install` and
+`croki-server service update` may replace the launcher and state while the unit is stopped. Server children
+only communicate with the launcher over their inherited IPC channel.
 
-The optional capability is intentionally backward compatible. An older server does not know about
-the field, so a missing value means the client must offer a manual relaunch instead of sending an
-unknown RPC.
+The state contains one active version and, at most, one update record:
 
-The shared `ServerUpdateAction` is rendered in both user-facing version-drift surfaces:
+- `pending A → B` selects B as a retryable trial;
+- `committed A → B` selects B for ordinary restarts;
+- `rolled-back A → B` or `failed A → B` selects A;
+- invalid state fails closed so systemd cannot guess at a runtime.
 
-- the conversation banner in `ChatView`;
-- primary and saved environment rows in **Settings** → **Connections**.
+Every write uses same-directory replacement plus file and directory fsync.
 
-Both surfaces target the client's exact version. When the reconnected server reports that version,
-the mismatch and action disappear.
+## Remote Update
 
-## Capability Selection
+1. The active server installs `croki-server@<target>` into a unique staging directory.
+2. The target runs `__service-preflight` and verifies that the stable launcher supports its update
+   protocol.
+3. The staging directory is renamed to its immutable version path only after preflight succeeds.
+4. The active child sends `request-update`. The launcher validates the child and target, writes
+   pending state, generates the update ID, then replies `update-accepted`.
+5. After a short response-flush grace period, the launcher stops the active child.
+6. With SQLite quiescent, the launcher snapshots the database, WAL, and shared-memory files.
+7. The launcher starts the target as a trial and gives it the pending update over IPC.
+8. The trial runs migrations, acquires dependencies, binds HTTP, starts every long-running root
+   fiber, and verifies that each root is parked at the activation gate.
+9. The trial sends `prepared`. The launcher durably commits B, deletes the snapshot, then replies
+   `committed`.
+10. The child opens the existing activation gate, accepts commands, and publishes lifecycle ready
+    with the terminal update outcome.
 
-The server resolves its capability once at startup and publishes it in the environment descriptor.
+Post-commit startup does not call service `start`, `initialize`, `connect`, `load`, or `acquire`
+operations. It only opens prepared gates and publishes prepared lifecycle state.
 
-| Advertised value  | Process shape                                                                                 | Client behavior                                                       |
-| ----------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `boot-service`    | Linux server running under the T3-managed systemd user service                                | Call the update RPC; the service unit is replaced and restarted.      |
-| `respawn`         | Published npm CLI running in the foreground on macOS or Linux                                 | Call the update RPC; the process hands off to a detached replacement. |
-| `desktop-managed` | Backend supervised by the desktop app                                                         | Tell the user to update the desktop app on the server machine.        |
-| absent            | Older server, development checkout, Windows foreground process, or an unrecognized supervisor | Offer the exact manual relaunch command.                              |
+The launcher serializes child exits, IPC messages, and timers. A trial must report prepared within
+120 seconds. If the trial exits or times out before prepared, the launcher stops it, restores the
+snapshot, records rollback, and starts A. A durable restore marker makes an interrupted restore
+resume before either version can boot. After commit, B is active and normal systemd restart policy
+applies.
 
-Desktop ownership takes precedence over process-shape detection. A desktop-managed backend must
-never spawn a second CLI server beside the app-owned process. Likewise, a process launched by an
-unrecognized systemd unit does not claim the foreground respawn path because its supervisor could
-bring the old version back.
+## Database Rollback
 
-## Update Flow
+The launcher snapshots `state.sqlite`, `state.sqlite-wal`, and `state.sqlite-shm` after the old
+server stops and before the trial starts. This makes trial migrations and writes reversible without
+requiring down migrations. The snapshot is retained across launcher restarts and is removed only
+after commit or after both restore and the terminal rollback state are durable.
 
-```mermaid
-flowchart TD
-    A[Client detects different versions] --> B{Advertised update path}
-    B -->|desktop-managed| C[Update desktop app on server machine]
-    B -->|missing| D[Copy exact manual relaunch command]
-    B -->|boot-service or respawn| E[server.updateServer]
-    E --> F[Install exact t3 version in pinned runtime]
-    F --> G[Run version preflight]
-    G -->|fails| H[Remove failed runtime and keep current server]
-    G -->|passes| I{Handoff method}
-    I -->|boot-service| J[Rewrite and restart T3 systemd unit]
-    I -->|respawn| K[Start delayed replacement and exit current process]
-    J --> L[Client reconnects]
-    K --> L
+The protocol version is part of the safety boundary. A target that requires database snapshots is
+blocked when the installed launcher is too old. Upgrade the launcher once with:
+
+```sh
+npx croki-server@<version> service update
 ```
 
-`server.updateServer` requires the environment's `orchestration:operate` authorization scope. Its
-payload accepts only an exact npm version, including an exact prerelease version; dist-tags such as
-`latest` and `nightly` are rejected.
+The local command stops the unit, selects the new launcher and exact runtime, then restarts the
+service. Later releases, including releases with migrations, can use the remote trial path.
 
-The update service permits one update at a time. It installs `croki-server@<version>` under
-`<baseDir>/runtime/versions/<version>` and writes an install-complete sentinel only after npm exits
-successfully. Boot-service setup and self-update share the same process-wide installation lock, so
-they cannot mutate a pinned runtime concurrently.
+Snapshots briefly require enough free disk for another copy of the SQLite files. Attachments and
+other files under the state directory are outside this rollback boundary.
 
-Before any restart, the current Node executable runs the replacement with `--version`. A failed
-install, failed preflight, or wrong reported version leaves the current server running. A failed
-preflight also removes the candidate runtime so retrying the same version performs a clean install.
+## Client Correlation
 
-## Host Service Lifecycle
+The update acknowledgement includes the launcher-generated update ID. After reconnecting, clients
+wait for a lifecycle ready event carrying that same ID. `committed` completes the operation only
+when the ready server is the target version. `rolled-back` and `failed` end it immediately with the
+recorded reason. Older servers without an ID retain version-only reconnect behavior.
 
-The systemd user service is a host lifecycle concern, not a Croki Connect resource. The standalone
-`t3 service install`, `uninstall`, `update`, and `status` commands own it. Install and update both
-reconcile the unit through `BootService`; running `npx croki-server@latest service update` therefore pins and
-activates the latest CLI release without requiring a connected client.
+## Capability and Compatibility
 
-The `t3 connect` onboarding flow may offer service installation, but it calls the same reconciliation
-operation as `t3 service install`. Connect logout only disables cloud access and clears its
-authorization; it does not uninstall the host service.
+The existing additive RPC and lifecycle schemas remain compatible with older clients. New servers
+advertise remote self-update only when they have valid launcher context and a live IPC channel.
+Desktop-managed servers direct the user to update the desktop app. Other process shapes provide a
+manual command; the old detached foreground respawn path no longer exists.
 
-## Process Handoff
-
-For `boot-service`, the server atomically rewrites the T3-managed user unit to point at the verified
-runtime, reloads systemd, and restarts the unit. Reload and restart failures restore the previous
-unit before returning an error.
-
-For `respawn`, the server starts a detached, delayed replacement that replays the original CLI
-arguments. It then acknowledges the request and schedules the current process to exit. The delays
-give the acknowledgement time to cross direct or relayed connections before the socket closes.
-
-There is no separate progress stream. The update request remains pending while npm installs and the
-client shows a disabled update action. A restart can interrupt the request normally; the connection
-runtime keeps the environment registered and reconnects through its usual retry path. After an
-acknowledged foreground handoff, the UI keeps the action pending until version sync removes it or a
-safety timeout releases it. If a boot-service restart closes the connection before acknowledgement,
-the UI releases the interrupted action without reporting a false update failure and lets reconnect
-and the next version check determine the result.
-
-## Release Invariant
-
-The exact client version must exist as the configured Croki-owned npm package
-before a client carrying that version is published. The release workflow must
-make the GitHub release depend on CLI publication, and hosted web deployment
-must depend on that release. See [Release ownership and enablement](../operations/release.md).
+An update-capable client is released only after its exact
+`croki-server@<version>` package publishes successfully. The Croki release plan
+and workflow enforce that ordering; a missing or failed CLI publication keeps
+client release destinations off.
 
 ## Source Map
 
-- Capability contract: `packages/contracts/src/environment.ts`
-- Update RPC contract: `packages/contracts/src/server.ts` and `packages/contracts/src/rpc.ts`
-- Capability detection and handoff: `apps/server/src/cloud/selfUpdate.ts`
-- Host service commands: `apps/server/src/cli/service.ts`
-- Pinned runtime installation: `apps/server/src/cloud/pinnedRuntime.ts`
-- Client version comparison: `apps/web/src/versionSkew.ts`
-- Shared update action: `apps/web/src/components/ServerUpdateAction.tsx`
+- Launcher and state machine: `apps/server/src/serviceLauncher.ts`
+- IPC and durable state types: `apps/server/src/cloud/serviceProtocol.ts`
+- Child IPC adapter: `apps/server/src/cloud/serviceLauncherClient.ts`
+- Staging and preflight: `apps/server/src/cloud/pinnedRuntime.ts` and `servicePreflight.ts`
+- Service installation: `apps/server/src/cloud/bootService.ts`
+- Activation boundary: `apps/server/src/serverRuntimeStartup.ts` and `serverActivation.ts`
+- Client outcome correlation: `packages/client-runtime/src/state/server.ts`
