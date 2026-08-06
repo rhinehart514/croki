@@ -70,14 +70,14 @@ does not embed a JavaScript runtime.
 The project expands these user-defined Xcode build settings into its generated
 Info.plist:
 
-| Setting                        | Required           | Purpose                                         |
-| ------------------------------ | ------------------ | ----------------------------------------------- |
-| `CROKI_CLERK_PUBLISHABLE_KEY`  | Croki Connect only | Clerk publishable key.                          |
-| `CROKI_CLERK_JWT_TEMPLATE`     | No                 | Relay JWT template; defaults to `croki-relay`.  |
-| `CROKI_RELAY_URL`              | Croki Connect only | Relay base URL using HTTPS.                     |
-| `DEVELOPMENT_TEAM`             | Device/archive     | Apple Developer team used by automatic signing. |
-| `MARKETING_VERSION`            | Release            | User-facing version.                            |
-| `CURRENT_PROJECT_VERSION`      | Release            | Monotonically increasing build number.          |
+| Setting                       | Required           | Purpose                                         |
+| ----------------------------- | ------------------ | ----------------------------------------------- |
+| `CROKI_CLERK_PUBLISHABLE_KEY` | Croki Connect only | Clerk publishable key.                          |
+| `CROKI_CLERK_JWT_TEMPLATE`    | No                 | Relay JWT template; defaults to `croki-relay`.  |
+| `CROKI_RELAY_URL`             | Croki Connect only | Relay base URL using HTTPS.                     |
+| `DEVELOPMENT_TEAM`            | Device/archive     | Apple Developer team used by automatic signing. |
+| `MARKETING_VERSION`           | Release            | User-facing version.                            |
+| `CURRENT_PROJECT_VERSION`     | Release            | Monotonically increasing build number.          |
 
 Unset Croki Connect values disable that connection method without affecting direct
 pairing. Supply settings on the `xcodebuild` command line or through a local

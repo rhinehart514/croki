@@ -38,20 +38,20 @@ It should make native work easier to understand, verify, resume, and ship.
 
 ## Graded state
 
-| Area | Score | Current judgment |
-| --- | ---: | --- |
-| Product thesis and coherence | 72 | The ADE and founder audience are credible, but the repeatable changed result is not yet visible as one product path. |
-| Core founder loop | 83 | Thread, intervention, Preview, Diff, Git, approvals, and recovery are substantive; verification and shipping remain fragmented. |
-| Architecture and type safety | 82 | Contracts, ordered replay, provider instances, and deterministic orchestration are strong; runtime durability and oversized modules remain risks. |
-| Tests, CI, and release operations | 79 | Unit and contract coverage is broad and release destinations fail closed; packaged runtime and enabled publication paths are not fully proven. |
-| Visual system and accessibility | 78 | The dense workspace has a coherent direction; core sidebar, composer, Preview input, tabs, and motion contain semantic or accessibility defects. |
-| Security and trust | 72 | Local auth, workspace writes, Electron isolation, and secure native storage are strong; terminal and remote authority are too broad. |
-| Provider support and parity | 82 | Six provider drivers preserve native differences; rollback, auth confidence, MCP availability, and readiness are not uniformly represented. |
-| Cross-platform product | 76 | Web, desktop, React Native, and native iOS share real contracts; Preview, Canvas, remote creation, packaging, and distribution are not at parity. |
-| Onboarding and documentation | 76 | Setup and recovery guidance exists; provider coverage, compatibility naming, platform availability, and support paths drift. |
-| Marketing and external readiness | 62 | The wedge is compelling, but public availability, ownership, proof, and download claims run ahead of enabled Croki releases. |
-| Performance and scale | 78 | Timeline virtualization and telemetry are good; long Thread reads are unpaged and hot paths repeatedly process full histories. |
-| Simplicity and product debt | 68 | 0.4.8 removes significant machinery, but legacy scopes, duplicate surfaces, and very large modules remain active. |
+| Area                              | Score | Current judgment                                                                                                                                  |
+| --------------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product thesis and coherence      |    72 | The ADE and founder audience are credible, but the repeatable changed result is not yet visible as one product path.                              |
+| Core founder loop                 |    83 | Thread, intervention, Preview, Diff, Git, approvals, and recovery are substantive; verification and shipping remain fragmented.                   |
+| Architecture and type safety      |    82 | Contracts, ordered replay, provider instances, and deterministic orchestration are strong; runtime durability and oversized modules remain risks. |
+| Tests, CI, and release operations |    79 | Unit and contract coverage is broad and release destinations fail closed; packaged runtime and enabled publication paths are not fully proven.    |
+| Visual system and accessibility   |    78 | The dense workspace has a coherent direction; core sidebar, composer, Preview input, tabs, and motion contain semantic or accessibility defects.  |
+| Security and trust                |    72 | Local auth, workspace writes, Electron isolation, and secure native storage are strong; terminal and remote authority are too broad.              |
+| Provider support and parity       |    82 | Six provider drivers preserve native differences; rollback, auth confidence, MCP availability, and readiness are not uniformly represented.       |
+| Cross-platform product            |    76 | Web, desktop, React Native, and native iOS share real contracts; Preview, Canvas, remote creation, packaging, and distribution are not at parity. |
+| Onboarding and documentation      |    76 | Setup and recovery guidance exists; provider coverage, compatibility naming, platform availability, and support paths drift.                      |
+| Marketing and external readiness  |    62 | The wedge is compelling, but public availability, ownership, proof, and download claims run ahead of enabled Croki releases.                      |
+| Performance and scale             |    78 | Timeline virtualization and telemetry are good; long Thread reads are unpaged and hot paths repeatedly process full histories.                    |
+| Simplicity and product debt       |    68 | 0.4.8 removes significant machinery, but legacy scopes, duplicate surfaces, and very large modules remain active.                                 |
 
 ## What is already strong
 

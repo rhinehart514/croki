@@ -14,15 +14,15 @@ reconstructing the work; an implicit Croki agent harness does not appear.
 
 Croki is the ADE around the selected agent. It does not become the agent.
 
-| Selected provider owns | Croki owns |
-| --- | --- |
-| Reasoning and planning | Durable Thread and worker representation |
-| Implementation and tool strategy | Tool availability, authority, and receipts |
-| Native delegation behavior | Durable worker Thread presentation |
-| Provider memory and session behavior | Repository, worktree, terminal, and runtime state |
-| Conclusions and response wording | Captured environment and Git evidence |
+| Selected provider owns                 | Croki owns                                                       |
+| -------------------------------------- | ---------------------------------------------------------------- |
+| Reasoning and planning                 | Durable Thread and worker representation                         |
+| Implementation and tool strategy       | Tool availability, authority, and receipts                       |
+| Native delegation behavior             | Durable worker Thread presentation                               |
+| Provider memory and session behavior   | Repository, worktree, terminal, and runtime state                |
+| Conclusions and response wording       | Captured environment and Git evidence                            |
 | Whether it believes a turn is complete | Whether the environment is active, quiescent, blocked, or failed |
-| Use of granted tools | Scope and consequence of granted authority |
+| Use of granted tools                   | Scope and consequence of granted authority                       |
 
 Croki may project observed facts. It must not create an unstated completion
 rubric, choose a provider strategy, add a planning loop, route work to agents,
