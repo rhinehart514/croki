@@ -51,8 +51,8 @@ const HIDDEN_UPDATE_TAP_COUNT = 5;
 let appUpdateCheckInFlight: AppUpdateCheckInFlight | undefined;
 
 /**
- * Keeps the manual update affordance discoverable only to someone deliberately
- * tapping the version row five times.
+ * Keeps the ordinary version row quiet unless someone deliberately taps it
+ * five times. Version-skew recovery exposes a direct update check separately.
  */
 export function registerHiddenUpdateTap(count: number): {
   readonly nextCount: number;

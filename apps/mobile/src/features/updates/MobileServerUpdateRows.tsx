@@ -1,7 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, ServerConfig } from "@croki/contracts";
+import type { EnvironmentId } from "@croki/contracts";
 import Constants from "expo-constants";
-import { useState } from "react";
+import * as Updates from "expo-updates";
+import { useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
@@ -11,7 +12,11 @@ import { useThemeColor } from "../../lib/useThemeColor";
 import type { ConnectedEnvironmentSummary } from "../../state/remote-runtime-types";
 import { environmentServerConfigsAtom, serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { resolveMobileServerUpdate } from "./mobileServerUpdates.logic";
+import { runAppUpdateCheck, type AppUpdateCheckState } from "./app-updates";
+import {
+  resolveMobileServerUpdate,
+  type MobileServerUpdatePresentation as MobileVersionUpdatePresentation,
+} from "./mobileServerUpdates.logic";
 
 export function MobileServerUpdateRows(props: {
   readonly environments: ReadonlyArray<ConnectedEnvironmentSummary>;
@@ -25,27 +30,31 @@ export function MobileServerUpdateRows(props: {
       serverVersion: config?.environment.serverVersion,
       selfUpdate: config?.environment.capabilities.serverSelfUpdate,
     });
-    return config && presentation ? [{ environment, config, presentation }] : [];
+    return presentation ? [{ environment, presentation }] : [];
   });
+  const clientUpdate = updates.find(
+    (entry): entry is typeof entry & { presentation: MobileClientUpdatePresentation } =>
+      entry.presentation.kind === "update-client",
+  );
+  const serverUpdates = updates.filter(
+    (entry): entry is typeof entry & { presentation: MobileServerUpdatePresentation } =>
+      entry.presentation.kind === "update-server",
+  );
 
   if (updates.length === 0) return null;
 
   return (
     <View className="mt-5 gap-3">
-      <Text className="px-1 text-sm font-t3-bold uppercase text-foreground-muted">
-        Server updates
-      </Text>
+      <Text className="px-1 text-sm font-t3-bold uppercase text-foreground-muted">Updates</Text>
       <View className="overflow-hidden rounded-[24px] bg-card">
-        {updates.map(({ environment, config, presentation }, index) => (
+        {clientUpdate ? <MobileClientUpdateRow presentation={clientUpdate.presentation} /> : null}
+        {serverUpdates.map(({ environment, presentation }, index) => (
           <MobileServerUpdateRow
             key={environment.environmentId}
-            borderTop={index !== 0}
+            borderTop={clientUpdate !== undefined || index !== 0}
             environmentId={environment.environmentId}
             label={environment.environmentLabel}
-            config={config}
-            command={presentation.command}
-            serverVersion={presentation.serverVersion}
-            targetVersion={presentation.targetVersion}
+            presentation={presentation}
           />
         ))}
       </View>
@@ -53,21 +62,91 @@ export function MobileServerUpdateRows(props: {
   );
 }
 
+type MobileClientUpdatePresentation = Extract<
+  MobileVersionUpdatePresentation,
+  { readonly kind: "update-client" }
+>;
+type MobileServerUpdatePresentation = Extract<
+  MobileVersionUpdatePresentation,
+  { readonly kind: "update-server" }
+>;
+
+function MobileClientUpdateRow(props: { readonly presentation: MobileClientUpdatePresentation }) {
+  const [updateState, setUpdateState] = useState<AppUpdateCheckState>("idle");
+  const updateInFlight = useRef(false);
+  const iconColor = useThemeColor("--color-icon");
+  const mutedColor = useThemeColor("--color-icon-muted");
+  const busy =
+    updateState === "checking" || updateState === "downloading" || updateState === "restarting";
+  const status =
+    updateState === "checking"
+      ? "Checking…"
+      : updateState === "downloading"
+        ? "Downloading…"
+        : updateState === "restarting"
+          ? "Restarting…"
+          : updateState === "current"
+            ? "No app update found"
+            : `${props.presentation.clientVersion} → ${props.presentation.serverVersion}`;
+
+  const handleUpdate = async () => {
+    if (updateInFlight.current) return;
+    updateInFlight.current = true;
+    try {
+      await runAppUpdateCheck({
+        onFailure: (message) => Alert.alert("Update failed", message),
+        onStateChange: setUpdateState,
+      });
+    } finally {
+      updateInFlight.current = false;
+    }
+  };
+
+  return (
+    <View className="px-4 py-3.5">
+      <View className="flex-row items-center gap-3">
+        <SymbolView name="arrow.down.circle" size={20} tintColor={iconColor} type="monochrome" />
+        <View className="min-w-0 flex-1 gap-0.5">
+          <Text className="text-base font-t3-bold text-foreground">Update this app</Text>
+          <Text className="text-xs text-foreground-muted" numberOfLines={2}>
+            {status}
+          </Text>
+        </View>
+        {busy ? (
+          <ActivityIndicator color={mutedColor} size="small" />
+        ) : Updates.isEnabled ? (
+          <Pressable
+            accessibilityLabel="Check for Croki update"
+            accessibilityRole="button"
+            className="min-h-[38px] justify-center rounded-full bg-subtle px-3.5 active:opacity-70"
+            onPress={() => void handleUpdate()}
+          >
+            <Text className="text-xs font-t3-bold text-foreground">
+              {updateState === "current" ? "Check again" : "Check update"}
+            </Text>
+          </Pressable>
+        ) : (
+          <Text className="max-w-28 text-right text-xs text-foreground-muted">
+            Install a newer Croki build
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
 function MobileServerUpdateRow(props: {
   readonly borderTop: boolean;
-  readonly command: string;
-  readonly config: ServerConfig;
   readonly environmentId: EnvironmentId;
   readonly label: string;
-  readonly serverVersion: string;
-  readonly targetVersion: string;
+  readonly presentation: MobileServerUpdatePresentation;
 }) {
   const updateState = useAtomValue(serverEnvironment.updateStateAtom(props.environmentId));
   const updateServer = useAtomCommand(serverEnvironment.updateServer, { reportFailure: false });
   const [submitting, setSubmitting] = useState(false);
   const iconColor = useThemeColor("--color-icon");
   const mutedColor = useThemeColor("--color-icon-muted");
-  const capability = props.config.environment.capabilities.serverSelfUpdate ?? null;
+  const capability = props.presentation.selfUpdate;
   const running = updateState.status === "running" || submitting;
   const status =
     updateState.status === "running"
@@ -76,7 +155,7 @@ function MobileServerUpdateRow(props: {
         : "Downloading…"
       : updateState.status === "failed"
         ? updateState.message
-        : `${props.serverVersion} → ${props.targetVersion}`;
+        : `${props.presentation.serverVersion} → ${props.presentation.targetVersion}`;
 
   const handleUpdate = async () => {
     if (running) return;
@@ -84,7 +163,7 @@ function MobileServerUpdateRow(props: {
     try {
       const result = await updateServer({
         environmentId: props.environmentId,
-        input: { targetVersion: props.targetVersion },
+        input: { targetVersion: props.presentation.targetVersion },
       });
       if (result._tag === "Failure") {
         Alert.alert("Server update failed", "Croki kept the previous server version available.");
@@ -95,7 +174,7 @@ function MobileServerUpdateRow(props: {
   };
 
   const handleCopy = () => {
-    copyTextWithHaptic(props.command, { target: "server update command" });
+    copyTextWithHaptic(props.presentation.command, { target: "server update command" });
     Alert.alert("Update command copied", `Run it on ${props.label}.`);
   };
 

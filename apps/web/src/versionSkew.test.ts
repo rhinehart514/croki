@@ -16,13 +16,36 @@ import {
 describe("versionSkew", () => {
   it("does not warn when versions match", () => {
     expect(resolveVersionMismatch(APP_VERSION)).toBeNull();
+    expect(resolveVersionMismatch(`v${APP_VERSION}`)).toBeNull();
   });
 
-  it("returns a mismatch when the server version differs from the client", () => {
+  it("directs newer clients to update an older server", () => {
+    expect(resolveVersionMismatch("0.0.0-alpha.1")).toEqual({
+      clientVersion: APP_VERSION,
+      serverVersion: "0.0.0-alpha.1",
+      updateTarget: "server",
+      hint: "This server is older than this Croki client. Update the server to match it.",
+    });
+  });
+
+  it("directs older clients to update themselves instead of rolling back a newer server", () => {
     expect(resolveVersionMismatch("9.9.9")).toEqual({
       clientVersion: APP_VERSION,
       serverVersion: "9.9.9",
-      hint: "Version mismatch. Try syncing the client and server to the same Croki version.",
+      updateTarget: "client",
+      hint: "This server is newer than this Croki client. Update Croki on this device to match it.",
+    });
+  });
+
+  it("does not choose an update target for versions it cannot compare safely", () => {
+    expect(resolveVersionMismatch("development")).toEqual({
+      clientVersion: APP_VERSION,
+      serverVersion: "development",
+      updateTarget: null,
+      hint: "Version mismatch. Sync this Croki client and server to the same version.",
+    });
+    expect(resolveVersionMismatch(`${APP_VERSION}+server-build`)).toMatchObject({
+      updateTarget: null,
     });
   });
 
@@ -74,7 +97,7 @@ describe("versionSkew", () => {
     const mismatch = resolveVersionMismatch("9.9.9");
 
     expect(appendVersionMismatchHint("Socket closed.", mismatch)).toBe(
-      "Socket closed. Hint: Version mismatch. Try syncing the client and server to the same Croki version.",
+      "Socket closed. Hint: This server is newer than this Croki client. Update Croki on this device to match it.",
     );
   });
 

@@ -1,4 +1,5 @@
 import type { EnvironmentId, ServerConfig, ServerSelfUpdateCapability } from "@croki/contracts";
+import { compareSemverVersions, parseSemver } from "@croki/shared/semver";
 import * as Schema from "effect/Schema";
 
 import { APP_VERSION } from "./branding";
@@ -7,6 +8,7 @@ import { getLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorag
 export interface VersionMismatch {
   readonly clientVersion: string;
   readonly serverVersion: string;
+  readonly updateTarget: "client" | "server" | null;
   readonly hint: string;
 }
 
@@ -36,10 +38,25 @@ export function resolveVersionMismatch(
     return null;
   }
 
+  const versionsAreComparable =
+    parseSemver(normalizedClientVersion) !== null && parseSemver(normalizedServerVersion) !== null;
+  const comparison = versionsAreComparable
+    ? compareSemverVersions(normalizedServerVersion, normalizedClientVersion)
+    : 0;
+  if (versionsAreComparable && comparison === 0) return null;
+  const updateTarget = !versionsAreComparable ? null : comparison > 0 ? "client" : "server";
+  const hint =
+    updateTarget === "client"
+      ? "This server is newer than this Croki client. Update Croki on this device to match it."
+      : updateTarget === "server"
+        ? "This server is older than this Croki client. Update the server to match it."
+        : "Version mismatch. Sync this Croki client and server to the same version.";
+
   return {
     clientVersion: normalizedClientVersion,
     serverVersion: normalizedServerVersion,
-    hint: "Version mismatch. Try syncing the client and server to the same Croki version.",
+    updateTarget,
+    hint,
   };
 }
 

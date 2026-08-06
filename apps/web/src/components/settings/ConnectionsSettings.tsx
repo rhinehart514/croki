@@ -7,6 +7,7 @@ import {
   TerminalIcon,
 } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
+import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, memo, useCallback, useMemo, useState } from "react";
 import {
   AuthAccessReadScope,
@@ -38,6 +39,7 @@ import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { isElectron } from "../../env";
 import { cn } from "../../lib/utils";
 import { formatElapsedDurationLabel, formatExpiresInLabel } from "../../timestampFormat";
 import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
@@ -1350,6 +1352,7 @@ function SavedBackendListRow({
   onConnect,
   onRemove,
 }: SavedBackendListRowProps) {
+  const navigate = useNavigate();
   const environmentId = environment.environmentId;
   const connectionState = environment.connection.phase;
   const isConnected = connectionState === "connected";
@@ -1441,13 +1444,20 @@ function SavedBackendListRow({
                     type="button"
                     className="w-fit cursor-help rounded-sm text-left text-muted-foreground text-xs"
                   >
-                    Server update available
+                    {versionMismatch.updateTarget === "client"
+                      ? "Update Croki on this device"
+                      : versionMismatch.updateTarget === "server"
+                        ? "Server update available"
+                        : "Croki versions differ"}
                   </button>
                 }
               />
               <TooltipPopup side="top">
-                {versionMismatch.serverVersion} <span aria-hidden="true">→</span>{" "}
-                {versionMismatch.clientVersion}
+                {versionMismatch.updateTarget === "client"
+                  ? `${versionMismatch.clientVersion} → ${versionMismatch.serverVersion}`
+                  : versionMismatch.updateTarget === "server"
+                    ? `${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}`
+                    : `${versionMismatch.clientVersion} ≠ ${versionMismatch.serverVersion}`}
               </TooltipPopup>
             </Tooltip>
           ) : null}
@@ -1467,8 +1477,12 @@ function SavedBackendListRow({
           ) : null}
         </div>
         <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
-          {versionMismatch &&
-          (serverUpdateState.status === "idle" || serverUpdateState.status === "failed") ? (
+          {versionMismatch?.updateTarget === "client" && isElectron ? (
+            <Button size="xs" onClick={() => void navigate({ to: "/settings" })}>
+              Update Croki
+            </Button>
+          ) : versionMismatch?.updateTarget === "server" &&
+            (serverUpdateState.status === "idle" || serverUpdateState.status === "failed") ? (
             <ServerUpdateAction
               environmentId={environmentId}
               serverLabel={`${environment.label} server`}
@@ -1731,6 +1745,7 @@ function CloudRemoteEnvironmentRows({
 }
 
 export function ConnectionsSettings() {
+  const navigate = useNavigate();
   const desktopBridge = window.desktopBridge;
   const { environments } = useEnvironments();
   const primaryEnvironment = usePrimaryEnvironment();
@@ -3011,31 +3026,33 @@ export function ConnectionsSettings() {
                     ? "Update failed"
                     : primaryServerUpdateState.status === "running"
                       ? "Updating server"
-                      : "Server update available"
+                      : primaryVersionMismatch?.updateTarget === "client"
+                        ? "Update Croki on this device"
+                        : primaryVersionMismatch?.updateTarget === "server"
+                          ? "Server update available"
+                          : "Croki versions differ"
                 }
                 description={
                   primaryServerUpdateState.status !== "idle" ? (
                     <ServerUpdateProgress state={primaryServerUpdateState} />
                   ) : primaryVersionMismatch ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button type="button" className="w-fit cursor-help rounded-sm text-left">
-                            Update to match this client.
-                          </button>
-                        }
-                      />
-                      <TooltipPopup side="top">
-                        {primaryVersionMismatch.serverVersion} <span aria-hidden="true">→</span>{" "}
-                        {primaryVersionMismatch.clientVersion}
-                      </TooltipPopup>
-                    </Tooltip>
+                    primaryVersionMismatch.updateTarget === "client" ? (
+                      "Update Croki on this device to match this server."
+                    ) : primaryVersionMismatch.updateTarget === "server" ? (
+                      "Update this server to match this Croki client."
+                    ) : (
+                      "Use the same Croki version for this client and server."
+                    )
                   ) : null
                 }
                 control={
-                  primaryVersionMismatch &&
-                  primaryEnvironmentId !== null &&
-                  primaryServerUpdateState.status !== "running" ? (
+                  primaryVersionMismatch?.updateTarget === "client" && isElectron ? (
+                    <Button size="xs" onClick={() => void navigate({ to: "/settings" })}>
+                      Update Croki
+                    </Button>
+                  ) : primaryVersionMismatch?.updateTarget === "server" &&
+                    primaryEnvironmentId !== null &&
+                    primaryServerUpdateState.status !== "running" ? (
                     <ServerUpdateAction
                       environmentId={primaryEnvironmentId}
                       serverLabel={primaryEnvironment?.label ?? "this server"}

@@ -76,13 +76,14 @@ npm run check:croki
 
 ## Exact-version update invariant
 
-Croki clients ask a connected server to install the client's exact version.
-The release plan therefore rejects desktop, hosted web, or mobile publication
-unless `croki-server` publication is enabled, and the GitHub release job runs
-only after that exact package version publishes successfully. Do not weaken
-this dependency to accept a skipped CLI job. Without the package, automatic
-server update capability must stay unavailable and the client must offer the
-manual path.
+When the server is older, Croki clients ask it to install the client's exact
+version. A client never asks a newer server to roll back; the client must update
+through its own distribution path instead. The release plan therefore rejects
+desktop, hosted web, or mobile publication unless `croki-server` publication is
+enabled, and the GitHub release job runs only after that exact package version
+publishes successfully. Do not weaken this dependency to accept a skipped CLI
+job. Without the package, automatic server update capability must stay
+unavailable and an older server must use the manual path.
 
 GitHub Release publication uses the repository-scoped workflow token so shared
 Release App API limits cannot strand artifact upload. The Croki Release App

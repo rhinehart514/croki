@@ -2000,7 +2000,9 @@ function ChatViewContent(props: ChatViewProps) {
     // "versions differ". A failed update never folds: its error and retry
     // action must stay visible.
     const reconnectingThroughVersionSkew =
-      serverUpdateState.status === "idle" && environmentReconnecting && versionMismatch !== null;
+      serverUpdateState.status === "idle" &&
+      environmentReconnecting &&
+      versionMismatch?.updateTarget === "server";
     // While an update runs, transient connect blips are expected (the server
     // restarts) and the update banner already shows progress. Hard failure
     // phases still surface so the Reconnect action stays reachable.
@@ -2081,21 +2083,32 @@ function ChatViewContent(props: ChatViewProps) {
               <TooltipTrigger
                 render={
                   <button type="button" className="cursor-help rounded-sm text-left">
-                    Server update available
+                    {versionMismatch.updateTarget === "client"
+                      ? "Update Croki on this device"
+                      : versionMismatch.updateTarget === "server"
+                        ? "Server update available"
+                        : "Croki versions differ"}
                   </button>
                 }
               />
               <TooltipPopup side="top">
-                {versionMismatchServerLabel} {versionMismatch.serverVersion}{" "}
-                <span aria-hidden="true">→</span> {versionMismatch.clientVersion}
+                {versionMismatch.updateTarget === "client"
+                  ? `${versionMismatch.clientVersion} → ${versionMismatch.serverVersion}`
+                  : versionMismatch.updateTarget === "server"
+                    ? `${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}`
+                    : `${versionMismatch.clientVersion} ≠ ${versionMismatch.serverVersion}`}
               </TooltipPopup>
             </Tooltip>
           ) : (
-            "Server update available"
+            "Croki versions differ"
           ),
         description:
           updateInProgress || updateFailed ? (
             <ServerUpdateProgress state={serverUpdateState} />
+          ) : versionMismatch?.updateTarget === "client" ? (
+            `Update Croki on this device to match ${versionMismatchServerLabel}.`
+          ) : versionMismatch?.updateTarget === null ? (
+            `Use the same Croki version on this device and ${versionMismatchServerLabel}.`
           ) : versionMismatchSelfUpdate === "desktop-managed" ? (
             serverUpdateGuidance(versionMismatchSelfUpdate, versionMismatchServerLabel)
           ) : null,
@@ -2104,7 +2117,16 @@ function ChatViewContent(props: ChatViewProps) {
         actions:
           updateInProgress ||
           !versionMismatch ||
-          versionMismatchSelfUpdate === "desktop-managed" ? undefined : (
+          versionMismatch.updateTarget === null ||
+          (versionMismatch.updateTarget === "server" &&
+            versionMismatchSelfUpdate ===
+              "desktop-managed") ? undefined : versionMismatch.updateTarget === "client" ? (
+            isElectron ? (
+              <Button size="xs" onClick={() => void navigate({ to: "/settings" })}>
+                Update Croki
+              </Button>
+            ) : undefined
+          ) : (
             <ServerUpdateAction
               environmentId={serverUpdateEnvironmentId}
               serverLabel={versionMismatchServerLabel}
