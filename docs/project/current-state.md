@@ -30,6 +30,12 @@ Croki currently provides:
   provision or replace an agent.
 - local and remote environment connection paths, including desktop-managed SSH
   and Croki Connect compatibility infrastructure;
+- rollback-safe automatic updates for launcher-managed Linux servers, with
+  exact-version package staging, database snapshots around migration trials,
+  correlated reconnect outcomes, and automatic return to the previous server
+  when a trial cannot prepare;
+- matching server-update actions on web, desktop, and mobile. Mobile OTA checks
+  remain disabled unless a non-inherited `CROKI_EAS_PROJECT_ID` is supplied;
 - Croki branding and completion feedback;
 - optional repository-owned application lineage at `.croki/application.croki`,
   which joins inherited released reality with the version currently being built;
@@ -258,6 +264,10 @@ memory, skills, or model.
 - Venture evidence now has a typed observation and provenance boundary, but
   source adapters for customer conversations, analytics, CRM, campaigns, and
   market research have not landed yet.
+- Automatic update production destinations remain intentionally unavailable
+  until Croki-owned npm, EAS, signing, and hosting credentials are configured.
+  Client release gates require the exact `croki-server` version to publish
+  before any update-capable client is exposed.
 - Parallel Threads is implemented behind a default-off Settings → Beta toggle
   for the planned 0.4.4 release. It reuses provider-native delegation and the
   parent Thread's existing Workstreams projection; provider support therefore
