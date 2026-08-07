@@ -120,11 +120,13 @@ import {
   resolveAdjacentThreadId,
   resolveSettledTimestamp,
   resolveSidebarV2Status,
+  resolveThreadAttention,
   resolveWorkingStartedAt,
   shouldNavigateAfterProjectRemoval,
   sortLogicalProjectsForSidebar,
   sortSettledThreadsForSidebarV2,
   sortThreadsForSidebarV2,
+  THREAD_ATTENTION_HASH,
 } from "./Sidebar.logic";
 import { resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
 import {
@@ -412,8 +414,12 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
   projectCwd: string | null;
   projectTitle: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
-  onThreadClick: (event: ReactMouseEvent, threadRef: ScopedThreadRef) => void;
-  onThreadActivate: (threadRef: ScopedThreadRef) => void;
+  onThreadClick: (
+    event: ReactMouseEvent,
+    threadRef: ScopedThreadRef,
+    needsAttention: boolean,
+  ) => void;
+  onThreadActivate: (threadRef: ScopedThreadRef, needsAttention?: boolean) => void;
   onStartRename: (threadRef: ScopedThreadRef, title: string) => void;
   onRenameTitleChange: (title: string) => void;
   onCommitRename: (threadRef: ScopedThreadRef, title: string, originalTitle: string) => void;
@@ -466,7 +472,8 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
   // Same semantics as v1 (never-visited counts as read): flipping the beta
   // flag must not light up every historical thread as unread.
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
-  const status = resolveSidebarV2Status(thread);
+  const attention = resolveThreadAttention({ ...thread, lastVisitedAt });
+  const status = resolveSidebarV2Status({ ...thread, lastVisitedAt });
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so unlike Done, a never-visited woke thread still
@@ -476,14 +483,9 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
   const lastVisitedDate = lastVisitedAt === undefined ? null : parseTimestampDate(lastVisitedAt);
   const wokeAtDate = props.wokeAt === null ? null : parseTimestampDate(props.wokeAt);
   const isWoke = wokeAtDate !== null && (lastVisitedDate === null || lastVisitedDate < wokeAtDate);
-  // In-flight rows (working, or waiting on approval/input) fade as a whole:
-  // there is nothing for the user to do yet, so prominence is reserved for
-  // rows that need a human — done (unread), read-but-unsettled, failed, and
-  // freshly woken. The status label keeps its hue, so waiting rows stay
-  // findable. In-flight rows recede the same as read-ready ones (inbox-zero:
-  // working threads aren't your problem yet) — only the colored status label
-  // stands out.
-  const isInFlight = status === "working" || status === "approval" || status === "input";
+  // Only autonomous work recedes. An approval, question, or fresh failure is
+  // the founder's next action and keeps the full row prominent.
+  const isInFlight = status === "working";
   const shouldRecede =
     (status === "ready" || isInFlight) && !isUnread && !isWoke && !props.isActive && !isSelected;
   // Status hues follow the system-wide convention set by sidebar v1 and the
@@ -499,19 +501,19 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
         }
       : status === "approval"
         ? {
-            label: "Approval",
+            label: attention?.label ?? "Needs Approval",
             icon: null,
             className: "text-amber-700 dark:text-amber-300",
           }
         : status === "input"
           ? {
-              label: "Input",
+              label: attention?.label ?? "Needs Input",
               icon: null,
               className: "text-indigo-600 dark:text-indigo-300",
             }
           : status === "failed"
             ? {
-                label: "Failed",
+                label: attention?.label ?? "Failed",
                 icon: null,
                 className: "text-red-700 dark:text-red-300",
               }
@@ -592,9 +594,9 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
         onThreadActivate(threadRef);
         return;
       }
-      onThreadClick(event, threadRef);
+      onThreadClick(event, threadRef, attention !== null);
     },
-    [onThreadActivate, onThreadClick, props.isChild, threadRef],
+    [attention, onThreadActivate, onThreadClick, props.isChild, threadRef],
   );
   const handleContextMenu = useCallback(
     (event: ReactMouseEvent) => {
@@ -609,9 +611,9 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
       if (event.target !== event.currentTarget) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
-      onThreadActivate(threadRef);
+      onThreadActivate(threadRef, attention !== null);
     },
-    [onThreadActivate, threadRef],
+    [attention, onThreadActivate, threadRef],
   );
   const handleDoubleClick = useCallback(
     (event: ReactMouseEvent) => {
@@ -1123,7 +1125,9 @@ export default function SidebarV2() {
     reportFailure: false,
   });
   const updateSettings = useUpdateClientSettings();
-  const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{ path: string }>({
+  const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{
+    path: string;
+  }>({
     onCopy: ({ path }) => {
       toastManager.add({
         type: "success",
@@ -1141,7 +1145,9 @@ export default function SidebarV2() {
       );
     },
   });
-  const { copyToClipboard: copyBranchToClipboard } = useCopyToClipboard<{ branch: string }>({
+  const { copyToClipboard: copyBranchToClipboard } = useCopyToClipboard<{
+    branch: string;
+  }>({
     target: "branch name",
     onCopy: ({ branch }) => {
       toastManager.add({
@@ -1237,6 +1243,39 @@ export default function SidebarV2() {
     () => sortLogicalProjectsForSidebar(unsortedProjectGroups, threads, sidebarProjectSortOrder),
     [sidebarProjectSortOrder, threads, unsortedProjectGroups],
   );
+  const threadLastVisitedAtByKey = useUiStateStore((state) => state.threadLastVisitedAtById);
+  const attentionCountByProjectKey = useMemo(() => {
+    const projectKeyByMemberRef = new Map<string, string>();
+    for (const project of projectGroups) {
+      for (const projectRef of project.memberProjectRefs) {
+        projectKeyByMemberRef.set(
+          `${projectRef.environmentId}:${projectRef.projectId}`,
+          project.projectKey,
+        );
+      }
+    }
+
+    const counts = new Map<string, number>();
+    for (const thread of threads) {
+      if (thread.archivedAt !== null || thread.parentThreadId) continue;
+      const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+      if (
+        resolveThreadAttention({
+          ...thread,
+          lastVisitedAt: threadLastVisitedAtByKey[threadKey],
+        }) === null
+      ) {
+        continue;
+      }
+      const projectKey = projectKeyByMemberRef.get(`${thread.environmentId}:${thread.projectId}`);
+      if (projectKey) counts.set(projectKey, (counts.get(projectKey) ?? 0) + 1);
+    }
+    return counts;
+  }, [projectGroups, threadLastVisitedAtByKey, threads]);
+  const totalAttentionCount = useMemo(
+    () => [...attentionCountByProjectKey.values()].reduce((total, count) => total + count, 0),
+    [attentionCountByProjectKey],
+  );
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
   const providerEntryByInstanceId = useMemo(
     () =>
@@ -1310,6 +1349,9 @@ export default function SidebarV2() {
         : (projectGroups.find((project) => project.projectKey === projectScopeKey) ?? null),
     [projectGroups, projectScopeKey],
   );
+  const scopedAttentionCount = scopedProjectGroup
+    ? (attentionCountByProjectKey.get(scopedProjectGroup.projectKey) ?? 0)
+    : totalAttentionCount;
   const scopedProjectKeys = useMemo(
     () =>
       scopedProjectGroup === null
@@ -1438,7 +1480,10 @@ export default function SidebarV2() {
     async (member: SidebarProjectGroupMember, nextTitle: string) => {
       const title = nextTitle.trim();
       if (!title) {
-        toastManager.add({ type: "warning", title: "Project title cannot be empty" });
+        toastManager.add({
+          type: "warning",
+          title: "Project title cannot be empty",
+        });
         return;
       }
       if (title === member.title) return;
@@ -1463,7 +1508,9 @@ export default function SidebarV2() {
   const updateProjectGroupingPreference = useCallback(
     (member: SidebarProjectGroupMember, selection: SidebarProjectGroupingMode | "inherit") => {
       const overrideKey = deriveProjectGroupingOverrideKey(member);
-      const nextOverrides = { ...projectGroupingSettings.sidebarProjectGroupingOverrides };
+      const nextOverrides = {
+        ...projectGroupingSettings.sidebarProjectGroupingOverrides,
+      };
       if (selection === "inherit") {
         delete nextOverrides[overrideKey];
       } else {
@@ -1558,7 +1605,11 @@ export default function SidebarV2() {
         pinned.push(thread);
       } else if (
         supportsSettlement &&
-        effectiveSettled(thread, { now, autoSettleAfterDays, changeRequestState })
+        effectiveSettled(thread, {
+          now,
+          autoSettleAfterDays,
+          changeRequestState,
+        })
       ) {
         settled.push(thread);
       } else {
@@ -1770,7 +1821,7 @@ export default function SidebarV2() {
   // history stays readable without un-settling, and sending a message or
   // starting a session un-settles server-side.
   const navigateToThread = useCallback(
-    (threadRef: ScopedThreadRef) => {
+    (threadRef: ScopedThreadRef, needsAttention = false) => {
       if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
         clearSelection();
       }
@@ -1781,6 +1832,7 @@ export default function SidebarV2() {
       void router.navigate({
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams(threadRef),
+        hash: needsAttention ? THREAD_ATTENTION_HASH : "",
       });
     },
     [clearSelection, isMobile, router, setOpenMobile, setSelectionAnchor],
@@ -1799,7 +1851,10 @@ export default function SidebarV2() {
         const trimmed = title.trim();
         setRenamingThreadKey(null);
         if (trimmed.length === 0) {
-          toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+          toastManager.add({
+            type: "warning",
+            title: "Thread title cannot be empty",
+          });
           return;
         }
         if (trimmed === originalTitle) return;
@@ -1823,7 +1878,7 @@ export default function SidebarV2() {
   );
 
   const handleThreadClick = useCallback(
-    (event: ReactMouseEvent, threadRef: ScopedThreadRef) => {
+    (event: ReactMouseEvent, threadRef: ScopedThreadRef, needsAttention: boolean) => {
       const isMac = isMacPlatform(navigator.platform);
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
       const threadKey = scopedThreadKey(threadRef);
@@ -1840,7 +1895,7 @@ export default function SidebarV2() {
       if (isTrailingDoubleClick(event.detail)) {
         return;
       }
-      navigateToThread(threadRef);
+      navigateToThread(threadRef, needsAttention);
     },
     [navigateToThread, rangeSelectTo, toggleThreadSelection],
   );
@@ -2157,7 +2212,9 @@ export default function SidebarV2() {
         for (const threadKey of threadKeys) {
           const thread = threadByKeyRef.current.get(threadKey);
           if (!thread || thread.settledOverride === "settled") continue;
-          attemptSettle(scopeThreadRef(thread.environmentId, thread.id), { coSettlingKeys });
+          attemptSettle(scopeThreadRef(thread.environmentId, thread.id), {
+            coSettlingKeys,
+          });
         }
         clearSelection();
         return;
@@ -2300,7 +2357,9 @@ export default function SidebarV2() {
                       : {
                           id: "snooze",
                           label: "Snooze",
-                          disabled: !canSnooze(thread, { now: new Date().toISOString() }),
+                          disabled: !canSnooze(thread, {
+                            now: new Date().toISOString(),
+                          }),
                           children: snoozePresets.map((preset) => ({
                             id: `snooze:${preset.id}`,
                             label: `${preset.label} (${preset.whenLabel})`,
@@ -2321,7 +2380,12 @@ export default function SidebarV2() {
               { id: "mark-unread", label: "Mark unread" },
               { id: "copy-path", label: "Copy path", icon: "copy" },
               ...(thread.branch ? [{ id: "copy-branch", label: "Copy branch", icon: "copy" }] : []),
-              { id: "delete", label: "Delete", destructive: true, icon: "trash" },
+              {
+                id: "delete",
+                label: "Delete",
+                destructive: true,
+                icon: "trash",
+              },
             ],
             position,
           ),
@@ -2411,7 +2475,9 @@ export default function SidebarV2() {
               );
               return;
             }
-            copyPathToClipboard(threadWorkspacePath, { path: threadWorkspacePath });
+            copyPathToClipboard(threadWorkspacePath, {
+              path: threadWorkspacePath,
+            });
             return;
           case "copy-branch":
             if (thread.branch) {
@@ -2627,7 +2693,11 @@ export default function SidebarV2() {
                   <MenuTrigger
                     render={
                       <SidebarMenuButton
-                        aria-label="Filter threads by project"
+                        aria-label={
+                          scopedAttentionCount > 0
+                            ? `Filter threads by project, ${scopedAttentionCount} need you`
+                            : "Filter threads by project"
+                        }
                         className="min-w-0 flex-1 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
                       />
                     }
@@ -2644,6 +2714,11 @@ export default function SidebarV2() {
                     <span className="min-w-0 flex-1 truncate">
                       {scopedProjectGroup?.displayName ?? "All projects"}
                     </span>
+                    {scopedAttentionCount > 0 ? (
+                      <span className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-300">
+                        {scopedAttentionCount} need you
+                      </span>
+                    ) : null}
                     <ChevronDownIcon className="-mr-px size-4 shrink-0" />
                   </MenuTrigger>
                   <MenuPopup align="start" className="w-(--anchor-width)">
@@ -2660,6 +2735,11 @@ export default function SidebarV2() {
                       >
                         <FolderIcon className="size-4 shrink-0" />
                         <span className="min-w-0 truncate text-sm">All projects</span>
+                        {totalAttentionCount > 0 ? (
+                          <span className="ml-auto shrink-0 text-xs text-amber-700 dark:text-amber-300">
+                            {totalAttentionCount} need you
+                          </span>
+                        ) : null}
                       </MenuRadioItem>
                       {projectGroups.map((project) => {
                         const scopeKey = project.projectKey;
@@ -2676,11 +2756,16 @@ export default function SidebarV2() {
                               className="size-4 shrink-0"
                             />
                             <span className="min-w-0 truncate text-sm">{project.displayName}</span>
+                            {(attentionCountByProjectKey.get(scopeKey) ?? 0) > 0 ? (
+                              <span className="ml-auto shrink-0 text-xs text-amber-700 dark:text-amber-300">
+                                {attentionCountByProjectKey.get(scopeKey)} need you
+                              </span>
+                            ) : null}
                             <button
                               type="button"
                               aria-label={`Project actions for ${project.displayName}`}
                               title={`Project actions for ${project.displayName}`}
-                              className="ml-auto inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/55 outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                              className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/55 outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                               onPointerDown={(event) => event.stopPropagation()}
                               onClick={(event) => {
                                 void handleProjectActions(event, project);
@@ -2969,7 +3054,9 @@ export default function SidebarV2() {
                       aria-label="Copy project path"
                       title="Copy project path"
                       onClick={() =>
-                        copyPathToClipboard(member.workspaceRoot, { path: member.workspaceRoot })
+                        copyPathToClipboard(member.workspaceRoot, {
+                          path: member.workspaceRoot,
+                        })
                       }
                     >
                       <CopyIcon className="size-3.5" />

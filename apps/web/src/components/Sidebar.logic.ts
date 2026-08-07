@@ -149,8 +149,9 @@ export interface ThreadStatusPill {
     | "Working"
     | "Connecting"
     | "Completed"
-    | "Pending Approval"
-    | "Awaiting Input"
+    | "Needs Approval"
+    | "Needs Input"
+    | "Failed"
     | "Plan Ready";
   colorClass: string;
   dotClass: string;
@@ -158,8 +159,9 @@ export interface ThreadStatusPill {
 }
 
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
-  "Pending Approval": 5,
-  "Awaiting Input": 4,
+  "Needs Approval": 7,
+  "Needs Input": 6,
+  Failed: 5,
   Working: 3,
   Connecting: 3,
   "Plan Ready": 2,
@@ -177,6 +179,47 @@ type ThreadStatusInput = Pick<
 > & {
   lastVisitedAt?: string | undefined;
 };
+
+export const THREAD_ATTENTION_HASH = "needs-attention";
+
+export function isThreadAttentionHash(hash: string): boolean {
+  return hash.replace(/^#/, "") === THREAD_ATTENTION_HASH;
+}
+
+export type ThreadAttentionKind = "approval" | "input" | "failure";
+
+export interface ThreadAttention {
+  kind: ThreadAttentionKind;
+  label: "Needs Approval" | "Needs Input" | "Failed";
+}
+
+type ThreadAttentionInput = Pick<
+  SidebarThreadSummary,
+  "hasPendingApprovals" | "hasPendingUserInput" | "session"
+> & { lastVisitedAt?: string | undefined };
+
+/**
+ * Returns only states that need a human decision or recovery action. A failure
+ * stops raising its hand after the user has visited the resulting state;
+ * approvals and questions remain actionable until the provider resolves them.
+ * A missing visit marker intentionally does not make historical failures new.
+ */
+export function resolveThreadAttention(thread: ThreadAttentionInput): ThreadAttention | null {
+  if (thread.hasPendingApprovals) {
+    return { kind: "approval", label: "Needs Approval" };
+  }
+  if (thread.hasPendingUserInput) {
+    return { kind: "input", label: "Needs Input" };
+  }
+  if (thread.session?.status !== "error" || !thread.lastVisitedAt) {
+    return null;
+  }
+  const failedAt = Date.parse(thread.session.updatedAt);
+  const lastVisitedAt = Date.parse(thread.lastVisitedAt);
+  if (Number.isNaN(failedAt)) return null;
+  if (!Number.isNaN(lastVisitedAt) && failedAt <= lastVisitedAt) return null;
+  return { kind: "failure", label: "Failed" };
+}
 
 export interface ThreadJumpHintVisibilityController {
   sync: (shouldShow: boolean) => void;
@@ -456,19 +499,20 @@ export type SidebarV2Status = "approval" | "input" | "working" | "failed" | "rea
 type SidebarV2StatusInput = Pick<
   SidebarThreadSummary,
   "hasPendingApprovals" | "hasPendingUserInput" | "session"
->;
+> & { lastVisitedAt?: string | undefined };
 
 export function resolveSidebarV2Status(thread: SidebarV2StatusInput): SidebarV2Status {
-  if (thread.hasPendingApprovals) {
+  const attention = resolveThreadAttention(thread);
+  if (attention?.kind === "approval") {
     return "approval";
   }
-  if (thread.hasPendingUserInput) {
+  if (attention?.kind === "input") {
     return "input";
   }
   if (thread.session?.status === "running" || thread.session?.status === "starting") {
     return "working";
   }
-  if (thread.session?.status === "error") {
+  if (attention !== null) {
     return "failed";
   }
   return "ready";
@@ -592,21 +636,31 @@ export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
 }): ThreadStatusPill | null {
   const { thread } = input;
+  const attention = resolveThreadAttention(thread);
 
-  if (thread.hasPendingApprovals) {
+  if (attention?.kind === "approval") {
     return {
-      label: "Pending Approval",
+      label: attention.label,
       colorClass: "text-amber-600 dark:text-amber-300/90",
       dotClass: "bg-amber-500 dark:bg-amber-300/90",
       pulse: false,
     };
   }
 
-  if (thread.hasPendingUserInput) {
+  if (attention?.kind === "input") {
     return {
-      label: "Awaiting Input",
+      label: attention.label,
       colorClass: "text-indigo-600 dark:text-indigo-300/90",
       dotClass: "bg-indigo-500 dark:bg-indigo-300/90",
+      pulse: false,
+    };
+  }
+
+  if (attention !== null) {
+    return {
+      label: attention.label,
+      colorClass: "text-red-600 dark:text-red-300/90",
+      dotClass: "bg-red-500 dark:bg-red-300/90",
       pulse: false,
     };
   }

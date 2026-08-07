@@ -445,7 +445,9 @@ private actor BlockingFirstAggregateEnvironmentLoader {
             firstLoadStarted.fulfill()
             try await Task.sleep(for: .seconds(60))
         }
-        restartedLoadObserved.fulfill()
+        if callCount == 2 {
+            restartedLoadObserved.fulfill()
+        }
         return try await runtime.environments()
     }
 }

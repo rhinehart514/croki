@@ -183,6 +183,7 @@ import {
   isTrailingDoubleClick,
   resolveProjectStatusIndicator,
   resolveThreadRowClassName,
+  resolveThreadAttention,
   resolveThreadStatusPill,
   orderItemsByPreferredIds,
   orderThreadsWithChildren,
@@ -190,6 +191,7 @@ import {
   sortProjectsForSidebar,
   useThreadJumpHintVisibility,
   ThreadStatusPill,
+  THREAD_ATTENTION_HASH,
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
@@ -329,8 +331,9 @@ interface SidebarThreadRowProps {
     event: React.MouseEvent,
     threadRef: ScopedThreadRef,
     orderedProjectThreadKeys: readonly string[],
+    needsAttention: boolean,
   ) => void;
-  navigateToThread: (threadRef: ScopedThreadRef) => void;
+  navigateToThread: (threadRef: ScopedThreadRef, needsAttention?: boolean) => void;
   handleMultiSelectContextMenu: (position: { x: number; y: number }) => Promise<void>;
   handleThreadContextMenu: (
     threadRef: ScopedThreadRef,
@@ -434,7 +437,11 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       event.stopPropagation();
       navigateToThread(threadRef);
       void (async () => {
-        const result = await openDiscoveredPort({ threadRef, port, openPreview });
+        const result = await openDiscoveredPort({
+          threadRef,
+          port,
+          openPreview,
+        });
         if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
           return;
         }
@@ -459,6 +466,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       lastVisitedAt,
     },
   });
+  const attention = resolveThreadAttention({ ...thread, lastVisitedAt });
   const pr = resolveThreadPr({
     threadBranch: thread.branch,
     gitStatus: gitStatus.data,
@@ -491,9 +499,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   );
   const handleRowClick = useCallback(
     (event: React.MouseEvent) => {
-      handleThreadClick(event, threadRef, orderedProjectThreadKeys);
+      handleThreadClick(event, threadRef, orderedProjectThreadKeys, attention !== null);
     },
-    [handleThreadClick, orderedProjectThreadKeys, threadRef],
+    [attention, handleThreadClick, orderedProjectThreadKeys, threadRef],
   );
   const handleRowDoubleClick = useCallback(
     (event: React.MouseEvent) => {
@@ -518,9 +526,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     (event: React.KeyboardEvent) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
-      navigateToThread(threadRef);
+      navigateToThread(threadRef, attention !== null);
     },
-    [navigateToThread, threadRef],
+    [attention, navigateToThread, threadRef],
   );
   const handleRowContextMenu = useCallback(
     (event: React.MouseEvent) => {
@@ -926,6 +934,7 @@ interface SidebarProjectThreadListProps {
     event: React.MouseEvent,
     threadRef: ScopedThreadRef,
     orderedProjectThreadKeys: readonly string[],
+    needsAttention: boolean,
   ) => void;
   navigateToThread: (threadRef: ScopedThreadRef) => void;
   handleMultiSelectContextMenu: (position: { x: number; y: number }) => Promise<void>;
@@ -1302,6 +1311,22 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       visibleProjectThreads,
     };
   }, [projectThreads, threadLastVisitedAts, threadSortOrder]);
+  const attentionCount = useMemo(
+    () =>
+      projectThreads.reduce((count, thread, index) => {
+        if (thread.archivedAt !== null || thread.parentThreadId) return count;
+        return (
+          count +
+          (resolveThreadAttention({
+            ...thread,
+            lastVisitedAt: threadLastVisitedAts[index] ?? undefined,
+          }) === null
+            ? 0
+            : 1)
+        );
+      }, 0),
+    [projectThreads, threadLastVisitedAts],
+  );
   const pinnedCollapsedThread = useMemo(() => {
     const activeThreadKey = activeRouteThreadKey ?? undefined;
     if (!activeThreadKey || projectExpanded) {
@@ -1645,7 +1670,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                 openProjectGroupingDialog(member);
                 return;
               case "copy-path":
-                copyPathToClipboard(member.workspaceRoot, { path: member.workspaceRoot });
+                copyPathToClipboard(member.workspaceRoot, {
+                  path: member.workspaceRoot,
+                });
                 return;
               case "delete":
                 return handleRemoveProject(member);
@@ -1727,7 +1754,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   );
 
   const navigateToThread = useCallback(
-    (threadRef: ScopedThreadRef) => {
+    (threadRef: ScopedThreadRef, needsAttention = false) => {
       if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
         clearSelection();
       }
@@ -1738,6 +1765,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       void router.navigate({
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams(threadRef),
+        hash: needsAttention ? THREAD_ATTENTION_HASH : "",
       });
     },
     [clearSelection, isMobile, router, setOpenMobile, setSelectionAnchor],
@@ -1748,6 +1776,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       event: React.MouseEvent,
       threadRef: ScopedThreadRef,
       orderedProjectThreadKeys: readonly string[],
+      needsAttention: boolean,
     ) => {
       const isMac = isMacPlatform(navigator.platform);
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
@@ -1784,6 +1813,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       void router.navigate({
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams(threadRef),
+        hash: needsAttention ? THREAD_ATTENTION_HASH : "",
       });
     },
     [
@@ -2160,7 +2190,12 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         [
           ...(canFork ? [buildForkThreadContextMenuItem({ isRunning: forkBlocked })] : []),
           ...(thread.branch
-            ? [{ id: "new-thread-on-branch", label: `New thread on ${thread.branch}` }]
+            ? [
+                {
+                  id: "new-thread-on-branch",
+                  label: `New thread on ${thread.branch}`,
+                },
+              ]
             : []),
           { id: "rename", label: "Rename thread" },
           { id: "mark-unread", label: "Mark unread" },
@@ -2317,6 +2352,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             {project.groupedProjectCount > 1 ? (
               <span className="shrink-0 text-[10px] text-muted-foreground/60">
                 {project.groupedProjectCount} projects
+              </span>
+            ) : null}
+            {attentionCount > 0 ? (
+              <span className="shrink-0 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                {attentionCount} need you
               </span>
             ) : null}
           </span>

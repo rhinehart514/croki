@@ -24,7 +24,11 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
         : "File change";
 
   return (
-    <div className="px-4 py-3.5 sm:px-5 sm:py-4">
+    <div
+      className="px-4 py-3.5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-amber-400/60 sm:px-5 sm:py-4"
+      data-thread-attention-target="approval"
+      tabIndex={-1}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className="uppercase text-sm tracking-[0.2em]">PENDING APPROVAL</span>
         <span className="text-sm font-medium">{approvalSummary}</span>
