@@ -123,6 +123,16 @@ context, but it must not add hidden personas, planning loops, delegation
 policies, or behavioral workflows. Those belong to explicit named harnesses
 that are off by default.
 
+Running-turn guidance is a separate `thread.turn.steer` command. The decider
+accepts it only for the exact active turn, persists the user message, and asks
+`ProviderCommandReactor` to invoke the adapter's native steering operation.
+Codex maps that request to `turn/steer`; adapters without a native operation
+reject it explicitly. Provider acknowledgements and failures are durable
+activities attached to the message, so reconnecting clients can show delivery
+truth. Croki does not replay an unacknowledged request after a server crash,
+because providers do not promise an idempotent steering operation; that state
+is shown as delivery unconfirmed instead of risking duplicate guidance.
+
 When `.croki/application.croki` exists, `ProviderCommandReactor` reads it from
 the canonical project root before every turn and prepends its bounded factual
 lineage to the provider input. This works identically for GitHub-hosted, local

@@ -27,6 +27,7 @@ import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { FileDiff } from "@pierre/diffs/react";
 import {
   deriveTimelineEntries,
+  type GuidanceDeliveryState,
   workEntryIndicatesToolFailure,
   workEntryIndicatesToolNeutralStatus,
   workEntryIndicatesToolSuccess,
@@ -145,6 +146,7 @@ interface TimelineRowSharedState {
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   activeThreadEnvironmentId: EnvironmentId;
   crokiContextReceiptsByMessageId: ReadonlyMap<string, CrokiContextReceipt>;
+  guidanceDeliveryByMessageId: ReadonlyMap<string, GuidanceDeliveryState>;
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
@@ -169,6 +171,7 @@ const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
 const EMPTY_CROKI_CONTEXT_RECEIPTS: ReadonlyMap<string, CrokiContextReceipt> = new Map();
+const EMPTY_GUIDANCE_DELIVERIES: ReadonlyMap<string, GuidanceDeliveryState> = new Map();
 const EMPTY_CANVAS_PRESENTATIONS: ReadonlyMap<string, CanvasPresentationTimelineActivity> =
   new Map();
 const EMPTY_COORDINATION_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = [];
@@ -198,6 +201,7 @@ interface MessagesTimelineProps {
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
   crokiContextReceiptsByMessageId?: ReadonlyMap<string, CrokiContextReceipt>;
+  guidanceDeliveryByMessageId?: ReadonlyMap<string, GuidanceDeliveryState>;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
@@ -238,6 +242,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onImageExpand,
   activeThreadEnvironmentId,
   crokiContextReceiptsByMessageId = EMPTY_CROKI_CONTEXT_RECEIPTS,
+  guidanceDeliveryByMessageId = EMPTY_GUIDANCE_DELIVERIES,
   markdownCwd,
   resolvedTheme,
   timestampFormat,
@@ -462,6 +467,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       skills,
       activeThreadEnvironmentId,
       crokiContextReceiptsByMessageId,
+      guidanceDeliveryByMessageId,
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
@@ -480,6 +486,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       skills,
       activeThreadEnvironmentId,
       crokiContextReceiptsByMessageId,
+      guidanceDeliveryByMessageId,
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
@@ -954,6 +961,7 @@ function CanvasPresentationTimelineRow({ row }: { row: Extract<TimelineRow, { ki
 
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  const activity = use(TimelineRowActivityCtx);
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
   const terminalContexts = displayedUserMessage.contexts;
@@ -1037,6 +1045,12 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       <CrokiAppliedContextReceipt
         receipt={ctx.crokiContextReceiptsByMessageId.get(row.message.id) ?? null}
       />
+      {row.message.turnId !== null ? (
+        <GuidanceDeliveryReceipt
+          delivery={ctx.guidanceDeliveryByMessageId.get(row.message.id) ?? null}
+          isActive={activity.activeTurnInProgress && activity.latestTurnId === row.message.turnId}
+        />
+      ) : null}
       <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
@@ -1056,6 +1070,35 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         </div>
       </div>
     </div>
+  );
+}
+
+function GuidanceDeliveryReceipt({
+  delivery,
+  isActive,
+}: {
+  delivery: GuidanceDeliveryState | null;
+  isActive: boolean;
+}) {
+  if (delivery?.status === "failed") {
+    return (
+      <p
+        className="max-w-[80%] pe-1 text-xs text-destructive"
+        title={delivery.detail ?? undefined}
+        role="status"
+      >
+        Guidance not delivered
+      </p>
+    );
+  }
+  return (
+    <p className="max-w-[80%] pe-1 text-xs text-muted-foreground/70" role="status">
+      {delivery?.status === "delivered"
+        ? "Guidance delivered"
+        : isActive
+          ? "Delivering guidance…"
+          : "Guidance delivery unconfirmed"}
+    </p>
   );
 }
 

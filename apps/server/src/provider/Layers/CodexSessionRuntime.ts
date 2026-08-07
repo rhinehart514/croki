@@ -10,6 +10,7 @@ import {
   type ProviderInteractionMode,
   type ProviderRequestKind,
   type ProviderSession,
+  type ProviderTurnSteerResult,
   type ProviderTurnStartResult,
   type ProviderUserInputAnswers,
   RuntimeMode,
@@ -120,6 +121,16 @@ export interface CodexSessionRuntimeSendTurnInput {
   readonly interactionMode?: ProviderInteractionMode;
 }
 
+export interface CodexSessionRuntimeSteerTurnInput {
+  readonly expectedTurnId: TurnId;
+  readonly clientUserMessageId: string;
+  readonly input?: string;
+  readonly attachments?: ReadonlyArray<{
+    readonly type: "image";
+    readonly url: string;
+  }>;
+}
+
 export interface CodexSessionRuntimeVoiceStartInput {
   readonly sdp: string;
   readonly voice?: string;
@@ -141,6 +152,9 @@ export interface CodexSessionRuntimeShape {
   readonly sendTurn: (
     input: CodexSessionRuntimeSendTurnInput,
   ) => Effect.Effect<ProviderTurnStartResult, CodexSessionRuntimeError>;
+  readonly steerTurn: (
+    input: CodexSessionRuntimeSteerTurnInput,
+  ) => Effect.Effect<ProviderTurnSteerResult, CodexSessionRuntimeError>;
   readonly interruptTurn: (turnId?: TurnId) => Effect.Effect<void, CodexSessionRuntimeError>;
   readonly startVoice: (
     input: CodexSessionRuntimeVoiceStartInput,
@@ -385,16 +399,7 @@ export function buildTurnStartParams(input: {
   CodexTurnStartParamsWithCollaborationMode,
   CodexErrors.CodexAppServerProtocolParseError
 > {
-  const turnInput: Array<EffectCodexSchema.V2TurnStartParams__UserInput> = [];
-  if (input.prompt) {
-    turnInput.push({
-      type: "text",
-      text: input.prompt,
-    });
-  }
-  for (const attachment of input.attachments ?? []) {
-    turnInput.push(attachment);
-  }
+  const turnInput = buildCodexUserInput(input.prompt, input.attachments);
 
   const config = runtimeModeToThreadConfig(input.runtimeMode);
   const collaborationMode = buildCodexCollaborationMode({
@@ -422,6 +427,23 @@ export function buildTurnStartParams(input: {
       ),
     ),
   );
+}
+
+function buildCodexUserInput(
+  prompt: string | undefined,
+  attachments:
+    | ReadonlyArray<{
+        readonly type: "image";
+        readonly url: string;
+      }>
+    | undefined,
+): Array<EffectCodexSchema.V2TurnStartParams__UserInput> {
+  const turnInput: Array<EffectCodexSchema.V2TurnStartParams__UserInput> = [];
+  if (prompt) {
+    turnInput.push({ type: "text", text: prompt });
+  }
+  turnInput.push(...(attachments ?? []));
+  return turnInput;
 }
 
 function classifyCodexStderrLine(rawLine: string): { readonly message: string } | null {
@@ -1847,6 +1869,20 @@ export const makeCodexSessionRuntime = (
               ? { resumeCursor: { threadId: resumedProviderThreadId } }
               : {}),
           } satisfies ProviderTurnStartResult;
+        }),
+      steerTurn: (input) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          const response = yield* client.request("turn/steer", {
+            threadId: providerThreadId,
+            expectedTurnId: input.expectedTurnId,
+            clientUserMessageId: input.clientUserMessageId,
+            input: buildCodexUserInput(input.input, input.attachments),
+          });
+          return {
+            threadId: options.threadId,
+            turnId: TurnId.make(response.turnId),
+          } satisfies ProviderTurnSteerResult;
         }),
       interruptTurn: (turnId) =>
         Effect.gen(function* () {

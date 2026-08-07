@@ -16,10 +16,12 @@ import type {
   ProviderUserInputAnswers,
   ProviderRuntimeEvent,
   ProviderSendTurnInput,
+  ProviderSteerTurnInput,
   ProviderSession,
   ProviderSessionStartInput,
   ThreadId,
   ProviderTurnStartResult,
+  ProviderTurnSteerResult,
   TurnId,
 } from "@croki/contracts";
 import type * as Effect from "effect/Effect";
@@ -80,6 +82,14 @@ export interface ProviderAdapterShape<TError> {
   readonly sendTurn: (
     input: ProviderSendTurnInput,
   ) => Effect.Effect<ProviderTurnStartResult, TError>;
+
+  /**
+   * Add user guidance to the provider's currently active turn. Providers that
+   * do not expose native same-turn steering leave this method absent.
+   */
+  readonly steerTurn?: (
+    input: ProviderSteerTurnInput,
+  ) => Effect.Effect<ProviderTurnSteerResult, TError>;
 
   /**
    * Interrupt an active turn.

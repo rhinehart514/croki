@@ -235,6 +235,9 @@ describe("ProviderCommandReactor", () => {
         turnId: asTurnId("turn-1"),
       }),
     );
+    const steerTurn = vi.fn<ProviderServiceShape["steerTurn"]>((input) =>
+      Effect.succeed({ threadId: input.threadId, turnId: input.expectedTurnId }),
+    );
     const interruptTurn = vi.fn((_: unknown) => Effect.void);
     const respondToRequest = vi.fn<ProviderServiceShape["respondToRequest"]>(() => Effect.void);
     const respondToUserInput = vi.fn<ProviderServiceShape["respondToUserInput"]>(() => Effect.void);
@@ -312,6 +315,7 @@ describe("ProviderCommandReactor", () => {
     const service: ProviderServiceShape = {
       startSession: startSession as ProviderServiceShape["startSession"],
       sendTurn: sendTurn as ProviderServiceShape["sendTurn"],
+      steerTurn,
       interruptTurn: interruptTurn as ProviderServiceShape["interruptTurn"],
       respondToRequest: respondToRequest as ProviderServiceShape["respondToRequest"],
       respondToUserInput: respondToUserInput as ProviderServiceShape["respondToUserInput"],
@@ -497,6 +501,7 @@ describe("ProviderCommandReactor", () => {
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       startSession,
       sendTurn,
+      steerTurn,
       interruptTurn,
       respondToRequest,
       respondToUserInput,
@@ -587,6 +592,71 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.status).toBe("starting");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
+  });
+
+  it("delivers running-turn guidance and records provider acknowledgement", async () => {
+    const harness = await createHarness();
+    const threadId = ThreadId.make("thread-1");
+    const turnId = asTurnId("turn-running");
+    const now = "2026-01-01T00:00:01.000Z";
+    if (!runtime) throw new Error("Provider command reactor runtime was not created.");
+    const reactor = await runtime.runPromise(Effect.service(ProviderCommandReactor));
+    await runtime.runPromise(reactor.prepareSession(threadId, now));
+    await harness.dispatch(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-running"),
+        threadId,
+        session: {
+          threadId,
+          status: "running",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          runtimeMode: "approval-required",
+          activeTurnId: turnId,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+    await harness.dispatch(
+      harness.engine.dispatch({
+        type: "thread.turn.steer",
+        commandId: CommandId.make("cmd-turn-steer"),
+        threadId,
+        expectedTurnId: turnId,
+        message: {
+          messageId: asMessageId("message-guidance"),
+          role: "user",
+          text: "Use SQLite, not Postgres.",
+          attachments: [],
+        },
+        createdAt: now,
+      }),
+    );
+    await harness.drain();
+
+    expect(harness.steerTurn).toHaveBeenCalledWith({
+      threadId,
+      expectedTurnId: turnId,
+      messageId: asMessageId("message-guidance"),
+      input: "Use SQLite, not Postgres.",
+      attachments: [],
+    });
+    const thread = (await harness.readModel()).threads.find((entry) => entry.id === threadId);
+    expect(
+      thread?.messages.find((message) => message.id === asMessageId("message-guidance")),
+    ).toMatchObject({ turnId, text: "Use SQLite, not Postgres." });
+    expect(thread?.activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "provider.turn.steer.delivered",
+          turnId,
+          payload: { messageId: "message-guidance" },
+        }),
+      ]),
+    );
   });
 
   it("does not inject legacy Canvas context into provider turns", async () => {

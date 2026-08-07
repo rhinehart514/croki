@@ -1529,6 +1529,12 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "thread.turn-steer-requested": {
+          // The associated user message carries the durable steering state.
+          // Delivery confirmation is projected from provider activities.
+          return;
+        }
+
         case "thread.session-set": {
           const turnId = event.payload.session.activeTurnId;
           if (turnId === null || event.payload.session.status !== "running") {

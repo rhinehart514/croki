@@ -5,6 +5,7 @@ import {
   MessageId,
   ProjectId,
   ThreadId,
+  TurnId,
   ProviderInstanceId,
 } from "@croki/contracts";
 import { createModelSelection } from "@croki/shared/model";
@@ -300,6 +301,116 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
         ]),
         runtimeMode: "approval-required",
         canvasEnabled: true,
+      });
+    }),
+  );
+
+  it.effect("persists guidance on the exact running turn before requesting native steering", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const projectId = asProjectId("project-steer");
+      const threadId = ThreadId.make("thread-steer");
+      const turnId = TurnId.make("turn-running");
+      const withProject = yield* projectEvent(createEmptyReadModel(now), {
+        sequence: 1,
+        eventId: asEventId("evt-project-steer"),
+        aggregateKind: "project",
+        aggregateId: projectId,
+        type: "project.created",
+        occurredAt: now,
+        commandId: CommandId.make("cmd-project-steer"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-project-steer"),
+        metadata: {},
+        payload: {
+          projectId,
+          title: "Project",
+          workspaceRoot: "/tmp/project-steer",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      const withThread = yield* projectEvent(withProject, {
+        sequence: 2,
+        eventId: asEventId("evt-thread-steer"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        type: "thread.created",
+        occurredAt: now,
+        commandId: CommandId.make("cmd-thread-steer"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-thread-steer"),
+        metadata: {},
+        payload: {
+          threadId,
+          projectId,
+          title: "Thread",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5-codex",
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          branch: null,
+          worktreePath: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      const readModel = yield* projectEvent(withThread, {
+        sequence: 3,
+        eventId: asEventId("evt-session-steer"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        type: "thread.session-set",
+        occurredAt: now,
+        commandId: CommandId.make("cmd-session-steer"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-session-steer"),
+        metadata: {},
+        payload: {
+          threadId,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "codex",
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            runtimeMode: "approval-required",
+            activeTurnId: turnId,
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      });
+
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.turn.steer",
+          commandId: CommandId.make("cmd-turn-steer"),
+          threadId,
+          expectedTurnId: turnId,
+          message: {
+            messageId: asMessageId("message-guidance"),
+            role: "user",
+            text: "Use SQLite, not Postgres.",
+            attachments: [],
+          },
+          createdAt: now,
+        },
+        readModel,
+      });
+
+      const events = Array.isArray(result) ? result : [result];
+      expect(events.map((event) => event.type)).toEqual([
+        "thread.message-sent",
+        "thread.turn-steer-requested",
+      ]);
+      expect(events[0]?.payload).toMatchObject({ turnId, text: "Use SQLite, not Postgres." });
+      expect(events[1]?.payload).toMatchObject({
+        messageId: asMessageId("message-guidance"),
+        expectedTurnId: turnId,
       });
     }),
   );

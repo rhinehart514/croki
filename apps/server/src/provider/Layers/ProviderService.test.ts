@@ -7,12 +7,15 @@ import type {
   ProviderApprovalDecision,
   ProviderRuntimeEvent,
   ProviderSendTurnInput,
+  ProviderSteerTurnInput,
   ProviderSession,
+  ProviderTurnSteerResult,
   ProviderTurnStartResult,
 } from "@croki/contracts";
 import {
   ApprovalRequestId,
   EventId,
+  MessageId,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderSessionStartInput,
@@ -136,6 +139,15 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
       Effect.void,
   );
 
+  const steerTurn = vi.fn(
+    (input: ProviderSteerTurnInput): Effect.Effect<ProviderTurnSteerResult, ProviderAdapterError> =>
+      sessions.has(input.threadId)
+        ? Effect.succeed({ threadId: input.threadId, turnId: input.expectedTurnId })
+        : Effect.fail(
+            new ProviderAdapterSessionNotFoundError({ provider, threadId: input.threadId }),
+          ),
+  );
+
   const respondToRequest = vi.fn(
     (
       _threadId: ThreadId,
@@ -217,6 +229,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     },
     startSession,
     sendTurn,
+    steerTurn,
     interruptTurn,
     respondToRequest,
     respondToUserInput,
@@ -253,6 +266,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     updateSession,
     startSession,
     sendTurn,
+    steerTurn,
     interruptTurn,
     respondToRequest,
     respondToUserInput,
@@ -960,6 +974,19 @@ routing.layer("ProviderServiceLive routing", (it) => {
         attachments: [],
       });
       assert.equal(routing.codex.sendTurn.mock.calls.length, 1);
+
+      const steerResult = yield* provider.steerTurn({
+        threadId: session.threadId,
+        expectedTurnId: asTurnId("turn-thread-1"),
+        messageId: MessageId.make("message-guidance"),
+        input: "Use SQLite, not Postgres.",
+        attachments: [],
+      });
+      assert.deepEqual(steerResult, {
+        threadId: session.threadId,
+        turnId: asTurnId("turn-thread-1"),
+      });
+      assert.equal(routing.codex.steerTurn.mock.calls.length, 1);
 
       yield* provider.interruptTurn({ threadId: session.threadId });
       assert.deepEqual(routing.codex.interruptTurn.mock.calls, [[session.threadId, undefined]]);

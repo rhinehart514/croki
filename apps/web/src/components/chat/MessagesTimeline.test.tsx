@@ -425,6 +425,54 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("bbbbbbbb");
   });
 
+  it("shows honest pending, delivered, and failed states for running-turn guidance", () => {
+    const entry = buildUserTimelineEntry("Use SQLite, not Postgres.");
+    const guidanceEntry = {
+      ...entry,
+      message: { ...entry.message, turnId: TurnId.make("turn-running") },
+    };
+    const pending = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        activeTurnInProgress
+        latestTurn={{
+          turnId: TurnId.make("turn-running"),
+          state: "running",
+          startedAt: MESSAGE_CREATED_AT,
+          completedAt: null,
+        }}
+        timelineEntries={[guidanceEntry]}
+      />,
+    );
+    const interrupted = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[guidanceEntry]} />,
+    );
+    const delivered = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[guidanceEntry]}
+        guidanceDeliveryByMessageId={new Map([["message-1", { status: "delivered" }]])}
+      />,
+    );
+    const failed = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[guidanceEntry]}
+        guidanceDeliveryByMessageId={
+          new Map([
+            ["message-1", { status: "failed", detail: "The active turn already completed." }],
+          ])
+        }
+      />,
+    );
+
+    expect(pending).toContain("Delivering guidance…");
+    expect(interrupted).toContain("Guidance delivery unconfirmed");
+    expect(delivered).toContain("Guidance delivered");
+    expect(failed).toContain("Guidance not delivered");
+    expect(failed).toContain('title="The active turn already completed."');
+  });
+
   it("keeps assistant changed-files headers sticky below the thread header", () => {
     const assistantMessageId = MessageId.make("message-assistant-with-files");
     const turnId = TurnId.make("turn-with-files");
