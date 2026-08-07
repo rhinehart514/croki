@@ -25,6 +25,8 @@ Croki currently provides:
 - web, Electron desktop, and mobile clients;
 - multiple configured instances of Codex, Claude, Cursor, Grok Build,
   OpenCode, and OpenClaw;
+- Codex Threads can explicitly run to one durable outcome with a visible native
+  goal, optional token budget, pause, resume, and clear controls;
 - OpenClaw instances can connect to any agent already configured in the user's
   Gateway. Croki stores the selected agent identity and preserves that agent's
   workspace, memory, skills, model, tools, and delegation settings; it does not

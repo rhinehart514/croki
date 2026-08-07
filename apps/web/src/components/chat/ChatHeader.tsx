@@ -2,6 +2,7 @@ import {
   type EnvironmentId,
   type EditorId,
   type ProjectScript,
+  type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
   type ThreadId,
   type WorkerView,
@@ -23,12 +24,14 @@ import { cn } from "~/lib/utils";
 import { CrokiApplicationFocus } from "./CrokiApplicationFocus";
 import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { CodexFinishModeControl } from "./CodexFinishModeControl";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   draftId?: DraftId;
   activeThreadTitle: string;
+  activeProvider: ProviderDriverKind;
   forkedFromThreadTitle: string | undefined;
   activeProjectName: string | undefined;
   activeProjectCwd: string | null;
@@ -71,6 +74,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   draftId,
   activeThreadTitle,
+  activeProvider,
   forkedFromThreadTitle,
   activeProjectName,
   activeProjectCwd,
@@ -165,6 +169,12 @@ export const ChatHeader = memo(function ChatHeader({
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
+        {activeProvider === "codex" ? (
+          <CodexFinishModeControl
+            environmentId={activeThreadEnvironmentId}
+            threadId={activeThreadId}
+          />
+        ) : null}
         {workerCount > 0 ? (
           <Select
             value={workerView}

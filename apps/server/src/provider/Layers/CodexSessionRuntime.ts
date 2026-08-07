@@ -152,6 +152,19 @@ export interface CodexSessionRuntimeShape {
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
   /** Fork the current Codex thread and return resumable state for the clone. */
   readonly forkThread: Effect.Effect<CodexResumeCursor, CodexSessionRuntimeError>;
+  readonly getGoal: Effect.Effect<
+    EffectCodexSchema.V2ThreadGoalGetResponse__ThreadGoal | null,
+    CodexSessionRuntimeError
+  >;
+  readonly setGoal: (input: {
+    readonly objective?: string;
+    readonly status?: EffectCodexSchema.V2ThreadGoalSetParams__ThreadGoalStatus;
+    readonly tokenBudget?: number;
+  }) => Effect.Effect<
+    EffectCodexSchema.V2ThreadGoalSetResponse__ThreadGoal,
+    CodexSessionRuntimeError
+  >;
+  readonly clearGoal: Effect.Effect<void, CodexSessionRuntimeError>;
   readonly respondToRequest: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -1923,6 +1936,26 @@ export const makeCodexSessionRuntime = (
           threadId: providerThreadId,
         });
         return { threadId: response.thread.id } satisfies CodexResumeCursor;
+      }),
+      getGoal: Effect.gen(function* () {
+        const providerThreadId = yield* readProviderThreadId;
+        const response = yield* client.request("thread/goal/get", { threadId: providerThreadId });
+        return response.goal ?? null;
+      }),
+      setGoal: (input) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          const response = yield* client.request("thread/goal/set", {
+            threadId: providerThreadId,
+            ...(input.objective !== undefined ? { objective: input.objective } : {}),
+            ...(input.status !== undefined ? { status: input.status } : {}),
+            ...(input.tokenBudget !== undefined ? { tokenBudget: input.tokenBudget } : {}),
+          });
+          return response.goal;
+        }),
+      clearGoal: Effect.gen(function* () {
+        const providerThreadId = yield* readProviderThreadId;
+        yield* client.request("thread/goal/clear", { threadId: providerThreadId });
       }),
       respondToRequest: (requestId, decision) =>
         Effect.gen(function* () {

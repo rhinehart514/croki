@@ -9,6 +9,8 @@
  */
 import type {
   ApprovalRequestId,
+  CodexGoal,
+  CodexGoalStatus,
   CodexVoiceEvent,
   CodexVoiceStartInput,
   ProviderApprovalDecision,
@@ -65,6 +67,19 @@ export interface ProviderAdapterShape<TError> {
     readonly start: (input: CodexVoiceStartInput) => Effect.Effect<void, TError>;
     readonly stop: (threadId: ThreadId) => Effect.Effect<void, TError>;
     readonly events: (threadId: ThreadId) => Stream.Stream<CodexVoiceEvent, TError>;
+  };
+  /** Codex-native durable outcome. Absent for providers without native goals. */
+  readonly goal?: {
+    readonly get: (threadId: ThreadId) => Effect.Effect<CodexGoal | null, TError>;
+    readonly set: (
+      threadId: ThreadId,
+      input: {
+        readonly objective?: string;
+        readonly status?: CodexGoalStatus;
+        readonly tokenBudget?: number;
+      },
+    ) => Effect.Effect<CodexGoal, TError>;
+    readonly clear: (threadId: ThreadId) => Effect.Effect<void, TError>;
   };
 
   /**

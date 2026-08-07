@@ -168,6 +168,13 @@ import {
   CodexVoiceStartInput,
   CodexVoiceThreadInput,
 } from "./codexVoice.ts";
+import {
+  CodexGoalError,
+  CodexGoalSetInput,
+  CodexGoalSetStatusInput,
+  CodexGoalSnapshot,
+  CodexGoalThreadInput,
+} from "./codexGoal.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -190,6 +197,10 @@ export const WS_METHODS = {
   // Codex native voice methods
   codexVoiceStart: "codexVoice.start",
   codexVoiceStop: "codexVoice.stop",
+  codexGoalGet: "codexGoal.get",
+  codexGoalSet: "codexGoal.set",
+  codexGoalSetStatus: "codexGoal.setStatus",
+  codexGoalClear: "codexGoal.clear",
 
   // VCS methods
   vcsPull: "vcs.pull",
@@ -823,7 +834,35 @@ export const WsCodexVoiceSubscribeRpc = Rpc.make(WS_METHODS.codexVoiceSubscribe,
   stream: true,
 });
 
+export const WsCodexGoalGetRpc = Rpc.make(WS_METHODS.codexGoalGet, {
+  payload: CodexGoalThreadInput,
+  success: CodexGoalSnapshot,
+  error: CodexGoalError,
+});
+
+export const WsCodexGoalSetRpc = Rpc.make(WS_METHODS.codexGoalSet, {
+  payload: CodexGoalSetInput,
+  success: CodexGoalSnapshot,
+  error: CodexGoalError,
+});
+
+export const WsCodexGoalSetStatusRpc = Rpc.make(WS_METHODS.codexGoalSetStatus, {
+  payload: CodexGoalSetStatusInput,
+  success: CodexGoalSnapshot,
+  error: CodexGoalError,
+});
+
+export const WsCodexGoalClearRpc = Rpc.make(WS_METHODS.codexGoalClear, {
+  payload: CodexGoalThreadInput,
+  success: CodexGoalSnapshot,
+  error: CodexGoalError,
+});
+
 export const WsRpcGroup = RpcGroup.make(
+  WsCodexGoalGetRpc,
+  WsCodexGoalSetRpc,
+  WsCodexGoalSetStatusRpc,
+  WsCodexGoalClearRpc,
   WsCodexVoiceStartRpc,
   WsCodexVoiceStopRpc,
   WsCodexVoiceSubscribeRpc,
