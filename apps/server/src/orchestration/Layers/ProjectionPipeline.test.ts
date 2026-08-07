@@ -568,6 +568,45 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
             },
           },
         });
+        const pinnedAt = "2026-07-31T12:00:30.000Z";
+        const titleRegenerationRequestId = CommandId.make("cmd-fork-title-regeneration");
+        yield* eventStore.append({
+          type: "thread.pinned",
+          eventId: EventId.make("evt-fork-pinned"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: pinnedAt,
+          commandId: CommandId.make("cmd-fork-pinned"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-pinned"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            pinnedAt,
+            updatedAt: pinnedAt,
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.meta-updated",
+          eventId: EventId.make("evt-fork-title-regeneration"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: pinnedAt,
+          commandId: titleRegenerationRequestId,
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-title-regeneration"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            regenerateTitle: true,
+            previousTitle: "Original",
+            titleRegeneration: {
+              requestId: titleRegenerationRequestId,
+              startedAt: pinnedAt,
+            },
+            updatedAt: pinnedAt,
+          },
+        });
         yield* eventStore.append({
           type: "thread.fork-requested",
           eventId: EventId.make("evt-fork-target"),
@@ -588,17 +627,41 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
         yield* projectionPipeline.bootstrap;
 
         const threadRows = yield* sql<{
+          readonly threadId: string;
           readonly forkedFromThreadId: string | null;
           readonly title: string;
+          readonly pinnedAt: string | null;
+          readonly titleRegenerationRequestId: string | null;
+          readonly titleRegenerationStartedAt: string | null;
         }>`
           SELECT
+            thread_id AS "threadId",
             forked_from_thread_id AS "forkedFromThreadId",
-            title
+            title,
+            pinned_at AS "pinnedAt",
+            title_regeneration_request_id AS "titleRegenerationRequestId",
+            title_regeneration_started_at AS "titleRegenerationStartedAt"
           FROM projection_threads
-          WHERE thread_id = ${targetThreadId}
+          WHERE thread_id IN (${sourceThreadId}, ${targetThreadId})
+          ORDER BY thread_id
         `;
         assert.deepEqual(threadRows, [
-          { forkedFromThreadId: sourceThreadId, title: "Original (fork)" },
+          {
+            threadId: sourceThreadId,
+            forkedFromThreadId: null,
+            title: "Original",
+            pinnedAt,
+            titleRegenerationRequestId,
+            titleRegenerationStartedAt: pinnedAt,
+          },
+          {
+            threadId: targetThreadId,
+            forkedFromThreadId: sourceThreadId,
+            title: "Original (fork)",
+            pinnedAt: null,
+            titleRegenerationRequestId: null,
+            titleRegenerationStartedAt: null,
+          },
         ]);
         const sessionRows = yield* sql<{ readonly status: string }>`
           SELECT status
