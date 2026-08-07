@@ -98,12 +98,14 @@ final class NativeRetryIdentityTests: XCTestCase {
         )!
         let client = NativeFeatureClient(runtime: runtime, settingsStore: settings)
         let initial = try await client.initialSnapshot()
-        XCTAssertEqual(initial.threads.first?.runtimeMode, .automatic)
-        XCTAssertEqual(initial.threads.first?.interactionMode, .standard)
+        let existingThread = try XCTUnwrap(initial.threads.first)
+        let existingWireThreadID = try XCTUnwrap(existingThread.wireID)
+        XCTAssertEqual(existingThread.runtimeMode, .automatic)
+        XCTAssertEqual(existingThread.interactionMode, .standard)
         await connection.waitUntilConnected()
 
         let turnIdentity = FeatureSubmissionIdentity(
-            threadID: "thread-existing",
+            threadID: existingWireThreadID,
             commandID: "persisted-turn-command",
             messageID: "persisted-turn-message",
             createdAt: Date(timeIntervalSince1970: 1_750_000_000)
@@ -111,7 +113,7 @@ final class NativeRetryIdentityTests: XCTestCase {
         for _ in 0..<2 {
             do {
                 try await client.sendMessage(
-                    threadID: "thread-existing",
+                    threadID: existingThread.id,
                     text: "Retry without duplicating",
                     selection: nil,
                     attachments: [],

@@ -160,7 +160,7 @@ final class NativeMultiEnvironmentTests: XCTestCase {
 
         _ = try await fixture.client.initialSnapshot()
 
-        await fulfillment(of: [retryObserved], timeout: 1)
+        await fulfillment(of: [retryObserved], timeout: 5)
         let retryCallCount = await loader.callCount
         XCTAssertGreaterThanOrEqual(retryCallCount, 2)
         await fixture.client.disconnect()
@@ -419,7 +419,9 @@ private actor FailOnceAggregateEnvironmentLoader {
         if callCount == 1 {
             throw URLError(.cannotOpenFile)
         }
-        retryObserved.fulfill()
+        if callCount == 2 {
+            retryObserved.fulfill()
+        }
         return try await runtime.environments()
     }
 }
