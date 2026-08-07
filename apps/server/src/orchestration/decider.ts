@@ -970,6 +970,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: targetThread.parentThreadId,
+      });
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({

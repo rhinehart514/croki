@@ -1,5 +1,6 @@
 import {
   CommandId,
+  MessageId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
@@ -91,6 +92,32 @@ it.layer(NodeServices.layer)("title regeneration decider", (it) => {
       }).pipe(Effect.flip);
 
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
+    }),
+  );
+
+  it.effect("rejects turn starts for worker threads", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-start-worker-turn"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: MessageId.make("message-worker-turn"),
+            role: "user",
+            text: "Continue independently",
+            attachments: [],
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          createdAt: UPDATED_AT,
+        },
+        readModel: workerReadModel,
+      }).pipe(Effect.flip);
+
+      expect(error._tag).toBe("OrchestrationCommandInvariantError");
+      expect(error.commandType).toBe("thread.turn.start");
+      expect(error.detail).toBe("worker thread thread-1 follows its parent lifecycle");
     }),
   );
 });

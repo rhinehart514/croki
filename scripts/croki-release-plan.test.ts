@@ -164,6 +164,68 @@ describe("Croki release plan", () => {
     );
   });
 
+  it("allows a mobile preview to verify an already-published server package independently", () => {
+    const plan = buildCrokiReleasePlan(
+      {
+        CROKI_MOBILE_PREVIEW_ENABLED: "true",
+        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
+        CROKI_RELEASE_BRANCH: "croki/main",
+        CROKI_EAS_PROJECT_ID: "11111111-2222-3333-4444-555555555555",
+        CROKI_EXPO_TOKEN: "expo-token-secret",
+        CROKI_CLI_PACKAGE: "croki-server",
+      },
+      { production: true },
+    );
+
+    expect(plan).toMatchObject({
+      status: "enabled",
+      enabled: true,
+      valid: true,
+      destinations: {
+        cli: { status: "disabled", enabled: false },
+        mobile: {
+          status: "enabled",
+          enabled: true,
+          productionRequested: false,
+          previewRequested: true,
+        },
+      },
+    });
+    expect(plan.errors).toEqual([]);
+  });
+
+  it("blocks a production mobile release until server package publication is enabled", () => {
+    const plan = buildCrokiReleasePlan(
+      {
+        CROKI_MOBILE_DEPLOY_ENABLED: "true",
+        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
+        CROKI_RELEASE_BRANCH: "croki/main",
+        CROKI_EAS_PROJECT_ID: "11111111-2222-3333-4444-555555555555",
+        CROKI_EXPO_TOKEN: "expo-token-secret",
+        CROKI_CLI_PACKAGE: "croki-server",
+      },
+      { production: true },
+    );
+
+    expect(plan).toMatchObject({
+      status: "invalid",
+      enabled: false,
+      valid: false,
+      destinations: {
+        cli: { status: "disabled", enabled: false },
+        mobile: {
+          status: "enabled",
+          enabled: true,
+          productionRequested: true,
+          previewRequested: false,
+        },
+      },
+    });
+    expect(plan.errors).toContain(
+      "Update-capable Croki clients require CROKI_CLI_PUBLISH_ENABLED=true so the exact-version croki-server package publishes first.",
+    );
+  });
+
   it("rejects a non-Croki CLI package even when publication is enabled", () => {
     const plan = buildCrokiReleasePlan({
       CROKI_CLI_PUBLISH_ENABLED: "true",

@@ -271,6 +271,14 @@ function assertCrokiReleaseGuards(): void {
       `Mobile ${name} workflow still uses the inherited Expo credential.`,
     );
   }
+
+  for (const guard of ["Verify exact Croki server package exists", "npm view"]) {
+    assertContains(
+      mobilePreviewWorkflow,
+      guard,
+      `Mobile preview workflow is missing exact-package guard: ${guard}`,
+    );
+  }
 }
 
 function assertCrokiReleasePlan(): void {

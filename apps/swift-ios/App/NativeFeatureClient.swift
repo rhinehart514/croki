@@ -3309,10 +3309,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
     }
 
     private func mapEnvironment(_ environment: Environment, activeID: String?) -> FeatureEnvironment {
-        let descriptor = Self.currentDescriptor(
-            for: environment,
-            serverConfig: serverConfigsByEnvironmentID[environment.id]
-        )
+        let descriptor = currentEnvironmentDescriptor(environment)
         return FeatureEnvironment(
             id: environment.id,
             name: environment.label,
@@ -3339,11 +3336,21 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         return current
     }
 
+    private func currentEnvironmentDescriptor(
+        _ environment: Environment
+    ) -> EnvironmentDescriptor? {
+        Self.currentDescriptor(
+            for: environment,
+            serverConfig: serverConfigsByEnvironmentID[environment.id]
+        )
+    }
+
     private func mapThread(
         _ thread: OrchestrationThreadShell,
         environment: Environment
     ) -> FeatureThread {
-        FeatureThread(
+        let descriptor = currentEnvironmentDescriptor(environment)
+        return FeatureThread(
             id: FeatureScopedID.thread(environmentID: environment.id, wireID: thread.id),
             wireID: thread.id,
             projectID: FeatureScopedID.project(
@@ -3370,7 +3377,8 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             providerID: thread.modelSelection.instanceId,
             providerName: threadProviderName(
                 session: thread.session,
-                modelSelection: thread.modelSelection
+                modelSelection: thread.modelSelection,
+                serverConfig: serverConfigsByEnvironmentID[environment.id]
             ),
             modelID: thread.modelSelection.model,
             modelOptions: mapOptionSelections(thread.modelSelection.options),
@@ -3385,9 +3393,8 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             snoozedUntil: thread.snoozedUntil.map(parseDate),
             snoozedAt: thread.snoozedAt.map(parseDate),
             pinnedAt: thread.pinnedAt.map(parseDate),
-            supportsPinning: environment.descriptor?.capabilities.threadPinning,
-            supportsTitleRegeneration:
-                environment.descriptor?.capabilities.threadTitleRegeneration,
+            supportsPinning: descriptor?.capabilities.threadPinning,
+            supportsTitleRegeneration: descriptor?.capabilities.threadTitleRegeneration,
             supportsWorkerView: false,
             titleRegeneration: thread.titleRegeneration.map {
                 FeatureTitleRegeneration(
@@ -3416,7 +3423,8 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         _ thread: OrchestrationThread,
         environment: Environment
     ) -> FeatureThread {
-        FeatureThread(
+        let descriptor = currentEnvironmentDescriptor(environment)
+        return FeatureThread(
             id: FeatureScopedID.thread(environmentID: environment.id, wireID: thread.id),
             wireID: thread.id,
             projectID: FeatureScopedID.project(
@@ -3444,7 +3452,8 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             providerID: thread.modelSelection.instanceId,
             providerName: threadProviderName(
                 session: thread.session,
-                modelSelection: thread.modelSelection
+                modelSelection: thread.modelSelection,
+                serverConfig: serverConfigsByEnvironmentID[environment.id]
             ),
             modelID: thread.modelSelection.model,
             modelOptions: mapOptionSelections(thread.modelSelection.options),
@@ -3459,9 +3468,8 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
             snoozedUntil: thread.snoozedUntil.map(parseDate),
             snoozedAt: thread.snoozedAt.map(parseDate),
             pinnedAt: thread.pinnedAt.map(parseDate),
-            supportsPinning: environment.descriptor?.capabilities.threadPinning,
-            supportsTitleRegeneration:
-                environment.descriptor?.capabilities.threadTitleRegeneration,
+            supportsPinning: descriptor?.capabilities.threadPinning,
+            supportsTitleRegeneration: descriptor?.capabilities.threadTitleRegeneration,
             supportsWorkerView: false,
             titleRegeneration: thread.titleRegeneration.map {
                 FeatureTitleRegeneration(
@@ -4276,14 +4284,15 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     private func threadProviderName(
         session: OrchestrationSession?,
-        modelSelection: ModelSelection
+        modelSelection: ModelSelection,
+        serverConfig: ServerConfigSnapshot?
     ) -> String {
         if let name = session?.providerName?.trimmingCharacters(in: .whitespacesAndNewlines),
            !name.isEmpty {
             return name
         }
         let providerID = session?.providerInstanceId ?? modelSelection.instanceId
-        if let provider = latestServerConfig?.providers.first(where: {
+        if let provider = serverConfig?.providers.first(where: {
             $0.instanceId == providerID
         }) {
             return provider.displayName ?? providerDisplayName(provider.driver)

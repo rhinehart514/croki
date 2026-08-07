@@ -28,7 +28,9 @@ final class NativeServerMetadataTests: XCTestCase {
                     "serverVersion": "0.4.8",
                     "capabilities": {
                       "repositoryIdentity": true,
-                      "serverSelfUpdate": "homebrew"
+                      "serverSelfUpdate": "homebrew",
+                      "threadPinning": true,
+                      "threadTitleRegeneration": true
                     }
                   },
                   "providers": []
@@ -44,7 +46,11 @@ final class NativeServerMetadataTests: XCTestCase {
 
         XCTAssertEqual(resolved?.serverVersion, "0.4.8")
         XCTAssertEqual(resolved?.capabilities.serverSelfUpdate, "homebrew")
+        XCTAssertEqual(resolved?.capabilities.threadPinning, true)
+        XCTAssertEqual(resolved?.capabilities.threadTitleRegeneration, true)
         XCTAssertEqual(environment.descriptor?.serverVersion, "0.4.7")
+        XCTAssertEqual(environment.descriptor?.capabilities.threadPinning, false)
+        XCTAssertEqual(environment.descriptor?.capabilities.threadTitleRegeneration, false)
     }
 
     private func descriptor(
@@ -63,7 +69,9 @@ final class NativeServerMetadataTests: XCTestCase {
                   "serverVersion": "\(version)",
                   "capabilities": {
                     "repositoryIdentity": true,
-                    "serverSelfUpdate": "\(updateMode)"
+                    "serverSelfUpdate": "\(updateMode)",
+                    "threadPinning": false,
+                    "threadTitleRegeneration": false
                   }
                 }
                 """.utf8

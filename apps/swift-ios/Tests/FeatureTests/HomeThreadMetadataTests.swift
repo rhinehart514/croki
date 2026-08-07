@@ -337,4 +337,69 @@ struct HomeThreadMetadataTests {
             ) == nil
         )
     }
+
+    @Test
+    func passiveEnvironmentUsesItsOwnProviderCatalogue() throws {
+        let activeThread = FeatureThread(
+            id: "active-thread",
+            projectID: "active-project",
+            environmentID: "active",
+            title: "Active work",
+            providerID: "shared-agent"
+        )
+        let passiveThread = FeatureThread(
+            id: "passive-thread",
+            projectID: "passive-project",
+            environmentID: "passive",
+            title: "Passive work",
+            providerID: "shared-agent"
+        )
+        let activeProvider = FeatureProvider(
+            id: "shared-agent",
+            name: "Codex Local",
+            driver: "codex"
+        )
+        let passiveProvider = FeatureProvider(
+            id: "shared-agent",
+            name: "Claude Remote",
+            driver: "anthropic"
+        )
+        let snapshot = FeatureSnapshot(
+            environments: [
+                FeatureEnvironment(
+                    id: "active",
+                    name: "Left Book",
+                    endpoint: "https://active.example",
+                    isActive: true
+                ),
+                FeatureEnvironment(
+                    id: "passive",
+                    name: "Steam Box",
+                    endpoint: "https://passive.example"
+                ),
+            ],
+            threads: [activeThread, passiveThread],
+            providers: [activeProvider],
+            providersByEnvironment: [
+                "active": [activeProvider],
+                "passive": [passiveProvider],
+            ]
+        )
+
+        let context = try #require(
+            HomeThreadRowContext.index(snapshot: snapshot)[passiveThread.id]
+        )
+
+        #expect(context.providerName == "Claude Remote")
+        #expect(context.providerDriver == "anthropic")
+        #expect(context.providerLooksTerminal == false)
+        #expect(
+            ProviderBrand.resolve(
+                driver: context.providerDriver,
+                providerID: context.providerID,
+                providerName: context.providerName
+            ) == .claude
+        )
+        #expect(passiveThread.homeProviderLabel(in: snapshot) == "Claude Remote")
+    }
 }

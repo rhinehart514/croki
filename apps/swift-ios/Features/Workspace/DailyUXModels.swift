@@ -434,7 +434,12 @@ extension FeatureThread {
             return providerName
         }
         guard let providerID else { return nil }
-        return snapshot.providers.first(where: { $0.id == providerID })?.name ?? providerID
+        let resolvedEnvironmentID = environmentID
+            ?? snapshot.projects.first(where: { $0.id == projectID })?.environmentID
+        let providers = resolvedEnvironmentID.flatMap {
+            snapshot.providersByEnvironment?[$0]
+        } ?? snapshot.providers
+        return providers.first(where: { $0.id == providerID })?.name ?? providerID
     }
 
     var needsAttention: Bool {
