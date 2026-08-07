@@ -19,6 +19,7 @@ import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
+import { normalizeThreadSearchText } from "../threadSearchText.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asTurnId = (value: string): TurnId => TurnId.make(value);
@@ -1799,6 +1800,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
       const sql = yield* SqlClient.SqlClient;
+      const unicodeSearchMessage = `${"Context before the result. ".repeat(12)}Échec near end.`;
 
       yield* sql`DELETE FROM projection_thread_messages`;
       yield* sql`DELETE FROM projection_turns`;
@@ -1919,6 +1921,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           turn_id,
           role,
           text,
+          search_text,
           is_streaming,
           created_at,
           updated_at
@@ -1930,6 +1933,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             'turn-active',
             'user',
             'Please find this USER needle in an old prompt.',
+            'please find this user needle in an old prompt.',
             0,
             '2026-05-01T00:00:12.000Z',
             '2026-05-01T00:00:12.000Z'
@@ -1940,6 +1944,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             NULL,
             'user',
             'Literal 100% fix in a prompt.',
+            'literal 100% fix in a prompt.',
             0,
             '2026-05-01T00:00:11.000Z',
             '2026-05-01T00:00:11.000Z'
@@ -1950,6 +1955,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             NULL,
             'user',
             'Literal 100x fix in a prompt.',
+            'literal 100x fix in a prompt.',
             0,
             '2026-05-01T00:00:11.000Z',
             '2026-05-01T00:00:11.000Z'
@@ -1960,6 +1966,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             'turn-active',
             'assistant',
             'The canonical final needle appears in this completed answer.',
+            'the canonical final needle appears in this completed answer.',
             0,
             '2026-05-01T00:00:13.000Z',
             '2026-05-01T00:00:13.000Z'
@@ -1970,6 +1977,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             'turn-active',
             'assistant',
             'Interim needle must not be searchable.',
+            'interim needle must not be searchable.',
             0,
             '2026-05-01T00:00:14.000Z',
             '2026-05-01T00:00:14.000Z'
@@ -1980,6 +1988,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             NULL,
             'system',
             'System needle must not be searchable.',
+            'system needle must not be searchable.',
             0,
             '2026-05-01T00:00:15.000Z',
             '2026-05-01T00:00:15.000Z'
@@ -1990,9 +1999,21 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             NULL,
             'user',
             'Hidden needle in archive.',
+            'hidden needle in archive.',
             0,
             '2026-05-01T00:00:16.000Z',
             '2026-05-01T00:00:16.000Z'
+          ),
+          (
+            'message-unicode',
+            'thread-active',
+            NULL,
+            'user',
+            ${unicodeSearchMessage},
+            ${normalizeThreadSearchText(unicodeSearchMessage)},
+            0,
+            '2026-05-01T00:00:17.000Z',
+            '2026-05-01T00:00:17.000Z'
           )
       `;
 
@@ -2034,6 +2055,10 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       const assistant = yield* snapshotQuery.searchThreads({ query: "FINAL NEEDLE" });
       assert.equal(assistant.matches[0]?.source, "assistant");
+
+      const unicode = yield* snapshotQuery.searchThreads({ query: "e\u0301chec" });
+      assert.equal(unicode.matches[0]?.source, "user");
+      assert.match(unicode.matches[0]?.snippet ?? "", /Échec near end/);
 
       const deduped = yield* snapshotQuery.searchThreads({ query: "needle" });
       assert.deepStrictEqual(

@@ -692,7 +692,7 @@ describe("buildHomeThreadGroups", () => {
     expect(groups[0]?.threads.map((candidate) => candidate.id)).toEqual(["thread-content"]);
   });
 
-  it("targets quick new threads at the group member with the newest thread", () => {
+  it("targets quick new threads at the last-active member independently of display sorting", () => {
     const laptopEnv = EnvironmentId.make("environment-laptop");
     const desktopEnv = EnvironmentId.make("environment-desktop");
     const repositoryIdentity = {
@@ -720,15 +720,18 @@ describe("buildHomeThreadGroups", () => {
         environmentId: laptopEnv,
         id: ThreadId.make("thread-laptop"),
         projectId: laptopProject.id,
-        title: "Older laptop thread",
+        title: "Newer-created laptop thread",
+        createdAt: "2026-06-28T00:00:00.000Z",
         updatedAt: "2026-06-27T00:00:00.000Z",
       }),
       makeThread({
         environmentId: desktopEnv,
         id: ThreadId.make("thread-desktop"),
         projectId: desktopProject.id,
-        title: "Newest desktop thread",
-        updatedAt: "2026-06-28T00:00:00.000Z",
+        title: "Last-active desktop thread",
+        createdAt: "2026-06-25T00:00:00.000Z",
+        latestUserMessageAt: "2026-06-29T00:00:00.000Z",
+        updatedAt: "2026-06-29T00:00:00.000Z",
       }),
     ];
 
@@ -739,5 +742,15 @@ describe("buildHomeThreadGroups", () => {
     expect(groups[0]?.projects).toHaveLength(2);
     expect(groups[0]?.newThreadTarget?.environmentId).toBe(desktopEnv);
     expect(groups[0]?.newThreadTarget?.id).toBe(desktopProject.id);
+
+    const createdAtGroups = buildGroups([laptopProject, desktopProject], threads, {
+      threadSortOrder: "created_at",
+    });
+    expect(createdAtGroups[0]?.threads.map((thread) => thread.id)).toEqual([
+      "thread-laptop",
+      "thread-desktop",
+    ]);
+    expect(createdAtGroups[0]?.newThreadTarget?.environmentId).toBe(desktopEnv);
+    expect(createdAtGroups[0]?.newThreadTarget?.id).toBe(desktopProject.id);
   });
 });
