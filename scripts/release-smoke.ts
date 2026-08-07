@@ -202,6 +202,8 @@ function assertCrokiReleaseGuards(): void {
     "node scripts/croki-release-plan.ts",
     "inputs.dry_run != true",
     "needs: [release_guard, check_changes]",
+    "vars.CROKI_CLI_PUBLISH_ENABLED != 'true' && needs.publish_cli.result == 'skipped'",
+    "VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE",
     "croki-release-plan.ts --production",
     "name=Croki v",
     'git push origin "HEAD:$RELEASE_BRANCH"',
@@ -318,16 +320,19 @@ function assertCrokiReleasePlan(): void {
       },
     },
   );
-  if (githubOnlyResult.status === 0) {
-    throw new Error("Croki GitHub-only release plan bypassed exact-version CLI publication.");
+  if (githubOnlyResult.status !== 0) {
+    throw new Error(`Croki GitHub-only release plan failed:\n${githubOnlyResult.stderr}`);
   }
   const githubOnlyPlan = JSON.parse(githubOnlyResult.stdout) as {
     readonly status?: unknown;
     readonly enabled?: unknown;
     readonly destinations?: Record<string, { readonly status?: unknown }>;
   };
-  if (githubOnlyPlan.status !== "invalid" || githubOnlyPlan.enabled !== false) {
-    throw new Error("Croki GitHub-only release plan must fail closed without CLI publication.");
+  if (githubOnlyPlan.status !== "enabled" || githubOnlyPlan.enabled !== true) {
+    throw new Error("Croki GitHub-only release plan must allow desktop asset publication.");
+  }
+  if (githubOnlyPlan.destinations?.github?.status !== "enabled") {
+    throw new Error("Croki GitHub-only release plan did not enable GitHub publication.");
   }
   for (const category of ["cli", "relay", "web", "signing", "discord", "mobile"]) {
     if (githubOnlyPlan.destinations?.[category]?.status !== "disabled") {

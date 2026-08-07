@@ -14,6 +14,21 @@ export interface VersionMismatch {
 
 export const VERSION_MISMATCH_DISMISSALS_STORAGE_KEY = "croki:version-mismatch-dismissals:v1";
 
+export function resolveServerPackageUpdatesAvailable(
+  configured: string | undefined,
+  development: boolean,
+): boolean {
+  const normalized = configured?.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return development;
+}
+
+export const SERVER_PACKAGE_UPDATES_AVAILABLE = resolveServerPackageUpdatesAvailable(
+  import.meta.env.VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE,
+  import.meta.env.DEV,
+);
+
 const VersionMismatchDismissalsSchema = Schema.Struct({
   keys: Schema.Array(Schema.String),
 });
@@ -72,6 +87,16 @@ export function resolveServerSelfUpdateCapability(
   serverConfig: Pick<ServerConfig, "environment"> | null | undefined,
 ): ServerSelfUpdateCapability | null {
   return serverConfig?.environment.capabilities.serverSelfUpdate ?? null;
+}
+
+/** Desktop-managed servers update with their owning app. Every other server
+    path installs the exact croki-server package and must only be offered when
+    that release destination was enabled for this client build. */
+export function serverUpdatePathAvailable(
+  capability: ServerSelfUpdateCapability | null,
+  serverPackageUpdatesAvailable = SERVER_PACKAGE_UPDATES_AVAILABLE,
+): boolean {
+  return capability === "desktop-managed" || serverPackageUpdatesAvailable;
 }
 
 /** The command to hand users whose server cannot update itself. */

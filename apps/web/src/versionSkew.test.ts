@@ -8,9 +8,11 @@ import {
   dismissVersionMismatch,
   isVersionMismatchDismissed,
   resolveServerConfigVersionMismatch,
+  resolveServerPackageUpdatesAvailable,
   resolveServerSelfUpdateCapability,
   resolveVersionMismatch,
   serverUpdateGuidance,
+  serverUpdatePathAvailable,
 } from "./versionSkew";
 
 describe("versionSkew", () => {
@@ -117,6 +119,18 @@ describe("versionSkew", () => {
       }),
     ).toBe("desktop-managed");
     expect(resolveServerSelfUpdateCapability(null)).toBeNull();
+  });
+
+  it("only offers package-backed server updates when that release destination exists", () => {
+    expect(resolveServerPackageUpdatesAvailable(undefined, true)).toBe(true);
+    expect(resolveServerPackageUpdatesAvailable("false", true)).toBe(false);
+    expect(resolveServerPackageUpdatesAvailable("true", false)).toBe(true);
+    expect(resolveServerPackageUpdatesAvailable(undefined, false)).toBe(false);
+    expect(serverUpdatePathAvailable("boot-service", false)).toBe(false);
+    expect(serverUpdatePathAvailable("respawn", false)).toBe(false);
+    expect(serverUpdatePathAvailable(null, false)).toBe(false);
+    expect(serverUpdatePathAvailable("boot-service", true)).toBe(true);
+    expect(serverUpdatePathAvailable("desktop-managed", false)).toBe(true);
   });
 
   it("matches version-drift guidance to the advertised update path", () => {

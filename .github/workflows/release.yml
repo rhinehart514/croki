@@ -444,6 +444,7 @@ jobs:
       CROKI_CLERK_CLI_OAUTH_CLIENT_ID: ${{ needs.relay_public_config.outputs.clerk_cli_oauth_client_id }}
       CROKI_RELAY_URL: ${{ needs.relay_public_config.outputs.relay_url }}
       CROKI_SIGNING_ENABLED: ${{ vars.CROKI_SIGNING_ENABLED }}
+      VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE: ${{ vars.CROKI_CLI_PUBLISH_ENABLED == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -789,6 +790,7 @@ jobs:
       CROKI_CLERK_JWT_TEMPLATE: ${{ needs.relay_public_config.outputs.clerk_jwt_template }}
       CROKI_CLERK_CLI_OAUTH_CLIENT_ID: ${{ needs.relay_public_config.outputs.clerk_cli_oauth_client_id }}
       CROKI_RELAY_URL: ${{ needs.relay_public_config.outputs.relay_url }}
+      VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -853,7 +855,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [preflight, build, publish_cli]
-    if: ${{ always() && !cancelled() && vars.CROKI_RELEASE_ENABLED == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && needs.publish_cli.result == 'success' }}
+    if: ${{ always() && !cancelled() && vars.CROKI_RELEASE_ENABLED == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && (needs.publish_cli.result == 'success' || (vars.CROKI_CLI_PUBLISH_ENABLED != 'true' && needs.publish_cli.result == 'skipped')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -1061,7 +1063,8 @@ jobs:
               --build-env "CROKI_RELAY_CLIENT_OTLP_TRACES_DATASET=${CROKI_RELAY_CLIENT_OTLP_TRACES_DATASET:-}" \
               --build-env "CROKI_RELAY_CLIENT_OTLP_TRACES_TOKEN=${CROKI_RELAY_CLIENT_OTLP_TRACES_TOKEN:-}" \
               --build-env "VITE_HOSTED_APP_URL=$router_url" \
-              --build-env "VITE_HOSTED_APP_CHANNEL=$channel_name"
+              --build-env "VITE_HOSTED_APP_CHANNEL=$channel_name" \
+              --build-env "VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE=true"
           )"
 
           echo "Aliasing $deployment_url to $channel_domain."

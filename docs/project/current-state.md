@@ -228,10 +228,13 @@ memory, skills, or model.
 
 ## Known implementation gaps
 
-- Automatic update production destinations remain intentionally unavailable
-  until Croki-owned npm, EAS, signing, and hosting credentials are configured.
-  Client release gates require the exact `croki-server` version to publish
-  before any update-capable client is exposed.
+- Hosted web, production mobile, and other package-backed server update paths
+  remain intentionally unavailable until Croki-owned npm, EAS, and hosting
+  credentials are configured. Their release gates require the exact
+  `croki-server` version to publish first. GitHub-only desktop releases are
+  independent: the desktop app updates its bundled server while remote package
+  update actions are compiled out. Signed desktop distribution remains
+  unavailable until Croki-owned signing credentials are configured.
 - Parallel Threads is implemented behind a default-off Settings → Beta toggle
   for the planned 0.4.4 release. It reuses provider-native delegation and the
   parent Thread's existing Workstreams projection; provider support therefore

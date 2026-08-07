@@ -133,7 +133,7 @@ describe("Croki release plan", () => {
     expect(plan.errors.join("\n")).toContain("pushes to main");
   });
 
-  it("blocks a GitHub release until exact-version croki-server publication is enabled", () => {
+  it("allows a GitHub-only desktop release without CLI publication", () => {
     const plan = buildCrokiReleasePlan(
       {
         CROKI_RELEASE_ENABLED: "true",
@@ -146,9 +146,9 @@ describe("Croki release plan", () => {
       { production: true },
     );
     expect(plan).toMatchObject({
-      status: "invalid",
-      enabled: false,
-      valid: false,
+      status: "enabled",
+      enabled: true,
+      valid: true,
       destinations: {
         github: { status: "enabled", enabled: true },
         cli: { status: "disabled", enabled: false },
@@ -159,8 +159,34 @@ describe("Croki release plan", () => {
         mobile: { status: "disabled", enabled: false },
       },
     });
+    expect(plan.errors).toEqual([]);
+  });
+
+  it("blocks a hosted web release until server package publication is enabled", () => {
+    const plan = buildCrokiReleasePlan(
+      {
+        CROKI_WEB_DEPLOY_ENABLED: "true",
+        CROKI_VERCEL_ORG_ID: "croki-org",
+        CROKI_VERCEL_PROJECT_ID: "croki-project",
+        CROKI_WEB_ROUTER_URL: "https://app.croki.example",
+        CROKI_WEB_LATEST_DOMAIN: "latest.croki.example",
+        CROKI_WEB_NIGHTLY_DOMAIN: "nightly.croki.example",
+        CROKI_CLI_PACKAGE: "croki-server",
+      },
+      { production: true },
+    );
+
+    expect(plan).toMatchObject({
+      status: "invalid",
+      enabled: false,
+      valid: false,
+      destinations: {
+        cli: { status: "disabled", enabled: false },
+        web: { status: "enabled", enabled: true },
+      },
+    });
     expect(plan.errors).toContain(
-      "Update-capable Croki clients require CROKI_CLI_PUBLISH_ENABLED=true so the exact-version croki-server package publishes first.",
+      "Hosted web and production mobile releases require CROKI_CLI_PUBLISH_ENABLED=true so the exact-version croki-server package publishes first.",
     );
   });
 
@@ -222,7 +248,7 @@ describe("Croki release plan", () => {
       },
     });
     expect(plan.errors).toContain(
-      "Update-capable Croki clients require CROKI_CLI_PUBLISH_ENABLED=true so the exact-version croki-server package publishes first.",
+      "Hosted web and production mobile releases require CROKI_CLI_PUBLISH_ENABLED=true so the exact-version croki-server package publishes first.",
     );
   });
 

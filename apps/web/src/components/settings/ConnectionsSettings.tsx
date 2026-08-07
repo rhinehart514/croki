@@ -111,6 +111,7 @@ import { useUiStateStore } from "~/uiStateStore";
 import {
   resolveServerConfigVersionMismatch,
   resolveServerSelfUpdateCapability,
+  serverUpdatePathAvailable,
 } from "~/versionSkew";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
@@ -1393,6 +1394,8 @@ function SavedBackendListRow({
     [copyTraceIdToClipboard],
   );
   const versionMismatch = resolveServerConfigVersionMismatch(environment.serverConfig);
+  const serverSelfUpdate = resolveServerSelfUpdateCapability(environment.serverConfig);
+  const serverUpdateAvailable = serverUpdatePathAvailable(serverSelfUpdate);
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
@@ -1447,7 +1450,9 @@ function SavedBackendListRow({
                     {versionMismatch.updateTarget === "client"
                       ? "Update Croki on this device"
                       : versionMismatch.updateTarget === "server"
-                        ? "Server update available"
+                        ? serverUpdateAvailable
+                          ? "Server update available"
+                          : "Server is older"
                         : "Croki versions differ"}
                   </button>
                 }
@@ -1456,7 +1461,9 @@ function SavedBackendListRow({
                 {versionMismatch.updateTarget === "client"
                   ? `${versionMismatch.clientVersion} → ${versionMismatch.serverVersion}`
                   : versionMismatch.updateTarget === "server"
-                    ? `${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}`
+                    ? serverUpdateAvailable
+                      ? `${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}`
+                      : `This server is older (${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}), but remote updates aren’t available in this Croki release.`
                     : `${versionMismatch.clientVersion} ≠ ${versionMismatch.serverVersion}`}
               </TooltipPopup>
             </Tooltip>
@@ -1482,11 +1489,12 @@ function SavedBackendListRow({
               Update Croki
             </Button>
           ) : versionMismatch?.updateTarget === "server" &&
+            serverUpdateAvailable &&
             (serverUpdateState.status === "idle" || serverUpdateState.status === "failed") ? (
             <ServerUpdateAction
               environmentId={environmentId}
               serverLabel={`${environment.label} server`}
-              selfUpdate={resolveServerSelfUpdateCapability(environment.serverConfig)}
+              selfUpdate={serverSelfUpdate}
               targetVersion={versionMismatch.clientVersion}
               label={serverUpdateState.status === "failed" ? "Retry" : "Update"}
             />
@@ -1870,6 +1878,8 @@ export function ConnectionsSettings() {
   >(null);
   const primaryServerConfig = primaryEnvironment?.serverConfig ?? null;
   const primaryVersionMismatch = resolveServerConfigVersionMismatch(primaryServerConfig);
+  const primaryServerSelfUpdate = resolveServerSelfUpdateCapability(primaryServerConfig);
+  const primaryServerUpdateAvailable = serverUpdatePathAvailable(primaryServerSelfUpdate);
   const primaryServerUpdateState = useAtomValue(
     serverEnvironment.updateStateAtom(primaryEnvironmentId),
   );
@@ -3029,7 +3039,9 @@ export function ConnectionsSettings() {
                       : primaryVersionMismatch?.updateTarget === "client"
                         ? "Update Croki on this device"
                         : primaryVersionMismatch?.updateTarget === "server"
-                          ? "Server update available"
+                          ? primaryServerUpdateAvailable
+                            ? "Server update available"
+                            : "Server is older"
                           : "Croki versions differ"
                 }
                 description={
@@ -3039,7 +3051,11 @@ export function ConnectionsSettings() {
                     primaryVersionMismatch.updateTarget === "client" ? (
                       "Update Croki on this device to match this server."
                     ) : primaryVersionMismatch.updateTarget === "server" ? (
-                      "Update this server to match this Croki client."
+                      primaryServerUpdateAvailable ? (
+                        "Update this server to match this Croki client."
+                      ) : (
+                        "This server is older, but remote updates aren’t available in this Croki release."
+                      )
                     ) : (
                       "Use the same Croki version for this client and server."
                     )
@@ -3051,12 +3067,13 @@ export function ConnectionsSettings() {
                       Update Croki
                     </Button>
                   ) : primaryVersionMismatch?.updateTarget === "server" &&
+                    primaryServerUpdateAvailable &&
                     primaryEnvironmentId !== null &&
                     primaryServerUpdateState.status !== "running" ? (
                     <ServerUpdateAction
                       environmentId={primaryEnvironmentId}
                       serverLabel={primaryEnvironment?.label ?? "this server"}
-                      selfUpdate={resolveServerSelfUpdateCapability(primaryServerConfig)}
+                      selfUpdate={primaryServerSelfUpdate}
                       targetVersion={primaryVersionMismatch.clientVersion}
                       label={primaryServerUpdateState.status === "failed" ? "Retry" : "Update"}
                     />

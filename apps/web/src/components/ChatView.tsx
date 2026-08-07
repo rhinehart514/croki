@@ -341,6 +341,7 @@ import {
   resolveServerConfigVersionMismatch,
   resolveServerSelfUpdateCapability,
   serverUpdateGuidance,
+  serverUpdatePathAvailable,
 } from "../versionSkew";
 import { useAssetUrls } from "../assets/assetUrls";
 
@@ -1982,6 +1983,7 @@ function ChatViewContent(props: ChatViewProps) {
       : "server";
   const serverUpdateEnvironmentId = activeThread?.environmentId ?? null;
   const versionMismatchSelfUpdate = resolveServerSelfUpdateCapability(serverConfig);
+  const versionMismatchServerUpdateAvailable = serverUpdatePathAvailable(versionMismatchSelfUpdate);
   const serverUpdateState = useAtomValue(
     serverEnvironment.updateStateAtom(serverUpdateEnvironmentId),
   );
@@ -2002,6 +2004,7 @@ function ChatViewContent(props: ChatViewProps) {
     const reconnectingThroughVersionSkew =
       serverUpdateState.status === "idle" &&
       environmentReconnecting &&
+      versionMismatchServerUpdateAvailable &&
       versionMismatch?.updateTarget === "server";
     // While an update runs, transient connect blips are expected (the server
     // restarts) and the update banner already shows progress. Hard failure
@@ -2086,7 +2089,9 @@ function ChatViewContent(props: ChatViewProps) {
                     {versionMismatch.updateTarget === "client"
                       ? "Update Croki on this device"
                       : versionMismatch.updateTarget === "server"
-                        ? "Server update available"
+                        ? versionMismatchServerUpdateAvailable
+                          ? "Server update available"
+                          : "Server is older"
                         : "Croki versions differ"}
                   </button>
                 }
@@ -2111,6 +2116,9 @@ function ChatViewContent(props: ChatViewProps) {
             `Use the same Croki version on this device and ${versionMismatchServerLabel}.`
           ) : versionMismatchSelfUpdate === "desktop-managed" ? (
             serverUpdateGuidance(versionMismatchSelfUpdate, versionMismatchServerLabel)
+          ) : versionMismatch?.updateTarget === "server" &&
+            !versionMismatchServerUpdateAvailable ? (
+            "This server is older, but remote updates aren’t available in this Croki release."
           ) : null,
         // The desktop-managed guidance is already the description; the action
         // slot would only repeat it.
@@ -2119,8 +2127,9 @@ function ChatViewContent(props: ChatViewProps) {
           !versionMismatch ||
           versionMismatch.updateTarget === null ||
           (versionMismatch.updateTarget === "server" &&
-            versionMismatchSelfUpdate ===
-              "desktop-managed") ? undefined : versionMismatch.updateTarget === "client" ? (
+            (!versionMismatchServerUpdateAvailable ||
+              versionMismatchSelfUpdate ===
+                "desktop-managed")) ? undefined : versionMismatch.updateTarget === "client" ? (
             isElectron ? (
               <Button size="xs" onClick={() => void navigate({ to: "/settings" })}>
                 Update Croki
@@ -2158,6 +2167,7 @@ function ChatViewContent(props: ChatViewProps) {
     versionMismatchDismissKey,
     serverUpdateEnvironmentId,
     versionMismatchSelfUpdate,
+    versionMismatchServerUpdateAvailable,
     versionMismatchServerLabel,
   ]);
   const providerStatuses = serverConfig?.providers ?? EMPTY_PROVIDERS;

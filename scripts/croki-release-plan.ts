@@ -119,10 +119,10 @@ export function buildCrokiReleasePlan(
   environment: ReleaseEnvironment,
   options: { readonly production?: boolean } = {},
 ): CrokiReleasePlan {
-  // Destinations are opt-in independently except for update-capable clients.
-  // A desktop, hosted web, or production mobile release can only ship after
-  // the matching exact-version croki-server package is enabled for publication.
-  // Mobile previews verify the already-published exact version in their workflow.
+  // Destinations are opt-in independently except for remotely hosted clients.
+  // Desktop updates are bundled into the GitHub release and managed by the app.
+  // Hosted web and production mobile releases require the matching exact-version
+  // croki-server package. Mobile previews verify that package in their workflow.
   const releaseRequested = enabled(environment, "CROKI_RELEASE_ENABLED");
   const cliRequested = enabled(environment, "CROKI_CLI_PUBLISH_ENABLED");
   const relayRequested = enabled(environment, "CROKI_RELAY_DEPLOY_ENABLED");
@@ -311,9 +311,9 @@ export function buildCrokiReleasePlan(
     ...(options.production === true && !requested
       ? ["No Croki production release destination is enabled."]
       : []),
-    ...((releaseRequested || webRequested || mobileProductionRequested) && !cliRequested
+    ...((webRequested || mobileProductionRequested) && !cliRequested
       ? [
-          "Update-capable Croki clients require CROKI_CLI_PUBLISH_ENABLED=true so the exact-version croki-server package publishes first.",
+          "Hosted web and production mobile releases require CROKI_CLI_PUBLISH_ENABLED=true so the exact-version croki-server package publishes first.",
         ]
       : []),
     ...destinationErrors,
