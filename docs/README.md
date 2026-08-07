@@ -8,6 +8,8 @@
 - [0.4.6 application lineage](./project/release-notes-0.4.6.md)
 - [0.4.7 UI history plan](./project/release-notes-0.4.7.md)
 - [0.4.8 resume and simplification plan](./project/release-notes-0.4.8.md)
+- [0.4.9 control without interruption plan](./project/release-notes-0.4.9.md)
+- [0.4.10 durable outcomes and review plan](./project/release-notes-0.4.10.md)
 - [0.4.5 stabilization notes](./project/release-notes-0.4.5.md)
 - [Release Canvas product specification](./project/release-canvas-spec.md)
 - [Harness visual-artifact specification](./project/harness-canvas-spec.md)
