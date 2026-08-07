@@ -62,7 +62,7 @@ import {
 } from "../Services/ProjectionSnapshotQuery.ts";
 import { projectProjectPerception } from "../projectPerception.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
-import { normalizeThreadSearchText } from "../threadSearchText.ts";
+import { findThreadSearchMatchRange, normalizeThreadSearchText } from "../threadSearchText.ts";
 
 const decodeReadModel = Schema.decodeUnknownEffect(OrchestrationReadModel);
 const decodeShellSnapshot = Schema.decodeUnknownEffect(OrchestrationShellSnapshot);
@@ -183,10 +183,9 @@ function buildSearchSnippet(text: string, query: string): string {
     return normalizedText;
   }
 
-  const normalizedQuery = normalizeThreadSearchText(query.replace(/\s+/g, " ").trim());
-  const matchIndex = normalizeThreadSearchText(normalizedText).indexOf(normalizedQuery);
+  const matchRange = findThreadSearchMatchRange(normalizedText, query.replace(/\s+/g, " ").trim());
   const bodyLength = 236;
-  const idealStart = Math.max(0, matchIndex - 72);
+  const idealStart = Math.max(0, (matchRange?.start ?? 0) - 72);
   const start = Math.min(idealStart, normalizedText.length - bodyLength);
   const end = Math.min(normalizedText.length, start + bodyLength);
   return `${start > 0 ? "…" : ""}${normalizedText.slice(start, end)}${

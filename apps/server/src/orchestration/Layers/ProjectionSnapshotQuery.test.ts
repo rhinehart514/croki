@@ -1800,7 +1800,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
       const sql = yield* SqlClient.SqlClient;
-      const unicodeSearchMessage = `${"Context before the result. ".repeat(12)}Échec near end.`;
+      const unicodeSearchMessage = `${"e\u0301".repeat(180)} Échec Straße τελος near end.`;
 
       yield* sql`DELETE FROM projection_thread_messages`;
       yield* sql`DELETE FROM projection_turns`;
@@ -2058,7 +2058,13 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       const unicode = yield* snapshotQuery.searchThreads({ query: "e\u0301chec" });
       assert.equal(unicode.matches[0]?.source, "user");
-      assert.match(unicode.matches[0]?.snippet ?? "", /Échec near end/);
+      assert.match(unicode.matches[0]?.snippet ?? "", /Échec Straße/);
+
+      const sharpS = yield* snapshotQuery.searchThreads({ query: "STRASSE" });
+      assert.match(sharpS.matches[0]?.snippet ?? "", /Straße τελος/);
+
+      const finalSigma = yield* snapshotQuery.searchThreads({ query: "ΤΕΛΟΣ" });
+      assert.match(finalSigma.matches[0]?.snippet ?? "", /τελος near end/);
 
       const deduped = yield* snapshotQuery.searchThreads({ query: "needle" });
       assert.deepStrictEqual(

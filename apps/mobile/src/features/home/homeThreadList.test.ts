@@ -752,5 +752,12 @@ describe("buildHomeThreadGroups", () => {
     ]);
     expect(createdAtGroups[0]?.newThreadTarget?.environmentId).toBe(desktopEnv);
     expect(createdAtGroups[0]?.newThreadTarget?.id).toBe(desktopProject.id);
+
+    const searchedGroups = buildGroups([laptopProject, desktopProject], threads, {
+      searchQuery: "newer-created laptop",
+    });
+    expect(searchedGroups[0]?.threads.map((thread) => thread.id)).toEqual(["thread-laptop"]);
+    expect(searchedGroups[0]?.newThreadTarget?.environmentId).toBe(desktopEnv);
+    expect(searchedGroups[0]?.newThreadTarget?.id).toBe(desktopProject.id);
   });
 });

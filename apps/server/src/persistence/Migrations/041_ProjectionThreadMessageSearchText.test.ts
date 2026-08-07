@@ -30,7 +30,7 @@ layer("041_ProjectionThreadMessageSearchText", (it) => {
           'thread-unicode-search',
           NULL,
           'user',
-          ${"E\u0301CHEC"},
+          ${"E\u0301CHEC Straße ΟΣ ς"},
           0,
           '2026-08-07T00:00:00.000Z',
           '2026-08-07T00:00:00.000Z'
@@ -44,7 +44,7 @@ layer("041_ProjectionThreadMessageSearchText", (it) => {
         FROM projection_thread_messages
         WHERE message_id = 'message-unicode-search'
       `;
-      assert.deepStrictEqual(rows, [{ searchText: "échec" }]);
+      assert.deepStrictEqual(rows, [{ searchText: "échec strasse οσ σ" }]);
     }),
   );
 });

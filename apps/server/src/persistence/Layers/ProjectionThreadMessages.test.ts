@@ -126,7 +126,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
         threadId,
         turnId: null,
         role: "user",
-        text: "ÉCHEC",
+        text: "ÉCHEC Straße ΟΣ",
         isStreaming: true,
         createdAt,
         updatedAt: createdAt,
@@ -136,7 +136,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
         threadId,
         turnId: null,
         role: "user",
-        text: "CAFE\u0301",
+        text: "CAFE\u0301 Straße τελος",
         isStreaming: false,
         createdAt,
         updatedAt: "2026-08-07T00:00:01.000Z",
@@ -147,7 +147,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
         FROM projection_thread_messages
         WHERE message_id = ${messageId}
       `;
-      assert.deepStrictEqual(rows, [{ searchText: "café" }]);
+      assert.deepStrictEqual(rows, [{ searchText: "café strasse τελοσ" }]);
     }),
   );
 });

@@ -334,7 +334,7 @@ export function buildHomeThreadGroups(input: {
 
     // A stale project id still resolves to the canonical member with the same
     // environment/path, so quick creation follows the machine with the newest activity.
-    const lastActiveProject = Arr.head(sortThreads(matchingThreads, "updated_at")).pipe(
+    const lastActiveProject = Arr.head(sortThreads(group.threads, "updated_at")).pipe(
       Option.flatMap((thread) =>
         Arr.findFirst(
           input.projects,
