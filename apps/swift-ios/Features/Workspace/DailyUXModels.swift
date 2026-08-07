@@ -380,17 +380,17 @@ extension FeatureThread {
         if backgroundLiveness == .monitoring { return .monitoring }
         switch state {
         case .queued, .working:
-            .working
+            return .working
         case .waitingForApproval:
-            .approval
+            return .approval
         case .waitingForInput:
-            .input
+            return .input
         case .failed:
-            .failed
+            return .failed
         case .completed:
-            .done
+            return .done
         case .idle:
-            .ready
+            return .ready
         }
     }
 
