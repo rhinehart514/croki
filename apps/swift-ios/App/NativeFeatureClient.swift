@@ -988,7 +988,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
 
     func renameThread(id: String, title: String) async throws {
         let route = try threadRoute(for: id)
-        try requireParentThread(id)
+        try requireParentOrProvisionalThread(id)
         _ = try await route.client.rename(threadID: route.wireID, title: title)
         updateCachedArchivedThread(id: route.uiID) { $0.title = title }
         try? await refresh(client: route.client)
@@ -1842,6 +1842,16 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         return thread
     }
 
+    /// A freshly created parent can be routable before a passive server's
+    /// follow-up shell includes it. Wire-only actions may use that route;
+    /// capability-dependent actions still require the materialized shell row.
+    private func requireParentOrProvisionalThread(_ id: String) throws {
+        if provisionalThreadRoutes[id] != nil {
+            return
+        }
+        _ = try requireParentThread(id)
+    }
+
     private func updateCachedArchivedThread(
         id: String,
         update: (inout FeatureThread) -> Void
@@ -2170,22 +2180,24 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
                         self.latestServerConfig = config
                         self.serverConfigsByEnvironmentID[activeClient.environment.id] = config
                     case let .providerStatuses(providers):
-                        let settings = self.serverConfigsByEnvironmentID[
+                        let current = self.serverConfigsByEnvironmentID[
                             activeClient.environment.id
-                        ]?.settings
+                        ] ?? self.latestServerConfig
                         let config = ServerConfigSnapshot(
                             providers: providers,
-                            settings: settings
+                            settings: current?.settings,
+                            environment: current?.environment
                         )
                         self.latestServerConfig = config
                         self.serverConfigsByEnvironmentID[activeClient.environment.id] = config
                     case let .settingsUpdated(settings):
-                        let providers = self.serverConfigsByEnvironmentID[
+                        let current = self.serverConfigsByEnvironmentID[
                             activeClient.environment.id
-                        ]?.providers ?? self.latestServerConfig?.providers ?? []
+                        ] ?? self.latestServerConfig
                         let config = ServerConfigSnapshot(
-                            providers: providers,
-                            settings: settings
+                            providers: current?.providers ?? [],
+                            settings: settings,
+                            environment: current?.environment
                         )
                         self.latestServerConfig = config
                         self.serverConfigsByEnvironmentID[activeClient.environment.id] = config
@@ -3297,16 +3309,34 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
     }
 
     private func mapEnvironment(_ environment: Environment, activeID: String?) -> FeatureEnvironment {
-        FeatureEnvironment(
+        let descriptor = Self.currentDescriptor(
+            for: environment,
+            serverConfig: serverConfigsByEnvironmentID[environment.id]
+        )
+        return FeatureEnvironment(
             id: environment.id,
             name: environment.label,
             endpoint: environment.httpBaseURL.absoluteString,
             isActive: environment.id == activeID,
             connectionState: environmentConnectionStates[environment.id],
             connectionDetail: environmentConnectionDetails[environment.id],
-            serverVersion: environment.descriptor?.serverVersion,
-            serverUpdateMode: environment.descriptor?.capabilities.serverSelfUpdate
+            serverVersion: descriptor?.serverVersion,
+            serverUpdateMode: descriptor?.capabilities.serverSelfUpdate
         )
+    }
+
+    /// Server config is refreshed after reconnects and carries current metadata.
+    /// Fall back to the persisted pairing descriptor when the server is offline
+    /// or a malformed response identifies a different environment.
+    static func currentDescriptor(
+        for environment: Environment,
+        serverConfig: ServerConfigSnapshot?
+    ) -> EnvironmentDescriptor? {
+        guard let current = serverConfig?.environment,
+              current.environmentId == environment.id else {
+            return environment.descriptor
+        }
+        return current
     }
 
     private func mapThread(

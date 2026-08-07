@@ -151,21 +151,28 @@ public struct ServerSettingsSnapshot: Codable, Equatable, Sendable {
 
 /// Narrow decode view of the much larger `ServerConfig` RPC result.
 public struct ServerConfigSnapshot: Codable, Equatable, Sendable {
+    public let environment: EnvironmentDescriptor?
     public let providers: [ServerProviderSnapshot]
     public let settings: ServerSettingsSnapshot?
 
     public init(
         providers: [ServerProviderSnapshot],
-        settings: ServerSettingsSnapshot? = nil
+        settings: ServerSettingsSnapshot? = nil,
+        environment: EnvironmentDescriptor? = nil
     ) {
+        self.environment = environment
         self.providers = providers
         self.settings = settings
     }
 
-    private enum CodingKeys: String, CodingKey { case providers, settings }
+    private enum CodingKeys: String, CodingKey { case environment, providers, settings }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        environment = try container.decodeIfPresent(
+            EnvironmentDescriptor.self,
+            forKey: .environment
+        )
         providers = try container.decode(
             [LossyDecodableElement<ServerProviderSnapshot>].self,
             forKey: .providers
@@ -175,6 +182,7 @@ public struct ServerConfigSnapshot: Codable, Equatable, Sendable {
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(environment, forKey: .environment)
         try container.encode(providers, forKey: .providers)
         try container.encodeIfPresent(settings, forKey: .settings)
     }

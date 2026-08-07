@@ -199,6 +199,92 @@ final class WebSocketRPCRaceTests: XCTestCase {
         await first.releaseSend()
     }
 
+    func testCancelledSubscriptionIsNotRestoredAfterItsSendResumes() async throws {
+        let first = GatedSubscriptionConnection()
+        let second = RecordingSubscriptionConnection()
+        let connector = SequencedConnector(connections: [first, second])
+        let client = WebSocketRPCClient(
+            connector: connector,
+            connectionWaitTimeout: .seconds(2),
+            endpointProvider: { URL(string: "wss://studio.example/ws")! }
+        )
+
+        await client.start()
+        await first.waitUntilReceiving()
+        let stream = await client.subscribe(
+            "thread.cancelledSubscription",
+            as: JSONValue.self
+        )
+        let consumer = Task {
+            do {
+                for try await _ in stream {}
+            } catch {}
+        }
+        await first.waitUntilRequestSendStarted()
+
+        consumer.cancel()
+        await consumer.value
+        // Drain the subscription's termination task before allowing the
+        // suspended send to return to the client actor.
+        _ = await client.isConnected()
+        await first.releaseRequestSend()
+        await first.waitUntilRequestSendCompleted()
+        _ = await client.isConnected()
+
+        await first.failReceive()
+        await second.waitUntilReceiving()
+        let replayedRequestIDs = await second.requestIDs()
+        XCTAssertTrue(
+            replayedRequestIDs.isEmpty,
+            "A cancelled subscription must not be restored and replayed after its old send resumes."
+        )
+        await client.stop()
+    }
+
+    func testOldSubscriptionSendCannotReplaceNewConnectionOwnership() async throws {
+        let first = GatedSubscriptionConnection()
+        let second = RecordingSubscriptionConnection()
+        let connector = SequencedConnector(connections: [first, second])
+        let client = WebSocketRPCClient(
+            connector: connector,
+            connectionWaitTimeout: .seconds(2),
+            endpointProvider: { URL(string: "wss://studio.example/ws")! }
+        )
+
+        await client.start()
+        await first.waitUntilReceiving()
+        let stream = await client.subscribe(
+            "thread.reconnectedSubscription",
+            as: JSONValue.self
+        )
+        let consumer = Task {
+            do {
+                for try await _ in stream {}
+            } catch {}
+        }
+        await first.waitUntilRequestSendStarted()
+
+        await first.failReceive()
+        await second.waitUntilReceiving()
+        let replacementRequestIDs = await second.requestIDs()
+        let replacementRequestID = try XCTUnwrap(replacementRequestIDs.first)
+
+        await first.releaseRequestSend()
+        await first.waitUntilRequestSendCompleted()
+        _ = await client.isConnected()
+
+        consumer.cancel()
+        await consumer.value
+        await second.waitUntilInterruptCount(1)
+        let interruptedRequestIDs = await second.interruptIDs()
+        XCTAssertEqual(
+            interruptedRequestIDs,
+            [replacementRequestID],
+            "Cancellation must interrupt the replacement socket's request, not the stale send's request."
+        )
+        await client.stop()
+    }
+
     func testStopDuringConnectClosesTheLateSocketWithoutPublishingIt() async {
         let lateConnection = CloseTrackingConnection()
         let connector = GatedConnector(connection: lateConnection)
@@ -246,6 +332,139 @@ final class WebSocketRPCRaceTests: XCTestCase {
         let isConnected = await client.isConnected()
         XCTAssertTrue(isConnected, "Completing an old stop must not clear a newer socket.")
         await client.stop()
+    }
+}
+
+private actor GatedSubscriptionConnection: WebSocketConnection {
+    private var requestSendContinuation: CheckedContinuation<Void, Never>?
+    private var requestSendStarted = false
+    private var requestSendCompleted = false
+    private var requestStartWaiters: [CheckedContinuation<Void, Never>] = []
+    private var requestCompletionWaiters: [CheckedContinuation<Void, Never>] = []
+    private var receiveContinuation: CheckedContinuation<Data, Error>?
+    private var receiveWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func send(_ data: Data) async throws {
+        let envelope = try JSONDecoder.t3.decode(JSONValue.self, from: data)
+        guard envelope["_tag"]?.stringValue == "Request" else { return }
+        requestSendStarted = true
+        let startWaiters = requestStartWaiters
+        requestStartWaiters.removeAll()
+        startWaiters.forEach { $0.resume() }
+        await withCheckedContinuation { continuation in
+            requestSendContinuation = continuation
+        }
+        requestSendCompleted = true
+        let completionWaiters = requestCompletionWaiters
+        requestCompletionWaiters.removeAll()
+        completionWaiters.forEach { $0.resume() }
+    }
+
+    func receive() async throws -> Data {
+        let waiters = receiveWaiters
+        receiveWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+        return try await withCheckedThrowingContinuation { continuation in
+            receiveContinuation = continuation
+        }
+    }
+
+    func close() {
+        receiveContinuation?.resume(throwing: CancellationError())
+        receiveContinuation = nil
+    }
+
+    func waitUntilRequestSendStarted() async {
+        guard !requestSendStarted else { return }
+        await withCheckedContinuation { continuation in
+            requestStartWaiters.append(continuation)
+        }
+    }
+
+    func releaseRequestSend() {
+        requestSendContinuation?.resume()
+        requestSendContinuation = nil
+    }
+
+    func waitUntilRequestSendCompleted() async {
+        guard !requestSendCompleted else { return }
+        await withCheckedContinuation { continuation in
+            requestCompletionWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilReceiving() async {
+        guard receiveContinuation == nil else { return }
+        await withCheckedContinuation { continuation in
+            receiveWaiters.append(continuation)
+        }
+    }
+
+    func failReceive() {
+        receiveContinuation?.resume(throwing: URLError(.networkConnectionLost))
+        receiveContinuation = nil
+    }
+}
+
+private actor RecordingSubscriptionConnection: WebSocketConnection {
+    private var requests: [Int] = []
+    private var interrupts: [Int] = []
+    private var interruptWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
+    private var receiveContinuation: CheckedContinuation<Data, Error>?
+    private var receiveWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func send(_ data: Data) throws {
+        let envelope = try JSONDecoder.t3.decode(JSONValue.self, from: data)
+        guard case let .number(rawID)? = envelope["requestId"] ?? envelope["id"],
+              let requestID = Int(exactly: rawID)
+        else { return }
+        switch envelope["_tag"]?.stringValue {
+        case "Request":
+            requests.append(requestID)
+        case "Interrupt":
+            interrupts.append(requestID)
+            let ready = interruptWaiters.filter { interrupts.count >= $0.0 }
+            interruptWaiters.removeAll { interrupts.count >= $0.0 }
+            ready.forEach { $0.1.resume() }
+        default:
+            break
+        }
+    }
+
+    func receive() async throws -> Data {
+        let waiters = receiveWaiters
+        receiveWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+        return try await withCheckedThrowingContinuation { continuation in
+            receiveContinuation = continuation
+        }
+    }
+
+    func close() {
+        receiveContinuation?.resume(throwing: CancellationError())
+        receiveContinuation = nil
+    }
+
+    func waitUntilReceiving() async {
+        guard receiveContinuation == nil else { return }
+        await withCheckedContinuation { continuation in
+            receiveWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilInterruptCount(_ count: Int) async {
+        guard interrupts.count < count else { return }
+        await withCheckedContinuation { continuation in
+            interruptWaiters.append((count, continuation))
+        }
+    }
+
+    func requestIDs() -> [Int] {
+        requests
+    }
+
+    func interruptIDs() -> [Int] {
+        interrupts
     }
 }
 

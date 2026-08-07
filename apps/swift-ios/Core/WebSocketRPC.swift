@@ -467,7 +467,8 @@ public actor WebSocketRPCClient {
     private func sendSubscription(_ subscriptionID: UUID) async {
         guard let connection,
               let connectionID,
-              var subscription = subscriptions[subscriptionID] else { return }
+              let subscription = subscriptions[subscriptionID] else { return }
+        let previousRequestID = subscription.requestID
         let requestID = allocateRequestID()
         let envelope = RPCRequestEnvelope(
             id: requestID,
@@ -477,8 +478,22 @@ public actor WebSocketRPCClient {
         )
         do {
             try await connection.send(JSONEncoder.t3.encode(envelope))
-            subscription.requestID = requestID
-            subscriptions[subscriptionID] = subscription
+            // Sending suspends this actor. Cancellation, reconnect cleanup, or
+            // another send may have moved subscription ownership meanwhile.
+            guard self.connectionID == connectionID,
+                  var current = subscriptions[subscriptionID],
+                  current.requestID == previousRequestID
+            else {
+                // If this socket is still current, the server accepted an
+                // otherwise orphaned subscription. Release it without
+                // disturbing a replacement request on the same connection.
+                if self.connectionID == connectionID {
+                    try? await sendControl("Interrupt", requestID: requestID)
+                }
+                return
+            }
+            current.requestID = requestID
+            subscriptions[subscriptionID] = current
             subscriptionByRequestID[requestID] = subscriptionID
         } catch {
             // Retain the subscription for the next socket, but make the send
