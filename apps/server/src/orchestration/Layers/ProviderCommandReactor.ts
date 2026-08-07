@@ -67,6 +67,7 @@ type ProviderIntentEvent = Extract<
       | "thread.runtime-mode-set"
       | "thread.fork-requested"
       | "thread.turn-start-requested"
+      | "thread.turn-steer-requested"
       | "thread.turn-interrupt-requested"
       | "thread.approval-response-requested"
       | "thread.user-input-response-requested"
@@ -354,6 +355,7 @@ const make = Effect.gen(function* () {
     readonly threadId: ThreadId;
     readonly kind:
       | "provider.turn.start.failed"
+      | "provider.turn.steer.failed"
       | "provider.turn.interrupt.failed"
       | "provider.approval.respond.failed"
       | "provider.user-input.respond.failed"
@@ -363,6 +365,7 @@ const make = Effect.gen(function* () {
     readonly turnId: TurnId | null;
     readonly createdAt: string;
     readonly requestId?: string;
+    readonly messageId?: string;
   }) =>
     Effect.all({
       commandId: serverCommandId("provider-failure-activity"),
@@ -381,7 +384,37 @@ const make = Effect.gen(function* () {
             payload: {
               detail: input.detail,
               ...(input.requestId ? { requestId: input.requestId } : {}),
+              ...(input.messageId ? { messageId: input.messageId } : {}),
             },
+            turnId: input.turnId,
+            createdAt: input.createdAt,
+          },
+          createdAt: input.createdAt,
+        }),
+      ),
+    );
+
+  const appendSteerDeliveredActivity = (input: {
+    readonly threadId: ThreadId;
+    readonly messageId: string;
+    readonly turnId: TurnId;
+    readonly createdAt: string;
+  }) =>
+    Effect.all({
+      commandId: serverCommandId("provider-steer-delivered"),
+      eventId: serverEventId(),
+    }).pipe(
+      Effect.flatMap(({ commandId, eventId }) =>
+        orchestrationEngine.dispatch({
+          type: "thread.activity.append",
+          commandId,
+          threadId: input.threadId,
+          activity: {
+            id: eventId,
+            tone: "info",
+            kind: "provider.turn.steer.delivered",
+            summary: "Guidance delivered",
+            payload: { messageId: input.messageId },
             turnId: input.turnId,
             createdAt: input.createdAt,
           },
@@ -1252,6 +1285,59 @@ const make = Effect.gen(function* () {
       .pipe(Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
   });
 
+  const processTurnSteerRequested = Effect.fn("processTurnSteerRequested")(function* (
+    event: Extract<ProviderIntentEvent, { type: "thread.turn-steer-requested" }>,
+  ) {
+    const key = turnStartKeyForEvent(event);
+    if (yield* hasHandledTurnStartRecently(key)) {
+      return;
+    }
+    const thread = yield* resolveThread(event.payload.threadId);
+    const message = thread?.messages.find((entry) => entry.id === event.payload.messageId);
+    if (!thread || !message || message.role !== "user") {
+      return yield* appendProviderFailureActivity({
+        threadId: event.payload.threadId,
+        kind: "provider.turn.steer.failed",
+        summary: "Guidance was not delivered",
+        detail: `User message '${event.payload.messageId}' was not found for the guidance request.`,
+        turnId: event.payload.expectedTurnId,
+        createdAt: event.payload.createdAt,
+        messageId: event.payload.messageId,
+      });
+    }
+
+    const guidance = toNonEmptyProviderInput(message.text);
+    yield* providerService
+      .steerTurn({
+        threadId: event.payload.threadId,
+        expectedTurnId: event.payload.expectedTurnId,
+        messageId: event.payload.messageId,
+        ...(guidance !== undefined ? { input: guidance } : {}),
+        ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
+      })
+      .pipe(
+        Effect.flatMap(() =>
+          appendSteerDeliveredActivity({
+            threadId: event.payload.threadId,
+            messageId: event.payload.messageId,
+            turnId: event.payload.expectedTurnId,
+            createdAt: event.payload.createdAt,
+          }),
+        ),
+        Effect.catchCause((cause) =>
+          appendProviderFailureActivity({
+            threadId: event.payload.threadId,
+            kind: "provider.turn.steer.failed",
+            summary: "Guidance was not delivered",
+            detail: formatFailureDetail(cause),
+            turnId: event.payload.expectedTurnId,
+            createdAt: event.payload.createdAt,
+            messageId: event.payload.messageId,
+          }),
+        ),
+      );
+  });
+
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-interrupt-requested" }>,
   ) {
@@ -1530,6 +1616,9 @@ const make = Effect.gen(function* () {
       case "thread.turn-start-requested":
         yield* processTurnStartRequested(event);
         return;
+      case "thread.turn-steer-requested":
+        yield* processTurnSteerRequested(event);
+        return;
       case "thread.turn-interrupt-requested":
         yield* processTurnInterruptRequested(event);
         return;
@@ -1567,6 +1656,7 @@ const make = Effect.gen(function* () {
         event.type === "thread.runtime-mode-set" ||
         event.type === "thread.fork-requested" ||
         event.type === "thread.turn-start-requested" ||
+        event.type === "thread.turn-steer-requested" ||
         event.type === "thread.turn-interrupt-requested" ||
         event.type === "thread.approval-response-requested" ||
         event.type === "thread.user-input-response-requested" ||

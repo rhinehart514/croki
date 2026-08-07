@@ -89,6 +89,7 @@ import {
   deriveActivePlanState,
   findSidebarProposedPlan,
   findLatestProposedPlan,
+  deriveGuidanceDeliveryByMessageId,
   deriveWorkLogEntries,
   hasActionableProposedPlan,
   isLatestTurnSettled,
@@ -1223,6 +1224,9 @@ function ChatViewContent(props: ChatViewProps) {
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
+  const steerThreadTurn = useAtomCommand(threadEnvironment.steerTurn, {
+    reportFailure: false,
+  });
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, {
     reportFailure: false,
   });
@@ -2209,10 +2213,16 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
   const phase = derivePhase(activeThread?.session ?? null);
+  const canSteerRunningTurn =
+    phase === "running" && activeThread?.session?.providerName === ProviderDriverKind.make("codex");
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
   const workLogEntries = useMemo(
     () => deriveWorkLogEntries(threadActivities, activeThread?.checkpoints ?? []),
     [activeThread?.checkpoints, threadActivities],
+  );
+  const guidanceDeliveryByMessageId = useMemo(
+    () => deriveGuidanceDeliveryByMessageId(threadActivities),
+    [threadActivities],
   );
   const crokiContextReceiptsByMessageId = useMemo(
     () => deriveCrokiContextReceiptsByMessageId(threadActivities),
@@ -5308,6 +5318,18 @@ function ChatViewContent(props: ChatViewProps) {
       }
       return;
     }
+    const steeringTurnId =
+      phase === "running" && canSteerRunningTurn
+        ? (activeThread.session?.activeTurnId ?? null)
+        : null;
+    if (phase === "running" && steeringTurnId === null) {
+      setThreadError(
+        activeThread.id,
+        "This provider cannot accept guidance while its current turn is running.",
+      );
+      return;
+    }
+    const isSteeringRunningTurn = steeringTurnId !== null;
     if (!activeProject) {
       toastManager.add(
         stackedThreadToast({
@@ -5319,7 +5341,8 @@ function ChatViewContent(props: ChatViewProps) {
       return;
     }
     const threadIdForSend = activeThread.id;
-    const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
+    const isFirstMessage =
+      !isSteeringRunningTurn && (!isServerThread || activeThread.messages.length === 0);
     const baseBranchForWorktree =
       isFirstMessage && sendEnvMode === "worktree" && !activeThread.worktreePath
         ? activeThreadBranch
@@ -5429,7 +5452,7 @@ function ChatViewContent(props: ChatViewProps) {
         role: "user",
         text: outgoingMessageText,
         ...(optimisticAttachments.length > 0 ? { attachments: optimisticAttachments } : {}),
-        turnId: null,
+        turnId: steeringTurnId,
         createdAt: messageCreatedAt,
         updatedAt: messageCreatedAt,
         streaming: false,
@@ -5496,7 +5519,7 @@ function ChatViewContent(props: ChatViewProps) {
       }
     }
 
-    if (failure === null && isServerThread) {
+    if (failure === null && isServerThread && !isSteeringRunningTurn) {
       const settingsResult = await persistThreadSettingsForNextTurn({
         threadId: threadIdForSend,
         createdAt: messageCreatedAt,
@@ -5550,27 +5573,38 @@ function ChatViewContent(props: ChatViewProps) {
             }
           : undefined;
       beginLocalDispatch({ preparingWorktree: false });
-      const startResult = await startThreadTurn({
-        environmentId,
-        input: {
-          threadId: threadIdForSend,
-          message: {
-            messageId: messageIdForSend,
-            role: "user",
-            text: outgoingMessageText,
-            attachments: turnAttachmentsResult.value,
-          },
-          modelSelection: ctxSelectedModelSelection,
-          titleSeed: title,
-          runtimeMode,
-          interactionMode: interactionModeForSend,
-          canvasEnabled,
-          parallelThreadsEnabled,
-          harnessId: crokiHarnessId,
-          ...(bootstrap ? { bootstrap } : {}),
-          createdAt: messageCreatedAt,
-        },
-      });
+      const message = {
+        messageId: messageIdForSend,
+        role: "user" as const,
+        text: outgoingMessageText,
+        attachments: turnAttachmentsResult.value,
+      };
+      const startResult = isSteeringRunningTurn
+        ? await steerThreadTurn({
+            environmentId,
+            input: {
+              threadId: threadIdForSend,
+              expectedTurnId: steeringTurnId,
+              message,
+              createdAt: messageCreatedAt,
+            },
+          })
+        : await startThreadTurn({
+            environmentId,
+            input: {
+              threadId: threadIdForSend,
+              message,
+              modelSelection: ctxSelectedModelSelection,
+              titleSeed: title,
+              runtimeMode,
+              interactionMode: interactionModeForSend,
+              canvasEnabled,
+              parallelThreadsEnabled,
+              harnessId: crokiHarnessId,
+              ...(bootstrap ? { bootstrap } : {}),
+              createdAt: messageCreatedAt,
+            },
+          });
       if (startResult._tag === "Failure") {
         failure = startResult;
       } else {
@@ -6622,6 +6656,7 @@ function ChatViewContent(props: ChatViewProps) {
                 turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
                 activeThreadEnvironmentId={activeThread.environmentId}
                 crokiContextReceiptsByMessageId={crokiContextReceiptsByMessageId}
+                guidanceDeliveryByMessageId={guidanceDeliveryByMessageId}
                 routeThreadKey={routeThreadKey}
                 onOpenTurnDiff={onOpenTurnDiff}
                 onPrepareCanvasUpdate={prepareTurnCanvasUpdate}
@@ -6763,6 +6798,7 @@ function ChatViewContent(props: ChatViewProps) {
                                 isLocalDraftThread && activeProject === null
                               }
                               phase={phase}
+                              canSteerRunningTurn={canSteerRunningTurn}
                               isConnecting={isConnecting}
                               isSendBusy={isSendBusy}
                               sendDisabledReason={threadDetailLoading ? "Messages loading" : null}

@@ -7,12 +7,14 @@ import {
   ApprovalRequestId,
   CodexSettings,
   EventId,
+  MessageId,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderItemId,
   type ProviderApprovalDecision,
   type ProviderEvent,
   type ProviderSession,
+  type ProviderTurnSteerResult,
   type ProviderTurnStartResult,
   type ProviderUserInputAnswers,
   ThreadId,
@@ -42,6 +44,7 @@ import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.t
 import {
   type CodexSessionRuntimeOptions,
   type CodexSessionRuntimeSendTurnInput,
+  type CodexSessionRuntimeSteerTurnInput,
   type CodexSessionRuntimeShape,
   type CodexThreadSnapshot,
 } from "./CodexSessionRuntime.ts";
@@ -82,6 +85,14 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
       Promise.resolve({
         threadId: this.options.threadId,
         turnId: asTurnId("turn-1"),
+      }),
+  );
+
+  public readonly steerTurnImpl = vi.fn(
+    (input: CodexSessionRuntimeSteerTurnInput): Promise<ProviderTurnSteerResult> =>
+      Promise.resolve({
+        threadId: this.options.threadId,
+        turnId: input.expectedTurnId,
       }),
   );
 
@@ -135,6 +146,10 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
 
   sendTurn(input: CodexSessionRuntimeSendTurnInput) {
     return Effect.promise(() => this.sendTurnImpl(input));
+  }
+
+  steerTurn(input: CodexSessionRuntimeSteerTurnInput) {
+    return Effect.promise(() => this.steerTurnImpl(input));
   }
 
   interruptTurn(turnId?: TurnId) {
@@ -382,6 +397,37 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
         effort: "high",
         serviceTier: "priority",
       });
+    }),
+  );
+
+  it.effect("routes guidance through Codex native turn steering", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      const threadId = asThreadId("sess-steer");
+      const turnId = asTurnId("turn-running");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const runtime = sessionRuntimeFactory.lastRuntime;
+      NodeAssert.ok(runtime);
+      runtime.steerTurnImpl.mockClear();
+
+      const result = yield* adapter.steerTurn!({
+        threadId,
+        expectedTurnId: turnId,
+        messageId: MessageId.make("message-guidance"),
+        input: "Use SQLite, not Postgres.",
+        attachments: [],
+      });
+
+      NodeAssert.deepStrictEqual(runtime.steerTurnImpl.mock.calls[0]?.[0], {
+        expectedTurnId: turnId,
+        clientUserMessageId: "message-guidance",
+        input: "Use SQLite, not Postgres.",
+      });
+      NodeAssert.deepStrictEqual(result, { threadId, turnId });
     }),
   );
 

@@ -20,11 +20,13 @@ import type {
   ProviderRespondToUserInputInput,
   ProviderRuntimeEvent,
   ProviderSendTurnInput,
+  ProviderSteerTurnInput,
   ProviderSession,
   ProviderSessionStartInput,
   ProviderStopSessionInput,
   ThreadId,
   ProviderTurnStartResult,
+  ProviderTurnSteerResult,
 } from "@croki/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
@@ -57,6 +59,11 @@ export interface ProviderServiceShape {
   readonly sendTurn: (
     input: ProviderSendTurnInput,
   ) => Effect.Effect<ProviderTurnStartResult, ProviderServiceError>;
+
+  /** Send guidance to a provider turn that is already running. */
+  readonly steerTurn: (
+    input: ProviderSteerTurnInput,
+  ) => Effect.Effect<ProviderTurnSteerResult, ProviderServiceError>;
 
   /**
    * Interrupt a running provider turn.

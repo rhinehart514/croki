@@ -23,6 +23,8 @@ Croki currently provides:
 - native project and worktree execution with Git diff, restore, commit, push,
   and pull-request paths;
 - terminal, files, preview, plans, approvals, project scripts, and recovery;
+- Codex-native guidance into an exact running turn, with durable sent messages
+  and explicit pending, delivered, failed, or unconfirmed delivery state;
 - web, Electron desktop, and mobile clients;
 - multiple configured instances of Codex, Claude, Cursor, Grok Build,
   OpenCode, and OpenClaw;

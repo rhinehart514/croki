@@ -651,6 +651,11 @@ export function deriveWorkLogEntries(
     if (activity.kind === "task.started") continue;
     if (activity.kind === "context-window.updated") continue;
     if (activity.kind === UI_HISTORY_ACTIVITY_KIND) continue;
+    if (
+      activity.kind === "provider.turn.steer.delivered" ||
+      activity.kind === "provider.turn.steer.failed"
+    )
+      continue;
     if (activity.summary === "Checkpoint captured") continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     entries.push(toDerivedWorkLogEntry(activity));
@@ -676,6 +681,45 @@ export function deriveWorkLogEntries(
     }),
   );
   return [...workEntries, ...uiChecks];
+}
+
+export type GuidanceDeliveryState =
+  | { readonly status: "delivered" }
+  | { readonly status: "failed"; readonly detail: string | null };
+
+/**
+ * Steering messages are durable user messages with a turn id. Provider
+ * activities confirm whether Codex accepted them; absence remains an honest
+ * pending state after a reconnect instead of being treated as success.
+ */
+export function deriveGuidanceDeliveryByMessageId(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+): ReadonlyMap<string, GuidanceDeliveryState> {
+  const deliveries = new Map<string, GuidanceDeliveryState>();
+  for (const activity of activities) {
+    if (
+      activity.kind !== "provider.turn.steer.delivered" &&
+      activity.kind !== "provider.turn.steer.failed"
+    ) {
+      continue;
+    }
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const messageId = typeof payload?.messageId === "string" ? payload.messageId : null;
+    if (!messageId) continue;
+    deliveries.set(
+      messageId,
+      activity.kind === "provider.turn.steer.delivered"
+        ? { status: "delivered" }
+        : {
+            status: "failed",
+            detail: typeof payload?.detail === "string" ? payload.detail : null,
+          },
+    );
+  }
+  return deliveries;
 }
 
 function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): boolean {

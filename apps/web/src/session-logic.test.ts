@@ -14,6 +14,7 @@ import {
   derivePendingApprovals,
   derivePendingUserInputs,
   deriveTimelineEntries,
+  deriveGuidanceDeliveryByMessageId,
   deriveWorkLogEntries,
   findLatestProposedPlan,
   findSidebarProposedPlan,
@@ -48,6 +49,32 @@ function makeActivity(overrides: {
     ...(overrides.sequence !== undefined ? { sequence: overrides.sequence } : {}),
   };
 }
+
+describe("deriveGuidanceDeliveryByMessageId", () => {
+  it("keeps provider steering receipts out of the work log and maps delivery by message", () => {
+    const delivered = makeActivity({
+      kind: "provider.turn.steer.delivered",
+      summary: "Guidance delivered",
+      payload: { messageId: "message-delivered" },
+      turnId: "turn-1",
+    });
+    const failed = makeActivity({
+      kind: "provider.turn.steer.failed",
+      summary: "Guidance was not delivered",
+      tone: "error",
+      payload: { messageId: "message-failed", detail: "Turn already completed." },
+      turnId: "turn-1",
+    });
+
+    expect(deriveGuidanceDeliveryByMessageId([delivered, failed])).toEqual(
+      new Map([
+        ["message-delivered", { status: "delivered" }],
+        ["message-failed", { status: "failed", detail: "Turn already completed." }],
+      ]),
+    );
+    expect(deriveWorkLogEntries([delivered, failed])).toEqual([]);
+  });
+});
 
 describe("derivePendingApprovals", () => {
   it("tracks open approvals and removes resolved ones", () => {
