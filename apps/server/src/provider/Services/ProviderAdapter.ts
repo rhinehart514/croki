@@ -20,6 +20,8 @@ import type {
   ProviderSessionStartInput,
   ThreadId,
   ProviderTurnStartResult,
+  NativeReviewStartInput,
+  NativeReviewStartResult,
   TurnId,
 } from "@croki/contracts";
 import type * as Effect from "effect/Effect";
@@ -65,6 +67,12 @@ export interface ProviderAdapterShape<TError> {
     readonly start: (input: CodexVoiceStartInput) => Effect.Effect<void, TError>;
     readonly stop: (threadId: ThreadId) => Effect.Effect<void, TError>;
     readonly events: (threadId: ThreadId) => Stream.Stream<CodexVoiceEvent, TError>;
+  };
+  /** Provider-native independent review. Present only on runtimes with a real review protocol. */
+  readonly nativeReview?: {
+    readonly start: (
+      input: NativeReviewStartInput,
+    ) => Effect.Effect<NativeReviewStartResult, TError>;
   };
 
   /**

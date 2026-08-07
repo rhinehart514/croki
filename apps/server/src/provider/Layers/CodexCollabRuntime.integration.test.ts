@@ -74,6 +74,71 @@ const scriptPath = NodePath.join(import.meta.dirname, "../testFixtures/.collab-s
 const peerPath = NodePath.join(import.meta.dirname, "../testFixtures/codexCollabMockPeer.sh");
 
 describe("CodexSessionRuntime collab integration", () => {
+  it.effect("starts native review as a detached read-only child", () =>
+    Effect.gen(function* () {
+      const reviewThreadId = "review-thread-fixture";
+      NodeFS.writeFileSync(
+        scriptPath,
+        // @effect-diagnostics-next-line preferSchemaOverJson:off
+        JSON.stringify({
+          rootThreadId: ROOT,
+          notifications: [],
+          reviewThreadId,
+          // Some Codex builds return the detached review id without a
+          // thread/started notification. The response still has enough
+          // identity to materialize the child before transcript events land.
+          reviewThreadStartedOmitted: true,
+        }),
+        "utf8",
+      );
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => NodeFS.rmSync(scriptPath, { force: true })),
+      );
+
+      const runtime = yield* makeCodexSessionRuntime({
+        threadId: ThreadId.make("thread-detached-review"),
+        binaryPath: peerPath,
+        cwd: "/tmp",
+        runtimeMode: "full-access",
+        environment: { ...process.env, T3_CODEX_COLLAB_SCRIPT: scriptPath },
+      });
+      const eventsFiber = yield* runtime.events.pipe(
+        Stream.takeUntil(
+          (event) =>
+            event.method === "turn/completed" && event.threadId === ThreadId.make(reviewThreadId),
+        ),
+        Stream.runCollect,
+        Effect.forkScoped,
+      );
+
+      yield* runtime.start();
+      const result = yield* runtime.startDetachedReview({
+        type: "baseBranch",
+        branch: "origin/main",
+      });
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+
+      assert.deepEqual(result, {
+        reviewThreadId,
+        turnId: "review-turn-fixture",
+      });
+      assert.deepInclude(events.find((event) => event.method === "collabAgent/started")?.payload, {
+        agentThreadId: reviewThreadId,
+        nickname: "Review against origin/main",
+        role: "reviewer",
+        parentThreadId: ROOT,
+      });
+      assert.include(
+        events
+          .filter((event) => event.threadId === ThreadId.make(reviewThreadId))
+          .map((event) => event.method),
+        "turn/completed",
+      );
+
+      yield* runtime.close;
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("tees child lifecycle into the parent while preserving child transcripts", () =>
     Effect.gen(function* () {
       // @effect-diagnostics-next-line preferSchemaOverJson:off

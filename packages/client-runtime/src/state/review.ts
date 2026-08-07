@@ -1,7 +1,7 @@
 import { WS_METHODS } from "@croki/contracts";
 import { Atom } from "effect/unstable/reactivity";
 
-import { createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
+import { createEnvironmentRpcCommand, createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 
 export function createReviewEnvironmentAtoms<R, E>(
@@ -12,6 +12,14 @@ export function createReviewEnvironmentAtoms<R, E>(
       label: "environment-data:review:diff-preview",
       tag: WS_METHODS.reviewGetDiffPreview,
       staleTimeMs: 5_000,
+    }),
+    startNative: createEnvironmentRpcCommand(runtime, {
+      label: "environment-command:review:start-native",
+      tag: WS_METHODS.reviewStartNative,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) => `${environmentId}:${input.threadId}`,
+      },
     }),
   };
 }

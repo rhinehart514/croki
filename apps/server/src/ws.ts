@@ -51,6 +51,8 @@ import {
   AssetWorkspaceContextResolutionError,
   RpcClientId,
   EnvironmentAuthorizationError,
+  NativeReviewStartFailedError,
+  NativeReviewUnavailableError,
   ThreadId,
   type TerminalAttachStreamEvent,
   type TerminalError,
@@ -1953,6 +1955,26 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.reviewGetDiffPreview, review.getDiffPreview(input), {
             "rpc.aggregate": "review",
           }),
+        [WS_METHODS.reviewStartNative]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.reviewStartNative,
+            providerService
+              ? providerService
+                  .startNativeReview(input)
+                  .pipe(
+                    Effect.mapError((error) =>
+                      error._tag === "ProviderAdapterValidationError"
+                        ? new NativeReviewUnavailableError({ reason: error.issue })
+                        : new NativeReviewStartFailedError({ detail: error.message }),
+                    ),
+                  )
+              : Effect.fail(
+                  new NativeReviewUnavailableError({
+                    reason: "Independent review is unavailable in this environment.",
+                  }),
+                ),
+            { "rpc.aggregate": "review" },
+          ),
         [WS_METHODS.terminalOpen]: (input) =>
           observeRpcEffect(WS_METHODS.terminalOpen, terminalManager.open(input), {
             "rpc.aggregate": "terminal",

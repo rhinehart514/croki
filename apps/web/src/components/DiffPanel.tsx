@@ -71,6 +71,7 @@ import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
+import { NativeReviewControl } from "./review/NativeReviewControl";
 
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
@@ -415,6 +416,20 @@ export default function DiffPanel({
   ];
   const gitDiff = selectedGitSource?.diff;
 
+  // Native review resumes the provider's persisted conversation, so it is
+  // offered only after this Thread has established a Codex session.
+  const activeProviderInstanceId = activeThread?.session?.providerInstanceId;
+  const supportsNativeReview =
+    serverConfig?.providers.find((provider) => provider.instanceId === activeProviderInstanceId)
+      ?.driver === "codex";
+  const nativeReviewTarget = selectedTurn
+    ? null
+    : selectedGitScope === "unstaged"
+      ? ({ type: "uncommittedChanges" } as const)
+      : selectedGitSource?.baseRef
+        ? ({ type: "baseBranch", branch: selectedGitSource.baseRef } as const)
+        : null;
+
   const selectedPatch = selectedTurn ? activeCheckpointDiff.data?.diff : gitDiff;
   const isSelectedPatchTruncated = !selectedTurn && selectedGitSource?.truncated === true;
   const isLoadingSelectedPatch = selectedTurn
@@ -718,6 +733,19 @@ export default function DiffPanel({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+        {routeThreadRef && supportsNativeReview && (
+          <NativeReviewControl
+            threadRef={routeThreadRef}
+            target={nativeReviewTarget}
+            disabledReason={
+              hasNoNetChanges
+                ? "There are no changes to review."
+                : isLoadingSelectedPatch
+                  ? "Wait for the selected changes to load."
+                  : undefined
+            }
+          />
+        )}
         {codeViewFiles.length > 0 && (
           <DiffStatLabel
             additions={diffLineStat.additions}

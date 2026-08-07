@@ -8,6 +8,7 @@ import {
   type ProviderApprovalDecision,
   type ProviderEvent,
   type ProviderInteractionMode,
+  type NativeReviewTarget,
   type ProviderRequestKind,
   type ProviderSession,
   type ProviderTurnStartResult,
@@ -152,6 +153,12 @@ export interface CodexSessionRuntimeShape {
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
   /** Fork the current Codex thread and return resumable state for the clone. */
   readonly forkThread: Effect.Effect<CodexResumeCursor, CodexSessionRuntimeError>;
+  readonly startDetachedReview: (
+    target: NativeReviewTarget,
+  ) => Effect.Effect<
+    { readonly reviewThreadId: string; readonly turnId: string },
+    CodexSessionRuntimeError
+  >;
   readonly respondToRequest: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -644,6 +651,22 @@ interface CollabChildAgentState {
   readonly spawnTurnId: TurnId | undefined;
 }
 
+interface PendingDetachedReview {
+  readonly title: string;
+  readonly reviewThreadId?: string;
+}
+
+function nativeReviewTitle(target: NativeReviewTarget): string {
+  switch (target.type) {
+    case "uncommittedChanges":
+      return "Review working tree";
+    case "baseBranch":
+      return `Review against ${target.branch}`;
+    case "commit":
+      return target.title ? `Review ${target.title}` : `Review commit ${target.sha.slice(0, 8)}`;
+  }
+}
+
 function readThreadSpawnSource(thread: { readonly source: unknown }):
   | {
       nickname: string | undefined;
@@ -889,6 +912,10 @@ export const makeCodexSessionRuntime = (
     const collabChildAgentsRef = yield* Ref.make(new Map<string, CollabChildAgentState>());
     /** Child provider-thread id → its currently running provider turn id. */
     const collabChildLiveTurnsRef = yield* Ref.make(new Map<string, string>());
+    const pendingDetachedReviewRef = yield* Ref.make<PendingDetachedReview | null>(null);
+    const pendingDetachedReviewNotificationsRef = yield* Ref.make<
+      ReadonlyArray<CodexServerNotification>
+    >([]);
     const closedRef = yield* Ref.make(false);
 
     // `~` is not shell-expanded when env vars are set via
@@ -1021,7 +1048,16 @@ export const makeCodexSessionRuntime = (
         if (notification.method === "thread/started") {
           const thread = notification.params.thread;
           const spawn = readThreadSpawnSource(thread);
-          if (!spawn) {
+          const pendingReview = yield* Ref.get(pendingDetachedReviewRef);
+          const isDetachedReview =
+            pendingReview !== null &&
+            typeof thread.source === "object" &&
+            thread.source !== null &&
+            "subAgent" in thread.source &&
+            thread.source.subAgent === "review" &&
+            (pendingReview.reviewThreadId === undefined ||
+              pendingReview.reviewThreadId === thread.id);
+          if (!spawn && !isDetachedReview) {
             return false;
           }
           // Merge with any subAgentActivity registration that got here
@@ -1037,12 +1073,18 @@ export const makeCodexSessionRuntime = (
             : ((yield* Ref.get(sessionRef)).activeTurnId ?? undefined);
           const state: CollabChildAgentState = {
             agentThreadId: thread.id,
-            nickname: spawn.nickname ?? thread.agentNickname ?? existingChild?.nickname,
-            role: spawn.role ?? thread.agentRole ?? existingChild?.role,
-            agentPath: spawn.agentPath ?? existingChild?.agentPath,
-            depth: spawn.depth ?? existingChild?.depth,
+            nickname:
+              (isDetachedReview ? pendingReview?.title : spawn?.nickname) ??
+              thread.agentNickname ??
+              existingChild?.nickname,
+            role:
+              (isDetachedReview ? "reviewer" : spawn?.role) ??
+              thread.agentRole ??
+              existingChild?.role,
+            agentPath: spawn?.agentPath ?? existingChild?.agentPath,
+            depth: spawn?.depth ?? existingChild?.depth,
             parentThreadId:
-              spawn.parentThreadId ?? thread.parentThreadId ?? existingChild?.parentThreadId,
+              spawn?.parentThreadId ?? thread.parentThreadId ?? existingChild?.parentThreadId,
             spawnTurnId,
           };
           yield* Ref.update(collabChildAgentsRef, (current) => {
@@ -1050,6 +1092,9 @@ export const makeCodexSessionRuntime = (
             next.set(thread.id, state);
             return next;
           });
+          if (isDetachedReview) {
+            yield* Ref.set(pendingDetachedReviewRef, null);
+          }
           yield* emitEvent({
             kind: "notification",
             threadId: options.threadId,
@@ -1142,6 +1187,17 @@ export const makeCodexSessionRuntime = (
         const children = yield* Ref.get(collabChildAgentsRef);
         const child = children.get(providerConversationId);
         if (!child) {
+          // A response and the review's first notifications can be read in
+          // one app-server chunk. Preserve unknown child traffic while the
+          // request is pending; the authoritative response id registers the
+          // reviewer and immediately replays it below.
+          if ((yield* Ref.get(pendingDetachedReviewRef)) !== null) {
+            yield* Ref.update(pendingDetachedReviewNotificationsRef, (current) => [
+              ...current,
+              notification,
+            ]);
+            return true;
+          }
           return false;
         }
         const childIdentity = {
@@ -1924,6 +1980,86 @@ export const makeCodexSessionRuntime = (
         });
         return { threadId: response.thread.id } satisfies CodexResumeCursor;
       }),
+      startDetachedReview: (target) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          yield* Ref.set(pendingDetachedReviewRef, { title: nativeReviewTitle(target) });
+          const response = yield* client
+            .request("review/start", {
+              threadId: providerThreadId,
+              delivery: "detached",
+              target,
+            })
+            .pipe(
+              Effect.tapError(() =>
+                Effect.all(
+                  [
+                    Ref.set(pendingDetachedReviewRef, null),
+                    Ref.set(pendingDetachedReviewNotificationsRef, []),
+                  ],
+                  { discard: true },
+                ),
+              ),
+            );
+          yield* Ref.update(pendingDetachedReviewRef, (pending) =>
+            pending === null ? null : { ...pending, reviewThreadId: response.reviewThreadId },
+          );
+          const existingReview = (yield* Ref.get(collabChildAgentsRef)).get(
+            response.reviewThreadId,
+          );
+          if (!existingReview) {
+            const title = nativeReviewTitle(target);
+            const state: CollabChildAgentState = {
+              agentThreadId: response.reviewThreadId,
+              nickname: title,
+              role: "reviewer",
+              agentPath: undefined,
+              depth: undefined,
+              parentThreadId: providerThreadId,
+              spawnTurnId: undefined,
+            };
+            yield* Ref.update(collabChildAgentsRef, (current) => {
+              const next = new Map(current);
+              next.set(response.reviewThreadId, state);
+              return next;
+            });
+            // `thread/started` is documented to precede the response, but it
+            // is not emitted by every Codex build. The response's explicit
+            // reviewThreadId is authoritative, so materialize the child from
+            // it and let subsequent native notifications fill its transcript.
+            yield* emitEvent({
+              kind: "notification",
+              threadId: options.threadId,
+              method: "collabAgent/started",
+              payload: {
+                agentThreadId: state.agentThreadId,
+                nickname: title,
+                role: "reviewer",
+                parentThreadId: providerThreadId,
+              },
+            });
+            yield* emitEvent({
+              kind: "notification",
+              threadId: ThreadId.make(response.reviewThreadId),
+              parentThreadId: options.threadId,
+              childPrompt: title,
+              method: "thread/started",
+              payload: { thread: { id: response.reviewThreadId } },
+            });
+          }
+          const bufferedNotifications = yield* Ref.getAndSet(
+            pendingDetachedReviewNotificationsRef,
+            [],
+          );
+          yield* Effect.forEach(bufferedNotifications, interceptCollabChildNotification, {
+            discard: true,
+          });
+          yield* Ref.set(pendingDetachedReviewRef, null);
+          return {
+            reviewThreadId: response.reviewThreadId,
+            turnId: response.turn.id,
+          };
+        }),
       respondToRequest: (requestId, decision) =>
         Effect.gen(function* () {
           const pending = (yield* Ref.get(pendingApprovalsRef)).get(requestId);

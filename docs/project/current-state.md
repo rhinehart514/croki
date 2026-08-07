@@ -1,18 +1,26 @@
 # Current project state
 
-Last audited: 2026-08-05
-Code baseline: Croki 0.4.7 UI history foundation on `croki/main`
+Last audited: 2026-08-07
+Code baseline: Croki 0.4.8 on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow application-aware overlay on the development environment rather than
 a second agent runtime.
 
-Croki 0.4.7 is the current repository version; 0.4.5 remains the latest
-published baseline inherited by it. See the [0.4.6 release
+Croki 0.4.8 is the current repository version. See the [0.4.6 release
 notes](./release-notes-0.4.6.md), [0.4.7 UI history
 plan](./release-notes-0.4.7.md), [0.4.8 quality-of-life
 plan](./release-notes-0.4.8.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
+
+## 0.4.9 candidate
+
+Review can start Codex's native independent review for working-tree or
+base-branch changes. The run is detached and read-only: it appears as a durable
+child Thread while the parent remains usable, and Codex's standardized findings
+link back into the ordinary source journey. The action is offered only for an
+active Codex Thread; no generic provider review, parallel dashboard, or
+non-durable Fix/Dismiss model is implied.
 
 ## Working product
 

@@ -18,6 +18,7 @@ import {
   type ProviderRuntimeEvent,
   type ProviderRequestKind,
   type ThreadTokenUsageSnapshot,
+  type NativeReviewStartResult,
   type ProviderUserInputAnswers,
   RuntimeItemId,
   RuntimeRequestId,
@@ -25,6 +26,7 @@ import {
   type RuntimeTaskUsage,
   ProviderApprovalDecision,
   ThreadId,
+  TurnId,
   ProviderSendTurnInput,
 } from "@croki/contracts";
 import * as Effect from "effect/Effect";
@@ -1976,6 +1978,21 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     },
   );
 
+  const startNativeReview = Effect.fn("startNativeReview")(function* (
+    input: Parameters<NonNullable<CodexAdapterShape["nativeReview"]>["start"]>[0],
+  ) {
+    const session = yield* requireSession(input.threadId);
+    const result = yield* session.runtime
+      .startDetachedReview(input.target)
+      .pipe(
+        Effect.mapError((cause) => mapCodexRuntimeError(input.threadId, "review/start", cause)),
+      );
+    return {
+      reviewThreadId: ThreadId.make(result.reviewThreadId),
+      turnId: TurnId.make(result.turnId),
+    } satisfies NativeReviewStartResult;
+  });
+
   const respondToRequest: CodexAdapterShape["respondToRequest"] = (threadId, requestId, decision) =>
     requireSession(threadId).pipe(
       Effect.flatMap((session) => session.runtime.respondToRequest(requestId, decision)),
@@ -2102,6 +2119,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           Stream.map(({ event }) => event),
         ),
     },
+    nativeReview: { start: startNativeReview },
     get streamEvents() {
       return Stream.fromQueue(runtimeEventQueue);
     },
