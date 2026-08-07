@@ -425,6 +425,59 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         });
       }
 
+      const forkPoint = yield* Effect.gen(function* () {
+        if (command.sourceMessageId === undefined) {
+          return undefined;
+        }
+        const sourceMessageIndex = sourceThread.messages.findIndex(
+          (message) => message.id === command.sourceMessageId,
+        );
+        const sourceMessage = sourceThread.messages[sourceMessageIndex];
+        if (
+          sourceMessageIndex < 0 ||
+          sourceMessage === undefined ||
+          sourceMessage.role !== "user"
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Message '${command.sourceMessageId}' is not a user message in source thread '${command.sourceThreadId}'.`,
+          });
+        }
+        const resolveUserMessageTurnId = (messageIndex: number) => {
+          const message = sourceThread.messages[messageIndex];
+          if (message?.turnId !== null && message?.turnId !== undefined) return message.turnId;
+          for (let index = messageIndex + 1; index < sourceThread.messages.length; index += 1) {
+            const candidate = sourceThread.messages[index];
+            if (candidate?.role === "user") break;
+            if (candidate?.turnId !== null && candidate?.turnId !== undefined) {
+              return candidate.turnId;
+            }
+          }
+          return null;
+        };
+        const sourceTurnId = resolveUserMessageTurnId(sourceMessageIndex);
+        if (sourceTurnId === null) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Message '${command.sourceMessageId}' has not completed a provider turn and cannot be used as a fork point.`,
+          });
+        }
+
+        const removedTurnIds = new Set(
+          sourceThread.messages.flatMap((message, messageIndex) => {
+            if (messageIndex < sourceMessageIndex || message.role !== "user") return [];
+            const turnId = resolveUserMessageTurnId(messageIndex);
+            return turnId === null ? [] : [turnId];
+          }),
+        );
+        return {
+          messageId: sourceMessage.id,
+          turnId: sourceTurnId,
+          createdAt: sourceMessage.createdAt,
+          rollbackTurns: removedTurnIds.size,
+        };
+      });
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -436,6 +489,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           sourceThreadId: command.sourceThreadId,
+          ...(forkPoint === undefined ? {} : { forkPoint }),
           createdAt: command.createdAt,
         },
       };

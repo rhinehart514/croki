@@ -1,4 +1,4 @@
-import type { ScopedThreadRef } from "@croki/contracts";
+import type { MessageId, ScopedThreadRef } from "@croki/contracts";
 import { scopeThreadRef, scopedThreadKey } from "@croki/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
@@ -15,6 +15,13 @@ import { buildThreadRouteParams } from "../threadRoutes";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { useSidebar } from "../components/ui/sidebar";
 
+interface ForkThreadOptions {
+  readonly sourceMessageId?: MessageId;
+  readonly failureTitle?: string;
+  readonly prepareTarget?: (targetThreadRef: ScopedThreadRef) => void | Promise<void>;
+  readonly shouldOpenTarget?: (targetThreadRef: ScopedThreadRef) => boolean;
+}
+
 /** Fork a persisted provider conversation, then open the accepted target thread. */
 export function useForkThread() {
   const dispatchFork = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
@@ -24,13 +31,19 @@ export function useForkThread() {
   const setSelectionAnchor = useThreadSelectionStore((state) => state.setAnchor);
 
   return useCallback(
-    async (sourceThreadRef: ScopedThreadRef): Promise<ScopedThreadRef | null> => {
+    async (
+      sourceThreadRef: ScopedThreadRef,
+      options: ForkThreadOptions = {},
+    ): Promise<ScopedThreadRef | null> => {
       const targetThreadRef = scopeThreadRef(sourceThreadRef.environmentId, newThreadId());
       const result = await dispatchFork({
         environmentId: sourceThreadRef.environmentId,
         input: {
           threadId: targetThreadRef.threadId,
           sourceThreadId: sourceThreadRef.threadId,
+          ...(options.sourceMessageId === undefined
+            ? {}
+            : { sourceMessageId: options.sourceMessageId }),
         },
       });
 
@@ -40,7 +53,7 @@ export function useForkThread() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to fork thread",
+              title: options.failureTitle ?? "Failed to fork thread",
               description: error instanceof Error ? error.message : "An error occurred.",
             }),
           );
@@ -48,6 +61,8 @@ export function useForkThread() {
         return null;
       }
 
+      await options.prepareTarget?.(targetThreadRef);
+      if (options.shouldOpenTarget?.(targetThreadRef) === false) return targetThreadRef;
       clearSelection();
       setSelectionAnchor(scopedThreadKey(targetThreadRef));
       if (isMobile) setOpenMobile(false);

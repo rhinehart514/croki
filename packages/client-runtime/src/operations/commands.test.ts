@@ -1,6 +1,7 @@
 import {
   CommandId,
   EnvironmentId,
+  MessageId,
   ORCHESTRATION_WS_METHODS,
   ProjectId,
   ThreadId,
@@ -130,6 +131,7 @@ describe("environment commands", () => {
       yield* forkThread({
         threadId: ThreadId.make("thread-fork"),
         sourceThreadId: ThreadId.make("thread-source"),
+        sourceMessageId: MessageId.make("message-edit"),
         createdAt: "2026-06-06T00:02:00.000Z",
       }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
 
@@ -139,6 +141,7 @@ describe("environment commands", () => {
           commandId: "00000000-0000-4000-8000-000000000000",
           threadId: "thread-fork",
           sourceThreadId: "thread-source",
+          sourceMessageId: "message-edit",
           createdAt: "2026-06-06T00:02:00.000Z",
         },
       ]);

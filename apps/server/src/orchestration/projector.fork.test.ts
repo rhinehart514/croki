@@ -60,6 +60,15 @@ const readModel: OrchestrationReadModel = {
           role: "user",
           text: "hello",
           turnId: sourceTurnId,
+          attachments: [
+            {
+              type: "image",
+              id: "source-image",
+              name: "source.png",
+              mimeType: "image/png",
+              sizeBytes: 42,
+            },
+          ],
           streaming: false,
           createdAt,
           updatedAt: createdAt,
@@ -190,5 +199,126 @@ it.effect("atomically projects a sanitized, target-scoped thread fork", () =>
       providerName: null,
       activeTurnId: null,
     });
+  }),
+);
+
+it.effect("forks immediately before the selected user message", () =>
+  Effect.gen(function* () {
+    const next = yield* projectEvent(readModel, {
+      ...event,
+      payload: {
+        ...event.payload,
+        forkPoint: {
+          messageId: sourceUserMessageId,
+          turnId: sourceTurnId,
+          createdAt,
+          rollbackTurns: 1,
+        },
+      },
+    });
+    const fork = next.threads.find((thread) => thread.id === targetThreadId)!;
+
+    expect(fork.title).toBe("Source (edit)");
+    expect(fork.messages).toEqual([]);
+    expect(fork.activities).toEqual([]);
+    expect(fork.proposedPlans).toEqual([]);
+    expect(fork.latestTurn).toBeNull();
+    expect(readModel.threads[0]?.messages).toHaveLength(2);
+  }),
+);
+
+it.effect("preserves settled history before a middle edit boundary", () =>
+  Effect.gen(function* () {
+    const secondTurnId = TurnId.make("turn-second");
+    const secondUserMessageId = MessageId.make("message-user-second");
+    const secondAssistantMessageId = MessageId.make("message-assistant-second");
+    const source = readModel.threads[0]!;
+    const modelWithTwoTurns: OrchestrationReadModel = {
+      ...readModel,
+      threads: [
+        {
+          ...source,
+          latestTurn: {
+            turnId: secondTurnId,
+            state: "completed",
+            requestedAt: "2026-01-02T03:05:00.000Z",
+            startedAt: "2026-01-02T03:05:00.000Z",
+            completedAt: "2026-01-02T03:05:02.000Z",
+            assistantMessageId: secondAssistantMessageId,
+          },
+          messages: [
+            ...source.messages,
+            {
+              id: secondUserMessageId,
+              role: "user",
+              text: "change direction",
+              turnId: secondTurnId,
+              streaming: false,
+              createdAt: "2026-01-02T03:05:00.000Z",
+              updatedAt: "2026-01-02T03:05:00.000Z",
+            },
+            {
+              id: secondAssistantMessageId,
+              role: "assistant",
+              text: "changed",
+              turnId: secondTurnId,
+              streaming: false,
+              createdAt: "2026-01-02T03:05:01.000Z",
+              updatedAt: "2026-01-02T03:05:02.000Z",
+            },
+          ],
+          proposedPlans: [
+            ...source.proposedPlans,
+            {
+              id: "second-plan",
+              turnId: secondTurnId,
+              planMarkdown: "later",
+              implementedAt: "2026-01-02T03:05:02.000Z",
+              implementationThreadId: sourceThreadId,
+              createdAt: "2026-01-02T03:05:01.000Z",
+              updatedAt: "2026-01-02T03:05:02.000Z",
+            },
+          ],
+          activities: [
+            ...source.activities,
+            {
+              id: EventId.make("activity-second"),
+              tone: "tool",
+              kind: "tool.completed",
+              summary: "Later tool complete",
+              payload: {},
+              turnId: secondTurnId,
+              createdAt: "2026-01-02T03:05:01.000Z",
+            },
+          ],
+        },
+      ],
+    };
+
+    const next = yield* projectEvent(modelWithTwoTurns, {
+      ...event,
+      payload: {
+        ...event.payload,
+        forkPoint: {
+          messageId: secondUserMessageId,
+          turnId: secondTurnId,
+          createdAt: "2026-01-02T03:05:00.000Z",
+          rollbackTurns: 1,
+        },
+      },
+    });
+    const fork = next.threads.find((thread) => thread.id === targetThreadId)!;
+
+    expect(fork.messages.map((message) => message.text)).toEqual(["hello", "hi"]);
+    expect(fork.messages[0]?.attachments).toEqual(source.messages[0]?.attachments);
+    expect(fork.latestTurn?.turnId).toBe(`fork:${targetThreadId}:${sourceTurnId}`);
+    expect(fork.latestTurn?.assistantMessageId).toBe(
+      `fork:${targetThreadId}:${sourceAssistantMessageId}`,
+    );
+    expect(fork.proposedPlans.map((plan) => plan.id)).toEqual(["implemented-plan"]);
+    expect(fork.activities.map((activity) => activity.id)).toEqual([
+      `fork:${targetThreadId}:activity-tool`,
+    ]);
+    expect(fork.checkpoints).toEqual([]);
   }),
 );

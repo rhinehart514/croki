@@ -188,8 +188,10 @@ import { NO_PROVIDER_MODEL_SELECTION } from "../providerInstances";
 import { useClientSettings, useEnvironmentSettings } from "../hooks/useSettings";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useForkThread } from "../hooks/useForkThread";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
+import { editFromHereDraftFromMessageText, restoreEditFromHereImages } from "../lib/editFromHere";
 import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
 import {
   deriveLogicalProjectKeyFromSettings,
@@ -1239,6 +1241,13 @@ function ChatViewContent(props: ChatViewProps) {
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
+  const forkThread = useForkThread();
+  const editFromHereRequestRef = useRef<{
+    readonly threadKey: string;
+    readonly messageId: MessageId;
+  } | null>(null);
+  const [editFromHerePendingMessageId, setEditFromHerePendingMessageId] =
+    useState<MessageId | null>(null);
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
   });
@@ -1563,6 +1572,15 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThread],
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  const activeThreadKeyRef = useRef(activeThreadKey);
+  activeThreadKeyRef.current = activeThreadKey;
+  useEffect(() => {
+    const request = editFromHereRequestRef.current;
+    if (request !== null && request.threadKey !== activeThreadKey) {
+      editFromHereRequestRef.current = null;
+      setEditFromHerePendingMessageId(null);
+    }
+  }, [activeThreadKey]);
   const continueInParent = useCallback(() => {
     if (!activeThread?.parentThreadId) return;
     void navigate({
@@ -6387,6 +6405,80 @@ function ChatViewContent(props: ChatViewProps) {
     }
     void onRevertToTurnCountRef.current(targetTurnCount);
   }, []);
+  const editFromHereUnavailableReason =
+    serverConfig?.environment.capabilities.threadEditFromHere !== true
+      ? "Edit from here requires an updated Croki server"
+      : selectedProvider !== "codex"
+        ? "Edit from here is available for Codex threads"
+        : null;
+  const onEditFromUserMessage = useCallback(
+    async (message: ChatMessage) => {
+      if (
+        !activeThreadRef ||
+        !activeThreadKey ||
+        editFromHereUnavailableReason !== null ||
+        editFromHereRequestRef.current !== null
+      ) {
+        return;
+      }
+
+      const request = { threadKey: activeThreadKey, messageId: message.id } as const;
+      editFromHereRequestRef.current = request;
+      setEditFromHerePendingMessageId(message.id);
+      let restoredImages: Awaited<ReturnType<typeof restoreEditFromHereImages>>["images"] = [];
+      try {
+        const draft = editFromHereDraftFromMessageText(message.text);
+        const restored = await restoreEditFromHereImages(message.attachments ?? []);
+        restoredImages = restored.images;
+        if (activeThreadKeyRef.current !== request.threadKey) {
+          for (const image of restored.images) URL.revokeObjectURL(image.previewUrl);
+          return;
+        }
+
+        const targetThreadRef = await forkThread(activeThreadRef, {
+          sourceMessageId: message.id,
+          failureTitle: "Could not edit from here",
+          prepareTarget: (targetRef) => {
+            const store = useComposerDraftStore.getState();
+            store.setPrompt(targetRef, draft.prompt);
+            store.setReviewComments(targetRef, draft.reviewComments);
+            store.addImages(targetRef, restored.images);
+          },
+          shouldOpenTarget: () => activeThreadKeyRef.current === request.threadKey,
+        });
+
+        if (targetThreadRef === null) {
+          for (const image of restored.images) URL.revokeObjectURL(image.previewUrl);
+          return;
+        }
+        if (restored.failedCount > 0) {
+          toastManager.add(
+            stackedThreadToast({
+              type: "warning",
+              title: `Branch created without ${restored.failedCount === 1 ? "an image" : `${restored.failedCount} images`}`,
+              description:
+                "The original Thread is unchanged. Add the missing image again before sending.",
+            }),
+          );
+        }
+      } catch (error) {
+        for (const image of restoredImages) URL.revokeObjectURL(image.previewUrl);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not edit from here",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
+        );
+      } finally {
+        if (editFromHereRequestRef.current === request) {
+          editFromHereRequestRef.current = null;
+          setEditFromHerePendingMessageId(null);
+        }
+      }
+    },
+    [activeThreadKey, activeThreadRef, editFromHereUnavailableReason, forkThread],
+  );
 
   // Empty state: no active thread
   if (!activeThread) {
@@ -6665,6 +6757,9 @@ function ChatViewContent(props: ChatViewProps) {
                 {...(canvasEnabled ? { onOpenCanvasArtifact: openCanvasArtifact } : {})}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
+                editFromHereUnavailableReason={editFromHereUnavailableReason}
+                editFromHerePendingMessageId={editFromHerePendingMessageId}
+                onEditFromUserMessage={onEditFromUserMessage}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 markdownCwd={gitCwd ?? undefined}

@@ -242,6 +242,9 @@ describe("ProviderCommandReactor", () => {
     const respondToRequest = vi.fn<ProviderServiceShape["respondToRequest"]>(() => Effect.void);
     const respondToUserInput = vi.fn<ProviderServiceShape["respondToUserInput"]>(() => Effect.void);
     const forkConversation = vi.fn<ProviderServiceShape["forkConversation"]>(() => Effect.void);
+    const rollbackConversation = vi.fn<ProviderServiceShape["rollbackConversation"]>(
+      () => Effect.void,
+    );
     const stopSession = vi.fn((input: unknown) =>
       Effect.sync(() => {
         const threadId =
@@ -311,7 +314,6 @@ describe("ProviderCommandReactor", () => {
       },
     ];
 
-    const unsupported = () => Effect.die(new Error("Unsupported provider call in test")) as never;
     const service: ProviderServiceShape = {
       startSession: startSession as ProviderServiceShape["startSession"],
       sendTurn: sendTurn as ProviderServiceShape["sendTurn"],
@@ -346,7 +348,7 @@ describe("ProviderCommandReactor", () => {
           },
         });
       },
-      rollbackConversation: () => unsupported(),
+      rollbackConversation,
       get streamEvents() {
         return Stream.fromPubSub(runtimeEventPubSub);
       },
@@ -506,6 +508,7 @@ describe("ProviderCommandReactor", () => {
       respondToRequest,
       respondToUserInput,
       forkConversation,
+      rollbackConversation,
       stopSession,
       renameBranch,
       refreshStatus,
@@ -515,10 +518,49 @@ describe("ProviderCommandReactor", () => {
       stateDir,
       drain,
       runEffect,
+      prepareSession: reactor.prepareSession,
       get titleRegenerationCompletionDispatchAttempts() {
         return titleRegenerationCompletionDispatchAttempts;
       },
     };
+  }
+
+  async function prepareCompletedForkSource(
+    harness: Awaited<ReturnType<typeof createHarness>>,
+    sourceThreadId = ThreadId.make("thread-1"),
+  ) {
+    await harness.runEffect(harness.prepareSession(sourceThreadId, "2026-01-01T00:00:00.000Z"));
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.user.append",
+        commandId: CommandId.make("cmd-edit-source-user"),
+        threadId: sourceThreadId,
+        messageId: asMessageId("edit-user-message-1"),
+        text: "Prompt 1",
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-edit-source-assistant-delta"),
+        threadId: sourceThreadId,
+        messageId: asMessageId("edit-assistant-message-1"),
+        turnId: asTurnId("edit-turn-1"),
+        delta: "Response 1",
+        createdAt: "2026-01-01T00:00:03.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-edit-source-assistant-complete"),
+        threadId: sourceThreadId,
+        messageId: asMessageId("edit-assistant-message-1"),
+        turnId: asTurnId("edit-turn-1"),
+        createdAt: "2026-01-01T00:00:05.000Z",
+      }),
+    );
   }
 
   it("prepares a provider session for voice before the first text turn", async () => {
@@ -3348,6 +3390,139 @@ describe("ProviderCommandReactor", () => {
           },
         });
       }),
+  );
+
+  effectIt.effect("rolls back only the forked Codex conversation for edit from here", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness());
+      const sourceThreadId = ThreadId.make("thread-1");
+      yield* Effect.promise(() => prepareCompletedForkSource(harness, sourceThreadId));
+      yield* harness.engine.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.make("cmd-thread-edit-from-here"),
+        threadId: ThreadId.make("thread-edit"),
+        sourceThreadId,
+        sourceMessageId: asMessageId("edit-user-message-1"),
+        createdAt: "2026-01-01T00:03:07.000Z",
+      });
+
+      yield* Effect.promise(() =>
+        waitFor(() => harness.rollbackConversation.mock.calls.length === 1),
+      );
+      yield* Effect.promise(() => harness.drain());
+
+      expect(harness.rollbackConversation).toHaveBeenCalledWith({
+        threadId: ThreadId.make("thread-edit"),
+        numTurns: 1,
+      });
+      expect(harness.stopSession).toHaveBeenCalledWith({
+        threadId: ThreadId.make("thread-edit"),
+      });
+
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      const source = readModel.threads.find((thread) => thread.id === sourceThreadId);
+      const target = readModel.threads.find((thread) => thread.id === ThreadId.make("thread-edit"));
+      expect(source?.messages).toHaveLength(2);
+      expect(target).toMatchObject({
+        title: "Thread (edit)",
+        forkedFromThreadId: sourceThreadId,
+        messages: [],
+        session: {
+          status: "stopped",
+          providerName: "codex",
+        },
+      });
+    }),
+  );
+
+  effectIt.effect("leaves the edit target recoverable when Codex rollback fails", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => createHarness());
+      yield* Effect.promise(() => prepareCompletedForkSource(harness));
+      harness.rollbackConversation.mockImplementationOnce(() =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: ProviderDriverKind.make("codex"),
+            method: "thread.rollback",
+            detail: "Native target rollback failed.",
+          }),
+        ),
+      );
+
+      yield* harness.engine.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.make("cmd-thread-edit-rollback-failure"),
+        threadId: ThreadId.make("thread-edit-rollback-failure"),
+        sourceThreadId: ThreadId.make("thread-1"),
+        sourceMessageId: asMessageId("edit-user-message-1"),
+        createdAt: "2026-01-01T00:03:07.000Z",
+      });
+
+      yield* Effect.promise(() =>
+        waitFor(async () => {
+          const readModel = await harness.readModel();
+          return readModel.threads.some(
+            (thread) =>
+              thread.id === ThreadId.make("thread-edit-rollback-failure") &&
+              thread.session?.status === "error",
+          );
+        }),
+      );
+
+      const target = (yield* Effect.promise(() => harness.readModel())).threads.find(
+        (thread) => thread.id === ThreadId.make("thread-edit-rollback-failure"),
+      );
+      expect(target?.session).toMatchObject({
+        status: "error",
+        lastError: "Native target rollback failed.",
+      });
+      expect(harness.stopSession).toHaveBeenCalledWith({
+        threadId: ThreadId.make("thread-edit-rollback-failure"),
+      });
+    }),
+  );
+
+  effectIt.effect("rejects edit from here before forking an unsupported provider", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          threadModelSelection: {
+            instanceId: ProviderInstanceId.make("claude"),
+            model: "claude-sonnet-4-5",
+          },
+        }),
+      );
+      yield* Effect.promise(() => prepareCompletedForkSource(harness));
+
+      yield* harness.engine.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.make("cmd-thread-edit-unsupported"),
+        threadId: ThreadId.make("thread-edit-unsupported"),
+        sourceThreadId: ThreadId.make("thread-1"),
+        sourceMessageId: asMessageId("edit-user-message-1"),
+        createdAt: "2026-01-01T00:03:07.000Z",
+      });
+
+      yield* Effect.promise(() =>
+        waitFor(async () => {
+          const readModel = await harness.readModel();
+          return readModel.threads.some(
+            (thread) =>
+              thread.id === ThreadId.make("thread-edit-unsupported") &&
+              thread.session?.status === "error",
+          );
+        }),
+      );
+
+      expect(harness.forkConversation).not.toHaveBeenCalled();
+      const target = (yield* Effect.promise(() => harness.readModel())).threads.find(
+        (thread) => thread.id === ThreadId.make("thread-edit-unsupported"),
+      );
+      expect(target?.session).toMatchObject({
+        status: "error",
+        lastError: "Edit from here is available only for Codex threads in this version.",
+      });
+    }),
   );
 
   effectIt.effect("leaves a recoverable target error when the provider fork fails", () =>

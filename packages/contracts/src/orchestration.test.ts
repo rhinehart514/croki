@@ -442,12 +442,14 @@ it.effect("decodes thread fork commands and requested events", () =>
       commandId: "command-fork",
       threadId: "thread-fork",
       sourceThreadId: "thread-source",
+      sourceMessageId: "message-edit",
       createdAt,
     });
     assert.strictEqual(command.type, "thread.fork");
     if (command.type !== "thread.fork") return;
     assert.strictEqual(command.threadId, "thread-fork");
     assert.strictEqual(command.sourceThreadId, "thread-source");
+    assert.strictEqual(command.sourceMessageId, "message-edit");
 
     const event = yield* decodeOrchestrationEvent({
       sequence: 1,
@@ -463,12 +465,19 @@ it.effect("decodes thread fork commands and requested events", () =>
       payload: {
         threadId: "thread-fork",
         sourceThreadId: "thread-source",
+        forkPoint: {
+          messageId: "message-edit",
+          turnId: "turn-edit",
+          createdAt,
+          rollbackTurns: 2,
+        },
         createdAt,
       },
     });
     assert.strictEqual(event.type, "thread.fork-requested");
     if (event.type !== "thread.fork-requested") return;
     assert.strictEqual(event.payload.sourceThreadId, "thread-source");
+    assert.strictEqual(event.payload.forkPoint?.rollbackTurns, 2);
   }),
 );
 

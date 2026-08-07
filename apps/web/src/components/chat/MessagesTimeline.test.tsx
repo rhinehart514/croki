@@ -189,6 +189,9 @@ function buildProps() {
     onOpenTurnDiff: () => {},
     revertTurnCountByUserMessageId: new Map(),
     onRevertUserMessage: () => {},
+    editFromHereUnavailableReason: null,
+    editFromHerePendingMessageId: null,
+    onEditFromUserMessage: () => {},
     isRevertingCheckpoint: false,
     onImageExpand: () => {},
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
@@ -671,6 +674,62 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("Show full message");
     expect(markup).toContain('data-user-message-collapsible="false"');
     expect(markup).toContain("rounded-2xl bg-accent p-3");
+  });
+
+  it("offers Edit from here on a completed provider Thread", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[buildUserTimelineEntry("Try another direction.")]}
+      />,
+    );
+    const button = markup.match(/<button[^>]*aria-label="Edit from here"[^>]*>/)?.[0];
+
+    expect(button).toBeDefined();
+    expect(button).toContain('aria-disabled="false"');
+    expect(markup).toContain("Files stay as they are.");
+  });
+
+  it("keeps Edit from here visible but unavailable for unsupported providers", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        editFromHereUnavailableReason="Edit from here is available for Codex threads"
+        timelineEntries={[buildUserTimelineEntry("Try another direction.")]}
+      />,
+    );
+    const button = markup.match(/<button[^>]*aria-label="Edit from here"[^>]*>/)?.[0];
+
+    expect(button).toContain('aria-disabled="true"');
+    expect(button).not.toContain('disabled=""');
+    expect(markup).toContain("Edit from here is available for Codex threads");
+  });
+
+  it("exposes branch creation as a single in-flight action", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        editFromHerePendingMessageId={MessageId.make("message-1")}
+        timelineEntries={[
+          buildUserTimelineEntry("Try another direction."),
+          {
+            ...buildUserTimelineEntry("A different prompt."),
+            id: "entry-user-2",
+            message: {
+              ...buildUserTimelineEntry("A different prompt.").message,
+              id: MessageId.make("message-2"),
+            },
+          },
+        ]}
+      />,
+    );
+    const buttons = markup.match(/<button[^>]*aria-label="Edit from here"[^>]*>/g) ?? [];
+
+    expect(buttons).toHaveLength(2);
+    expect(buttons.every((button) => button.includes('aria-disabled="true"'))).toBe(true);
+    expect(buttons[0]).toContain('aria-busy="true"');
+    expect(markup).toContain("Creating conversation branch…");
+    expect(markup).toContain("Wait for the conversation branch to finish");
   });
 
   it("renders inline terminal labels with the composer chip UI", () => {

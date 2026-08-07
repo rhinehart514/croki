@@ -633,6 +633,9 @@ const ThreadForkCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   sourceThreadId: ThreadId,
+  // When present, fork immediately before this completed user message. The
+  // selected prompt belongs in the target composer, not its transcript.
+  sourceMessageId: Schema.optional(MessageId),
   createdAt: IsoDateTime,
 });
 
@@ -1121,6 +1124,14 @@ export const ThreadCreatedPayload = Schema.Struct({
 export const ThreadForkRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   sourceThreadId: ThreadId,
+  forkPoint: Schema.optional(
+    Schema.Struct({
+      messageId: MessageId,
+      turnId: TurnId,
+      createdAt: IsoDateTime,
+      rollbackTurns: NonNegativeInt,
+    }),
+  ),
   createdAt: IsoDateTime,
 });
 
