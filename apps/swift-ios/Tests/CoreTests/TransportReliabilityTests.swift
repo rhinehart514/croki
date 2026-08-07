@@ -255,7 +255,7 @@ final class TransportReliabilityTests: XCTestCase {
         XCTAssertEqual(hosted.label, "Big O")
 
         let loose = try PairingURL.parseFields("192.168.1.7:18773 N735KQXJ5SJW")
-        XCTAssertEqual(loose.host, "https://192.168.1.7:18773")
+        XCTAssertEqual(loose.host, "http://192.168.1.7:18773")
         XCTAssertEqual(loose.pairingCode, "N735KQXJ5SJW")
 
         let wrapped = try PairingURL.pairingURL(

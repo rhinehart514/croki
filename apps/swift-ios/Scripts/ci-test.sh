@@ -54,5 +54,7 @@ xcodebuild test \
   -destination "platform=iOS Simulator,id=${SIMULATOR_ID}" \
   -derivedDataPath "${DERIVED_DATA_PATH}" \
   -maximum-concurrent-test-simulator-destinations 1 \
+  -retry-tests-on-failure \
+  -test-iterations 2 \
   -only-testing:T3CodeTests \
   CODE_SIGNING_ALLOWED=NO

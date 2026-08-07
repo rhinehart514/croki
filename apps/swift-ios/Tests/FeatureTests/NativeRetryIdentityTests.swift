@@ -548,6 +548,7 @@ private struct PartialBootstrapWebSocketConnector: WebSocketConnecting {
 private actor AmbiguousDispatchWebSocketConnection: WebSocketConnection {
     private var commands: [JSONValue] = []
     private var queuedResponses: [Data] = []
+    private var queuedReceiveError: URLError?
     private var didConnect = false
     private var connectionWaiters: [CheckedContinuation<Void, Never>] = []
     private var receiver: CheckedContinuation<Data, Error>?
@@ -567,11 +568,15 @@ private actor AmbiguousDispatchWebSocketConnection: WebSocketConnection {
         if request["tag"]?.stringValue == RPCMethod.dispatchCommand.rawValue,
            let payload = request["payload"] {
             commands.append(payload)
-            throw URLError(.networkConnectionLost)
+            failReceive(with: URLError(.networkConnectionLost))
         }
     }
 
     func receive() async throws -> Data {
+        if let queuedReceiveError {
+            self.queuedReceiveError = nil
+            throw queuedReceiveError
+        }
         if !queuedResponses.isEmpty {
             return queuedResponses.removeFirst()
         }
@@ -602,6 +607,18 @@ private actor AmbiguousDispatchWebSocketConnection: WebSocketConnection {
             receiver.resume(returning: data)
         } else {
             queuedResponses.append(data)
+        }
+    }
+
+    /// The command crossed the socket, but its response was lost. This keeps
+    /// the fixture on the ambiguous-delivery path instead of the safe HTTP
+    /// fallback used when `send` itself fails.
+    private func failReceive(with error: URLError) {
+        if let receiver {
+            self.receiver = nil
+            receiver.resume(throwing: error)
+        } else {
+            queuedReceiveError = error
         }
     }
 }
