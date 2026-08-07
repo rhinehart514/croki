@@ -16,6 +16,7 @@ import {
   ListProjectionThreadMessagesInput,
   ProjectionThreadMessage,
 } from "../Services/ProjectionThreadMessages.ts";
+import { normalizeThreadSearchText } from "../../orchestration/threadSearchText.ts";
 
 const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   Struct.assign({
@@ -48,6 +49,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
     execute: (row) => {
       const nextAttachmentsJson =
         row.attachments !== undefined ? JSON.stringify(row.attachments) : null;
+      const searchText = normalizeThreadSearchText(row.text);
       return sql`
         INSERT INTO projection_thread_messages (
           message_id,
@@ -55,6 +57,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           turn_id,
           role,
           text,
+          search_text,
           attachments_json,
           is_streaming,
           created_at,
@@ -66,6 +69,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           ${row.turnId},
           ${row.role},
           ${row.text},
+          ${searchText},
           COALESCE(
             ${nextAttachmentsJson},
             (
@@ -84,6 +88,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           turn_id = excluded.turn_id,
           role = excluded.role,
           text = excluded.text,
+          search_text = excluded.search_text,
           attachments_json = COALESCE(
             excluded.attachments_json,
             projection_thread_messages.attachments_json

@@ -13,6 +13,8 @@ import type {
   OrchestrationProject,
   OrchestrationProjectShell,
   OrchestrationReadModel,
+  OrchestrationSearchThreadsInput,
+  OrchestrationSearchThreadsResult,
   OrchestrationShellSnapshot,
   OrchestrationThread,
   OrchestrationThreadDetailSnapshot,
@@ -100,6 +102,14 @@ export interface ProjectionSnapshotQueryShape {
   readonly getProjectPerception?: (
     input: OrchestrationGetProjectPerceptionInput,
   ) => Effect.Effect<Option.Option<CrokiProjectPerceptionSnapshot>, ProjectionRepositoryError>;
+
+  /**
+   * Search active thread navigation metadata, user messages, and canonical
+   * assistant outputs without hydrating thread detail snapshots.
+   */
+  readonly searchThreads: (
+    input: OrchestrationSearchThreadsInput,
+  ) => Effect.Effect<OrchestrationSearchThreadsResult, ProjectionRepositoryError>;
 
   /**
    * Read the latest projection snapshot sequence without hydrating read-model

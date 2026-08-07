@@ -16,7 +16,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/bin.ts",
-    "build:bundle": "vp pack",
+    "build:bundle": "vp pack && vp pack src/service-launcher.ts --out-dir dist --no-clean",
     "start": "node dist/bin.mjs",
     "typecheck": "tsgo --noEmit",
     "test": "vp test run"
@@ -32,6 +32,7 @@
     "@pierre/diffs": "catalog:",
     "effect": "catalog:",
     "node-pty": "^1.1.0",
+    "unicode-case-folding": "^1.1.1",
     "yaml": "catalog:"
   },
   "devDependencies": {

@@ -57,10 +57,10 @@ Keep these concepts separate:
 - **Tools**: actions available to the runtime.
 - **Harness**: an explicit policy that changes how the agent approaches a task.
 
-The web composer ships `Native` and `GTM v1`. Native is the default and adds no
-Croki behavior prompt. GTM v1 is named, visible, scoped to one turn, resets to
+The web composer ships `Native` and `Product`. Native is the default and adds no
+Croki behavior prompt. Product is named, visible, scoped to one turn, resets to
 Native after a successful send, and cannot silently modify founder-approved
-Canvas truth.
+application truth.
 
 The old Canvas-triggered preamble and fixed OpenClaw Sol/Luna policy have been
 removed. Canvas context and tools are available for project turns without

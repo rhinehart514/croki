@@ -34,7 +34,7 @@ jobs:
         vars.CROKI_RELEASE_BRANCH != '' &&
         github.ref_name == vars.CROKI_RELEASE_BRANCH
       )
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
       name: production

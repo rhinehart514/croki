@@ -7,7 +7,12 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
-import { type CodexSettings, type ModelSelection } from "@croki/contracts";
+import {
+  type CodexSettings,
+  DEFAULT_TEXT_GENERATION_REASONING_EFFORT,
+  type ModelSelection,
+  TextGenerationError,
+} from "@croki/contracts";
 import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@croki/shared/git";
 import { resolveSpawnCommand } from "@croki/shared/shell";
 
@@ -15,7 +20,6 @@ import { resolveAttachmentPath } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
 import { expandHomePath } from "../pathExpansion.ts";
 import { codexExecLaunchArgs, resolveCodexLaunchArgs } from "../provider/Layers/codexLaunchArgs.ts";
-import { TextGenerationError } from "@croki/contracts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
   buildBranchNamePrompt,
@@ -33,7 +37,6 @@ import {
 import { getModelSelectionStringOptionValue } from "@croki/shared/model";
 import { getCodexServiceTierOptionValue } from "../codexModelOptions.ts";
 
-const CODEX_GIT_TEXT_GENERATION_REASONING_EFFORT = "low";
 const CODEX_TIMEOUT_MS = 180_000;
 const encodeJsonString = Schema.encodeEffect(Schema.UnknownFromJsonString);
 /**
@@ -178,7 +181,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       const launchArgs = resolveCodexLaunchArgs(codexConfig.launchArgs, resolvedEnvironment);
       const reasoningEffort =
         getModelSelectionStringOptionValue(modelSelection, "reasoningEffort") ??
-        CODEX_GIT_TEXT_GENERATION_REASONING_EFFORT;
+        DEFAULT_TEXT_GENERATION_REASONING_EFFORT;
       const serviceTier = getCodexServiceTierOptionValue(modelSelection);
       const spawnCommand = yield* resolveSpawnCommand(
         codexConfig.binaryPath || "codex",
@@ -384,6 +387,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       );
       const { prompt, outputSchema } = buildThreadTitlePrompt({
         message: input.message,
+        previousTitle: input.previousTitle,
         attachments: input.attachments,
       });
 

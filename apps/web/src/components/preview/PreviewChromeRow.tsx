@@ -7,7 +7,6 @@ import {
   MousePointerClick,
   PictureInPicture2,
   RotateCw,
-  Sparkles,
 } from "lucide-react";
 import {
   type FormEvent,
@@ -57,8 +56,6 @@ interface Props {
   pickDisabled?: boolean | undefined;
   /** Optional reason string surfaced in the disabled tooltip. */
   pickDisabledReason?: string | undefined;
-  onExploreOptions?: (() => void) | undefined;
-  exploreOptionsDisabled?: boolean | undefined;
   /**
    * Trailing slot rendered after the URL input. Used by the preview view
    * to mount the three-dot menu (hard reload, devtools, zoom, clear data).
@@ -94,8 +91,6 @@ export function PreviewChromeRow({
   pickActive,
   pickDisabled,
   pickDisabledReason,
-  onExploreOptions,
-  exploreOptionsDisabled,
   trailingActions,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -282,19 +277,6 @@ export function PreviewChromeRow({
                   : "Annotate elements, regions, and drawings"}
             </TooltipPopup>
           </Tooltip>
-        ) : null}
-        {onExploreOptions ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 shrink-0 px-2 text-xs"
-            onClick={onExploreOptions}
-            disabled={exploreOptionsDisabled}
-            type="button"
-          >
-            <Sparkles />
-            Alternatives
-          </Button>
         ) : null}
         {onCapture ? (
           <Tooltip>

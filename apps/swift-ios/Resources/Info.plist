@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>$(PRODUCT_BUNDLE_IDENTIFIER).refresh</string>
+    </array>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLName</key>
+            <string>Croki SwiftUI Routes</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>croki-native</string>
+            </array>
+        </dict>
+    </array>
+    <key>T3ConnectClerkJWTTemplate</key>
+    <string>$(CROKI_CLERK_JWT_TEMPLATE)</string>
+    <key>T3ConnectClerkPublishableKey</key>
+    <string>$(CROKI_CLERK_PUBLISHABLE_KEY)</string>
+    <key>T3ConnectRelayHTTPURL</key>
+    <string>$(CROKI_RELAY_URL)</string>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>remote-notification</string>
+    </array>
+</dict>
+</plist>

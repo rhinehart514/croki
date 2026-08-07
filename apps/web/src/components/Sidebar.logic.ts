@@ -16,8 +16,12 @@ import { resolveServerBackedAppStageLabel } from "../branding.logic";
 export const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
 export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 100;
 // Visible sidebar rows are prewarmed into the thread-detail cache so opening a
-// nearby thread usually reuses an already-hot subscription.
-export const SIDEBAR_THREAD_PREWARM_LIMIT = 10;
+// nearby thread usually reuses an already-hot subscription. Each prewarmed
+// thread holds a live, fully hydrated detail subscription (all messages and
+// activities, growing as agents work) for as long as the row stays visible,
+// so this limit is a direct renderer-heap and server-load multiplier. Keep it
+// small; cold opens still render instantly from the cached snapshot.
+export const SIDEBAR_THREAD_PREWARM_LIMIT = 3;
 type SidebarProject = {
   id: string;
   title: string;
@@ -123,6 +127,23 @@ export function isSidebarThreadForkBlocked(
   );
 }
 
+export function buildBulkTitleRegenerationContextMenuItem(input: {
+  supportedCount: number;
+  actionableCount: number;
+}): ContextMenuItem<"regenerate-title"> | null {
+  if (input.supportedCount === 0) return null;
+  if (input.actionableCount === 0) {
+    return {
+      id: "regenerate-title",
+      label: `Regenerating… (${input.supportedCount})`,
+      disabled: true,
+    };
+  }
+  return {
+    id: "regenerate-title",
+    label: `Regenerate titles (${input.actionableCount})`,
+  };
+}
 export interface ThreadStatusPill {
   label:
     | "Working"
@@ -867,6 +888,7 @@ export function orderThreadsWithChildren<
     readonly environmentId: string;
     readonly id: string;
     readonly parentThreadId?: string | null | undefined;
+    readonly workerView?: "threads" | "activity" | undefined;
   },
 >(threads: readonly TThread[]): TThread[] {
   const childKeys = new Set(
@@ -874,10 +896,18 @@ export function orderThreadsWithChildren<
       .filter((thread) => thread.parentThreadId != null)
       .map((thread) => `${thread.environmentId}\0${thread.id}`),
   );
+  const suppressedChildKeys = new Set<string>();
   const childrenByParent = new Map<string, TThread[]>();
+  const threadByKey = new Map(
+    threads.map((thread) => [`${thread.environmentId}\0${thread.id}`, thread]),
+  );
   for (const thread of threads) {
     if (!thread.parentThreadId) continue;
     const parentKey = `${thread.environmentId}\0${thread.parentThreadId}`;
+    if ((threadByKey.get(parentKey)?.workerView ?? "threads") !== "threads") {
+      suppressedChildKeys.add(`${thread.environmentId}\0${thread.id}`);
+      continue;
+    }
     const children = childrenByParent.get(parentKey) ?? [];
     children.push(thread);
     childrenByParent.set(parentKey, children);
@@ -891,7 +921,13 @@ export function orderThreadsWithChildren<
   }
   for (const thread of threads) {
     const threadKey = `${thread.environmentId}\0${thread.id}`;
-    if (childKeys.has(threadKey) && !ordered.includes(thread)) ordered.push(thread);
+    if (
+      childKeys.has(threadKey) &&
+      !suppressedChildKeys.has(threadKey) &&
+      !ordered.includes(thread)
+    ) {
+      ordered.push(thread);
+    }
   }
   return ordered;
 }

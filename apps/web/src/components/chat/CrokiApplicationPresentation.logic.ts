@@ -14,9 +14,13 @@ export type CrokiApplicationState =
   | { readonly status: "loading" }
   | { readonly status: "absent" }
   | { readonly status: "unavailable" }
-  | { readonly status: "oversized" }
-  | { readonly status: "truncated" }
-  | { readonly status: "invalid"; readonly errorCode: CrokiApplicationErrorCode }
+  | { readonly status: "oversized"; readonly sourcePath: string }
+  | { readonly status: "truncated"; readonly sourcePath: string }
+  | {
+      readonly status: "invalid";
+      readonly errorCode: CrokiApplicationErrorCode;
+      readonly sourcePath: string;
+    }
   | {
       readonly status: "loaded";
       readonly application: CrokiApplication;
@@ -34,19 +38,22 @@ export function deriveCrokiApplicationState(
   query: CrokiApplicationFileQueryState,
 ): CrokiApplicationState {
   if (query.data) {
-    if (query.data.truncated) return { status: "truncated" };
+    if (query.data.truncated) {
+      return { status: "truncated", sourcePath: query.data.relativePath };
+    }
     if (query.data.byteLength > CROKI_APPLICATION_LIMITS.sourceBytes) {
-      return { status: "oversized" };
+      return { status: "oversized", sourcePath: query.data.relativePath };
     }
     try {
       const application = parseCrokiApplication(query.data.contents);
       return buildCrokiApplicationPrompt(application, query.data.relativePath) === null
-        ? { status: "oversized" }
+        ? { status: "oversized", sourcePath: query.data.relativePath }
         : { status: "loaded", application, sourcePath: query.data.relativePath };
     } catch (error) {
       return {
         status: "invalid",
         errorCode: error instanceof CrokiApplicationParseError ? error.code : "malformed",
+        sourcePath: query.data.relativePath,
       };
     }
   }
@@ -56,13 +63,19 @@ export function deriveCrokiApplicationState(
   return { status: "absent" };
 }
 
-/** Prefer the native .croki object while allowing existing projects to migrate lazily. */
+/** Prefer the native application brief while allowing older repositories to migrate lazily. */
 export function deriveCrokiApplicationStateWithLegacy(
   current: CrokiApplicationFileQueryState,
   legacy: CrokiApplicationFileQueryState,
 ): CrokiApplicationState {
   const currentState = deriveCrokiApplicationState(current);
   return currentState.status === "absent" ? deriveCrokiApplicationState(legacy) : currentState;
+}
+
+export function applicationFocusLabel(application: CrokiApplication): string {
+  const { released, building } = application;
+  if (released && building) return `${released.version} → ${building.version}`;
+  return building?.version ?? released?.version ?? application.application.name;
 }
 
 function isMissingApplicationFile(value: unknown): boolean {

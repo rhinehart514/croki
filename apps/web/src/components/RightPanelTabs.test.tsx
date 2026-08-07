@@ -35,22 +35,15 @@ describe("RightPanelEmptyState", () => {
     filesAvailable: true,
   };
 
-  it("presents Preview as the product entry and omits disabled Canvas", () => {
-    const markup = renderToStaticMarkup(
-      <RightPanelEmptyState {...props} canvasAvailable={false} previewIdeationAvailable />,
-    );
-
-    expect(markup).toContain("Preview");
-    expect(markup).toContain("Open an app, component, or product idea.");
-    expect(markup).not.toContain("Canvas");
-  });
-
-  it("does not promise component or idea exploration while the beta is off", () => {
+  it("presents Preview as one running-app surface and omits disabled Canvas", () => {
     const markup = renderToStaticMarkup(
       <RightPanelEmptyState {...props} canvasAvailable={false} />,
     );
+
+    expect(markup).toContain("Preview");
     expect(markup).toContain("Open and interact with a running app.");
     expect(markup).not.toContain("component or product idea");
+    expect(markup).not.toContain("Canvas");
   });
 
   it("offers Canvas only when its beta is enabled", () => {

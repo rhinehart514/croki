@@ -22,6 +22,7 @@ import { appAtomRegistry } from "./state/atom-registry";
 import { OverlayPortalHost } from "./components/OverlayPortal";
 import { appBlurTargetRef } from "./lib/appBlurTarget";
 import { useThemeColor } from "./lib/useThemeColor";
+import { checkForAppUpdateOnLaunch } from "./features/updates/app-updates";
 
 import "../global.css";
 
@@ -57,6 +58,14 @@ function SplashScreenCoordinator() {
   return null;
 }
 
+function AppUpdateCoordinator() {
+  useEffect(() => {
+    void checkForAppUpdateOnLaunch();
+  }, []);
+
+  return null;
+}
+
 export default function App() {
   const colorScheme = useColorScheme();
   const statusBarBg = useThemeColor("--color-status-bar");
@@ -66,6 +75,7 @@ export default function App() {
       <CloudAuthProvider>
         <AppearancePreferencesProvider>
           <SplashScreenCoordinator />
+          <AppUpdateCoordinator />
           <GestureHandlerRootView className="flex-1">
             <KeyboardProvider statusBarTranslucent>
               <SafeAreaProvider>

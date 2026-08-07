@@ -7,6 +7,7 @@
  * @module ProjectionThreadRepository
  */
 import {
+  CommandId,
   IsoDateTime,
   ModelSelection,
   NonNegativeInt,
@@ -15,6 +16,7 @@ import {
   RuntimeMode,
   ThreadId,
   TurnId,
+  WorkerView,
 } from "@croki/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -34,6 +36,7 @@ export const ProjectionThread = Schema.Struct({
   worktreePath: Schema.NullOr(Schema.String),
   forkedFromThreadId: Schema.NullOr(ThreadId),
   parentThreadId: Schema.NullOr(ThreadId),
+  workerView: WorkerView,
   latestTurnId: Schema.NullOr(TurnId),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -42,6 +45,9 @@ export const ProjectionThread = Schema.Struct({
   settledAt: Schema.NullOr(IsoDateTime),
   snoozedUntil: Schema.NullOr(IsoDateTime),
   snoozedAt: Schema.NullOr(IsoDateTime),
+  pinnedAt: Schema.NullOr(IsoDateTime),
+  titleRegenerationRequestId: Schema.optional(Schema.NullOr(CommandId)),
+  titleRegenerationStartedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   latestUserMessageAt: Schema.NullOr(IsoDateTime),
   pendingApprovalCount: NonNegativeInt,
   pendingUserInputCount: NonNegativeInt,

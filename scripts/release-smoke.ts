@@ -271,6 +271,14 @@ function assertCrokiReleaseGuards(): void {
       `Mobile ${name} workflow still uses the inherited Expo credential.`,
     );
   }
+
+  for (const guard of ["Verify exact Croki server package exists", "npm view"]) {
+    assertContains(
+      mobilePreviewWorkflow,
+      guard,
+      `Mobile preview workflow is missing exact-package guard: ${guard}`,
+    );
+  }
 }
 
 function assertCrokiReleasePlan(): void {
@@ -310,16 +318,16 @@ function assertCrokiReleasePlan(): void {
       },
     },
   );
-  if (githubOnlyResult.status !== 0) {
-    throw new Error(`Croki GitHub-only release plan failed:\n${githubOnlyResult.stderr}`);
+  if (githubOnlyResult.status === 0) {
+    throw new Error("Croki GitHub-only release plan bypassed exact-version CLI publication.");
   }
   const githubOnlyPlan = JSON.parse(githubOnlyResult.stdout) as {
     readonly status?: unknown;
     readonly enabled?: unknown;
     readonly destinations?: Record<string, { readonly status?: unknown }>;
   };
-  if (githubOnlyPlan.status !== "enabled" || githubOnlyPlan.enabled !== true) {
-    throw new Error("Croki GitHub-only release plan must be enabled for the owned repository.");
+  if (githubOnlyPlan.status !== "invalid" || githubOnlyPlan.enabled !== false) {
+    throw new Error("Croki GitHub-only release plan must fail closed without CLI publication.");
   }
   for (const category of ["cli", "relay", "web", "signing", "discord", "mobile"]) {
     if (githubOnlyPlan.destinations?.[category]?.status !== "disabled") {

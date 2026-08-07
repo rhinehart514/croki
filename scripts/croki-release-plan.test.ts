@@ -21,7 +21,7 @@ const safeProductionEnvironment = {
   CROKI_RELEASE_APP_ID: "app-id-secret",
   CROKI_RELEASE_APP_PRIVATE_KEY: "private-key-secret",
   CROKI_CLI_PUBLISH_ENABLED: "true",
-  CROKI_CLI_PACKAGE: "@example/croki",
+  CROKI_CLI_PACKAGE: "croki-server",
   CROKI_RELAY_DEPLOY_ENABLED: "true",
   CROKI_RELAY_DOMAIN: "relay.croki.example",
   CROKI_WEB_DEPLOY_ENABLED: "true",
@@ -133,7 +133,7 @@ describe("Croki release plan", () => {
     expect(plan.errors.join("\n")).toContain("pushes to main");
   });
 
-  it("allows a GitHub-only release on the Croki repository", () => {
+  it("blocks a GitHub release until exact-version croki-server publication is enabled", () => {
     const plan = buildCrokiReleasePlan(
       {
         CROKI_RELEASE_ENABLED: "true",
@@ -141,14 +141,14 @@ describe("Croki release plan", () => {
         CROKI_RELEASE_BRANCH: "croki/main",
         CROKI_RELEASE_APP_ID: "app-id-secret",
         CROKI_RELEASE_APP_PRIVATE_KEY: "private-key-secret",
-        CROKI_CLI_PACKAGE: "croki",
+        CROKI_CLI_PACKAGE: "croki-server",
       },
       { production: true },
     );
     expect(plan).toMatchObject({
-      status: "enabled",
-      enabled: true,
-      valid: true,
+      status: "invalid",
+      enabled: false,
+      valid: false,
       destinations: {
         github: { status: "enabled", enabled: true },
         cli: { status: "disabled", enabled: false },
@@ -159,6 +159,83 @@ describe("Croki release plan", () => {
         mobile: { status: "disabled", enabled: false },
       },
     });
+    expect(plan.errors).toContain(
+      "Update-capable Croki clients require CROKI_CLI_PUBLISH_ENABLED=true so the exact-version croki-server package publishes first.",
+    );
+  });
+
+  it("allows a mobile preview to verify an already-published server package independently", () => {
+    const plan = buildCrokiReleasePlan(
+      {
+        CROKI_MOBILE_PREVIEW_ENABLED: "true",
+        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
+        CROKI_RELEASE_BRANCH: "croki/main",
+        CROKI_EAS_PROJECT_ID: "11111111-2222-3333-4444-555555555555",
+        CROKI_EXPO_TOKEN: "expo-token-secret",
+        CROKI_CLI_PACKAGE: "croki-server",
+      },
+      { production: true },
+    );
+
+    expect(plan).toMatchObject({
+      status: "enabled",
+      enabled: true,
+      valid: true,
+      destinations: {
+        cli: { status: "disabled", enabled: false },
+        mobile: {
+          status: "enabled",
+          enabled: true,
+          productionRequested: false,
+          previewRequested: true,
+        },
+      },
+    });
+    expect(plan.errors).toEqual([]);
+  });
+
+  it("blocks a production mobile release until server package publication is enabled", () => {
+    const plan = buildCrokiReleasePlan(
+      {
+        CROKI_MOBILE_DEPLOY_ENABLED: "true",
+        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
+        CROKI_RELEASE_BRANCH: "croki/main",
+        CROKI_EAS_PROJECT_ID: "11111111-2222-3333-4444-555555555555",
+        CROKI_EXPO_TOKEN: "expo-token-secret",
+        CROKI_CLI_PACKAGE: "croki-server",
+      },
+      { production: true },
+    );
+
+    expect(plan).toMatchObject({
+      status: "invalid",
+      enabled: false,
+      valid: false,
+      destinations: {
+        cli: { status: "disabled", enabled: false },
+        mobile: {
+          status: "enabled",
+          enabled: true,
+          productionRequested: true,
+          previewRequested: false,
+        },
+      },
+    });
+    expect(plan.errors).toContain(
+      "Update-capable Croki clients require CROKI_CLI_PUBLISH_ENABLED=true so the exact-version croki-server package publishes first.",
+    );
+  });
+
+  it("rejects a non-Croki CLI package even when publication is enabled", () => {
+    const plan = buildCrokiReleasePlan({
+      CROKI_CLI_PUBLISH_ENABLED: "true",
+      CROKI_CLI_PACKAGE: "@example/croki",
+    });
+
+    expect(plan.destinations.cli.status).toBe("invalid");
+    expect(plan.errors).toContain(
+      "CROKI_CLI_PACKAGE must be the Croki-owned croki-server package.",
+    );
   });
 
   it("reports credential presence without ever rendering secret values", () => {

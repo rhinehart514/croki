@@ -728,6 +728,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             worktreePath: event.payload.worktreePath,
             forkedFromThreadId: null,
             parentThreadId: event.payload.parentThreadId ?? null,
+            workerView: "threads",
             latestTurnId: null,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
@@ -736,6 +737,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             settledAt: null,
             snoozedUntil: null,
             snoozedAt: null,
+            pinnedAt: null,
+            titleRegenerationRequestId: null,
+            titleRegenerationStartedAt: null,
             latestUserMessageAt: null,
             pendingApprovalCount: 0,
             pendingUserInputCount: 0,
@@ -778,6 +782,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             settledAt: null,
             snoozedUntil: null,
             snoozedAt: null,
+            pinnedAt: null,
+            titleRegenerationRequestId: null,
+            titleRegenerationStartedAt: null,
             pendingApprovalCount: 0,
             pendingUserInputCount: 0,
             hasActionableProposedPlan: 0,
@@ -796,6 +803,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             archivedAt: event.payload.archivedAt,
+            titleRegenerationRequestId: null,
+            titleRegenerationStartedAt: null,
             updatedAt: event.payload.updatedAt,
           });
           return;
@@ -880,6 +889,36 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "thread.pinned": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            pinnedAt: event.payload.pinnedAt,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.unpinned": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            pinnedAt: null,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         case "thread.meta-updated": {
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
@@ -890,12 +929,21 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             ...(event.payload.title !== undefined ? { title: event.payload.title } : {}),
+            ...(event.payload.titleRegeneration !== undefined
+              ? {
+                  titleRegenerationRequestId: event.payload.titleRegeneration?.requestId ?? null,
+                  titleRegenerationStartedAt: event.payload.titleRegeneration?.startedAt ?? null,
+                }
+              : {}),
             ...(event.payload.modelSelection !== undefined
               ? { modelSelection: event.payload.modelSelection }
               : {}),
             ...(event.payload.branch !== undefined ? { branch: event.payload.branch } : {}),
             ...(event.payload.worktreePath !== undefined
               ? { worktreePath: event.payload.worktreePath }
+              : {}),
+            ...(event.payload.workerView !== undefined
+              ? { workerView: event.payload.workerView }
               : {}),
             updatedAt: event.payload.updatedAt,
           });

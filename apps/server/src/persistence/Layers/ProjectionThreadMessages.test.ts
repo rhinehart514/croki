@@ -2,6 +2,7 @@ import { MessageId, ThreadId } from "@croki/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { ProjectionThreadMessageRepository } from "../Services/ProjectionThreadMessages.ts";
 import { ProjectionThreadMessageRepositoryLive } from "./ProjectionThreadMessages.ts";
@@ -109,6 +110,44 @@ layer("ProjectionThreadMessageRepository", (it) => {
       assert.equal(rows.length, 1);
       assert.equal(rows[0]?.text, "cleared");
       assert.deepEqual(rows[0]?.attachments, []);
+    }),
+  );
+
+  it.effect("updates canonical Unicode search text with the message", () =>
+    Effect.gen(function* () {
+      const repository = yield* ProjectionThreadMessageRepository;
+      const sql = yield* SqlClient.SqlClient;
+      const threadId = ThreadId.make("thread-unicode-search");
+      const messageId = MessageId.make("message-unicode-search");
+      const createdAt = "2026-08-07T00:00:00.000Z";
+
+      yield* repository.upsert({
+        messageId,
+        threadId,
+        turnId: null,
+        role: "user",
+        text: "ÉCHEC Straße ΟΣ",
+        isStreaming: true,
+        createdAt,
+        updatedAt: createdAt,
+      });
+      yield* repository.upsert({
+        messageId,
+        threadId,
+        turnId: null,
+        role: "user",
+        text: "CAFE\u0301 Straße τελος",
+        isStreaming: false,
+        createdAt,
+        updatedAt: "2026-08-07T00:00:01.000Z",
+      });
+
+      const rows = yield* sql<{ readonly searchText: string }>`
+        SELECT search_text AS "searchText"
+        FROM projection_thread_messages
+        WHERE message_id = ${messageId}
+      `;
+      assert.deepStrictEqual(rows, [{ searchText: "café strasse τελοσ" }]);
     }),
   );
 });

@@ -1,10 +1,13 @@
 # Documentation
 
 - [Current project state](./project/current-state.md)
+- [Current-state audit (2026-08-05)](./project/current-state-audit-2026-08-05.md)
+- [ADE-native product adjustments](./project/ade-native-adjustments.md)
 - [0.4.2 release notes](./project/release-notes-0.4.2.md)
 - [0.4.4 release plan](./project/release-notes-0.4.4.md)
 - [0.4.6 application lineage](./project/release-notes-0.4.6.md)
 - [0.4.7 UI history plan](./project/release-notes-0.4.7.md)
+- [0.4.8 resume and simplification plan](./project/release-notes-0.4.8.md)
 - [0.4.5 stabilization notes](./project/release-notes-0.4.5.md)
 - [Release Canvas product specification](./project/release-canvas-spec.md)
 - [Harness visual-artifact specification](./project/harness-canvas-spec.md)
