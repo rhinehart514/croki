@@ -18,6 +18,7 @@ import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityRes
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
+import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asTurnId = (value: string): TurnId => TurnId.make(value);
@@ -28,6 +29,7 @@ const asCheckpointRef = (value: string): CheckpointRef => CheckpointRef.make(val
 const projectionSnapshotLayer = it.layer(
   OrchestrationProjectionSnapshotQueryLive.pipe(
     Layer.provideMerge(RepositoryIdentityResolver.layer),
+    Layer.provideMerge(ThreadBackgroundLiveness.layer),
     Layer.provideMerge(SqlitePersistenceMemory),
     Layer.provideMerge(NodeServices.layer),
   ),
@@ -37,6 +39,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const backgroundLiveness = yield* ThreadBackgroundLiveness.ThreadBackgroundLivenessService;
       const sql = yield* SqlClient.SqlClient;
 
       yield* sql`DELETE FROM projection_projects`;
@@ -374,7 +377,18 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         },
       ]);
 
-      const shellSnapshot = yield* snapshotQuery.getShellSnapshot();
+      backgroundLiveness.recordTaskLiveness({
+        threadId: "thread-1",
+        taskId: "monitor-1",
+        taskType: "monitor",
+        status: "running",
+        kind: "started",
+      });
+      const shellSnapshot = yield* snapshotQuery
+        .getShellSnapshot()
+        .pipe(
+          Effect.ensuring(Effect.sync(() => backgroundLiveness.clearThreadLiveness("thread-1"))),
+        );
       assert.equal(shellSnapshot.snapshotSequence, 5);
       assert.deepEqual(shellSnapshot.projects, [
         {
@@ -449,6 +463,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           hasPendingApprovals: true,
           hasPendingUserInput: false,
           hasActionableProposedPlan: false,
+          backgroundLiveness: "monitoring",
         },
       ]);
 
@@ -1140,6 +1155,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
   it.effect("uses projection_threads.latest_turn_id for targeted thread latest turn queries", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const backgroundLiveness = yield* ThreadBackgroundLiveness.ThreadBackgroundLivenessService;
       const sql = yield* SqlClient.SqlClient;
 
       yield* sql`DELETE FROM projection_projects`;
@@ -1262,12 +1278,25 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           )
       `;
 
-      const threadShell = yield* snapshotQuery.getThreadShellById(ThreadId.make("thread-1"));
+      backgroundLiveness.recordTaskLiveness({
+        threadId: "thread-1",
+        taskId: "agent-1",
+        taskType: "agent",
+        status: "running",
+        kind: "started",
+      });
+
+      const threadShell = yield* snapshotQuery
+        .getThreadShellById(ThreadId.make("thread-1"))
+        .pipe(
+          Effect.ensuring(Effect.sync(() => backgroundLiveness.clearThreadLiveness("thread-1"))),
+        );
       assert.equal(threadShell._tag, "Some");
       if (threadShell._tag === "Some") {
         assert.equal(threadShell.value.latestTurn?.turnId, asTurnId("turn-running"));
         assert.equal(threadShell.value.latestTurn?.state, "running");
         assert.equal(threadShell.value.latestTurn?.startedAt, "2026-04-02T00:00:30.000Z");
+        assert.equal(threadShell.value.backgroundLiveness, "working");
       }
 
       const threadDetail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
@@ -2059,6 +2088,7 @@ it.effect(
             }),
         }),
       ),
+      Layer.provideMerge(ThreadBackgroundLiveness.layer),
       Layer.provideMerge(SqlitePersistenceMemory),
     );
 

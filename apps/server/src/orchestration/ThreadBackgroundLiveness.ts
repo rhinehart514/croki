@@ -15,12 +15,14 @@
  *
  * @module ThreadBackgroundLivenessService
  */
-import { INERT_TASK_TYPES, MONITOR_TASK_TYPES } from "@croki/contracts";
+import {
+  INERT_TASK_TYPES,
+  MONITOR_TASK_TYPES,
+  type ThreadBackgroundLiveness,
+} from "@croki/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-
-export type ThreadBackgroundLiveness = "working" | "monitoring" | null;
 
 interface ThreadLivenessState {
   readonly agents: Set<string>;
@@ -68,7 +70,7 @@ export class ThreadBackgroundLivenessService extends Context.Service<
      * Two-state vocabulary by design: any live agent work is "working";
      * "monitoring" only when watch loops are the ONLY live work.
      */
-    readonly getThreadBackgroundLiveness: (threadId: string) => ThreadBackgroundLiveness;
+    readonly getThreadBackgroundLiveness: (threadId: string) => ThreadBackgroundLiveness | null;
   }
 >()("croki-server/orchestration/ThreadBackgroundLiveness/ThreadBackgroundLivenessService") {}
 

@@ -390,6 +390,9 @@ export const WorkerView = Schema.Literals(["threads", "activity"]);
 export type WorkerView = typeof WorkerView.Type;
 export const DEFAULT_WORKER_VIEW: WorkerView = "threads";
 
+export const ThreadBackgroundLiveness = Schema.Literals(["working", "monitoring"]);
+export type ThreadBackgroundLiveness = typeof ThreadBackgroundLiveness.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -489,6 +492,8 @@ export const OrchestrationThreadShell = Schema.Struct({
   hasPendingApprovals: Schema.Boolean,
   hasPendingUserInput: Schema.Boolean,
   hasActionableProposedPlan: Schema.Boolean,
+  // Optional while clients may still read shell snapshots from older servers.
+  backgroundLiveness: Schema.optional(Schema.NullOr(ThreadBackgroundLiveness)),
 });
 export type OrchestrationThreadShell = typeof OrchestrationThreadShell.Type;
 
