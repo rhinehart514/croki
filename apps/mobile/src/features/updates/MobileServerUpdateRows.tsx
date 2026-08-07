@@ -3,7 +3,7 @@ import type { EnvironmentId } from "@croki/contracts";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
 import { useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Platform, Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { SymbolView } from "../../components/AppSymbol";
@@ -12,7 +12,12 @@ import { useThemeColor } from "../../lib/useThemeColor";
 import type { ConnectedEnvironmentSummary } from "../../state/remote-runtime-types";
 import { environmentServerConfigsAtom, serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { runAppUpdateCheck, type AppUpdateCheckState } from "./app-updates";
+import {
+  needsNativeBuildUpdate,
+  resolveNativeBuildUpdateRecovery,
+  runAppUpdateCheck,
+  type AppUpdateCheckState,
+} from "./app-updates";
 import {
   resolveMobileServerUpdate,
   type MobileServerUpdatePresentation as MobileVersionUpdatePresentation,
@@ -78,6 +83,11 @@ function MobileClientUpdateRow(props: { readonly presentation: MobileClientUpdat
   const mutedColor = useThemeColor("--color-icon-muted");
   const busy =
     updateState === "checking" || updateState === "downloading" || updateState === "restarting";
+  const needsNativeBuild = needsNativeBuildUpdate({
+    updatesEnabled: Updates.isEnabled,
+    updateState,
+  });
+  const nativeBuildRecovery = resolveNativeBuildUpdateRecovery(Platform.OS);
   const status =
     updateState === "checking"
       ? "Checking…"
@@ -85,8 +95,8 @@ function MobileClientUpdateRow(props: { readonly presentation: MobileClientUpdat
         ? "Downloading…"
         : updateState === "restarting"
           ? "Restarting…"
-          : updateState === "current"
-            ? "No app update found"
+          : needsNativeBuild
+            ? "A newer native build is required"
             : `${props.presentation.clientVersion} → ${props.presentation.serverVersion}`;
 
   const handleUpdate = async () => {
@@ -102,6 +112,44 @@ function MobileClientUpdateRow(props: { readonly presentation: MobileClientUpdat
     }
   };
 
+  const openNativeBuildAction = async (action: {
+    readonly label: string;
+    readonly url: string;
+  }) => {
+    try {
+      await Linking.openURL(action.url);
+    } catch {
+      Alert.alert(
+        "Could not open the install source",
+        "Open TestFlight, the App Store, or Google Play and install the latest Croki build.",
+      );
+    }
+  };
+
+  const handleNativeBuildUpdate = () => {
+    if (!nativeBuildRecovery) {
+      Alert.alert(
+        "Install a newer Croki build",
+        "Install the latest build from the same source that installed this app.",
+      );
+      return;
+    }
+
+    if (nativeBuildRecovery.actions.length === 1) {
+      const [action] = nativeBuildRecovery.actions;
+      if (action) void openNativeBuildAction(action);
+      return;
+    }
+
+    Alert.alert("Install a newer Croki build", nativeBuildRecovery.guidance, [
+      { text: "Cancel", style: "cancel" },
+      ...nativeBuildRecovery.actions.map((action) => ({
+        text: action.label,
+        onPress: () => void openNativeBuildAction(action),
+      })),
+    ]);
+  };
+
   return (
     <View className="px-4 py-3.5">
       <View className="flex-row items-center gap-3">
@@ -114,21 +162,24 @@ function MobileClientUpdateRow(props: { readonly presentation: MobileClientUpdat
         </View>
         {busy ? (
           <ActivityIndicator color={mutedColor} size="small" />
-        ) : Updates.isEnabled ? (
+        ) : needsNativeBuild ? (
+          <Pressable
+            accessibilityLabel="Install newer Croki build"
+            accessibilityRole="button"
+            className="min-h-[38px] justify-center rounded-full bg-subtle px-3.5 active:opacity-70"
+            onPress={handleNativeBuildUpdate}
+          >
+            <Text className="text-xs font-t3-bold text-foreground">Install build</Text>
+          </Pressable>
+        ) : (
           <Pressable
             accessibilityLabel="Check for Croki update"
             accessibilityRole="button"
             className="min-h-[38px] justify-center rounded-full bg-subtle px-3.5 active:opacity-70"
             onPress={() => void handleUpdate()}
           >
-            <Text className="text-xs font-t3-bold text-foreground">
-              {updateState === "current" ? "Check again" : "Check update"}
-            </Text>
+            <Text className="text-xs font-t3-bold text-foreground">Check update</Text>
           </Pressable>
-        ) : (
-          <Text className="max-w-28 text-right text-xs text-foreground-muted">
-            Install a newer Croki build
-          </Text>
         )}
       </View>
     </View>

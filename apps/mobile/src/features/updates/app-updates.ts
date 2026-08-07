@@ -10,6 +10,14 @@ import {
 
 export type AppUpdateCheckState = "idle" | "checking" | "downloading" | "restarting" | "current";
 
+export interface NativeBuildUpdateRecovery {
+  readonly actions: ReadonlyArray<{
+    readonly label: string;
+    readonly url: string;
+  }>;
+  readonly guidance: string;
+}
+
 export interface AppUpdateClient {
   readonly isEnabled: boolean;
   readonly checkForUpdateAsync: () => Promise<{
@@ -49,6 +57,42 @@ interface Deferred {
 
 const HIDDEN_UPDATE_TAP_COUNT = 5;
 let appUpdateCheckInFlight: AppUpdateCheckInFlight | undefined;
+
+const IOS_APP_STORE_URL = "https://apps.apple.com/us/app/croki-remote-claude-more/id6787819824";
+const ANDROID_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.croki.croki";
+
+/**
+ * OTA updates cannot cross Expo fingerprint runtimes. When version skew
+ * remains after a successful check, send the founder back to the native build
+ * channel that installed Croki instead of offering another identical check.
+ */
+export function resolveNativeBuildUpdateRecovery(
+  platform: string,
+): NativeBuildUpdateRecovery | null {
+  if (platform === "ios") {
+    return {
+      actions: [
+        { label: "Open TestFlight", url: "itms-beta://" },
+        { label: "Open App Store", url: IOS_APP_STORE_URL },
+      ],
+      guidance: "Use the same channel that installed this app.",
+    };
+  }
+  if (platform === "android") {
+    return {
+      actions: [{ label: "Open Play Store", url: ANDROID_PLAY_STORE_URL }],
+      guidance: "Install the latest Croki build from Google Play.",
+    };
+  }
+  return null;
+}
+
+export function needsNativeBuildUpdate(input: {
+  readonly updatesEnabled: boolean;
+  readonly updateState: AppUpdateCheckState;
+}): boolean {
+  return !input.updatesEnabled || input.updateState === "current";
+}
 
 /**
  * Keeps the ordinary version row quiet unless someone deliberately taps it
