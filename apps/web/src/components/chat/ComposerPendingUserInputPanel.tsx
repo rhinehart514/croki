@@ -153,7 +153,11 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   const customAnswerActive = progress.customAnswer.trim().length > 0;
 
   return (
-    <div className="px-4 py-3 sm:px-5">
+    <div
+      className="px-4 py-3 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-indigo-400/60 sm:px-5"
+      data-thread-attention-target="input"
+      tabIndex={-1}
+    >
       <div className="mb-2 flex items-center gap-3">
         <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/55 uppercase">
           {activeQuestion.header}

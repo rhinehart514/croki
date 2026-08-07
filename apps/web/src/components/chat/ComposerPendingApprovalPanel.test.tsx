@@ -20,6 +20,7 @@ describe("ComposerPendingApprovalPanel", () => {
     );
 
     expect(markup).toContain('data-approval-detail="complete"');
+    expect(markup).toContain('data-thread-attention-target="approval"');
     expect(markup).toContain('aria-label="Command"');
     expect(markup).toContain(detail);
     expect(markup).not.toContain("truncate");

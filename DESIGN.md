@@ -28,6 +28,8 @@ The developer experience is a normal repository that has gained product awarenes
   native to iOS and Android, but founders must be able to direct, inspect,
   intervene in, and resume the same project and Thread work as desktop.
 - Status belongs beside the work it describes. Avoid decorative pills and explanatory chrome.
+- Thread navigation says **Needs Approval**, **Needs Input**, or names a fresh terminal failure when the founder must act. Project navigation may summarize those unresolved states as **_n_ need you**. Ordinary completion is never included in that count, and a visited failure stops raising its hand.
+- Activating a Thread that needs the founder opens the existing Thread view at the unresolved approval, question, or failure. Attention routing does not create an inbox, dashboard, or duplicate task surface.
 - When an application brief exists, the Thread header shows one compact released-to-building focus beside the project. Opening it reveals the application promise and current intent, with one action to open `.croki/application.croki`. It does not show setup, progress, scores, or Concept scope.
 - Opening a `.croki` file uses the ordinary file editor and ordinary panel size. Croki does not generate a second visual representation of repository metadata.
 - Worker nesting uses indentation and a quiet rule, not a second navigation section or dashboard.
