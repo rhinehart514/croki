@@ -224,6 +224,34 @@ describe("buildThreadActionItems", () => {
     expect(item?.description).toBe("Croki · #feat/search");
   });
 
+  it("preserves authoritative Unicode content matches from the server", () => {
+    const threadItems = buildThreadActionItems({
+      threads: [makeThread({ title: "Unrelated title" })],
+      projectTitleById: new Map([[PROJECT_ID, "Unrelated project"]]),
+      sortOrder: "updated_at",
+      icon: null,
+      getContentMatch: () => ({
+        source: "assistant",
+        snippet: "Die Straße ist jetzt offen.",
+        query: "STRASSE",
+        isWorker: false,
+      }),
+      runThread: async (_thread) => undefined,
+    });
+
+    const groups = filterCommandPaletteGroups({
+      activeGroups: [],
+      query: "STRASSE",
+      isInSubmenu: false,
+      projectSearchItems: [],
+      threadSearchItems: threadItems,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items.map((item) => item.value)).toEqual(["thread:thread-1"]);
+    expect(groups[0]?.items[0]?.threadContentMatch?.snippet).toBe("Die Straße ist jetzt offen.");
+  });
+
   it("filters archived threads out of thread search items", () => {
     const items = buildThreadActionItems({
       threads: [

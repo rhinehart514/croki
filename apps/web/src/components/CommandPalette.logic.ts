@@ -290,7 +290,13 @@ export function filterCommandPaletteGroups(input: {
   return searchableGroups.flatMap((group) => {
     const items = Arr.filterMap(group.items, (item, index) => {
       const haystack = normalizeSearchText(item.searchTerms.join(" "));
-      if (!haystack.includes(normalizedQuery)) {
+      // Content matches have already been accepted by the server's richer
+      // Unicode-aware search. Preserve that authoritative result instead of
+      // requiring this lightweight client fold to reproduce it.
+      const hasAuthoritativeContentMatch =
+        item.threadContentMatch !== undefined &&
+        normalizeSearchText(item.threadContentMatch.query) === normalizedQuery;
+      if (!hasAuthoritativeContentMatch && !haystack.includes(normalizedQuery)) {
         return Result.failVoid;
       }
 
