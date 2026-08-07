@@ -86,7 +86,7 @@ function makeFakeBrowserWindow() {
     isMaximized: vi.fn(() => false),
     isMinimized: vi.fn(() => false),
     isVisible: vi.fn(() => true),
-    loadURL: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn((_url: string) => Promise.resolve()),
     maximize: vi.fn(),
     on: vi.fn((eventName: string, listener: (...args: readonly unknown[]) => void) => {
       windowListeners.set(eventName, listener);
@@ -929,6 +929,64 @@ describe("DesktopWindow", () => {
       }).pipe(Effect.provide(layer));
     }),
   );
+
+  it.effect("reopens the exact application screen after a recoverable renderer crash", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const layer = makeTestLayer({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+
+        const didNavigateInPage = fakeWindow.webContentsListeners.get("did-navigate-in-page");
+        const renderProcessGone = fakeWindow.webContentsListeners.get("render-process-gone");
+        if (!didNavigateInPage || !renderProcessGone) {
+          return yield* Effect.die("renderer recovery listeners were not registered");
+        }
+
+        didNavigateInPage({}, "croki-dev://app/local/thread-1?panel=preview#checked-screen");
+        renderProcessGone({}, { reason: "oom", exitCode: 137 });
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(500);
+        yield* Effect.promise(() => Promise.resolve());
+
+        assert.equal(fakeWindow.loadURL.mock.calls.length, 2);
+        const recoveryUrl = new URL(String(fakeWindow.loadURL.mock.calls[1]?.[0]));
+        assert.equal(recoveryUrl.pathname, "/local/thread-1");
+        assert.equal(recoveryUrl.searchParams.get("panel"), "preview");
+        assert.equal(recoveryUrl.hash, "#checked-screen");
+        assert.equal(recoveryUrl.searchParams.get("croki-recovery"), "renderer");
+        assert.equal(recoveryUrl.searchParams.get("croki-recovery-reason"), "oom");
+        assert.equal(recoveryUrl.searchParams.get("croki-recovery-location"), "restored");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it("marks the location reset when the last renderer URL is not Croki", () => {
+    const recoveryUrl = new URL(
+      DesktopWindow.buildRendererRecoveryUrl({
+        applicationUrl: "croki-dev://app/",
+        lastApplicationUrl: "croki-dev://other/thread-1",
+        reason: "crashed",
+      }),
+    );
+
+    assert.equal(recoveryUrl.pathname, "/");
+    assert.equal(recoveryUrl.searchParams.get("croki-recovery-location"), "reset");
+    assert.isFalse(
+      DesktopWindow.isSameOriginRendererNavigation({
+        applicationUrl: "croki-dev://app/",
+        navigationUrl: "croki-dev://other/thread-1",
+      }),
+    );
+  });
 
   it("retries only transient failures for the development renderer", () => {
     assert.isTrue(

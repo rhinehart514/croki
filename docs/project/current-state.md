@@ -19,6 +19,7 @@ for independently gated publication destinations.
 Croki currently provides:
 
 - durable projects, threads, messages, activities, and checkpoints;
+- recoverable desktop renderer crashes reopen the last verified Croki screen and explain which server-owned work stayed attached, which saved drafts remain available, and which browser-only state reset. Full desktop process exits make no runtime-survival promise;
 - native project and worktree execution with Git diff, restore, commit, push,
   and pull-request paths;
 - terminal, files, preview, plans, approvals, project scripts, and recovery;
