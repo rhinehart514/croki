@@ -245,6 +245,9 @@ describe("ProviderCommandReactor", () => {
     const rollbackConversation = vi.fn<ProviderServiceShape["rollbackConversation"]>(
       () => Effect.void,
     );
+    const discardConversation = vi.fn<ProviderServiceShape["discardConversation"]>(
+      () => Effect.void,
+    );
     const stopSession = vi.fn((input: unknown) =>
       Effect.sync(() => {
         const threadId =
@@ -322,6 +325,7 @@ describe("ProviderCommandReactor", () => {
       respondToRequest: respondToRequest as ProviderServiceShape["respondToRequest"],
       respondToUserInput: respondToUserInput as ProviderServiceShape["respondToUserInput"],
       forkConversation,
+      discardConversation,
       stopSession: stopSession as ProviderServiceShape["stopSession"],
       listSessions: () => Effect.succeed(runtimeSessions),
       getCapabilities: (_provider) =>
@@ -508,6 +512,7 @@ describe("ProviderCommandReactor", () => {
       respondToRequest,
       respondToUserInput,
       forkConversation,
+      discardConversation,
       rollbackConversation,
       stopSession,
       renameBranch,
@@ -3477,6 +3482,9 @@ describe("ProviderCommandReactor", () => {
         lastError: "Native target rollback failed.",
       });
       expect(harness.stopSession).toHaveBeenCalledWith({
+        threadId: ThreadId.make("thread-edit-rollback-failure"),
+      });
+      expect(harness.discardConversation).toHaveBeenCalledWith({
         threadId: ThreadId.make("thread-edit-rollback-failure"),
       });
     }),

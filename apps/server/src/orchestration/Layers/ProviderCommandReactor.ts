@@ -1600,6 +1600,12 @@ const make = Effect.gen(function* () {
     yield* stopTemporarySourceSession;
 
     if (Exit.isSuccess(forkExit)) return;
+    if (event.payload.forkPoint !== undefined) {
+      // A failed exact-boundary rollback leaves the provider's live-edge
+      // resume cursor unsafe. Remove that binding so this target cannot later
+      // continue from history the founder explicitly chose to exclude.
+      yield* providerService.discardConversation({ threadId: targetThread.id });
+    }
     yield* setThreadSession({
       threadId: targetThread.id,
       session: {
