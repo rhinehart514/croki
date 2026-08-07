@@ -7,6 +7,7 @@ APP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SIMULATOR_ID="${T3_SWIFT_SIMULATOR_ID:-}"
 DERIVED_DATA_ROOT="${RUNNER_TEMP:-${APP_DIR}/.derivedData}"
 DERIVED_DATA_PATH="${T3_SWIFT_DERIVED_DATA_PATH:-${DERIVED_DATA_ROOT}/swift-ios-ci}"
+RESULT_BUNDLE_PATH="${T3_SWIFT_RESULT_BUNDLE_PATH:-${DERIVED_DATA_ROOT}/swift-ios-ci-$$.xcresult}"
 
 die() {
   printf '[swift-ios-ci] error: %s\n' "$*" >&2
@@ -47,14 +48,27 @@ fi
 printf '[swift-ios-ci] Xcode: %s\n' "$(xcodebuild -version | tr '\n' ' ')"
 printf '[swift-ios-ci] simulator: %s\n' "${SIMULATOR_ID}"
 
+set +e
 xcodebuild test \
   -project "${APP_DIR}/T3Code.xcodeproj" \
   -scheme T3Code \
   -configuration Debug \
   -destination "platform=iOS Simulator,id=${SIMULATOR_ID}" \
   -derivedDataPath "${DERIVED_DATA_PATH}" \
+  -resultBundlePath "${RESULT_BUNDLE_PATH}" \
   -maximum-concurrent-test-simulator-destinations 1 \
   -retry-tests-on-failure \
   -test-iterations 2 \
   -only-testing:T3CodeTests \
   CODE_SIGNING_ALLOWED=NO
+test_status=$?
+set -e
+
+if ((test_status != 0)); then
+  printf '[swift-ios-ci] failing test summary:\n'
+  xcrun xcresulttool get test-results summary --path "${RESULT_BUNDLE_PATH}" || true
+  printf '[swift-ios-ci] failing test details:\n'
+  xcrun xcresulttool get test-results tests --path "${RESULT_BUNDLE_PATH}" || true
+fi
+
+exit "${test_status}"
