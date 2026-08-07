@@ -23,6 +23,7 @@ import {
   type ProviderDriverKind,
   type ProviderRuntimeEvent,
   type ProviderSession,
+  NativeReviewStartInput,
 } from "@croki/contracts";
 import { causeErrorTag } from "@croki/shared/observability";
 import * as DateTime from "effect/DateTime";
@@ -734,6 +735,35 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     );
   });
 
+  const startNativeReview: ProviderServiceMethod<"startNativeReview"> = Effect.fn(
+    "startNativeReview",
+  )(function* (rawInput) {
+    const input = yield* decodeInputOrValidationError({
+      operation: "ProviderService.startNativeReview",
+      schema: NativeReviewStartInput,
+      payload: rawInput,
+    });
+    const routed = yield* resolveRoutableSession({
+      threadId: input.threadId,
+      operation: "ProviderService.startNativeReview",
+      allowRecovery: true,
+    });
+    if (routed.adapter.provider !== "codex" || routed.adapter.nativeReview === undefined) {
+      return yield* new ProviderAdapterValidationError({
+        provider: routed.adapter.provider,
+        operation: "review/start",
+        issue: "Independent review is available only for Codex Threads.",
+      });
+    }
+    yield* Effect.annotateCurrentSpan({
+      "provider.operation": "start-native-review",
+      "provider.kind": routed.adapter.provider,
+      "provider.thread_id": input.threadId,
+      "review.target": input.target.type,
+    });
+    return yield* routed.adapter.nativeReview.start(input);
+  });
+
   const interruptTurn: ProviderServiceMethod<"interruptTurn"> = Effect.fn("interruptTurn")(
     function* (rawInput) {
       const input = yield* decodeInputOrValidationError({
@@ -1233,6 +1263,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     voice,
     startSession,
     sendTurn,
+    startNativeReview,
     interruptTurn,
     respondToRequest,
     respondToUserInput,

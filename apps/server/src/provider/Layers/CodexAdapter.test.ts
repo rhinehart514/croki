@@ -10,6 +10,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderItemId,
+  type NativeReviewTarget,
   type ProviderApprovalDecision,
   type ProviderEvent,
   type ProviderSession,
@@ -109,6 +110,10 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
     Promise.resolve({ threadId: "provider-thread-forked" }),
   );
 
+  public readonly startDetachedReviewImpl = vi.fn((_target: NativeReviewTarget) =>
+    Promise.resolve({ reviewThreadId: "provider-review-thread", turnId: "review-turn" }),
+  );
+
   public readonly respondToRequestImpl = vi.fn(
     (_requestId: ApprovalRequestId, _decision: ProviderApprovalDecision): Promise<void> =>
       Promise.resolve(undefined),
@@ -148,6 +153,9 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
   }
 
   forkThread = Effect.promise(() => this.forkThreadImpl());
+
+  startDetachedReview = (target: NativeReviewTarget) =>
+    Effect.promise(() => this.startDetachedReviewImpl(target));
 
   respondToRequest(requestId: ApprovalRequestId, decision: ProviderApprovalDecision) {
     return Effect.promise(() => this.respondToRequestImpl(requestId, decision));
@@ -537,6 +545,24 @@ function startLifecycleRuntime() {
 }
 
 lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
+  it.effect("starts a detached Codex review against the requested target", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const target = { type: "baseBranch", branch: "origin/main" } as const;
+
+      const result = yield* adapter.nativeReview!.start({
+        threadId: asThreadId("thread-1"),
+        target,
+      });
+
+      NodeAssert.deepStrictEqual(result, {
+        reviewThreadId: asThreadId("provider-review-thread"),
+        turnId: asTurnId("review-turn"),
+      });
+      NodeAssert.deepStrictEqual(runtime.startDetachedReviewImpl.mock.calls, [[target]]);
+    }),
+  );
+
   it.effect("returns the native Codex resume cursor when forking a thread", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();

@@ -9,6 +9,7 @@ import type {
   ProviderSendTurnInput,
   ProviderSession,
   ProviderTurnStartResult,
+  NativeReviewStartInput,
 } from "@croki/contracts";
 import {
   ApprovalRequestId,
@@ -37,6 +38,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import {
   ProviderAdapterRequestError,
+  ProviderAdapterValidationError,
   ProviderAdapterSessionNotFoundError,
   ProviderUnsupportedError,
   ProviderValidationError,
@@ -131,6 +133,13 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     },
   );
 
+  const startNativeReview = vi.fn((input: NativeReviewStartInput) =>
+    Effect.succeed({
+      reviewThreadId: asThreadId(`review-${String(input.threadId)}`),
+      turnId: asTurnId(`review-turn-${String(input.threadId)}`),
+    }),
+  );
+
   const interruptTurn = vi.fn(
     (_threadId: ThreadId, _turnId?: TurnId): Effect.Effect<void, ProviderAdapterError> =>
       Effect.void,
@@ -217,6 +226,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     },
     startSession,
     sendTurn,
+    ...(provider === CODEX_DRIVER ? { nativeReview: { start: startNativeReview } } : {}),
     interruptTurn,
     respondToRequest,
     respondToUserInput,
@@ -253,6 +263,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     updateSession,
     startSession,
     sendTurn,
+    startNativeReview,
     interruptTurn,
     respondToRequest,
     respondToUserInput,
@@ -1880,6 +1891,53 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
 
 const validation = makeProviderServiceLayer();
 validation.layer("ProviderServiceLive validation", (it) => {
+  it.effect("routes detached review only through the Codex native adapter", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const threadId = asThreadId("thread-native-review");
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+
+      const target = { type: "uncommittedChanges" } as const;
+      const result = yield* provider.startNativeReview({ threadId, target });
+
+      assert.deepEqual(result, {
+        reviewThreadId: asThreadId("review-thread-native-review"),
+        turnId: asTurnId("review-turn-thread-native-review"),
+      });
+      assert.deepEqual(validation.codex.startNativeReview.mock.calls.at(-1), [
+        { threadId, target },
+      ]);
+    }),
+  );
+
+  it.effect("rejects detached review for a non-Codex Thread", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const threadId = asThreadId("thread-claude-review");
+      yield* provider.startSession(threadId, {
+        provider: CLAUDE_AGENT_DRIVER,
+        providerInstanceId: claudeAgentInstanceId,
+        threadId,
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+
+      const failure = yield* provider
+        .startNativeReview({ threadId, target: { type: "uncommittedChanges" } })
+        .pipe(Effect.flip);
+
+      assert.instanceOf(failure, ProviderAdapterValidationError);
+      assert.equal(failure.issue, "Independent review is available only for Codex Threads.");
+      assert.equal(validation.claude.startNativeReview.mock.calls.length, 0);
+    }),
+  );
+
   it.effect("rejects session starts without an explicit provider instance id", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;

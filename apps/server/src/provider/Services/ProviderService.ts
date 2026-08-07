@@ -25,6 +25,8 @@ import type {
   ProviderStopSessionInput,
   ThreadId,
   ProviderTurnStartResult,
+  NativeReviewStartInput,
+  NativeReviewStartResult,
 } from "@croki/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
@@ -57,6 +59,11 @@ export interface ProviderServiceShape {
   readonly sendTurn: (
     input: ProviderSendTurnInput,
   ) => Effect.Effect<ProviderTurnStartResult, ProviderServiceError>;
+
+  /** Start a detached provider-native review without occupying the parent Thread. */
+  readonly startNativeReview: (
+    input: NativeReviewStartInput,
+  ) => Effect.Effect<NativeReviewStartResult, ProviderServiceError>;
 
   /**
    * Interrupt a running provider turn.

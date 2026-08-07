@@ -42,6 +42,53 @@ rl.on("line", (line) => {
     write({ id, result: fixture.responses.threadStart });
     return;
   }
+  if (method === "review/start") {
+    const reviewThreadId = script.reviewThreadId ?? "review-thread-fixture";
+    const reviewTurn = {
+      ...fixture.responses.turnStart.turn,
+      id: script.reviewTurnId ?? "review-turn-fixture",
+    };
+    const capturedThreadStarted = fixture.notifications.find(
+      (notification) => notification.method === "thread/started",
+    );
+    const threadStarted = {
+      jsonrpc: "2.0",
+      method: "thread/started",
+      params: {
+        thread: {
+          ...capturedThreadStarted.params.thread,
+          id: reviewThreadId,
+          sessionId: reviewThreadId,
+          parentThreadId: message.params?.threadId,
+          source: { subAgent: "review" },
+        },
+      },
+    };
+    if (
+      script.reviewThreadStartedOmitted !== true &&
+      script.reviewThreadStartedAfterResponse !== true
+    ) {
+      write(threadStarted);
+    }
+    write({ id, result: { reviewThreadId, turn: reviewTurn } });
+    if (
+      script.reviewThreadStartedOmitted !== true &&
+      script.reviewThreadStartedAfterResponse === true
+    ) {
+      write(threadStarted);
+    }
+    write({
+      jsonrpc: "2.0",
+      method: "turn/started",
+      params: { threadId: reviewThreadId, turn: reviewTurn },
+    });
+    write({
+      jsonrpc: "2.0",
+      method: "turn/completed",
+      params: { threadId: reviewThreadId, turn: { ...reviewTurn, status: "completed" } },
+    });
+    return;
+  }
   if (method === "turn/start") {
     write({ id, result: fixture.responses.turnStart });
     const rootThreadId = script.rootThreadId;

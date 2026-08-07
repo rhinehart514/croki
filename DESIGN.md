@@ -19,6 +19,7 @@ The developer experience is a normal repository that has gained product awarenes
 - The **application brief** at `.croki/application.croki` is the single repository-owned statement of application identity, released reality, and current build intent. Croki reads it automatically as bounded, founder-approved direction for project Threads. It is edited through ordinary files, Git, and Review, never a setup form or parallel product database.
 - Historical `.croki/application.json`, Concept, Release, and Venture schemas remain readable compatibility input. They do not create workspace navigation or dedicated product objects.
 - Native Codex voice lives beside the Thread composer only for Codex Threads. Spoken turns act directly in the native realtime session; they do not populate the unsent draft. Croki exposes honest connecting, listening, stopping, and typing-fallback states without relaying or persisting raw audio.
+- A Codex Thread can start an independent review from Review. Codex runs it read-only in a durable child Thread, so the parent remains usable and the result stays inspectable beside its source work. Other providers are never presented as supporting this native capability.
 - Croki's experimental native iOS client installs beside the React Native mobile app and uses the same server contracts. It has Croki-owned bundle, deep-link, storage, and App Group identities; inherited T3 destinations are never release defaults.
 
 ## Interface direction
@@ -38,6 +39,7 @@ The developer experience is a normal repository that has gained product awarenes
 - Version-skew guidance is directional. An older server may offer its advertised server-update path; an older client tells the founder to update Croki on that device and never offers a server rollback. When an OTA cannot cross the installed native runtime, recovery points to the device's native build channel instead of repeating the same update check.
 - GitHub-only desktop releases update their bundled server with the desktop app. When no exact `croki-server` package was published, they describe remote version skew without offering remote update buttons or package commands that cannot succeed.
 - UI history stays inside Preview and Review evidence. Its completion receipt sits directly after the answer, survives folded turn internals, and replaces duplicate raw snapshot rows. It must not become a dashboard or compete with the live result.
+- Review offers one explicit **Run Codex review** action for working-tree and base-branch changes on Codex Threads. Findings use the child transcript and ordinary source links; Croki does not add a review dashboard or show Fix/Dismiss controls without durable finding-decision semantics.
 - Preview has one job: open, inspect, and capture the running product. Product creation and alternatives stay in the canonical Thread instead of creating App, Component, and Idea modes inside Preview.
 - Application direction is visible through the compact header focus, its ordinary source file, and the model's source-grounded answer. Croki does not add a setup workflow, alignment score, progress model, or Croki-authored verdict.
 
