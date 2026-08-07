@@ -32,6 +32,9 @@ const DEVELOPMENT_LOAD_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000] as const;
 const RENDERER_RECOVERY_RELOAD_DELAY_MS = 500;
 const RENDERER_RECOVERY_MAX_ATTEMPTS = 3;
 const RENDERER_RECOVERY_WINDOW_MS = 60_000;
+export const RENDERER_RECOVERY_QUERY_KEY = "croki-recovery";
+export const RENDERER_RECOVERY_REASON_QUERY_KEY = "croki-recovery-reason";
+export const RENDERER_RECOVERY_LOCATION_QUERY_KEY = "croki-recovery-location";
 const DEVELOPMENT_RETRYABLE_LOAD_ERROR_CODES = new Set([
   -2, // ERR_FAILED
   -7, // ERR_TIMED_OUT
@@ -166,10 +169,47 @@ export function isSameOriginRendererNavigation(input: {
   readonly navigationUrl: string;
 }): boolean {
   try {
-    return new URL(input.applicationUrl).origin === new URL(input.navigationUrl).origin;
+    const applicationUrl = new URL(input.applicationUrl);
+    const navigationUrl = new URL(input.navigationUrl);
+    if (applicationUrl.origin !== "null" || navigationUrl.origin !== "null") {
+      return applicationUrl.origin === navigationUrl.origin;
+    }
+    // Chromium serializes custom-scheme origins as `null`. Compare the actual
+    // scheme and host so a foreign opaque origin cannot be mistaken for Croki.
+    return (
+      applicationUrl.protocol === navigationUrl.protocol &&
+      applicationUrl.host === navigationUrl.host
+    );
   } catch {
     return false;
   }
+}
+
+export type RendererRecoveryReason = "abnormal-exit" | "crashed" | "oom";
+
+export function buildRendererRecoveryUrl(input: {
+  readonly applicationUrl: string;
+  readonly lastApplicationUrl: string | null;
+  readonly reason: RendererRecoveryReason;
+}): string {
+  const canRestoreLocation =
+    input.lastApplicationUrl !== null &&
+    isSameOriginRendererNavigation({
+      applicationUrl: input.applicationUrl,
+      navigationUrl: input.lastApplicationUrl,
+    });
+  const recoveryUrl = new URL(
+    canRestoreLocation && input.lastApplicationUrl
+      ? input.lastApplicationUrl
+      : input.applicationUrl,
+  );
+  recoveryUrl.searchParams.set(RENDERER_RECOVERY_QUERY_KEY, "renderer");
+  recoveryUrl.searchParams.set(RENDERER_RECOVERY_REASON_QUERY_KEY, input.reason);
+  recoveryUrl.searchParams.set(
+    RENDERER_RECOVERY_LOCATION_QUERY_KEY,
+    canRestoreLocation ? "restored" : "reset",
+  );
+  return recoveryUrl.toString();
 }
 
 export function isRetryableDevelopmentRendererLoadFailure(input: {
@@ -545,6 +585,7 @@ export const make = Effect.gen(function* () {
     let developmentLoadRetryIndex = 0;
     let developmentLoadRetryFiber: Fiber.Fiber<void, never> | undefined;
     let rendererRecoveryTimestamps: number[] = [];
+    let lastApplicationNavigationUrl: string | null = applicationUrl;
     const clearDevelopmentLoadRetry = () => {
       if (developmentLoadRetryFiber === undefined) {
         return;
@@ -553,11 +594,11 @@ export const make = Effect.gen(function* () {
       developmentLoadRetryFiber = undefined;
       runFork(Fiber.interrupt(retryFiber));
     };
-    const loadApplication = () => {
+    const loadApplication = (url = applicationUrl) => {
       if (window.isDestroyed()) {
         return;
       }
-      void window.loadURL(applicationUrl).catch(() => undefined);
+      void window.loadURL(url).catch(() => undefined);
     };
     const scheduleDevelopmentLoadRetry = () => {
       if (developmentLoadRetryFiber !== undefined || window.isDestroyed()) {
@@ -599,6 +640,18 @@ export const make = Effect.gen(function* () {
       developmentLoadRetryIndex = 0;
       window.setTitle(environment.displayName);
     });
+    const rememberApplicationNavigation = (_event: unknown, navigationUrl: string) => {
+      if (
+        isSameOriginRendererNavigation({
+          applicationUrl,
+          navigationUrl,
+        })
+      ) {
+        lastApplicationNavigationUrl = navigationUrl;
+      }
+    };
+    window.webContents.on("did-navigate", rememberApplicationNavigation);
+    window.webContents.on("did-navigate-in-page", rememberApplicationNavigation);
     window.webContents.on(
       "did-fail-load",
       (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
@@ -657,7 +710,13 @@ export const make = Effect.gen(function* () {
           rendererRecoveryTimestamps.push(now);
           yield* Effect.sleep(RENDERER_RECOVERY_RELOAD_DELAY_MS);
           if (!window.isDestroyed()) {
-            loadApplication();
+            loadApplication(
+              buildRendererRecoveryUrl({
+                applicationUrl,
+                lastApplicationUrl: lastApplicationNavigationUrl,
+                reason: details.reason as RendererRecoveryReason,
+              }),
+            );
           }
         }),
       );
