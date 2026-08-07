@@ -2,8 +2,10 @@
 
 Croki production releases are disabled by default. Destinations are opt-in,
 and every enabled destination fails closed unless its Croki-owned configuration
-is complete. Update-capable desktop, hosted web, and mobile clients additionally
-require exact-version `croki-server` publication in the same release.
+is complete. Hosted web and production mobile clients additionally require
+exact-version `croki-server` publication in the same release. A GitHub-only
+desktop release instead updates its bundled, desktop-managed server and compiles
+package-backed remote server updates out of the client.
 
 ## 0.4.3 source candidate
 
@@ -20,12 +22,13 @@ notes](../project/release-notes-0.4.3.md) for the product summary.
 - Manual release dispatch defaults to a dry-run destination plan.
 - Tagged and scheduled GitHub release paths can be enabled with
   `CROKI_RELEASE_ENABLED=true`, `CROKI_RELEASE_REPOSITORY=rhinehart514/croki`,
-  `CROKI_RELEASE_BRANCH=croki/main`, `CROKI_CLI_PUBLISH_ENABLED=true`, and
-  `CROKI_CLI_PACKAGE=croki-server`. Relay, web, signing, Discord, and mobile
-  paths remain skipped unless their own enable flags and configuration validate.
+  and `CROKI_RELEASE_BRANCH=croki/main`. Relay, CLI, web, signing, Discord, and
+  mobile paths remain skipped unless their own enable flags and configuration
+  validate.
 - The local server package is `croki-server` and its metadata points at the
-  Croki repository. Publication is still disabled because the Croki-owned
-  package destination and release variables are not configured.
+  Croki repository. Set `CROKI_CLI_PUBLISH_ENABLED=true` and
+  `CROKI_CLI_PACKAGE=croki-server` only for a release that should publish it to
+  npm.
 
 ## Ownership guard
 
@@ -76,14 +79,19 @@ npm run check:croki
 
 ## Exact-version update invariant
 
-When the server is older, Croki clients ask it to install the client's exact
-version. A client never asks a newer server to roll back; the client must update
-through its own distribution path instead. The release plan therefore rejects
-desktop, hosted web, or mobile publication unless `croki-server` publication is
-enabled, and the GitHub release job runs only after that exact package version
-publishes successfully. Do not weaken this dependency to accept a skipped CLI
-job. Without the package, automatic server update capability must stay
-unavailable and an older server must use the manual path.
+When package-backed server updates are available, Croki clients ask an older
+server to install the client's exact version. A client never asks a newer server
+to roll back; the client must update through its own distribution path instead.
+The release plan therefore rejects hosted web and production mobile publication
+unless `croki-server` publication is enabled. The GitHub release job accepts a
+skipped CLI job only when npm publication was not requested; it never accepts a
+requested-but-failed CLI publish.
+
+In a GitHub-only desktop build, the desktop app owns updates for its bundled
+local server. Package-backed update actions for remote, boot-service, respawned,
+or manually managed servers are compiled out, so the client may describe an
+older server but must not offer an impossible npm command. Enable CLI publication
+when a release must support those remote update paths.
 
 GitHub Release publication uses the repository-scoped workflow token so shared
 Release App API limits cannot strand artifact upload. The Croki Release App
