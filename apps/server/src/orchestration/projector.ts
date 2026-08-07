@@ -382,15 +382,20 @@ export function projectEvent(
         const retainedTurnIds = new Set(
           retainedMessages.flatMap((message) => (message.turnId === null ? [] : [message.turnId])),
         );
-        const retainedLatestTurnId = retainedMessages.findLast(
+        const retainedLatestTurnMessageIndex = retainedMessages.findLastIndex(
           (message) => message.turnId !== null,
-        )?.turnId;
-        const retainedLatestTurnMessages = retainedLatestTurnId
-          ? retainedMessages.filter((message) => message.turnId === retainedLatestTurnId)
-          : [];
-        const retainedLatestUserMessage = retainedLatestTurnMessages.find(
-          (message) => message.role === "user",
         );
+        const retainedLatestTurnId = retainedMessages[retainedLatestTurnMessageIndex]?.turnId;
+        const retainedLatestUserMessage = retainedMessages
+          .slice(0, retainedLatestTurnMessageIndex + 1)
+          .findLast((message) => message.role === "user");
+        const retainedLatestTurnMessages =
+          retainedLatestTurnId && retainedLatestUserMessage
+            ? [
+                retainedLatestUserMessage,
+                ...retainedMessages.filter((message) => message.turnId === retainedLatestTurnId),
+              ]
+            : [];
         const retainedLatestAssistantMessage = retainedLatestTurnMessages.findLast(
           (message) => message.role === "assistant",
         );

@@ -247,7 +247,9 @@ it.effect("preserves settled history before a middle edit boundary", () =>
             assistantMessageId: secondAssistantMessageId,
           },
           messages: [
-            ...source.messages,
+            ...source.messages.map((message) =>
+              message.id === sourceUserMessageId ? { ...message, turnId: null } : message,
+            ),
             {
               id: secondUserMessageId,
               role: "user",

@@ -301,6 +301,7 @@ import {
   dismissBranchMismatchForSession,
   hasServerAcknowledgedLocalDispatch,
   isBranchMismatchDismissedForSession,
+  isEditFromHerePreparationFailure,
   shouldShowBranchMismatchBanner,
   getStartedThreadModelChangeBlockReason,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
@@ -1527,6 +1528,7 @@ function ChatViewContent(props: ChatViewProps) {
   const threadError = isServerThread
     ? (localServerError ?? activeServerThread?.session?.lastError ?? null)
     : localDraftError;
+  const editFromHerePreparationFailed = isEditFromHerePreparationFailure(threadError);
   const runtimeMode = composerRuntimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
   const interactionMode =
     composerInteractionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE;
@@ -6896,7 +6898,13 @@ function ChatViewContent(props: ChatViewProps) {
                               canSteerRunningTurn={canSteerRunningTurn}
                               isConnecting={isConnecting}
                               isSendBusy={isSendBusy}
-                              sendDisabledReason={threadDetailLoading ? "Messages loading" : null}
+                              sendDisabledReason={
+                                threadDetailLoading
+                                  ? "Messages loading"
+                                  : editFromHerePreparationFailed
+                                    ? "Return to the source Thread and try Edit from here again"
+                                    : null
+                              }
                               isPreparingWorktree={isPreparingWorktree}
                               environmentUnavailable={activeEnvironmentUnavailableState}
                               activePendingApproval={activePendingApproval}

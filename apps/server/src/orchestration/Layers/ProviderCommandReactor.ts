@@ -1,4 +1,5 @@
 import {
+  EDIT_FROM_HERE_PREPARATION_FAILED_PREFIX,
   type ChatAttachment,
   CommandId,
   type CrokiHarnessId,
@@ -1615,7 +1616,7 @@ const make = Effect.gen(function* () {
         providerInstanceId: targetThread.modelSelection.instanceId,
         runtimeMode: targetThread.runtimeMode,
         activeTurnId: null,
-        lastError: formatFailureDetail(forkExit.cause),
+        lastError: `${EDIT_FROM_HERE_PREPARATION_FAILED_PREFIX} Return to the source Thread and try again. ${formatFailureDetail(forkExit.cause)}`,
         updatedAt: event.payload.createdAt,
       },
       createdAt: event.payload.createdAt,

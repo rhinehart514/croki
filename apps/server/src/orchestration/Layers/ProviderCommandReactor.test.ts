@@ -3479,7 +3479,8 @@ describe("ProviderCommandReactor", () => {
       );
       expect(target?.session).toMatchObject({
         status: "error",
-        lastError: "Native target rollback failed.",
+        lastError:
+          "Edit from here could not prepare the selected conversation boundary. Return to the source Thread and try again. Native target rollback failed.",
       });
       expect(harness.stopSession).toHaveBeenCalledWith({
         threadId: ThreadId.make("thread-edit-rollback-failure"),
@@ -3528,7 +3529,8 @@ describe("ProviderCommandReactor", () => {
       );
       expect(target?.session).toMatchObject({
         status: "error",
-        lastError: "Edit from here is available only for Codex threads in this version.",
+        lastError:
+          "Edit from here could not prepare the selected conversation boundary. Return to the source Thread and try again. Edit from here is available only for Codex threads in this version.",
       });
     }),
   );
@@ -3571,7 +3573,8 @@ describe("ProviderCommandReactor", () => {
       );
       expect(target?.session).toMatchObject({
         status: "error",
-        lastError: "Native history fork failed.",
+        lastError:
+          "Edit from here could not prepare the selected conversation boundary. Return to the source Thread and try again. Native history fork failed.",
       });
       expect(harness.stopSession).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
     }),

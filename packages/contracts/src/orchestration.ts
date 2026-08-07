@@ -448,6 +448,9 @@ export const OrchestrationReadModel = Schema.Struct({
 });
 export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
 
+export const EDIT_FROM_HERE_PREPARATION_FAILED_PREFIX =
+  "Edit from here could not prepare the selected conversation boundary.";
+
 export const OrchestrationProjectShell = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,

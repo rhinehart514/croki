@@ -121,6 +121,15 @@ it.effect("derives a source-preserving message fork point", () =>
             createdAt: "2026-01-02T03:01:30.000Z",
             updatedAt: "2026-01-02T03:01:30.000Z",
           },
+          {
+            id: MessageId.make("message-user-3"),
+            role: "user",
+            text: "failed before an answer",
+            turnId: null,
+            streaming: false,
+            createdAt: "2026-01-02T03:02:00.000Z",
+            updatedAt: "2026-01-02T03:02:00.000Z",
+          },
         ],
       }),
     });
@@ -132,7 +141,7 @@ it.effect("derives a source-preserving message fork point", () =>
       messageId: secondMessageId,
       turnId: secondTurnId,
       createdAt: "2026-01-02T03:01:00.000Z",
-      rollbackTurns: 1,
+      rollbackTurns: 2,
     });
   }).pipe(Effect.provide(NodeServices.layer)),
 );
