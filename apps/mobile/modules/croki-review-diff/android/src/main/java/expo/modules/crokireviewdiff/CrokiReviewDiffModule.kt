@@ -23,7 +23,10 @@ class CrokiReviewDiffModule : Module() {
       Prop("selectedRowIdsJson") { view: CrokiReviewDiffView, selectedRowIdsJson: String ->
         view.setSelectedRowIdsJson(selectedRowIdsJson)
       }
-      Prop("collapsedCommentIdsJson") { view: CrokiReviewDiffView, collapsedCommentIdsJson: String ->
+      Prop("collapsedCommentIdsJson") {
+          view: CrokiReviewDiffView,
+          collapsedCommentIdsJson: String
+        ->
         view.setCollapsedCommentIdsJson(collapsedCommentIdsJson)
       }
       Prop("appearanceScheme") { view: CrokiReviewDiffView, appearanceScheme: String ->
@@ -54,7 +57,11 @@ class CrokiReviewDiffModule : Module() {
         "onToggleComment",
       )
 
-      AsyncFunction("scrollToFile") { view: CrokiReviewDiffView, fileId: String, animated: Boolean ->
+      AsyncFunction("scrollToFile") {
+          view: CrokiReviewDiffView,
+          fileId: String,
+          animated: Boolean
+        ->
         view.scrollToFile(fileId, animated)
       }
       AsyncFunction("scrollToTop") { view: CrokiReviewDiffView, animated: Boolean ->
