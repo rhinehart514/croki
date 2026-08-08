@@ -54,7 +54,7 @@ jobs:
           set -euo pipefail
           (cd packages/contracts && vp test run src/project.test.ts src/keybindings.test.ts)
           (cd packages/shared && vp test run src/crokiContext.test.ts)
-          (cd apps/server && vp test run src/orchestration/Layers/CrokiContext.test.ts src/orchestration/Layers/CrokiContext.runtime.test.ts src/orchestration/Layers/ProviderCommandReactor.test.ts src/workspace/WorkspaceFileSystem.test.ts)
+          (cd apps/server && vp test run src/orchestration/Layers/CrokiApplication.test.ts src/orchestration/Layers/CrokiContext.runtime.test.ts src/orchestration/Layers/ProviderCommandReactor.test.ts src/workspace/WorkspaceFileSystem.test.ts)
           (cd apps/web && vp test run --project unit src/branding.test.ts src/components/croki src/components/chat/CrokiContextPresentation.test.tsx src/components/chat/CrokiProposalPrompts.logic.test.ts)
           (cd scripts && vp test run lib/brand-policy.test.ts lib/brand-assets.test.ts check-croki-overlay.test.ts report-croki-overlay.test.ts croki-release-plan.test.ts)
           npm run release:smoke
