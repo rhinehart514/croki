@@ -469,6 +469,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         adapter,
         instanceId,
         threadId: input.threadId,
+        runtimeMode: binding.runtimeMode,
         isActive: true,
       } as const;
     }
@@ -478,6 +479,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         adapter,
         instanceId,
         threadId: input.threadId,
+        runtimeMode: binding.runtimeMode,
         isActive: false,
       } as const;
     }
@@ -490,6 +492,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       adapter: recovered.adapter,
       instanceId,
       threadId: input.threadId,
+      runtimeMode: recovered.session.runtimeMode,
       isActive: true,
     } as const;
   });
@@ -639,6 +642,19 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
             input.modelSelection.model.trim().length > 0,
         });
 
+        // Changing runtime mode restarts the session, so the transition is only
+        // observable here, by diffing against the mode the previous session for
+        // this thread was bound to. Recording it separately is what makes the
+        // "started supervised, switched to full access" funnel answerable.
+        const previousRuntimeMode = persistedBinding?.runtimeMode;
+        if (previousRuntimeMode !== undefined && previousRuntimeMode !== input.runtimeMode) {
+          yield* analytics.record("provider.runtime_mode.changed", {
+            provider: sessionWithInstance.provider,
+            from: previousRuntimeMode,
+            to: input.runtimeMode,
+          });
+        }
+
         return sessionWithInstance;
       }).pipe(
         withMetrics({
@@ -659,8 +675,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       payload: rawInput,
     });
 
+    // `canvasEnabled` is retained on the transport contract for compatibility
+    // with clients that use it as presentation state. It is not provider input
+    // and cannot grant model-facing tools without an explicit per-turn control.
+    const { canvasEnabled: _canvasPresentationEnabled, ...providerInput } = parsed;
     const input = {
-      ...parsed,
+      ...providerInput,
       attachments: parsed.attachments ?? [],
     };
     if (!input.input && input.attachments.length === 0) {
@@ -694,9 +714,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       // an already-spawned agent process, so we keep the existing token valid
       // rather than issuing a new one: sessions that go a long time between
       // browser tool calls used to lose the toolkit outright.
-      yield* McpSessionRegistry.touchActiveMcpThread(input.threadId, {
-        harnessId: input.harnessId ?? "native",
-      });
+      yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
       const turn = yield* routed.adapter.sendTurn(input);
       yield* directory.upsert({
         threadId: input.threadId,
@@ -715,6 +733,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         provider: routed.adapter.provider,
         model: input.modelSelection?.model,
         interactionMode: input.interactionMode,
+        // Session-start events alone skew runtime mode toward users who toggle
+        // often, since every toggle restarts the session. Recording it per turn
+        // gives a usage-weighted view and lets it cross with interactionMode.
+        runtimeMode: routed.runtimeMode,
         attachmentCount: input.attachments.length,
         hasInput: typeof input.input === "string" && input.input.trim().length > 0,
       });

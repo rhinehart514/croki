@@ -38,6 +38,7 @@ describe("Croki application focus", () => {
           application,
           sourcePath: ".croki/application.croki",
         }}
+        onAddSource={() => undefined}
         onOpenSource={() => undefined}
       />,
     );
@@ -48,7 +49,11 @@ describe("Croki application focus", () => {
   it("keeps repositories without an application brief in the ordinary ADE", () => {
     expect(
       renderToStaticMarkup(
-        <CrokiApplicationFocus state={{ status: "absent" }} onOpenSource={() => undefined} />,
+        <CrokiApplicationFocus
+          state={{ status: "absent" }}
+          onAddSource={() => undefined}
+          onOpenSource={() => undefined}
+        />,
       ),
     ).toBe("");
   });
@@ -61,6 +66,7 @@ describe("Croki application focus", () => {
           errorCode: "malformed",
           sourcePath: ".croki/application.croki",
         }}
+        onAddSource={() => undefined}
         onOpenSource={() => undefined}
       />,
     );
@@ -73,6 +79,7 @@ describe("Croki application focus", () => {
     expect(markup).toContain("Application direction");
     expect(markup).toContain("Keep application focus inside a normal ADE.");
     expect(markup).toContain("Project-declared in .croki/application.croki");
+    expect(markup).toContain("Add it to a message when the model needs it.");
     expect(markup).not.toContain("Concept");
     expect(markup).not.toContain("Venture");
   });

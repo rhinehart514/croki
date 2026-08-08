@@ -74,7 +74,7 @@ type StageWorkspaceConfig = typeof StageWorkspaceConfig.Type;
 const RepoRoot = Effect.service(Path.Path).pipe(
   Effect.flatMap((path) => path.fromFileUrl(new URL("..", import.meta.url))),
 );
-const encodeJsonString = Schema.encodeEffect(Schema.UnknownFromJsonString);
+const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeWorkspaceConfig = Schema.decodeEffect(fromYaml(WorkspaceConfig));
 const decodeNodePtyManifest = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Struct({ version: Schema.String })),
@@ -1610,6 +1610,18 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       executableName: CROKI_PRODUCT_IDENTIFIERS.productionWmClass,
       icon: "icons",
       category: "Development",
+      // electron-builder turns these into MimeType=x-scheme-handler/<scheme>;
+      // in the .desktop entry (Exec already gets %U), so browsers can hand
+      // Croki OAuth callbacks to the app.
+      protocols: [
+        {
+          name: CROKI_VISIBLE_BRAND.protocolDisplayName,
+          schemes: [
+            CROKI_PRODUCT_IDENTIFIERS.productionScheme,
+            CROKI_PRODUCT_IDENTIFIERS.developmentScheme,
+          ],
+        },
+      ],
       desktop: {
         entry: {
           StartupWMClass: CROKI_PRODUCT_IDENTIFIERS.productionWmClass,

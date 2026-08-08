@@ -1,7 +1,12 @@
 "use client";
 
-import type { OrchestrationThreadActivity, ScopedThreadRef } from "@croki/contracts";
+import type {
+  OrchestrationThreadActivity,
+  PreviewAnnotationPayload,
+  ScopedThreadRef,
+} from "@croki/contracts";
 
+import type { ComposerImageAttachment } from "~/composerDraftStore";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 
 import { PreviewPanelShell, type PreviewPanelMode } from "./PreviewPanelShell";
@@ -15,6 +20,10 @@ interface Props {
   visible: boolean;
   activities?: ReadonlyArray<OrchestrationThreadActivity> | undefined;
   onAddCanvasEvidence?: ((url: string) => void) | undefined;
+  onSendAnnotation?: (
+    annotation: PreviewAnnotationPayload,
+    image: ComposerImageAttachment | null,
+  ) => void;
 }
 
 export function PreviewPanel({
@@ -25,6 +34,7 @@ export function PreviewPanel({
   visible,
   activities,
   onAddCanvasEvidence,
+  onSendAnnotation,
 }: Props) {
   if (!isPreviewSupportedInRuntime()) {
     return (
@@ -47,6 +57,7 @@ export function PreviewPanel({
         visible={visible}
         activities={activities}
         onAddCanvasEvidence={onAddCanvasEvidence}
+        {...(onSendAnnotation ? { onSendAnnotation } : {})}
       />
     </PreviewPanelShell>
   );

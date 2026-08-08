@@ -868,6 +868,36 @@ it.effect(
 );
 
 routing.layer("ProviderServiceLive routing", (it) => {
+  it.effect("keeps Canvas presentation state out of provider turns", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const threadId = asThreadId("thread-canvas-presentation-only");
+
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "full-access",
+      });
+      routing.codex.sendTurn.mockClear();
+
+      yield* provider.sendTurn({
+        threadId,
+        input: "Keep Canvas open",
+        attachments: [],
+        canvasEnabled: true,
+      });
+
+      assert.equal(routing.codex.sendTurn.mock.calls.length, 1);
+      assert.deepEqual(routing.codex.sendTurn.mock.calls[0]?.[0], {
+        threadId,
+        input: "Keep Canvas open",
+        attachments: [],
+      });
+      yield* provider.stopSession({ threadId });
+    }),
+  );
+
   it.effect("forks natively and persists an inactive resumable target binding", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;

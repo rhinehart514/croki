@@ -3,7 +3,6 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
-  DEFAULT_CROKI_HARNESS_ID,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   ModelSelection,
@@ -775,7 +774,7 @@ it.effect("decodes legacy thread.turn-start-requested payloads without Canvas st
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
     assert.isUndefined(parsed.canvasEnabled);
-    assert.strictEqual(parsed.harnessId, DEFAULT_CROKI_HARNESS_ID);
+    assert.isUndefined(parsed.harnessId);
     assert.strictEqual(parsed.sourceProposedPlan, undefined);
   }),
 );

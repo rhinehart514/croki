@@ -339,7 +339,8 @@ function projectScene(
       affordances: [affordance("inspect", "Inspect artifact", "read")],
       data: {
         presentation: artifact.presentation,
-        harnessId: artifact.harnessId,
+        ...(artifact.source !== undefined ? { source: artifact.source } : {}),
+        ...(artifact.harnessId !== undefined ? { harnessId: artifact.harnessId } : {}),
         activityId: String(artifactRevision.activity.id),
       },
     });

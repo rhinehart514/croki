@@ -1,9 +1,4 @@
-import {
-  DEFAULT_CROKI_HARNESS_ID,
-  ProviderInstanceId,
-  ThreadId,
-  type CrokiHarnessId,
-} from "@croki/contracts";
+import { ProviderInstanceId, ThreadId } from "@croki/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -19,8 +14,6 @@ import * as McpProviderSession from "./McpProviderSession.ts";
 export interface McpCredentialRequest {
   readonly threadId: ThreadId;
   readonly providerInstanceId: ProviderInstanceId;
-  /** The selected behavior for the first turn, when known. */
-  readonly harnessId?: CrokiHarnessId;
 }
 
 export interface McpIssuedCredential {
@@ -37,10 +30,7 @@ export interface McpSessionRegistryShape {
    * turns call this so that a session which is plainly alive keeps its
    * credential even when it goes a long time without touching an MCP tool.
    */
-  readonly touch: (
-    threadId: ThreadId,
-    options?: { readonly harnessId?: CrokiHarnessId },
-  ) => Effect.Effect<void>;
+  readonly touch: (threadId: ThreadId) => Effect.Effect<void>;
   readonly revokeProviderSession: (providerSessionId: string) => Effect.Effect<void>;
   readonly revokeThread: (threadId: ThreadId) => Effect.Effect<void>;
   readonly revokeAll: Effect.Effect<void>;
@@ -138,8 +128,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         threadId: ThreadId.make(request.threadId),
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
-        harnessId: request.harnessId ?? DEFAULT_CROKI_HARNESS_ID,
-        capabilities: capabilitiesForHarness(request.harnessId ?? DEFAULT_CROKI_HARNESS_ID),
+        capabilities: new Set(["preview"]),
         issuedAt,
       };
       yield* SynchronizedRef.update(state, ({ records }) => {
@@ -177,11 +166,8 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
   );
 
   const touch: McpSessionRegistryShape["touch"] = Effect.fn("McpSessionRegistry.touch")(
-    function* (threadId, touchOptions) {
+    function* (threadId) {
       const timestamp = yield* currentTimeMillis;
-      // The turn selection is the authority boundary. Canvas panel visibility
-      // is client presentation state and must never grant provider tooling.
-      const harnessId = touchOptions?.harnessId ?? DEFAULT_CROKI_HARNESS_ID;
       yield* SynchronizedRef.update(state, ({ records }) => {
         const current = pruneDead(records, timestamp);
         const next = new Map(current);
@@ -191,8 +177,9 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
               ...record,
               scope: {
                 ...record.scope,
-                harnessId,
-                capabilities: capabilitiesForHarness(harnessId),
+                // Canvas is a presentation preference until Croki exposes a
+                // visible, removable per-turn capability selection.
+                capabilities: new Set(["preview"]),
               },
               lastAliveAt: timestamp,
             });
@@ -257,11 +244,8 @@ export const issueActiveMcpCredential = (
  * Refreshes the liveness of a thread's MCP credential. Called on every provider
  * turn so an active session is never mistaken for an abandoned one.
  */
-export const touchActiveMcpThread = (
-  threadId: ThreadId,
-  options?: { readonly harnessId?: CrokiHarnessId },
-): Effect.Effect<void> =>
-  activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId, options) : Effect.void;
+export const touchActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
+  activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId) : Effect.void;
 
 export const revokeActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.revokeThread(threadId) : Effect.void;
@@ -273,9 +257,3 @@ export const revokeAllActiveMcpCredentials = (): Effect.Effect<void> =>
 export const __testing = {
   make: makeWithOptions,
 };
-
-function capabilitiesForHarness(harnessId: CrokiHarnessId): ReadonlySet<"preview" | "canvas"> {
-  return harnessId === "product-v1" || harnessId === "gtm-v1"
-    ? new Set(["preview", "canvas"])
-    : new Set(["preview"]);
-}

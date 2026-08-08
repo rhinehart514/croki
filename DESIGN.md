@@ -2,7 +2,14 @@
 
 Croki is for people directing serious software work across long-running Threads. It keeps the canonical conversation, the work happening around it, and the evidence needed to judge the result in one dense workspace.
 
-The developer experience is a normal repository that has gained product awareness, not another framework. Files, Git, Threads, worktrees, terminals, Preview, Review, and PRs remain the work. Croki derives useful context from those sources without asking the founder to maintain a second product model.
+The developer experience is a normal repository that has gained product awareness, not another framework. Files, Git, Threads, worktrees, terminals, Preview, Review, and PRs remain the work. Croki derives useful founder-facing awareness from those sources without asking the founder to maintain a second product model or silently sending that awareness to a provider.
+
+Croki is a harness host, not a harness. A fresh Thread uses the selected
+provider's native behavior and native project configuration. Croki adds no
+behavioral instruction or hidden application, sibling-Thread, progress, or
+project context by default. Anything Croki applies that can affect the model is
+chosen by the user, visible before sending, scoped, recorded with the turn,
+removable, and reversible.
 
 ## Product nouns and behavior
 
@@ -18,10 +25,32 @@ The developer experience is a normal repository that has gained product awarenes
 - Ordinary work must not expose worker or orchestration chrome when no delegation exists.
 - **UI history** is the durable record of screens Croki's models actually checked in Preview. It belongs to the originating Thread, preserves the observed image and bounded page evidence, and remains read-only. Its images follow normal Thread fork, revert, and deletion ownership. The founder sees **checked screens** and, later, **checked flows**; Croki does not expose a perception graph, authored state database, or design mode.
 - A turn that changes likely user-visible files ends with at most one inline UI-check receipt. Same-turn snapshots collapse into **Checked _n_ screens** and open as one gallery; visible changes with no rendered evidence say **Not checked**. Nonvisual turns add no receipt. Checked means Croki preserved at least one screen the model inspected during that turn, not that every state, flow, breakpoint, or production condition passed.
-- **Product** is the only active ideation behavior. It treats product, customer, market, positioning, and release direction as one reality; historical Venture and split GTM behavior IDs remain readable but are not offered for new turns.
-- **Concurrent work awareness** is a bounded, source-labelled snapshot of other Threads in the same project. Before a provider turn, Croki may supply Thread identity, state, branch, latest checkpoint files, and exact file overlap. It never copies sibling transcripts or presents observed work as founder-approved direction.
-- **Application awareness** is a bounded read of the invoking Thread's repository, checkpoint/files, source-attributed project evidence, and checked screens. The selected native model interprets user responsibility and product continuity.
-- The **application brief** at `.croki/application.croki` is the single repository-owned statement of application identity, released reality, and current build intent. Croki reads it automatically as bounded, founder-approved direction for project Threads. It is edited through ordinary files, Git, and Review, never a setup form or parallel product database.
+- **Applied to this turn** is the visible record of user-selected instructions,
+  context attachments, skills, and Croki-added tool access. Each item retains
+  its source and scope, can be removed before sending, and remains inspectable
+  on the sent turn. It describes only what Croki applied and never claims to
+  reveal provider-owned system instructions.
+- Provider runtime, instructions, context, tools, and senses are distinct.
+  Enabling a tool changes tool availability only; it does not add a Croki tool
+  policy or behavioral prompt. Opening Canvas, Preview, a project, or an
+  application brief never applies anything to the model.
+- Persistent model configuration uses provider- or repository-native mechanisms
+  such as `AGENTS.md`, skills, plugins, MCP configuration, and provider-owned
+  project instructions. Croki may make these easy to discover, inspect, install,
+  enable, and invoke; it does not simulate persistence by silently repeating a
+  proprietary prompt on every turn.
+- Product, GTM, Venture, Parallel Threads, and all former Croki behavior IDs are
+  legacy compatibility data only. Historical turns remain readable, but these
+  behaviors are not offered or executable for new turns.
+- Concurrent work and application awareness remain founder-facing projections.
+  Croki may show source-labelled Thread, checkpoint, file, progress, and project
+  evidence in its UI, but it never sends those projections to a provider unless
+  the user visibly attaches the specific context.
+- The **application brief** at `.croki/application.croki` is the repository-owned
+  statement of application identity, released reality, and current build intent.
+  Croki may display and edit it through ordinary files, Git, and Review. Its
+  existence never adds it to a provider turn; the founder may attach it for one
+  turn or reference it from provider-native project instructions.
 - Historical `.croki/application.json`, Concept, Release, and Venture schemas remain readable compatibility input. They do not create workspace navigation or dedicated product objects.
 - A running Codex Thread keeps its composer available for native turn guidance. Guidance is attached to the exact active turn and reports **Delivering guidance**, **Guidance delivered**, **Guidance not delivered**, or **Guidance delivery unconfirmed** beside the sent message. Providers without native steering keep the text as an editable draft and expose no simulated send path.
 - Native Codex voice lives beside the Thread composer only for Codex Threads. Spoken turns act directly in the native realtime session; they do not populate the unsent draft. Croki exposes honest connecting, listening, stopping, and typing-fallback states without relaying or persisting raw audio.
@@ -48,7 +77,11 @@ The developer experience is a normal repository that has gained product awarenes
 - GitHub-only desktop releases update their bundled server with the desktop app. When no exact `croki-server` package was published, they describe remote version skew without offering remote update buttons or package commands that cannot succeed.
 - UI history stays inside Preview and Review evidence. Its completion receipt sits directly after the answer, survives folded turn internals, and replaces duplicate raw snapshot rows. It must not become a dashboard or compete with the live result.
 - Preview has one job: open, inspect, and capture the running product. Product creation and alternatives stay in the canonical Thread instead of creating App, Component, and Idea modes inside Preview.
-- Application direction is visible through the compact header focus, its ordinary source file, and the model's source-grounded answer. Croki does not add a setup workflow, alignment score, progress model, or Croki-authored verdict.
+- Application direction is visible through the compact header focus and its
+  ordinary source file. A model answer is application-grounded only when the
+  founder attached that source or configured it through a provider-native
+  mechanism. Croki does not add a setup workflow, alignment score, progress
+  model, hidden context, or Croki-authored verdict.
 
 ## Stack
 

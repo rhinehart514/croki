@@ -822,6 +822,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           pinnedAt: existingPinnedAt ?? occurredAt,
+          // A fresh pin takes the client's slot in the arranged order; on a
+          // re-pin the existing key wins so raced duplicates cannot move a
+          // thread the user already placed.
+          ...(existingPinnedAt === null && command.orderKey !== undefined
+            ? { pinOrderKey: command.orderKey }
+            : {}),
           updatedAt: existingPinnedAt !== null ? thread.updatedAt : occurredAt,
         },
       };
@@ -892,6 +898,43 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           updatedAt: alreadyUnpinned ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
+    case "thread.pin.reorder": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Only pinned threads have a slot in the arranged order. Rejecting
+      // (rather than silently pinning) keeps a raced reorder-after-unpin
+      // from resurrecting a pin the user just cleared.
+      if (thread.pinnedAt == null) {
+        return yield* Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `thread ${command.threadId} is not pinned and cannot be reordered`,
+          }),
+        );
+      }
+      // Idempotent by re-emission (see thread.settle): a duplicate drop on
+      // the same slot keeps the existing updatedAt so it projects as a no-op.
+      const keyUnchanged = thread.pinOrderKey === command.orderKey;
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.pin-reordered",
+        payload: {
+          threadId: command.threadId,
+          orderKey: command.orderKey,
+          updatedAt: keyUnchanged ? thread.updatedAt : occurredAt,
         },
       };
     }
@@ -1023,6 +1066,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.turn.start": {
+      if (command.harnessId !== undefined || command.parallelThreadsEnabled !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail:
+            "Croki behavior fields are no longer supported. Update this client and apply instructions or delegation through provider-native configuration.",
+        });
+      }
       const targetThread = yield* requireThread({
         readModel,
         command,
@@ -1096,8 +1146,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           runtimeMode: targetThread.runtimeMode,
           interactionMode: targetThread.interactionMode,
           canvasEnabled: command.canvasEnabled ?? false,
-          parallelThreadsEnabled: command.parallelThreadsEnabled ?? false,
-          harnessId: command.harnessId ?? "native",
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
           createdAt: command.createdAt,
         },

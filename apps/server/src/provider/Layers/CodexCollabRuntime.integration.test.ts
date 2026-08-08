@@ -74,7 +74,7 @@ const scriptPath = NodePath.join(import.meta.dirname, "../testFixtures/.collab-s
 const peerPath = NodePath.join(import.meta.dirname, "../testFixtures/codexCollabMockPeer.sh");
 
 describe("CodexSessionRuntime collab integration", () => {
-  it.effect("tees child lifecycle into the parent while preserving child transcripts", () =>
+  it.effect("replays the captured fan-out into synthetic agent events without child leaks", () =>
     Effect.gen(function* () {
       // @effect-diagnostics-next-line preferSchemaOverJson:off
       NodeFS.writeFileSync(scriptPath, JSON.stringify(buildScript()), "utf8");
@@ -91,11 +91,7 @@ describe("CodexSessionRuntime collab integration", () => {
       });
 
       const eventsFiber = yield* runtime.events.pipe(
-        Stream.takeUntil(
-          (event) =>
-            event.method === "turn/completed" &&
-            event.threadId === ThreadId.make("thread-collab-integration"),
-        ),
+        Stream.takeUntil((event) => event.method === "turn/completed"),
         Stream.runCollect,
         Effect.forkScoped,
       );
@@ -135,34 +131,16 @@ describe("CodexSessionRuntime collab integration", () => {
       // root as a child: the parent turn completion still flows.
       assert.include(methods, "turn/completed");
 
-      // Raw child conversation methods remain addressed to their canonical
-      // child Threads; they are never copied into the parent transcript.
-      const childTranscriptEvents = events.filter(
-        (event) =>
-          event.threadId === ThreadId.make(CHILD_A) || event.threadId === ThreadId.make(CHILD_B),
-      );
-      assert.include(
-        childTranscriptEvents.map((event) => event.method),
-        "turn/completed",
-      );
-      assert.include(
-        childTranscriptEvents.map((event) => event.method),
-        "thread/closed",
-      );
-
+      // No raw child conversation methods leak onto the parent stream.
       const leaked = events.filter((event) => {
         const payload = event.payload as { threadId?: string } | undefined;
         const addressedToChild = payload?.threadId === CHILD_A || payload?.threadId === CHILD_B;
-        return (
-          event.threadId === ThreadId.make("thread-collab-integration") &&
-          addressedToChild &&
-          (event.method?.startsWith("thread/") ?? false)
-        );
+        return addressedToChild && (event.method?.startsWith("thread/") ?? false);
       });
       assert.deepEqual(
         leaked.map((event) => event.method),
         [],
-        "child thread/* lifecycle must not be copied into the parent transcript",
+        "child thread/* lifecycle must not appear as parent events",
       );
 
       yield* runtime.close;

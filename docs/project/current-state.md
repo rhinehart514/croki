@@ -1,19 +1,19 @@
 # Current project state
 
-Last audited: 2026-08-05
-Code baseline: Croki 0.4.7 UI history foundation on `croki/main`
+Last audited: 2026-08-08
+Code baseline: Croki native-provider integration on `croki/main`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow application-aware overlay on the development environment rather than
 a second agent runtime.
 
-Croki 0.4.7 is the current repository version; 0.4.5 remains the latest
-published baseline inherited by it. See the [0.4.6 release
+Croki 0.4.10 is the current repository version; 0.4.9 remains the latest tagged
+stable baseline inherited by it. See the [0.4.6 release
 notes](./release-notes-0.4.6.md), [0.4.7 UI history
-plan](./release-notes-0.4.7.md), [0.4.8 quality-of-life
-plan](./release-notes-0.4.8.md), [0.4.9 control without interruption
-plan](./release-notes-0.4.9.md), [0.4.10 durable outcomes and review
-plan](./release-notes-0.4.10.md), and [release ownership contract](../operations/release.md)
+notes](./release-notes-0.4.7.md), [0.4.8 quality-of-life
+notes](./release-notes-0.4.8.md), [0.4.9 control without interruption
+notes](./release-notes-0.4.9.md), [0.4.10 native-provider integration
+notes](./release-notes-0.4.10.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
 ## Working product
@@ -43,8 +43,8 @@ Croki currently provides:
 - matching server-update actions on web, desktop, and mobile. Mobile OTA checks
   remain disabled unless a non-inherited `CROKI_EAS_PROJECT_ID` is supplied;
 - Croki branding and completion feedback;
-- one repository-owned application brief at `.croki/application.croki`, carried
-  as bounded direction into project Threads;
+- one repository-owned application brief at `.croki/application.croki`, visible
+  to the founder and attached to a model only through an explicit user action;
 - the true Canvas / Croki Senses projection established by the 0.4.2 migration.
 
 ## 0.4.8 boundary
@@ -56,14 +56,16 @@ continuity strengthen the existing project and Thread model. `.croki` collapses
 to one application brief and one compact released-to-building focus in the
 Thread header. The setup action, progress model, Concept workflow, generated
 object views, and automatic panel expansion disappear. The brief opens as
-ordinary source and remains bounded direction for project Threads. The patch
+ordinary source and remains founder-facing direction. It reaches a model only
+when the founder visibly attaches it or configures a provider-native project
+instruction. The patch
 does not add another application-awareness layer, prompt surface, `.croki`
 kind, or future product-direction commitment. Preview also returns to one job:
 opening and checking a running app. Its component catalog, idea form,
 alternatives flow, and Beta setting disappear while checked-screen history
 remains.
 
-## Planned 0.4.9 and 0.4.10 boundaries
+## 0.4.9 and 0.4.10 boundaries
 
 0.4.9 continues the 0.4.8 continuity story: guide an active Codex turn, route
 only unresolved founder judgment into existing navigation, recover honestly
@@ -72,11 +74,13 @@ rewriting either the source Thread or current files. It adds no inbox, task
 system, provider-neutral steering loop, or combined conversation/filesystem
 undo.
 
-0.4.10 is the deliberate expansion release: an explicit native Codex goal can
-continue one Thread to a durable outcome, and a native detached Codex review can
-challenge a concrete change set in a read-only child Thread. Neither behavior
-is imitated for unsupported providers, and neither creates a Croki-owned agent
-runtime or second canonical conversation.
+0.4.10 integrates the current T3 Code substrate while removing Croki's active
+model-behavior harness. Default turns contain only the founder's visible
+message and attachments. Application direction, skills, files, interaction
+modes, permissions, and any Croki-added tool access affect the model only
+through explicit user actions. Canvas itself remains founder-facing and grants
+no model tools. Croki observes provider-native agents and workflows but does
+not become their scheduler, strategy layer, or recovery runtime.
 
 ## UI history
 
@@ -103,24 +107,18 @@ deduplication are not yet needed or implemented for explicit model checks.
 
 ## Application awareness
 
-The 0.4.7 application foundation gives native providers with Croki MCP one read-only
-`application_observe` frame: project-declared direction, the invoking Thread's
-branch/worktree and latest checkpoint files, project-wide checked screens, and
-bounded Senses evidence. Every screen is qualified by source Thread and screen
-id so forked observations cannot resolve ambiguously. A model may select a
-baseline and target screen for factual diagnostic deltas, then reopen either
-exact PNG with `application_screen`.
+Application awareness is a founder-facing Croki projection, not default model
+context. The application brief, Thread state, checkpoint files, sibling work,
+checked screens, and Senses evidence may be shown in Croki without being added
+to a provider request. Opening a project, Thread, Canvas, Preview, or the
+application focus changes nothing sent to the model.
 
-Croki does not author the product conclusion. Approval of the current direction
-file is explicitly unverified at read time, observed evidence stays separate
-from declaration, and missing or stale coverage remains visible. The provider
-uses its native reasoning and repository tools to judge user responsibility and
-mission continuity.
-
-MCP-backed application observation is not available to OpenClaw's current ACP
-bridge or external OpenCode sessions. Those paths still receive bounded
-application lineage and retain native file/Git inspection, but cannot yet reopen
-project-wide checked screens through this capability.
+When a founder wants a model to use application evidence, Croki exposes the
+specific source as a removable attachment or makes the relevant read-only tool
+available through an explicit user action. The sent turn records what Croki
+applied, including its source and scope. Croki never promotes observed evidence
+to founder-approved direction or claims to expose provider-owned hidden
+instructions.
 
 Provider support means that an adapter and product surface exist. A provider is
 ready only when its required local CLI, authentication, model access, and
@@ -130,8 +128,8 @@ Gateway and configured agent.
 ## Venture evidence and Croki Senses
 
 Canvas presentation is on the back burner after 0.4.3. The active foundation
-is provider-neutral venture evidence carried through ordinary Thread activity
-and inspected through Croki Senses. Product behavior, customer language, market
+is provider-neutral venture evidence shown through ordinary Thread activity
+and inspected through user-enabled Croki Senses. Customer language, market
 signals, and distribution results share one bounded observation envelope with
 source provenance, confidence, read-only authority, and explicit separation
 from founder-approved canon.
@@ -157,12 +155,12 @@ refresh or narrow its attention, inspect causal neighbors, compare a possible
 future, or wait for a meaningful change. Canvas stays current without a founder
 or agent manually authoring nodes, edges, release items, or a scene.
 
-The initial capabilities are `sense_status`, `sense_observe`, `sense_inspect`,
-and `sense_wait`; these
-give models more perception and control over context rather than constraining
-their reasoning to a fixed Canvas schema. External writes, destructive actions,
-expensive operations, sensitive data, and production changes still pass through
-native Threads, tools, approvals, and authority checks.
+The compatibility capabilities are `sense_status`, `sense_observe`,
+`sense_inspect`, and `sense_wait`. When a user enables them, they give the model
+read-only perception without supplying a Croki behavioral instruction. External
+writes, destructive actions, expensive operations, sensitive data, and
+production changes still pass through native Threads, tools, approvals, and
+authority checks.
 
 Sense calls are read-only and return frames directly. Canvas derives the same
 frame from ordinary Thread activity, so neither models nor founders maintain a
@@ -182,10 +180,10 @@ to provenance, and `Address in Thread` acts directly from the object without
 first opening an inspector.
 
 The founder can choose `Address in Thread` directly on any meaningful object.
-Croki focuses the native composer and carries only stable sensed IDs into the
-sent turn; the provider can inspect their sources through read-only Senses.
-Canvas never injects bodies, grants authority, or changes provider behavior.
-Failed sends preserve the focus and successful turn starts clear it.
+Croki focuses the native composer and presents a visible, removable reference
+before send. Canvas never injects bodies, grants authority, enables a tool, or
+changes provider behavior. Failed sends preserve the draft reference and a
+successful turn records it.
 
 `.croki/application.croki` is the single repository-owned application brief.
 It remains bounded, founder-approved direction and never becomes Canvas state.
@@ -204,47 +202,42 @@ focus with a direct path to its source. Croki has no `.croki` setup form,
 progress model, Concept worktree action, or generated object representation. A
 `.croki` file opens in the same editor and panel size as any other project file.
 
-The server bounds and validates the brief before treating it as factual project
-direction. Malformed, absent, unsupported, or oversized data fails open, the
-stored user message remains unchanged, and native provider behavior remains the
-default. Product remains an optional Composer behavior, not a metadata
-maintenance flow.
+The server bounds and validates the brief for display. Malformed, absent,
+unsupported, or oversized data fails open, the stored user message remains
+unchanged, and no application data is sent to the provider. The founder may
+attach the brief visibly for one turn or reference it from provider-native
+project instructions.
 
-Before each provider turn, Croki also derives a bounded project-activity
-snapshot from durable Thread projections. It includes at most five sibling
-Threads with their title, current state, branch, and latest checkpoint files,
-plus exact file overlaps with the invoking Thread. This observed activity is
-explicitly distinct from founder-approved application direction. Snapshot
-failure never blocks the turn, and sibling message bodies or private reasoning
-are never copied into provider context.
+Croki may derive a bounded project-activity snapshot for its own UI. It is
+never prepended before a provider turn. The founder may attach a specific
+source-labelled slice; Croki records that attachment with the sent turn and
+never copies sibling transcripts or private reasoning.
 
 Historical Concept, Release, and Venture parsers remain only to keep older
 repositories readable. They are not active navigation, ideation, release, or
 portfolio objects.
 
-## Selected native-provider rule
+## Native-provider and user-application rule
 
-The default Croki experience must preserve each provider's native behavior.
-Croki-specific personas, planning loops, delegation policies, tool policies,
-and behavioral prompts are never implicit. An explicit harness may be requested
-for a turn or thread, but Canvas and Croki Senses never require one and never
-silently change one. Any harness is visible, scoped, reversible, and unable to
-modify founder-approved project truth.
+Croki is a harness host, not a harness. A default turn consists of the user's
+message and ordinary user-selected attachments plus provider-required protocol
+data. Croki adds no persona, planning loop, delegation policy, tool policy,
+workflow instruction, application brief, project summary, sibling activity, or
+other hidden context.
 
-Runtime, context, tools, and harnesses are separate:
+Instructions, context, tools, runtime, and senses stay separate. Anything Croki
+applies that can affect the model is chosen by the user, visible before send,
+scoped, recorded on the turn, removable, and reversible. Persistent behavior
+uses provider- or repository-native mechanisms such as `AGENTS.md`, skills,
+plugins, MCP configuration, and provider-owned project instructions; Croki does
+not emulate it by repeating a hidden prompt.
 
-- the provider runtime performs the work;
-- context supplies visible facts and constraints;
-- tools expose actions;
-- a harness deliberately changes how an agent approaches a task.
-
-Canvas is the projection of sense activity, not a harness. The web composer
-remains native by default; opening, closing, selecting, or arranging Canvas
-never changes provider behavior or grants authority. OpenClaw follows the same
-rule: Croki passes prompts through ACP without a persona, delegation policy,
-model requirement, or forced reasoning mode. The selected OpenClaw agent remains
-user-owned and native; Croki never asks it to use a Croki-owned workspace,
-memory, skills, or model.
+Product, GTM, Venture, Parallel Threads, and former `Native` behavior IDs remain
+readable only for historical turns and migrations. They are not active composer
+choices and cannot reactivate Croki behavior. Opening Canvas or Preview changes
+no instruction, context, tool access, or authority. OpenClaw follows the same
+rule: Croki connects to the selected user-owned agent through ACP without
+rewriting its workspace, memory, skills, model, tools, or delegation settings.
 
 ## Known implementation gaps
 
@@ -255,13 +248,10 @@ memory, skills, or model.
   independent: the desktop app updates its bundled server while remote package
   update actions are compiled out. Signed desktop distribution remains
   unavailable until Croki-owned signing credentials are configured.
-- Parallel Threads is implemented behind a default-off Settings → Beta toggle
-  for the planned 0.4.4 release. It reuses provider-native delegation and the
-  parent Thread's existing Workstreams projection; provider support therefore
-  depends on the selected runtime exposing native workers. Once real child
-  Threads exist, the founder can persist either nested read-only worker chats
-  or bounded inline Workstreams on the parent. The two presentations are
-  mutually exclusive and worker transcripts remain owned by the children.
+- Native worker and subagent activity remains observable when the selected
+  provider creates it. Croki no longer injects a Parallel Threads delegation
+  policy or exposes it as a built-in behavior. Historical worker Threads remain
+  readable and owned by their children.
 - Historical `.croki` scope schemas and legacy Canvas objects remain only for
   compatibility reads and old receipts. The application brief remains active.
 - Additional native senses can expand beyond the initial Thread, preview,

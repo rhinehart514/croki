@@ -11,7 +11,6 @@ import {
 } from "./baseSchemas.ts";
 import {
   ChatAttachment,
-  CrokiHarnessId,
   ModelSelection,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
@@ -76,10 +75,8 @@ export const ProviderSendTurnInput = Schema.Struct({
   ),
   modelSelection: Schema.optional(ModelSelection),
   interactionMode: Schema.optional(ProviderInteractionMode),
-  /** Enables the scoped Croki Canvas presentation tool for this provider turn. */
+  /** @deprecated Compatibility-only Canvas presentation state; providers must ignore it. */
   canvasEnabled: Schema.optional(Schema.Boolean),
-  /** One-turn Croki behavior layered over the provider's native runtime. */
-  harnessId: Schema.optional(CrokiHarnessId),
 });
 export type ProviderSendTurnInput = typeof ProviderSendTurnInput.Type;
 

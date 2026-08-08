@@ -359,6 +359,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(mac, "asarUnpack");
       assert.notProperty(linux, "asarUnpack");
       assert.deepStrictEqual(win.asarUnpack, WINDOWS_ASAR_UNPACK);
+      // Linux must register the renderer schemes so the generated .desktop
+      // entry advertises Croki's schemes for OAuth deep links.
+      assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
+        { name: "Croki", schemes: ["croki", "croki-dev"] },
+      ]);
       for (const config of [mac, linux, win]) {
         assert.equal(config.appId, "com.croki.desktop");
         assert.equal(config.productName, "Croki");

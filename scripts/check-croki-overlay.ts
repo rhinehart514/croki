@@ -17,7 +17,7 @@ export interface CrokiOverlayViolation {
     | "brand-policy"
     | "line-limit"
     | "missing-test"
-    | "server-loader-owner"
+    | "automatic-model-input"
     | "shared-context-owner";
   readonly path: string;
   readonly message: string;
@@ -29,12 +29,43 @@ export interface AddedOverlayLine {
 }
 
 const REQUIRED_FOCUSED_TESTS = [
-  "apps/server/src/orchestration/Layers/CrokiContext.test.ts",
+  "apps/server/src/orchestration/Layers/ProviderCommandReactor.test.ts",
   "apps/web/src/branding.test.ts",
   "apps/web/src/components/croki/CrokiCanvasField.test.tsx",
   "apps/web/src/components/croki/crokiCanvasModel.test.ts",
   "packages/shared/src/crokiContext.test.ts",
   "scripts/lib/brand-policy.test.ts",
+] as const;
+
+/**
+ * Persisted preferences from upstream themes remain readable after the Croki
+ * rename. These are internal storage identifiers, not labels or visible
+ * product names, so the allowance must stay exact.
+ */
+export const LEGACY_PERSISTED_THEME_IDS = new Set([
+  "t3-chat",
+  "t3-chat-dark",
+  "t3-ember",
+  "t3-grove",
+  "t3-iris",
+  "t3-ocean",
+]);
+
+const FORBIDDEN_AUTOMATIC_MODEL_INPUT_PATTERNS = [
+  /\bloadCrokiAgentContext\b/u,
+  /\bcompileCrokiTurnInput\b/u,
+  /\bCROKI_(?:PRODUCT|GTM|VENTURE)_HARNESS_INSTRUCTION\b/u,
+  /\bCROKI_PARALLEL_THREADS_INSTRUCTION\b/u,
+  /<croki_(?:product|gtm|venture)_harness\b/u,
+  /<croki_parallel_threads_beta\b/u,
+] as const;
+
+const FORBIDDEN_PROVIDER_REACTOR_CONTEXT_PATTERNS = [
+  /\bloadCrokiApplication\b/u,
+  /\bloadCrokiConceptContext\b/u,
+  /\bloadCrokiParentScopes\b/u,
+  /\bbuildCrokiProjectActivityPrompt\b/u,
+  /\bderiveCrokiApplicationProgress\b/u,
 ] as const;
 
 const CROKI_SOURCE_ROOTS = [
@@ -135,8 +166,9 @@ const CROKI_IDENTIFIER_PATTERN =
 
 export function findUnretainedT3Identifiers(value: string): readonly string[] {
   if (/\b(?:font|text|bg|border)-t3-/u.test(value)) return [];
-  if (/\bT3 (?:Code|Tools)\b/u.test(value)) {
-    return [value.match(/\bT3 (?:Code|Tools)\b/u)?.[0] ?? value];
+  if (LEGACY_PERSISTED_THEME_IDS.has(value)) return [];
+  if (/\bT3(?: (?:Chat|Code|Tools))?\b/u.test(value)) {
+    return [value.match(/\bT3(?: (?:Chat|Code|Tools))?\b/u)?.[0] ?? value];
   }
   const identifiers = [...value.matchAll(CROKI_IDENTIFIER_PATTERN)].map((match) => match[0]);
   const unretained = identifiers.filter((identifier) => !matchesRetainedIdentifier(identifier));
@@ -145,6 +177,16 @@ export function findUnretainedT3Identifiers(value: string): readonly string[] {
 
   const unknownCompactIdentifier = value.match(/\bt3[a-z0-9._:-]+\b/iu)?.[0];
   return unknownCompactIdentifier ? [unknownCompactIdentifier] : [];
+}
+
+export function containsAutomaticServerModelInput(path: string, contents: string): boolean {
+  if (FORBIDDEN_AUTOMATIC_MODEL_INPUT_PATTERNS.some((pattern) => pattern.test(contents))) {
+    return true;
+  }
+  return (
+    toRepoPath(path) === "apps/server/src/orchestration/Layers/ProviderCommandReactor.ts" &&
+    FORBIDDEN_PROVIDER_REACTOR_CONTEXT_PATTERNS.some((pattern) => pattern.test(contents))
+  );
 }
 
 export function findBrandPolicyViolations(lines: readonly AddedOverlayLine[]) {
@@ -225,12 +267,20 @@ function runGit(repoRoot: string, args: readonly string[]): string {
 }
 
 export function resolveOverlayBase(repoRoot: string, explicitBase?: string): string {
-  const candidates = [
-    explicitBase?.trim(),
-    NodeProcess.env.CROKI_OVERLAY_BASE_SHA?.trim(),
-    "main",
-    "HEAD^",
-  ].filter((value): value is string => Boolean(value));
+  if (explicitBase !== undefined) {
+    const candidate = explicitBase.trim();
+    if (candidate.length === 0) {
+      throw new Error("Croki overlay base cannot be empty.");
+    }
+    try {
+      return runGit(repoRoot, ["rev-parse", "--verify", `${candidate}^{commit}`]).trim();
+    } catch {
+      throw new Error(`Could not resolve explicit Croki overlay base commit: ${candidate}`);
+    }
+  }
+  const candidates = [NodeProcess.env.CROKI_OVERLAY_BASE_SHA?.trim(), "main", "HEAD^"].filter(
+    (value): value is string => Boolean(value),
+  );
   for (const candidate of candidates) {
     try {
       return runGit(repoRoot, ["rev-parse", "--verify", `${candidate}^{commit}`]).trim();
@@ -359,19 +409,15 @@ export function checkCrokiOverlay(
     });
   }
 
-  const serverLoaderOwners = findDeclarationOwners(
-    repoRoot,
-    ["apps/server/src"],
-    /\bexport\s+function\s+loadCrokiAgentContext\b/u,
-  );
-  if (
-    serverLoaderOwners.length !== 1 ||
-    serverLoaderOwners[0] !== "apps/server/src/orchestration/Layers/CrokiContext.ts"
-  ) {
+  const automaticModelInputOwners = walkFiles(repoRoot, "apps/server/src")
+    .filter((path) => isTypeScriptSource(path) && !isTestPath(path))
+    .filter((path) => containsAutomaticServerModelInput(path, readRepoFile(repoRoot, path)))
+    .toSorted();
+  if (automaticModelInputOwners.length > 0) {
     violations.push({
-      code: "server-loader-owner",
-      path: "apps/server/src/orchestration/Layers/CrokiContext.ts",
-      message: `Expected one server loader owner; found: ${serverLoaderOwners.join(", ") || "none"}.`,
+      code: "automatic-model-input",
+      path: automaticModelInputOwners[0]!,
+      message: `Croki must not automatically inject context or behavioral instructions into provider turns; found: ${automaticModelInputOwners.join(", ")}.`,
     });
   }
 

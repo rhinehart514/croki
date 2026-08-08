@@ -28,7 +28,9 @@ describe("resolveCrokiEasUpdates", () => {
   });
 
   it("rejects inherited and malformed destinations", () => {
-    expect(() => resolveCrokiEasUpdates(INHERITED_T3_EAS_PROJECT_ID)).toThrow(/inherited T3/);
+    expect(() => resolveCrokiEasUpdates(INHERITED_T3_EAS_PROJECT_ID)).toThrow(
+      /predecessor project/,
+    );
     expect(() => resolveCrokiEasUpdates("not-a-project")).toThrow(/valid EAS project UUID/);
   });
 });

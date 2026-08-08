@@ -60,11 +60,23 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedCommandPalette.command, "commandPalette.toggle");
 
-    const parsedCanvasOpen = yield* decode(KeybindingRule, {
-      key: "mod+shift+c",
-      command: "canvas.open",
+    const parsedFilePicker = yield* decode(KeybindingRule, {
+      key: "mod+p",
+      command: "filePicker.toggle",
     });
-    assert.strictEqual(parsedCanvasOpen.command, "canvas.open");
+    assert.strictEqual(parsedFilePicker.command, "filePicker.toggle");
+
+    const parsedProjectSearch = yield* decode(KeybindingRule, {
+      key: "mod+shift+f",
+      command: "projectSearch.toggle",
+    });
+    assert.strictEqual(parsedProjectSearch.command, "projectSearch.toggle");
+
+    const parsedThemeEditor = yield* decode(KeybindingRule, {
+      key: "mod+alt+shift+t",
+      command: "themeEditor.toggle",
+    });
+    assert.strictEqual(parsedThemeEditor.command, "themeEditor.toggle");
 
     const parsedLocal = yield* decode(KeybindingRule, {
       key: "mod+shift+n",
@@ -194,11 +206,11 @@ it.effect("drops resolved rules with commands this build does not know", () =>
     const parsed = yield* decode(ResolvedKeybindingsConfig, [
       { command: "terminal.toggle", shortcut },
       { command: "someFuture.toggle", shortcut },
-      { command: "canvas.open", shortcut },
+      { command: "filePicker.toggle", shortcut },
     ]);
     assert.deepEqual(
       parsed.map((rule) => rule.command),
-      ["terminal.toggle", "canvas.open"],
+      ["terminal.toggle", "filePicker.toggle"],
     );
   }),
 );

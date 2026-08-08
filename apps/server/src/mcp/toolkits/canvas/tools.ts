@@ -82,7 +82,7 @@ const CanonicalCanvasEdge = Schema.Struct({
   relation: NonEmpty.check(Schema.isMaxLength(CROKI_CANVAS_PRESENT_LIMITS.edgeRelationChars)),
 });
 
-/** Current tool wire shape. The harness id is normally supplied by invocation scope. */
+/** Current wire shape. A harness id is accepted only to reject legacy callers clearly. */
 const CanonicalCanvasPresentInput = Schema.Struct({
   harnessId: Schema.optional(ArtifactHarnessId),
   presentation: ArtifactPresentation,
@@ -137,7 +137,7 @@ export type CrokiCanvasPresentInput = typeof CrokiCanvasPresentInput.Type;
 export const CrokiCanvasPresentResult = Schema.Struct({
   artifactId: Schema.String,
   revision: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
-  harnessId: ArtifactHarnessId,
+  source: Schema.Literal("user-applied"),
   presentation: ArtifactPresentation,
   nodeCount: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
   edgeCount: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),

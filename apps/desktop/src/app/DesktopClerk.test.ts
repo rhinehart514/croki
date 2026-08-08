@@ -22,17 +22,38 @@ vi.mock("@clerk/electron/storage", () => ({
   storage: storageMock,
 }));
 
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as ElectronApp from "../electron/ElectronApp.ts";
+import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopClerk from "./DesktopClerk.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
-const makeDesktopClerkLayer = (isDevelopment = true) => {
+const makeDesktopClerkLayer = (isDevelopment = true, events: string[] = []) => {
   const environment = DesktopEnvironment.DesktopEnvironment.of({
-    stateDir: "/tmp/t3-state",
+    stateDir: "/tmp/croki-state",
     isDevelopment,
+    appDataDirectory: "/tmp/app-data",
+    userDataDirName: isDevelopment ? "Croki (Dev)" : "Croki",
+    legacyUserDataDirName: isDevelopment ? "croki-dev" : "croki",
+    path: { join: (...parts: ReadonlyArray<string>) => parts.join("/") },
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
 
+  const electronApp = {
+    setPath: (name: string, value: string) =>
+      Effect.sync(() => {
+        events.push(`setPath:${name}:${value}`);
+      }),
+  } as unknown as ElectronApp.ElectronApp["Service"];
+
   return DesktopClerk.layer.pipe(
-    Layer.provide(Layer.succeed(DesktopEnvironment.DesktopEnvironment, environment)),
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.succeed(DesktopEnvironment.DesktopEnvironment, environment),
+        Layer.succeed(ElectronApp.ElectronApp, electronApp),
+        FileSystem.layerNoop({ exists: () => Effect.succeed(false) }),
+      ),
+    ),
   );
 };
 
@@ -55,11 +76,15 @@ describe("DesktopClerk", () => {
 
   it.effect("acquires and releases the SDK bridge with the layer", () => {
     const cleanup = vi.fn();
+    const events: string[] = [];
     storageMock.mockReturnValue(storageAdapter);
-    createClerkBridgeMock.mockReturnValue({ cleanup });
+    createClerkBridgeMock.mockImplementation(() => {
+      events.push("createClerkBridge");
+      return { cleanup, isPrimaryInstance: true };
+    });
 
     return Effect.gen(function* () {
-      yield* Effect.scoped(Layer.build(makeDesktopClerkLayer()));
+      yield* Effect.scoped(Layer.build(makeDesktopClerkLayer(true, events)));
 
       assert.deepEqual(createClerkBridgeMock.mock.calls, [
         [
@@ -71,6 +96,10 @@ describe("DesktopClerk", () => {
         ],
       ]);
       assert.equal(cleanup.mock.calls.length, 1);
+      // The bridge acquires Electron's single-instance lock at creation, and
+      // the lock both lives in and creates the userData directory — so the
+      // real path must be set before the bridge exists.
+      assert.deepEqual(events, ["setPath:userData:/tmp/app-data/Croki (Dev)", "createClerkBridge"]);
       storageMock.mockClear();
       createClerkBridgeMock.mockClear();
     });
@@ -87,12 +116,12 @@ describe("DesktopClerk", () => {
       const error = yield* Effect.scoped(Layer.build(makeDesktopClerkLayer())).pipe(Effect.flip);
 
       assert.instanceOf(error, DesktopClerk.DesktopClerkBridgeInitializationError);
-      assert.equal(error.stateDir, "/tmp/t3-state");
+      assert.equal(error.stateDir, "/tmp/croki-state");
       assert.equal(error.isDevelopment, true);
       assert.strictEqual(error.cause, cause);
       assert.equal(
         error.message,
-        'Failed to initialize the desktop Clerk bridge for state directory "/tmp/t3-state" (development: true).',
+        'Failed to initialize the desktop Clerk bridge for state directory "/tmp/croki-state" (development: true).',
       );
     });
   });
@@ -113,27 +142,83 @@ describe("DesktopClerk", () => {
       if (exit._tag === "Failure") {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, DesktopClerk.DesktopClerkBridgeCleanupError);
-        assert.equal(error.stateDir, "/tmp/t3-state");
+        assert.equal(error.stateDir, "/tmp/croki-state");
         assert.equal(error.isDevelopment, false);
         assert.strictEqual(error.cause, cause);
         assert.equal(
           error.message,
-          'Failed to clean up the desktop Clerk bridge for state directory "/tmp/t3-state" (development: false).',
+          'Failed to clean up the desktop Clerk bridge for state directory "/tmp/croki-state" (development: false).',
         );
       }
     });
+  });
+
+  it.effect("registers the second-instance handler in the primary instance", () => {
+    storageMock.mockReturnValue(storageAdapter);
+    createClerkBridgeMock.mockReturnValue({ cleanup: vi.fn(), isPrimaryInstance: true });
+    const quit = vi.fn();
+    const registeredEvents: string[] = [];
+    const electronApp = {
+      quit: Effect.sync(quit),
+      on: (eventName: string) =>
+        Effect.sync(() => {
+          registeredEvents.push(eventName);
+        }),
+    } as unknown as ElectronApp.ElectronApp["Service"];
+    const electronWindow = {} as ElectronWindow.ElectronWindow["Service"];
+
+    return Effect.gen(function* () {
+      const clerk = yield* DesktopClerk.DesktopClerk;
+      const exit = yield* Effect.exit(Effect.scoped(clerk.configure));
+
+      assert.isTrue(Exit.isSuccess(exit));
+      assert.equal(quit.mock.calls.length, 0);
+      assert.deepEqual(registeredEvents, ["second-instance"]);
+    }).pipe(
+      Effect.provide(makeDesktopClerkLayer()),
+      Effect.provideService(ElectronApp.ElectronApp, electronApp),
+      Effect.provideService(ElectronWindow.ElectronWindow, electronWindow),
+    );
+  });
+
+  it.effect("quits and interrupts startup in a secondary instance", () => {
+    storageMock.mockReturnValue(storageAdapter);
+    createClerkBridgeMock.mockReturnValue({ cleanup: vi.fn(), isPrimaryInstance: false });
+    const quit = vi.fn();
+    const registeredEvents: string[] = [];
+    const electronApp = {
+      quit: Effect.sync(quit),
+      on: (eventName: string) =>
+        Effect.sync(() => {
+          registeredEvents.push(eventName);
+        }),
+    } as unknown as ElectronApp.ElectronApp["Service"];
+    const electronWindow = {} as ElectronWindow.ElectronWindow["Service"];
+
+    return Effect.gen(function* () {
+      const clerk = yield* DesktopClerk.DesktopClerk;
+      const exit = yield* Effect.exit(Effect.scoped(clerk.configure));
+
+      assert.isTrue(Exit.hasInterrupts(exit));
+      assert.equal(quit.mock.calls.length, 1);
+      assert.deepEqual(registeredEvents, []);
+    }).pipe(
+      Effect.provide(makeDesktopClerkLayer()),
+      Effect.provideService(ElectronApp.ElectronApp, electronApp),
+      Effect.provideService(ElectronWindow.ElectronWindow, electronWindow),
+    );
   });
 
   it.each([
     { isDevelopment: true, scheme: "croki-dev" },
     { isDevelopment: false, scheme: "croki" },
   ])("configures the SDK with the $scheme renderer origin", ({ isDevelopment, scheme }) => {
-    const bridge = { cleanup: vi.fn() };
+    const bridge = { cleanup: vi.fn(), isPrimaryInstance: true };
     storageMock.mockReturnValue(storageAdapter);
     createClerkBridgeMock.mockReturnValue(bridge);
 
-    assert.equal(DesktopClerk.createDesktopClerkBridge("/tmp/t3-state", isDevelopment), bridge);
-    assert.deepEqual(storageMock.mock.calls, [[{ path: "/tmp/t3-state" }]]);
+    assert.equal(DesktopClerk.createDesktopClerkBridge("/tmp/croki-state", isDevelopment), bridge);
+    assert.deepEqual(storageMock.mock.calls, [[{ path: "/tmp/croki-state" }]]);
     assert.deepEqual(createClerkBridgeMock.mock.calls, [
       [
         {

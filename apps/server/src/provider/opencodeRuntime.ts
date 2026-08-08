@@ -34,7 +34,7 @@ import { collectStreamAsString } from "./providerSnapshot.ts";
 import * as NetService from "@croki/shared/Net";
 import { HostProcessPlatform } from "@croki/shared/hostProcess";
 import { resolveSpawnCommand } from "@croki/shared/shell";
-const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
+const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 const OPENCODE_EMPTY_CONFIG_CONTENT = "{}";
 
 const OPENCODE_SERVER_READY_PREFIX = "opencode server listening";

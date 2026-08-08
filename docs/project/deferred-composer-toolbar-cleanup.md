@@ -1,6 +1,11 @@
 # Deferred composer toolbar cleanup
 
-Status: deferred exploration, not selected work
+Status: superseded historical exploration
+
+> This proposal predates Croki's native-provider boundary. Product, GTM,
+> Venture, and Native behavior IDs are legacy compatibility data only. Croki
+> now has no built-in harness selector; model-affecting configuration is applied
+> explicitly by the user and remains visible, scoped, removable, and reversible.
 
 ## Opportunity
 

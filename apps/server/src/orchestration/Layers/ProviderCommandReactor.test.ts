@@ -49,6 +49,7 @@ import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
+import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import {
   providerErrorLabel,
   providerErrorLabelFromInstanceHint,
@@ -361,6 +362,7 @@ describe("ProviderCommandReactor", () => {
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
       Layer.provide(ThreadBackgroundLiveness.layer),
+      Layer.provide(ThreadPlanProgress.layer),
       Layer.provide(OrchestrationProjectionPipelineLive),
       Layer.provide(OrchestrationEventStoreLive),
       Layer.provide(OrchestrationCommandReceiptRepositoryLive),
@@ -369,6 +371,7 @@ describe("ProviderCommandReactor", () => {
     );
     const projectionSnapshotLayer = OrchestrationProjectionSnapshotQueryLive.pipe(
       Layer.provide(ThreadBackgroundLiveness.layer),
+      Layer.provide(ThreadPlanProgress.layer),
       Layer.provide(RepositoryIdentityResolver.layer),
       Layer.provide(SqlitePersistenceMemory),
     );
@@ -394,6 +397,9 @@ describe("ProviderCommandReactor", () => {
           get streamDomainEvents() {
             return engine.streamDomainEvents;
           },
+          ...(engine.subscribeDomainEvents === undefined
+            ? {}
+            : { subscribeDomainEvents: engine.subscribeDomainEvents }),
           latestSequence: engine.latestSequence,
         } satisfies OrchestrationEngineService["Service"];
       }),
@@ -810,7 +816,7 @@ describe("ProviderCommandReactor", () => {
     ).toBe("");
   });
 
-  it("injects project application lineage into native worktree turns", async () => {
+  it("does not inject application files or project activity into provider input", async () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "croki-reactor-"));
     const workspaceRoot = NodePath.join(baseDir, "project");
     NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".croki"), { recursive: true });
@@ -896,15 +902,7 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(() => harness.sendTurn.mock.calls.length === 1);
     const providerRequest = harness.sendTurn.mock.calls[0]?.[0] as { input?: string };
-    expect(providerRequest.input).toContain('<croki_application version="1"');
-    expect(providerRequest.input).toContain('<croki_application_progress version="1"');
-    expect(providerRequest.input).toContain("Customer evidence observed");
-    expect(providerRequest.input).not.toContain("Private customer transcript");
-    expect(providerRequest.input).not.toContain("sensitive information");
-    expect(providerRequest.input).toContain("not founder-approved application facts");
-    expect(providerRequest.input).toContain('"version":"0.4.5"');
-    expect(providerRequest.input).toContain('"version":"0.4.6"');
-    expect(providerRequest.input?.endsWith(userText)).toBe(true);
+    expect(providerRequest.input).toBe(userText);
 
     const thread = (await harness.readModel()).threads.find(
       (entry) => entry.id === ThreadId.make("thread-1"),
@@ -916,7 +914,7 @@ describe("ProviderCommandReactor", () => {
     ).toBe(userText);
   });
 
-  it("enables the strategy harness while ignoring invalid legacy context", async () => {
+  it("explicitly rejects legacy Croki behavior fields from old clients", async () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "croki-reactor-"));
     const workspaceRoot = NodePath.join(baseDir, "project");
     NodeFS.mkdirSync(NodePath.join(workspaceRoot, ".croki"), { recursive: true });
@@ -924,40 +922,34 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness({ baseDir, projectWorkspaceRoot: workspaceRoot });
     const userText = "Help me challenge the first-customer assumption";
 
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.turn.start",
-        commandId: CommandId.make("cmd-turn-start-canvas-harness"),
-        threadId: ThreadId.make("thread-1"),
-        message: {
-          messageId: asMessageId("user-message-canvas-harness"),
-          role: "user",
-          text: userText,
-          attachments: [],
-        },
-        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-        runtimeMode: "approval-required",
-        canvasEnabled: true,
-        harnessId: "gtm-v1",
-        createdAt: "2026-01-01T00:00:00.000Z",
-      }),
-    );
+    await expect(
+      Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-turn-start-canvas-harness"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId("user-message-canvas-harness"),
+            role: "user",
+            text: userText,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          canvasEnabled: true,
+          harnessId: "gtm-v1",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
+      ),
+    ).rejects.toThrow("Croki behavior fields are no longer supported");
 
-    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
-    const providerRequest = harness.sendTurn.mock.calls[0]?.[0] as { input?: string };
-    expect(providerRequest.input).toContain('<croki_gtm_harness version="1">');
-    expect(providerRequest.input).toContain(userText);
-    expect(providerRequest.input).not.toContain("not json");
-
+    expect(harness.sendTurn).not.toHaveBeenCalled();
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(
       thread?.messages.find((message) => message.id === asMessageId("user-message-canvas-harness"))
         ?.text,
-    ).toBe(userText);
-    expect(thread?.activities.some((activity) => activity.kind === "croki.context.applied")).toBe(
-      false,
-    );
+    ).toBeUndefined();
   });
 
   effectIt.effect("projects starting before a slow provider session finishes", () =>

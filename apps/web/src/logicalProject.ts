@@ -1,4 +1,5 @@
 export {
+  buildProjectGroups,
   deriveLogicalProjectKey,
   deriveLogicalProjectKeyFromRef,
   deriveLogicalProjectKeyFromSettings,
@@ -11,4 +12,6 @@ export {
   selectProjectGroupingSettings,
   type ProjectGroupingMode,
   type ProjectGroupingSettings,
+  type ProjectGroup,
+  type ProjectGroupMember,
 } from "@croki/client-runtime/state/project-grouping";

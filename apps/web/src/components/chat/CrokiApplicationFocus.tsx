@@ -11,6 +11,7 @@ import {
 
 export function CrokiApplicationFocus(props: {
   readonly state: CrokiApplicationState | null;
+  readonly onAddSource: (relativePath: string) => void;
   readonly onOpenSource: (relativePath: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -70,7 +71,16 @@ export function CrokiApplicationFocus(props: {
         viewportClassName="p-4"
       >
         <ApplicationFocusDetails application={application} />
-        <div className="mt-4 flex justify-end border-t border-border/70 pt-3">
+        <div className="mt-4 flex justify-end gap-2 border-t border-border/70 pt-3">
+          <Button
+            size="xs"
+            onClick={() => {
+              setOpen(false);
+              props.onAddSource(sourcePath);
+            }}
+          >
+            Add to message
+          </Button>
           <Button
             size="xs"
             variant="ghost"
@@ -138,7 +148,7 @@ export function ApplicationFocusDetails(props: { readonly application: CrokiAppl
       ) : null}
 
       <p className="text-[11px] leading-4 text-muted-foreground/70">
-        Project-declared in .croki/application.croki and carried into project Threads.
+        Project-declared in .croki/application.croki. Add it to a message when the model needs it.
       </p>
     </div>
   );

@@ -25,7 +25,7 @@ const source = JSON.stringify({
     intent: "Give applications version-aware product and GTM inheritance.",
     product: ["Show released and building versions in the composer."],
     gtm: ["Keep claims connected to released product reality."],
-    successSignals: ["Native turns receive the same bounded application context."],
+    successSignals: ["Founders can explicitly add bounded application context to a turn."],
   },
 });
 

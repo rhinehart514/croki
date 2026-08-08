@@ -6,6 +6,8 @@ Status: superseded compatibility specification
 > [Croki on Croki](../croki.md). Agents must not call `canvas_present` or
 > maintain Canvas artifacts. This document describes legacy history parsing
 > only and is retained so existing Thread artifacts remain understandable.
+> Product, GTM, Venture, and Native behavior IDs are legacy compatibility data;
+> Croki offers no built-in harness or behavior selector for new turns.
 
 ## Product decision
 
@@ -37,16 +39,17 @@ identity needed to associate a Thread with that existing runtime.
 
 ## Primary experience
 
-### Select a harness
+### Historical harness selection
 
-The composer offers three one-turn behaviors:
+Earlier Croki builds offered three one-turn behaviors:
 
 - `Native`: no Croki behavior instruction and no Canvas execution capability;
 - `Product`: product judgment with optional Canvas presentation;
 - `GTM`: go-to-market judgment with optional Canvas presentation.
 
-Product and GTM reset to Native after a successful send. The active harness is
-visible in the composer before sending and in the turn receipt afterward.
+Product and GTM reset to Native after a successful send. Current builds preserve
+these values only when rendering historical turns; they cannot be selected or
+executed for new turns.
 
 ### Produce a visual only when useful
 

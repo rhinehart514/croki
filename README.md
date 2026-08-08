@@ -7,19 +7,20 @@ a standalone agent runtime or a replacement for the provider behind the work.
 Croki is a narrow product overlay on the underlying development environment. It
 preserves native threads, providers, worktrees, checkpoints, recovery, Git,
 terminal, preview, files, plans, project scripts, desktop, web, and mobile
-clients. Canvas adds optional, repository-owned product understanding that
-survives individual conversations.
+clients.
 
-The primary product rule is **native providers by default**. Croki-specific
-personas, planning loops, delegation policies, and behavioral prompts belong in
-explicit named harnesses that are off by default, visible, scoped, and
-reversible. The web composer now defaults to Native and offers Product for one
-turn. Approved Canvas context attaches independently of panel visibility, while
-proposals remain excluded. See [current project state](./docs/project/current-state.md)
-for the remaining provider and release gaps.
+Croki is a harness host, not a harness. A default turn adds no Croki-authored
+behavioral instruction or hidden application, sibling-Thread, or project
+context. Anything that can affect the selected model is applied by the user,
+visible before send, scoped, recorded with the turn, removable, and reversible.
+Croki makes provider-native project instructions, skills, plugins, tools, and
+explicit context attachments easy to discover and apply without translating
+them into a hidden Croki prompt layer. See
+[current project state](./docs/project/current-state.md) for the remaining
+provider and release gaps.
 
 See [Croki architecture](./docs/croki.md) for the product model, branch contract,
-context format, and recovery record.
+application brief, and recovery record.
 
 ## Installation
 
@@ -31,7 +32,7 @@ context format, and recovery record.
 >
 > - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
 > - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
-> - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `cursor-agent login`
+> - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `agent login`
 > - Grok Build: install [Grok Build CLI](https://x.ai/cli) and run `grok login`
 > - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
 > - OpenClaw: install OpenClaw, start its Gateway, and configure the selected agent
@@ -59,15 +60,19 @@ are configured, so Windows may show a SmartScreen warning.
 
 ## Documentation
 
-- [Current project state](./docs/project/current-state.md)
-- [Getting started](./docs/getting-started/quick-start.md)
+- [Install and first run](./docs/user/install.md)
+- [Permission modes](./docs/user/permission-modes.md)
+- [Keyboard shortcuts](./docs/user/keybindings.md)
+- [Organizing Threads](./docs/user/thread-sidebar.md)
 - [Remote access](./docs/user/remote-access.md)
-- [Keeping Croki in sync](./docs/user/server-updates.md)
-- [Architecture overview](./docs/architecture/overview.md)
-- [Provider architecture](./docs/architecture/providers.md)
-- [Provider guides](./docs/README.md#providers)
-- [Operations](./docs/operations/ci.md)
-- [Reference](./docs/reference/encyclopedia.md)
+- [Keeping Croki in sync](./docs/user/updating.md)
+- [Source control integrations](./docs/user/source-control.md)
+- Multiple accounts: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md)
+- Linux: [run Croki as a background service](./docs/user/background-service.md)
+- [Current project state](./docs/project/current-state.md)
+
+Building from source? Start at
+[docs/internals/overview.md](./docs/internals/overview.md).
 
 ## Development
 

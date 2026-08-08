@@ -1,9 +1,9 @@
 # Croki application brief
 
-Croki is an application-aware ADE. The repository remains the development
+Croki is an application-aware ADE and a harness host, not a harness. The repository remains the development
 environment: Threads, files, worktrees, terminal, Preview, Review, Git, and pull
 requests. `.croki/application.croki` gives that work one shared product focus
-without becoming a second workspace.
+for the founder without becoming a second workspace or hidden model context.
 
 ## One application file
 
@@ -14,11 +14,12 @@ records three bounded kinds of founder-approved truth:
 - what the released product already does; and
 - what the current version intends to change.
 
-Croki validates and carries that brief into project Threads without changing
-the founder's stored message or the selected provider's native behavior. The
-Thread header shows one compact released-to-building focus. Opening it reveals
-the application promise and current intent; **Open .croki** opens the exact
-source in the ordinary file editor.
+Croki validates the brief for display but never carries it into a provider turn
+automatically. The Thread header shows one compact released-to-building focus.
+Opening it reveals the application promise and current intent; **Open .croki**
+opens the exact source in the ordinary file editor. A founder can apply the
+brief as a visible, removable one-turn attachment or reference it from
+provider-native project instructions.
 
 The brief has no setup form, progress model, score, dashboard, generated visual
 world, or Concept workflow. Normal files, Git, and Review own every change. An
@@ -36,17 +37,25 @@ unreadable, unsupported, or oversized data never prevents a native provider
 turn. Repository data cannot run commands, grant authority, import a prompt, or
 silently establish product truth.
 
-## Product work
+## User-applied model configuration
 
-Product remains an optional Composer behavior when a founder wants the selected
-provider to concentrate on customer, market, positioning, or release direction.
-It operates in the canonical Thread. Observations and proposals remain distinct
-from founder-approved application direction until the founder confirms them.
+Croki adds no built-in Product, GTM, Venture, planning, or delegation behavior.
+Those historical behavior IDs remain readable on older turns and migrations but
+are unavailable for new turns. A founder who wants specialized behavior applies
+provider-native project instructions, a skill, a plugin, or an explicit
+instruction attachment. Croki shows its source and scope before send and records
+what it applied on the resulting turn.
 
-Concurrent work awareness remains a separate bounded snapshot. It may include a
-sibling Thread's identity, state, branch, latest checkpoint files, and exact
-file overlap, but never copies sibling transcripts or presents observed work as
-founder-approved direction.
+Concurrent work awareness remains a founder-facing bounded projection. It may
+show a sibling Thread's identity, state, branch, latest checkpoint files, and
+exact file overlap. It never reaches a provider unless the founder visibly
+attaches a specific source-labelled slice, never copies sibling transcripts,
+and never presents observed work as founder-approved direction.
+
+Provider runtime, instructions, context, tools, and senses remain separate.
+Opening Canvas or Preview, enabling a tool, or selecting a file does not add a
+Croki-authored instruction. Persistent configuration uses the provider's or
+repository's native mechanism rather than a Croki prompt repeated every turn.
 
 ## Croki Senses and Canvas
 

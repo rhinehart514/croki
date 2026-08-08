@@ -17,7 +17,6 @@ export interface NativeBuildUpdateRecovery {
   }>;
   readonly guidance: string;
 }
-
 export interface AppUpdateClient {
   readonly isEnabled: boolean;
   readonly checkForUpdateAsync: () => Promise<{

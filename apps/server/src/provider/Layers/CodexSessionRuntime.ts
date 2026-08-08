@@ -370,15 +370,18 @@ function buildCodexCollaborationMode(input: {
   }
   const model = normalizeCodexModelSlug(input.model) ?? DEFAULT_MODEL;
   const reasoningEffort = input.effort ?? "medium";
+  const developerInstructions = buildCodexDeveloperInstructions(input.interactionMode, {
+    model,
+    reasoningEffort,
+  });
   return {
     mode: input.interactionMode,
     settings: {
       model,
       reasoning_effort: reasoningEffort,
-      developer_instructions: buildCodexDeveloperInstructions(input.interactionMode, {
-        model,
-        reasoningEffort,
-      }),
+      ...(developerInstructions !== undefined
+        ? { developer_instructions: developerInstructions }
+        : {}),
     },
   };
 }
@@ -699,7 +702,7 @@ function readThreadSpawnSource(thread: { readonly source: unknown }):
 }
 
 function rememberCollabReceiverTurns(
-  collabReceiverTurns: Map<string, { readonly parentTurnId: TurnId; readonly prompt?: string }>,
+  collabReceiverTurns: Map<string, TurnId>,
   notification: CodexServerNotification,
   parentTurnId: TurnId | undefined,
 ): void {
@@ -716,12 +719,7 @@ function rememberCollabReceiverTurns(
   }
 
   for (const receiverThreadId of notification.params.item.receiverThreadIds) {
-    const existing = collabReceiverTurns.get(receiverThreadId);
-    const prompt = notification.params.item.prompt ?? existing?.prompt;
-    collabReceiverTurns.set(receiverThreadId, {
-      parentTurnId,
-      ...(prompt ? { prompt } : {}),
-    });
+    collabReceiverTurns.set(receiverThreadId, parentTurnId);
   }
 }
 
@@ -750,7 +748,7 @@ function shouldSuppressChildConversationNotification(
  * Exported and pure so the routing table can be asserted against captured
  * wire traces (see codexMultiAgentWire.json) rather than only read.
  *
- * - "agent-event": map to synthetic parent workstream lifecycle.
+ * - "agent-event": map to a synthetic collabAgent/* event (Agents surface).
  * - "parent": pass through to the parent path — it carries state the parent
  *   still owns (approval correlation cleanup).
  * - "drop": genuine child chatter with no parent meaning (deltas, name and
@@ -808,20 +806,6 @@ export function routeCodexChildNotification(method: string): CodexChildNotificat
   }
   // Unknown or parent-owned (serverRequest/resolved, approvals, …).
   return "parent";
-}
-
-function shouldProjectChildTranscript(method: string): boolean {
-  return (
-    method.startsWith("item/") ||
-    method === "thread/started" ||
-    method === "thread/status/changed" ||
-    method === "thread/tokenUsage/updated" ||
-    method === "thread/name/updated" ||
-    method === "thread/closed" ||
-    method === "turn/started" ||
-    method === "turn/completed" ||
-    method === "error"
-  );
 }
 
 function toCodexUserInputAnswer(
@@ -905,9 +889,7 @@ export const makeCodexSessionRuntime = (
     const pendingApprovalsRef = yield* Ref.make(new Map<ApprovalRequestId, PendingApproval>());
     const approvalCorrelationsRef = yield* Ref.make(new Map<string, ApprovalCorrelation>());
     const pendingUserInputsRef = yield* Ref.make(new Map<ApprovalRequestId, PendingUserInput>());
-    const collabReceiverTurnsRef = yield* Ref.make(
-      new Map<string, { readonly parentTurnId: TurnId; readonly prompt?: string }>(),
-    );
+    const collabReceiverTurnsRef = yield* Ref.make(new Map<string, TurnId>());
     const collabChildAgentsRef = yield* Ref.make(new Map<string, CollabChildAgentState>());
     /** Child provider-thread id → its currently running provider turn id. */
     const collabChildLiveTurnsRef = yield* Ref.make(new Map<string, string>());
@@ -1309,32 +1291,20 @@ export const makeCodexSessionRuntime = (
         const payload = notification.params;
         const route = readRouteFields(notification);
         const collabReceiverTurns = yield* Ref.get(collabReceiverTurnsRef);
+        const childParentTurnId = (() => {
+          const providerConversationId = readNotificationThreadId(notification);
+          return providerConversationId
+            ? collabReceiverTurns.get(providerConversationId)
+            : undefined;
+        })();
+
         rememberCollabReceiverTurns(collabReceiverTurns, notification, route.turnId);
         // Interception FIRST: a registered v2 child is usually also in the
         // receiver-turn map (collabAgentToolCall.receiverThreadIds), and the
         // legacy suppressor below would drop its lifecycle before it could
         // become synthetic collabAgent events (review finding). The
         // suppressor still covers UNREGISTERED children.
-        const interceptedChild = yield* interceptCollabChildNotification(notification);
-        const providerConversationId = readNotificationThreadId(notification);
-        const registeredChild = providerConversationId
-          ? (yield* Ref.get(collabChildAgentsRef)).get(providerConversationId)
-          : undefined;
-        const receiverLink = providerConversationId
-          ? collabReceiverTurns.get(providerConversationId)
-          : undefined;
-        const childLink = receiverLink
-          ? receiverLink.prompt
-            ? { prompt: receiverLink.prompt }
-            : {}
-          : registeredChild
-            ? registeredChild.nickname
-              ? { prompt: registeredChild.nickname }
-              : {}
-            : undefined;
-        const projectChildTranscript =
-          childLink !== undefined && shouldProjectChildTranscript(notification.method);
-        if (interceptedChild && !projectChildTranscript) {
+        if (yield* interceptCollabChildNotification(notification)) {
           yield* Ref.set(collabReceiverTurnsRef, collabReceiverTurns);
           return;
         }
@@ -1356,8 +1326,7 @@ export const makeCodexSessionRuntime = (
           );
         })();
         if (
-          !projectChildTranscript &&
-          (childLink !== undefined || foreignConversation) &&
+          (childParentTurnId !== undefined || foreignConversation) &&
           shouldSuppressChildConversationNotification(notification.method)
         ) {
           // Stop-everything must not depend on registration timing: a
@@ -1395,9 +1364,10 @@ export const makeCodexSessionRuntime = (
           yield* Ref.set(collabReceiverTurnsRef, collabReceiverTurns);
           return;
         }
+
         let requestId: ApprovalRequestId | undefined;
         let requestKind: ProviderRequestKind | undefined;
-        let turnId = route.turnId;
+        let turnId = childParentTurnId ?? route.turnId;
         let itemId = route.itemId;
 
         if (notification.method === "serverRequest/resolved") {
@@ -1424,12 +1394,7 @@ export const makeCodexSessionRuntime = (
         yield* Ref.set(collabReceiverTurnsRef, collabReceiverTurns);
         yield* emitEvent({
           kind: "notification",
-          threadId:
-            childLink && readNotificationThreadId(notification)
-              ? ThreadId.make(readNotificationThreadId(notification)!)
-              : options.threadId,
-          ...(childLink ? { parentThreadId: options.threadId } : {}),
-          ...(childLink?.prompt ? { childPrompt: childLink.prompt } : {}),
+          threadId: options.threadId,
           method: notification.method,
           ...(turnId ? { turnId } : {}),
           ...(itemId ? { itemId } : {}),

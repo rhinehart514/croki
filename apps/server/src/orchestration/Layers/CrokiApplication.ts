@@ -1,7 +1,6 @@
 import * as NodeCrypto from "node:crypto";
 
 import {
-  buildCrokiApplicationPrompt,
   CROKI_APPLICATION_LEGACY_RELATIVE_PATH,
   CROKI_APPLICATION_LIMITS,
   CROKI_APPLICATION_RELATIVE_PATH,
@@ -20,7 +19,6 @@ export type CrokiApplicationLoadStatus = "loaded" | "absent" | "invalid" | "over
 export interface LoadedCrokiApplication {
   readonly status: CrokiApplicationLoadStatus;
   readonly application: CrokiApplication | null;
-  readonly prompt: string | null;
   readonly sha256: string | null;
   readonly sourcePath: CrokiApplicationRelativePath | null;
   readonly errorCode?: CrokiApplicationErrorCode;
@@ -29,7 +27,7 @@ export interface LoadedCrokiApplication {
 const sha256 = (contents: string): string =>
   NodeCrypto.createHash("sha256").update(contents, "utf8").digest("hex");
 
-/** Application lineage is optional factual context and must never block a native turn. */
+/** Reads the repository-owned application brief for explicit UI/tool requests. */
 export function loadCrokiApplication(cwd: string | undefined) {
   if (!cwd) return Effect.succeed(absentApplication());
   return Effect.gen(function* () {
@@ -48,7 +46,6 @@ export function loadCrokiApplication(cwd: string | undefined) {
       return {
         status: "oversized",
         application: null,
-        prompt: null,
         sha256: null,
         sourcePath,
       } satisfies LoadedCrokiApplication;
@@ -59,7 +56,6 @@ export function loadCrokiApplication(cwd: string | undefined) {
       return {
         status: "oversized",
         application: null,
-        prompt: null,
         sha256: fingerprint,
         sourcePath,
       } satisfies LoadedCrokiApplication;
@@ -76,22 +72,11 @@ function parseLoadedApplication(
 ): LoadedCrokiApplication {
   try {
     const application = parseCrokiApplication(contents);
-    const prompt = buildCrokiApplicationPrompt(application, sourcePath);
-    if (prompt === null) {
-      return {
-        status: "oversized",
-        application: null,
-        prompt: null,
-        sha256: fingerprint,
-        sourcePath,
-      };
-    }
-    return { status: "loaded", application, prompt, sha256: fingerprint, sourcePath };
+    return { status: "loaded", application, sha256: fingerprint, sourcePath };
   } catch (error) {
     return {
       status: "invalid",
       application: null,
-      prompt: null,
       sha256: fingerprint,
       sourcePath,
       errorCode: error instanceof CrokiApplicationParseError ? error.code : "malformed",
@@ -100,14 +85,13 @@ function parseLoadedApplication(
 }
 
 function absentApplication(): LoadedCrokiApplication {
-  return { status: "absent", application: null, prompt: null, sha256: null, sourcePath: null };
+  return { status: "absent", application: null, sha256: null, sourcePath: null };
 }
 
 function invalidApplication(): LoadedCrokiApplication {
   return {
     status: "invalid",
     application: null,
-    prompt: null,
     sha256: null,
     sourcePath: null,
     errorCode: "malformed",

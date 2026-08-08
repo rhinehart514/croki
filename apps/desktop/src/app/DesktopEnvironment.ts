@@ -15,6 +15,7 @@ import { CROKI_PRODUCT_IDENTIFIERS } from "../../../../scripts/lib/brand-policy.
 
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
+import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 
 export interface MakeDesktopEnvironmentInput {
@@ -68,6 +69,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly appUserModelId: string;
     readonly linuxDesktopEntryName: string;
     readonly linuxWmClass: string;
+    readonly linuxApplicationsDir: string;
+    readonly appImagePath: Option.Option<string>;
     readonly userDataDirName: string;
     readonly legacyUserDataDirName: string;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
@@ -149,10 +152,12 @@ const make = Effect.fn("desktop.environment.make")(function* (
       : input.platform === "darwin"
         ? path.join(homeDirectory, "Library", "Application Support")
         : Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config"));
-  const configuredBaseDir = Option.orElse(config.crokiHome, () => config.t3Home);
-  const baseDir = Option.getOrElse(configuredBaseDir, () =>
-    path.join(homeDirectory, CROKI_PRODUCT_IDENTIFIERS.stateRoot),
-  );
+  const baseDir = resolveDesktopBaseDir({
+    homeDirectory,
+    joinPath: path.join,
+    configuredHome: config.crokiHome,
+    defaultStateRoot: CROKI_PRODUCT_IDENTIFIERS.stateRoot,
+  });
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
   const branding = resolveDesktopAppBranding({
@@ -160,14 +165,20 @@ const make = Effect.fn("desktop.environment.make")(function* (
     appVersion: input.appVersion,
   });
   const displayName = branding.displayName;
-  const stateDir = path.join(
+  const stateDir = resolveDesktopStateDir({
     baseDir,
-    isDevelopment && Option.isNone(configuredBaseDir) ? "dev" : "userdata",
-  );
+    isDevelopment,
+    joinPath: path.join,
+    configuredHome: config.crokiHome,
+  });
   const userDataDirName = isDevelopment
     ? CROKI_PRODUCT_IDENTIFIERS.developmentStorageName
     : CROKI_PRODUCT_IDENTIFIERS.productionStorageName;
   const legacyUserDataDirName = isDevelopment ? "croki-dev" : "croki";
+  const linuxApplicationsDir = path.join(
+    Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
+    "applications",
+  );
   const resourcesPath = input.resourcesPath;
 
   return DesktopEnvironment.of({
@@ -217,6 +228,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     linuxWmClass: isDevelopment
       ? CROKI_PRODUCT_IDENTIFIERS.developmentWmClass
       : CROKI_PRODUCT_IDENTIFIERS.productionWmClass,
+    linuxApplicationsDir,
+    appImagePath: config.appImagePath,
     userDataDirName,
     legacyUserDataDirName,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),

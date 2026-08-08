@@ -60,7 +60,7 @@ export const CrokiCanvasPresentedActivityPayload = Schema.Struct({
       payload.sha256 !== undefined;
     return (
       hasLegacyReceipt ||
-      new SchemaIssue.InvalidValue(Option.some(payload), {
+      new SchemaIssue.InvalidValue({
         message: "Canvas presentation activity requires an artifact or a complete legacy receipt.",
       })
     );
