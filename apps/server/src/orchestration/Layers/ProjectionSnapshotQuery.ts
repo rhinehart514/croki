@@ -122,7 +122,7 @@ const ProjectPerceptionRevisionRowSchema = Schema.Struct({
   revision: NonNegativeInt,
 });
 const ProjectionThreadSearchRequest = Schema.Struct({
-  pattern: Schema.String,
+  normalizedQuery: Schema.String,
   limit: Schema.Int,
 });
 const ProjectionThreadSearchRow = Schema.Struct({
@@ -212,24 +212,15 @@ function maxIso(left: string | null, right: string): string {
   return left > right ? left : right;
 }
 
-function escapeLikePattern(value: string): string {
-  return value.replaceAll("!", "!!").replaceAll("%", "!%").replaceAll("_", "!_");
-}
-
-function foldAsciiCase(value: string): string {
-  return value.replace(/[A-Z]/g, (character) => character.toLowerCase());
-}
-
 function buildSearchSnippet(text: string, query: string): string {
   const normalizedText = text.replace(/\s+/g, " ").trim();
   if (normalizedText.length <= 240) {
     return normalizedText;
   }
 
-  const normalizedQuery = foldAsciiCase(query.replace(/\s+/g, " ").trim());
-  const matchIndex = foldAsciiCase(normalizedText).indexOf(normalizedQuery);
+  const matchRange = findThreadSearchMatchRange(normalizedText, query.replace(/\s+/g, " ").trim());
   const bodyLength = 236;
-  const idealStart = Math.max(0, matchIndex - 72);
+  const idealStart = Math.max(0, (matchRange?.start ?? 0) - 72);
   const start = Math.min(idealStart, normalizedText.length - bodyLength);
   const end = Math.min(normalizedText.length, start + bodyLength);
   return `${start > 0 ? "…" : ""}${normalizedText.slice(start, end)}${
@@ -906,7 +897,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
   const searchActiveThreadRows = SqlSchema.findAll({
     Request: ProjectionThreadSearchRequest,
     Result: ProjectionThreadSearchRow,
-    execute: ({ pattern, limit }) =>
+    execute: ({ normalizedQuery, limit }) =>
       sql`
         WITH ranked AS (
           SELECT
@@ -954,7 +945,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 )
               )
             )
-            AND messages.text LIKE ${pattern} ESCAPE '!'
+            AND instr(messages.search_text, ${normalizedQuery}) > 0
         )
         SELECT
           thread_id AS "threadId",
@@ -2294,9 +2285,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
   const searchThreads: ProjectionSnapshotQueryShape["searchThreads"] = Effect.fn(
     "ProjectionSnapshotQuery.searchThreads",
   )(function* (input) {
-    const escapedQuery = escapeLikePattern(input.query);
     const rows = yield* searchActiveThreadRows({
-      pattern: `%${escapedQuery}%`,
+      normalizedQuery: normalizeThreadSearchText(input.query),
       limit: input.limit ?? 50,
     }).pipe(
       Effect.mapError(

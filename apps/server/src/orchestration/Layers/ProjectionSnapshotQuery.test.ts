@@ -21,6 +21,7 @@ import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { encodeThreadDetailPageCursor } from "../threadDetailCursor.ts";
+import { normalizeThreadSearchText } from "../threadSearchText.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asTurnId = (value: string): TurnId => TurnId.make(value);
@@ -473,7 +474,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           hasPendingApprovals: true,
           hasPendingUserInput: false,
           hasActionableProposedPlan: false,
-          backgroundLiveness: null,
+          backgroundLiveness: "monitoring",
           planProgress: null,
         },
       ]);
@@ -2009,9 +2010,21 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             NULL,
             'user',
             'Hidden needle in archive.',
+            'hidden needle in archive.',
             0,
             '2026-05-01T00:00:16.000Z',
             '2026-05-01T00:00:16.000Z'
+          ),
+          (
+            'message-unicode',
+            'thread-active',
+            NULL,
+            'user',
+            ${unicodeSearchMessage},
+            ${normalizeThreadSearchText(unicodeSearchMessage)},
+            0,
+            '2026-05-01T00:00:17.000Z',
+            '2026-05-01T00:00:17.000Z'
           )
       `;
 
