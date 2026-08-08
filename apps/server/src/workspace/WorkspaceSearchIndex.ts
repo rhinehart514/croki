@@ -4,19 +4,16 @@ import {
   type FileItem,
   FileFinder,
   type GrepCursor,
+  type GrepResult,
   type MixedItem,
   type MixedSearchResult,
   type Result,
   type SearchResult,
 } from "@ff-labs/fff-node";
-import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
-import * as NodePath from "@effect/platform-node/NodePath";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as LayerMap from "effect/LayerMap";
-import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import type {
@@ -301,37 +298,6 @@ function isWholeWordRange(
   return leftIsBoundary && rightIsBoundary;
 }
 
-function findPlainWholeWordMatches(
-  relativePath: string,
-  contents: string,
-  input: Omit<ProjectSearchContentsInput, "cwd">,
-  limit: number,
-): ProjectSearchContentsResult["matches"] {
-  const matcher = new RegExp(
-    input.query.replace(REGEX_SPECIAL_CHARACTER, "\\$&"),
-    input.caseSensitive ? "gu" : "giu",
-  );
-  const matches: Array<ProjectSearchContentsResult["matches"][number]> = [];
-  const lines = contents.split("\n");
-
-  for (let index = 0; index < lines.length && matches.length < limit; index += 1) {
-    const rawLine = lines[index] ?? "";
-    const lineContent = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
-    const matchRanges = [...lineContent.matchAll(matcher)]
-      .map((match) => ({ start: match.index, end: match.index + match[0].length }))
-      .filter((range) => isWholeWordRange(lineContent, range));
-    if (matchRanges.length === 0) continue;
-    matches.push({
-      path: toPosixPath(relativePath),
-      lineNumber: index + 1,
-      lineContent,
-      matchRanges,
-    });
-  }
-
-  return matches;
-}
-
 function withDirectoryAncestors(entries: ReadonlyArray<ProjectEntry>): ProjectEntry[] {
   const entryByPath = new Map(entries.map((entry) => [entry.path, entry]));
   for (const entry of entries) {
@@ -401,12 +367,10 @@ const waitForIndexReady = Effect.fn("WorkspaceSearchIndex.waitForIndexReady")(fu
   }
 });
 
-const makeWithPlatformRequirements = Effect.fn("WorkspaceSearchIndex.make")(function* (
+export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
   cwd: string,
   variant: WorkspaceSearchIndexVariant = "paths",
 ) {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
   const finder = yield* Effect.acquireRelease(createFinder(cwd, variant), (finder) =>
     Effect.try({
       try: () => finder.destroy(),
@@ -526,106 +490,85 @@ const makeWithPlatformRequirements = Effect.fn("WorkspaceSearchIndex.make")(func
   )(function* (input) {
     const { searchQuery, regexMode } = buildContentSearchQuery(input);
     const deadline = performance.now() + CONTENT_SEARCH_TIME_BUDGET_MS;
-    // Whole-word plain searches are filtered by Finder before pagination. One
-    // extra result preserves an honest `truncated` value after boundary checks.
-    // Regex searches retain their historical per-file overscan because their
-    // arbitrary match edges cannot be wrapped without changing the regex.
-    const rawPageSize =
-      input.wholeWord && input.useRegex
-        ? input.limit + CONTENT_SEARCH_MAX_MATCHES_PER_FILE + 1
-        : input.wholeWord
-          ? input.limit + 1
-          : input.limit;
+    // Finder cursors advance by file. Whole-word searches request one extra
+    // exact result, then retry a saturated page from the same cursor with a
+    // geometrically larger per-file allowance. The file-size-derived ceiling
+    // is exhaustive: a searchable file cannot contain more matching lines
+    // than bytes plus one. This avoids both finite overscan and unbounded work.
+    const initialRawPageSize = input.wholeWord ? input.limit + 1 : input.limit;
+    const maxWholeWordPageSize = CONTENT_SEARCH_MAX_FILE_SIZE_BYTES + 1;
     const matches: Array<ProjectSearchContentsResult["matches"][number]> = [];
     let nextCursor: GrepCursor | null = null;
     let regexFallbackError: string | undefined;
+    let boundarySearchIncomplete = false;
 
     do {
-      const remainingTimeBudgetMs = Math.max(1, Math.ceil(deadline - performance.now()));
-      const result = yield* runSearch(input.query, input.limit, "grep", () =>
-        finder.grep(searchQuery, {
-          mode: regexMode ? "regex" : "plain",
-          smartCase: !input.caseSensitive && !regexMode,
-          // Arbitrary regex match edges still need bounded post-filtering.
-          // Plain whole-word queries reach Finder with native boundaries, so
-          // rejected substrings do not consume this per-file allowance.
-          maxMatchesPerFile: input.wholeWord
-            ? rawPageSize
-            : Math.min(CONTENT_SEARCH_MAX_MATCHES_PER_FILE, rawPageSize),
-          pageSize: rawPageSize,
-          cursor: nextCursor,
-          timeBudgetMs: remainingTimeBudgetMs,
-        }),
-      );
+      const pageCursor = nextCursor;
+      let rawPageSize = initialRawPageSize;
+      let result: GrepResult;
+      let pageMatches: Array<ProjectSearchContentsResult["matches"][number]>;
 
-      const saturatedMatch = result.items.at(-1);
-      const exactSaturatedMatches =
-        input.wholeWord &&
-        !input.useRegex &&
-        result.items.length >= rawPageSize &&
-        saturatedMatch !== undefined
-          ? yield* fileSystem.stat(path.resolve(cwd, saturatedMatch.relativePath)).pipe(
-              Effect.flatMap((metadata) =>
-                metadata.size > CONTENT_SEARCH_MAX_FILE_SIZE_BYTES
-                  ? Effect.void
-                  : fileSystem.readFileString(path.resolve(cwd, saturatedMatch.relativePath)),
-              ),
-              Effect.orElseSucceed(() => undefined),
-              Effect.map((contents) =>
-                contents === undefined
-                  ? undefined
-                  : findPlainWholeWordMatches(
-                      saturatedMatch.relativePath,
-                      contents,
-                      input,
-                      Math.max(1, input.limit + 1 - matches.length),
-                    ),
-              ),
-            )
-          : undefined;
-      let addedExactSaturatedMatches = false;
-
-      for (const match of result.items) {
-        if (
-          exactSaturatedMatches !== undefined &&
-          match.relativePath === saturatedMatch?.relativePath
-        ) {
-          if (!addedExactSaturatedMatches) {
-            matches.push(...exactSaturatedMatches);
-            addedExactSaturatedMatches = true;
-          }
-          continue;
-        }
-        const matchRanges = mapContentMatchRanges(match.lineContent, match.matchRanges).filter(
-          (range) => !input.wholeWord || isWholeWordRange(match.lineContent, range),
+      while (true) {
+        const remainingTimeBudgetMs = Math.max(1, Math.ceil(deadline - performance.now()));
+        result = yield* runSearch(input.query, rawPageSize, "grep", () =>
+          finder.grep(searchQuery, {
+            mode: regexMode ? "regex" : "plain",
+            maxFileSize: CONTENT_SEARCH_MAX_FILE_SIZE_BYTES,
+            smartCase: !input.caseSensitive && !regexMode,
+            maxMatchesPerFile: input.wholeWord
+              ? rawPageSize
+              : Math.min(CONTENT_SEARCH_MAX_MATCHES_PER_FILE, rawPageSize),
+            pageSize: rawPageSize,
+            cursor: pageCursor,
+            timeBudgetMs: remainingTimeBudgetMs,
+          }),
         );
-        if (matchRanges.length === 0) continue;
-        matches.push({
-          path: toPosixPath(match.relativePath),
-          lineNumber: match.lineNumber,
-          lineContent: match.lineContent,
-          matchRanges,
+        regexFallbackError ??= result.regexFallbackError;
+        pageMatches = result.items.flatMap((match) => {
+          const matchRanges = mapContentMatchRanges(match.lineContent, match.matchRanges).filter(
+            (range) => !input.wholeWord || isWholeWordRange(match.lineContent, range),
+          );
+          return matchRanges.length === 0
+            ? []
+            : [
+                {
+                  path: toPosixPath(match.relativePath),
+                  lineNumber: match.lineNumber,
+                  lineContent: match.lineContent,
+                  matchRanges,
+                },
+              ];
         });
+
+        const exactResultsNeeded = input.limit + 1 - matches.length;
+        const pageIsSaturated = input.wholeWord && result.items.length >= rawPageSize;
+        if (
+          !pageIsSaturated ||
+          pageMatches.length >= exactResultsNeeded ||
+          rawPageSize >= maxWholeWordPageSize
+        ) {
+          break;
+        }
+        if (performance.now() >= deadline) {
+          boundarySearchIncomplete = true;
+          break;
+        }
+        rawPageSize = Math.min(maxWholeWordPageSize, rawPageSize * 2);
       }
+
+      matches.push(...pageMatches);
       nextCursor = result.nextCursor;
-      regexFallbackError ??= result.regexFallbackError;
     } while (matches.length < input.limit && nextCursor !== null && performance.now() < deadline);
 
     return {
       matches: matches.slice(0, input.limit),
-      truncated: matches.length > input.limit || nextCursor !== null,
+      truncated: boundarySearchIncomplete || matches.length > input.limit || nextCursor !== null,
       ...(regexFallbackError !== undefined ? { regexFallbackError } : {}),
     };
   });
 
   return WorkspaceSearchIndex.of({ list, refresh, search, searchContents });
 });
-
-const nodePlatformLayer = Layer.merge(NodeFileSystem.layer, NodePath.layer);
-
-/** Keeps platform filesystem details internal to the workspace index service. */
-export const make = (cwd: string, variant: WorkspaceSearchIndexVariant = "paths") =>
-  makeWithPlatformRequirements(cwd, variant).pipe(Effect.provide(nodePlatformLayer));
 
 export const WORKSPACE_SEARCH_INDEX_VARIANTS = ["paths", "content"] as const;
 export type WorkspaceSearchIndexVariant = (typeof WORKSPACE_SEARCH_INDEX_VARIANTS)[number];

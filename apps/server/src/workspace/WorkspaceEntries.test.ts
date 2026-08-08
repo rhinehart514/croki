@@ -516,6 +516,34 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
       }),
     );
 
+    it.effect("finds regex whole-word matches after 102 Unicode-adjacent matches", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTempDir({ prefix: "t3code-workspace-regex-unicode-page-" });
+        yield* writeTextFile(cwd, "src/words.ts", `${"𐐀fooo\n".repeat(102)}fooo\n`);
+
+        const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+        const result = yield* workspaceEntries.searchContents({
+          cwd,
+          query: "fo+",
+          limit: 1,
+          caseSensitive: true,
+          wholeWord: true,
+          useRegex: true,
+        });
+
+        expect(result).toEqual({
+          matches: [
+            expect.objectContaining({
+              path: "src/words.ts",
+              lineNumber: 103,
+              matchRanges: [{ start: 0, end: 4 }],
+            }),
+          ],
+          truncated: false,
+        });
+      }),
+    );
+
     it.effect("matches punctuation-edged whole-word queries including adjacent occurrences", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTempDir({ prefix: "t3code-workspace-content-punctuation-" });
