@@ -1,69 +1,193 @@
-# Croki 0.4.10: Delegate the outcome
+# Croki 0.4.10: Native means native
 
-Croki 0.4.10 builds on 0.4.9's trustworthy intervention and recovery paths. A
-founder can give Codex one durable outcome or ask an independent Codex reviewer
-to challenge the current change set without replacing the canonical Thread or
-creating a Croki-owned agent runtime.
+Croki 0.4.10 integrates the current T3 Code foundation while removing Croki's
+active model-behavior harness. Croki supplies the durable development
+environment; the selected coding provider remains the agent.
 
-Both features remain explicitly Codex-only because they use native Codex
-protocol operations. Other providers keep their native behavior until they
-expose equivalent, provable semantics.
+A default turn now contains only the message and attachments the founder can
+see. Anything else that can affect the model—files, skills, interaction mode,
+permissions, or Canvas tools—must be applied through an explicit user action.
 
-## Run one Thread to a durable outcome
+## No active Croki harness
 
-- An established Codex Thread exposes compact **Finish mode** in its header.
-- The founder supplies one explicit objective and may optionally set a token
-  budget.
-- Codex continues the native goal across ordinary turn boundaries and context
-  compaction until it completes, pauses, blocks, or reaches a usage or token
-  limit.
-- The same control shows the objective, native status, elapsed time, and token
-  use, with actions to pause, resume, or clear it.
-- Croki never invents a percent-complete score and does not create a project
-  task, checklist, dashboard, or hidden planning loop.
+- The **Behavior: Native / Product** composer control is removed.
+- Product, GTM, and Venture behavior prompts are no longer available for new
+  turns.
+- Default turns do not receive application direction, application progress,
+  sibling Thread activity, project activity, or Croki parallel-worker policy.
+- Default Codex turns omit Croki-authored `developer_instructions`. An
+  explicitly selected provider-native Plan mode may still apply that
+  provider's planning contract.
+- The provider receives the founder's normalized visible message and explicit
+  attachments directly.
 
-The provider owns goal execution and persistence. Croki owns the explicit entry
-point, typed transport, authorization, and truthful presentation.
+Historical behavior receipts and Canvas artifacts remain readable. Legacy
+clients that submit removed harness or parallel-policy fields receive a clear
+version-skew error; Croki never silently reactivates the old behavior.
 
-Implementation: [PR #10](https://github.com/rhinehart514/croki/pull/10).
+## Application direction is user-applied
 
-## Review without derailing the builder
+`.croki/application.croki` remains the repository-owned application brief, but
+it is founder-facing until the founder chooses to send it.
 
-- The existing Review panel exposes **Run Codex review** for an established
-  Codex Thread and a concrete supported change target.
-- Croki calls Codex's native detached review operation rather than composing a
-  review prompt inside the builder's conversation.
-- The returned reviewer becomes a durable read-only child Thread beneath the
-  canonical parent.
-- The parent remains usable while review runs.
-- Findings stay source-linked in the reviewer's native transcript and can be
-  carried back into ordinary parent work.
-- Croki does not add **Fix** or **Dismiss** controls until the provider exposes
-  durable finding identities and decision semantics.
+The Thread header exposes one compact application focus. Opening it shows the
+declared direction and two actions:
 
-Implementation: [PR #14](https://github.com/rhinehart514/croki/pull/14).
+- **Add to message** inserts a visible `.croki/application.croki` file chip in
+  the composer.
+- **Open .croki** opens the ordinary source file without changing model input.
 
-## Explicitly out of scope
+The file chip has a focusable remove control and retains keyboard Backspace and
+Delete behavior. The focus reads from the active Thread workspace—including a
+Thread-owned worktree—so the inspected file, opened file, and attached file are
+the same source.
 
-0.4.10 does not make Finish mode implicit, translate it into a provider-neutral
-loop, add a goals dashboard, schedule recurring work, let review mutate files,
-or manufacture structured finding state from prose. It does not turn worker
-Threads into competing canonical conversations.
+## Explicit model controls
+
+Croki continues to make provider capabilities easy to apply without wrapping
+them in a Croki-owned strategy layer:
+
+- `@file` adds repository context visibly;
+- `$skill` invokes a provider-native skill;
+- model and reasoning controls remain explicit;
+- Default and provider-native Plan remain explicit interaction choices;
+- permission mode remains a separate explicit authority choice;
+- Canvas capability is available only when the founder enables Canvas; and
+- provider-native delegation remains observable without becoming a Croki
+  scheduler.
+
+New Canvas artifacts record `user-applied` source semantics. Historical
+Product and GTM attribution remains decode-only compatibility data.
+
+## Current T3 Code foundation
+
+0.4.10 merges T3 Code upstream commit
+`a20923ce463335e89e92f5983d98a180536e8e7d` and preserves Croki's product,
+identity, release, and application boundaries.
+
+### Sidebar and long Threads
+
+- Sidebar v2 is the default.
+- Pinned Threads support reordering and unpinning.
+- Croki attention states and nested worker Threads remain intact.
+- Thread history supports pagination instead of hydrating an entire long
+  conversation.
+- Lightweight shell snapshots avoid loading every message and activity body.
+
+### Native agent observability
+
+- Codex collaboration children and Claude subagents/workflows normalize into
+  durable agent activity.
+- The Agents panel exposes provider-native work without creating a competing
+  canonical conversation.
+- Background-agent liveness and reaping are integrated.
+- Task and tool progress use stable, bounded activity rows so heartbeats cannot
+  evict meaningful lifecycle evidence.
+- Croki observes provider-owned delegation; it does not plan, schedule, or
+  recover that delegation itself.
+
+### Plans, usage, providers, and browser history
+
+- Current inline-plan presentation and plan progress are integrated.
+- The Usage area reads provider transcript usage across environments.
+- Provider settings can differ by environment.
+- Browser recent history is integrated.
+- Theme infrastructure is updated while visible labels remain Croki-branded.
+- Exact legacy `t3-*` theme identifiers remain supported only to preserve
+  stored user settings.
+
+### Mobile
+
+- Unified model and Thread settings
+- Long-Thread pagination
+- Pinned-Thread ordering
+- Connection and header improvements
+- Native paste and typography improvements
+- Worker navigation, application grouping, and update recovery
+
+Mobile follows the same no-harness boundary: no behavior selector, automatic
+application attachment, or Croki delegation prompt is present in turn
+plumbing.
+
+### Desktop and platform
+
+- Current desktop startup, state, URL handling, and Linux behavior are
+  integrated under Croki identities.
+- Ghostty terminal headers now live in the repository-level native package.
+- Croki release, relay, signing, EAS, and publication ownership guards remain
+  intact.
+- Croki and `croki-dev` protocols are preserved.
+- Inherited T3 publication destinations continue to fail closed.
+
+## Reliability repairs
+
+### Provider reactor startup
+
+The orchestration reactor previously subscribed lazily to a hot event stream.
+A provider event could arrive after startup returned but before the consumer
+actually subscribed. Startup now acquires the live subscription before forking
+the consumer, closing the event-loss window.
+
+This restores deterministic provider-history forks, temporary session release,
+and recoverable provider-fork failures.
+
+### Runtime activity merge repair
+
+Duplicate `task.updated` and `tool.progress` switch branches introduced during
+upstream integration were removed. The retained implementations preserve
+stable task-scoped identifiers, bounded progress, summaries, and task linkage.
+
+### Database convergence
+
+Migration 42 reconciles overlapping Croki and T3 migration identifiers so both
+schema histories converge without discarding either side's data model.
+
+### Source integrity
+
+Raw control bytes introduced during conflict resolution were replaced with
+explicit source escapes. Server and web sources remain ordinary text files.
+
+## What disappeared
+
+0.4.10 removes these active product surfaces and behaviors:
+
+- Product and Native behavior selection
+- Product, GTM, and Venture prompt overlays
+- automatic application and progress injection
+- automatic sibling-work and project-activity injection
+- Croki parallel-worker instructions
+- default Croki Codex developer instructions
+- automatic plan-sidebar opening
+- Preview ideation behavior
+- hidden Canvas harness attribution
+
+Opening or arranging Croki surfaces—Application, Canvas, Preview, files,
+terminal, Review, or Git—does not by itself change provider behavior or model
+input.
+
+## Compatibility
+
+- Historical behavior and Canvas receipts remain readable.
+- Legacy command fields remain decodable only for upgrade diagnostics.
+- Existing stored theme identifiers continue to resolve.
+- Historical Application, Concept, Release, and Venture data remains readable.
+- New turns and new Canvas artifacts use only the explicit 0.4.10 contract.
 
 ## Release proof
 
-- a founder can set one Codex objective, optionally bound token use, leave the
-  Thread, reopen it, and see the provider's current durable state;
-- pause, resume, clear, blocked, usage-limited, budget-limited, and complete
-  states remain distinct and accurate;
-- an established Codex Thread can start an independent detached review against
-  a concrete change target;
-- the reviewer persists as a read-only child while the parent remains usable;
-  and
-- unsupported providers and unestablished sessions do not show controls that
-  Croki cannot fulfill.
+The integrated release passed:
 
-Focused tests must prove native goal routing, typed authorization, detached
-review lifecycle races, child persistence, read-only enforcement, and parent
-continuity. Existing worker lineage, Review, provider, Thread, and mobile
-boundaries must remain green.
+- full workspace typechecking;
+- 2,219 web tests;
+- 642 mobile tests;
+- 371 shared-package tests;
+- 244 script and policy tests;
+- all 55 ProviderCommandReactor tests;
+- Croki overlay enforcement against the exact T3 base;
+- release smoke and frozen-lockfile verification;
+- rendered application-focus, add-to-message, and removal checks; and
+- an independent product review followed by repair of worktree consistency and
+  accessible removal.
+
+The release boundary is enforced in code: Croki is the environment around
+native providers, not an implicit agent harness.
