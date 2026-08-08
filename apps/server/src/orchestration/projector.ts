@@ -386,8 +386,11 @@ export function projectEvent(
           (message) => message.turnId !== null,
         );
         const retainedLatestTurnId = retainedMessages[retainedLatestTurnMessageIndex]?.turnId;
+        const retainedLatestTurnFirstMessageIndex = retainedMessages.findIndex(
+          (message) => message.turnId === retainedLatestTurnId,
+        );
         const retainedLatestUserMessage = retainedMessages
-          .slice(0, retainedLatestTurnMessageIndex + 1)
+          .slice(0, retainedLatestTurnFirstMessageIndex + 1)
           .findLast((message) => message.role === "user");
         const retainedLatestTurnMessages =
           retainedLatestTurnId && retainedLatestUserMessage

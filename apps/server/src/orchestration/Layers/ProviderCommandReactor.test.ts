@@ -3574,8 +3574,9 @@ describe("ProviderCommandReactor", () => {
       expect(target?.session).toMatchObject({
         status: "error",
         lastError:
-          "Edit from here could not prepare the selected conversation boundary. Return to the source Thread and try again. Native history fork failed.",
+          "Could not fork the provider conversation. Try again. Native history fork failed.",
       });
+      expect(harness.discardConversation).not.toHaveBeenCalled();
       expect(harness.stopSession).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
     }),
   );
