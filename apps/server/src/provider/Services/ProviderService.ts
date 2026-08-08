@@ -13,6 +13,8 @@
  */
 import type {
   CodexVoiceEvent,
+  CodexGoal,
+  CodexGoalStatus,
   CodexVoiceStartInput,
   ProviderInterruptTurnInput,
   ProviderInstanceId,
@@ -40,6 +42,18 @@ import type { ProviderInstanceRoutingInfo } from "./ProviderAdapterRegistry.ts";
  * ProviderServiceShape - Service API for provider session and turn orchestration.
  */
 export interface ProviderServiceShape {
+  readonly goal?: {
+    readonly get: (threadId: ThreadId) => Effect.Effect<CodexGoal | null, ProviderServiceError>;
+    readonly set: (
+      threadId: ThreadId,
+      input: {
+        readonly objective?: string;
+        readonly status?: CodexGoalStatus;
+        readonly tokenBudget?: number;
+      },
+    ) => Effect.Effect<CodexGoal, ProviderServiceError>;
+    readonly clear: (threadId: ThreadId) => Effect.Effect<void, ProviderServiceError>;
+  };
   readonly voice?: {
     readonly start: (input: CodexVoiceStartInput) => Effect.Effect<void, ProviderServiceError>;
     readonly stop: (threadId: ThreadId) => Effect.Effect<void, ProviderServiceError>;

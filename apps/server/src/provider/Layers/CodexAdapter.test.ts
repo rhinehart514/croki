@@ -120,6 +120,21 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
     Promise.resolve({ threadId: "provider-thread-forked" }),
   );
 
+  public readonly getGoalImpl = vi.fn(() => Promise.resolve(null));
+  public readonly setGoalImpl = vi.fn((input: Parameters<CodexSessionRuntimeShape["setGoal"]>[0]) =>
+    Promise.resolve({
+      threadId: "provider-thread-1",
+      objective: input.objective ?? "Finish the work",
+      status: input.status ?? ("active" as const),
+      tokenBudget: input.tokenBudget ?? null,
+      tokensUsed: 0,
+      timeUsedSeconds: 0,
+      createdAt: 0,
+      updatedAt: 0,
+    }),
+  );
+  public readonly clearGoalImpl = vi.fn(() => Promise.resolve());
+
   public readonly respondToRequestImpl = vi.fn(
     (_requestId: ApprovalRequestId, _decision: ProviderApprovalDecision): Promise<void> =>
       Promise.resolve(undefined),
@@ -163,6 +178,14 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
   }
 
   forkThread = Effect.promise(() => this.forkThreadImpl());
+
+  getGoal = Effect.promise(() => this.getGoalImpl());
+
+  setGoal(input: Parameters<CodexSessionRuntimeShape["setGoal"]>[0]) {
+    return Effect.promise(() => this.setGoalImpl(input));
+  }
+
+  clearGoal = Effect.promise(() => this.clearGoalImpl());
 
   respondToRequest(requestId: ApprovalRequestId, decision: ProviderApprovalDecision) {
     return Effect.promise(() => this.respondToRequestImpl(requestId, decision));
@@ -594,6 +617,25 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         resumeCursor: { threadId: "provider-thread-forked" },
       });
       NodeAssert.equal(runtime.forkThreadImpl.mock.calls.length, 1);
+    }),
+  );
+
+  it.effect("routes Finish mode through the native Codex goal", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      NodeAssert.ok(adapter.goal);
+
+      const goal = yield* adapter.goal.set(asThreadId("thread-1"), {
+        objective: "Keep going until CI is green",
+        tokenBudget: 20_000,
+      });
+
+      NodeAssert.equal(goal.objective, "Keep going until CI is green");
+      NodeAssert.equal(goal.tokenBudget, 20_000);
+      NodeAssert.deepStrictEqual(runtime.setGoalImpl.mock.calls[0]?.[0], {
+        objective: "Keep going until CI is green",
+        tokenBudget: 20_000,
+      });
     }),
   );
 

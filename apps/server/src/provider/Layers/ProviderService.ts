@@ -1282,6 +1282,63 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       ),
   };
 
+  const goal: NonNullable<ProviderService.ProviderService["Service"]["goal"]> = {
+    get: (threadId) =>
+      resolveRoutableSession({
+        threadId,
+        operation: "ProviderService.goal.get",
+        allowRecovery: true,
+      }).pipe(
+        Effect.flatMap(({ adapter }) =>
+          adapter.goal
+            ? adapter.goal.get(threadId)
+            : Effect.fail(
+                new ProviderAdapterValidationError({
+                  provider: adapter.provider,
+                  operation: "goal.get",
+                  issue: "The selected provider does not support durable goals.",
+                }),
+              ),
+        ),
+      ),
+    set: (threadId, input) =>
+      resolveRoutableSession({
+        threadId,
+        operation: "ProviderService.goal.set",
+        allowRecovery: true,
+      }).pipe(
+        Effect.flatMap(({ adapter }) =>
+          adapter.goal
+            ? adapter.goal.set(threadId, input)
+            : Effect.fail(
+                new ProviderAdapterValidationError({
+                  provider: adapter.provider,
+                  operation: "goal.set",
+                  issue: "Finish mode is only available for Codex Threads.",
+                }),
+              ),
+        ),
+      ),
+    clear: (threadId) =>
+      resolveRoutableSession({
+        threadId,
+        operation: "ProviderService.goal.clear",
+        allowRecovery: true,
+      }).pipe(
+        Effect.flatMap(({ adapter }) =>
+          adapter.goal
+            ? adapter.goal.clear(threadId)
+            : Effect.fail(
+                new ProviderAdapterValidationError({
+                  provider: adapter.provider,
+                  operation: "goal.clear",
+                  issue: "The selected provider does not support durable goals.",
+                }),
+              ),
+        ),
+      ),
+  };
+
   yield* Effect.addFinalizer(() =>
     runStopAll().pipe(
       Effect.catchCause((cause) =>
@@ -1294,6 +1351,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
   return {
     voice,
+    goal,
     startSession,
     sendTurn,
     steerTurn,

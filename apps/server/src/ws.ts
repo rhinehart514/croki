@@ -16,6 +16,7 @@ import {
   type AuthEnvironmentScope,
   AuthSessionId,
   CommandId,
+  CodexGoalError,
   CodexVoiceError,
   type DiscoveredLocalServerList,
   EventId,
@@ -1038,6 +1039,103 @@ const makeWsRpcLayer = (
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
       return WsRpcGroup.of({
+        [WS_METHODS.codexGoalGet]: ({ threadId }) =>
+          providerService?.goal
+            ? providerService.goal.get(threadId).pipe(
+                Effect.map((goal) => ({ goal })),
+                Effect.mapError(
+                  (error) =>
+                    new CodexGoalError({
+                      kind:
+                        error._tag === "ProviderValidationError"
+                          ? "unsupported"
+                          : error._tag === "ProviderSessionNotFoundError"
+                            ? "not-ready"
+                            : "provider-error",
+                      message: error.message,
+                    }),
+                ),
+              )
+            : Effect.fail(
+                new CodexGoalError({
+                  kind: "unsupported",
+                  message: "Finish mode is unavailable in this environment.",
+                }),
+              ),
+        [WS_METHODS.codexGoalSet]: ({ threadId, objective, tokenBudget }) =>
+          providerService?.goal
+            ? providerService.goal
+                .set(threadId, {
+                  objective,
+                  ...(tokenBudget !== undefined ? { tokenBudget } : {}),
+                })
+                .pipe(
+                  Effect.map((goal) => ({ goal })),
+                  Effect.mapError(
+                    (error) =>
+                      new CodexGoalError({
+                        kind:
+                          error._tag === "ProviderValidationError"
+                            ? "unsupported"
+                            : error._tag === "ProviderSessionNotFoundError"
+                              ? "not-ready"
+                              : "provider-error",
+                        message: error.message,
+                      }),
+                  ),
+                )
+            : Effect.fail(
+                new CodexGoalError({
+                  kind: "unsupported",
+                  message: "Finish mode is unavailable in this environment.",
+                }),
+              ),
+        [WS_METHODS.codexGoalSetStatus]: ({ threadId, status }) =>
+          providerService?.goal
+            ? providerService.goal.set(threadId, { status }).pipe(
+                Effect.map((goal) => ({ goal })),
+                Effect.mapError(
+                  (error) =>
+                    new CodexGoalError({
+                      kind:
+                        error._tag === "ProviderValidationError"
+                          ? "unsupported"
+                          : error._tag === "ProviderSessionNotFoundError"
+                            ? "not-ready"
+                            : "provider-error",
+                      message: error.message,
+                    }),
+                ),
+              )
+            : Effect.fail(
+                new CodexGoalError({
+                  kind: "unsupported",
+                  message: "Finish mode is unavailable in this environment.",
+                }),
+              ),
+        [WS_METHODS.codexGoalClear]: ({ threadId }) =>
+          providerService?.goal
+            ? providerService.goal.clear(threadId).pipe(
+                Effect.as({ goal: null }),
+                Effect.mapError(
+                  (error) =>
+                    new CodexGoalError({
+                      kind:
+                        error._tag === "ProviderValidationError"
+                          ? "unsupported"
+                          : error._tag === "ProviderSessionNotFoundError"
+                            ? "not-ready"
+                            : "provider-error",
+                      message: error.message,
+                    }),
+                ),
+              )
+            : Effect.fail(
+                new CodexGoalError({
+                  kind: "unsupported",
+                  message: "Finish mode is unavailable in this environment.",
+                }),
+              ),
         [WS_METHODS.codexVoiceStart]: (input) =>
           providerService?.voice && providerCommandReactor
             ? nowIso.pipe(

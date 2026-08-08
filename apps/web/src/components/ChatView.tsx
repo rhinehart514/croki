@@ -6683,6 +6683,7 @@ function ChatViewContent(props: ChatViewProps) {
             activeThreadId={activeThread.id}
             {...(routeKind === "draft" && draftId ? { draftId } : {})}
             activeThreadTitle={activeThread.title}
+            activeProvider={selectedProvider}
             forkedFromThreadTitle={
               forkSourceThread?.title ??
               (activeServerThread?.forkedFromThreadId ? "deleted thread" : undefined)

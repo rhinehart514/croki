@@ -8,6 +8,7 @@
  * @module CodexAdapterLive
  */
 import {
+  type CodexGoal,
   type CodexVoiceEvent,
   type CanonicalItemType,
   type CanonicalRequestType,
@@ -73,6 +74,18 @@ const isCodexSessionRuntimeThreadIdMissingError = Schema.is(
   CodexSessionRuntimeThreadIdMissingError,
 );
 const isCodexResumeCursorSchema = Schema.is(CodexResumeCursorSchema);
+
+function toCodexGoal(goal: EffectCodexSchema.V2ThreadGoalGetResponse__ThreadGoal): CodexGoal {
+  return {
+    objective: goal.objective as CodexGoal["objective"],
+    status: goal.status,
+    tokenBudget: goal.tokenBudget ?? null,
+    tokensUsed: goal.tokensUsed,
+    timeUsedSeconds: goal.timeUsedSeconds,
+    createdAt: goal.createdAt,
+    updatedAt: goal.updatedAt,
+  };
+}
 
 const PROVIDER = ProviderDriverKind.make("codex");
 
@@ -2123,6 +2136,37 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         Stream.fromPubSub(voiceEventPubSub).pipe(
           Stream.filter(({ threadId: eventThreadId }) => eventThreadId === threadId),
           Stream.map(({ event }) => event),
+        ),
+    },
+    goal: {
+      get: (threadId) =>
+        requireSession(threadId).pipe(
+          Effect.flatMap((session) => session.runtime.getGoal),
+          Effect.map((goal) => (goal ? toCodexGoal(goal) : null)),
+          Effect.mapError((cause) =>
+            cause._tag === "ProviderAdapterSessionNotFoundError"
+              ? cause
+              : mapCodexRuntimeError(threadId, "thread/goal/get", cause),
+          ),
+        ),
+      set: (threadId, input) =>
+        requireSession(threadId).pipe(
+          Effect.flatMap((session) => session.runtime.setGoal(input)),
+          Effect.map(toCodexGoal),
+          Effect.mapError((cause) =>
+            cause._tag === "ProviderAdapterSessionNotFoundError"
+              ? cause
+              : mapCodexRuntimeError(threadId, "thread/goal/set", cause),
+          ),
+        ),
+      clear: (threadId) =>
+        requireSession(threadId).pipe(
+          Effect.flatMap((session) => session.runtime.clearGoal),
+          Effect.mapError((cause) =>
+            cause._tag === "ProviderAdapterSessionNotFoundError"
+              ? cause
+              : mapCodexRuntimeError(threadId, "thread/goal/clear", cause),
+          ),
         ),
     },
     get streamEvents() {
