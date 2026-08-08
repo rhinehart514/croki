@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off
 import { describe, expect, it } from "vite-plus/test";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeProcess from "node:process";
