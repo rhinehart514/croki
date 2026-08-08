@@ -21,6 +21,7 @@ import {
   subscribeToThemePreview,
   subscribeToCustomThemes,
   T3_CHAT_THEME,
+  T3_CHAT_THEME_LABEL,
   EMBER_THEME,
   GROVE_THEME,
   IRIS_THEME,
@@ -50,6 +51,11 @@ function contrastRatio(first: string, second: string): number {
 }
 
 describe("theme files", () => {
+  it("uses Croki branding for the built-in theme", () => {
+    expect(T3_CHAT_THEME_LABEL).toBe("Croki");
+    expect(T3_CHAT_THEME.label).toBe("Croki");
+  });
+
   it("derives a readable palette from extreme simple-editor colors", () => {
     const light = createManagedThemeColors("light", "#111827", "#ffff00");
     const dark = createManagedThemeColors("dark", "#ffffff", "#ffff00");
@@ -69,7 +75,7 @@ describe("theme files", () => {
     expect(dark.secondaryLabel).toBe(dark.textMuted);
     expect(contrastRatio(light.accentForeground, light.accent)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(dark.accentForeground, dark.accent)).toBeGreaterThanOrEqual(4.5);
-    // Status colors fall back to T3 Code's standard red and amber rather than
+    // Status colors fall back to Croki's standard red and amber rather than
     // the flagship palette's, so no generated theme inherits a brand tint.
     const channels = (value: string) =>
       [1, 3, 5].map((index) => Number.parseInt(value.slice(index, index + 2), 16)) as [
@@ -275,7 +281,7 @@ describe("theme files", () => {
     });
   });
 
-  it("keeps the T3 Chat palette faithful and readable", () => {
+  it("keeps the Croki palette faithful and readable", () => {
     expect(T3_CHAT_THEME.colors).toMatchObject({
       canvas: "#fdf7fd",
       chrome: "#fdf7fd",
@@ -490,7 +496,7 @@ describe("stored theme preferences", () => {
     }
   });
 
-  it("resolves the legacy t3-chat-dark preference to dark T3 Chat", () => {
+  it("resolves the legacy t3-chat-dark preference to dark Croki", () => {
     expect(getThemeDefinition("t3-chat-dark")).toBe(T3_CHAT_THEME);
     expect(getThemePreferenceMode("t3-chat-dark")).toBe("dark");
     expect(resolveThemeAppearance("t3-chat-dark", true, false)).toBe("dark");
