@@ -37,6 +37,13 @@ export interface TranscriptFileListing {
   readonly walkedDirectories: number;
   /** Directories omitted because their entries could not be listed. */
   readonly failedDirectories: number;
+  /** Transcript entries omitted because their metadata could not be read. */
+  readonly failedFiles: number;
+}
+
+/** Missing entries are expected when an active transcript is rotated mid-walk. */
+function isMissingPathError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
 /**
@@ -53,6 +60,7 @@ export async function listTranscriptFiles(
   const found: TranscriptFile[] = [];
   let walkedDirectories = 0;
   let failedDirectories = 0;
+  let failedFiles = 0;
 
   const walk = async (dir: string): Promise<void> => {
     let entries;
@@ -75,14 +83,17 @@ export async function listTranscriptFiles(
         if (stats.mtimeMs >= sinceMs) {
           found.push({ path: child, size: stats.size, mtimeMs: stats.mtimeMs });
         }
-      } catch {
-        // Vanished between readdir and stat.
+      } catch (error) {
+        // Vanishing between readdir and stat is normal during transcript
+        // rotation. Other failures make the listing incomplete and must be
+        // reflected in the source provenance.
+        if (!isMissingPathError(error)) failedFiles += 1;
       }
     }
   };
 
   await walk(root);
-  return { files: found, walkedDirectories, failedDirectories };
+  return { files: found, walkedDirectories, failedDirectories, failedFiles };
 }
 
 /**

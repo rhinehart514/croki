@@ -1185,7 +1185,11 @@ const makeWsRpcLayer = (
         [ORCHESTRATION_WS_METHODS.getWorkflowScript]: (input) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.getWorkflowScript,
-            readWorkflowScript({ scriptPath: input.scriptPath }),
+            readWorkflowScript(input, {
+              getThread: projectionSnapshotQuery.getThreadShellById,
+              getProject: projectionSnapshotQuery.getProjectShellById,
+              getSettings: serverSettings.getSettings,
+            }),
             { "rpc.aggregate": "orchestration" },
           ),
         [ORCHESTRATION_WS_METHODS.getTurnDiff]: (input) =>

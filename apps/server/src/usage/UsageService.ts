@@ -394,11 +394,11 @@ export const make = Effect.gen(function* () {
       const listing = yield* Effect.promise(() => listTranscriptFiles(dir, windowStartMs));
       // Absence only proves deletion when every subtree under the root was
       // listed. Preserve cached entries after a partial walk.
-      if (listing.failedDirectories === 0) walkedRoots.push(dir);
+      if (listing.failedDirectories === 0 && listing.failedFiles === 0) walkedRoots.push(dir);
       let scannedFiles = 0;
-      let skippedFiles = 0;
+      let skippedFiles = listing.failedFiles;
       let readableFiles = 0;
-      let failedFiles = 0;
+      let failedFiles = listing.failedFiles;
       // Distinct per directory. Buckets carry per-cell session counts, but a
       // session spans days and models, so clients total this figure instead.
       const sessionIds = new Set<string>();

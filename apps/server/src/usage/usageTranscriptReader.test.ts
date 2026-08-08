@@ -10,11 +10,12 @@ import { listTranscriptFiles } from "./usageTranscriptReader.ts";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
-  return { ...actual, readdir: vi.fn(actual.readdir) };
+  return { ...actual, readdir: vi.fn(actual.readdir), stat: vi.fn(actual.stat) };
 });
 
 afterEach(() => {
   vi.mocked(NodeFSP.readdir).mockClear();
+  vi.mocked(NodeFSP.stat).mockClear();
 });
 
 describe("listTranscriptFiles", () => {
@@ -26,6 +27,7 @@ describe("listTranscriptFiles", () => {
         files: [],
         walkedDirectories: 1,
         failedDirectories: 0,
+        failedFiles: 0,
       });
 
       vi.mocked(NodeFSP.readdir).mockRejectedValueOnce(new Error("permission denied"));
@@ -33,6 +35,7 @@ describe("listTranscriptFiles", () => {
         files: [],
         walkedDirectories: 0,
         failedDirectories: 1,
+        failedFiles: 0,
       });
     } finally {
       await NodeFSP.rm(emptyDir, { recursive: true });
@@ -54,6 +57,37 @@ describe("listTranscriptFiles", () => {
         files: [],
         walkedDirectories: 1,
         failedDirectories: 1,
+        failedFiles: 0,
+      });
+    } finally {
+      await NodeFSP.rm(root, { recursive: true });
+    }
+  });
+
+  it("reports metadata failures but tolerates a transcript rotated during the walk", async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "croki-usage-reader-"));
+    const transcript = NodePath.join(root, "session.jsonl");
+    await NodeFSP.writeFile(transcript, "{}\n");
+
+    try {
+      vi.mocked(NodeFSP.stat).mockRejectedValueOnce(
+        Object.assign(new Error("permission denied"), { code: "EACCES" }),
+      );
+      await expect(listTranscriptFiles(root, 0)).resolves.toEqual({
+        files: [],
+        walkedDirectories: 1,
+        failedDirectories: 0,
+        failedFiles: 1,
+      });
+
+      vi.mocked(NodeFSP.stat).mockRejectedValueOnce(
+        Object.assign(new Error("rotated"), { code: "ENOENT" }),
+      );
+      await expect(listTranscriptFiles(root, 0)).resolves.toEqual({
+        files: [],
+        walkedDirectories: 1,
+        failedDirectories: 0,
+        failedFiles: 0,
       });
     } finally {
       await NodeFSP.rm(root, { recursive: true });

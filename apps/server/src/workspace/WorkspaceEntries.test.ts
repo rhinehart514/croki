@@ -440,7 +440,7 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
     it.effect("finds later whole-word matches in a file after rejected raw matches", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTempDir({ prefix: "t3code-workspace-content-late-whole-word-" });
-        yield* writeTextFile(cwd, "src/words.ts", `${"afoo\n".repeat(10)}foo\n`);
+        yield* writeTextFile(cwd, "src/words.ts", `${"foobar\n".repeat(100)}foo\n`);
 
         const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
         const result = yield* workspaceEntries.searchContents({
@@ -455,7 +455,7 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
         expect(result.matches).toEqual([
           expect.objectContaining({
             path: "src/words.ts",
-            lineNumber: 11,
+            lineNumber: 101,
             matchRanges: [{ start: 0, end: 3 }],
           }),
         ]);

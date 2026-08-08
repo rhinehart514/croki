@@ -470,10 +470,11 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
   )(function* (input) {
     const { searchQuery, regexMode } = buildContentSearchQuery(input);
     const deadline = performance.now() + CONTENT_SEARCH_TIME_BUDGET_MS;
-    // Grep cursors advance by file, so whole-word post-filtering needs enough
-    // raw candidates from the current file before moving to the next one.
+    // Grep cursors advance by file, so whole-word post-filtering must reserve
+    // room for rejected substring matches before the cursor leaves that file.
+    // The extra result preserves an honest `truncated` value after filtering.
     const rawPageSize = input.wholeWord
-      ? Math.max(input.limit, CONTENT_SEARCH_MAX_MATCHES_PER_FILE)
+      ? input.limit + CONTENT_SEARCH_MAX_MATCHES_PER_FILE + 1
       : input.limit;
     const matches: Array<ProjectSearchContentsResult["matches"][number]> = [];
     let nextCursor: GrepCursor | null = null;
@@ -485,8 +486,11 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
         finder.grep(searchQuery, {
           mode: regexMode ? "regex" : "plain",
           smartCase: !input.caseSensitive && !regexMode,
-          // A single dense file must not consume the whole result page.
-          maxMatchesPerFile: Math.min(CONTENT_SEARCH_MAX_MATCHES_PER_FILE, rawPageSize),
+          // Ordinary searches cap dense files. Whole-word searches use their
+          // bounded overscan because the cursor cannot return to a capped file.
+          maxMatchesPerFile: input.wholeWord
+            ? rawPageSize
+            : Math.min(CONTENT_SEARCH_MAX_MATCHES_PER_FILE, rawPageSize),
           pageSize: rawPageSize,
           cursor: nextCursor,
           timeBudgetMs: remainingTimeBudgetMs,
