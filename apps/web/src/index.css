@@ -1509,11 +1509,11 @@ code {
   }
 }
 
-.t3-ghostty-canvas {
+.croki-ghostty-canvas {
   cursor: text;
 }
 
-.t3-ghostty-scrollbar {
+.croki-ghostty-scrollbar {
   position: absolute;
   z-index: 1;
   top: 4px;
@@ -1524,7 +1524,7 @@ code {
   touch-action: none;
 }
 
-.t3-ghostty-scrollbar-thumb {
+.croki-ghostty-scrollbar-thumb {
   position: absolute;
   top: 0;
   right: 1px;
@@ -1534,8 +1534,8 @@ code {
   transition: background-color 120ms ease-out;
 }
 
-.t3-ghostty-scrollbar:hover .t3-ghostty-scrollbar-thumb,
-.t3-ghostty-scrollbar:focus-visible .t3-ghostty-scrollbar-thumb {
+.croki-ghostty-scrollbar:hover .croki-ghostty-scrollbar-thumb,
+.croki-ghostty-scrollbar:focus-visible .croki-ghostty-scrollbar-thumb {
   background: var(--app-scrollbar-thumb-hover);
 }
 
