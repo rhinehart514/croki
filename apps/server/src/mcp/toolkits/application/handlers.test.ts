@@ -25,7 +25,6 @@ const invocation = {
   threadId,
   providerSessionId: "provider-session-awareness",
   providerInstanceId: ProviderInstanceId.make("codex"),
-  harnessId: "native" as const,
   capabilities: new Set(["canvas"] as const),
   issuedAt: 1,
 };

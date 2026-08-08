@@ -59,6 +59,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
 
       - name: Build Croki release destination plan
         shell: bash
@@ -92,7 +97,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: true
-          run-install: true
+          run-install: |
+            args:
+              - --filter=t3code-relay...
 
       - name: Deploy production relay stage
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true

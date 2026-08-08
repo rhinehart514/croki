@@ -35,7 +35,6 @@ const invocation: McpInvocationContext.McpInvocationScope = {
   threadId,
   providerSessionId: "provider-session-canvas-tool",
   providerInstanceId: ProviderInstanceId.make("codex"),
-  harnessId: "product-v1",
   capabilities: new Set(["canvas"]),
   issuedAt: 1,
 };
@@ -122,7 +121,6 @@ it.effect("persists a bounded artifact in the originating Thread activity", () =
     } satisfies OrchestrationEngineShape);
 
     const result = yield* presentCrokiCanvas({
-      harnessId: "product-v1",
       presentation: "compare",
       question: "How should Canvas participate in Croki?",
       nodes: [
@@ -141,7 +139,7 @@ it.effect("persists a bounded artifact in the originating Thread activity", () =
     );
 
     expect(result.revision).toBe(3);
-    expect(result.harnessId).toBe("product-v1");
+    expect(result.source).toBe("user-applied");
     expect(activities).toHaveLength(1);
     const command = activities[0];
     expect(command?.type).toBe("thread.activity.append");
@@ -153,16 +151,16 @@ it.effect("persists a bounded artifact in the originating Thread activity", () =
       id: result.artifactId,
       revision: 3,
       threadId,
-      harnessId: "product-v1",
+      source: "user-applied",
       presentation: "compare",
     });
   }).pipe(Effect.provideService(Crypto.Crypto, testCrypto)),
 );
 
-it.effect("does not persist when the active invocation is Native", () =>
+it.effect("does not persist when Canvas was not explicitly enabled", () =>
   Effect.gen(function* () {
     let dispatches = 0;
-    const nativeInvocation = { ...invocation, harnessId: "native" as const };
+    const invocationWithoutCanvas = { ...invocation, capabilities: new Set(["preview"] as const) };
     const projection = Layer.mock(ProjectionSnapshotQuery)({
       getThreadDetailById: () => Effect.succeed(Option.some(thread)),
     });
@@ -178,13 +176,12 @@ it.effect("does not persist when the active invocation is Native", () =>
     } satisfies OrchestrationEngineShape);
 
     const result = yield* presentCrokiCanvas({
-      harnessId: "product-v1",
       presentation: "compare",
       question: "Should this be visible?",
       nodes: [{ id: "route", role: "route", title: "No" }],
       edges: [],
     }).pipe(
-      Effect.provideService(McpInvocationContext.McpInvocationContext, nativeInvocation),
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocationWithoutCanvas),
       Effect.provide(projection),
       Effect.provideService(OrchestrationEngineService, engine),
       Effect.flip,

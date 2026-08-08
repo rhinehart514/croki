@@ -1,44 +1,54 @@
-# Documentation
+# Croki docs
+
+## Using Croki
+
+- [Install and first run](./user/install.md)
+- [Permission modes](./user/permission-modes.md)
+- [Keyboard shortcuts](./user/keybindings.md)
+- [Organizing threads](./user/thread-sidebar.md)
+- [Remote access](./user/remote-access.md)
+- [Keeping app and server in sync](./user/updating.md)
+- [Source control integrations](./user/source-control.md)
+- [Background service (Linux)](./user/background-service.md)
+- Providers: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md)
+
+Mobile app: [apps/mobile/README.md](../apps/mobile/README.md)
+
+---
+
+## Working on Croki
+
+Everything below is for maintainers. Setup lives in the [root README](../README.md);
+policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../AGENTS.md).
+
+- [Architecture overview](./internals/overview.md)
+- [Workspace layout](./internals/workspace-layout.md)
+- [Glossary](./internals/glossary.md)
+- [Scripts](./internals/scripts.md)
+- [Connection runtime](./internals/connection-runtime.md)
+- [Providers](./internals/providers.md)
+- [Remote environments](./internals/remote.md)
+- [Server updates](./internals/server-updates.md)
+- [Resource telemetry](./internals/resource-telemetry.md)
+- [Environment auth](./internals/environment-auth.md)
+- [Connect compatibility architecture](./internals/t3-connect.md)
+- [CI gates](./internals/ci.md)
+
+### Croki product direction
 
 - [Current project state](./project/current-state.md)
 - [Current-state audit (2026-08-05)](./project/current-state-audit-2026-08-05.md)
 - [ADE-native product adjustments](./project/ade-native-adjustments.md)
-- [0.4.2 release notes](./project/release-notes-0.4.2.md)
-- [0.4.4 release plan](./project/release-notes-0.4.4.md)
-- [0.4.6 application lineage](./project/release-notes-0.4.6.md)
-- [0.4.7 UI history plan](./project/release-notes-0.4.7.md)
-- [0.4.8 resume and simplification plan](./project/release-notes-0.4.8.md)
-- [0.4.9 control without interruption plan](./project/release-notes-0.4.9.md)
-- [0.4.10 durable outcomes and review plan](./project/release-notes-0.4.10.md)
-- [0.4.5 stabilization notes](./project/release-notes-0.4.5.md)
-- [Release Canvas product specification](./project/release-canvas-spec.md)
-- [Harness visual-artifact specification](./project/harness-canvas-spec.md)
 - [Croki product and overlay contract](./croki.md)
-- [Getting started](./getting-started/quick-start.md)
-- Architecture
-  - [Overview](./architecture/overview.md)
-  - [Providers](./architecture/providers.md)
-  - [Runtime and access modes](./architecture/runtime-modes.md)
-  - [Connection runtime](./architecture/connection-runtime.md)
-  - [Remote environments](./architecture/remote.md)
-  - [Server updates](./architecture/server-updates.md)
-- User guides
-  - [Background service](./user/background-service.md)
-  - [Remote access](./user/remote-access.md)
-  - [Keeping Croki in sync](./user/server-updates.md)
-  - [Keybindings](./user/keybindings.md)
-- [Croki Connect](./cloud/t3-connect-clerk.md)
-- [Integrations](./integrations/source-control-providers.md)
-- Operations
-  - [CI quality gates](./operations/ci.md)
-  - [Release ownership and enablement](./operations/release.md)
-- Providers
-  - [Codex](./providers/codex.md)
-  - [Claude](./providers/claude.md)
-  - [OpenClaw](./providers/openclaw.md)
-- [Reference](./reference/encyclopedia.md)
+- [Release notes and historical specifications](./project/)
 
-Some deep architecture documents retain `CROKI_*`, `t3`, `@croki/*`,
-`croki://`, and inherited service identifiers. Those are compatibility
-contracts, not visible product branding. Production release and hosted-service
-instructions are disabled until every destination is Croki-owned.
+Historical Product, GTM, Venture, and harness documents describe earlier Croki
+releases. Their behavior identifiers remain readable for compatibility but are
+not active choices for new turns.
+
+### Runbooks
+
+- [Release](./operations/release.md)
+- [Observability](./operations/observability.md)
+- [Relay observability](./operations/relay-observability.md)
+- [Mobile app store screenshots](./operations/mobile-app-store-screenshots.md)

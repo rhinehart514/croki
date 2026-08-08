@@ -42,7 +42,7 @@ export const CROKI_BRAND_ASSET_PATHS = {
 export const LEGACY_PRODUCT_IDENTIFIERS = {
   predecessorRepository: "pingdotgg/t3code",
   predecessorPackageName: "t3",
-  predecessorPackageScope: "@t3tools/",
+  predecessorPackageScope: "@croki/",
   stagedPackageName: "croki",
   packageScope: "@croki/",
   desktopAppId: "com.croki.desktop",

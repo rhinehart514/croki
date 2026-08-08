@@ -1,6 +1,5 @@
 import type {
   ApprovalRequestId,
-  CrokiHarnessId,
   EnvironmentId,
   ModelSelection,
   PreviewAnnotationPayload,
@@ -11,7 +10,6 @@ import type {
   ScopedThreadRef,
   ServerProvider,
   ThreadId,
-  TurnId,
 } from "@croki/contracts";
 import {
   ProviderDriverKind,
@@ -78,7 +76,6 @@ import {
 } from "../../lib/terminalContext";
 import { useComposerPathSearch } from "../../lib/composerPathSearchState";
 import { type ElementContextDraft } from "../../lib/elementContext";
-import type { HarnessCanvasArtifactNode } from "./canvasThreadIntegration";
 import { ComposerPendingElementContexts } from "./ComposerPendingElementContexts";
 import { ComposerPendingReviewComments } from "./ComposerPendingReviewComments";
 import { ComposerPreviewAnnotationCards } from "./ComposerPreviewAnnotationCards";
@@ -93,29 +90,22 @@ import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
-import { CodexVoiceButton } from "./CodexVoiceButton";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
-import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
+import { ComposerControl, ComposerControlIcon, ComposerSelectControl } from "./ComposerControl";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
 import {
   getComposerPromptInjectionState,
   getComposerProviderState,
+  renderProviderTraitsMenuContent,
   renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
-import {
-  Menu,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator,
-  MenuTrigger,
-} from "../ui/menu";
+import { Separator } from "../ui/separator";
 
 type ComposerCommandMenuPosition = {
   bottom: number;
@@ -198,9 +188,20 @@ function ComposerCommandMenuLayer(props: { anchor: HTMLElement | null; children:
   );
 }
 import { Button } from "../ui/button";
+import { Select, SelectItem, SelectPopup, SelectValue } from "../ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
-import { CircleAlertIcon, ListTodoIcon, XIcon } from "lucide-react";
+import {
+  BotIcon,
+  CircleAlertIcon,
+  PencilRulerIcon,
+  type LucideIcon,
+  LockIcon,
+  LockOpenIcon,
+  PenLineIcon,
+  SparklesIcon,
+  XIcon,
+} from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
 import { getProviderDisplayName, getProviderInteractionModeToggle } from "../../providerModels";
 import {
@@ -226,6 +227,33 @@ import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
 
+const runtimeModeConfig: Record<
+  RuntimeMode,
+  { label: string; description: string; icon: LucideIcon }
+> = {
+  "approval-required": {
+    label: "Supervised",
+    description: "Ask before commands and file changes.",
+    icon: LockIcon,
+  },
+  "auto-accept-edits": {
+    label: "Auto-accept edits",
+    description: "Auto-approve edits, ask before other actions.",
+    icon: PenLineIcon,
+  },
+  auto: {
+    label: "Auto",
+    description: "Supported providers approve routine actions; others still ask.",
+    icon: SparklesIcon,
+  },
+  "full-access": {
+    label: "Full access",
+    description: "Allow commands and edits without prompts.",
+    icon: LockOpenIcon,
+  },
+};
+
+const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
 const COMPOSER_FLOATING_LAYER_SELECTOR = [
   '[data-slot="popover-popup"]',
   '[data-slot="menu-popup"]',
@@ -266,94 +294,94 @@ function isInsideComposerFloatingLayer(element: Element): boolean {
   return element.closest(COMPOSER_FLOATING_LAYER_SELECTOR) !== null;
 }
 
-const ComposerBehaviorControls = memo(function ComposerBehaviorControls(props: {
-  harnessId: CrokiHarnessId;
-  interactionMode: ProviderInteractionMode;
+const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
   showInteractionModeToggle: boolean;
-  showPlanToggle: boolean;
-  planSidebarLabel: string;
-  planSidebarOpen: boolean;
-  onHarnessChange: (harnessId: CrokiHarnessId) => void;
+  interactionMode: ProviderInteractionMode;
+  runtimeMode: RuntimeMode;
   onToggleInteractionMode: () => void;
-  onTogglePlanSidebar: () => void;
+  onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
-  const behaviorLabel = [
-    props.harnessId === "product-v1" ? "Product" : "Native",
-    props.interactionMode === "plan" ? "Plan" : "Build",
-  ].join(" · ");
+  const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
+  const RuntimeModeIcon = runtimeModeOption.icon;
+  const interactionModeTooltip =
+    props.interactionMode === "plan"
+      ? "Plan mode — click to return to normal build mode"
+      : "Default mode — click to enter plan mode";
 
-  return (
+  const interactionModeToggle = props.showInteractionModeToggle ? (
     <>
-      <Menu>
-        <MenuTrigger
+      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+      <Tooltip>
+        <TooltipTrigger
           render={
             <ComposerControl
+              className={cn(
+                "shrink-0 whitespace-nowrap",
+                props.interactionMode === "plan"
+                  ? "bg-accent text-accent-foreground hover:bg-accent/80"
+                  : "text-secondary-label hover:text-foreground",
+              )}
               type="button"
-              className="shrink-0 text-muted-foreground/65 transition-colors duration-150 hover:text-foreground/85 motion-reduce:transition-none"
-              aria-label="Behavior"
+              onClick={props.onToggleInteractionMode}
+              aria-label={interactionModeTooltip}
             />
           }
         >
-          <span aria-hidden="true" className="opacity-45">
-            ·
+          {props.interactionMode === "plan" ? (
+            <ComposerControlIcon icon={PencilRulerIcon} className="text-current opacity-100" />
+          ) : (
+            <ComposerControlIcon icon={BotIcon} opticalSize="large" />
+          )}
+          <span className="sr-only sm:not-sr-only">
+            {props.interactionMode === "plan" ? "Plan" : "Build"}
           </span>
-          {behaviorLabel}
-        </MenuTrigger>
-        <MenuPopup
-          align="start"
-          className="translate-y-0 transition-[opacity,translate] duration-100 ease-out data-ending-style:translate-y-0.5 data-ending-style:opacity-0 data-starting-style:translate-y-0.5 data-starting-style:opacity-0 motion-reduce:transition-none"
-        >
-          <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Behavior</div>
-          <MenuRadioGroup
-            value={props.harnessId}
-            onValueChange={(value) => {
-              if (!value || value === props.harnessId) return;
-              props.onHarnessChange(value as CrokiHarnessId);
-            }}
-          >
-            <MenuRadioItem value="native">Native</MenuRadioItem>
-            <MenuRadioItem value="product-v1">Product</MenuRadioItem>
-          </MenuRadioGroup>
-          {props.showInteractionModeToggle ? (
-            <>
-              <MenuSeparator />
-              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Mode</div>
-              <MenuRadioGroup
-                value={props.interactionMode}
-                onValueChange={(value) => {
-                  if (!value || value === props.interactionMode) return;
-                  props.onToggleInteractionMode();
-                }}
-              >
-                <MenuRadioItem value="default">Build</MenuRadioItem>
-                <MenuRadioItem value="plan">Plan</MenuRadioItem>
-              </MenuRadioGroup>
-            </>
-          ) : null}
-        </MenuPopup>
-      </Menu>
+        </TooltipTrigger>
+        <TooltipPopup side="top">{interactionModeTooltip}</TooltipPopup>
+      </Tooltip>
+    </>
+  ) : null;
 
-      {props.showPlanToggle ? (
-        <Tooltip>
+  return (
+    <>
+      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+
+      <Tooltip>
+        <Select
+          value={props.runtimeMode}
+          onValueChange={(value) => props.onRuntimeModeChange(value!)}
+        >
           <TooltipTrigger
-            render={
-              <ComposerControl
-                type="button"
-                onClick={props.onTogglePlanSidebar}
-                aria-label={`${props.planSidebarOpen ? "Hide" : "Show"} ${props.planSidebarLabel.toLowerCase()}`}
-              />
-            }
+            render={<ComposerSelectControl className="font-medium" aria-label="Runtime mode" />}
           >
-            <ComposerControlIcon icon={ListTodoIcon} />
-            <span>{props.planSidebarLabel}</span>
+            <ComposerControlIcon icon={RuntimeModeIcon} />
+            <SelectValue>{runtimeModeOption.label}</SelectValue>
           </TooltipTrigger>
-          <TooltipPopup side="top">
-            {props.planSidebarOpen
-              ? `Hide ${props.planSidebarLabel.toLowerCase()} sidebar`
-              : `Show ${props.planSidebarLabel.toLowerCase()} sidebar`}
-          </TooltipPopup>
-        </Tooltip>
-      ) : null}
+          <SelectPopup alignItemWithTrigger={false}>
+            {runtimeModeOptions.map((mode) => {
+              const option = runtimeModeConfig[mode];
+              const OptionIcon = option.icon;
+              return (
+                <SelectItem key={mode} value={mode} hideIndicator className="min-w-64 py-2">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="grid min-w-0 flex-1 gap-0.5">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                        <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                        {option.label}
+                      </span>
+                      <span className="text-muted-foreground text-xs leading-4">
+                        {option.description}
+                      </span>
+                    </div>
+                  </div>
+                </SelectItem>
+              );
+            })}
+          </SelectPopup>
+        </Select>
+        <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
+      </Tooltip>
+
+      {interactionModeToggle}
     </>
   );
 });
@@ -371,7 +399,6 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
     isComplete: boolean;
   } | null;
   isRunning: boolean;
-  canSteerRunningTurn: boolean;
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
@@ -393,13 +420,12 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         />
       ) : null}
       {props.isPreparingWorktree ? (
-        <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
+        <span className="text-secondary-label text-xs">Preparing worktree...</span>
       ) : null}
       <ComposerPrimaryActions
         compact={props.compact}
         pendingAction={props.pendingAction}
         isRunning={props.isRunning}
-        canSteerRunningTurn={props.canSteerRunningTurn}
         showPlanFollowUpPrompt={props.showPlanFollowUpPrompt}
         promptHasText={props.promptHasText}
         isSendBusy={props.isSendBusy}
@@ -482,7 +508,6 @@ export interface ChatComposerProps {
 
   // Session phase
   phase: SessionPhase;
-  canSteerRunningTurn: boolean;
   isConnecting: boolean;
   isSendBusy: boolean;
   sendDisabledReason: string | null;
@@ -512,15 +537,10 @@ export interface ChatComposerProps {
   // Plan
   showPlanFollowUpPrompt: boolean;
   activeProposedPlan: Thread["proposedPlans"][number] | null;
-  activePlan: { turnId?: TurnId } | null;
-  sidebarProposedPlan: { turnId?: TurnId } | null;
-  planSidebarLabel: string;
-  planSidebarOpen: boolean;
 
   // Mode
   runtimeMode: RuntimeMode;
   interactionMode: ProviderInteractionMode;
-  crokiHarnessId: CrokiHarnessId;
 
   // Provider / model
   lockedProvider: ProviderDriverKind | null;
@@ -530,7 +550,6 @@ export interface ChatComposerProps {
 
   // Context window
   activeThreadActivities: Thread["activities"] | undefined;
-  canvasSelection?: readonly HarnessCanvasArtifactNode[];
 
   // Misc
   resolvedTheme: "light" | "dark";
@@ -570,10 +589,6 @@ export interface ChatComposerProps {
   toggleInteractionMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
-  onCrokiHarnessChange: (harnessId: CrokiHarnessId) => void;
-  onClearCanvasSelection?: () => void;
-  onRemoveCanvasSelection?: (nodeId: string) => void;
-  togglePlanSidebar: () => void;
 
   focusComposer: () => void;
   scheduleComposerFocus: () => void;
@@ -600,7 +615,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     forceExpandedOnMobile,
     projectSelectionRequired,
     phase,
-    canSteerRunningTurn,
     isConnecting,
     isSendBusy,
     sendDisabledReason,
@@ -617,19 +631,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     respondingRequestIds,
     showPlanFollowUpPrompt,
     activeProposedPlan,
-    activePlan,
-    sidebarProposedPlan,
-    planSidebarLabel,
-    planSidebarOpen,
     runtimeMode,
     interactionMode,
-    crokiHarnessId,
     lockedProvider,
     providerStatuses,
     activeProjectDefaultModelSelection,
     activeThreadModelSelection,
     activeThreadActivities,
-    canvasSelection = [],
     resolvedTheme,
     settings,
     keybindings,
@@ -653,10 +661,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     toggleInteractionMode,
     handleRuntimeModeChange,
     handleInteractionModeChange,
-    onCrokiHarnessChange,
-    onClearCanvasSelection,
-    onRemoveCanvasSelection,
-    togglePlanSidebar,
     focusComposer,
     scheduleComposerFocus,
     setThreadError,
@@ -871,14 +875,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const selectedPromptEffort = composerProviderState.promptEffort;
   const selectedModelOptionsForDispatch = composerProviderState.modelOptionsForDispatch;
+  // Plan mode is a legacy feature behind Settings → Beta. With the flag off,
+  // ChatView forces the effective mode to "default", so hiding the toggle
+  // can't trap anyone in plan mode.
+  const planModeUiEnabled = settings.planModeEnabled;
   const composerProviderControls = useMemo(
     () => ({
-      showInteractionModeToggle: getProviderInteractionModeToggle(
-        providerStatuses,
-        selectedProvider,
-      ),
+      showInteractionModeToggle:
+        planModeUiEnabled && getProviderInteractionModeToggle(providerStatuses, selectedProvider),
     }),
-    [providerStatuses, selectedProvider],
+    [planModeUiEnabled, providerStatuses, selectedProvider],
   );
   const selectedModelSelection = useMemo<ModelSelection>(
     () => createModelSelection(selectedInstanceId, selectedModel, selectedModelOptionsForDispatch),
@@ -1039,20 +1045,24 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           label: "/model",
           description: "Switch response model for this thread",
         },
-        {
-          id: "slash:plan",
-          type: "slash-command",
-          command: "plan",
-          label: "/plan",
-          description: "Switch this thread into plan mode",
-        },
-        {
-          id: "slash:default",
-          type: "slash-command",
-          command: "default",
-          label: "/default",
-          description: "Switch this thread back to normal build mode",
-        },
+        ...(planModeUiEnabled
+          ? ([
+              {
+                id: "slash:plan",
+                type: "slash-command",
+                command: "plan",
+                label: "/plan",
+                description: "Switch this thread into plan mode",
+              },
+              {
+                id: "slash:default",
+                type: "slash-command",
+                command: "default",
+                label: "/default",
+                description: "Switch this thread back to normal build mode",
+              },
+            ] as const)
+          : []),
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
         (command) => ({
@@ -1087,7 +1097,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       );
     }
     return [];
-  }, [composerTrigger, selectedProvider, selectedProviderStatus, workspaceEntries.entries]);
+  }, [
+    composerTrigger,
+    planModeUiEnabled,
+    selectedProvider,
+    selectedProviderStatus,
+    workspaceEntries.entries,
+  ]);
 
   const composerMenuOpen = Boolean(composerTrigger);
   const composerMenuSearchKey = composerTrigger
@@ -1127,7 +1143,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     isComposerCollapsedMobile && !isComposerApprovalState && pendingUserInputs.length === 0;
 
   const composerFooterHasWideActions = showPlanFollowUpPrompt || activePendingProgress !== null;
-  const showPlanSidebarToggle = Boolean(activePlan || sidebarProposedPlan || planSidebarOpen);
   const composerFooterActionLayoutKey = useMemo(() => {
     if (activePendingProgress) {
       return `pending:${activePendingProgress.questionIndex}:${activePendingProgress.isLastQuestion}:${activePendingIsResponding}`;
@@ -1162,6 +1177,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       : "No matching command.";
   }, [composerTriggerKind]);
 
+  // ------------------------------------------------------------------
+  // Provider traits UI
+  // ------------------------------------------------------------------
   const setPromptFromTraits = useCallback(
     (nextPrompt: string) => {
       if (nextPrompt === promptRef.current) {
@@ -1178,6 +1196,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [composerDraftTarget, promptRef, scheduleComposerFocus, setComposerDraftPrompt],
   );
 
+  const providerTraitsMenuContent = renderProviderTraitsMenuContent({
+    provider: selectedProvider,
+    instanceId: selectedInstanceId,
+    ...(routeKind === "server" ? { threadRef: routeThreadRef } : {}),
+    ...(routeKind === "draft" && draftId ? { draftId } : {}),
+    model: selectedModel,
+    models: selectedProviderModels,
+    modelOptions: composerModelOptions?.[selectedInstanceId],
+    prompt,
+    onPromptChange: setPromptFromTraits,
+  });
   const providerTraitsPicker = renderProviderTraitsPicker({
     provider: selectedProvider,
     instanceId: selectedInstanceId,
@@ -1189,7 +1218,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     prompt,
     onPromptChange: setPromptFromTraits,
   });
-
   const pendingPrimaryAction = useMemo(
     () =>
       activePendingProgress
@@ -1204,7 +1232,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [activePendingIsResponding, activePendingProgress, activePendingResolvedAnswers],
   );
   const collapsedComposerPrimaryActionDisabled =
-    (phase === "running" && !canSteerRunningTurn) ||
+    phase === "running" ||
     isSendBusy ||
     isSendDisabled ||
     isConnecting ||
@@ -1212,8 +1240,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     projectSelectionRequired ||
     environmentUnavailable !== null ||
     !composerSendState.hasSendableContent;
-  const collapsedComposerPrimaryActionLabel =
-    phase === "running" && canSteerRunningTurn ? "Send guidance now" : "Send message";
+  const collapsedComposerPrimaryActionLabel = "Send message";
   const showMobilePendingAnswerActions =
     isMobileViewport && !isComposerCollapsedMobile && pendingPrimaryAction !== null;
 
@@ -1842,6 +1869,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     event: KeyboardEvent,
   ) => {
     if (key === "Tab" && event.shiftKey) {
+      if (!planModeUiEnabled) return false;
       toggleInteractionMode();
       return true;
     }
@@ -1867,9 +1895,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       key === "Enter" &&
       shouldSubmitComposerOnEnter({ isMobileViewport, shiftKey: event.shiftKey })
     ) {
-      if (phase === "running" && !canSteerRunningTurn) {
-        return false;
-      }
       submitComposer();
       return true;
     }
@@ -1950,7 +1975,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         // unique image into the overflow list for nothing.
         const existingDedupKeys = new Set(
           composerImagesRef.current.map(
-            (image) => `${image.mimeType} ${image.sizeBytes} ${image.name}`,
+            (image) => `${image.mimeType}\u0000${image.sizeBytes}\u0000${image.name}`,
           ),
         );
         const capacity = Math.max(
@@ -1961,7 +1986,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           (attachment) =>
             !existingIds.has(attachment.id) &&
             !existingDedupKeys.has(
-              `${attachment.mimeType} ${attachment.sizeBytes} ${attachment.name}`,
+              `${attachment.mimeType}\u0000${attachment.sizeBytes}\u0000${attachment.name}`,
             ),
         );
         // Anything past the attachment limit cannot be restored. The entry is
@@ -2053,7 +2078,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     // the composer has been cleared the user can type something genuinely
     // new (or switch threads) while encoding continues, and that deserves its
     // own entry.
-    const snapshotKey = `${String(composerDraftTarget)} ${prompt} ${images
+    const snapshotKey = `${String(composerDraftTarget)}\u0000${prompt}\u0000${images
       .map((image) => image.id)
       .join(",")}`;
     if (stashInFlightRef.current.has(snapshotKey)) return;
@@ -2648,7 +2673,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           ref={composerSurfaceRef}
           data-chat-composer-mobile-collapsed={isComposerCollapsedMobile ? "true" : "false"}
           className={cn(
-            "rounded-[20px] bg-background/90 shadow-[inset_0_1px_0_rgb(255_255_255/0.035)] backdrop-blur-xl transition-[background-color] duration-200",
+            "rounded-[20px] transition-[background-color] duration-200",
             isDragOverComposer ? "bg-accent/45 ring-1 ring-primary/70" : null,
             projectSelectionRequired ? "opacity-75" : null,
             composerProviderState.composerSurfaceClassName,
@@ -2742,9 +2767,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     type="button"
                     className={cn(
                       "min-w-0 flex-1 truncate bg-transparent py-1.5 text-left text-sm",
-                      activePendingProgress?.customAnswer
-                        ? "text-foreground"
-                        : "text-muted-foreground/60",
+                      activePendingProgress?.customAnswer ? "text-foreground" : "text-placeholder",
                       !activePendingProgress?.activeQuestion?.multiSelect && "px-3 py-2",
                     )}
                     onPointerDown={(event) => event.preventDefault()}
@@ -2789,7 +2812,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   "min-w-0 flex-1 truncate bg-transparent p-0 text-left text-[14px] focus:outline-none",
                   (activePendingProgress ? activePendingProgress.customAnswer : prompt.trim())
                     ? "text-foreground"
-                    : "text-muted-foreground/35",
+                    : "text-placeholder",
                 )}
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={expandMobileComposer}
@@ -2803,7 +2826,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               </button>
               <button
                 type="button"
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/90 text-primary-foreground disabled:opacity-30"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-message-action text-message-action-foreground hover:bg-message-action-hover disabled:opacity-30"
                 disabled={collapsedComposerPrimaryActionDisabled}
                 aria-label={collapsedComposerPrimaryActionLabel}
                 onPointerDown={(event) => event.preventDefault()}
@@ -2822,36 +2845,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   />
                 </svg>
               </button>
-            </div>
-          ) : null}
-
-          {!isComposerCollapsedMobile && canvasSelection.length > 0 ? (
-            <div
-              className="flex min-w-0 items-start gap-2 border-b border-border/55 px-3 pb-2 text-xs sm:px-4"
-              data-canvas-selection-context="true"
-            >
-              <span className="shrink-0 pt-0.5 font-medium text-foreground/75">
-                Canvas selection
-              </span>
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground/75">
-                {canvasSelection.map((node) => (
-                  <span key={node.id} className="inline-flex min-w-0 items-center gap-1">
-                    <span className="max-w-56 truncate">{node.title}</span>
-                    {onRemoveCanvasSelection || onClearCanvasSelection ? (
-                      <button
-                        type="button"
-                        className="shrink-0 text-muted-foreground/55 hover:text-foreground"
-                        aria-label={`Remove ${node.title} from Canvas selection`}
-                        onClick={() =>
-                          onRemoveCanvasSelection?.(node.id) ?? onClearCanvasSelection?.()
-                        }
-                      >
-                        ×
-                      </button>
-                    ) : null}
-                  </span>
-                ))}
-              </div>
             </div>
           ) : null}
 
@@ -2983,7 +2976,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             />
                           </button>
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-muted-foreground/70">
+                          <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-secondary-label">
                             {image.name}
                           </div>
                         )}
@@ -3058,11 +3051,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             ? "Enable a provider in Settings to send a message"
                             : phase === "disconnected"
                               ? "Ask for follow-up changes or attach images"
-                              : phase === "running" && canSteerRunningTurn
-                                ? "Guide Codex while it works"
-                                : phase === "running"
-                                  ? "Draft a follow-up while this provider works"
-                                  : "Ask anything, @tag files/folders, $use skills, or / for commands"
+                              : "Ask anything, @tag files/folders, $use skills, or / for commands"
                 }
                 disabled={isConnecting || isComposerApprovalState || projectSelectionRequired}
               />
@@ -3099,7 +3088,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
           {/* Bottom toolbar */}
           {isComposerCollapsedMobile ? null : activePendingApproval ? (
-            <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5 sm:px-3 sm:pb-3">
+            <div className="flex items-center justify-end gap-2 px-3 pb-3 sm:px-4 sm:pb-4">
               <ComposerPendingApprovalActions
                 requestId={activePendingApproval.requestId}
                 isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
@@ -3111,7 +3100,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               data-chat-composer-footer="true"
               data-chat-composer-footer-compact={isComposerFooterCompact ? "true" : "false"}
               className={cn(
-                "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-2.5 pb-2.5 sm:px-3 sm:pb-3",
+                "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:px-4 sm:pb-4",
                 pendingUserInputs.length > 0 && "pt-2",
                 isComposerFooterCompact ? "gap-1.5" : "gap-2 sm:gap-0",
                 showMobilePendingAnswerActions && "hidden sm:flex",
@@ -3125,7 +3114,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     variant="ghost"
                     disabled
                     data-chat-provider-unavailable="true"
-                    className="shrink-0 gap-2 px-2 text-muted-foreground/70 sm:px-3"
+                    className="shrink-0 gap-2 px-2 text-secondary-label sm:px-3"
                   >
                     <CircleAlertIcon className="size-4" />
                     No provider available
@@ -3140,6 +3129,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     instanceEntries={providerInstanceEntries}
                     keybindings={keybindings}
                     modelOptionsByInstance={modelOptionsByInstance}
+                    triggerClassName="-ms-px ps-0"
                     terminalOpen={terminalOpen}
                     open={isComposerModelPickerOpen}
                     {...(composerProviderState.modelPickerIconClassName
@@ -3156,31 +3146,32 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   />
                 )}
 
-                {providerTraitsPicker ? (
-                  <span className="flex items-center">
-                    <span aria-hidden="true" className="text-muted-foreground/30">
-                      ·
-                    </span>
-                    {providerTraitsPicker}
-                  </span>
-                ) : null}
-
-                <CompactComposerControlsMenu
-                  runtimeMode={runtimeMode}
-                  onRuntimeModeChange={handleRuntimeModeChange}
-                />
-
-                <ComposerBehaviorControls
-                  harnessId={crokiHarnessId}
-                  interactionMode={interactionMode}
-                  showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
-                  showPlanToggle={showPlanSidebarToggle}
-                  planSidebarLabel={planSidebarLabel}
-                  planSidebarOpen={planSidebarOpen}
-                  onHarnessChange={onCrokiHarnessChange}
-                  onToggleInteractionMode={toggleInteractionMode}
-                  onTogglePlanSidebar={togglePlanSidebar}
-                />
+                {isComposerFooterCompact ? (
+                  <CompactComposerControlsMenu
+                    interactionMode={interactionMode}
+                    runtimeMode={runtimeMode}
+                    showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
+                    traitsMenuContent={providerTraitsMenuContent}
+                    onToggleInteractionMode={toggleInteractionMode}
+                    onRuntimeModeChange={handleRuntimeModeChange}
+                  />
+                ) : (
+                  <>
+                    {providerTraitsPicker ? (
+                      <>
+                        <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+                        {providerTraitsPicker}
+                      </>
+                    ) : null}
+                    <ComposerFooterModeControls
+                      showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
+                      interactionMode={interactionMode}
+                      runtimeMode={runtimeMode}
+                      onToggleInteractionMode={toggleInteractionMode}
+                      onRuntimeModeChange={handleRuntimeModeChange}
+                    />
+                  </>
+                )}
               </div>
 
               {/* Right side: send / stop button */}
@@ -3191,21 +3182,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 }
                 className="flex shrink-0 flex-nowrap items-center justify-end gap-2"
               >
-                {activeThreadId && selectedProvider === ProviderDriverKind.make("codex") ? (
-                  <CodexVoiceButton
-                    key={`${environmentId}:${activeThreadId}`}
-                    environmentId={environmentId}
-                    threadId={activeThreadId}
-                    onError={(message) => setThreadError(activeThreadId, message)}
-                  />
-                ) : null}
                 <ComposerFooterPrimaryActions
                   compact={isComposerPrimaryActionsCompact}
                   activeContextWindow={activeContextWindow}
                   activeThreadProviderDisplayName={activeThreadProviderDisplayName}
                   pendingAction={pendingPrimaryAction}
                   isRunning={phase === "running"}
-                  canSteerRunningTurn={canSteerRunningTurn}
                   showPlanFollowUpPrompt={pendingUserInputs.length === 0 && showPlanFollowUpPrompt}
                   promptHasText={prompt.trim().length > 0}
                   isSendBusy={isSendBusy}

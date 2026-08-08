@@ -82,6 +82,8 @@ export type CrokiCanvasNodeRole = typeof CrokiCanvasNodeRole.Type;
 
 export const CrokiCanvasHarnessId = Schema.Literals(["product-v1", "gtm-v1"]);
 export type CrokiCanvasHarnessId = typeof CrokiCanvasHarnessId.Type;
+export const CrokiCanvasArtifactSource = Schema.Literal("user-applied");
+export type CrokiCanvasArtifactSource = typeof CrokiCanvasArtifactSource.Type;
 
 export const CrokiCanvasReference = Schema.Union([
   Schema.Struct({
@@ -130,7 +132,10 @@ const CrokiCanvasArtifactBase = Schema.Struct({
   revision: CrokiCanvasRevision,
   threadId: CanvasThreadId,
   turnId: Schema.NullOr(CanvasTurnId),
-  harnessId: CrokiCanvasHarnessId,
+  /** New artifacts record explicit user-applied tool access. */
+  source: Schema.optional(CrokiCanvasArtifactSource),
+  /** Historical Product/GTM attribution. New artifacts never write this field. */
+  harnessId: Schema.optional(CrokiCanvasHarnessId),
   presentation: CrokiCanvasPresentation,
   question: CanvasQuestion,
   nodes: Schema.Array(CrokiCanvasArtifactNode).check(
@@ -150,11 +155,16 @@ const CrokiCanvasArtifactBase = Schema.Struct({
  */
 export const CrokiCanvasArtifact = CrokiCanvasArtifactBase.check(
   Schema.makeFilter((artifact) => {
+    if ((artifact.source === undefined) === (artifact.harnessId === undefined)) {
+      return new SchemaIssue.InvalidValue({
+        message: "Canvas artifact requires exactly one current source or legacy harness id.",
+      });
+    }
     if (
       new TextEncoder().encode(JSON.stringify(artifact)).byteLength >
       CROKI_CANVAS_ARTIFACT_LIMITS.artifactBytes
     ) {
-      return new SchemaIssue.InvalidValue(Option.some(artifact), {
+      return new SchemaIssue.InvalidValue({
         message: "Canvas artifact exceeds its serialized size limit.",
       });
     }
@@ -162,7 +172,7 @@ export const CrokiCanvasArtifact = CrokiCanvasArtifactBase.check(
     const nodeIds = new Set<string>();
     for (const node of artifact.nodes) {
       if (nodeIds.has(node.id)) {
-        return new SchemaIssue.InvalidValue(Option.some(artifact), {
+        return new SchemaIssue.InvalidValue({
           message: `Canvas artifact contains duplicate node id '${node.id}'.`,
         });
       }
@@ -172,13 +182,13 @@ export const CrokiCanvasArtifact = CrokiCanvasArtifactBase.check(
     const edgeKeys = new Set<string>();
     for (const edge of artifact.edges) {
       if (edge.from === edge.to || !nodeIds.has(edge.from) || !nodeIds.has(edge.to)) {
-        return new SchemaIssue.InvalidValue(Option.some(artifact), {
+        return new SchemaIssue.InvalidValue({
           message: "Canvas artifact contains an edge with invalid endpoints.",
         });
       }
       const key = `${edge.from}\u0000${edge.relation}\u0000${edge.to}`;
       if (edgeKeys.has(key)) {
-        return new SchemaIssue.InvalidValue(Option.some(artifact), {
+        return new SchemaIssue.InvalidValue({
           message: "Canvas artifact contains duplicate edges.",
         });
       }

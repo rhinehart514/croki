@@ -134,7 +134,7 @@ export const discoverOpenClawAgents = Effect.fn("discoverOpenClawAgents")(functi
   return parseOpenClawAgents(output.stdout);
 });
 
-const decodeUnknownJson = Schema.decodeUnknownExit(Schema.UnknownFromJsonString);
+const decodeUnknownJson = Schema.decodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

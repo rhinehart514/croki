@@ -13,7 +13,6 @@ it.effect("loads bounded application context and fails open", () =>
     const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "croki-application-" });
     const absent = yield* loadCrokiApplication(cwd);
     assert.equal(absent.status, "absent");
-    assert.isNull(absent.prompt);
 
     const crokiDirectory = path.join(cwd, ".croki");
     const applicationPath = path.join(crokiDirectory, "application.croki");
@@ -33,7 +32,6 @@ it.effect("loads bounded application context and fails open", () =>
     const legacy = yield* loadCrokiApplication(cwd);
     assert.equal(legacy.status, "loaded");
     assert.equal(legacy.sourcePath, ".croki/application.json");
-    assert.include(legacy.prompt ?? "", 'source=".croki/application.json"');
     yield* fileSystem.remove(legacyApplicationPath);
 
     yield* fileSystem.writeFileString(
@@ -56,21 +54,16 @@ it.effect("loads bounded application context and fails open", () =>
     );
     const loaded = yield* loadCrokiApplication(cwd);
     assert.equal(loaded.status, "loaded");
-    assert.include(loaded.prompt ?? "", '"version":"0.4.5"');
-    assert.include(loaded.prompt ?? "", '"version":"0.4.6"');
-    assert.include(loaded.prompt ?? "", 'source=".croki/application.croki"');
     assert.equal(loaded.sourcePath, ".croki/application.croki");
 
     yield* fileSystem.writeFileString(applicationPath, "not json");
     const invalid = yield* loadCrokiApplication(cwd);
     assert.equal(invalid.status, "invalid");
-    assert.isNull(invalid.prompt);
     assert.equal(invalid.errorCode, "malformed");
 
     yield* fileSystem.writeFileString(applicationPath, "x".repeat(64 * 1024 + 1));
     const oversized = yield* loadCrokiApplication(cwd);
     assert.equal(oversized.status, "oversized");
-    assert.isNull(oversized.prompt);
     assert.isNull(oversized.sha256);
   }).pipe(Effect.provide(NodeServices.layer)),
 );

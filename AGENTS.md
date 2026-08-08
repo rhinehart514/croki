@@ -4,7 +4,8 @@ Croki is Jacob's daily development environment for building real products with c
 
 The user request chooses the work. These instructions govern how that work improves Croki.
 
-Read `docs/project/current-state.md` before changing product direction. Read `docs/architecture/overview.md` before changing execution, state, or data flow.
+Read `docs/project/current-state.md` before changing product direction. Read
+`docs/internals/overview.md` before changing execution, state, or data flow.
 
 ## Always improve Croki
 
@@ -35,6 +36,9 @@ A founder should be able to:
 6. Verify the result, review the change, recover when needed, and ship.
 
 Croki wins when this loop becomes faster, clearer, safer, and more capable through daily use.
+
+**Mobile** is a React Native app for iOS and Android. It connects to Croki
+servers so the founder can direct and inspect the same work remotely.
 
 Thread carries the founder's direction. The selected provider performs the work. Canvas keeps the current outcome, important conclusions, evidence, and required judgment in view. Preview, checkpoints, review, and Git prove what actually changed.
 
@@ -74,12 +78,44 @@ When the product contract changes, update the copy, tests, docs, migrations, and
 
 ## Keep these Croki boundaries
 
-- Provider runtimes remain native by default. Do not add a hidden persona, planning loop, delegation policy, tool policy, workflow, or behavioral prompt.
-- A behavior-changing harness must be explicitly selected, visible, scoped, reversible, and off by default.
-- Runtime, context, tools, harnesses, and senses are separate. Opening, closing, selecting, or arranging Canvas must not change provider behavior or grant authority.
+- **Entry points.** A behavior reachable from the chat view is usually also reachable from Settings, the command palette, and a keybinding. Fixing one is not fixing the feature.
+- **Clients.** Web, desktop (wraps web, adds Electron shell/IPC), and mobile (React Native, separate navigation). Shared logic lives in `packages/client-runtime`
+- **Providers.** Codex, Claude, Cursor, Grok, and OpenCode each have an adapter. Provider-shaped features need a decision per adapter, even if the decision is "not supported here".
+- **Contracts.** Anything crossing the wire is typed in `packages/contracts`. Change the schema and the server, web, mobile, and desktop all follow.
+- **Reverse states.** If you added a way in, add the way out and the way to see it. Snooze needs unsnooze. Close needs reopen. A one-way door is a bug.
+- **Connection modes.** Local, remote/relay, and tunnel behave differently. Multi-device and multi-environment cases are real.
+- **Docs.** `docs/` splits by audience. Behavior changes that a user would notice belong in `docs/user/` (shipped-product voice, no repo tooling or source paths); architecture and contributor changes in `docs/internals/`; runbooks in `docs/operations/`; new vocabulary in `docs/internals/glossary.md`.
+
+- Croki is a harness host, not a harness. A default turn uses the selected
+  provider's native behavior and adds no Croki-authored persona, planning loop,
+  delegation policy, tool policy, workflow, behavioral instruction, application
+  brief, sibling activity, project summary, or hidden context.
+- Anything Croki applies that can affect the model must be chosen by the user,
+  visible before send, scoped to the turn or a provider-native persistence
+  mechanism, recorded with the turn, removable, and reversible. The absence of
+  applied configuration is the default; do not create a selectable `Native`
+  mode or silently emulate persistence by repeating prompts.
+- Instructions, context attachments, provider runtime, tools, and senses are
+  distinct. Enabling a tool does not authorize Croki to add instructions about
+  when or how the model should use it. Opening, closing, selecting, or arranging
+  Canvas must not change provider behavior, context, tool access, or authority.
+- Prefer provider- and repository-native configuration such as `AGENTS.md`,
+  skills, plugins, MCP configuration, and provider-owned project instructions.
+  Croki may discover, explain, open, install, enable, or attach them, but must
+  not translate them into an invisible proprietary prompt layer.
+- Product, GTM, Venture, Parallel Threads, and other historical Croki behavior
+  IDs are legacy compatibility data only. Existing turns remain readable; the
+  IDs are never offered for a new turn and cannot reactivate model behavior.
 - Canvas is a zero-maintenance projection of real project and Thread activity. It should help the founder understand the work, not become a second runtime, conversation, task board, context editor, memory database, or manually maintained scene.
 - Sense calls are read-only. Consequential actions still go through native Threads, tools, approvals, and authority checks.
-- `.croki/application.croki` is the single repository-owned, founder-approved application brief. Read it automatically as bounded project direction. Create or edit it only when the founder explicitly asks for or confirms that product delta, through normal files, Git, and Review rather than dedicated setup UI. `.croki/application.json` and historical Concept, Release, and Venture schemas remain compatibility input, not active product surfaces.
+- `.croki/application.croki` is a repository-owned application brief for the
+  founder and Croki UI. Its existence never sends it to a provider. A user may
+  attach it visibly for one turn or reference it from provider-native project
+  instructions. Create or edit it only when the founder explicitly asks for or
+  confirms that product delta, through normal files, Git, and Review rather
+  than dedicated setup UI. `.croki/application.json` and historical Concept,
+  Release, and Venture schemas remain compatibility input, not active product
+  surfaces or automatic model context.
 - `.croki/context.json` is a legacy Canvas compatibility format. Do not revive its node, release-board, or provider-injection model.
 - Keep raw Canvas bodies, rendered prompts, private memory, and sensitive context out of receipts, logs, CI summaries, and artifacts.
 - Do not import or revive the archived standalone `brain`, `relay`, runtime, or workflow machinery unless an explicit migration requires it.
@@ -88,6 +124,13 @@ When the product contract changes, update the copy, tests, docs, migrations, and
 - Release destinations stay independently gated. Never point publishing, signing, relay, web, Discord, mobile, or updates at inherited T3 destinations.
 
 These are current product boundaries, not permission to freeze Croki. When a task deliberately changes one, update the implementation, migration path, current-state document, and proof together.
+
+- `vp i` installs. Worktrees get this from the t3.json setup script; if module resolution looks broken, it probably did not run.
+- `vp run dev` starts server and web. In a worktree, state defaults to that worktree's gitignored `.t3`, which deliberately outranks an ambient `T3CODE_HOME` so you cannot land on shared state by accident. An explicit `--home-dir` still wins.
+- Ports derive from the worktree path and are stable across restarts, but read the real ones from the `[dev-runner]` line since occupied ports shift.
+- Sharing over the tailnet is three steps: run `vp run dev --share` in the background, wait for the `pairingUrl:` line in its output, paste that full URL (token included) in your reply. Do not wire up `tailscale serve` by hand for this, and do not open the URL yourself.
+- The web app requires pairing. Hand over the pairing URL, not the bare origin. A URL without its token is useless to whoever you gave it to. If the token got consumed, mint a fresh one with `node apps/server/src/bin.ts pair` — note it carries standard scopes, while the startup URL carries admin scopes (needed for Settings → Connections management).
+- Stop what you started, by the PID you tracked. See rule 1.
 
 ## Keep the implementation direct
 
@@ -122,3 +165,39 @@ Do not perform destructive Git, data, release, or production actions unless the 
 - Do not call the task complete because it compiles. Confirm that the founder can perform the intended action and understand what happened.
 
 Report completion in product terms: what the founder could do before, what they can do now, the evidence that it works, and any remaining risk. Do not lead with file counts or architecture summaries.
+
+- Never make a PR unless the developer explicitly asks you to do so.
+- Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
+- Body: the problem in a sentence or two, then how you fixed it. End with the model and execution environment that did the work.
+- **Rebase onto latest main before opening.** Stale branches conflict and burn a review round.
+- UI changes need before/after images. Motion or timing needs a short video.
+- One concern per PR. If the description says "also", split it.
+- When babysitting: poll checks and comments newer than the last push, verify each bot finding against the source, fix real ones, dismiss false positives with a written reason. Stay quiet when nothing is new. Stop when the bots are green on the latest commit.
+
+## How it works
+
+Clients send typed WebSocket requests. The server turns them into _commands_, a pure _decider_ turns commands into persisted _events_, and a _projector_ derives the read model the UI renders. Provider CLIs run as subprocesses; per-provider _adapters_ translate their native protocols into orchestration events. Side effects run in queue-backed _reactors_ that emit _receipts_ when milestones land. Each turn ends with a _checkpoint_, a hidden git ref, so the app can diff and restore.
+
+Full glossary with file links: `docs/internals/glossary.md`
+
+## Where code lives
+
+- `apps/server` - WebSocket, orchestration, providers, checkpointing. Effect-heavy: read `.repos/effect-smol/LLMS.md` before writing Effect code.
+- `apps/web` - React/Vite UI. `apps/desktop` wraps it, `apps/mobile` is React Native, `apps/marketing` is the site.
+- `packages/contracts` - Effect/Schema contracts plus small derived helpers. No heavy runtime logic.
+- `packages/shared` - shared runtime utils, subpath exports, no barrel.
+- `packages/client-runtime` - client code shared by web and mobile.
+- `.repos/` - vendored read-only references. Prefer their patterns over invented ones. Never edit or import from them. Sync with `vpr sync:repos` when bumping the matching dependency.
+
+## Taste
+
+- Complexity belongs at the adapter boundary. Orchestration stays pure, UI stays dumb.
+- Inferred types over annotations. `any` is the enemy.
+- Comments describe how a thing is used, and move when the code moves. To be used mostly to describe functions, not to annotate every line of behavior.
+- Our users drive agents all day and notice a dropped frame, a lying spinner, and a stale label. No continuously repainting animations; they peg the GPU on high-refresh displays.
+- If a rule here fights the task in front of you, say so loudly and get a human sign-off before breaking it.
+
+## Additional tips
+
+- Don't verify with browsers or computer use unless the user explicitly agrees or requests it.
+- Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.

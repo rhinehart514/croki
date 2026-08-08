@@ -11,7 +11,6 @@ import {
   CROKI_CANVAS_PRESENT_LIMITS,
   type CanonicalCanvasEdgeInput,
   type CanonicalCanvasNodeInput,
-  type CrokiCanvasHarnessId,
   type CrokiCanvasPresentation,
   type CrokiCanvasPresentInput,
 } from "./tools.ts";
@@ -23,7 +22,7 @@ export interface BuildCrokiCanvasArtifactOptions {
   readonly revision: number;
   readonly threadId: string;
   readonly turnId: string | null;
-  readonly harnessId: CrokiCanvasHarnessId;
+  readonly source: "user-applied";
   readonly createdAt: string;
 }
 
@@ -49,7 +48,7 @@ export function buildCrokiCanvasArtifact(
     revision: options.revision,
     threadId: options.threadId,
     turnId: options.turnId,
-    harnessId: options.harnessId,
+    source: options.source,
     presentation: scene.presentation,
     question: scene.question,
     nodes: scene.nodes,

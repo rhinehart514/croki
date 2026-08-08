@@ -8,6 +8,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as Option from "effect/Option";
 import { EnvironmentId, ThreadId, type ProjectScript, type WorkerView } from "@croki/contracts";
+import { requestOlderThreadTurns, threadHasOlderTurns } from "@croki/client-runtime/state/threads";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@croki/shared/projectScripts";
 import { Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -193,6 +194,20 @@ function ThreadRouteContent(
     useThreadSelection();
   const selectedThreadDetailState = props.selectedThreadDetailState;
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
+  // "Load earlier turns" header state for windowed (paginated) thread loads.
+  const loadEarlierTurns = useMemo(() => {
+    if (selectedThread === null || !threadHasOlderTurns(selectedThreadDetailState)) {
+      return null;
+    }
+    return {
+      loading:
+        selectedThreadDetailState.page._tag === "Some" &&
+        selectedThreadDetailState.page.value.loadingOlder,
+      onLoadEarlier: () => {
+        requestOlderThreadTurns(selectedThread.environmentId, selectedThread.id);
+      },
+    };
+  }, [selectedThread, selectedThreadDetailState]);
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const composer = useThreadComposerState();
   const gitState = useSelectedThreadGitState();
@@ -904,6 +919,7 @@ function ThreadRouteContent(
           draftAttachments={composer.draftAttachments}
           connectionStateLabel={routeConnectionState}
           threadSyncStatus={selectedThreadDetailState.status}
+          loadEarlier={loadEarlierTurns}
           activeThreadBusy={composer.activeThreadBusy}
           environmentId={selectedThread.environmentId}
           projectWorkspaceRoot={selectedThreadProject?.workspaceRoot ?? null}

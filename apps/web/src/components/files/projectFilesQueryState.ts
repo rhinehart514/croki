@@ -13,6 +13,7 @@ import { useCallback } from "react";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { projectEnvironment } from "~/state/projects";
 import { executeAtomQuery } from "@croki/client-runtime/state/runtime";
+import { useProjectPathSearch } from "~/state/queries";
 
 const EMPTY_PROJECT_FILE_PATH = "";
 const EMPTY_PROJECT_FILE_QUERY_ATOM = Atom.make(
@@ -161,6 +162,32 @@ export function useProjectComponentsQuery(
     failure: queryFailure(result),
     isPending: result.waiting,
     refresh,
+  };
+}
+
+/**
+ * Backing query for the project file picker: a debounced, bounded, file-only
+ * server search. An empty query is a valid request — the index answers it
+ * with frecency-ordered files, so the picker's initial view is recent files
+ * without transferring the full workspace listing. `matchedQuery` is the
+ * query the returned entries were computed for, so the caller can highlight
+ * against results instead of half-typed input.
+ */
+export function useProjectFilePickerQuery(
+  environmentId: EnvironmentId,
+  cwd: string,
+  query: string,
+  limit: number,
+) {
+  const search = useProjectPathSearch({ environmentId, cwd, query, kind: "file" }, limit, {
+    allowEmptyQuery: true,
+  });
+
+  return {
+    entries: search.isPending ? [] : search.entries,
+    error: search.error,
+    isPending: search.isPending,
+    matchedQuery: search.searchedQuery,
   };
 }
 

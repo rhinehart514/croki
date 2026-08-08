@@ -26,7 +26,6 @@ import {
   type CrokiSenseWaitResult,
   CrokiCanvasPresentError,
   CrokiSenseToolkit,
-  type CrokiCanvasHarnessId,
   type CrokiCanvasPresentInput,
   type CrokiCanvasPresentResult,
 } from "./tools.ts";
@@ -39,39 +38,21 @@ const fail = (
 
 /**
  * Presents a visual as an immutable Thread activity. Project context is not
- * read or written here: Canvas is a harness artifact, never a memory store.
+ * read or written here: Canvas is a user-applied tool artifact, never a memory store.
  */
 export const presentCrokiCanvas = Effect.fn("CrokiLegacyCanvasPresentation.present")(function* (
   input: CrokiCanvasPresentInput,
 ) {
   const invocation = yield* McpInvocationContext.McpInvocationContext;
-  const invocationHarnessId = getInvocationHarnessId(invocation);
   const inputHarnessId = getInputHarnessId(input);
 
-  // During the rollout the invocation scope is authoritative. The capability
-  // fallback keeps old MCP sessions and deterministic tests readable until all
-  // providers issue explicit harness ids.
-  if (
-    invocationHarnessId === "native" ||
-    (invocationHarnessId === undefined && !invocation.capabilities.has("canvas"))
-  ) {
-    return yield* fail(
-      "canvas-unavailable",
-      "Canvas presentation is available only during an explicit Product or GTM turn.",
-    );
+  if (!invocation.capabilities.has("canvas")) {
+    return yield* fail("canvas-unavailable", "Canvas presentation was not applied to this turn.");
   }
-
-  const harnessId = invocationHarnessId ?? inputHarnessId;
-  if (harnessId !== "product-v1" && harnessId !== "gtm-v1") {
-    return yield* fail(
-      "canvas-unavailable",
-      "Canvas presentation requires an explicit Product or GTM harness.",
-    );
-  }
-  if (inputHarnessId !== undefined && inputHarnessId !== harnessId) {
+  if (inputHarnessId !== undefined) {
     return yield* fail(
       "artifact-invalid",
-      "Canvas harness attribution does not match the active turn.",
+      "Product and GTM harness ids are legacy data and cannot be used for a new Canvas artifact.",
     );
   }
 
@@ -104,7 +85,7 @@ export const presentCrokiCanvas = Effect.fn("CrokiLegacyCanvasPresentation.prese
         revision,
         threadId: invocation.threadId,
         turnId,
-        harnessId,
+        source: "user-applied",
         createdAt: timestamp,
       }),
     catch: (cause) =>
@@ -147,7 +128,7 @@ export const presentCrokiCanvas = Effect.fn("CrokiLegacyCanvasPresentation.prese
   return {
     artifactId: artifact.id,
     revision: artifact.revision,
-    harnessId: artifact.harnessId,
+    source: "user-applied",
     presentation: artifact.presentation,
     nodeCount: artifact.nodes.length,
     edgeCount: artifact.edges.length,
@@ -337,18 +318,7 @@ function senseFail(
   return Effect.fail(new CrokiSenseError({ code, message }));
 }
 
-function getInvocationHarnessId(
-  invocation: McpInvocationContext.McpInvocationScope,
-): CrokiCanvasHarnessId | "native" | undefined {
-  const value = (
-    invocation as McpInvocationContext.McpInvocationScope & {
-      readonly harnessId?: unknown;
-    }
-  ).harnessId;
-  return value === "native" || value === "product-v1" || value === "gtm-v1" ? value : undefined;
-}
-
-function getInputHarnessId(input: CrokiCanvasPresentInput): CrokiCanvasHarnessId | undefined {
+function getInputHarnessId(input: CrokiCanvasPresentInput): "product-v1" | "gtm-v1" | undefined {
   if ("presentation" in input) {
     return input.harnessId;
   }

@@ -29,7 +29,6 @@ const scope = {
   threadId: ThreadId.make("thread-1"),
   providerSessionId: "provider-session-1",
   providerInstanceId: ProviderInstanceId.make("codex"),
-  harnessId: "native" as const,
   capabilities: new Set(["preview"] as const),
   issuedAt: 1,
 };

@@ -137,7 +137,7 @@ export type CrokiCanvasPresentInput = typeof CrokiCanvasPresentInput.Type;
 export const CrokiCanvasPresentResult = Schema.Struct({
   artifactId: Schema.String,
   revision: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
-  harnessId: ArtifactHarnessId,
+  source: Schema.Literal("user-applied"),
   presentation: ArtifactPresentation,
   nodeCount: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
   edgeCount: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),

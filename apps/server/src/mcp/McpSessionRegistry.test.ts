@@ -110,7 +110,7 @@ it.effect("keeps a credential alive across turns that never touch an MCP tool", 
   }),
 );
 
-it.effect("grants Canvas only for explicit Product and GTM harness turns", () =>
+it.effect("grants Canvas only when the turn explicitly enables it", () =>
   Effect.gen(function* () {
     const registry = yield* makeRegistry(() => 1_000);
     const threadId = ThreadId.make("thread-canvas");
@@ -120,18 +120,10 @@ it.effect("grants Canvas only for explicit Product and GTM harness turns", () =>
     });
     const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
 
-    expect((yield* registry.resolve(token))?.harnessId).toBe("native");
     expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
-    // Panel visibility is deliberately not part of the capability decision.
-    yield* registry.touch(threadId, { harnessId: "native" });
-    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
-    yield* registry.touch(threadId, { harnessId: "product-v1" });
+    yield* registry.touch(threadId, { canvasEnabled: true });
     expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(true);
-    expect((yield* registry.resolve(token))?.harnessId).toBe("product-v1");
-    yield* registry.touch(threadId, { harnessId: "gtm-v1" });
-    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(true);
-    expect((yield* registry.resolve(token))?.harnessId).toBe("gtm-v1");
-    yield* registry.touch(threadId, { harnessId: "native" });
+    yield* registry.touch(threadId, { canvasEnabled: false });
     expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
   }),
 );

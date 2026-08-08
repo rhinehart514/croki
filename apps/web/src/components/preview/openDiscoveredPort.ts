@@ -3,6 +3,7 @@ import { mapAtomCommandResult, type AtomCommandResult } from "@croki/client-runt
 
 import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
 import type { OpenPreviewMutation } from "~/browser/openFileInPreview";
+import { recordVisitForThread } from "~/browserHistoryStore";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { openPreviewSession } from "./openPreviewSession";
 
@@ -18,6 +19,7 @@ export async function openDiscoveredPort<E>(input: {
     url: resolvedUrl,
   });
   return mapAtomCommandResult(result, (snapshot) => {
+    recordVisitForThread(input.threadRef, input.port.url);
     useRightPanelStore.getState().openBrowser(input.threadRef, snapshot.tabId);
   });
 }

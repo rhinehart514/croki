@@ -30,6 +30,7 @@ describe("RightPanelEmptyState", () => {
     onAddDiff: () => undefined,
     onAddFiles: () => undefined,
     onAddCanvas: () => undefined,
+    onAddAgents: () => undefined,
     browserAvailable: true,
     diffAvailable: true,
     filesAvailable: true,

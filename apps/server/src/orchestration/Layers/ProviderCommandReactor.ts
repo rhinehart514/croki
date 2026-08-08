@@ -2,7 +2,6 @@ import {
   EDIT_FROM_HERE_PREPARATION_FAILED_PREFIX,
   type ChatAttachment,
   CommandId,
-  type CrokiHarnessId,
   EventId,
   type ModelSelection,
   type OrchestrationEvent,
@@ -41,22 +40,13 @@ import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
+import { forkParked, ServerActivation } from "../../serverActivation.ts";
 import {
   resolveSourceControlWriterModelSelection,
   ServerSettingsService,
 } from "../../serverSettings.ts";
-import {
-  buildCrokiApplicationProgressPrompt,
-  deriveCrokiApplicationProgress,
-} from "@croki/shared/crokiApplicationProgress";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
-import { forkParked } from "../../serverActivation.ts";
-import { loadCrokiApplication } from "./CrokiApplication.ts";
-import { loadCrokiConceptContext } from "./CrokiConcepts.ts";
-import { buildCrokiProjectActivityPrompt } from "./CrokiProjectActivity.ts";
-import { compileCrokiTurnInput } from "./CrokiContext.ts";
-import { loadCrokiParentScopes } from "./CrokiScopes.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
@@ -785,8 +775,6 @@ const make = Effect.gen(function* () {
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
     readonly canvasEnabled: boolean;
-    readonly parallelThreadsEnabled: boolean;
-    readonly harnessId: CrokiHarnessId;
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThread(input.threadId);
@@ -804,60 +792,6 @@ const make = Effect.gen(function* () {
     }
     const normalizedInput = toNonEmptyProviderInput(input.messageText);
     const normalizedAttachments = input.attachments ?? [];
-    const project = yield* resolveProject(thread.projectId);
-    const applicationContext = yield* loadCrokiApplication(project?.workspaceRoot);
-    const conceptContext = yield* loadCrokiConceptContext(project?.workspaceRoot, thread.branch);
-    const parentScopes = yield* loadCrokiParentScopes(
-      project?.workspaceRoot,
-      applicationContext.application ?? undefined,
-    );
-    const projectActivity = yield* (
-      projectionSnapshotQuery.getProjectPerception?.({ projectId: thread.projectId, limit: 100 }) ??
-      Effect.succeed(Option.none())
-    ).pipe(
-      Effect.match({
-        onFailure: () => null,
-        onSuccess: (snapshot) =>
-          buildCrokiProjectActivityPrompt(Option.getOrNull(snapshot), thread.id),
-      }),
-    );
-    const loadedApplication =
-      applicationContext.status === "loaded" ? applicationContext.application : null;
-    const applicationProgressPrompt =
-      loadedApplication !== null && projectionSnapshotQuery.getProjectPerception !== undefined
-        ? yield* projectionSnapshotQuery
-            .getProjectPerception({ projectId: thread.projectId, limit: 200 })
-            .pipe(
-              Effect.map((snapshotOption) =>
-                Option.isSome(snapshotOption)
-                  ? buildCrokiApplicationProgressPrompt(
-                      deriveCrokiApplicationProgress(loadedApplication, snapshotOption.value),
-                    )
-                  : null,
-              ),
-              // Project perception is optional evidence. A stale or failed
-              // read must never prevent a native provider turn.
-              Effect.orElseSucceed(() => null),
-            )
-        : null;
-    const agentContext = [
-      parentScopes.venturePrompt,
-      applicationContext.prompt,
-      parentScopes.releasePrompt,
-      conceptContext,
-      projectActivity,
-      applicationProgressPrompt,
-    ]
-      .filter((value): value is string => Boolean(value))
-      .join("\n\n");
-    const providerInput = compileCrokiTurnInput({
-      harnessId: input.harnessId,
-      // Application lineage is founder-approved fact; progress is explicitly
-      // labeled derived evidence. Neither changes native provider behavior.
-      agentContext: agentContext || null,
-      userInput: normalizedInput,
-      parallelThreadsEnabled: input.parallelThreadsEnabled,
-    });
     const activeSession = yield* providerService
       .listSessions()
       .pipe(
@@ -889,8 +823,7 @@ const make = Effect.gen(function* () {
     return {
       threadId: input.threadId,
       canvasEnabled: input.canvasEnabled,
-      harnessId: input.harnessId,
-      ...(providerInput ? { input: providerInput } : {}),
+      ...(normalizedInput ? { input: normalizedInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
@@ -1070,19 +1003,25 @@ const make = Effect.gen(function* () {
       ...(input.title !== undefined ? { title: input.title } : {}),
     });
   });
-  const clearInterruptedThreadTitleRegenerations = Effect.fn(
-    "clearInterruptedThreadTitleRegenerations",
+  const findInterruptedThreadTitleRegenerations = Effect.fn(
+    "findInterruptedThreadTitleRegenerations",
   )(function* () {
     const readModel = yield* projectionSnapshotQuery.getCommandReadModel();
+    return readModel.threads.flatMap((thread) => {
+      const requestId = thread.titleRegeneration?.requestId;
+      return requestId === undefined ? [] : [{ threadId: thread.id, requestId }];
+    });
+  });
+  const clearInterruptedThreadTitleRegenerations = Effect.fn(
+    "clearInterruptedThreadTitleRegenerations",
+  )(function* (
+    interrupted: ReadonlyArray<{ readonly threadId: ThreadId; readonly requestId: CommandId }>,
+  ) {
     yield* Effect.forEach(
-      readModel.threads,
-      (thread) => {
-        const requestId = thread.titleRegeneration?.requestId;
-        if (requestId === undefined) {
-          return Effect.void;
-        }
+      interrupted,
+      ({ threadId, requestId }) => {
         return dispatchThreadTitleRegenerationCompletion({
-          threadId: thread.id,
+          threadId,
           requestId,
         }).pipe(
           Effect.catchCause((cause) => {
@@ -1092,7 +1031,7 @@ const make = Effect.gen(function* () {
             return Effect.logWarning(
               "provider command reactor failed to clear interrupted title regeneration",
               {
-                threadId: thread.id,
+                threadId,
                 cause: Cause.pretty(cause),
               },
             );
@@ -1269,8 +1208,6 @@ const make = Effect.gen(function* () {
         : {}),
       interactionMode: event.payload.interactionMode,
       canvasEnabled: event.payload.canvasEnabled ?? false,
-      parallelThreadsEnabled: event.payload.parallelThreadsEnabled ?? false,
-      harnessId: event.payload.harnessId,
       createdAt: event.payload.createdAt,
     }).pipe(
       Effect.map(Option.some),
@@ -1683,7 +1620,7 @@ const make = Effect.gen(function* () {
     processDomainEvent(event).pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
-          return Effect.failCause(cause);
+          return Effect.interrupt;
         }
         return Effect.logWarning("provider command reactor failed to process event", {
           eventType: event.type,
@@ -1695,6 +1632,17 @@ const make = Effect.gen(function* () {
   const worker = yield* makeDrainableWorker(processDomainEventSafely);
 
   const start: ProviderCommandReactorShape["start"] = Effect.fn("start")(function* () {
+    const interruptedTitleRegenerations = yield* findInterruptedThreadTitleRegenerations().pipe(
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) {
+          return Effect.interrupt;
+        }
+        return Effect.logWarning(
+          "provider command reactor failed to find interrupted title regenerations",
+          { cause: Cause.pretty(cause) },
+        ).pipe(Effect.as([]));
+      }),
+    );
     const processEvent = Effect.fn("processEvent")(function* (event: OrchestrationEvent) {
       if (
         (event.type === "thread.meta-updated" && event.payload.regenerateTitle === true) ||
@@ -1716,7 +1664,9 @@ const make = Effect.gen(function* () {
     // The domain event stream is hot, so work pending before this reactor
     // starts cannot be resumed. Correlated completions only clear the request
     // captured here, leaving any newer request untouched.
-    yield* clearInterruptedThreadTitleRegenerations().pipe(
+    const clearInterrupted = clearInterruptedThreadTitleRegenerations(
+      interruptedTitleRegenerations,
+    ).pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.interrupt;
@@ -1729,6 +1679,12 @@ const make = Effect.gen(function* () {
         );
       }),
     );
+    const activation = yield* ServerActivation;
+    if (activation === undefined) {
+      yield* clearInterrupted;
+    } else {
+      yield* forkParked(clearInterrupted);
+    }
   });
 
   return {

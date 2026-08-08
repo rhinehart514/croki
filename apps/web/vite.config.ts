@@ -1,10 +1,13 @@
+import * as NodeZlib from "node:zlib";
+
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import compression from "compression";
 import { defineProject, type TestProjectInlineConfiguration } from "vite-plus/test/config";
 import "vite-plus/test/config";
-import { defineConfig } from "vite-plus";
+import { defineConfig, type Connect, type Plugin } from "vite-plus";
 import pkg from "./package.json" with { type: "json" };
 
 import { DEV_PROXIED_PATH_PREFIXES } from "@croki/shared/devProxy";
@@ -58,6 +61,8 @@ const sourcemapEnv = process.env.CROKI_WEB_SOURCEMAP?.trim().toLowerCase();
 // dev for much faster startup/reload on large module graphs, with HMR served
 // as hot patches. Opt-in while experimental: CROKI_BUNDLED_DEV=1 pnpm dev:web
 const bundledDevEnv = process.env.CROKI_BUNDLED_DEV?.trim().toLowerCase();
+// The dev runner defaults this on for --share runs (remote browsers pay a
+// round trip per import level in unbundled dev); CROKI_BUNDLED_DEV=0 opts out.
 const bundledDev = bundledDevEnv === "1" || bundledDevEnv === "true";
 
 const buildSourcemap: boolean | "hidden" =
@@ -116,6 +121,28 @@ function resolveDevProxyTarget(
 
 const devProxyTarget = resolveDevProxyTarget(process.env.CROKI_PORT, configuredWsUrl);
 
+// Vite's dev server sends JS uncompressed. On localhost that is free; over a
+// shared origin (tailnet, LAN) it is the whole cold-start: bundled dev serves
+// one ~25 MB chunk, and a typical uplink moves that in about a minute while
+// both machines sit idle. Compressing turns it into a few seconds of CPU.
+// Brotli quality 5 keeps encode time in the hundreds of ms; the default
+// (quality 11) would trade the transfer stall for an equally long encode stall.
+function devCompressionPlugin(): Plugin {
+  return {
+    name: "croki:dev-compression",
+    apply: "serve",
+    configureServer(server) {
+      // compression() is typed against Express's req/res, which extend the
+      // node http objects Connect actually passes — safe to narrow.
+      server.middlewares.use(
+        compression({
+          brotli: { params: { [NodeZlib.constants.BROTLI_PARAM_QUALITY]: 5 } },
+        }) as unknown as Connect.NextHandleFunction,
+      );
+    },
+  };
+}
+
 // Vite rejects requests whose Host header isn't localhost, which blocks sharing
 // a dev server over Tailscale/LAN. Tailnet names are safe to allow wholesale:
 // the DNS is controlled by tailscale, so they can't be rebound by an attacker.
@@ -128,7 +155,9 @@ const allowedHosts = [".ts.net", ...configuredAllowedHosts];
 
 export default defineConfig(() => {
   return {
+    assetsInclude: ["**/*.wasm"],
     plugins: [
+      devCompressionPlugin(),
       tanstackRouter(),
       react(),
       babel({
@@ -191,6 +220,13 @@ export default defineConfig(() => {
       port,
       strictPort: true,
       allowedHosts,
+      // Transform the whole module graph at server start instead of on the
+      // first request. Without this, a cold worktree discovers and transforms
+      // modules one import-level at a time while the browser waits — which
+      // over a tailnet origin turns into minutes of waterfall.
+      warmup: {
+        clientFiles: ["./src/main.tsx"],
+      },
       ...(devProxyTarget
         ? {
             // One entry per shared prefix; the server's dev catch-all 404s the

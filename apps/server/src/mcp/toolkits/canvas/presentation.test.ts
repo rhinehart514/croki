@@ -7,7 +7,6 @@ const NOW = "2026-08-02T18:00:00.000Z";
 it("builds a bounded immutable artifact without project-context semantics", () => {
   const artifact = buildCrokiCanvasArtifact(
     {
-      harnessId: "product-v1",
       presentation: "compare",
       question: "Which route should the founder choose?",
       nodes: [
@@ -32,7 +31,7 @@ it("builds a bounded immutable artifact without project-context semantics", () =
       revision: 2,
       threadId: "thread-1",
       turnId: null,
-      harnessId: "product-v1",
+      source: "user-applied",
       createdAt: NOW,
     },
   );
@@ -41,7 +40,7 @@ it("builds a bounded immutable artifact without project-context semantics", () =
     id: "artifact-1",
     revision: 2,
     threadId: "thread-1",
-    harnessId: "product-v1",
+    source: "user-applied",
     presentation: "compare",
     question: "Which route should the founder choose?",
   });
@@ -69,7 +68,7 @@ it("normalizes rollout-era Product scenes to a recoverable compare artifact", ()
       revision: 1,
       threadId: "thread-legacy",
       turnId: null,
-      harnessId: "product-v1",
+      source: "user-applied",
       createdAt: NOW,
     },
   );
@@ -82,7 +81,6 @@ it("rejects duplicate ids, dangling edges, invalid legacy workflow, and duplicat
   expect(() =>
     buildCrokiCanvasArtifact(
       {
-        harnessId: "gtm-v1",
         presentation: "journey",
         question: "Where does the funnel break?",
         nodes: [
@@ -96,7 +94,7 @@ it("rejects duplicate ids, dangling edges, invalid legacy workflow, and duplicat
         revision: 1,
         threadId: "thread-dup",
         turnId: null,
-        harnessId: "gtm-v1",
+        source: "user-applied",
         createdAt: NOW,
       },
     ),
@@ -105,7 +103,6 @@ it("rejects duplicate ids, dangling edges, invalid legacy workflow, and duplicat
   expect(() =>
     buildCrokiCanvasArtifact(
       {
-        harnessId: "gtm-v1",
         presentation: "system",
         question: "Who owns the channel?",
         nodes: [{ id: "owner", role: "route", title: "Founder" }],
@@ -116,7 +113,7 @@ it("rejects duplicate ids, dangling edges, invalid legacy workflow, and duplicat
         revision: 1,
         threadId: "thread-dangling",
         turnId: null,
-        harnessId: "gtm-v1",
+        source: "user-applied",
         createdAt: NOW,
       },
     ),
@@ -135,7 +132,7 @@ it("rejects duplicate ids, dangling edges, invalid legacy workflow, and duplicat
         revision: 1,
         threadId: "thread-workflow",
         turnId: null,
-        harnessId: "product-v1",
+        source: "user-applied",
         createdAt: NOW,
       },
     ),

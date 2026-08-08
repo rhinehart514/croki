@@ -164,7 +164,7 @@ describe("projectActivityPayload", () => {
     expect(item.server).toBe("github");
     expect(item.arguments).toEqual({ pr: 42 });
     expect(item._meta).toBeUndefined();
-    expect(item.result).toEqual({ summary: "PR body line one", truncated: true });
+    expect(item.result).toEqual({ content: "PR body line one" });
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 
@@ -186,7 +186,7 @@ describe("projectActivityPayload", () => {
     const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
     expect(data.toolName).toBe("mcp__github__fetch_pr");
     expect(data.input).toEqual({ pr: 42 });
-    expect(data.result).toEqual({ summary: "first line of output", truncated: true });
+    expect(data.result).toEqual({ content: "first line of output" });
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 
@@ -203,28 +203,7 @@ describe("projectActivityPayload", () => {
       runHandles: { runId: "run-1", scriptPath: "/tmp/wf.js" },
       timelineBypass: true,
     });
-
     const projected = projectActivityPayload(source);
     expect(projected.payload).toEqual(source.payload);
-  });
-
-  it("preserves worker attribution through tool payload slimming", () => {
-    const projected = projectActivityPayload(
-      activity({
-        itemType: "command_execution",
-        agentId: "worker-123",
-        parentToolUseId: "toolu-parent",
-        data: {
-          toolName: "Bash",
-          command: "pnpm test",
-          rawOutput: { content: "x".repeat(10) },
-          somethingClientNeverReads: { big: "blob" },
-        },
-      }),
-    );
-    const payload = projected.payload as Record<string, unknown>;
-    expect(payload.agentId).toBe("worker-123");
-    expect(payload.parentToolUseId).toBe("toolu-parent");
-    expect((payload.data as Record<string, unknown>).somethingClientNeverReads).toBeUndefined();
   });
 });

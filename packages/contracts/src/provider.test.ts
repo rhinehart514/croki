@@ -152,7 +152,7 @@ describe("ProviderSendTurnInput", () => {
     expect(getOptionValue(parsed.modelSelection?.options, "fastMode")).toBe(true);
   });
 
-  it("accepts one-turn Product harness metadata", () => {
+  it("does not carry legacy Croki behavior metadata into provider requests", () => {
     const parsed = decodeProviderSendTurnInput({
       threadId: "thread-1",
       input: "Reconsider Canvas",
@@ -160,7 +160,7 @@ describe("ProviderSendTurnInput", () => {
       harnessId: "product-v1",
     });
 
-    expect(parsed.harnessId).toBe("product-v1");
+    expect("harnessId" in parsed).toBe(false);
     expect(parsed.canvasEnabled).toBe(true);
   });
 });

@@ -76,7 +76,7 @@ import { type OpenClawAdapterShape } from "../Services/OpenClawAdapter.ts";
 import { resolveOpenClawAcpBaseModelId } from "../acp/OpenClawAcpSupport.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import packageJson from "../../../package.json" with { type: "json" };
-const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
+const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
 const PROVIDER = ProviderDriverKind.make("openclaw");
 const OPENCLAW_RESUME_VERSION = 2 as const;

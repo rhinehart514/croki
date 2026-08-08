@@ -1,5 +1,4 @@
 import {
-  type CrokiHarnessId,
   type EnvironmentId,
   PreviewAutomationUnavailableError,
   type ProviderInstanceId,
@@ -15,8 +14,6 @@ export interface McpInvocationScope {
   readonly threadId: ThreadId;
   readonly providerSessionId: string;
   readonly providerInstanceId: ProviderInstanceId;
-  /** Harness selected for the current provider turn. Native is explicit. */
-  readonly harnessId: CrokiHarnessId;
   readonly capabilities: ReadonlySet<McpCapability>;
   readonly issuedAt: number;
 }
