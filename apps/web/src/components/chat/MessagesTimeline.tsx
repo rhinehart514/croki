@@ -33,7 +33,7 @@ import {
   workEntryIndicatesToolSuccess,
   workLogEntryIsToolLike,
 } from "../../session-logic";
-import { type TurnDiffSummary } from "../../types";
+import { type ChatMessage, type TurnDiffSummary } from "../../types";
 import {
   getRenderablePatch,
   resolveDiffThemeName,
@@ -148,6 +148,9 @@ interface TimelineRowSharedState {
   crokiContextReceiptsByMessageId: ReadonlyMap<string, CrokiContextReceipt>;
   guidanceDeliveryByMessageId: ReadonlyMap<string, GuidanceDeliveryState>;
   onRevertUserMessage: (messageId: MessageId) => void;
+  editFromHereUnavailableReason: string | null;
+  editFromHerePendingMessageId: MessageId | null;
+  onEditFromUserMessage: (message: ChatMessage) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
@@ -197,6 +200,9 @@ interface MessagesTimelineProps {
   onOpenCanvasArtifact?: (presentation: CanvasPresentationTimelineActivity) => void;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
+  editFromHereUnavailableReason: string | null;
+  editFromHerePendingMessageId: MessageId | null;
+  onEditFromUserMessage: (message: ChatMessage) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
@@ -238,6 +244,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onOpenCanvasArtifact,
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
+  editFromHereUnavailableReason,
+  editFromHerePendingMessageId,
+  onEditFromUserMessage,
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
@@ -469,6 +478,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       crokiContextReceiptsByMessageId,
       guidanceDeliveryByMessageId,
       onRevertUserMessage,
+      editFromHereUnavailableReason,
+      editFromHerePendingMessageId,
+      onEditFromUserMessage,
       onImageExpand,
       onOpenTurnDiff,
       onPrepareCanvasUpdate,
@@ -488,6 +500,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       crokiContextReceiptsByMessageId,
       guidanceDeliveryByMessageId,
       onRevertUserMessage,
+      editFromHereUnavailableReason,
+      editFromHerePendingMessageId,
+      onEditFromUserMessage,
       onImageExpand,
       onOpenTurnDiff,
       onPrepareCanvasUpdate,
@@ -1051,7 +1066,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           isActive={activity.activeTurnInProgress && activity.latestTurnId === row.message.turnId}
         />
       ) : null}
-      <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+      <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-100 transition-opacity duration-200 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
             <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
@@ -1062,6 +1077,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             </TooltipPopup>
           </Tooltip>
           <div className="flex items-center gap-0.5">
+            <EditFromHereButton message={row.message} />
             {canRevertAgentWork && <RevertUserMessageButton messageId={row.message.id} />}
             {displayedUserMessage.copyText && (
               <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" />
@@ -1099,6 +1115,55 @@ function GuidanceDeliveryReceipt({
           ? "Delivering guidance…"
           : "Guidance delivery unconfirmed"}
     </p>
+  );
+}
+
+function EditFromHereButton({ message }: { message: ChatMessage }) {
+  const ctx = use(TimelineRowCtx);
+  const activity = use(TimelineRowActivityCtx);
+  const isPending = ctx.editFromHerePendingMessageId !== null;
+  const unavailableReason =
+    ctx.editFromHereUnavailableReason ??
+    (isPending
+      ? ctx.editFromHerePendingMessageId === message.id
+        ? "Creating conversation branch…"
+        : "Wait for the conversation branch to finish"
+      : activity.isRevertingCheckpoint
+        ? "Wait for the filesystem revert to finish"
+        : activity.isWorking
+          ? "Interrupt the current turn before editing from here"
+          : null);
+  const descriptionId = `edit-from-here-description-${message.id}`;
+
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              aria-disabled={unavailableReason !== null}
+              aria-busy={ctx.editFromHerePendingMessageId === message.id || undefined}
+              aria-describedby={descriptionId}
+              onClick={() => {
+                if (unavailableReason === null) ctx.onEditFromUserMessage(message);
+              }}
+              aria-label="Edit from here"
+            />
+          }
+        >
+          <SquarePenIcon className="size-3" />
+        </TooltipTrigger>
+        <TooltipPopup side="top">
+          {unavailableReason ?? "Branch conversation from here. Files stay as they are."}
+        </TooltipPopup>
+      </Tooltip>
+      <span id={descriptionId} className="sr-only">
+        {unavailableReason ?? "Creates a conversation branch. Files stay as they are."}
+      </span>
+    </>
   );
 }
 

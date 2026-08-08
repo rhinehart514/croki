@@ -404,6 +404,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
         const serverConfig = yield* ServerConfig;
         const sourceThreadId = ThreadId.make("fork-source");
         const targetThreadId = ThreadId.make("fork-target");
+        const editTargetThreadId = ThreadId.make("fork-edit-target");
         const now = "2026-07-31T12:00:00.000Z";
         const attachmentUuid = "12345678-1234-1234-1234-123456789abc";
         const sourceAttachmentId = `fork-source-${attachmentUuid}`;
@@ -623,6 +624,28 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
             createdAt: "2026-07-31T12:01:00.000Z",
           },
         });
+        yield* eventStore.append({
+          type: "thread.fork-requested",
+          eventId: EventId.make("evt-fork-edit-target"),
+          aggregateKind: "thread",
+          aggregateId: editTargetThreadId,
+          occurredAt: "2026-07-31T12:02:00.000Z",
+          commandId: CommandId.make("cmd-fork-edit-target"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-edit-target"),
+          metadata: {},
+          payload: {
+            threadId: editTargetThreadId,
+            sourceThreadId,
+            forkPoint: {
+              messageId: MessageId.make("fork-message"),
+              turnId: TurnId.make("fork-turn"),
+              createdAt: now,
+              rollbackTurns: 1,
+            },
+            createdAt: "2026-07-31T12:02:00.000Z",
+          },
+        });
 
         yield* projectionPipeline.bootstrap;
 
@@ -642,10 +665,18 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
             title_regeneration_request_id AS "titleRegenerationRequestId",
             title_regeneration_started_at AS "titleRegenerationStartedAt"
           FROM projection_threads
-          WHERE thread_id IN (${sourceThreadId}, ${targetThreadId})
+          WHERE thread_id IN (${sourceThreadId}, ${targetThreadId}, ${editTargetThreadId})
           ORDER BY thread_id
         `;
         assert.deepEqual(threadRows, [
+          {
+            threadId: editTargetThreadId,
+            forkedFromThreadId: sourceThreadId,
+            title: "Original (edit)",
+            pinnedAt: null,
+            titleRegenerationRequestId: null,
+            titleRegenerationStartedAt: null,
+          },
           {
             threadId: sourceThreadId,
             forkedFromThreadId: null,
@@ -681,6 +712,12 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork
         `;
         assert.equal(messageRows[0]?.messageId, "fork:fork-target:fork-message");
         assert.equal(messageRows[0]?.attachmentId, targetAttachmentId);
+        const editMessageRows = yield* sql<{ readonly count: number }>`
+          SELECT count(*) AS count
+          FROM projection_thread_messages
+          WHERE thread_id = ${editTargetThreadId}
+        `;
+        assert.deepEqual(editMessageRows, [{ count: 0 }]);
         const activityRows = yield* sql<{
           readonly attachmentId: string | null;
           readonly kind: string;

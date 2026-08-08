@@ -1164,6 +1164,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
   );
 
+  const discardConversation: ProviderServiceMethod<"discardConversation"> = Effect.fn(
+    "discardConversation",
+  )(function* (input) {
+    yield* stopSession({ threadId: input.threadId }).pipe(Effect.ignore);
+    yield* directory.remove(input.threadId);
+  });
+
   const runStopAll = Effect.fn("runStopAll")(function* () {
     const threadIds = yield* directory.listThreadIds();
     const currentAdapters = yield* getAdapterEntries;
@@ -1299,6 +1306,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     getInstanceInfo,
     rollbackConversation,
     forkConversation,
+    discardConversation,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
     // independently receive all runtime events.

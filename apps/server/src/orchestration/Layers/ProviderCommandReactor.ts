@@ -1525,6 +1525,21 @@ const make = Effect.gen(function* () {
       });
     });
 
+    const stopTargetSession = Effect.gen(function* () {
+      const activeTargetSession = (yield* providerService.listSessions()).find(
+        (session) => session.threadId === targetThread.id,
+      );
+      if (!activeTargetSession) return;
+      yield* providerService.stopSession({ threadId: targetThread.id }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("failed to stop target session after thread fork", {
+            threadId: targetThread.id,
+            cause: Cause.pretty(cause),
+          }),
+        ),
+      );
+    });
+
     const forkExit = yield* Effect.exit(
       Effect.gen(function* () {
         yield* ensureSessionForThread(sourceThread.id, event.payload.createdAt);
@@ -1538,11 +1553,30 @@ const make = Effect.gen(function* () {
             detail: `Thread '${sourceThread.id}' did not start a provider session for forking.`,
           });
         }
+        if (event.payload.forkPoint !== undefined && activeSourceSession.provider !== "codex") {
+          return yield* new ProviderAdapterRequestError({
+            provider: activeSourceSession.provider,
+            method: "thread.fork",
+            detail: "Edit from here is available only for Codex threads in this version.",
+          });
+        }
 
         yield* providerService.forkConversation({
           sourceThreadId: sourceThread.id,
           targetThreadId: targetThread.id,
         });
+
+        const rollbackTurns = event.payload.forkPoint?.rollbackTurns ?? 0;
+        if (rollbackTurns > 0) {
+          // The provider forks at its live edge. Resume only the target and
+          // trim it back to the selected source boundary, preserving the
+          // original provider conversation and the filesystem as-is.
+          yield* ensureSessionForThread(targetThread.id, event.payload.createdAt);
+          yield* providerService.rollbackConversation({
+            threadId: targetThread.id,
+            numTurns: rollbackTurns,
+          });
+        }
 
         yield* setThreadSession({
           threadId: targetThread.id,
@@ -1560,12 +1594,18 @@ const make = Effect.gen(function* () {
           },
           createdAt: event.payload.createdAt,
         });
-      }),
+      }).pipe(Effect.ensuring(stopTargetSession)),
     );
 
     yield* stopTemporarySourceSession;
 
     if (Exit.isSuccess(forkExit)) return;
+    if (event.payload.forkPoint !== undefined) {
+      // A failed exact-boundary rollback leaves the provider's live-edge
+      // resume cursor unsafe. Remove that binding so this target cannot later
+      // continue from history the founder explicitly chose to exclude.
+      yield* providerService.discardConversation({ threadId: targetThread.id });
+    }
     yield* setThreadSession({
       threadId: targetThread.id,
       session: {

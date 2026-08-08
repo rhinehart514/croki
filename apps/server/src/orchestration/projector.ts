@@ -371,6 +371,56 @@ export function projectEvent(
         const remapMessageId = (messageId: OrchestrationThread["messages"][number]["id"]) =>
           MessageId.make(forkScopedId(payload.threadId, messageId));
         const pendingRequestIds = openBlockingRequestIds(source.activities);
+        const boundaryMessageIndex =
+          payload.forkPoint === undefined
+            ? source.messages.length
+            : source.messages.findIndex((message) => message.id === payload.forkPoint?.messageId);
+        const retainedMessages = source.messages.slice(
+          0,
+          boundaryMessageIndex < 0 ? source.messages.length : boundaryMessageIndex,
+        );
+        const retainedTurnIds = new Set(
+          retainedMessages.flatMap((message) => (message.turnId === null ? [] : [message.turnId])),
+        );
+        const retainedLatestTurnId = retainedMessages.findLast(
+          (message) => message.turnId !== null,
+        )?.turnId;
+        const retainedLatestTurnMessages = retainedLatestTurnId
+          ? retainedMessages.filter((message) => message.turnId === retainedLatestTurnId)
+          : [];
+        const retainedLatestUserMessage = retainedLatestTurnMessages.find(
+          (message) => message.role === "user",
+        );
+        const retainedLatestAssistantMessage = retainedLatestTurnMessages.findLast(
+          (message) => message.role === "assistant",
+        );
+        const retainedLatestMessage = retainedLatestTurnMessages.at(-1);
+        const latestTurn =
+          retainedLatestTurnId == null ||
+          retainedLatestUserMessage === undefined ||
+          retainedLatestMessage === undefined
+            ? null
+            : source.latestTurn?.turnId === retainedLatestTurnId
+              ? {
+                  ...source.latestTurn,
+                  turnId: TurnId.make(forkScopedId(payload.threadId, retainedLatestTurnId)),
+                  assistantMessageId:
+                    source.latestTurn.assistantMessageId === null
+                      ? null
+                      : remapMessageId(source.latestTurn.assistantMessageId),
+                  sourceProposedPlan: undefined,
+                }
+              : {
+                  turnId: TurnId.make(forkScopedId(payload.threadId, retainedLatestTurnId)),
+                  state: "completed" as const,
+                  requestedAt: retainedLatestUserMessage.createdAt,
+                  startedAt: retainedLatestUserMessage.createdAt,
+                  completedAt: retainedLatestMessage.updatedAt,
+                  assistantMessageId:
+                    retainedLatestAssistantMessage === undefined
+                      ? null
+                      : remapMessageId(retainedLatestAssistantMessage.id),
+                };
 
         const thread: OrchestrationThread = yield* decodeForEvent(
           OrchestrationThread,
@@ -378,24 +428,13 @@ export function projectEvent(
             id: payload.threadId,
             projectId: source.projectId,
             forkedFromThreadId: source.id,
-            title: `${source.title} (fork)`,
+            title: `${source.title} (${payload.forkPoint === undefined ? "fork" : "edit"})`,
             modelSelection: source.modelSelection,
             runtimeMode: source.runtimeMode,
             interactionMode: source.interactionMode,
             branch: source.branch,
             worktreePath: source.worktreePath,
-            latestTurn:
-              source.latestTurn === null
-                ? null
-                : {
-                    ...source.latestTurn,
-                    turnId: TurnId.make(forkScopedId(payload.threadId, source.latestTurn.turnId)),
-                    assistantMessageId:
-                      source.latestTurn.assistantMessageId === null
-                        ? null
-                        : remapMessageId(source.latestTurn.assistantMessageId),
-                    sourceProposedPlan: undefined,
-                  },
+            latestTurn,
             createdAt: payload.createdAt,
             updatedAt: payload.createdAt,
             archivedAt: null,
@@ -404,14 +443,21 @@ export function projectEvent(
             snoozedUntil: null,
             snoozedAt: null,
             deletedAt: null,
-            messages: source.messages.map((message) => ({
+            messages: retainedMessages.map((message) => ({
               ...message,
               id: remapMessageId(message.id),
               turnId: remapTurnId(message.turnId),
               streaming: false,
             })),
             proposedPlans: source.proposedPlans
-              .filter((plan) => plan.implementedAt !== null)
+              .filter(
+                (plan) =>
+                  plan.implementedAt !== null &&
+                  (payload.forkPoint === undefined ||
+                    (plan.turnId === null
+                      ? plan.createdAt < payload.forkPoint.createdAt
+                      : retainedTurnIds.has(plan.turnId))),
+              )
               .map((plan) => ({
                 ...plan,
                 turnId: remapTurnId(plan.turnId),
@@ -424,7 +470,14 @@ export function projectEvent(
                     : null;
                 const requestId =
                   typeof activityPayload?.requestId === "string" ? activityPayload.requestId : null;
-                return requestId === null || !pendingRequestIds.has(requestId);
+                const precedesForkPoint =
+                  payload.forkPoint === undefined ||
+                  (activity.turnId === null
+                    ? activity.createdAt < payload.forkPoint.createdAt
+                    : retainedTurnIds.has(activity.turnId));
+                return (
+                  precedesForkPoint && (requestId === null || !pendingRequestIds.has(requestId))
+                );
               })
               .map((activity) => ({
                 ...activity,

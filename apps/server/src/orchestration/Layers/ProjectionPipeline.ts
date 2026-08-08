@@ -140,6 +140,37 @@ function forkedProposedPlanId(
   return OrchestrationProposedPlanId.make(forkedEntityId(targetThreadId, sourceId));
 }
 
+type ThreadForkPoint = NonNullable<
+  Extract<OrchestrationEvent, { type: "thread.fork-requested" }>["payload"]["forkPoint"]
+>;
+
+function sourceTurnsForFork(
+  sourceTurns: ReadonlyArray<ProjectionTurn>,
+  forkPoint: ThreadForkPoint | undefined,
+): ReadonlyArray<ProjectionTurn> {
+  const settledTurns = sourceTurns.filter(
+    (turn) => turn.turnId !== null && turn.state !== "pending" && turn.state !== "running",
+  );
+  if (forkPoint === undefined) return settledTurns;
+  const boundaryIndex = settledTurns.findIndex((turn) => turn.turnId === forkPoint.turnId);
+  return boundaryIndex < 0
+    ? settledTurns.filter((turn) => turn.requestedAt < forkPoint.createdAt)
+    : settledTurns.slice(0, boundaryIndex);
+}
+
+function sourceMessagesForFork(
+  sourceMessages: ReadonlyArray<ProjectionThreadMessage>,
+  forkPoint: ThreadForkPoint | undefined,
+): ReadonlyArray<ProjectionThreadMessage> {
+  if (forkPoint === undefined) return sourceMessages;
+  const boundaryIndex = sourceMessages.findIndex(
+    (message) => message.messageId === forkPoint.messageId,
+  );
+  return boundaryIndex < 0
+    ? sourceMessages.filter((message) => message.createdAt < forkPoint.createdAt)
+    : sourceMessages.slice(0, boundaryIndex);
+}
+
 function activityEndsOpenRequest(activity: ProjectionThreadActivity): boolean {
   if (activity.kind === "approval.resolved" || activity.kind === "user-input.resolved") {
     return true;
@@ -755,22 +786,27 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           if (Option.isNone(source) || source.value.deletedAt !== null) {
             return;
           }
-          const sourceTurns = yield* projectionTurnRepository.listByThreadId({
-            threadId: event.payload.sourceThreadId,
-          });
+          const [sourceTurns, sourceMessages] = yield* Effect.all([
+            projectionTurnRepository.listByThreadId({
+              threadId: event.payload.sourceThreadId,
+            }),
+            projectionThreadMessageRepository.listByThreadId({
+              threadId: event.payload.sourceThreadId,
+            }),
+          ]);
+          const turnsForFork = sourceTurnsForFork(sourceTurns, event.payload.forkPoint);
           const clonedTurnIds = new Set(
-            sourceTurns
-              .filter(
-                (turn) =>
-                  turn.turnId !== null && turn.state !== "pending" && turn.state !== "running",
-              )
-              .flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
+            turnsForFork.flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
           );
+          const retainedMessages = sourceMessagesForFork(sourceMessages, event.payload.forkPoint);
+          const latestUserMessageAt = retainedMessages.findLast(
+            (message) => message.role === "user",
+          )?.createdAt;
           yield* projectionThreadRepository.upsert({
             ...source.value,
             threadId: event.payload.threadId,
             forkedFromThreadId: event.payload.sourceThreadId,
-            title: `${source.value.title} (fork)`,
+            title: `${source.value.title} (${event.payload.forkPoint === undefined ? "fork" : "edit"})`,
             latestTurnId:
               source.value.latestTurnId !== null && clonedTurnIds.has(source.value.latestTurnId)
                 ? forkedTurnId(event.payload.threadId, source.value.latestTurnId)
@@ -785,6 +821,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             pinnedAt: null,
             titleRegenerationRequestId: null,
             titleRegenerationStartedAt: null,
+            latestUserMessageAt: latestUserMessageAt ?? null,
             pendingApprovalCount: 0,
             pendingUserInputCount: 0,
             hasActionableProposedPlan: 0,
@@ -1101,16 +1138,13 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           const sourceTurns = yield* projectionTurnRepository.listByThreadId({
             threadId: event.payload.sourceThreadId,
           });
+          const turnsForFork = sourceTurnsForFork(sourceTurns, event.payload.forkPoint);
           const clonedTurnIds = new Set(
-            sourceTurns
-              .filter(
-                (turn) =>
-                  turn.turnId !== null && turn.state !== "pending" && turn.state !== "running",
-              )
-              .flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
+            turnsForFork.flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
           );
+          const messagesForFork = sourceMessagesForFork(sourceMessages, event.payload.forkPoint);
           yield* Effect.forEach(
-            sourceMessages.filter(
+            messagesForFork.filter(
               (message) =>
                 !message.isStreaming &&
                 (message.turnId === null || clonedTurnIds.has(message.turnId)),
@@ -1236,11 +1270,28 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     )(function* (event, _attachmentSideEffects) {
       switch (event.type) {
         case "thread.fork-requested": {
-          const sourcePlans = yield* projectionThreadProposedPlanRepository.listByThreadId({
-            threadId: event.payload.sourceThreadId,
-          });
+          const [sourcePlans, sourceTurns] = yield* Effect.all([
+            projectionThreadProposedPlanRepository.listByThreadId({
+              threadId: event.payload.sourceThreadId,
+            }),
+            projectionTurnRepository.listByThreadId({
+              threadId: event.payload.sourceThreadId,
+            }),
+          ]);
+          const retainedTurnIds = new Set(
+            sourceTurnsForFork(sourceTurns, event.payload.forkPoint).flatMap((turn) =>
+              turn.turnId === null ? [] : [turn.turnId],
+            ),
+          );
           yield* Effect.forEach(
-            sourcePlans.filter((plan) => plan.implementedAt !== null),
+            sourcePlans.filter(
+              (plan) =>
+                plan.implementedAt !== null &&
+                (event.payload.forkPoint === undefined ||
+                  (plan.turnId === null
+                    ? plan.createdAt < event.payload.forkPoint.createdAt
+                    : retainedTurnIds.has(plan.turnId))),
+            ),
             (plan) =>
               projectionThreadProposedPlanRepository.upsert({
                 ...plan,
@@ -1318,16 +1369,16 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               threadId: event.payload.sourceThreadId,
             }),
           ]);
+          const turnsForFork = sourceTurnsForFork(sourceTurns, event.payload.forkPoint);
           const clonedTurnIds = new Set(
-            sourceTurns
-              .filter(
-                (turn) =>
-                  turn.turnId !== null && turn.state !== "pending" && turn.state !== "running",
-              )
-              .flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
+            turnsForFork.flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
           );
           const historicalActivities = withoutOpenRequestActivities(sourceActivities).filter(
-            (activity) => activity.turnId === null || clonedTurnIds.has(activity.turnId),
+            (activity) =>
+              (activity.turnId === null || clonedTurnIds.has(activity.turnId)) &&
+              (event.payload.forkPoint === undefined ||
+                activity.turnId !== null ||
+                activity.createdAt < event.payload.forkPoint.createdAt),
           );
           yield* Effect.forEach(
             historicalActivities,
@@ -1487,10 +1538,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             threadId: event.payload.sourceThreadId,
           });
           yield* Effect.forEach(
-            sourceTurns.filter(
-              (turn) =>
-                turn.turnId !== null && turn.state !== "pending" && turn.state !== "running",
-            ),
+            sourceTurnsForFork(sourceTurns, event.payload.forkPoint),
             (turn) =>
               turn.turnId === null
                 ? Effect.void

@@ -7,6 +7,11 @@ The developer experience is a normal repository that has gained product awarenes
 ## Product nouns and behavior
 
 - A **Thread** is the canonical conversation and unit of work.
+- **Edit from here** creates a successor Thread immediately before the selected
+  completed user message, then reopens that message's authored text and
+  supported image attachments in the new composer. The original Thread and
+  filesystem remain unchanged. Providers that cannot prove a native fork at
+  that exact boundary show the action as unavailable rather than simulating it.
 - Explicitly delegated parallel work creates durable **worker Threads** beneath the parent Thread. Worker Threads have their own transcript and lifecycle, survive reloads, and never become competing canonical conversations.
 - The left rail nests worker Threads directly beneath their parent. Selecting a worker opens its read-only transcript; **Continue in parent** returns to the canonical Thread.
 - After a parent has real worker Threads, **Workers** lets the founder choose one durable presentation: **Separate chats** nests those transcripts, while **In Thread** hides the child rows and shows bounded Workstreams at their spawn point. Croki never renders both full representations or copies worker messages into the parent.

@@ -111,6 +111,7 @@ function createProviderServiceHarness(
     respondToRequest: () => unsupported(),
     respondToUserInput: () => unsupported(),
     forkConversation: () => unsupported(),
+    discardConversation: () => unsupported(),
     stopSession: () => unsupported(),
     listSessions,
     getCapabilities: () =>
