@@ -111,7 +111,7 @@ function missingValues(
 
 function inheritedDomainError(name: string, destination: string | null): string[] {
   return destination?.toLowerCase().includes(INHERITED_T3_DOMAIN_SUFFIX)
-    ? [`${name} must not target the inherited T3 domain.`]
+    ? [`${name} must not target the predecessor domain.`]
     : [];
 }
 
@@ -165,7 +165,7 @@ export function buildCrokiReleasePlan(
   const cliErrors = [
     ...(packageName === INHERITED_T3_CLI_PACKAGE ||
     packageName?.startsWith(INHERITED_T3_CLI_PACKAGE_SCOPE) === true
-      ? ["CROKI_CLI_PACKAGE must not target an inherited T3 package."]
+      ? ["CROKI_CLI_PACKAGE must not target a predecessor package."]
       : []),
     ...(cliRequested && packageName !== null && packageName !== "croki-server"
       ? ["CROKI_CLI_PACKAGE must be the Croki-owned croki-server package."]
@@ -285,7 +285,7 @@ export function buildCrokiReleasePlan(
       ]),
       errors:
         easProjectId === INHERITED_T3_EAS_PROJECT_ID
-          ? ["CROKI_EAS_PROJECT_ID must not target the inherited T3 project."]
+          ? ["CROKI_EAS_PROJECT_ID must not target the predecessor project."]
           : [],
     }),
     productionRequested: mobileProductionRequested,
