@@ -186,6 +186,10 @@ function assertCrokiReleaseGuards(): void {
     NodePath.resolve(repoRoot, ".github/workflows/mobile-eas-preview.yml"),
     "utf8",
   );
+  const mobileShowcaseWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/mobile-showcase-screenshots.yml"),
+    "utf8",
+  );
 
   for (const guard of [
     "CROKI_RELEASE_ENABLED",
@@ -216,6 +220,7 @@ function assertCrokiReleaseGuards(): void {
     "secrets.VERCEL_TOKEN",
     "latest.app.t3.codes",
     "nightly.app.t3.codes",
+    "--filter=t3...",
   ]) {
     assertNotContains(
       releaseWorkflow,
@@ -241,6 +246,32 @@ function assertCrokiReleaseGuards(): void {
     relayWorkflow,
     "secrets.CLOUDFLARE_API_TOKEN",
     "Relay workflow still uses the inherited Cloudflare credential.",
+  );
+  assertContains(
+    relayWorkflow,
+    "--filter=croki-relay...",
+    "Relay workflow does not install the Croki relay workspace.",
+  );
+  assertNotContains(
+    relayWorkflow,
+    "--filter=t3code-relay...",
+    "Relay workflow still installs the inherited T3 relay workspace.",
+  );
+
+  assertContains(
+    releaseWorkflow,
+    "--filter=croki-server...",
+    "Release workflow does not install the Croki server workspace.",
+  );
+  assertContains(
+    mobileShowcaseWorkflow,
+    "--filter=croki-server...",
+    "Mobile showcase workflow does not install the Croki server workspace.",
+  );
+  assertNotContains(
+    mobileShowcaseWorkflow,
+    "--filter=t3...",
+    "Mobile showcase workflow still installs the inherited T3 workspace.",
   );
 
   for (const guard of ["dry-run", "release:croki:plan", "inputs.mode != 'dry-run'"]) {

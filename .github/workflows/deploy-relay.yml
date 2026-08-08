@@ -99,7 +99,7 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=t3code-relay...
+              - --filter=croki-relay...
 
       - name: Deploy production relay stage
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
