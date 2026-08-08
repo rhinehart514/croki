@@ -31,26 +31,38 @@ export interface TranscriptFile {
   readonly mtimeMs: number;
 }
 
+export interface TranscriptFileListing {
+  readonly files: readonly TranscriptFile[];
+  /** Directories whose entries were successfully listed. */
+  readonly walkedDirectories: number;
+  /** Directories omitted because their entries could not be listed. */
+  readonly failedDirectories: number;
+}
+
 /**
  * Lists `.jsonl` transcripts under `root` last modified at or after `sinceMs`.
  *
- * Errors on individual entries are swallowed: session files rotate and get
- * removed while the walk is in flight, and a partial listing is far better than
- * failing the page.
+ * A partial listing is returned when directories disappear or become
+ * unreadable while the walk is in flight. The counts preserve that provenance
+ * so callers do not mistake an incomplete walk for a legitimately empty tree.
  */
 export async function listTranscriptFiles(
   root: string,
   sinceMs: number,
-): Promise<readonly TranscriptFile[]> {
+): Promise<TranscriptFileListing> {
   const found: TranscriptFile[] = [];
+  let walkedDirectories = 0;
+  let failedDirectories = 0;
 
   const walk = async (dir: string): Promise<void> => {
     let entries;
     try {
       entries = await NodeFSP.readdir(dir, { withFileTypes: true });
     } catch {
+      failedDirectories += 1;
       return;
     }
+    walkedDirectories += 1;
     for (const entry of entries) {
       const child = NodePath.join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -70,7 +82,7 @@ export async function listTranscriptFiles(
   };
 
   await walk(root);
-  return found;
+  return { files: found, walkedDirectories, failedDirectories };
 }
 
 /**

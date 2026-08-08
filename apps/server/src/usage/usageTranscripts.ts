@@ -188,6 +188,9 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageRecord
 
   if (record["type"] === "turn_context") {
     if (typeof payloadRecord["model"] === "string") state.model = payloadRecord["model"];
+    // Duplicate token_count emissions only repeat within a turn. Equal deltas
+    // in a later turn are genuine usage and must be counted again.
+    state.lastUsageSignature = null;
     return null;
   }
 

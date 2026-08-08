@@ -121,6 +121,22 @@ describe("parseCodexLine", () => {
     expect(repeat).toBeNull();
   });
 
+  it("counts identical usage deltas in consecutive turns", () => {
+    const state = initialCodexScanState();
+    parseCodexLine(turnContext, state);
+    const firstTurn = parseCodexLine(tokenCount(100, 0, 10, 0), state);
+    const firstTurnRepeat = parseCodexLine(tokenCount(100, 0, 10, 0), state);
+
+    parseCodexLine(turnContext, state);
+    const secondTurn = parseCodexLine(tokenCount(100, 0, 10, 0), state);
+    const secondTurnRepeat = parseCodexLine(tokenCount(100, 0, 10, 0), state);
+
+    expect(firstTurn).not.toBeNull();
+    expect(firstTurnRepeat).toBeNull();
+    expect(secondTurn).not.toBeNull();
+    expect(secondTurnRepeat).toBeNull();
+  });
+
   it("drops usage that arrives before any model is known", () => {
     const state = initialCodexScanState();
     expect(parseCodexLine(tokenCount(100, 0, 10, 0), state)).toBeNull();

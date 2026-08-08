@@ -69,17 +69,33 @@ export function classifyTranscriptRead(
     : { status: "ok", records: dedupeWithinFile(records) };
 }
 
-/** Derives honest source provenance from the files that were actually readable. */
+/** Derives honest source provenance from the directory walk and file reads. */
 export function deriveSourceReadProvenance(input: {
   readonly readableFiles: number;
   readonly failedFiles: number;
+  readonly walkedDirectories: number;
+  readonly failedDirectories: number;
 }): Pick<UsageSource, "status" | "message"> {
-  if (input.failedFiles === 0) return { status: "ok", message: null };
+  if (input.failedFiles === 0 && input.failedDirectories === 0) {
+    return { status: "ok", message: null };
+  }
 
-  const noun = input.failedFiles === 1 ? "file" : "files";
+  const failures: string[] = [];
+  if (input.failedDirectories > 0) {
+    const noun = input.failedDirectories === 1 ? "directory" : "directories";
+    failures.push(`${input.failedDirectories} transcript ${noun} could not be listed`);
+  }
+  if (input.failedFiles > 0) {
+    const noun = input.failedFiles === 1 ? "file" : "files";
+    failures.push(`${input.failedFiles} transcript ${noun} could not be read`);
+  }
+
   return {
-    status: input.readableFiles === 0 ? "failed" : "partial",
-    message: `${input.failedFiles} transcript ${noun} could not be read.`,
+    status:
+      input.walkedDirectories === 0 || (input.failedFiles > 0 && input.readableFiles === 0)
+        ? "failed"
+        : "partial",
+    message: `${failures.join(" and ")}.`,
   };
 }
 
@@ -375,8 +391,10 @@ export const make = Effect.gen(function* () {
         continue;
       }
 
-      walkedRoots.push(dir);
-      const files = yield* Effect.promise(() => listTranscriptFiles(dir, windowStartMs));
+      const listing = yield* Effect.promise(() => listTranscriptFiles(dir, windowStartMs));
+      // Absence only proves deletion when every subtree under the root was
+      // listed. Preserve cached entries after a partial walk.
+      if (listing.failedDirectories === 0) walkedRoots.push(dir);
       let scannedFiles = 0;
       let skippedFiles = 0;
       let readableFiles = 0;
@@ -385,7 +403,7 @@ export const make = Effect.gen(function* () {
       // session spans days and models, so clients total this figure instead.
       const sessionIds = new Set<string>();
 
-      for (const file of files) {
+      for (const file of listing.files) {
         livePaths.add(file.path);
         const result = yield* readFileRecords(file.path, file.size, file.mtimeMs, provider);
         if (result.status === "failed") {
@@ -409,7 +427,12 @@ export const make = Effect.gen(function* () {
         }
       }
 
-      const provenance = deriveSourceReadProvenance({ readableFiles, failedFiles });
+      const provenance = deriveSourceReadProvenance({
+        readableFiles,
+        failedFiles,
+        walkedDirectories: listing.walkedDirectories,
+        failedDirectories: listing.failedDirectories,
+      });
       sources.push({
         fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
         status: provenance.status,

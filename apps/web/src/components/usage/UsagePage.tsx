@@ -3,7 +3,7 @@ import { RefreshCwIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { cn } from "../../lib/utils";
-import { useUsage } from "../../state/usage";
+import { type EnvironmentUsageStatus, useUsage } from "../../state/usage";
 import {
   enumerateDays,
   formatCount,
@@ -433,30 +433,49 @@ function QualityRow({ label, value }: { readonly label: string; readonly value: 
 
 /**
  * Says plainly when the totals are incomplete: an environment still answering,
- * one that failed, or one whose transcripts another environment already
- * reported.
+ * an environment or transcript source that failed, or a source another
+ * environment already reported.
  */
-function UsageCoverageNotice({
+export function UsageCoverageNotice({
   environments,
   duplicateSources,
   staleEnvironments,
   isPartial,
 }: {
-  readonly environments: readonly {
-    environmentId: string;
-    label: string;
-    error: string | null;
-    isPending: boolean;
-  }[];
+  readonly environments: readonly EnvironmentUsageStatus[];
   readonly duplicateSources: readonly string[];
   readonly staleEnvironments: readonly string[];
   readonly isPartial: boolean;
 }) {
+  const staleEnvironmentIds = new Set(staleEnvironments);
   const failed = environments.filter((environment) => environment.error !== null);
   const stale = environments.filter((environment) =>
-    staleEnvironments.includes(environment.environmentId),
+    staleEnvironmentIds.has(environment.environmentId),
   );
-  if (failed.length === 0 && stale.length === 0 && duplicateSources.length === 0 && !isPartial) {
+  const incompleteSources = environments.flatMap((environment) => {
+    // An environment-level error or stale contract already explains why its
+    // data is incomplete. Source provenance is meaningful only for a current,
+    // successfully returned summary.
+    if (
+      environment.error !== null ||
+      environment.summary === null ||
+      staleEnvironmentIds.has(environment.environmentId)
+    ) {
+      return [];
+    }
+
+    return environment.summary.sources.flatMap((source) =>
+      source.status === "partial" || source.status === "failed" ? [{ environment, source }] : [],
+    );
+  });
+
+  if (
+    failed.length === 0 &&
+    stale.length === 0 &&
+    incompleteSources.length === 0 &&
+    duplicateSources.length === 0 &&
+    !isPartial
+  ) {
     return null;
   }
 
@@ -464,11 +483,22 @@ function UsageCoverageNotice({
     <div className="flex flex-col gap-1 border border-border px-3 py-2 text-xs text-muted-foreground">
       {isPartial ? <span>Some environments are still reporting. Totals are partial.</span> : null}
       {failed.map((environment) => (
-        <span key={environment.label}>{environment.label} could not report usage.</span>
+        <span key={environment.environmentId}>{environment.label} could not report usage.</span>
       ))}
       {stale.map((environment) => (
-        <span key={environment.label}>
+        <span key={environment.environmentId}>
           {environment.label} runs an older server version and is excluded from totals.
+        </span>
+      ))}
+      {incompleteSources.map(({ environment, source }) => (
+        <span
+          key={`${environment.environmentId}:${source.fingerprint.provider}:${source.fingerprint.resolvedHomePath}:${source.fingerprint.volumeId}`}
+        >
+          {environment.label} · {PROVIDER_LABEL[source.fingerprint.provider]} at{" "}
+          {source.fingerprint.resolvedHomePath}{" "}
+          {source.status === "partial"
+            ? "reported partial usage. Totals include readable transcripts only."
+            : "could not report usage. Totals exclude this source."}
         </span>
       ))}
       {duplicateSources.length > 0 ? (
