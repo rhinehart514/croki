@@ -31,8 +31,11 @@ describe("ElectronProtocol", () => {
     unhandleMock.mockReset();
   });
 
-  it.effect("registers Croki renderer schemes as secure before protocol handling", () =>
+  it.effect("registers Croki renderer schemes as privileged exactly once", () =>
     Effect.gen(function* () {
+      ElectronProtocol.registerDesktopSchemesAsPrivileged();
+      ElectronProtocol.registerDesktopSchemesAsPrivileged();
+
       const protocol = yield* ElectronProtocol.ElectronProtocol;
       yield* protocol.registerPrivilegedSchemes;
 
