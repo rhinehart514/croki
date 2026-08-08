@@ -1659,7 +1659,14 @@ const make = Effect.gen(function* () {
       }
     });
 
-    yield* forkParked(Stream.runForEach(orchestrationEngine.streamDomainEvents, processEvent));
+    // Acquire the hot PubSub subscription in the caller before forking. A
+    // forked Stream.fromPubSub subscribes only after its fiber starts, which
+    // left a gap where an immediately dispatched command could be lost.
+    const domainEvents =
+      orchestrationEngine.subscribeDomainEvents === undefined
+        ? orchestrationEngine.streamDomainEvents
+        : Stream.fromSubscription(yield* orchestrationEngine.subscribeDomainEvents);
+    yield* forkParked(Stream.runForEach(domainEvents, processEvent));
 
     // The domain event stream is hot, so work pending before this reactor
     // starts cannot be resumed. Correlated completions only clear the request
