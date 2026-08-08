@@ -12,7 +12,7 @@ export function resolveCrokiEasUpdates(value: string | undefined): {
   const projectId = value?.trim() || null;
   if (projectId === INHERITED_T3_EAS_PROJECT_ID) {
     throw new Error(
-      "CROKI_EAS_PROJECT_ID must identify a Croki-owned EAS project, not the inherited T3 project.",
+      "CROKI_EAS_PROJECT_ID must identify a Croki-owned EAS project, not the predecessor project.",
     );
   }
   if (projectId !== null && !EAS_PROJECT_ID_PATTERN.test(projectId)) {

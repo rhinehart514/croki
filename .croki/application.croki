@@ -14,8 +14,8 @@
     "summary": "Croki is an application-aware development environment where founders direct native coding-agent Threads and verify the resulting software through files, terminal, Preview, Review, Git, and durable checked screens.",
     "product": [
       "The selected coding provider remains the agent and retains its native reasoning, planning, delegation, memory, tools, and response behavior by default.",
-      "Croki owns the durable development environment around the provider: Threads, worker representation, repositories, worktrees, files, terminal, Preview, Review, Git, permissions, receipts, evidence, and recovery.",
-      "Application context is bounded, source-backed, and injected into project turns without changing the founder's message.",
+      "Croki owns the durable environment around the provider: Threads, agents, repositories, worktrees, files, terminal, Preview, Review, Git, permissions, evidence, and recovery.",
+      "Application context is bounded, source-backed, and only reaches a model when the founder explicitly adds its source to a message.",
       "Preview preserves checked-screen history as durable Thread evidence.",
       "Parallel workers persist as read-only child Threads beneath one canonical founder conversation."
     ],
@@ -25,7 +25,7 @@
     ],
     "learnings": [
       "Croki should make native agent work easier to understand, resume, verify, and ship without becoming an implicit agent harness.",
-      "Application direction should guide native development work without becoming a second workflow system.",
+      "Application direction should be easy for founders to apply without becoming hidden model behavior or a second workflow system.",
       "Observed evidence must remain distinct from founder-approved product direction and from a Croki-authored verdict."
     ],
     "sources": [
@@ -41,29 +41,24 @@
   },
   "building": {
     "version": "0.4.8",
-    "intent": "Make native agent work legible as one founder-controlled path from direction through evidence and Git, while removing Croki-owned workflow machinery.",
+    "intent": "Integrate the current T3 Code substrate while making Croki an out-of-the-box host for native providers with no Croki-owned model harness or hidden context injection.",
     "product": [
-      ".croki/application.croki is the single repository-owned application brief and appears as one compact focus in the Thread header.",
-      "Threads, files, terminal, Preview, Review, Git, and pull requests remain the primary development environment.",
-      "A completed provider turn may receive one factual Croki result derived from changed files, observed checks, checked screens, pending founder input, and Git state; Croki does not grade the work or rewrite the provider answer.",
-      "Environment evidence opens the relevant existing surface and can return to the canonical Thread as a stable founder-selected reference.",
-      "Provider readiness and capability differences are shown honestly beside the affected control, with direct recovery actions and no silent provider switching.",
-      "Remote and terminal authority narrows to the active environment, project, worktree, Thread or provider session, tool family, and lifetime without changing provider reasoning.",
-      "Preview opens and checks running applications without a second ideation workflow.",
-      "Historical Concept, Release, and Venture schemas remain readable without dedicated workspace UI."
+      "Default turns send only the founder's visible message and attachments; Croki adds no persona, planning, delegation, application, progress, or sibling-work prompt.",
+      ".croki/application.croki remains a visible repository brief with Add to message and Open actions; adding it creates a removable @file mention in the draft.",
+      "Provider-native skills, files, models, modes, permissions, tools, and delegation stay available as explicit user choices.",
+      "Threads, agents, files, terminal, Preview, Review, Git, usage, remote access, and mobile remain the environment around the provider.",
+      "Historical Croki harness and Canvas receipts remain readable, while older clients attempting to send removed behavior fields receive a clear version-skew error."
     ],
     "gtm": [
       "Describe Croki as the ADE around native coding agents, not an agent runtime, orchestration system, or product-management system.",
       "Public platform and release claims must match enabled Croki-owned destinations."
     ],
     "successSignals": [
-      "Every project turn can inherit the same bounded application direction.",
-      "The founder can see the current application focus and open its source from the Thread header.",
-      "After a turn, the founder can identify what changed, what Croki observed, what remains unverified, and the current Git state without reconstructing several surfaces.",
-      "Blocked provider and environment states preserve the draft and lead directly to setup, reconnect, or retry.",
-      "Opening, closing, or arranging Croki surfaces never changes provider behavior, authority, or harness selection.",
-      "Every factual result traces to a checkpoint, command, Preview, approval, provider, environment, or Git source.",
-      "Ordinary development never requires a setup form, object browser, progress model, Concept workflow, Croki-authored plan, or completion score."
+      "A default turn's provider input contains only the founder's visible message and attachments.",
+      "The founder can add the application brief to a draft in one action and remove it before sending.",
+      "No Product or Native behavior selector, automatic application context, or Croki parallel-work policy appears in active turn plumbing.",
+      "Explicit provider-native skills, files, models, modes, permissions, and agent activity remain visible and usable.",
+      "Croki overlay checks, typechecks, focused tests, and rendered interaction evidence pass against the integrated T3 base."
     ]
   }
 }
