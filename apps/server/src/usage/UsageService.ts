@@ -14,7 +14,12 @@
 import * as NodeOS from "node:os";
 
 import {
+  ClaudeSettings,
+  CodexSettings,
+  ProviderDriverKind,
   USAGE_CONTRACT_VERSION,
+  type ProviderInstanceConfig,
+  type ServerSettings as ServerSettingsValue,
   type UsageProviderKind,
   type UsageSource,
   type UsageSummary,
@@ -34,8 +39,8 @@ import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 import { ServerConfig } from "../config.ts";
+import { expandHomePath } from "../pathExpansion.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
 import { parseRateTable, type RateTable } from "./usagePricing.ts";
@@ -43,6 +48,7 @@ import {
   listTranscriptFiles,
   readDirectoryVolumeId,
   readTranscriptRecords,
+  type TranscriptRecords,
 } from "./usageTranscriptReader.ts";
 import {
   decodeScanCache,
@@ -51,22 +57,109 @@ import {
   pruneScanCache,
   type ScanCache,
 } from "./usageScanCache.ts";
-import type { UsageRecord } from "./usageTranscripts.ts";
-
 type TranscriptReadResult =
-  | { readonly status: "ok"; readonly records: readonly UsageRecord[] }
+  | ({ readonly status: "ok" } & TranscriptRecords)
   | { readonly status: "failed" };
+
+export interface UsageTranscriptDir {
+  readonly provider: UsageProviderKind;
+  readonly dir: string;
+}
+
+const decodeCodexSettings = Schema.decodeUnknownOption(CodexSettings);
+const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
+
+function providerEnvironmentValue(
+  environment: ProviderInstanceConfig["environment"],
+  name: string,
+): string | undefined {
+  let value: string | undefined;
+  for (const variable of environment ?? []) {
+    if (variable.name === name) value = variable.value;
+  }
+  return value;
+}
+
+/**
+ * Resolves every physical transcript root represented by the effective
+ * provider-instance map. This mirrors registry hydration: explicit canonical
+ * entries win over their legacy mirror, while custom instances are additive.
+ * Multiple instances sharing one provider home collapse to one scan/source.
+ */
+export const resolveConfiguredTranscriptDirs = Effect.fn(
+  "UsageService.resolveConfiguredTranscriptDirs",
+)(function* (
+  settings: ServerSettingsValue,
+  processEnvironment: NodeJS.ProcessEnv = process.env,
+): Effect.fn.Return<ReadonlyArray<UsageTranscriptDir>, never, Path.Path> {
+  const path = yield* Path.Path;
+  const instances: ProviderInstanceConfig[] = Object.values(settings.providerInstances);
+
+  if (!Object.hasOwn(settings.providerInstances, "codex")) {
+    instances.push({
+      driver: ProviderDriverKind.make("codex"),
+      config: settings.providers.codex,
+    });
+  }
+  if (!Object.hasOwn(settings.providerInstances, "claudeAgent")) {
+    instances.push({
+      driver: ProviderDriverKind.make("claudeAgent"),
+      config: settings.providers.claudeAgent,
+    });
+  }
+
+  const roots: UsageTranscriptDir[] = [];
+  const seen = new Set<string>();
+  const append = (provider: UsageProviderKind, dir: string) => {
+    const key = `${provider}\0${dir}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    roots.push({ provider, dir });
+  };
+
+  for (const instance of instances) {
+    if (instance.driver === "codex") {
+      const config = Option.getOrUndefined(decodeCodexSettings(instance.config ?? {}));
+      if (config === undefined) continue;
+      const layout = yield* resolveCodexHomeLayout(config);
+      append("codex", path.join(layout.sharedHomePath, "sessions"));
+      continue;
+    }
+
+    if (instance.driver !== "claudeAgent") continue;
+    const config = Option.getOrUndefined(decodeClaudeSettings(instance.config ?? {}));
+    if (config === undefined) continue;
+
+    const configuredHome = config.homePath.trim();
+    const configuredEnvironment = (
+      providerEnvironmentValue(instance.environment, "CLAUDE_CONFIG_DIR") ??
+      processEnvironment.CLAUDE_CONFIG_DIR ??
+      ""
+    ).trim();
+    const configDir =
+      configuredHome.length > 0
+        ? path.resolve(expandHomePath(configuredHome))
+        : configuredEnvironment.length > 0
+          ? path.resolve(configuredEnvironment)
+          : path.join(NodeOS.homedir(), ".claude");
+    append("claude", path.join(configDir, "projects"));
+  }
+
+  return roots;
+});
 
 /**
  * Preserves the reader's failure signal instead of treating an unreadable
  * transcript as a legitimately empty file.
  */
-export function classifyTranscriptRead(
-  records: readonly UsageRecord[] | null,
-): TranscriptReadResult {
-  return records === null
+export function classifyTranscriptRead(transcript: TranscriptRecords | null): TranscriptReadResult {
+  return transcript === null
     ? { status: "failed" }
-    : { status: "ok", records: dedupeWithinFile(records) };
+    : {
+        status: "ok",
+        records: dedupeWithinFile(transcript.records),
+        malformedRecords: transcript.malformedRecords,
+      };
 }
 
 /** Derives honest source provenance from the directory walk and file reads. */
@@ -75,8 +168,9 @@ export function deriveSourceReadProvenance(input: {
   readonly failedFiles: number;
   readonly walkedDirectories: number;
   readonly failedDirectories: number;
+  readonly malformedRecords: number;
 }): Pick<UsageSource, "status" | "message"> {
-  if (input.failedFiles === 0 && input.failedDirectories === 0) {
+  if (input.failedFiles === 0 && input.failedDirectories === 0 && input.malformedRecords === 0) {
     return { status: "ok", message: null };
   }
 
@@ -88,6 +182,10 @@ export function deriveSourceReadProvenance(input: {
   if (input.failedFiles > 0) {
     const noun = input.failedFiles === 1 ? "file" : "files";
     failures.push(`${input.failedFiles} transcript ${noun} could not be read`);
+  }
+  if (input.malformedRecords > 0) {
+    const noun = input.malformedRecords === 1 ? "record" : "records";
+    failures.push(`${input.malformedRecords} usage ${noun} could not be interpreted`);
   }
 
   return {
@@ -229,19 +327,6 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  /**
-   * Claude's config dir is the home itself when overridden, but a default
-   * install nests transcripts under `~/.claude/projects`. Probe both.
-   */
-  const resolveClaudeTranscriptDir = (homePath: string) =>
-    Effect.gen(function* () {
-      const nested = path.join(homePath, ".claude", "projects");
-      const nestedExists = yield* fileSystem
-        .exists(nested)
-        .pipe(Effect.catchCause(() => Effect.succeed(false)));
-      return nestedExists ? nested : path.join(homePath, "projects");
-    });
-
   /** Resolves the transcript directory for each provider. */
   const resolveTranscriptDirs = Effect.fn("UsageService.resolveTranscriptDirs")(function* () {
     // A settings failure must surface as an error: swallowing it here would
@@ -260,14 +345,7 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-    const claudeHome = yield* resolveClaudeHomePath(settings.providers.claudeAgent);
-    const claudeDir = yield* resolveClaudeTranscriptDir(claudeHome);
-    const codexLayout = yield* resolveCodexHomeLayout(settings.providers.codex);
-
-    return [
-      { provider: "claude" as const, dir: claudeDir },
-      { provider: "codex" as const, dir: path.join(codexLayout.sharedHomePath, "sessions") },
-    ];
+    return yield* resolveConfiguredTranscriptDirs(settings);
   });
 
   /**
@@ -319,7 +397,11 @@ export const make = Effect.gen(function* () {
         cached.mtimeMs === mtimeMs &&
         cached.provider === provider
       ) {
-        return { status: "ok", records: cached.records };
+        return {
+          status: "ok",
+          records: cached.records,
+          malformedRecords: cached.malformedRecords,
+        };
       }
 
       const parsed = yield* Effect.promise(() => readTranscriptRecords(filePath, provider));
@@ -331,7 +413,13 @@ export const make = Effect.gen(function* () {
       // duplicates. The aggregator still runs the cross-file dedupe pass.
       const records = result.records;
 
-      fileCache.set(filePath, { size, mtimeMs, provider, records });
+      fileCache.set(filePath, {
+        size,
+        mtimeMs,
+        provider,
+        records,
+        malformedRecords: result.malformedRecords,
+      });
       cacheDirty = true;
       return result;
     });
@@ -399,6 +487,7 @@ export const make = Effect.gen(function* () {
       let skippedFiles = listing.failedFiles;
       let readableFiles = 0;
       let failedFiles = listing.failedFiles;
+      let malformedRecords = 0;
       // Distinct per directory. Buckets carry per-cell session counts, but a
       // session spans days and models, so clients total this figure instead.
       const sessionIds = new Set<string>();
@@ -412,6 +501,7 @@ export const make = Effect.gen(function* () {
           continue;
         }
         readableFiles += 1;
+        malformedRecords += result.malformedRecords;
         const records = result.records;
         if (records.length === 0) {
           skippedFiles += 1;
@@ -432,13 +522,14 @@ export const make = Effect.gen(function* () {
         failedFiles,
         walkedDirectories: listing.walkedDirectories,
         failedDirectories: listing.failedDirectories,
+        malformedRecords,
       });
       sources.push({
         fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
         status: provenance.status,
         scannedFiles,
         skippedFiles,
-        malformedRecords: 0,
+        malformedRecords,
         distinctSessions: sessionIds.size,
         message: provenance.message,
       });

@@ -41,6 +41,12 @@ export interface TranscriptFileListing {
   readonly failedFiles: number;
 }
 
+export interface TranscriptRecords {
+  readonly records: readonly UsageRecord[];
+  /** Usage-shaped lines that could not be attributed without guessing. */
+  readonly malformedRecords: number;
+}
+
 /** Missing entries are expected when an active transcript is rotated mid-walk. */
 function isMissingPathError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
@@ -113,8 +119,9 @@ export async function readDirectoryVolumeId(path: string): Promise<string> {
 }
 
 /**
- * Streams one transcript and returns the usage records it contains, or `null`
- * when the file could not be read.
+ * Streams one transcript and returns its usage records plus the number of
+ * usage-shaped lines that could not be interpreted, or `null` when the file
+ * could not be read.
  *
  * The distinction matters to the caller's cache: a genuinely empty transcript
  * is a stable fact worth memoising, while a transient read failure memoised
@@ -128,9 +135,10 @@ export async function readDirectoryVolumeId(path: string): Promise<string> {
 export async function readTranscriptRecords(
   filePath: string,
   provider: UsageProviderKind,
-): Promise<readonly UsageRecord[] | null> {
+): Promise<TranscriptRecords | null> {
   const records: UsageRecord[] = [];
   const codexState = initialCodexScanState();
+  let malformedRecords = 0;
 
   try {
     const lines = NodeReadline.createInterface({
@@ -140,25 +148,28 @@ export async function readTranscriptRecords(
 
     for await (const line of lines) {
       if (provider === "codex") {
+        const usageCandidate = mightCarryUsage(line, provider);
         if (
-          !mightCarryUsage(line, provider) &&
+          !usageCandidate &&
           !line.includes('"turn_context"') &&
           !line.includes('"session_meta"')
         ) {
           continue;
         }
-        const record = parseCodexLine(line, codexState);
-        if (record !== null) records.push(record);
+        const result = parseCodexLine(line, codexState);
+        if (result.status === "record") records.push(result.record);
+        if (usageCandidate && result.status === "malformed") malformedRecords += 1;
         continue;
       }
 
       if (!mightCarryUsage(line, provider)) continue;
-      const record = parseClaudeLine(line);
-      if (record !== null) records.push(record);
+      const result = parseClaudeLine(line);
+      if (result.status === "record") records.push(result.record);
+      if (result.status === "malformed") malformedRecords += 1;
     }
   } catch {
     return null;
   }
 
-  return records;
+  return { records, malformedRecords };
 }

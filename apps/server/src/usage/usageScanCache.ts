@@ -18,13 +18,14 @@ import type { UsageProviderKind } from "@croki/contracts";
 
 import type { UsageRecord } from "./usageTranscripts.ts";
 
-export const USAGE_SCAN_CACHE_VERSION = 1 as const;
+export const USAGE_SCAN_CACHE_VERSION = 2 as const;
 
 export interface CachedFile {
   readonly size: number;
   readonly mtimeMs: number;
   readonly provider: UsageProviderKind;
   readonly records: readonly UsageRecord[];
+  readonly malformedRecords: number;
 }
 
 export type ScanCache = Map<string, CachedFile>;
@@ -52,6 +53,7 @@ interface SerializedFile {
   readonly m: number;
   readonly p: UsageProviderKind;
   readonly r: readonly SerializedRecord[];
+  readonly x: number;
 }
 
 interface SerializedCache {
@@ -95,6 +97,7 @@ export function encodeScanCache(cache: ScanCache): SerializedCache {
         record.dedupeKey,
         record.reportedCostUsd,
       ]),
+      x: entry.malformedRecords,
     };
   }
 
@@ -134,6 +137,14 @@ export function decodeScanCache(document: unknown): ScanCache {
     if (typeof entry.s !== "number" || typeof entry.m !== "number") continue;
     if (entry.p !== "claude" && entry.p !== "codex") continue;
     if (!isRecordArray(entry.r)) continue;
+    if (
+      typeof entry.x !== "number" ||
+      !Number.isInteger(entry.x) ||
+      !Number.isFinite(entry.x) ||
+      entry.x < 0
+    ) {
+      continue;
+    }
 
     const provider: UsageProviderKind = entry.p;
     const records: UsageRecord[] = [];
@@ -192,7 +203,13 @@ export function decodeScanCache(document: unknown): ScanCache {
     }
 
     if (corrupt) continue;
-    cache.set(path, { size: entry.s, mtimeMs: entry.m, provider, records });
+    cache.set(path, {
+      size: entry.s,
+      mtimeMs: entry.m,
+      provider,
+      records,
+      malformedRecords: entry.x,
+    });
   }
 
   return cache;

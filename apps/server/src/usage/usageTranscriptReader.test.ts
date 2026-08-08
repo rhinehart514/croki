@@ -6,7 +6,7 @@ import * as NodePath from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 
-import { listTranscriptFiles } from "./usageTranscriptReader.ts";
+import { listTranscriptFiles, readTranscriptRecords } from "./usageTranscriptReader.ts";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
@@ -89,6 +89,94 @@ describe("listTranscriptFiles", () => {
         failedDirectories: 0,
         failedFiles: 0,
       });
+    } finally {
+      await NodeFSP.rm(root, { recursive: true });
+    }
+  });
+});
+
+describe("readTranscriptRecords", () => {
+  it("counts malformed Claude usage candidates without counting ordinary lines", async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "croki-usage-reader-"));
+    const transcript = NodePath.join(root, "claude.jsonl");
+    const valid = {
+      type: "assistant",
+      timestamp: "2026-08-07T04:05:13.944Z",
+      sessionId: "session-a",
+      message: {
+        id: "message-a",
+        model: "claude-fable-5",
+        usage: { input_tokens: 2, output_tokens: 3 },
+      },
+    };
+    const missingModel = {
+      ...valid,
+      message: { id: "message-b", usage: { input_tokens: 4, output_tokens: 5 } },
+    };
+
+    await NodeFSP.writeFile(
+      transcript,
+      [
+        JSON.stringify({ type: "user", message: { content: "ordinary transcript noise" } }),
+        JSON.stringify(valid),
+        JSON.stringify(missingModel),
+        '{"usage":',
+      ].join("\n"),
+    );
+
+    try {
+      const result = await readTranscriptRecords(transcript, "claude");
+      expect(result?.records).toHaveLength(1);
+      expect(result?.malformedRecords).toBe(2);
+    } finally {
+      await NodeFSP.rm(root, { recursive: true });
+    }
+  });
+
+  it("does not count Codex context or duplicate usage events as malformed", async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "croki-usage-reader-"));
+    const transcript = NodePath.join(root, "codex.jsonl");
+    const turnContext = {
+      type: "turn_context",
+      timestamp: "2026-08-07T04:05:13.944Z",
+      payload: { type: "turn_context", model: "gpt-5.6-sol" },
+    };
+    const tokenCount = {
+      type: "event_msg",
+      timestamp: "2026-08-07T04:05:14.944Z",
+      payload: {
+        type: "token_count",
+        info: {
+          last_token_usage: {
+            input_tokens: 10,
+            cached_input_tokens: 2,
+            output_tokens: 3,
+            reasoning_output_tokens: 1,
+          },
+        },
+      },
+    };
+    const malformedTokenCount = {
+      type: "event_msg",
+      timestamp: "2026-08-07T04:05:15.944Z",
+      payload: { type: "token_count", info: {} },
+    };
+
+    await NodeFSP.writeFile(
+      transcript,
+      [
+        JSON.stringify({ type: "response_item", payload: { type: "message" } }),
+        JSON.stringify(turnContext),
+        JSON.stringify(tokenCount),
+        JSON.stringify(tokenCount),
+        JSON.stringify(malformedTokenCount),
+      ].join("\n"),
+    );
+
+    try {
+      const result = await readTranscriptRecords(transcript, "codex");
+      expect(result?.records).toHaveLength(1);
+      expect(result?.malformedRecords).toBe(1);
     } finally {
       await NodeFSP.rm(root, { recursive: true });
     }

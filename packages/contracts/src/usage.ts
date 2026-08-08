@@ -128,7 +128,7 @@ export const UsageSource = Schema.Struct({
   status: UsageSourceStatus,
   scannedFiles: NonNegativeInt,
   skippedFiles: NonNegativeInt,
-  /** Records that parsed but carried no recognisable usage payload. */
+  /** Usage-shaped transcript lines that could not be parsed or attributed safely. */
   malformedRecords: NonNegativeInt,
   /**
    * Distinct transcript sessions seen under this directory. Buckets also carry
