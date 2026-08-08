@@ -11,6 +11,7 @@ import {
   $applyNodeReplacement,
   $createRangeSelectionFromDom,
   $createRangeSelection,
+  $getNodeByKey,
   $getSelection,
   $setSelection,
   $isElementNode,
@@ -42,6 +43,7 @@ import {
   type NodeKey,
   type Spread,
 } from "lexical";
+import { X } from "lucide-react";
 import {
   createContext,
   use,
@@ -72,6 +74,7 @@ import { cn, isMacPlatform } from "~/lib/utils";
 import { basenameOfPath } from "~/pierre-icons";
 import {
   COMPOSER_INLINE_CHIP_ICON_CLASS_NAME,
+  COMPOSER_INLINE_CHIP_DISMISS_BUTTON_CLASS_NAME,
   COMPOSER_INLINE_SKILL_CHIP_CLASS_NAME,
   COMPOSER_INLINE_SKILL_CHIP_LABEL_CLASS_NAME,
   SKILL_CHIP_ICON_SVG,
@@ -98,6 +101,7 @@ const SURROUND_SYMBOLS: [string, string][] = [
 ];
 const SURROUND_SYMBOLS_MAP = new Map<string, string>(SURROUND_SYMBOLS);
 const BACKTICK_SURROUND_CLOSE_SYMBOL = SURROUND_SYMBOLS_MAP.get("`") ?? null;
+const APPLICATION_BRIEF_PATH = ".croki/application.croki";
 
 type SerializedComposerMentionNode = Spread<
   {
@@ -134,18 +138,43 @@ const ComposerTerminalContextActionsContext = createContext<{
   onRemoveTerminalContext: () => {},
 });
 
-function ComposerMentionDecorator(props: { path: string }) {
-  const theme = resolvedThemeFromDocument();
+export function ComposerMentionChip(props: {
+  path: string;
+  theme: "light" | "dark";
+  onRemove?: () => void;
+}) {
   const chip = (
     <span
-      className={FILE_TAG_CHIP_CLASS_NAME}
+      className={cn(FILE_TAG_CHIP_CLASS_NAME, props.onRemove && "pr-1")}
       contentEditable={false}
       spellCheck={false}
       data-composer-mention-chip="true"
     >
-      <FileTagChipContent path={props.path} label={basenameOfPath(props.path)} theme={theme} />
+      <FileTagChipContent
+        path={props.path}
+        label={props.path === APPLICATION_BRIEF_PATH ? props.path : basenameOfPath(props.path)}
+        theme={props.theme}
+      />
+      {props.onRemove ? (
+        <button
+          type="button"
+          aria-label={`Remove ${props.path}`}
+          className={cn(COMPOSER_INLINE_CHIP_DISMISS_BUTTON_CLASS_NAME, "size-6")}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            props.onRemove?.();
+          }}
+        >
+          <X className="size-3" aria-hidden />
+        </button>
+      ) : null}
     </span>
   );
+
+  if (props.path === APPLICATION_BRIEF_PATH) {
+    return chip;
+  }
 
   return (
     <Tooltip>
@@ -154,6 +183,31 @@ function ComposerMentionDecorator(props: { path: string }) {
         {props.path}
       </TooltipPopup>
     </Tooltip>
+  );
+}
+
+function ComposerMentionDecorator(props: { path: string; nodeKey: NodeKey }) {
+  const [editor] = useLexicalComposerContext();
+  const onRemove =
+    props.path === APPLICATION_BRIEF_PATH
+      ? () => {
+          editor.update(() => {
+            const node = $getNodeByKey(props.nodeKey);
+            if (!(node instanceof ComposerMentionNode)) return;
+            const tokenStart = getAbsoluteOffsetForPoint(node, 0);
+            node.remove();
+            $setSelectionAtComposerOffset(tokenStart);
+          });
+          editor.focus();
+        }
+      : undefined;
+
+  return (
+    <ComposerMentionChip
+      path={props.path}
+      theme={resolvedThemeFromDocument()}
+      {...(onRemove ? { onRemove } : {})}
+    />
   );
 }
 
@@ -205,7 +259,7 @@ class ComposerMentionNode extends DecoratorNode<React.ReactElement> {
   }
 
   override decorate(): React.ReactElement {
-    return <ComposerMentionDecorator path={this.__path} />;
+    return <ComposerMentionDecorator path={this.__path} nodeKey={this.__key} />;
   }
 }
 

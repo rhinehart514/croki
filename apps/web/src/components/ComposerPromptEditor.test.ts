@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
 import {
   $createParagraphNode,
   $createTextNode,
@@ -11,6 +13,36 @@ import {
 } from "lexical";
 
 import { registerComposerInlineTokenPaste } from "./composerInlineTokenPaste";
+import { ComposerMentionChip } from "./ComposerPromptEditor";
+
+describe("ComposerMentionChip", () => {
+  it("shows and exposes removal for the application brief", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ComposerMentionChip, {
+        path: ".croki/application.croki",
+        theme: "dark",
+        onRemove: () => {},
+      }),
+    );
+
+    expect(markup).toContain(".croki/application.croki");
+    expect(markup).toContain('aria-label="Remove .croki/application.croki"');
+    expect(markup).toContain('<button type="button"');
+  });
+
+  it("keeps ordinary file mentions compact and without an embedded remove button", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ComposerMentionChip, {
+        path: "src/components/Button.tsx",
+        theme: "light",
+      }),
+    );
+
+    expect(markup).toContain("Button.tsx");
+    expect(markup).not.toContain(">src/components/Button.tsx<");
+    expect(markup).not.toContain("<button");
+  });
+});
 
 class TestClipboardEvent extends Event {
   readonly clipboardData: DataTransfer;
