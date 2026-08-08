@@ -675,8 +675,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       payload: rawInput,
     });
 
+    // `canvasEnabled` is retained on the transport contract for compatibility
+    // with clients that use it as presentation state. It is not provider input
+    // and cannot grant model-facing tools without an explicit per-turn control.
+    const { canvasEnabled: _canvasPresentationEnabled, ...providerInput } = parsed;
     const input = {
-      ...parsed,
+      ...providerInput,
       attachments: parsed.attachments ?? [],
     };
     if (!input.input && input.attachments.length === 0) {
@@ -710,9 +714,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       // an already-spawned agent process, so we keep the existing token valid
       // rather than issuing a new one: sessions that go a long time between
       // browser tool calls used to lose the toolkit outright.
-      yield* McpSessionRegistry.touchActiveMcpThread(input.threadId, {
-        canvasEnabled: input.canvasEnabled ?? false,
-      });
+      yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
       const turn = yield* routed.adapter.sendTurn(input);
       yield* directory.upsert({
         threadId: input.threadId,

@@ -77,9 +77,10 @@ undo.
 0.4.10 integrates the current T3 Code substrate while removing Croki's active
 model-behavior harness. Default turns contain only the founder's visible
 message and attachments. Application direction, skills, files, interaction
-modes, permissions, and Canvas capability affect the model only through
-explicit user actions. Croki observes provider-native agents and workflows but
-does not become their scheduler, strategy layer, or recovery runtime.
+modes, permissions, and any Croki-added tool access affect the model only
+through explicit user actions. Canvas itself remains founder-facing and grants
+no model tools. Croki observes provider-native agents and workflows but does
+not become their scheduler, strategy layer, or recovery runtime.
 
 ## UI history
 

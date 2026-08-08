@@ -6,7 +6,8 @@ environment; the selected coding provider remains the agent.
 
 A default turn now contains only the message and attachments the founder can
 see. Anything else that can affect the model—files, skills, interaction mode,
-permissions, or Canvas tools—must be applied through an explicit user action.
+permissions, or Croki-added tool access—must be applied through an explicit
+user action.
 
 ## No active Croki harness
 
@@ -52,7 +53,9 @@ them in a Croki-owned strategy layer:
 - model and reasoning controls remain explicit;
 - Default and provider-native Plan remain explicit interaction choices;
 - permission mode remains a separate explicit authority choice;
-- Canvas capability is available only when the founder enables Canvas; and
+- Canvas remains a founder-facing projection and does not grant model tools;
+  Croki will expose any future Canvas capability only through a visible,
+  removable, turn-scoped choice; and
 - provider-native delegation remains observable without becoming a Croki
   scheduler.
 

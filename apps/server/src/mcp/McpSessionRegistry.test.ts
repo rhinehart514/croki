@@ -110,7 +110,7 @@ it.effect("keeps a credential alive across turns that never touch an MCP tool", 
   }),
 );
 
-it.effect("grants Canvas only when the turn explicitly enables it", () =>
+it.effect("never derives Canvas capability from persistent presentation state", () =>
   Effect.gen(function* () {
     const registry = yield* makeRegistry(() => 1_000);
     const threadId = ThreadId.make("thread-canvas");
@@ -121,9 +121,7 @@ it.effect("grants Canvas only when the turn explicitly enables it", () =>
     const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
 
     expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
-    yield* registry.touch(threadId, { canvasEnabled: true });
-    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(true);
-    yield* registry.touch(threadId, { canvasEnabled: false });
+    yield* registry.touch(threadId);
     expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
   }),
 );

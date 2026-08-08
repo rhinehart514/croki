@@ -30,10 +30,7 @@ export interface McpSessionRegistryShape {
    * turns call this so that a session which is plainly alive keeps its
    * credential even when it goes a long time without touching an MCP tool.
    */
-  readonly touch: (
-    threadId: ThreadId,
-    options?: { readonly canvasEnabled?: boolean },
-  ) => Effect.Effect<void>;
+  readonly touch: (threadId: ThreadId) => Effect.Effect<void>;
   readonly revokeProviderSession: (providerSessionId: string) => Effect.Effect<void>;
   readonly revokeThread: (threadId: ThreadId) => Effect.Effect<void>;
   readonly revokeAll: Effect.Effect<void>;
@@ -131,7 +128,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         threadId: ThreadId.make(request.threadId),
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
-        capabilities: capabilitiesForTurn(false),
+        capabilities: new Set(["preview"]),
         issuedAt,
       };
       yield* SynchronizedRef.update(state, ({ records }) => {
@@ -169,11 +166,8 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
   );
 
   const touch: McpSessionRegistryShape["touch"] = Effect.fn("McpSessionRegistry.touch")(
-    function* (threadId, touchOptions) {
+    function* (threadId) {
       const timestamp = yield* currentTimeMillis;
-      // Only the explicit turn option grants Canvas tooling. Merely opening a
-      // panel or having application metadata in the project never reaches here.
-      const capabilities = capabilitiesForTurn(touchOptions?.canvasEnabled === true);
       yield* SynchronizedRef.update(state, ({ records }) => {
         const current = pruneDead(records, timestamp);
         const next = new Map(current);
@@ -183,7 +177,9 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
               ...record,
               scope: {
                 ...record.scope,
-                capabilities,
+                // Canvas is a presentation preference until Croki exposes a
+                // visible, removable per-turn capability selection.
+                capabilities: new Set(["preview"]),
               },
               lastAliveAt: timestamp,
             });
@@ -248,11 +244,8 @@ export const issueActiveMcpCredential = (
  * Refreshes the liveness of a thread's MCP credential. Called on every provider
  * turn so an active session is never mistaken for an abandoned one.
  */
-export const touchActiveMcpThread = (
-  threadId: ThreadId,
-  options?: { readonly canvasEnabled?: boolean },
-): Effect.Effect<void> =>
-  activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId, options) : Effect.void;
+export const touchActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
+  activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId) : Effect.void;
 
 export const revokeActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.revokeThread(threadId) : Effect.void;
@@ -264,7 +257,3 @@ export const revokeAllActiveMcpCredentials = (): Effect.Effect<void> =>
 export const __testing = {
   make: makeWithOptions,
 };
-
-function capabilitiesForTurn(canvasEnabled: boolean): ReadonlySet<"preview" | "canvas"> {
-  return canvasEnabled ? new Set(["preview", "canvas"]) : new Set(["preview"]);
-}
