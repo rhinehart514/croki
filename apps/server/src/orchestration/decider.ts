@@ -467,7 +467,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           sourceThread.messages.flatMap((message, messageIndex) => {
             if (messageIndex < sourceMessageIndex || message.role !== "user") return [];
             const turnId = resolveUserMessageTurnId(messageIndex);
-            return turnId === null ? [] : [turnId];
+            // A failed or interrupted turn can end before any assistant message
+            // carries its turn id. Its persisted user message still represents
+            // one native provider turn that must be removed. Guidance already
+            // carries the active turn id, so the Set continues to deduplicate it.
+            return [turnId ?? message.id];
           }),
         );
         return {

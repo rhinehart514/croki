@@ -11,7 +11,9 @@ Croki 0.4.7 is the current repository version; 0.4.5 remains the latest
 published baseline inherited by it. See the [0.4.6 release
 notes](./release-notes-0.4.6.md), [0.4.7 UI history
 plan](./release-notes-0.4.7.md), [0.4.8 quality-of-life
-plan](./release-notes-0.4.8.md), and [release ownership contract](../operations/release.md)
+plan](./release-notes-0.4.8.md), [0.4.9 control without interruption
+plan](./release-notes-0.4.9.md), [0.4.10 durable outcomes and review
+plan](./release-notes-0.4.10.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
 ## Working product
@@ -60,6 +62,21 @@ kind, or future product-direction commitment. Preview also returns to one job:
 opening and checking a running app. Its component catalog, idea form,
 alternatives flow, and Beta setting disappear while checked-screen history
 remains.
+
+## Planned 0.4.9 and 0.4.10 boundaries
+
+0.4.9 continues the 0.4.8 continuity story: guide an active Codex turn, route
+only unresolved founder judgment into existing navigation, recover honestly
+after renderer failure, and branch an earlier Codex instruction without
+rewriting either the source Thread or current files. It adds no inbox, task
+system, provider-neutral steering loop, or combined conversation/filesystem
+undo.
+
+0.4.10 is the deliberate expansion release: an explicit native Codex goal can
+continue one Thread to a durable outcome, and a native detached Codex review can
+challenge a concrete change set in a read-only child Thread. Neither behavior
+is imitated for unsupported providers, and neither creates a Croki-owned agent
+runtime or second canonical conversation.
 
 ## UI history
 

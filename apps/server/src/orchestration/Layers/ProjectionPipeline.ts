@@ -148,9 +148,13 @@ function sourceTurnsForFork(
   sourceTurns: ReadonlyArray<ProjectionTurn>,
   forkPoint: ThreadForkPoint | undefined,
 ): ReadonlyArray<ProjectionTurn> {
-  const settledTurns = sourceTurns.filter(
-    (turn) => turn.turnId !== null && turn.state !== "pending" && turn.state !== "running",
-  );
+  const settledTurns = sourceTurns
+    .filter((turn) => turn.turnId !== null && turn.state !== "pending" && turn.state !== "running")
+    .toSorted((left, right) =>
+      left.requestedAt === right.requestedAt
+        ? (left.turnId ?? "").localeCompare(right.turnId ?? "")
+        : left.requestedAt.localeCompare(right.requestedAt),
+    );
   if (forkPoint === undefined) return settledTurns;
   const boundaryIndex = settledTurns.findIndex((turn) => turn.turnId === forkPoint.turnId);
   return boundaryIndex < 0

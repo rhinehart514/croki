@@ -1,4 +1,5 @@
 import {
+  EDIT_FROM_HERE_PREPARATION_FAILED_PREFIX,
   type ChatAttachment,
   CommandId,
   type CrokiHarnessId,
@@ -1606,6 +1607,7 @@ const make = Effect.gen(function* () {
       // continue from history the founder explicitly chose to exclude.
       yield* providerService.discardConversation({ threadId: targetThread.id });
     }
+    const failureDetail = formatFailureDetail(forkExit.cause);
     yield* setThreadSession({
       threadId: targetThread.id,
       session: {
@@ -1615,7 +1617,10 @@ const make = Effect.gen(function* () {
         providerInstanceId: targetThread.modelSelection.instanceId,
         runtimeMode: targetThread.runtimeMode,
         activeTurnId: null,
-        lastError: formatFailureDetail(forkExit.cause),
+        lastError:
+          event.payload.forkPoint === undefined
+            ? `Could not fork the provider conversation. Try again. ${failureDetail}`
+            : `${EDIT_FROM_HERE_PREPARATION_FAILED_PREFIX} Return to the source Thread and try again. ${failureDetail}`,
         updatedAt: event.payload.createdAt,
       },
       createdAt: event.payload.createdAt,

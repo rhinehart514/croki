@@ -247,7 +247,9 @@ it.effect("preserves settled history before a middle edit boundary", () =>
             assistantMessageId: secondAssistantMessageId,
           },
           messages: [
-            ...source.messages,
+            ...source.messages.map((message) =>
+              message.id === sourceUserMessageId ? { ...message, turnId: null } : message,
+            ),
             {
               id: secondUserMessageId,
               role: "user",
@@ -320,5 +322,42 @@ it.effect("preserves settled history before a middle edit boundary", () =>
       `fork:${targetThreadId}:activity-tool`,
     ]);
     expect(fork.checkpoints).toEqual([]);
+  }),
+);
+
+it.effect("uses the originating prompt timestamp when the retained turn has guidance", () =>
+  Effect.gen(function* () {
+    const source = readModel.threads[0]!;
+    const promptAt = "2026-01-02T03:04:00.000Z";
+    const guideAt = "2026-01-02T03:04:02.000Z";
+    const modelWithGuidance: OrchestrationReadModel = {
+      ...readModel,
+      threads: [
+        {
+          ...source,
+          latestTurn: null,
+          messages: [
+            { ...source.messages[0]!, turnId: null, createdAt: promptAt, updatedAt: promptAt },
+            source.messages[1]!,
+            {
+              id: MessageId.make("message-guide"),
+              role: "user",
+              text: "Keep it concise",
+              turnId: sourceTurnId,
+              streaming: false,
+              createdAt: guideAt,
+              updatedAt: guideAt,
+            },
+          ],
+        },
+      ],
+    };
+
+    const next = yield* projectEvent(modelWithGuidance, event);
+    const fork = next.threads.find((thread) => thread.id === targetThreadId)!;
+
+    expect(fork.latestTurn?.requestedAt).toBe(promptAt);
+    expect(fork.latestTurn?.startedAt).toBe(promptAt);
+    expect(fork.latestTurn?.completedAt).toBe(guideAt);
   }),
 );

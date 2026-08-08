@@ -1,4 +1,5 @@
 import {
+  EDIT_FROM_HERE_PREPARATION_FAILED_PREFIX,
   type EnvironmentId,
   isProviderDriverKind,
   ProjectId,
@@ -291,6 +292,10 @@ export function deriveComposerSendState(options: {
       sendableTerminalContexts.length > 0 ||
       elementContextCount > 0,
   };
+}
+
+export function isEditFromHerePreparationFailure(error: string | null | undefined): boolean {
+  return error?.startsWith(EDIT_FROM_HERE_PREPARATION_FAILED_PREFIX) === true;
 }
 
 export function buildExpiredTerminalContextToastCopy(
