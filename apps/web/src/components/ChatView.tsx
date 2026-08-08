@@ -2757,7 +2757,9 @@ function ChatViewContent(props: ChatViewProps) {
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
-  const crokiWorkspaceRoot = activeProjectCwd ?? undefined;
+  // Application focus must describe the same checkout that @file mentions and
+  // the file panel use for this Thread, including a Thread-owned worktree.
+  const crokiWorkspaceRoot = activeWorkspaceRoot;
   const crokiApplicationFileQuery = useProjectFileQuery(
     activeProject?.environmentId ?? environmentId,
     crokiWorkspaceRoot ?? ".",
