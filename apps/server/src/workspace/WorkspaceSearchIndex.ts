@@ -9,10 +9,14 @@ import {
   type Result,
   type SearchResult,
 } from "@ff-labs/fff-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as LayerMap from "effect/LayerMap";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import type {
@@ -30,6 +34,7 @@ const WORKSPACE_INDEX_SCAN_TIMEOUT = "15 seconds";
 const WORKSPACE_INDEX_SCAN_TIMEOUT_MS = 15_000;
 const WORKSPACE_INDEX_IDLE_TTL = "15 minutes";
 const CONTENT_SEARCH_TIME_BUDGET_MS = 250;
+const CONTENT_SEARCH_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const CONTENT_SEARCH_MAX_MATCHES_PER_FILE = 100;
 
 export class WorkspaceSearchIndexCreateFailed extends Schema.TaggedErrorClass<WorkspaceSearchIndexCreateFailed>()(
@@ -211,6 +216,8 @@ function mapMixedSearchResult(
 }
 
 const WORD_CHARACTER = /[\p{Letter}\p{Mark}\p{Number}_]/u;
+const ASCII_WORD_CHARACTER = /[A-Za-z0-9_]/;
+const REGEX_SPECIAL_CHARACTER = /[.*+?^${}()|[\]\\]/g;
 
 function codePointAt(line: string, index: number): string | undefined {
   const codePoint = line.codePointAt(index);
@@ -229,6 +236,22 @@ function buildContentSearchQuery(input: Omit<ProjectSearchContentsInput, "cwd">)
   readonly searchQuery: string;
   readonly regexMode: boolean;
 } {
+  if (!input.useRegex && input.wholeWord) {
+    const escapedQuery = input.query.replace(REGEX_SPECIAL_CHARACTER, "\\$&");
+    const firstCharacter = codePointAt(input.query, 0);
+    const lastCharacter = codePointBefore(input.query, input.query.length);
+    const boundaryQuery = `${firstCharacter !== undefined && ASCII_WORD_CHARACTER.test(firstCharacter) ? "\\b" : ""}${escapedQuery}${lastCharacter !== undefined && ASCII_WORD_CHARACTER.test(lastCharacter) ? "\\b" : ""}`;
+
+    // Finder's regex engine has zero-width ASCII word boundaries, but does not
+    // support lookaround or Unicode character classes. This is still a safe
+    // native prefilter: it removes ordinary substring matches before Finder's
+    // per-file cursor advances, while isWholeWordRange below rejects the
+    // remaining Unicode-adjacent matches with Croki's exact boundary rules.
+    return {
+      searchQuery: input.caseSensitive ? boundaryQuery : `(?i)${boundaryQuery}`,
+      regexMode: true,
+    };
+  }
   if (input.caseSensitive) {
     return { searchQuery: input.query, regexMode: input.useRegex };
   }
@@ -252,13 +275,13 @@ function mapContentMatchRanges(
 }
 
 /**
- * Whole-word filtering happens after the grep rather than by wrapping the
- * pattern in boundary regex: consuming boundaries such as `(?:^|\W)` swallow
- * the separator between adjacent matches and widen the reported ranges, and
- * `\b` cannot match punctuation-edged queries at all. Matching VS Code, a
- * match edge is a word boundary when it touches the line edge, the
- * neighbouring character is not a word character, or the match's own edge
- * character is not a word character.
+ * Native boundaries keep ordinary plain-text substrings out of Finder's
+ * pagination, but exact whole-word filtering still happens here. Consuming
+ * boundaries such as `(?:^|\W)` swallow separators and widen ranges, while
+ * Finder's `\b` is ASCII-only and cannot constrain punctuation-edged queries.
+ * Matching VS Code, a match edge is a word boundary when it touches the line
+ * edge, the neighbouring character is not a word character, or the match's
+ * own edge character is not a word character.
  */
 function isWholeWordRange(
   line: string,
@@ -276,6 +299,37 @@ function isWholeWordRange(
     !isWord(codePointAt(line, range.end)) ||
     !isWord(codePointBefore(line, range.end));
   return leftIsBoundary && rightIsBoundary;
+}
+
+function findPlainWholeWordMatches(
+  relativePath: string,
+  contents: string,
+  input: Omit<ProjectSearchContentsInput, "cwd">,
+  limit: number,
+): ProjectSearchContentsResult["matches"] {
+  const matcher = new RegExp(
+    input.query.replace(REGEX_SPECIAL_CHARACTER, "\\$&"),
+    input.caseSensitive ? "gu" : "giu",
+  );
+  const matches: Array<ProjectSearchContentsResult["matches"][number]> = [];
+  const lines = contents.split("\n");
+
+  for (let index = 0; index < lines.length && matches.length < limit; index += 1) {
+    const rawLine = lines[index] ?? "";
+    const lineContent = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+    const matchRanges = [...lineContent.matchAll(matcher)]
+      .map((match) => ({ start: match.index, end: match.index + match[0].length }))
+      .filter((range) => isWholeWordRange(lineContent, range));
+    if (matchRanges.length === 0) continue;
+    matches.push({
+      path: toPosixPath(relativePath),
+      lineNumber: index + 1,
+      lineContent,
+      matchRanges,
+    });
+  }
+
+  return matches;
 }
 
 function withDirectoryAncestors(entries: ReadonlyArray<ProjectEntry>): ProjectEntry[] {
@@ -347,10 +401,12 @@ const waitForIndexReady = Effect.fn("WorkspaceSearchIndex.waitForIndexReady")(fu
   }
 });
 
-export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
+const makeWithPlatformRequirements = Effect.fn("WorkspaceSearchIndex.make")(function* (
   cwd: string,
   variant: WorkspaceSearchIndexVariant = "paths",
 ) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const finder = yield* Effect.acquireRelease(createFinder(cwd, variant), (finder) =>
     Effect.try({
       try: () => finder.destroy(),
@@ -470,12 +526,16 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
   )(function* (input) {
     const { searchQuery, regexMode } = buildContentSearchQuery(input);
     const deadline = performance.now() + CONTENT_SEARCH_TIME_BUDGET_MS;
-    // Grep cursors advance by file, so whole-word post-filtering must reserve
-    // room for rejected substring matches before the cursor leaves that file.
-    // The extra result preserves an honest `truncated` value after filtering.
-    const rawPageSize = input.wholeWord
-      ? input.limit + CONTENT_SEARCH_MAX_MATCHES_PER_FILE + 1
-      : input.limit;
+    // Whole-word plain searches are filtered by Finder before pagination. One
+    // extra result preserves an honest `truncated` value after boundary checks.
+    // Regex searches retain their historical per-file overscan because their
+    // arbitrary match edges cannot be wrapped without changing the regex.
+    const rawPageSize =
+      input.wholeWord && input.useRegex
+        ? input.limit + CONTENT_SEARCH_MAX_MATCHES_PER_FILE + 1
+        : input.wholeWord
+          ? input.limit + 1
+          : input.limit;
     const matches: Array<ProjectSearchContentsResult["matches"][number]> = [];
     let nextCursor: GrepCursor | null = null;
     let regexFallbackError: string | undefined;
@@ -486,8 +546,9 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
         finder.grep(searchQuery, {
           mode: regexMode ? "regex" : "plain",
           smartCase: !input.caseSensitive && !regexMode,
-          // Ordinary searches cap dense files. Whole-word searches use their
-          // bounded overscan because the cursor cannot return to a capped file.
+          // Arbitrary regex match edges still need bounded post-filtering.
+          // Plain whole-word queries reach Finder with native boundaries, so
+          // rejected substrings do not consume this per-file allowance.
           maxMatchesPerFile: input.wholeWord
             ? rawPageSize
             : Math.min(CONTENT_SEARCH_MAX_MATCHES_PER_FILE, rawPageSize),
@@ -497,7 +558,44 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
         }),
       );
 
+      const saturatedMatch = result.items.at(-1);
+      const exactSaturatedMatches =
+        input.wholeWord &&
+        !input.useRegex &&
+        result.items.length >= rawPageSize &&
+        saturatedMatch !== undefined
+          ? yield* fileSystem.stat(path.resolve(cwd, saturatedMatch.relativePath)).pipe(
+              Effect.flatMap((metadata) =>
+                metadata.size > CONTENT_SEARCH_MAX_FILE_SIZE_BYTES
+                  ? Effect.void
+                  : fileSystem.readFileString(path.resolve(cwd, saturatedMatch.relativePath)),
+              ),
+              Effect.orElseSucceed(() => undefined),
+              Effect.map((contents) =>
+                contents === undefined
+                  ? undefined
+                  : findPlainWholeWordMatches(
+                      saturatedMatch.relativePath,
+                      contents,
+                      input,
+                      Math.max(1, input.limit + 1 - matches.length),
+                    ),
+              ),
+            )
+          : undefined;
+      let addedExactSaturatedMatches = false;
+
       for (const match of result.items) {
+        if (
+          exactSaturatedMatches !== undefined &&
+          match.relativePath === saturatedMatch?.relativePath
+        ) {
+          if (!addedExactSaturatedMatches) {
+            matches.push(...exactSaturatedMatches);
+            addedExactSaturatedMatches = true;
+          }
+          continue;
+        }
         const matchRanges = mapContentMatchRanges(match.lineContent, match.matchRanges).filter(
           (range) => !input.wholeWord || isWholeWordRange(match.lineContent, range),
         );
@@ -522,6 +620,12 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
 
   return WorkspaceSearchIndex.of({ list, refresh, search, searchContents });
 });
+
+const nodePlatformLayer = Layer.merge(NodeFileSystem.layer, NodePath.layer);
+
+/** Keeps platform filesystem details internal to the workspace index service. */
+export const make = (cwd: string, variant: WorkspaceSearchIndexVariant = "paths") =>
+  makeWithPlatformRequirements(cwd, variant).pipe(Effect.provide(nodePlatformLayer));
 
 export const WORKSPACE_SEARCH_INDEX_VARIANTS = ["paths", "content"] as const;
 export type WorkspaceSearchIndexVariant = (typeof WORKSPACE_SEARCH_INDEX_VARIANTS)[number];

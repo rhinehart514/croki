@@ -440,7 +440,7 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
     it.effect("finds later whole-word matches in a file after rejected raw matches", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTempDir({ prefix: "t3code-workspace-content-late-whole-word-" });
-        yield* writeTextFile(cwd, "src/words.ts", `${"foobar\n".repeat(100)}foo\n`);
+        yield* writeTextFile(cwd, "src/words.ts", `${"foobar\n".repeat(102)}foo\nfoo\n`);
 
         const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
         const result = yield* workspaceEntries.searchContents({
@@ -455,10 +455,11 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
         expect(result.matches).toEqual([
           expect.objectContaining({
             path: "src/words.ts",
-            lineNumber: 101,
+            lineNumber: 103,
             matchRanges: [{ start: 0, end: 3 }],
           }),
         ]);
+        expect(result.truncated).toBe(true);
       }),
     );
 
@@ -484,6 +485,34 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
             matchRanges: [{ start: 6, end: 9 }],
           }),
         ]);
+      }),
+    );
+
+    it.effect("finds exact matches after an unbounded Unicode-adjacent page", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTempDir({ prefix: "t3code-workspace-content-unicode-page-" });
+        yield* writeTextFile(cwd, "src/words.ts", `${"𐐀foo\n".repeat(102)}foo\n`);
+
+        const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+        const result = yield* workspaceEntries.searchContents({
+          cwd,
+          query: "foo",
+          limit: 1,
+          caseSensitive: true,
+          wholeWord: true,
+          useRegex: false,
+        });
+
+        expect(result).toEqual({
+          matches: [
+            expect.objectContaining({
+              path: "src/words.ts",
+              lineNumber: 103,
+              matchRanges: [{ start: 0, end: 3 }],
+            }),
+          ],
+          truncated: false,
+        });
       }),
     );
 
@@ -514,6 +543,31 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
             { start: 12, end: 17 },
           ],
         });
+      }),
+    );
+
+    it.effect("keeps plain whole-word queries literal when applying native boundaries", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTempDir({ prefix: "t3code-workspace-content-literal-boundary-" });
+        yield* writeTextFile(cwd, "src/words.ts", "foo.bar fooXbar\n");
+
+        const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+        const result = yield* workspaceEntries.searchContents({
+          cwd,
+          query: "foo.bar",
+          limit: 100,
+          caseSensitive: true,
+          wholeWord: true,
+          useRegex: false,
+        });
+
+        expect(result.matches).toEqual([
+          expect.objectContaining({
+            path: "src/words.ts",
+            lineNumber: 1,
+            matchRanges: [{ start: 0, end: 7 }],
+          }),
+        ]);
       }),
     );
 
