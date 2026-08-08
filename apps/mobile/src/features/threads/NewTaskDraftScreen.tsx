@@ -965,6 +965,8 @@ export function NewTaskDraftScreen(props: {
       onUpdateOptionSelections={flow.setSelectedModelOptions}
       runtimeMode={flow.runtimeMode}
       onUpdateRuntimeMode={flow.setRuntimeMode}
+      interactionMode={flow.interactionMode}
+      onUpdateInteractionMode={flow.setInteractionMode}
     />
   );
 

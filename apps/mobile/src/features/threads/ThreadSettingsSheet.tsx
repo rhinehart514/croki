@@ -60,6 +60,14 @@ const RUNTIME_MODE_CHOICES: ReadonlyArray<{
   { mode: "full-access", label: "Full access", shortLabel: "Full" },
 ];
 
+const INTERACTION_MODE_CHOICES: ReadonlyArray<{
+  readonly mode: ProviderInteractionMode;
+  readonly label: string;
+}> = [
+  { mode: "default", label: "Default" },
+  { mode: "plan", label: "Plan" },
+];
+
 /**
  * Compact "Fable 5 · Max · Auto" style summary for the composer trigger pill,
  * covering model, provider options, runtime mode, and plan mode in one label.
@@ -277,7 +285,8 @@ function SwitchRow(props: {
 
 type SubmenuPage =
   | { readonly kind: "descriptor"; readonly id: string }
-  | { readonly kind: "runtime" };
+  | { readonly kind: "runtime" }
+  | { readonly kind: "interaction" };
 
 /**
  * Unified thread settings: the sheet is the provider-grouped model list
@@ -312,6 +321,8 @@ export function ThreadSettingsSheet(props: {
   readonly onUpdateOptionSelections: (selections: ReadonlyArray<ProviderOptionSelection>) => void;
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
+  readonly interactionMode: ProviderInteractionMode;
+  readonly onUpdateInteractionMode: (mode: ProviderInteractionMode) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -458,21 +469,35 @@ export function ThreadSettingsSheet(props: {
             },
           })),
         }
-      : activeDescriptor?.type === "select"
+      : submenu?.kind === "interaction"
         ? {
-            title: activeDescriptor.label,
-            rows: selectableChoices(activeDescriptor).map((choice) => ({
-              id: choice.id,
+            title: "Interaction",
+            rows: INTERACTION_MODE_CHOICES.map((choice) => ({
+              id: choice.mode,
               label: choice.label,
-              selected: choice.id === getProviderOptionCurrentValue(activeDescriptor),
+              selected: choice.mode === props.interactionMode,
               onPress: () => {
                 void Haptics.selectionAsync();
-                handleOptionChange(activeDescriptor.id, choice.id);
+                props.onUpdateInteractionMode(choice.mode);
                 setSubmenu(null);
               },
             })),
           }
-        : null;
+        : activeDescriptor?.type === "select"
+          ? {
+              title: activeDescriptor.label,
+              rows: selectableChoices(activeDescriptor).map((choice) => ({
+                id: choice.id,
+                label: choice.label,
+                selected: choice.id === getProviderOptionCurrentValue(activeDescriptor),
+                onPress: () => {
+                  void Haptics.selectionAsync();
+                  handleOptionChange(activeDescriptor.id, choice.id);
+                  setSubmenu(null);
+                },
+              })),
+            }
+          : null;
 
   return (
     <Modal
@@ -620,6 +645,14 @@ export function ThreadSettingsSheet(props: {
                 RUNTIME_MODE_CHOICES.find((choice) => choice.mode === props.runtimeMode)?.label
               }
               onPress={() => setSubmenu({ kind: "runtime" })}
+            />
+            <DisclosureRow
+              label="Interaction"
+              value={
+                INTERACTION_MODE_CHOICES.find((choice) => choice.mode === props.interactionMode)
+                  ?.label
+              }
+              onPress={() => setSubmenu({ kind: "interaction" })}
             />
             <Pressable
               accessibilityRole="button"
