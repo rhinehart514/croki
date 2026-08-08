@@ -186,7 +186,34 @@ describe("mergeUsage", () => {
     expect(merged.providers[0]?.provider).toBe("claude");
     expect(merged.providers[0]?.costShare).toBeCloseTo(0.75, 5);
     expect(merged.costQuality.unpricedShare).toBeCloseTo(0.5, 5);
+    expect(merged.costQuality.unpricedRecords).toBe(5);
     expect(merged.costQuality.cacheSavingsUsd).toBe(4);
+    expect(merged.providers[1]?.unpricedRecords).toBe(5);
+    expect(merged.models[1]?.unpricedRecords).toBe(5);
+    expect(merged.daily[0]?.unpricedRecords).toBe(5);
+  });
+
+  it("preserves unavailable rate-table provenance for wholly unpriced usage", () => {
+    const unavailableSummary = {
+      ...summary(
+        [bucket({ costUsd: 0, costSource: "unpriced", unpricedRecords: 5 })],
+        [{ provider: "claude", hostId: "mac", homePath: "/a/.claude" }],
+      ),
+      pricing: {
+        status: "unavailable" as const,
+        source: "litellm",
+        fetchedAt: null,
+        knownModels: 0,
+      },
+    };
+
+    const merged = mergeUsage([environment("env-a", unavailableSummary)], USAGE_CONTRACT_VERSION);
+
+    expect(merged.costUsd).toBe(0);
+    expect(merged.totalTokens).toBeGreaterThan(0);
+    expect(merged.costQuality.unpricedRecords).toBe(merged.records);
+    expect(merged.costQuality.pricingStatuses).toEqual(["unavailable"]);
+    expect(merged.providers[0]).toMatchObject({ costUsd: 0, records: 5, unpricedRecords: 5 });
   });
 
   it("keeps two machines apart when hostname and home path collide", () => {

@@ -53,6 +53,36 @@ import {
 } from "./usageScanCache.ts";
 import type { UsageRecord } from "./usageTranscripts.ts";
 
+type TranscriptReadResult =
+  | { readonly status: "ok"; readonly records: readonly UsageRecord[] }
+  | { readonly status: "failed" };
+
+/**
+ * Preserves the reader's failure signal instead of treating an unreadable
+ * transcript as a legitimately empty file.
+ */
+export function classifyTranscriptRead(
+  records: readonly UsageRecord[] | null,
+): TranscriptReadResult {
+  return records === null
+    ? { status: "failed" }
+    : { status: "ok", records: dedupeWithinFile(records) };
+}
+
+/** Derives honest source provenance from the files that were actually readable. */
+export function deriveSourceReadProvenance(input: {
+  readonly readableFiles: number;
+  readonly failedFiles: number;
+}): Pick<UsageSource, "status" | "message"> {
+  if (input.failedFiles === 0) return { status: "ok", message: null };
+
+  const noun = input.failedFiles === 1 ? "file" : "files";
+  return {
+    status: input.readableFiles === 0 ? "failed" : "partial",
+    message: `${input.failedFiles} transcript ${noun} could not be read.`,
+  };
+}
+
 const LITELLM_RATES_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
 
@@ -262,7 +292,7 @@ export const make = Effect.gen(function* () {
     size: number,
     mtimeMs: number,
     provider: UsageProviderKind,
-  ): Effect.Effect<readonly UsageRecord[]> =>
+  ): Effect.Effect<TranscriptReadResult> =>
     Effect.gen(function* () {
       const cached = fileCache.get(filePath);
       // Provider is part of the identity: if both providers were ever pointed
@@ -273,20 +303,21 @@ export const make = Effect.gen(function* () {
         cached.mtimeMs === mtimeMs &&
         cached.provider === provider
       ) {
-        return cached.records;
+        return { status: "ok", records: cached.records };
       }
 
       const parsed = yield* Effect.promise(() => readTranscriptRecords(filePath, provider));
+      const result = classifyTranscriptRead(parsed);
       // A read failure is not an empty transcript: caching it under this
       // (size, mtime) would silently drop the file's usage until it changes.
-      if (parsed === null) return [];
+      if (result.status === "failed") return result;
       // Stored already de-duplicated within the file, which is 99% of all
       // duplicates. The aggregator still runs the cross-file dedupe pass.
-      const records = dedupeWithinFile(parsed);
+      const records = result.records;
 
       fileCache.set(filePath, { size, mtimeMs, provider, records });
       cacheDirty = true;
-      return records;
+      return result;
     });
 
   const readSummary = Effect.fn("UsageService.readSummary")(function* (input: UsageSummaryInput) {
@@ -348,13 +379,22 @@ export const make = Effect.gen(function* () {
       const files = yield* Effect.promise(() => listTranscriptFiles(dir, windowStartMs));
       let scannedFiles = 0;
       let skippedFiles = 0;
+      let readableFiles = 0;
+      let failedFiles = 0;
       // Distinct per directory. Buckets carry per-cell session counts, but a
       // session spans days and models, so clients total this figure instead.
       const sessionIds = new Set<string>();
 
       for (const file of files) {
         livePaths.add(file.path);
-        const records = yield* readFileRecords(file.path, file.size, file.mtimeMs, provider);
+        const result = yield* readFileRecords(file.path, file.size, file.mtimeMs, provider);
+        if (result.status === "failed") {
+          failedFiles += 1;
+          skippedFiles += 1;
+          continue;
+        }
+        readableFiles += 1;
+        const records = result.records;
         if (records.length === 0) {
           skippedFiles += 1;
           continue;
@@ -369,14 +409,15 @@ export const make = Effect.gen(function* () {
         }
       }
 
+      const provenance = deriveSourceReadProvenance({ readableFiles, failedFiles });
       sources.push({
         fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
-        status: "ok",
+        status: provenance.status,
         scannedFiles,
         skippedFiles,
         malformedRecords: 0,
         distinctSessions: sessionIds.size,
-        message: null,
+        message: provenance.message,
       });
     }
 

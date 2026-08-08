@@ -9,6 +9,7 @@
 import type {
   EnvironmentId,
   UsageBucket,
+  UsagePricingStatus,
   UsageProviderKind,
   UsageSourceFingerprint,
   UsageSummary,
@@ -25,6 +26,7 @@ export interface ProviderTotals {
   readonly costUsd: number;
   readonly totalTokens: number;
   readonly records: number;
+  readonly unpricedRecords: number;
   readonly costShare: number;
   readonly tokenShare: number;
 }
@@ -35,6 +37,7 @@ export interface ModelTotals {
   readonly costUsd: number;
   readonly totalTokens: number;
   readonly records: number;
+  readonly unpricedRecords: number;
   readonly costShare: number;
 }
 
@@ -42,14 +45,22 @@ export interface DailyTotals {
   readonly day: string;
   readonly costUsd: number;
   readonly totalTokens: number;
-  readonly byProvider: ReadonlyMap<UsageProviderKind, { costUsd: number; totalTokens: number }>;
+  readonly records: number;
+  readonly unpricedRecords: number;
+  readonly byProvider: ReadonlyMap<
+    UsageProviderKind,
+    { costUsd: number; totalTokens: number; records: number; unpricedRecords: number }
+  >;
 }
 
 export interface CostQuality {
   readonly providerReportedShare: number;
   readonly modelPricedShare: number;
   readonly unpricedShare: number;
+  readonly unpricedRecords: number;
   readonly cacheSavingsUsd: number;
+  /** Rate-table states reported by environments that contributed usage. */
+  readonly pricingStatuses: readonly UsagePricingStatus[];
 }
 
 export interface MergedUsage {
@@ -172,7 +183,9 @@ const EMPTY_MERGED: MergedUsage = {
     providerReportedShare: 0,
     modelPricedShare: 0,
     unpricedShare: 0,
+    unpricedRecords: 0,
     cacheSavingsUsd: 0,
+    pricingStatuses: [],
   },
   duplicateSources: [],
   contributingEnvironments: [],
@@ -215,21 +228,33 @@ export function mergeUsage(
   let cacheSavingsUsd = 0;
   let providerReportedRecords = 0;
   let unpricedRecords = 0;
+  const pricingStatuses = new Set<UsagePricingStatus>();
 
   const providerAccumulator = new Map<
     UsageProviderKind,
-    { costUsd: number; totalTokens: number; records: number }
+    { costUsd: number; totalTokens: number; records: number; unpricedRecords: number }
   >();
   const modelAccumulator = new Map<
     string,
-    { provider: UsageProviderKind; costUsd: number; totalTokens: number; records: number }
+    {
+      provider: UsageProviderKind;
+      costUsd: number;
+      totalTokens: number;
+      records: number;
+      unpricedRecords: number;
+    }
   >();
   const dailyAccumulator = new Map<
     string,
     {
       costUsd: number;
       totalTokens: number;
-      byProvider: Map<UsageProviderKind, { costUsd: number; totalTokens: number }>;
+      records: number;
+      unpricedRecords: number;
+      byProvider: Map<
+        UsageProviderKind,
+        { costUsd: number; totalTokens: number; records: number; unpricedRecords: number }
+      >;
     }
   >();
   const contributingEnvironments: EnvironmentId[] = [];
@@ -239,7 +264,10 @@ export function mergeUsage(
       environment,
       ownerByFingerprint,
     );
-    if (buckets.length > 0) contributingEnvironments.push(environment.environmentId);
+    if (buckets.length > 0) {
+      contributingEnvironments.push(environment.environmentId);
+      pricingStatuses.add(environment.summary.pricing.status);
+    }
     sessions += environmentSessions;
 
     for (const bucket of buckets) {
@@ -260,10 +288,12 @@ export function mergeUsage(
         costUsd: 0,
         totalTokens: 0,
         records: 0,
+        unpricedRecords: 0,
       };
       provider.costUsd += bucket.costUsd;
       provider.totalTokens += tokens;
       provider.records += bucket.records;
+      provider.unpricedRecords += bucket.unpricedRecords;
       providerAccumulator.set(bucket.provider, provider);
 
       const modelKey = `${bucket.provider} ${bucket.model}`;
@@ -272,22 +302,38 @@ export function mergeUsage(
         costUsd: 0,
         totalTokens: 0,
         records: 0,
+        unpricedRecords: 0,
       };
       model.costUsd += bucket.costUsd;
       model.totalTokens += tokens;
       model.records += bucket.records;
+      model.unpricedRecords += bucket.unpricedRecords;
       modelAccumulator.set(modelKey, model);
 
       const day = dailyAccumulator.get(bucket.day) ?? {
         costUsd: 0,
         totalTokens: 0,
-        byProvider: new Map<UsageProviderKind, { costUsd: number; totalTokens: number }>(),
+        records: 0,
+        unpricedRecords: 0,
+        byProvider: new Map<
+          UsageProviderKind,
+          { costUsd: number; totalTokens: number; records: number; unpricedRecords: number }
+        >(),
       };
       day.costUsd += bucket.costUsd;
       day.totalTokens += tokens;
-      const dayProvider = day.byProvider.get(bucket.provider) ?? { costUsd: 0, totalTokens: 0 };
+      day.records += bucket.records;
+      day.unpricedRecords += bucket.unpricedRecords;
+      const dayProvider = day.byProvider.get(bucket.provider) ?? {
+        costUsd: 0,
+        totalTokens: 0,
+        records: 0,
+        unpricedRecords: 0,
+      };
       dayProvider.costUsd += bucket.costUsd;
       dayProvider.totalTokens += tokens;
+      dayProvider.records += bucket.records;
+      dayProvider.unpricedRecords += bucket.unpricedRecords;
       day.byProvider.set(bucket.provider, dayProvider);
       dailyAccumulator.set(bucket.day, day);
     }
@@ -301,6 +347,7 @@ export function mergeUsage(
       costUsd: totals.costUsd,
       totalTokens: totals.totalTokens,
       records: totals.records,
+      unpricedRecords: totals.unpricedRecords,
       costShare: costUsd === 0 ? 0 : totals.costUsd / costUsd,
       tokenShare: totalTokens === 0 ? 0 : totals.totalTokens / totalTokens,
     }))
@@ -313,6 +360,7 @@ export function mergeUsage(
       costUsd: totals.costUsd,
       totalTokens: totals.totalTokens,
       records: totals.records,
+      unpricedRecords: totals.unpricedRecords,
       costShare: costUsd === 0 ? 0 : totals.costUsd / costUsd,
     }))
     .sort((a, b) => b.costUsd - a.costUsd || b.totalTokens - a.totalTokens);
@@ -322,6 +370,8 @@ export function mergeUsage(
       day,
       costUsd: totals.costUsd,
       totalTokens: totals.totalTokens,
+      records: totals.records,
+      unpricedRecords: totals.unpricedRecords,
       byProvider: totals.byProvider,
     }))
     .sort((a, b) => a.day.localeCompare(b.day));
@@ -342,9 +392,11 @@ export function mergeUsage(
     costQuality: {
       providerReportedShare: records === 0 ? 0 : providerReportedRecords / records,
       unpricedShare: records === 0 ? 0 : unpricedRecords / records,
+      unpricedRecords,
       modelPricedShare:
         records === 0 ? 0 : (records - providerReportedRecords - unpricedRecords) / records,
       cacheSavingsUsd,
+      pricingStatuses: [...pricingStatuses].sort(),
     },
     duplicateSources: duplicates,
     contributingEnvironments,

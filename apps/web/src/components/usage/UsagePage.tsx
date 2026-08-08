@@ -10,9 +10,14 @@ import {
   formatDayShort,
   formatPercent,
   formatTokens,
-  formatUsd,
   makeWindow,
 } from "../../usage/usageFormat";
+import {
+  costCompleteness,
+  describeCostCoverage,
+  formatCoveredCost,
+  formatPricingStatuses,
+} from "../../usage/usageCostPresentation";
 import { ScrollArea } from "../ui/scroll-area";
 import { UsageChartLegend, UsageProviderChart, type UsageChartMetric } from "./UsageProviderChart";
 import { PROVIDER_COLOR, PROVIDER_LABEL, PROVIDER_MARK, PROVIDER_ORDER } from "./usageProviders";
@@ -52,6 +57,11 @@ export function UsagePage() {
   const dailyAverage = activeDays === 0 ? 0 : merged.totalTokens / activeDays;
   const observedInput = merged.uncachedInputTokens + merged.cachedInputTokens;
   const cachedShare = observedInput === 0 ? 0 : merged.cachedInputTokens / observedInput;
+  const costCoverage = {
+    records: merged.records,
+    unpricedRecords: merged.costQuality.unpricedRecords,
+  };
+  const totalCostCompleteness = costCompleteness(costCoverage);
 
   return (
     <ScrollArea className="h-full">
@@ -112,16 +122,20 @@ export function UsagePage() {
               <div className="flex flex-col gap-5">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs tracking-wide text-muted-foreground uppercase">
-                    {metric === "cost" ? "Raw token cost" : "Processed tokens"}
+                    {metric === "cost" && totalCostCompleteness === "partial"
+                      ? "Known token cost"
+                      : metric === "cost"
+                        ? "Raw token cost"
+                        : "Processed tokens"}
                   </span>
                   <span className="text-4xl font-semibold text-foreground tabular-nums">
                     {metric === "cost"
-                      ? `${formatUsd(merged.costUsd)}*`
+                      ? `${formatCoveredCost(merged.costUsd, costCoverage)}${totalCostCompleteness === "complete" ? "*" : ""}`
                       : formatTokens(merged.totalTokens)}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {metric === "cost"
-                      ? "* if billed at full API rate"
+                      ? `${totalCostCompleteness === "complete" ? "* " : ""}${describeCostCoverage(costCoverage)}`
                       : `Input, cache reads and output across ${formatCount(merged.sessions)} sessions.`}
                   </span>
                 </div>
@@ -137,7 +151,7 @@ export function UsagePage() {
                         </span>
                         <span className="text-sm text-foreground tabular-nums">
                           {metric === "cost"
-                            ? formatUsd(provider.costUsd)
+                            ? formatCoveredCost(provider.costUsd, provider)
                             : formatTokens(provider.totalTokens)}
                         </span>
                       </div>
@@ -152,8 +166,8 @@ export function UsagePage() {
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {metric === "cost"
-                          ? `${formatPercent(share)} of cost · ${formatTokens(provider.totalTokens)} tokens`
-                          : `${formatPercent(share)} of tokens · ${formatUsd(provider.costUsd)}`}
+                          ? `${formatPercent(share)} of ${totalCostCompleteness === "complete" ? "cost" : "known cost"} · ${formatTokens(provider.totalTokens)} tokens`
+                          : `${formatPercent(share)} of tokens · ${formatCoveredCost(provider.costUsd, provider)}`}
                       </span>
                     </div>
                   );
@@ -163,7 +177,7 @@ export function UsagePage() {
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-sm font-medium text-foreground">
-                    Daily {metric === "tokens" ? "processed tokens" : "cost"}
+                    Daily {metric === "tokens" ? "processed tokens" : "known cost"}
                   </h2>
                   <div className="flex items-center gap-4">
                     <div className="flex overflow-hidden rounded-md border border-border">
@@ -213,11 +227,15 @@ export function UsagePage() {
               />
               <Metric
                 label="Cache savings"
-                value={formatUsd(merged.costQuality.cacheSavingsUsd)}
+                value={formatCoveredCost(merged.costQuality.cacheSavingsUsd, costCoverage)}
                 detail={
-                  merged.costUsd > 0
-                    ? `${(merged.costQuality.cacheSavingsUsd / merged.costUsd).toFixed(1)}x the raw token cost`
-                    : "vs full input rates"
+                  totalCostCompleteness === "unavailable"
+                    ? "requires model pricing"
+                    : totalCostCompleteness === "partial"
+                      ? "known savings only"
+                      : merged.costUsd > 0
+                        ? `${(merged.costQuality.cacheSavingsUsd / merged.costUsd).toFixed(1)}x the raw token cost`
+                        : "vs full input rates"
                 }
               />
             </section>
@@ -275,7 +293,7 @@ export function UsagePage() {
                               </span>
                             </td>
                             <td className="py-2 text-right text-foreground tabular-nums">
-                              {formatUsd(model.costUsd)}
+                              {formatCoveredCost(model.costUsd, model)}
                             </td>
                             <td className="py-2 text-right text-muted-foreground tabular-nums">
                               {formatPercent(model.costShare)}
@@ -313,16 +331,22 @@ export function UsagePage() {
                         recentDays.map((day) => (
                           <tr key={day.day} className="border-b border-border/50">
                             <td className="py-2 text-foreground">{formatDayShort(day.day)}</td>
-                            {PROVIDER_ORDER.map((provider) => (
-                              <td
-                                key={provider}
-                                className="py-2 text-right text-muted-foreground tabular-nums"
-                              >
-                                {formatUsd(day.byProvider.get(provider)?.costUsd ?? 0)}
-                              </td>
-                            ))}
+                            {PROVIDER_ORDER.map((provider) => {
+                              const providerDay = day.byProvider.get(provider);
+                              return (
+                                <td
+                                  key={provider}
+                                  className="py-2 text-right text-muted-foreground tabular-nums"
+                                >
+                                  {formatCoveredCost(providerDay?.costUsd ?? 0, {
+                                    records: providerDay?.records ?? 0,
+                                    unpricedRecords: providerDay?.unpricedRecords ?? 0,
+                                  })}
+                                </td>
+                              );
+                            })}
                             <td className="py-2 text-right text-foreground tabular-nums">
-                              {formatUsd(day.costUsd)}
+                              {formatCoveredCost(day.costUsd, day)}
                             </td>
                             <td className="py-2 text-right text-muted-foreground tabular-nums">
                               {formatTokens(day.totalTokens)}
@@ -339,6 +363,10 @@ export function UsagePage() {
                 <h2 className="text-sm font-medium text-foreground">Cost quality</h2>
                 <dl className="flex flex-col">
                   <QualityRow
+                    label="Rate table"
+                    value={formatPricingStatuses(merged.costQuality.pricingStatuses)}
+                  />
+                  <QualityRow
                     label="Provider reported"
                     value={formatPercent(merged.costQuality.providerReportedShare)}
                   />
@@ -352,7 +380,7 @@ export function UsagePage() {
                   />
                   <QualityRow
                     label="Cache savings"
-                    value={formatUsd(merged.costQuality.cacheSavingsUsd)}
+                    value={formatCoveredCost(merged.costQuality.cacheSavingsUsd, costCoverage)}
                   />
                 </dl>
               </div>
