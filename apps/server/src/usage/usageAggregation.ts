@@ -1,6 +1,7 @@
 // @effect-diagnostics globalDate:off
 /**
- * Folds parsed transcript records into `(day, provider, model)` buckets.
+ * Folds one source's parsed transcript records into
+ * `(source, day, provider, model)` buckets.
  *
  * `Intl.DateTimeFormat` is the only reliable way to resolve a wall-clock day in
  * an arbitrary IANA zone, and it takes a `Date`. That is why the raw `Date`
@@ -11,7 +12,12 @@
  *
  * @module usageAggregation
  */
-import type { UsageBucket, UsageDay, UsageTokenTotals } from "@croki/contracts";
+import type {
+  UsageBucket,
+  UsageDay,
+  UsageSourceFingerprint,
+  UsageTokenTotals,
+} from "@croki/contracts";
 
 import { addTotals, EMPTY_TOTALS, type UsageRecord } from "./usageTranscripts.ts";
 import { cacheSavingsUsd, priceUsage, type RateTable } from "./usagePricing.ts";
@@ -50,6 +56,7 @@ interface MutableBucket {
   records: number;
   unpricedRecords: number;
   providerReportedRecords: number;
+  modelPricedRecords: number;
   sessions: Set<string>;
 }
 
@@ -58,6 +65,7 @@ export interface AggregateOptions {
   readonly sinceDay: string;
   readonly untilDay: string;
   readonly rates: RateTable;
+  readonly sourceFingerprint: UsageSourceFingerprint;
 }
 
 export interface AggregateResult {
@@ -118,6 +126,7 @@ export class UsageAggregator {
         records: 0,
         unpricedRecords: 0,
         providerReportedRecords: 0,
+        modelPricedRecords: 0,
         sessions: new Set<string>(),
       };
       this.#buckets.set(key, bucket);
@@ -136,6 +145,7 @@ export class UsageAggregator {
     bucket.records += 1;
     if (priced.costSource === "unpriced") bucket.unpricedRecords += 1;
     if (priced.costSource === "providerReported") bucket.providerReportedRecords += 1;
+    if (priced.costSource === "modelPriced") bucket.modelPricedRecords += 1;
     if (record.sessionId.length > 0) bucket.sessions.add(record.sessionId);
     return true;
   }
@@ -145,6 +155,7 @@ export class UsageAggregator {
     for (const [key, bucket] of this.#buckets) {
       const [day = "", provider = "", model = ""] = key.split("\u0000");
       buckets.push({
+        sourceFingerprint: this.#options.sourceFingerprint,
         day: day as UsageDay,
         provider: provider as UsageBucket["provider"],
         model,
@@ -153,6 +164,8 @@ export class UsageAggregator {
         cacheSavingsUsd: bucket.cacheSavingsUsd,
         costSource: resolveCostSource(bucket),
         records: bucket.records,
+        providerReportedRecords: bucket.providerReportedRecords,
+        modelPricedRecords: bucket.modelPricedRecords,
         unpricedRecords: bucket.unpricedRecords,
         sessions: bucket.sessions.size,
       });

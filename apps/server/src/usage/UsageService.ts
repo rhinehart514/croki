@@ -20,6 +20,7 @@ import {
   USAGE_CONTRACT_VERSION,
   type ProviderInstanceConfig,
   type ServerSettings as ServerSettingsValue,
+  type UsageBucket,
   type UsageProviderKind,
   type UsageSource,
   type UsageSummary,
@@ -449,26 +450,21 @@ export const make = Effect.gen(function* () {
     }
     const windowStartMs = DateTime.toEpochMillis(windowStart.value) - MTIME_SLACK_MS;
 
-    const aggregator = new UsageAggregator({
-      timeZone: input.timeZone,
-      sinceDay: input.sinceDay,
-      untilDay: input.untilDay,
-      rates,
-    });
-
+    const buckets: UsageBucket[] = [];
     const sources: UsageSource[] = [];
     const livePaths = new Set<string>();
     const walkedRoots: string[] = [];
 
     for (const { provider, dir } of dirs) {
       const volumeId = yield* Effect.promise(() => readDirectoryVolumeId(dir));
+      const fingerprint = { hostId, provider, resolvedHomePath: dir, volumeId };
       const exists = yield* fileSystem
         .exists(dir)
         .pipe(Effect.catchCause(() => Effect.succeed(false)));
 
       if (!exists) {
         sources.push({
-          fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
+          fingerprint,
           status: "missing",
           scannedFiles: 0,
           skippedFiles: 0,
@@ -478,6 +474,17 @@ export const make = Effect.gen(function* () {
         });
         continue;
       }
+
+      // Keep aggregation and de-duplication inside one physical transcript
+      // source. The client can then drop an overlapping source from another
+      // environment without also dropping this environment's other roots.
+      const aggregator = new UsageAggregator({
+        timeZone: input.timeZone,
+        sinceDay: input.sinceDay,
+        untilDay: input.untilDay,
+        rates,
+        sourceFingerprint: fingerprint,
+      });
 
       const listing = yield* Effect.promise(() => listTranscriptFiles(dir, windowStartMs));
       // Absence only proves deletion when every subtree under the root was
@@ -524,8 +531,9 @@ export const make = Effect.gen(function* () {
         failedDirectories: listing.failedDirectories,
         malformedRecords,
       });
+      buckets.push(...aggregator.finish().buckets);
       sources.push({
-        fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
+        fingerprint,
         status: provenance.status,
         scannedFiles,
         skippedFiles,
@@ -544,7 +552,6 @@ export const make = Effect.gen(function* () {
     if (pruned > 0) cacheDirty = true;
     yield* persistScanCache();
 
-    const aggregated = aggregator.finish();
     const readAt = yield* DateTime.now;
     const finishedAtMs = yield* Clock.currentTimeMillis;
 
@@ -554,7 +561,7 @@ export const make = Effect.gen(function* () {
       timeZone: input.timeZone,
       sinceDay: input.sinceDay,
       untilDay: input.untilDay,
-      buckets: aggregated.buckets,
+      buckets,
       sources,
       pricing: {
         status: ratesStatus,

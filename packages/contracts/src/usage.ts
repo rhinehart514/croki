@@ -21,7 +21,7 @@ import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
  * client renders partial coverage when an environment reports an older version
  * rather than failing the whole page.
  */
-export const USAGE_CONTRACT_VERSION = 3 as const;
+export const USAGE_CONTRACT_VERSION = 4 as const;
 
 export const UsageProviderKind = Schema.Literals(["claude", "codex"]);
 export type UsageProviderKind = typeof UsageProviderKind.Type;
@@ -68,35 +68,6 @@ export const UsageTokenTotals = Schema.Struct({
 export type UsageTokenTotals = typeof UsageTokenTotals.Type;
 
 /**
- * One `(day, provider, model)` cell.
- *
- * `costUsd` is the raw API-equivalent cost of these tokens. It is not money
- * spent: subscription plans bill separately. `unpricedRecords` counts records
- * whose tokens are included in the token totals but which contributed nothing
- * to `costUsd`.
- */
-export const UsageBucket = Schema.Struct({
-  day: UsageDay,
-  provider: UsageProviderKind,
-  model: TrimmedNonEmptyString,
-  totals: UsageTokenTotals,
-  costUsd: Schema.Number,
-  /**
-   * What the cached input would have cost at full input rates minus what it
-   * actually cost. Requires the rate table, so it is computed alongside cost
-   * rather than derived on the client.
-   */
-  cacheSavingsUsd: Schema.Number,
-  costSource: UsageCostSource,
-  /** Distinct assistant responses, after de-duplication. */
-  records: NonNegativeInt,
-  unpricedRecords: NonNegativeInt,
-  /** Distinct transcript sessions that contributed to this cell. */
-  sessions: NonNegativeInt,
-});
-export type UsageBucket = typeof UsageBucket.Type;
-
-/**
  * Identifies the physical transcript directory a source read from.
  *
  * Two environments on the same machine (worktree servers, for example) resolve
@@ -119,6 +90,41 @@ export const UsageSourceFingerprint = Schema.Struct({
   volumeId: Schema.String,
 });
 export type UsageSourceFingerprint = typeof UsageSourceFingerprint.Type;
+
+/**
+ * One `(source, day, provider, model)` cell.
+ *
+ * `costUsd` is the raw API-equivalent cost of these tokens. It is not money
+ * spent: subscription plans bill separately. `unpricedRecords` counts records
+ * whose tokens are included in the token totals but which contributed nothing
+ * to `costUsd`.
+ */
+export const UsageBucket = Schema.Struct({
+  /** Exact transcript source this bucket was aggregated from. */
+  sourceFingerprint: UsageSourceFingerprint,
+  day: UsageDay,
+  provider: UsageProviderKind,
+  model: TrimmedNonEmptyString,
+  totals: UsageTokenTotals,
+  costUsd: Schema.Number,
+  /**
+   * What the cached input would have cost at full input rates minus what it
+   * actually cost. Requires the rate table, so it is computed alongside cost
+   * rather than derived on the client.
+   */
+  cacheSavingsUsd: Schema.Number,
+  costSource: UsageCostSource,
+  /** Distinct assistant responses, after de-duplication. */
+  records: NonNegativeInt,
+  /** Records whose transcript supplied the cost directly. */
+  providerReportedRecords: NonNegativeInt,
+  /** Records priced from the server's model rate table. */
+  modelPricedRecords: NonNegativeInt,
+  unpricedRecords: NonNegativeInt,
+  /** Distinct transcript sessions that contributed to this cell. */
+  sessions: NonNegativeInt,
+});
+export type UsageBucket = typeof UsageBucket.Type;
 
 export const UsageSourceStatus = Schema.Literals(["ok", "missing", "partial", "failed"]);
 export type UsageSourceStatus = typeof UsageSourceStatus.Type;

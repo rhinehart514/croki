@@ -11,6 +11,7 @@ import type {
   UsageBucket,
   UsagePricingStatus,
   UsageProviderKind,
+  UsageSource,
   UsageSourceFingerprint,
   UsageSummary,
 } from "@croki/contracts";
@@ -105,9 +106,8 @@ function fingerprintKey(fingerprint: UsageSourceFingerprint): string {
  *
  * Several environments on one machine (worktree servers, for instance) resolve
  * the same provider home and would otherwise double count every token. The
- * first environment in a stable order claims a fingerprint; the rest have that
- * provider's buckets dropped. Environments are sorted by id so the winner does
- * not change between renders.
+ * most complete readable source claims a fingerprint; status ties break by
+ * environment id so the winner does not change between renders.
  */
 function claimSources(environments: readonly EnvironmentUsage[]): {
   readonly ownerByFingerprint: ReadonlyMap<string, EnvironmentId>;
@@ -115,22 +115,51 @@ function claimSources(environments: readonly EnvironmentUsage[]): {
 } {
   const ownerByFingerprint = new Map<string, EnvironmentId>();
   const duplicates: string[] = [];
+  const candidatesByFingerprint = new Map<
+    string,
+    Array<{ readonly environment: EnvironmentUsage; readonly source: UsageSource }>
+  >();
 
-  const ordered = [...environments].sort((a, b) => a.environmentId.localeCompare(b.environmentId));
-
-  for (const environment of ordered) {
+  for (const environment of environments) {
     for (const source of environment.summary.sources) {
       if (source.status === "missing") continue;
       const key = fingerprintKey(source.fingerprint);
-      if (ownerByFingerprint.has(key)) {
-        duplicates.push(`${environment.label}: ${source.fingerprint.resolvedHomePath}`);
-        continue;
-      }
-      ownerByFingerprint.set(key, environment.environmentId);
+      const candidates = candidatesByFingerprint.get(key) ?? [];
+      candidates.push({ environment, source });
+      candidatesByFingerprint.set(key, candidates);
     }
   }
 
-  return { ownerByFingerprint, duplicates };
+  for (const [key, candidates] of candidatesByFingerprint) {
+    candidates.sort(
+      (a, b) =>
+        sourceStatusRank(b.source.status) - sourceStatusRank(a.source.status) ||
+        a.environment.environmentId.localeCompare(b.environment.environmentId),
+    );
+    const winner = candidates[0];
+    if (winner === undefined) continue;
+    ownerByFingerprint.set(key, winner.environment.environmentId);
+    for (const duplicate of candidates.slice(1)) {
+      duplicates.push(
+        `${duplicate.environment.label}: ${duplicate.source.fingerprint.resolvedHomePath}`,
+      );
+    }
+  }
+
+  return { ownerByFingerprint, duplicates: duplicates.sort() };
+}
+
+function sourceStatusRank(status: UsageSource["status"]): number {
+  switch (status) {
+    case "ok":
+      return 3;
+    case "partial":
+      return 2;
+    case "failed":
+      return 1;
+    case "missing":
+      return 0;
+  }
 }
 
 /** Sources this environment owns after fingerprint claims, plus their buckets. */
@@ -138,20 +167,22 @@ function ownedContribution(
   environment: EnvironmentUsage,
   ownerByFingerprint: ReadonlyMap<string, EnvironmentId>,
 ): { readonly buckets: readonly UsageBucket[]; readonly sessions: number } {
-  const ownedProviders = new Set<UsageProviderKind>();
+  const ownedFingerprints = new Set<string>();
   let sessions = 0;
   for (const source of environment.summary.sources) {
     if (source.status === "missing") continue;
     const key = fingerprintKey(source.fingerprint);
     if (ownerByFingerprint.get(key) === environment.environmentId) {
-      ownedProviders.add(source.fingerprint.provider);
+      ownedFingerprints.add(key);
       // Distinct within a directory. Summing per-bucket session counts instead
       // would count a session once per day and model it spans.
       sessions += source.distinctSessions;
     }
   }
   return {
-    buckets: environment.summary.buckets.filter((bucket) => ownedProviders.has(bucket.provider)),
+    buckets: environment.summary.buckets.filter((bucket) =>
+      ownedFingerprints.has(fingerprintKey(bucket.sourceFingerprint)),
+    ),
     sessions,
   };
 }
@@ -227,6 +258,7 @@ export function mergeUsage(
   let sessions = 0;
   let cacheSavingsUsd = 0;
   let providerReportedRecords = 0;
+  let modelPricedRecords = 0;
   let unpricedRecords = 0;
   const pricingStatuses = new Set<UsagePricingStatus>();
 
@@ -282,7 +314,8 @@ export function mergeUsage(
       reasoningTokens += bucket.totals.reasoningTokens;
       records += bucket.records;
       unpricedRecords += bucket.unpricedRecords;
-      if (bucket.costSource === "providerReported") providerReportedRecords += bucket.records;
+      providerReportedRecords += bucket.providerReportedRecords;
+      modelPricedRecords += bucket.modelPricedRecords;
 
       const provider = providerAccumulator.get(bucket.provider) ?? {
         costUsd: 0,
@@ -393,8 +426,7 @@ export function mergeUsage(
       providerReportedShare: records === 0 ? 0 : providerReportedRecords / records,
       unpricedShare: records === 0 ? 0 : unpricedRecords / records,
       unpricedRecords,
-      modelPricedShare:
-        records === 0 ? 0 : (records - providerReportedRecords - unpricedRecords) / records,
+      modelPricedShare: records === 0 ? 0 : modelPricedRecords / records,
       cacheSavingsUsd,
       pricingStatuses: [...pricingStatuses].sort(),
     },

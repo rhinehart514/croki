@@ -4,6 +4,13 @@ import { UsageAggregator } from "./usageAggregation.ts";
 import type { RateTable } from "./usagePricing.ts";
 import type { UsageRecord } from "./usageTranscripts.ts";
 
+const sourceFingerprint = {
+  hostId: "test-host",
+  provider: "claude" as const,
+  resolvedHomePath: "/test/.claude/projects",
+  volumeId: "test-volume",
+};
+
 const rates: RateTable = new Map([
   [
     "claude-fable-5",
@@ -42,6 +49,7 @@ function aggregate(records: readonly UsageRecord[], timeZone = "UTC") {
     sinceDay: "2026-08-01",
     untilDay: "2026-08-31",
     rates,
+    sourceFingerprint,
   });
   for (const item of records) aggregator.add(item);
   return aggregator.finish();
@@ -82,6 +90,7 @@ describe("UsageAggregator", () => {
     // 100*1e-5 + 1000*1e-6 + 10*1.25e-5 + 50*5e-5
     expect(result.buckets[0]?.costUsd).toBeCloseTo(0.004625, 9);
     expect(result.buckets[0]?.costSource).toBe("modelPriced");
+    expect(result.buckets[0]?.modelPricedRecords).toBe(1);
   });
 
   it("counts tokens but not cost for a model with no rate", () => {
@@ -98,6 +107,18 @@ describe("UsageAggregator", () => {
 
     expect(result.buckets[0]?.costUsd).toBe(1.25);
     expect(result.buckets[0]?.costSource).toBe("providerReported");
+    expect(result.buckets[0]?.providerReportedRecords).toBe(1);
+  });
+
+  it("preserves mixed per-record cost provenance within one bucket", () => {
+    const result = aggregate([record({ reportedCostUsd: 1.25 }), record()]);
+
+    expect(result.buckets[0]).toMatchObject({
+      records: 2,
+      providerReportedRecords: 1,
+      modelPricedRecords: 1,
+      unpricedRecords: 0,
+    });
   });
 
   it("drops records outside the window", () => {
@@ -113,6 +134,7 @@ describe("UsageAggregator", () => {
       sinceDay: "2026-08-01",
       untilDay: "2026-08-31",
       rates,
+      sourceFingerprint,
     });
 
     expect(aggregator.add(record({ dedupeKey: "msg_1:" }))).toBe(true);
