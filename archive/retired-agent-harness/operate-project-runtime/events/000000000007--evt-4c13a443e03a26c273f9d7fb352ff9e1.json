@@ -1,0 +1,21 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": [".harness/state/current.json"],
+    "effects": ["Canvas can show the active project operation without a new runtime or dashboard."],
+    "expected_hash": null,
+    "id": "operate-projection-server",
+    "operation_id": "croki-operating-environment",
+    "scope": "Attach active operate-project consequence and attention to existing read-only project perception.",
+    "target": "apps/server/src/orchestration/projectPerception.ts"
+  },
+  "digest": "sha256:83c3e961e007481045527bb000f7f56e8e3c68543ff0e6b6323f1fb9528abfbe",
+  "event_version": 1,
+  "id": "evt-4c13a443e03a26c273f9d7fb352ff9e1",
+  "idempotency_key": "operate-projection-server-20260807",
+  "occurred_at": "2026-08-07T19:59:13.801841Z",
+  "previous_digest": "sha256:8627b26fcdce417616fd400734288490b9e983dd19c77b884c5b8d2dd2b87a28",
+  "request_fingerprint": "sha256:164a256800f8c8d52970a4e8f132c00313b8bb70ffba3f657c0a5bae43cef478",
+  "sequence": 7,
+  "type": "mutation_intent_recorded"
+}

@@ -1,0 +1,18 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "intent_id": "operate-projection-field-semantics",
+    "operation_id": "croki-operating-environment",
+    "reason": "Canvas labels active operate-project consequence as Active operation and keeps unreadable runtime state in founder judgment.",
+    "result_hash": null
+  },
+  "digest": "sha256:1acc802586720a2bbc5cf64b09f8a3a3f0af300eab3259451ec9d71b3a5c836e",
+  "event_version": 1,
+  "id": "evt-9f370b339c238234507b0fd503c0e25a",
+  "idempotency_key": "release-operate-projection-field-semantics-v1",
+  "occurred_at": "2026-08-07T20:24:49.550732Z",
+  "previous_digest": "sha256:85b95da76b4f572eb48cd4bb181c10aece085ddcf52a1d24cf7f750abbef9a6d",
+  "request_fingerprint": "sha256:04e917173ee3a1d719fc7837372456fd20784c46ca1df54df841d1b8da92d6ad",
+  "sequence": 28,
+  "type": "mutation_intent_released"
+}

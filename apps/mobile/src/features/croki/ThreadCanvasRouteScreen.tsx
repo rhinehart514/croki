@@ -7,8 +7,10 @@ import { EmptyState } from "../../components/EmptyState";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useThreadSelection } from "../../state/use-thread-selection";
+import { useThreadDetail } from "../../state/queries";
+import { appendTextToThreadDraft } from "../../state/use-thread-composer-state";
 import { useAdaptiveWorkspacePaneRole } from "../layout/AdaptiveWorkspaceLayout";
-import { CrokiCanvasPane } from "./CrokiCanvasPane";
+import { CrokiThoughtViewPane } from "./CrokiThoughtViewPane";
 
 type ThreadCanvasRouteScreenProps = StaticScreenProps<{
   readonly environmentId: string;
@@ -27,6 +29,7 @@ export function ThreadCanvasRouteScreen(props: ThreadCanvasRouteScreenProps) {
   const threadIdRaw = firstRouteParam(props.route.params.threadId);
   const environmentId = environmentIdRaw === null ? null : EnvironmentId.make(environmentIdRaw);
   const threadId = threadIdRaw === null ? null : ThreadId.make(threadIdRaw);
+  const threadDetail = useThreadDetail(environmentId, threadId);
   const routeMatchesSelection =
     selectedThread !== null &&
     environmentId !== null &&
@@ -34,6 +37,8 @@ export function ThreadCanvasRouteScreen(props: ThreadCanvasRouteScreenProps) {
     selectedThread.environmentId === environmentId &&
     selectedThread.id === threadId;
   const cwd = selectedThreadProject?.workspaceRoot ?? null;
+  const question =
+    threadDetail.data?.messages.findLast((message) => message.role === "user")?.text.trim() ?? "";
   const handleOpenFile = useCallback(
     (path: string, line: number | null) => {
       if (environmentId === null || threadId === null) return;
@@ -65,11 +70,21 @@ export function ThreadCanvasRouteScreen(props: ThreadCanvasRouteScreenProps) {
   return (
     <View className="flex-1 bg-black">
       <NativeStackScreenOptions options={{ title: "Canvas" }} />
-      <CrokiCanvasPane
-        cwd={cwd}
+      <CrokiThoughtViewPane
         environmentId={environmentId}
+        projectId={selectedThread.projectId}
+        question={question}
         onOpenFile={handleOpenFile}
         projectName={selectedThreadProject?.title ?? "Canvas"}
+        onUse={(selection, title) => {
+          if (threadId === null) return;
+          appendTextToThreadDraft({
+            environmentId,
+            threadId,
+            text: `View selection · ${title}\nSources: ${selection.sourceIds.join(", ")}\nView: ${selection.viewId} · revision ${selection.sourceRevision}`,
+          });
+          navigation.goBack();
+        }}
       />
     </View>
   );

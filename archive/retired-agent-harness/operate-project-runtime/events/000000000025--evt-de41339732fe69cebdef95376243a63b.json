@@ -1,0 +1,27 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "artifact_hash": null,
+    "artifact_path": null,
+    "artifact_source_path": null,
+    "id": "operate-projection-preview-unavailable",
+    "limitations": "Static rendered-markup tests passed, but the visible result was not visually inspected through Preview.",
+    "method": "Started an isolated Croki dev environment, paired a temporary project, retried snapshot and DOM inspection in two tabs, then tested snapshot on example.com.",
+    "observed_at": "2026-08-07T20:24:39.325150Z",
+    "operation_id": "croki-operating-environment",
+    "result": "Navigation and status worked, but every snapshot failed and DOM evaluation timed out; no checked-screen evidence was produced.",
+    "sensitivity": "internal",
+    "source": "Croki collaborative Preview",
+    "source_type": "environment",
+    "subject": "Rendered visual verification"
+  },
+  "digest": "sha256:76cb20aaec5ec6f6d632dccbac24c16bad52e9f1763fc7472373ff39526f1646",
+  "event_version": 1,
+  "id": "evt-de41339732fe69cebdef95376243a63b",
+  "idempotency_key": "observe-operate-projection-preview-v1",
+  "occurred_at": "2026-08-07T20:24:39.325332Z",
+  "previous_digest": "sha256:710503b4bfa156bf875445df95a34277371d05abe19a79962c5484eb9c788de5",
+  "request_fingerprint": "sha256:d115b1bc3559d925658f9154f3090ed1e1755e5ae792b54c77400614f889a6ca",
+  "sequence": 25,
+  "type": "observation_recorded"
+}

@@ -1,0 +1,18 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "intent_id": "operate-projection-render-test",
+    "operation_id": "croki-operating-environment",
+    "reason": "Added rendered-markup evidence in isolated worktree for operation wording and required judgment ordering.",
+    "result_hash": null
+  },
+  "digest": "sha256:4312abaa9ddcf8bfdd4b4cedaa6df4ab9ebc2edcc47b7598548b5b3a878542e4",
+  "event_version": 1,
+  "id": "evt-9302e6d630b7bf01eb1673d656b2e230",
+  "idempotency_key": "release-operate-projection-render-test-v2",
+  "occurred_at": "2026-08-07T20:15:16.215519Z",
+  "previous_digest": "sha256:6baf1c54b5cd8a35af51936b4c67f4ca3255530aee743e0b2b7f018a99373b20",
+  "request_fingerprint": "sha256:b06ad4079267e1eaebace1dbc2eab74a2e4622b2cb7e71e2c73fad79285dcade",
+  "sequence": 17,
+  "type": "mutation_intent_released"
+}

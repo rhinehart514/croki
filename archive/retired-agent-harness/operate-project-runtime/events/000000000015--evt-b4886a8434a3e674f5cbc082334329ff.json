@@ -1,0 +1,18 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "intent_id": "operate-projection-web",
+    "operation_id": "croki-operating-environment",
+    "reason": "Implemented in isolated worktree; existing Canvas prioritizes the operation and labels it structurally unverified. Focused web tests and typecheck pass.",
+    "result_hash": null
+  },
+  "digest": "sha256:5a756d2e4aca1aaca1b13f97622c02a695314d4dd9a9ba48a36d62aedc74d4b1",
+  "event_version": 1,
+  "id": "evt-b4886a8434a3e674f5cbc082334329ff",
+  "idempotency_key": "release-operate-projection-web-v2",
+  "occurred_at": "2026-08-07T20:15:16.023843Z",
+  "previous_digest": "sha256:780592595b5e0eea8ed1984129274c6a1fdf776d4ba04383f90c4467d64a3f37",
+  "request_fingerprint": "sha256:e906e798055b3a45878f13b610a2c29acb9069a72704ca5947844fe4b17eacf4",
+  "sequence": 15,
+  "type": "mutation_intent_released"
+}

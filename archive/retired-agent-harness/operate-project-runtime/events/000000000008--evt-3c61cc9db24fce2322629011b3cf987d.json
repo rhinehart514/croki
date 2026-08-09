@@ -1,0 +1,21 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": [".harness/state/current.json"],
+    "effects": ["Runtime file changes appear through fresh project perception reads."],
+    "expected_hash": null,
+    "id": "operate-projection-query",
+    "operation_id": "croki-operating-environment",
+    "scope": "Resolve the project workspace root and load operation projection outside persistent orchestration state.",
+    "target": "apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts"
+  },
+  "digest": "sha256:8b0a9ef34c52d0925b641bcc57bf7756d2c7f7ae9f0120173c2dfb53bef9ac82",
+  "event_version": 1,
+  "id": "evt-3c61cc9db24fce2322629011b3cf987d",
+  "idempotency_key": "operate-projection-query-20260807",
+  "occurred_at": "2026-08-07T19:59:13.844758Z",
+  "previous_digest": "sha256:83c3e961e007481045527bb000f7f56e8e3c68543ff0e6b6323f1fb9528abfbe",
+  "request_fingerprint": "sha256:106745874c74f4e8bd6f5fb00791561e350cbe8b2fdffcf21850aad73754d457",
+  "sequence": 8,
+  "type": "mutation_intent_recorded"
+}

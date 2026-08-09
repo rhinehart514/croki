@@ -1,0 +1,17 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "lease_expires_at": "2026-08-08T19:51:35.033886Z",
+    "operation_id": "croki-operating-environment",
+    "summary": "Recovered v0.4.8 release reality and preserved the stale dirty worktree. Five independent Luna Max workers converged on an isolated read-only first slice: explicit native -project invocation already works; Croki should project bounded .harness v2 consequence, waiting, and attention through existing project Senses and Canvas, with no new prompt mode, dashboard, RPC control plane, or runtime writes. Created clean feat/operate-project-projection worktree from origin/croki/main at 294b63768; bounded loader implementation is active there."
+  },
+  "digest": "sha256:554dc1d9da0eb5e0deac280c27c17d0f3959243f4b1682ce4473935d5df9186e",
+  "event_version": 1,
+  "id": "evt-f6cf0e99fb5234dac0aa04e2e5f0a5c5",
+  "idempotency_key": "croki-frontier-checkpoint-20260807",
+  "occurred_at": "2026-08-07T19:51:35.034074Z",
+  "previous_digest": "sha256:1f7473025c6cc3fe0b6b6fd4cbb8175581454c21b83e7359dede6b1d7be126fa",
+  "request_fingerprint": "sha256:24c3162f7975a8ee7f3d1835e9f331b7d0590726c5a8b2fc6d00525d49e4ddf5",
+  "sequence": 5,
+  "type": "operation_checkpointed"
+}

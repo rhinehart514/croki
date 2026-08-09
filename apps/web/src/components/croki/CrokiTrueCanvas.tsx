@@ -1,3 +1,4 @@
+import type { CrokiThoughtViewStatement } from "@croki/contracts";
 import { ExternalLink, ScanSearch } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -5,18 +6,19 @@ import { ScrollArea } from "../ui/scroll-area";
 import type { CrokiCanvasProps } from "./crokiCanvasProps";
 import { CROKI_CANVAS_MODEL_ERROR_MESSAGE } from "./crokiCanvasModelErrors";
 import { CrokiCanvasLiveField } from "./CrokiCanvasLiveField";
+import { CrokiThoughtViewBasis } from "./CrokiThoughtViewBasis";
+import { CrokiThoughtViewField } from "./CrokiThoughtViewField";
 import type { CrokiCanvasLiveObject } from "./crokiCanvasLiveScene";
 import { projectCrokiCanvasLiveScene } from "./crokiCanvasLiveScene";
+import { thoughtStatementLiveObject } from "./crokiThoughtViewSelection";
 import { CrokiTrueCanvasHeader } from "./CrokiTrueCanvasHeader";
 import { CrokiTrueCanvasInspector } from "./CrokiTrueCanvasInspector";
+import { artifactAtRevision, sourceProjectionMessage } from "./crokiTrueCanvasProjection";
 import { selectCrokiCanvasNode } from "./crokiCanvasDraftStore";
 import { canvasThreadFocusIds } from "./crokiCanvasThreadFocus";
 import { useCrokiCanvasController } from "./useCrokiCanvasController";
+import { useCrokiThoughtView } from "./useCrokiThoughtView";
 
-/**
- * The single Canvas surface. It is a read-only projection of live perception;
- * all durable changes still happen in their source system.
- */
 export function CrokiTrueCanvas(props: CrokiCanvasProps) {
   const hasNativePerception = props.perceptionFrame !== undefined;
   const controller = useCrokiCanvasController({
@@ -56,10 +58,20 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
       state.context,
     ],
   );
-  const selectedObjects = useMemo(
-    () => scene.objects.filter((object) => selectedIds.includes(object.id)),
-    [scene.objects, selectedIds],
-  );
+  const thought = useCrokiThoughtView({
+    frame: props.perceptionFrame,
+    question: props.externalQuestion,
+  });
+  const { thoughtView } = thought;
+  const selectedObjects = useMemo(() => {
+    const frameObjects = props.perceptionFrame?.objects ?? [];
+    return selectedIds.flatMap((id) => {
+      const sceneObject = scene.objects.find((object) => object.id === id);
+      if (sceneObject) return [sceneObject];
+      const perceptionObject = frameObjects.find((object) => object.id === id);
+      return perceptionObject ? [thoughtStatementLiveObject(perceptionObject)] : [];
+    });
+  }, [props.perceptionFrame, scene.objects, selectedIds]);
   const revisionObjects = scene.revisionObjects;
   const currentRevision = selectedArtifact?.revision ?? props.latestArtifact?.revision ?? null;
 
@@ -99,6 +111,10 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
     if (object.source === "visual" && object.selectionId && object.artifact) {
       props.onSelectArtifactNodes?.([object.selectionId]);
     }
+  };
+  const selectThoughtStatement = (statement: CrokiThoughtViewStatement) => {
+    setSelectedIds([statement.objectId]);
+    props.onSelectArtifactNodes?.([statement.objectId]);
   };
   const clearSelection = () => {
     setSelectedIds([]);
@@ -178,7 +194,15 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
           setScrubRevision(revision);
           if (artifact) props.onViewArtifactRevision?.(artifact);
         }}
+        thoughtView={thoughtView}
+        basisOpen={thought.basisOpen}
+        updateAvailable={thought.updateAvailable}
+        onToggleBasis={thought.toggleBasis}
+        onReframe={thought.reframe}
+        onUpdate={thought.update}
       />
+
+      {thoughtView && thought.basisOpen ? <CrokiThoughtViewBasis view={thoughtView} /> : null}
 
       {sourceStateMessage ? (
         <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-2 text-[11px] text-zinc-500">
@@ -231,15 +255,24 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
       ) : null}
 
       <div className="relative flex min-h-0 flex-1">
-        <CrokiCanvasLiveField
-          scene={scene}
-          focusMode="all"
-          selectedIds={selectedIds}
-          onClearSelection={clearSelection}
-          onAddress={addressObject}
-          onOpen={openObject}
-          onSelect={selectObject}
-        />
+        {thoughtView ? (
+          <CrokiThoughtViewField
+            view={thoughtView}
+            selectedObjectIds={selectedIds}
+            onClearSelection={clearSelection}
+            onSelect={selectThoughtStatement}
+          />
+        ) : (
+          <CrokiCanvasLiveField
+            scene={scene}
+            focusMode="all"
+            selectedIds={selectedIds}
+            onClearSelection={clearSelection}
+            onAddress={addressObject}
+            onOpen={openObject}
+            onSelect={selectObject}
+          />
+        )}
         {selectedObjects.length > 0 ? (
           <aside className="absolute inset-y-0 right-0 z-20 w-[min(360px,85%)] border-l border-white/15 bg-black shadow-[-16px_0_32px_rgba(0,0,0,0.72)]">
             <ScrollArea className="h-full">
@@ -260,27 +293,4 @@ export function CrokiTrueCanvas(props: CrokiCanvasProps) {
       </div>
     </section>
   );
-}
-
-function artifactAtRevision(props: CrokiCanvasProps, scrubRevision: number | null) {
-  if (scrubRevision === null)
-    return (
-      props.artifact ??
-      props.latestArtifact ??
-      props.artifacts?.slice().sort((left, right) => right.revision - left.revision)[0] ??
-      null
-    );
-  return (
-    props.artifacts?.find((artifact) => artifact.revision === scrubRevision) ??
-    props.artifact ??
-    props.latestArtifact ??
-    null
-  );
-}
-
-function sourceProjectionMessage(sourceState: string, sourceMessage: string | null): string | null {
-  if (sourceState === "valid") return null;
-  if (sourceState === "missing")
-    return "No project understanding source yet. Waiting for observation.";
-  return sourceMessage;
 }

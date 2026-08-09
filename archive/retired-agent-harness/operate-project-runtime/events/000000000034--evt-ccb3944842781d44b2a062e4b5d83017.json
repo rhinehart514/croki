@@ -1,0 +1,17 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "lease_expires_at": "2026-08-08T20:29:16.303640Z",
+    "operation_id": "croki-operating-environment",
+    "summary": "Independent Luna Max verification passed the corrected projection slice: 35 focused tests, formatting, lint, both typechecks, actual .harness query integration, and no control-plane additions. Actual current runtime now projects the active operation plus blocking integration attention. Work remains isolated and uncommitted; checked-screen evidence is absent because collaborative Preview snapshotting failed globally. Operation remains active and intentionally unverified pending integration authority, working Preview evidence, provider-native discoverability/recovery proof, and release-line integration."
+  },
+  "digest": "sha256:966be7346de095e6cdf08ae3d06734b4616e1ccbd158a96fd7d972a8456f1e06",
+  "event_version": 1,
+  "id": "evt-ccb3944842781d44b2a062e4b5d83017",
+  "idempotency_key": "checkpoint-operate-projection-ready-v1",
+  "occurred_at": "2026-08-07T20:29:16.303815Z",
+  "previous_digest": "sha256:61e3c1336784a90a2132bb8593eb7e759f144d8f0b6a04cc29cbb91567c203b7",
+  "request_fingerprint": "sha256:771a90f17748bb7bf736586f3ade088add32cf4cc9c812035eed2ccdb0de6268",
+  "sequence": 34,
+  "type": "operation_checkpointed"
+}

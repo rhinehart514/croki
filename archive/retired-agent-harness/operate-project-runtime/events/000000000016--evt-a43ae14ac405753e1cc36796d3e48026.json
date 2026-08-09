@@ -1,0 +1,18 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "intent_id": "operate-projection-design",
+    "operation_id": "croki-operating-environment",
+    "reason": "Recorded durable native-harness ownership boundary in isolated worktree without touching stale control worktree.",
+    "result_hash": null
+  },
+  "digest": "sha256:6baf1c54b5cd8a35af51936b4c67f4ca3255530aee743e0b2b7f018a99373b20",
+  "event_version": 1,
+  "id": "evt-a43ae14ac405753e1cc36796d3e48026",
+  "idempotency_key": "release-operate-projection-design-v2",
+  "occurred_at": "2026-08-07T20:15:16.117707Z",
+  "previous_digest": "sha256:5a756d2e4aca1aaca1b13f97622c02a695314d4dd9a9ba48a36d62aedc74d4b1",
+  "request_fingerprint": "sha256:589dd65dfb363ad820d3a6025d865d79195ba0d44d761d8caba2a0e1fa3d5ce9",
+  "sequence": 16,
+  "type": "mutation_intent_released"
+}

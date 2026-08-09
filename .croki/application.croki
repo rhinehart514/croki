@@ -34,5 +34,23 @@
         "path": "docs/project/release-notes-0.4.10.md"
       }
     ]
+  },
+  "building": {
+    "version": "0.4.11",
+    "intent": "Make Croki automatically visualize the structure of product, GTM, design, and implementation questions inside the native ADE without adding a harness or a second workflow.",
+    "product": [
+      "Threads, files, terminal, Preview, Review, Git, and pull requests remain the primary development environment.",
+      "Croki automatically places a source-grounded View directly after the relevant user message when bounded perception contains structure that linear text hides.",
+      "Every View statement exposes epistemic state, source identity, coverage, revision, framing, and omissions.",
+      "Reframe changes the organizing logic over the same sources; local exploration never sends a message or changes provider behavior.",
+      "Use in next message returns only a visible founder-selected View reference and stable source IDs to the native composer.",
+      "Sparse, unavailable, invalid, or unsupported inputs add nothing to the Thread.",
+      "Canvas is absent from navigation, Settings, commands, and new-turn behavior; historical identifiers remain readable for compatibility only."
+    ],
+    "successSignals": [
+      "The founder can see a complex question as a useful visual structure and inspect the provenance behind every consequential statement.",
+      "The same semantic View remains legible across web, React Native, and native SwiftUI clients.",
+      "Ordinary development never requires Product mode, a strategy folder, object browser, progress model, or Canvas workspace."
+    ]
   }
 }

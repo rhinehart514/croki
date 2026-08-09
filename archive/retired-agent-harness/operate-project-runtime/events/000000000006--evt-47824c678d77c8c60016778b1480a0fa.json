@@ -1,0 +1,21 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": [".harness/state/current.json"],
+    "effects": ["Expose structurally coherent consequence and attention to project Senses."],
+    "expected_hash": null,
+    "id": "operate-projection-loader",
+    "operation_id": "croki-operating-environment",
+    "scope": "Read bounded operate-project v2 projections without creating Croki-owned truth.",
+    "target": "apps/server/src/orchestration/operateProjectProjection.ts"
+  },
+  "digest": "sha256:8627b26fcdce417616fd400734288490b9e983dd19c77b884c5b8d2dd2b87a28",
+  "event_version": 1,
+  "id": "evt-47824c678d77c8c60016778b1480a0fa",
+  "idempotency_key": "operate-projection-loader-20260807",
+  "occurred_at": "2026-08-07T19:59:13.759631Z",
+  "previous_digest": "sha256:554dc1d9da0eb5e0deac280c27c17d0f3959243f4b1682ce4473935d5df9186e",
+  "request_fingerprint": "sha256:ae0bd18ee04601e0ca438f600dc91f0d144d271bab092fcc4ebebdc40340992e",
+  "sequence": 6,
+  "type": "mutation_intent_recorded"
+}

@@ -1,0 +1,21 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": [],
+    "effects": ["Navigation tests preserve the new product noun and remove Canvas copy."],
+    "expected_hash": null,
+    "id": "canvas-brief-tabs-tests",
+    "operation_id": "croki-operating-environment",
+    "scope": "Cover the founder-facing Brief label and icon.",
+    "target": "apps/web/src/components/RightPanelTabs.test.tsx"
+  },
+  "digest": "sha256:860f87249eeae6587c750c4b58b46ecf03abb9c0f354fc8f887e9678b9963937",
+  "event_version": 1,
+  "id": "evt-f9ac778c332de00bb95bf1586f2abf7d",
+  "idempotency_key": "brief-tabs-tests-v1",
+  "occurred_at": "2026-08-07T22:26:05.852252Z",
+  "previous_digest": "sha256:d3e05247f0b499bcf0d92ab0af2b378abde6cd8633af0df49e5c6c813c1ac4ee",
+  "request_fingerprint": "sha256:03d451a77ce9cda4f7d1d0628dac8e42ac8625926b41c7ce89ba768314a84669",
+  "sequence": 39,
+  "type": "mutation_intent_recorded"
+}

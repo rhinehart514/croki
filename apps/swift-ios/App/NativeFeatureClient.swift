@@ -1243,6 +1243,22 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         activeThreadSequence = nil
     }
 
+    func loadThoughtView(
+        projectID: String,
+        question: String,
+        alternate: Bool
+    ) async throws -> FeatureThoughtView? {
+        let route = try projectRoute(for: projectID)
+        guard let snapshot = try await route.client.projectPerception(projectID: route.wireID) else {
+            return nil
+        }
+        return FeatureThoughtViewCompiler.compile(
+            snapshot: snapshot,
+            question: question,
+            alternate: alternate
+        )
+    }
+
     func sendMessage(
         threadID: String,
         text: String,

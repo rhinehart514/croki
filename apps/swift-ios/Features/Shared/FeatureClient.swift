@@ -65,6 +65,11 @@ public protocol FeatureClient: AnyObject {
         -> FeatureThreadSearchResult
 
     func loadThread(id: String) async throws -> FeatureThreadDetail
+    func loadThoughtView(
+        projectID: String,
+        question: String,
+        alternate: Bool
+    ) async throws -> FeatureThoughtView?
     func releaseThread(id: String)
     func sendMessage(threadID: String, text: String, selection: FeatureSelection?) async throws
     func sendMessage(
@@ -129,6 +134,11 @@ public extension FeatureClient {
     func disconnect() async {}
     func addProject(path: String) async throws {}
     func releaseThread(id: String) {}
+    func loadThoughtView(
+        projectID: String,
+        question: String,
+        alternate: Bool
+    ) async throws -> FeatureThoughtView? { nil }
     func resolveUserInput(id: String, answers: [String: FeatureInputAnswer]) async throws {}
 
     /// Keeps simple text-only callers source-compatible while the typed API

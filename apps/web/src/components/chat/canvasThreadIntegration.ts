@@ -136,7 +136,7 @@ export function canvasHarnessLabel(harnessId: CanvasHarnessId | null): "Product"
 }
 
 /**
- * Keep Canvas selections visible in the sent message. The selection is not
+ * Keep View selections visible in the sent message. The selection is not
  * appended to the composer draft, so selecting and then abandoning a turn
  * never mutates or sends anything.
  */
@@ -158,7 +158,7 @@ export function appendCanvasSelectionToPrompt(
     }
     return lines.join("\n");
   });
-  const selection = `Canvas selection\n${blocks.join("\n")}`;
+  const selection = `View selection\n${blocks.join("\n")}`;
   const trimmed = prompt.trim();
   return trimmed.length > 0 ? `${trimmed}\n\n${selection}` : selection;
 }

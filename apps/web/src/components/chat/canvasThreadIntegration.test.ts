@@ -64,7 +64,7 @@ describe("Canvas thread integration", () => {
 
   it("keeps Canvas selection visible only when composing the sent prompt", () => {
     expect(appendCanvasSelectionToPrompt("Converge on this route.", [artifact.nodes[0]!])).toBe(
-      "Converge on this route.\n\nCanvas selection\n- Thread-scoped visual\n  Keep the visual attached to the decision that produced it.\n  Why it matters: It avoids a second project-management surface.",
+      "Converge on this route.\n\nView selection\n- Thread-scoped visual\n  Keep the visual attached to the decision that produced it.\n  Why it matters: It avoids a second project-management surface.",
     );
   });
 

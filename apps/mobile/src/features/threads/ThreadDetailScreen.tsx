@@ -41,6 +41,7 @@ import {
 } from "./ThreadComposer";
 import { ThreadFeed } from "./ThreadFeed";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
+import { CrokiInlineThoughtView } from "../croki/CrokiInlineThoughtView";
 
 export interface ThreadDetailScreenProps {
   readonly selectedThread: OrchestrationThreadShell;
@@ -203,6 +204,21 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     }
   })();
   const selectedThreadFeed = props.selectedThreadFeed;
+  const latestUserQuestion = selectedThreadFeed.findLast(
+    (entry) => entry.type === "message" && entry.message.role === "user",
+  );
+  const thoughtViewFooter =
+    latestUserQuestion?.type === "message" && latestUserQuestion.message.text.trim() ? (
+      <CrokiInlineThoughtView
+        environmentId={props.environmentId}
+        projectId={props.selectedThread.projectId}
+        question={latestUserQuestion.message.text}
+        onUse={(text) => {
+          const current = props.draftMessage.trim();
+          props.onChangeDraftMessage(current ? `${current}\n\n${text}` : text);
+        }}
+      />
+    ) : null;
   const composerChrome = composerExpanded ? COMPOSER_EXPANDED_CHROME : COMPOSER_COLLAPSED_CHROME;
   const composerOverlapHeight = composerChrome + composerBottomInset;
   const estimatedOverlayHeight = composerOverlapHeight;
@@ -375,6 +391,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             onHeaderMaterialVisibilityChange={props.onHeaderMaterialVisibilityChange}
             skills={selectedProviderSkills}
             loadEarlier={props.loadEarlier ?? null}
+            footer={thoughtViewFooter}
           />
         </View>
       ) : (

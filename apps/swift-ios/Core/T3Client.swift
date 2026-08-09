@@ -73,6 +73,17 @@ public actor T3Client {
         )
     }
 
+    public func projectPerception(projectID: String) async throws -> CrokiPerceptionSnapshot? {
+        try await rpc.request(
+            RPCMethod.getProjectPerception.rawValue,
+            payload: .object([
+                "projectId": .string(projectID),
+                "limit": .number(Double(200)),
+            ]),
+            as: CrokiPerceptionSnapshot?.self
+        )
+    }
+
     public func searchThreads(query: String, limit: Int = 50) async throws
         -> OrchestrationSearchThreadsResult
     {
@@ -1166,6 +1177,7 @@ public enum RPCMethod: String, Sendable {
     case serverGetConfig = "server.getConfig"
     case dispatchCommand = "orchestration.dispatchCommand"
     case getArchivedShellSnapshot = "orchestration.getArchivedShellSnapshot"
+    case getProjectPerception = "orchestration.getProjectPerception"
     case searchThreads = "orchestration.searchThreads"
     case subscribeShell = "orchestration.subscribeShell"
     case subscribeThread = "orchestration.subscribeThread"

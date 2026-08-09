@@ -1,4 +1,6 @@
 import {
+  type CrokiThoughtView,
+  type CrokiThoughtViewStatement,
   type EnvironmentId,
   type MessageId,
   type OrchestrationThreadActivity,
@@ -135,6 +137,7 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { applicationAwarenessToolPreview } from "./applicationAwarenessPresentation";
 import { useAssetUrls } from "~/assets/assetUrls";
 import { uiHistoryEntryLabel } from "~/components/preview/uiHistory";
+import { CrokiInlineThoughtView } from "../croki/CrokiInlineThoughtView";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -167,6 +170,20 @@ interface TimelineRowSharedState {
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
   agentPanelModel: AgentPanelModel;
   onOpenAgents: () => void;
+  thoughtView?: MessagesTimelineThoughtView | undefined;
+}
+
+export interface MessagesTimelineThoughtView {
+  readonly view: CrokiThoughtView;
+  readonly anchorMessageId: MessageId;
+  readonly basisOpen: boolean;
+  readonly selectedObjectIds: readonly string[];
+  readonly updateAvailable: boolean;
+  readonly onToggleBasis: () => void;
+  readonly onReframe: () => void;
+  readonly onUpdate: () => void;
+  readonly onUse: (statement: CrokiThoughtViewStatement) => void;
+  readonly onOpenSource?: ((uri: string) => void) | undefined;
 }
 
 interface TimelineRowActivityState {
@@ -278,6 +295,7 @@ interface MessagesTimelineProps {
   topFadeEnabled?: boolean;
   /** Non-null when older turns exist beyond the loaded window. */
   loadEarlier?: { readonly loading: boolean; readonly onLoadEarlier: () => void } | null;
+  thoughtView?: MessagesTimelineThoughtView | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -326,6 +344,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   hideEmptyPlaceholder = false,
   topFadeEnabled = false,
   loadEarlier = null,
+  thoughtView,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
@@ -453,6 +472,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         activeTurnStartedAt,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
+        thoughtView: thoughtView?.view,
+        thoughtViewAnchorMessageId: thoughtView?.anchorMessageId,
       }),
     [
       timelineEntries,
@@ -466,6 +487,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeTurnStartedAt,
       turnDiffSummaryByAssistantMessageId,
       revertTurnCountByUserMessageId,
+      thoughtView,
     ],
   );
   const rows = useStableRows(rawRows);
@@ -575,6 +597,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
+      thoughtView,
     }),
     [
       timestampFormat,
@@ -599,6 +622,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
+      thoughtView,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -1005,6 +1029,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
           row.kind === "work-toggle" ||
           row.kind === "coordination" ||
           row.kind === "canvas" ||
+          row.kind === "thought-view" ||
           row.kind === "turn-plan"
           ? "pb-2"
           : "pb-4",
@@ -1026,10 +1051,29 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "turn-plan" ? <TurnPlanTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
       {row.kind === "canvas" ? <CanvasPresentationTimelineRow row={row} /> : null}
+      {row.kind === "thought-view" ? <ThoughtViewTimelineRow row={row} /> : null}
       {row.kind === "coordination" ? <CoordinationWorkstreams activities={row.activities} /> : null}
     </div>
   );
 });
+
+function ThoughtViewTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "thought-view" }> }) {
+  const thoughtView = use(TimelineRowCtx).thoughtView;
+  if (!thoughtView || thoughtView.view.id !== row.view.id) return null;
+  return (
+    <CrokiInlineThoughtView
+      view={row.view}
+      basisOpen={thoughtView.basisOpen}
+      selectedObjectIds={thoughtView.selectedObjectIds}
+      updateAvailable={thoughtView.updateAvailable}
+      onToggleBasis={thoughtView.onToggleBasis}
+      onReframe={thoughtView.onReframe}
+      onUpdate={thoughtView.onUpdate}
+      onUse={thoughtView.onUse}
+      {...(thoughtView.onOpenSource ? { onOpenSource: thoughtView.onOpenSource } : {})}
+    />
+  );
+}
 
 function CanvasPresentationTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "canvas" }> }) {
   const ctx = use(TimelineRowCtx);

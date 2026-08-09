@@ -123,6 +123,10 @@
       "types": "./src/crokiPerception.ts",
       "import": "./src/crokiPerception.ts"
     },
+    "./crokiThoughtView": {
+      "types": "./src/crokiThoughtView.ts",
+      "import": "./src/crokiThoughtView.ts"
+    },
     "./crokiReleaseCandidate": {
       "types": "./src/crokiReleaseCandidate.ts",
       "import": "./src/crokiReleaseCandidate.ts"

@@ -1,0 +1,23 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": [],
+    "effects": [
+      "Automated evidence rejects the old dashboard sections and requires outcome-first hierarchy."
+    ],
+    "expected_hash": null,
+    "id": "canvas-brief-tests",
+    "operation_id": "croki-operating-environment",
+    "scope": "Update visible composition coverage for the editorial brief.",
+    "target": "apps/web/src/components/croki/CrokiCanvasLiveField.test.tsx"
+  },
+  "digest": "sha256:d3e05247f0b499bcf0d92ab0af2b378abde6cd8633af0df49e5c6c813c1ac4ee",
+  "event_version": 1,
+  "id": "evt-4731eacc4b48d6f325b69bc4a243dfcf",
+  "idempotency_key": "brief-tests-v1",
+  "occurred_at": "2026-08-07T22:26:05.746934Z",
+  "previous_digest": "sha256:4e71ef44f57c0f1f621f108e8c96ac50db91e64e6fa0a4a319c06916dd730161",
+  "request_fingerprint": "sha256:271171cdb85a3a0219ac4660f87f13e8658a678cdc85eccdf49813ca225a53ad",
+  "sequence": 38,
+  "type": "mutation_intent_recorded"
+}

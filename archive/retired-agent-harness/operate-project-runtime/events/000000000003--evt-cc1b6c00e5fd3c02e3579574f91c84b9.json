@@ -1,0 +1,23 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": [".harness/state/current.json"],
+    "effects": [
+      "Fresh harnesses can recover the active project direction without this conversation."
+    ],
+    "expected_hash": null,
+    "id": "croki-project-contract",
+    "operation_id": "croki-operating-environment",
+    "scope": "Record the human-readable consequence, current frontier, authority, contradictions, and proof for the delegated Croki operation.",
+    "target": "PROJECT.md"
+  },
+  "digest": "sha256:eb9990a907c2f013724114b2b1a42483c051600fc16238b66188c67bc5b04634",
+  "event_version": 1,
+  "id": "evt-cc1b6c00e5fd3c02e3579574f91c84b9",
+  "idempotency_key": "croki-project-contract-intent-20260807",
+  "occurred_at": "2026-08-07T19:38:18.221097Z",
+  "previous_digest": "sha256:bd3f5ed50c56d80245580f645afe45b905a6f0b6b6058cbd796561008cace004",
+  "request_fingerprint": "sha256:7148436a42e22ed294db0a0ca07c6bd3761b32fcb9ab5d7bc827d89fed7daf5e",
+  "sequence": 3,
+  "type": "mutation_intent_recorded"
+}

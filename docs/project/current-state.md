@@ -7,13 +7,13 @@ Croki is Jacob's current ADE and daily development environment. The product is
 a narrow application-aware overlay on the development environment rather than
 a second agent runtime.
 
-Croki 0.4.10 is the current repository version; 0.4.9 remains the latest tagged
-stable baseline inherited by it. See the [0.4.6 release
+Croki 0.4.11 is the current repository implementation candidate; 0.4.10 remains
+the latest tagged stable baseline inherited by it. See the [0.4.6 release
 notes](./release-notes-0.4.6.md), [0.4.7 UI history
 notes](./release-notes-0.4.7.md), [0.4.8 quality-of-life
 notes](./release-notes-0.4.8.md), [0.4.9 control without interruption
 notes](./release-notes-0.4.9.md), [0.4.10 native-provider integration
-notes](./release-notes-0.4.10.md), and [release ownership contract](../operations/release.md)
+notes](./release-notes-0.4.10.md), [0.4.11 Thought Views candidate](./release-notes-0.4.11.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
 ## Working product
@@ -45,7 +45,20 @@ Croki currently provides:
 - Croki branding and completion feedback;
 - one repository-owned application brief at `.croki/application.croki`, visible
   to the founder and attached to a model only through an explicit user action;
-- the true Canvas / Croki Senses projection established by the 0.4.2 migration.
+- source-grounded Croki Senses perception, now rendered as automatic inline Views when it materially improves a Thread question.
+
+## 0.4.11 boundary
+
+0.4.11 places automatic visual thinking directly inside the Thread. When the
+latest user question and bounded project perception contain useful structure,
+a source-grounded View appears with that user turn. Epistemic state, coverage,
+framing, and omissions remain inspectable. **Reframe** changes the organizing
+logic over the same sources. **Use in next message** returns stable source IDs
+through the visible composer boundary. Sparse input adds nothing.
+
+The implementation adds no second model session, hidden Thread, prompt harness,
+Canvas destination, or provider dependency. Historical Canvas and harness IDs
+remain readable for compatibility only.
 
 ## 0.4.8 boundary
 

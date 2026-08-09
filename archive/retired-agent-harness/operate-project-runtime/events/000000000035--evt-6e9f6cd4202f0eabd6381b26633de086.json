@@ -1,0 +1,23 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": [],
+    "effects": [
+      "Founder sees the outcome first, one required judgment second, and quiet supporting truth without decoding harness machinery."
+    ],
+    "expected_hash": null,
+    "id": "canvas-brief-field",
+    "operation_id": "croki-operating-environment",
+    "scope": "Replace the Canvas card dashboard with one editorial project brief.",
+    "target": "apps/web/src/components/croki/CrokiCanvasLiveField.tsx"
+  },
+  "digest": "sha256:d3428ec0776816cb68c48f9f87d4af4ad217242d3a30e98f1d3e6b04447ec353",
+  "event_version": 1,
+  "id": "evt-6e9f6cd4202f0eabd6381b26633de086",
+  "idempotency_key": "brief-field-v1",
+  "occurred_at": "2026-08-07T22:26:05.444297Z",
+  "previous_digest": "sha256:966be7346de095e6cdf08ae3d06734b4616e1ccbd158a96fd7d972a8456f1e06",
+  "request_fingerprint": "sha256:6c8334732d923069606ef1a246bb639603132fe5fb9230c189909d0ba19f4ac3",
+  "sequence": 35,
+  "type": "mutation_intent_recorded"
+}

@@ -35,3 +35,4 @@ export * from "./perception.ts";
 export * from "./evidence.ts";
 export * from "./uiHistory.ts";
 export * from "./applicationAwareness.ts";
+export * from "./thoughtView.ts";

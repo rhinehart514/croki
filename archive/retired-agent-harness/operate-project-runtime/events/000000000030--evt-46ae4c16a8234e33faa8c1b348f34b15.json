@@ -1,0 +1,18 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "intent_id": "operate-projection-query-integration",
+    "operation_id": "croki-operating-environment",
+    "reason": "Added an end-to-end ProjectionSnapshotQuery test over a real project-local .harness fixture; suite passes.",
+    "result_hash": null
+  },
+  "digest": "sha256:3aaaee084773fae150fd86a7d408e68a382aaf3e1ac50fe20d0bf1b746dc0c2a",
+  "event_version": 1,
+  "id": "evt-46ae4c16a8234e33faa8c1b348f34b15",
+  "idempotency_key": "release-operate-projection-query-integration-v1",
+  "occurred_at": "2026-08-07T20:24:49.748068Z",
+  "previous_digest": "sha256:921afdf0930c66671b861e435d83b0c126ab6bfcb0e0d53bd78cd57d44c706a8",
+  "request_fingerprint": "sha256:e03ca6c5cb56fc115e74de44fca80239d42b5cb6472db34f3bceaf03ee39eb16",
+  "sequence": 30,
+  "type": "mutation_intent_released"
+}

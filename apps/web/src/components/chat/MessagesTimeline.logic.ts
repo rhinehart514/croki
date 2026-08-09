@@ -9,6 +9,7 @@ import {
 } from "../../session-logic";
 import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
 import {
+  type CrokiThoughtView,
   type MessageId,
   type OrchestrationLatestTurn,
   type OrchestrationThreadActivity,
@@ -221,6 +222,12 @@ export type MessagesTimelineRow =
       id: string;
       createdAt: string;
       presentation: CanvasPresentationTimelineActivity;
+    }
+  | {
+      kind: "thought-view";
+      id: string;
+      createdAt: string;
+      view: CrokiThoughtView;
     }
   | {
       kind: "coordination";
@@ -484,6 +491,8 @@ export function deriveMessagesTimelineRows(input: {
   activeTurnStartedAt: string | null;
   turnDiffSummaryByAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>;
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
+  thoughtView?: CrokiThoughtView | null | undefined;
+  thoughtViewAnchorMessageId?: MessageId | null | undefined;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
   // Native task lifecycle has exactly one product home: Workstreams when
@@ -691,6 +700,19 @@ export function deriveMessagesTimelineRows(input: {
           ? input.revertTurnCountByUserMessageId.get(timelineEntry.message.id)
           : undefined,
     });
+
+    if (
+      input.thoughtView &&
+      timelineEntry.message.role === "user" &&
+      timelineEntry.message.id === input.thoughtViewAnchorMessageId
+    ) {
+      nextRows.push({
+        kind: "thought-view",
+        id: `thought-view:${input.thoughtView.id}`,
+        createdAt: timelineEntry.createdAt,
+        view: input.thoughtView,
+      });
+    }
   }
 
   for (const [scope, group] of coordinationGroups) {
@@ -759,6 +781,9 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
 
     case "canvas":
       return a.presentation === (b as typeof a).presentation;
+
+    case "thought-view":
+      return a.view === (b as typeof a).view;
 
     case "coordination":
       return Equal.equals(a.activities, (b as typeof a).activities);

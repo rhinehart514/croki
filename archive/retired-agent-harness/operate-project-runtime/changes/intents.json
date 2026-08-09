@@ -1,0 +1,409 @@
+{
+  "active_mutations": [
+    {
+      "dependencies": [],
+      "effects": [
+        "Founder sees the outcome first, one required judgment second, and quiet supporting truth without decoding harness machinery."
+      ],
+      "event_id": "evt-6e9f6cd4202f0eabd6381b26633de086",
+      "expected_hash": null,
+      "id": "canvas-brief-field",
+      "operation_id": "croki-operating-environment",
+      "owner": "codex-root",
+      "scope": "Replace the Canvas card dashboard with one editorial project brief.",
+      "state": "active",
+      "target": "apps/web/src/components/croki/CrokiCanvasLiveField.tsx"
+    },
+    {
+      "dependencies": [],
+      "effects": [
+        "Header names the founder-facing brief and communicates freshness without internal model vocabulary."
+      ],
+      "event_id": "evt-65796694f817e3327c0123e4b71caf21",
+      "expected_hash": null,
+      "id": "canvas-brief-header",
+      "operation_id": "croki-operating-environment",
+      "owner": "codex-root",
+      "scope": "Remove perception-model and revision chatter from the visible header.",
+      "state": "active",
+      "target": "apps/web/src/components/croki/CrokiTrueCanvasHeader.tsx"
+    },
+    {
+      "dependencies": [],
+      "effects": [
+        "The panel affordance promises a concise project brief instead of a graph/editor surface."
+      ],
+      "event_id": "evt-194dbb62ab1fabd8f6cd5ef08553146e",
+      "expected_hash": null,
+      "id": "canvas-brief-surface",
+      "operation_id": "croki-operating-environment",
+      "owner": "codex-root",
+      "scope": "Rename the founder-facing Canvas destination to Brief.",
+      "state": "active",
+      "target": "apps/web/src/components/RightPanelTabs.tsx"
+    },
+    {
+      "dependencies": [],
+      "effects": [
+        "Automated evidence rejects the old dashboard sections and requires outcome-first hierarchy."
+      ],
+      "event_id": "evt-4731eacc4b48d6f325b69bc4a243dfcf",
+      "expected_hash": null,
+      "id": "canvas-brief-tests",
+      "operation_id": "croki-operating-environment",
+      "owner": "codex-root",
+      "scope": "Update visible composition coverage for the editorial brief.",
+      "state": "active",
+      "target": "apps/web/src/components/croki/CrokiCanvasLiveField.test.tsx"
+    },
+    {
+      "dependencies": [],
+      "effects": ["Navigation tests preserve the new product noun and remove Canvas copy."],
+      "event_id": "evt-f9ac778c332de00bb95bf1586f2abf7d",
+      "expected_hash": null,
+      "id": "canvas-brief-tabs-tests",
+      "operation_id": "croki-operating-environment",
+      "owner": "codex-root",
+      "scope": "Cover the founder-facing Brief label and icon.",
+      "state": "active",
+      "target": "apps/web/src/components/RightPanelTabs.test.tsx"
+    },
+    {
+      "dependencies": [],
+      "effects": [
+        "Future work preserves one editorial read-only projection and does not reintroduce Canvas dashboard or graph machinery."
+      ],
+      "event_id": "evt-60f474adeef648e42e4d0225094c0f4c",
+      "expected_hash": null,
+      "id": "canvas-brief-design",
+      "operation_id": "croki-operating-environment",
+      "owner": "codex-root",
+      "scope": "Record the durable founder-facing Brief decision.",
+      "state": "active",
+      "target": "DESIGN.md"
+    }
+  ],
+  "intents": [
+    {
+      "dependencies": [".harness/state/current.json"],
+      "effects": [
+        "Fresh harnesses can recover the active project direction without this conversation."
+      ],
+      "event_id": "evt-cc1b6c00e5fd3c02e3579574f91c84b9",
+      "expected_hash": null,
+      "id": "croki-project-contract",
+      "operation_id": "croki-operating-environment",
+      "scope": "Record the human-readable consequence, current frontier, authority, contradictions, and proof for the delegated Croki operation.",
+      "target": "PROJECT.md",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "event_id": "evt-ab7c31dcb4e62f74faefc148899f12cc",
+      "intent_id": "croki-project-contract",
+      "operation_id": "croki-operating-environment",
+      "reason": "Concurrent authoritative PROJECT.md content appeared before the planned write; preserved it unchanged and released ownership.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "dependencies": [".harness/state/current.json"],
+      "effects": ["Expose structurally coherent consequence and attention to project Senses."],
+      "event_id": "evt-47824c678d77c8c60016778b1480a0fa",
+      "expected_hash": null,
+      "id": "operate-projection-loader",
+      "operation_id": "croki-operating-environment",
+      "scope": "Read bounded operate-project v2 projections without creating Croki-owned truth.",
+      "target": "apps/server/src/orchestration/operateProjectProjection.ts",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": [".harness/state/current.json"],
+      "effects": [
+        "Canvas can show the active project operation without a new runtime or dashboard."
+      ],
+      "event_id": "evt-4c13a443e03a26c273f9d7fb352ff9e1",
+      "expected_hash": null,
+      "id": "operate-projection-server",
+      "operation_id": "croki-operating-environment",
+      "scope": "Attach active operate-project consequence and attention to existing read-only project perception.",
+      "target": "apps/server/src/orchestration/projectPerception.ts",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": [".harness/state/current.json"],
+      "effects": ["Runtime file changes appear through fresh project perception reads."],
+      "event_id": "evt-3c61cc9db24fce2322629011b3cf987d",
+      "expected_hash": null,
+      "id": "operate-projection-query",
+      "operation_id": "croki-operating-environment",
+      "scope": "Resolve the project workspace root and load operation projection outside persistent orchestration state.",
+      "target": "apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": ["operate-projection-server"],
+      "effects": [
+        "Ordinary projects remain visually unchanged; an active structurally coherent runtime becomes the current outcome and its attention becomes founder judgment."
+      ],
+      "event_id": "evt-b06d7d709677a66bc81b790419f27765",
+      "expected_hash": null,
+      "id": "operate-projection-web",
+      "operation_id": "croki-operating-environment",
+      "scope": "Project active operate-project consequence and attention through the existing Canvas scene only.",
+      "target": "apps/web/src/components/croki/crokiCanvasPerceptionProjection.ts",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": ["operate-projection-web"],
+      "effects": [
+        "Future Croki work preserves native harness ownership and does not add empty operation UI."
+      ],
+      "event_id": "evt-2925074d109ac949d89bc41f032092c9",
+      "expected_hash": null,
+      "id": "operate-projection-design",
+      "operation_id": "croki-operating-environment",
+      "scope": "Record the durable boundary for explicit operate-project projection.",
+      "target": "DESIGN.md",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": ["operate-projection-web"],
+      "effects": [
+        "Automated evidence proves the projected wording actually renders in the existing Canvas composition."
+      ],
+      "event_id": "evt-e38877c74d381549742fa399cf1d993e",
+      "expected_hash": null,
+      "id": "operate-projection-render-test",
+      "operation_id": "croki-operating-environment",
+      "scope": "Exercise the visible operation outcome and judgment markup through the existing Canvas field.",
+      "target": "apps/web/src/components/croki/CrokiCanvasLiveField.test.tsx",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "event_id": "evt-00be18ce7ae5f1ac3ebced98400e736e",
+      "intent_id": "operate-projection-loader",
+      "operation_id": "croki-operating-environment",
+      "reason": "Implemented in isolated worktree at origin/croki/main; runtime root intentionally remains untouched. Focused loader tests pass.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "event_id": "evt-ec9bef691fddbf561cca12f904096e27",
+      "intent_id": "operate-projection-server",
+      "operation_id": "croki-operating-environment",
+      "reason": "Implemented in isolated worktree; projected one active operation and one highest-urgency attention item. Focused tests pass.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "event_id": "evt-7bccc9154d03da1251070a4e84cbf04c",
+      "intent_id": "operate-projection-query",
+      "operation_id": "croki-operating-environment",
+      "reason": "Implemented in isolated worktree; filesystem projection occurs after SQL transaction completion. Query tests and server typecheck pass.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "event_id": "evt-b4886a8434a3e674f5cbc082334329ff",
+      "intent_id": "operate-projection-web",
+      "operation_id": "croki-operating-environment",
+      "reason": "Implemented in isolated worktree; existing Canvas prioritizes the operation and labels it structurally unverified. Focused web tests and typecheck pass.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "event_id": "evt-a43ae14ac405753e1cc36796d3e48026",
+      "intent_id": "operate-projection-design",
+      "operation_id": "croki-operating-environment",
+      "reason": "Recorded durable native-harness ownership boundary in isolated worktree without touching stale control worktree.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "event_id": "evt-9302e6d630b7bf01eb1673d656b2e230",
+      "intent_id": "operate-projection-render-test",
+      "operation_id": "croki-operating-environment",
+      "reason": "Added rendered-markup evidence in isolated worktree for operation wording and required judgment ordering.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "dependencies": ["operate-projection-loader"],
+      "effects": [
+        "Broken project runtime state can be shown honestly without reading canonical events."
+      ],
+      "event_id": "evt-42fba7c7890d9f554fa9c9a9fd11f788",
+      "expected_hash": null,
+      "id": "operate-projection-loader-v2",
+      "operation_id": "croki-operating-environment",
+      "scope": "Preserve bounded observation time for invalid or oversized runtime projections.",
+      "target": "apps/server/src/orchestration/operateProjectProjection.ts",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": ["operate-projection-server"],
+      "effects": ["Models cannot mistake a Croki structural projection for runtime verification."],
+      "event_id": "evt-d8b04973faf7238f3b5a27666eaf8295",
+      "expected_hash": null,
+      "id": "operate-projection-senses-authority",
+      "operation_id": "croki-operating-environment",
+      "scope": "Preserve structural-only runtime caveat in model-facing application evidence limitations.",
+      "target": "apps/server/src/mcp/toolkits/application/handlers.ts",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": ["operate-projection-web"],
+      "effects": [
+        "Founder sees active operation and broken runtime judgment without achieved-state overclaim."
+      ],
+      "event_id": "evt-df52065064665511b23db36824831051",
+      "expected_hash": null,
+      "id": "operate-projection-field-semantics",
+      "operation_id": "croki-operating-environment",
+      "scope": "Label active native operation as active operation, not current achieved outcome.",
+      "target": "apps/web/src/components/croki/CrokiCanvasLiveField.tsx",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": ["operate-projection-web"],
+      "effects": ["Active intent no longer inherits green check styling."],
+      "event_id": "evt-aba90622ee34866e7676934fbfc9fff1",
+      "expected_hash": null,
+      "id": "operate-projection-card-semantics",
+      "operation_id": "croki-operating-environment",
+      "scope": "Give active operation neutral in-progress visual treatment instead of verified outcome treatment.",
+      "target": "apps/web/src/components/croki/CrokiCanvasLiveObjects.tsx",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": ["operate-projection-query"],
+      "effects": [
+        "Proof covers the filesystem-to-Senses integration boundary, not only isolated pure functions."
+      ],
+      "event_id": "evt-b5de42e6be8b8c0023b81b8b4b2533b6",
+      "expected_hash": null,
+      "id": "operate-projection-query-integration",
+      "operation_id": "croki-operating-environment",
+      "scope": "Exercise ProjectionSnapshotQuery against an actual project-local operate-project fixture.",
+      "target": "apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.test.ts",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "event_id": "evt-d1e05c17060e4416912f3ce933522f99",
+      "intent_id": "operate-projection-loader-v2",
+      "operation_id": "croki-operating-environment",
+      "reason": "Invalid and oversized runtime projections now retain bounded observation time so Senses can surface a warning; focused tests pass.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "event_id": "evt-5e36ba0bdbe2311871d1cdecbf66402a",
+      "intent_id": "operate-projection-senses-authority",
+      "operation_id": "croki-operating-environment",
+      "reason": "Application awareness now adds an explicit limitation whenever selected evidence comes from operate-project; focused handler tests pass.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "event_id": "evt-9f370b339c238234507b0fd503c0e25a",
+      "intent_id": "operate-projection-field-semantics",
+      "operation_id": "croki-operating-environment",
+      "reason": "Canvas labels active operate-project consequence as Active operation and keeps unreadable runtime state in founder judgment.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "event_id": "evt-96c5da70778c8398608751e898b6743b",
+      "intent_id": "operate-projection-card-semantics",
+      "operation_id": "croki-operating-environment",
+      "reason": "Active operation now uses neutral sky in-progress styling and a circle marker, not green verified outcome treatment.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "event_id": "evt-46ae4c16a8234e33faa8c1b348f34b15",
+      "intent_id": "operate-projection-query-integration",
+      "operation_id": "croki-operating-environment",
+      "reason": "Added an end-to-end ProjectionSnapshotQuery test over a real project-local .harness fixture; suite passes.",
+      "result_hash": null,
+      "type": "mutation_intent_released"
+    },
+    {
+      "dependencies": [],
+      "effects": [
+        "Founder sees the outcome first, one required judgment second, and quiet supporting truth without decoding harness machinery."
+      ],
+      "event_id": "evt-6e9f6cd4202f0eabd6381b26633de086",
+      "expected_hash": null,
+      "id": "canvas-brief-field",
+      "operation_id": "croki-operating-environment",
+      "scope": "Replace the Canvas card dashboard with one editorial project brief.",
+      "target": "apps/web/src/components/croki/CrokiCanvasLiveField.tsx",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": [],
+      "effects": [
+        "Header names the founder-facing brief and communicates freshness without internal model vocabulary."
+      ],
+      "event_id": "evt-65796694f817e3327c0123e4b71caf21",
+      "expected_hash": null,
+      "id": "canvas-brief-header",
+      "operation_id": "croki-operating-environment",
+      "scope": "Remove perception-model and revision chatter from the visible header.",
+      "target": "apps/web/src/components/croki/CrokiTrueCanvasHeader.tsx",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": [],
+      "effects": [
+        "The panel affordance promises a concise project brief instead of a graph/editor surface."
+      ],
+      "event_id": "evt-194dbb62ab1fabd8f6cd5ef08553146e",
+      "expected_hash": null,
+      "id": "canvas-brief-surface",
+      "operation_id": "croki-operating-environment",
+      "scope": "Rename the founder-facing Canvas destination to Brief.",
+      "target": "apps/web/src/components/RightPanelTabs.tsx",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": [],
+      "effects": [
+        "Automated evidence rejects the old dashboard sections and requires outcome-first hierarchy."
+      ],
+      "event_id": "evt-4731eacc4b48d6f325b69bc4a243dfcf",
+      "expected_hash": null,
+      "id": "canvas-brief-tests",
+      "operation_id": "croki-operating-environment",
+      "scope": "Update visible composition coverage for the editorial brief.",
+      "target": "apps/web/src/components/croki/CrokiCanvasLiveField.test.tsx",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": [],
+      "effects": ["Navigation tests preserve the new product noun and remove Canvas copy."],
+      "event_id": "evt-f9ac778c332de00bb95bf1586f2abf7d",
+      "expected_hash": null,
+      "id": "canvas-brief-tabs-tests",
+      "operation_id": "croki-operating-environment",
+      "scope": "Cover the founder-facing Brief label and icon.",
+      "target": "apps/web/src/components/RightPanelTabs.test.tsx",
+      "type": "mutation_intent_recorded"
+    },
+    {
+      "dependencies": [],
+      "effects": [
+        "Future work preserves one editorial read-only projection and does not reintroduce Canvas dashboard or graph machinery."
+      ],
+      "event_id": "evt-60f474adeef648e42e4d0225094c0f4c",
+      "expected_hash": null,
+      "id": "canvas-brief-design",
+      "operation_id": "croki-operating-environment",
+      "scope": "Record the durable founder-facing Brief decision.",
+      "target": "DESIGN.md",
+      "type": "mutation_intent_recorded"
+    }
+  ],
+  "version": 2
+}

@@ -21,7 +21,6 @@ import { useAgentNotificationNavigation } from "./features/agent-awareness/notif
 import { ClerkSettingsSheetDetentProvider } from "./features/cloud/ClerkSettingsSheetDetent";
 import { ConnectOnboardingRouteScreen } from "./features/cloud/ConnectOnboardingRouteScreen";
 import { useConnectOnboardingNavigation } from "./features/cloud/connectOnboardingNavigation";
-import { ThreadCanvasRouteScreen } from "./features/croki/ThreadCanvasRouteScreen";
 import { ThreadFilesTreeScreen, ThreadFileScreen } from "./features/files/ThreadFilesRouteScreen";
 import { AdaptiveWorkspaceLayout } from "./features/layout/AdaptiveWorkspaceLayout";
 import { HardwareKeyboardCommandProvider } from "./features/keyboard/HardwareKeyboardCommandProvider";
@@ -430,11 +429,6 @@ export const RootStack = createNativeStackNavigator({
         sheetAllowedDetents: Platform.OS === "android" ? undefined : [0.55, 0.92],
         sheetGrabberVisible: Platform.OS !== "android",
       },
-    }),
-    ThreadCanvas: createNativeStackScreen({
-      screen: ThreadCanvasRouteScreen,
-      linking: `${THREAD_LINKING_PREFIX}/canvas`,
-      options: SOLID_HEADER_OPTIONS,
     }),
     ThreadFiles: createNativeStackScreen({
       screen: ThreadFilesTreeScreen,

@@ -1,0 +1,18 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "intent_id": "croki-project-contract",
+    "operation_id": "croki-operating-environment",
+    "reason": "Concurrent authoritative PROJECT.md content appeared before the planned write; preserved it unchanged and released ownership.",
+    "result_hash": null
+  },
+  "digest": "sha256:1f7473025c6cc3fe0b6b6fd4cbb8175581454c21b83e7359dede6b1d7be126fa",
+  "event_version": 1,
+  "id": "evt-ab7c31dcb4e62f74faefc148899f12cc",
+  "idempotency_key": "croki-project-contract-release-20260807",
+  "occurred_at": "2026-08-07T19:39:44.023265Z",
+  "previous_digest": "sha256:eb9990a907c2f013724114b2b1a42483c051600fc16238b66188c67bc5b04634",
+  "request_fingerprint": "sha256:74fcac66e1d9c4a963b4440df2e4d56099dff1fb4d46b6a06171e6790af64016",
+  "sequence": 4,
+  "type": "mutation_intent_released"
+}

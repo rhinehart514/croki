@@ -1,0 +1,23 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": [],
+    "effects": [
+      "Future work preserves one editorial read-only projection and does not reintroduce Canvas dashboard or graph machinery."
+    ],
+    "expected_hash": null,
+    "id": "canvas-brief-design",
+    "operation_id": "croki-operating-environment",
+    "scope": "Record the durable founder-facing Brief decision.",
+    "target": "DESIGN.md"
+  },
+  "digest": "sha256:2989c09b718f449bbb1632ad487e1c9e041188cc4582c5e23b6f8815b26b5b39",
+  "event_version": 1,
+  "id": "evt-60f474adeef648e42e4d0225094c0f4c",
+  "idempotency_key": "brief-design-v1",
+  "occurred_at": "2026-08-07T22:26:05.958747Z",
+  "previous_digest": "sha256:860f87249eeae6587c750c4b58b46ecf03abb9c0f354fc8f887e9678b9963937",
+  "request_fingerprint": "sha256:dcfca4b7e80e173f6e8c09abf511503a3d98574c896a93a38c4efa6358be2739",
+  "sequence": 40,
+  "type": "mutation_intent_recorded"
+}

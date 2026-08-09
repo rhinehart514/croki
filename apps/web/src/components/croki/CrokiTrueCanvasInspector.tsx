@@ -1,4 +1,4 @@
-import { ArrowRight, Check, ExternalLink, GitBranch } from "lucide-react";
+import { ArrowRight, Check, GitBranch } from "lucide-react";
 
 import { Button } from "../ui/button";
 import type { CrokiCanvasLiveObject } from "./crokiCanvasLiveScene";
@@ -96,7 +96,7 @@ export function CrokiTrueCanvasInspector(props: CrokiTrueCanvasInspectorProps) {
             className="w-full justify-between rounded-none"
             onClick={props.onUse}
           >
-            Address in Thread <ArrowRight className="size-3" aria-hidden />
+            Use in Thread <ArrowRight className="size-3" aria-hidden />
           </Button>
         ) : null}
         {canApprove ? (

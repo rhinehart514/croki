@@ -1,0 +1,23 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": ["operate-projection-server"],
+    "effects": [
+      "Ordinary projects remain visually unchanged; an active structurally coherent runtime becomes the current outcome and its attention becomes founder judgment."
+    ],
+    "expected_hash": null,
+    "id": "operate-projection-web",
+    "operation_id": "croki-operating-environment",
+    "scope": "Project active operate-project consequence and attention through the existing Canvas scene only.",
+    "target": "apps/web/src/components/croki/crokiCanvasPerceptionProjection.ts"
+  },
+  "digest": "sha256:8869b469276576a7f202af735b8b05b2a72911d8088248643f98972fd44e63c1",
+  "event_version": 1,
+  "id": "evt-b06d7d709677a66bc81b790419f27765",
+  "idempotency_key": "operate-projection-web-v1",
+  "occurred_at": "2026-08-07T20:04:15.277588Z",
+  "previous_digest": "sha256:8b0a9ef34c52d0925b641bcc57bf7756d2c7f7ae9f0120173c2dfb53bef9ac82",
+  "request_fingerprint": "sha256:50e0eeeb7551324b481b26c1f9c3c9a28757237f17d9f21ee2ff95fd2f4757d0",
+  "sequence": 9,
+  "type": "mutation_intent_recorded"
+}

@@ -42,7 +42,7 @@ import { useThreadSelection } from "../state/use-thread-selection";
 import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { useThreadOutboxMessages } from "./use-thread-outbox";
 
-export function appendReviewCommentToDraft(input: {
+export function appendTextToThreadDraft(input: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
   readonly text: string;
@@ -56,6 +56,8 @@ export function appendReviewCommentToDraft(input: {
     appendComposerDraftAttachments(threadKey, input.attachments);
   }
 }
+
+export const appendReviewCommentToDraft = appendTextToThreadDraft;
 
 export function useThreadDraftForThread(input: {
   readonly environmentId?: EnvironmentId;

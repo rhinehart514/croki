@@ -1,0 +1,27 @@
+{
+  "actor": "luna-verifier",
+  "data": {
+    "artifact_hash": null,
+    "artifact_path": null,
+    "artifact_source_path": null,
+    "id": "operate-projection-luna-verification",
+    "limitations": "This verifies the prepared projection slice only. It does not prove checked-screen rendering, provider-native skill discoverability in every harness, merge integration, release behavior, or recovery after a shipped disconnect.",
+    "method": "Reviewed the current isolated-worktree diff and reran the six focused suites, formatter check, server and web typechecks, and diff hygiene checks.",
+    "observed_at": "2026-08-07T20:28:50.095200Z",
+    "operation_id": "croki-operating-environment",
+    "result": "PASS: 35/35 tests; invalid state visible; active operation is non-green and unverified; Senses keeps structural caveat; event_count advances revision; real .harness query integration passes; no control-plane behavior added.",
+    "sensitivity": "internal",
+    "source": "Independent Luna Max verifier",
+    "source_type": "person",
+    "subject": "Corrected operate-project projection slice"
+  },
+  "digest": "sha256:fa3ade1ee3f64a331090307fedc7e10acc5de3cb2046f1782dc8e02bc5361378",
+  "event_version": 1,
+  "id": "evt-2dd2d309b75067ab3fdf7bf68797e6f1",
+  "idempotency_key": "observe-final-luna-verification-v1",
+  "occurred_at": "2026-08-07T20:28:50.095398Z",
+  "previous_digest": "sha256:66a7afc48100bb1beb71c5e86ef615d2a3f68772cb79ea21b7f1ffd4f3df93b1",
+  "request_fingerprint": "sha256:618e11dd12f84ea8dcb92a523bf247595535d5dc58d03717bcc995de67be7845",
+  "sequence": 32,
+  "type": "observation_recorded"
+}

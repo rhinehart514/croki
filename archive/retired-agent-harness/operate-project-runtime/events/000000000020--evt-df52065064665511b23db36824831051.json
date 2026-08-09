@@ -1,0 +1,23 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": ["operate-projection-web"],
+    "effects": [
+      "Founder sees active operation and broken runtime judgment without achieved-state overclaim."
+    ],
+    "expected_hash": null,
+    "id": "operate-projection-field-semantics",
+    "operation_id": "croki-operating-environment",
+    "scope": "Label active native operation as active operation, not current achieved outcome.",
+    "target": "apps/web/src/components/croki/CrokiCanvasLiveField.tsx"
+  },
+  "digest": "sha256:cc4a6ea37856d0ca56b03962b621ac82f1023e3696d591758726a6843fdfa999",
+  "event_version": 1,
+  "id": "evt-df52065064665511b23db36824831051",
+  "idempotency_key": "operate-projection-field-semantics-v1",
+  "occurred_at": "2026-08-07T20:16:42.295134Z",
+  "previous_digest": "sha256:c749b99c8f8712add73d4917ec5786cd2cbf0cef4b13dc773e7fc069a0f41e60",
+  "request_fingerprint": "sha256:3bf6085514a3693c113e610b56ff961468ce59fe277b3aba32168a6b8462bbba",
+  "sequence": 20,
+  "type": "mutation_intent_recorded"
+}

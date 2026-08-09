@@ -1,0 +1,17 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "lease_expires_at": "2026-08-08T20:26:25.051675Z",
+    "operation_id": "croki-operating-environment",
+    "summary": "Prepared a bounded read-only operate-project projection in the isolated origin-based worktree. Active consequence appears as Active operation with neutral in-progress treatment; attention appears as founder judgment; invalid or oversized runtime becomes an error judgment; model-facing Senses receives a structural-only limitation. 35 focused tests, both typechecks, format, lint, query integration, actual current-runtime load, and Croki overlay checks pass. Collaborative Preview snapshots remain unavailable, so no checked-screen evidence exists. No merge, commit, release, or stale-worktree overwrite occurred."
+  },
+  "digest": "sha256:66a7afc48100bb1beb71c5e86ef615d2a3f68772cb79ea21b7f1ffd4f3df93b1",
+  "event_version": 1,
+  "id": "evt-91978736125ad341afc5e338eca755f0",
+  "idempotency_key": "checkpoint-operate-projection-corrections-v1",
+  "occurred_at": "2026-08-07T20:26:25.051869Z",
+  "previous_digest": "sha256:3aaaee084773fae150fd86a7d408e68a382aaf3e1ac50fe20d0bf1b746dc0c2a",
+  "request_fingerprint": "sha256:3563122dd07036b2a14cd91c231c2e3ac9a85baedacdf2b9cb7acd2cb6ad2f45",
+  "sequence": 31,
+  "type": "operation_checkpointed"
+}

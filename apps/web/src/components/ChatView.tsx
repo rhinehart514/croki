@@ -158,11 +158,8 @@ import {
 } from "../previewMiniPlayerStore";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { CrokiCanvas } from "./croki/CrokiCanvas";
+import { useCrokiThoughtView } from "./croki/useCrokiThoughtView";
 import { addProvisionalCrokiEvidence } from "./croki/crokiCanvasEvidenceDraft";
-import {
-  makeCrokiCanvasWorkspaceKey,
-  useCrokiCanvasDraftSummary,
-} from "./croki/crokiCanvasDraftStore";
 import { useRegisterCanvasCommand } from "./CommandPalette";
 import { AgentsPanel } from "./AgentsPanel";
 import {
@@ -273,7 +270,7 @@ import {
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
-import { MessagesTimeline } from "./chat/MessagesTimeline";
+import { MessagesTimeline, type MessagesTimelineThoughtView } from "./chat/MessagesTimeline";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { ChatHeader } from "./chat/ChatHeader";
 import { deriveCrokiContextReceiptsByMessageId } from "./chat/CrokiContextPresentation.logic";
@@ -1655,15 +1652,6 @@ function ChatViewContent(props: ChatViewProps) {
   const [canvasBaseView, setCanvasBaseView] = useState<"release" | "context">("release");
   const canvasSelectionNodeIds =
     canvasSelectionState.threadKey === activeThreadKey ? canvasSelectionState.nodeIds : [];
-  const clearCanvasSelection = useCallback(() => {
-    setCanvasSelectionState((current) => ({ ...current, nodeIds: [] }));
-  }, []);
-  const removeCanvasSelection = useCallback((nodeId: string) => {
-    setCanvasSelectionState((current) => ({
-      ...current,
-      nodeIds: current.nodeIds.filter((selectedId) => selectedId !== nodeId),
-    }));
-  }, []);
   const handleCanvasSelectionChange = useCallback(
     (nodeIds: readonly string[], artifactId: string | null) => {
       setCanvasSelectionState({
@@ -1701,10 +1689,10 @@ function ChatViewContent(props: ChatViewProps) {
   const activeRightPanelSurface = useRightPanelStore((state) =>
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
   );
-  const canvasEnabled = settings.canvasEnabled && activeThread !== undefined;
-  const visibleRightPanelSurfaces = canvasEnabled
-    ? rightPanelState.surfaces
-    : rightPanelState.surfaces.filter((surface) => surface.kind !== "canvas");
+  const canvasEnabled = false;
+  const visibleRightPanelSurfaces = rightPanelState.surfaces.filter(
+    (surface) => surface.kind !== "canvas",
+  );
   const activeFileSurface =
     activeRightPanelSurface?.kind === "file" ? activeRightPanelSurface : null;
   const activePreviewState = useThreadPreviewState(activeThreadRef);
@@ -1730,6 +1718,17 @@ function ChatViewContent(props: ChatViewProps) {
   const rightPanelMaximized =
     canMaximizeRightPanel && maximizedRightPanelThreadKey === routeThreadKey;
   const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUseRightPanelSheet;
+
+  useEffect(() => {
+    if (
+      !activeThreadRef ||
+      !rightPanelState.surfaces.some((surface) => surface.kind === "canvas")
+    ) {
+      return;
+    }
+    setCanvasSelectionState((current) => ({ ...current, artifactId: null, nodeIds: [] }));
+    useRightPanelStore.getState().closeSurface(activeThreadRef, "canvas");
+  }, [activeThreadRef, rightPanelState.surfaces]);
 
   useEffect(() => {
     if (!activeThreadRef) return;
@@ -2846,14 +2845,6 @@ function ChatViewContent(props: ChatViewProps) {
     activeProject && activeWorkspaceRoot
       ? `${activeProject.environmentId}:${activeWorkspaceRoot}`
       : null;
-  const crokiCanvasWorkspaceKey =
-    activeProject && crokiWorkspaceRoot
-      ? makeCrokiCanvasWorkspaceKey(activeProject.environmentId, crokiWorkspaceRoot)
-      : "__no-active-croki-workspace__";
-  const crokiCanvasDraftSummary = useCrokiCanvasDraftSummary(
-    crokiCanvasWorkspaceKey,
-    activeProject?.title ?? "",
-  );
   const canvasPresentationActivities = useMemo(
     () => deriveCanvasPresentationActivities(threadActivities),
     [threadActivities],
@@ -2875,10 +2866,10 @@ function ChatViewContent(props: ChatViewProps) {
       threadActivities,
     ],
   );
+  const latestUserMessage = activeThread?.messages.findLast((message) => message.role === "user");
+  const canvasQuestion = latestUserMessage?.text.trim() ?? null;
   const projectPerceptionQuery = useEnvironmentQuery(
-    activeProject &&
-      canvasEnabled &&
-      (activeRightPanelSurface?.kind === "canvas" || canvasSelectionNodeIds.length > 0)
+    activeProject && canvasQuestion
       ? orchestrationEnvironment.projectPerception({
           environmentId: activeProject.environmentId,
           input: { projectId: activeProject.id, limit: 200 },
@@ -2886,6 +2877,10 @@ function ChatViewContent(props: ChatViewProps) {
       : null,
   );
   const canvasWorkingModel = projectPerceptionQuery.data ?? canvasPerceptionFrame;
+  const inlineThoughtView = useCrokiThoughtView({
+    frame: canvasWorkingModel,
+    question: canvasQuestion,
+  });
   const hasNativeCanvasPerception = canvasWorkingModel.objects.some(
     (object) =>
       object.source.kind !== "thread" &&
@@ -2923,11 +2918,6 @@ function ChatViewContent(props: ChatViewProps) {
     const ids = new Set(canvasSelectionNodeIds);
     return selectedCanvasPresentation.artifact.nodes.filter((node) => ids.has(node.id));
   }, [canvasSelectionNodeIds, selectedCanvasPresentation]);
-  const [queuedCanvasEvidence, setQueuedCanvasEvidence] = useState<{
-    readonly reference: CrokiContextReference;
-    readonly title: string;
-    readonly workspaceKey: string;
-  } | null>(null);
   const [pendingSurfaceIdsByWorkspace, setPendingSurfaceIdsByWorkspace] = useState<
     ReadonlyMap<string, ReadonlySet<string>>
   >(() => new Map());
@@ -3666,6 +3656,46 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [activeThreadRef, openPreview],
   );
+  const openThoughtViewSource = useCallback(
+    (uri: string) => {
+      if (uri.startsWith("http://") || uri.startsWith("https://")) {
+        openCanvasReference({ kind: "url", url: uri });
+        return;
+      }
+      openCanvasReference({ kind: "file", path: uri.replace(/^file:\/\//, "") });
+    },
+    [openCanvasReference],
+  );
+  const thoughtViewPresentation = useMemo<MessagesTimelineThoughtView | undefined>(() => {
+    if (!inlineThoughtView.thoughtView || !latestUserMessage) return undefined;
+    return {
+      view: inlineThoughtView.thoughtView,
+      anchorMessageId: latestUserMessage.id,
+      basisOpen: inlineThoughtView.basisOpen,
+      selectedObjectIds: canvasSelectionNodeIds,
+      updateAvailable: inlineThoughtView.updateAvailable,
+      onToggleBasis: inlineThoughtView.toggleBasis,
+      onReframe: inlineThoughtView.reframe,
+      onUpdate: inlineThoughtView.update,
+      onUse: (statement) => {
+        handleCanvasSelectionChange([statement.objectId], null);
+        scheduleComposerFocus();
+      },
+      onOpenSource: openThoughtViewSource,
+    };
+  }, [
+    canvasSelectionNodeIds,
+    handleCanvasSelectionChange,
+    inlineThoughtView.basisOpen,
+    inlineThoughtView.reframe,
+    inlineThoughtView.thoughtView,
+    inlineThoughtView.toggleBasis,
+    inlineThoughtView.update,
+    inlineThoughtView.updateAvailable,
+    latestUserMessage,
+    openThoughtViewSource,
+    scheduleComposerFocus,
+  ]);
   const openCanvasArtifact = useCallback(
     (presentation: CanvasPresentationTimelineActivity) => {
       setCanvasViewedArtifactId(presentation.artifact?.id ?? null);
@@ -6808,6 +6838,7 @@ function ChatViewContent(props: ChatViewProps) {
                 {...(canvasEnabled ? { canvasPresentationsByActivityId } : {})}
                 {...(workerView === "activity" ? { coordinationActivities: threadActivities } : {})}
                 {...(canvasEnabled ? { onOpenCanvasArtifact: openCanvasArtifact } : {})}
+                {...(thoughtViewPresentation ? { thoughtView: thoughtViewPresentation } : {})}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
                 editFromHereUnavailableReason={editFromHereUnavailableReason}

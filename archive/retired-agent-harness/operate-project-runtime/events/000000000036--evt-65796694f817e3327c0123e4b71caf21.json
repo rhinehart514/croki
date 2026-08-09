@@ -1,0 +1,23 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": [],
+    "effects": [
+      "Header names the founder-facing brief and communicates freshness without internal model vocabulary."
+    ],
+    "expected_hash": null,
+    "id": "canvas-brief-header",
+    "operation_id": "croki-operating-environment",
+    "scope": "Remove perception-model and revision chatter from the visible header.",
+    "target": "apps/web/src/components/croki/CrokiTrueCanvasHeader.tsx"
+  },
+  "digest": "sha256:b92c1b4e343e448b2cbe8b0106e8883c6d9473fc65d7b5e4b24680a1c3e6d821",
+  "event_version": 1,
+  "id": "evt-65796694f817e3327c0123e4b71caf21",
+  "idempotency_key": "brief-header-v1",
+  "occurred_at": "2026-08-07T22:26:05.529893Z",
+  "previous_digest": "sha256:d3428ec0776816cb68c48f9f87d4af4ad217242d3a30e98f1d3e6b04447ec353",
+  "request_fingerprint": "sha256:70b91daa297d32c141b6191d54bf542308d05a352397f96294b65a98d788880e",
+  "sequence": 36,
+  "type": "mutation_intent_recorded"
+}

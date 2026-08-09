@@ -262,6 +262,38 @@ describe("resolveAssistantMessageCopyState", () => {
 });
 
 describe("deriveMessagesTimelineRows", () => {
+  it("places an automatic thought View directly after its user message", () => {
+    const messageId = "user-view" as never;
+    const thoughtView = { id: "view-1" } as never;
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "user-view-entry",
+          kind: "message",
+          createdAt: "2026-08-08T12:00:00Z",
+          message: {
+            id: messageId,
+            role: "user",
+            text: "Compare the two product directions",
+            turnId: null,
+            createdAt: "2026-08-08T12:00:00Z",
+            updatedAt: "2026-08-08T12:00:00Z",
+            streaming: false,
+          },
+        },
+      ],
+      thoughtView,
+      thoughtViewAnchorMessageId: messageId,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows.map((row) => row.kind)).toEqual(["message", "thought-view"]);
+    expect(rows[1]).toMatchObject({ kind: "thought-view", view: thoughtView });
+  });
+
   it("keeps a Canvas presentation as a dedicated timeline row", () => {
     const presentation = {
       activityId: "canvas-activity",

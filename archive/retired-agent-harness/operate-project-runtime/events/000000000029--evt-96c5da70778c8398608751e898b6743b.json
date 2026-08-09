@@ -1,0 +1,18 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "intent_id": "operate-projection-card-semantics",
+    "operation_id": "croki-operating-environment",
+    "reason": "Active operation now uses neutral sky in-progress styling and a circle marker, not green verified outcome treatment.",
+    "result_hash": null
+  },
+  "digest": "sha256:921afdf0930c66671b861e435d83b0c126ab6bfcb0e0d53bd78cd57d44c706a8",
+  "event_version": 1,
+  "id": "evt-96c5da70778c8398608751e898b6743b",
+  "idempotency_key": "release-operate-projection-card-semantics-v1",
+  "occurred_at": "2026-08-07T20:24:49.651585Z",
+  "previous_digest": "sha256:1acc802586720a2bbc5cf64b09f8a3a3f0af300eab3259451ec9d71b3a5c836e",
+  "request_fingerprint": "sha256:3e88edac5d2015d1f063775dd4dad32b439c694b496628374170d7c3757f8e92",
+  "sequence": 29,
+  "type": "mutation_intent_released"
+}

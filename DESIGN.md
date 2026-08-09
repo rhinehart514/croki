@@ -14,6 +14,7 @@ removable, and reversible.
 ## Product nouns and behavior
 
 - A **Thread** is the canonical conversation and unit of work.
+- A **View** is an automatic, source-grounded visual representation placed directly after the relevant user message when bounded project perception contains structure that linear text hides. Croki chooses comparison, causal, temporal, evidence, experience, system, counterfactual, or possible-world structure without a mode or destination. A View is ephemeral and locally interactive; only explicit **Use in next message** returns selected source IDs to the native composer. Historical Canvas identifiers remain readable but are not choices or navigation for new work.
 - **Edit from here** creates a successor Thread immediately before the selected
   completed user message, then reopens that message's authored text and
   supported image attachments in the new composer. The original Thread and
@@ -32,7 +33,7 @@ removable, and reversible.
   reveal provider-owned system instructions.
 - Provider runtime, instructions, context, tools, and senses are distinct.
   Enabling a tool changes tool availability only; it does not add a Croki tool
-  policy or behavioral prompt. Opening Canvas, Preview, a project, or an
+  policy or behavioral prompt. Opening Preview, a project, or an
   application brief never applies anything to the model.
 - Persistent model configuration uses provider- or repository-native mechanisms
   such as `AGENTS.md`, skills, plugins, MCP configuration, and provider-owned
@@ -67,6 +68,7 @@ removable, and reversible.
 - Activating a Thread that needs the founder opens the existing Thread view at the unresolved approval, question, or failure. Attention routing does not create an inbox, dashboard, or duplicate task surface.
 - When an application brief exists, the Thread header shows one compact released-to-building focus beside the project. Opening it reveals the application promise and current intent, with one action to open `.croki/application.croki`. It does not show setup, progress, scores, or Concept scope.
 - Opening a `.croki` file uses the ordinary file editor and ordinary panel size. Croki does not generate a second visual representation of repository metadata.
+- Views are part of the Thread, not a separate workspace. A qualifying View appears inline without stealing focus; a non-qualifying turn adds nothing. It never becomes project truth, executes work, or changes the selected provider. Every important statement exposes whether it is observed, attributed, derived, inferred, hypothetical, contradicted, or uncovered. Framing and omissions remain inspectable through **Basis**.
 - Worker nesting uses indentation and a quiet rule, not a second navigation section or dashboard.
 - The Workers choice lives in the Thread header only after delegation. **Separate chats** is never offered for inferred activity without real child Threads.
 - Long titles truncate in the rail and remain available in the Thread view. Keyboard focus and status labels remain explicit.
@@ -82,6 +84,7 @@ removable, and reversible.
   founder attached that source or configured it through a provider-native
   mechanism. Croki does not add a setup workflow, alignment score, progress
   model, hidden context, or Croki-authored verdict.
+- Do not create a Canvas destination, manually maintained visual scene, or second product workspace for Views.
 
 ## Stack
 

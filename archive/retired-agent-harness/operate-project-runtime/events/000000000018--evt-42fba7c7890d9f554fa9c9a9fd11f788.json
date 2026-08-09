@@ -1,0 +1,23 @@
+{
+  "actor": "codex-root",
+  "data": {
+    "dependencies": ["operate-projection-loader"],
+    "effects": [
+      "Broken project runtime state can be shown honestly without reading canonical events."
+    ],
+    "expected_hash": null,
+    "id": "operate-projection-loader-v2",
+    "operation_id": "croki-operating-environment",
+    "scope": "Preserve bounded observation time for invalid or oversized runtime projections.",
+    "target": "apps/server/src/orchestration/operateProjectProjection.ts"
+  },
+  "digest": "sha256:6576d74720034f8e1c88c111928332150397c10465f880e843f5c8b3baad8f1e",
+  "event_version": 1,
+  "id": "evt-42fba7c7890d9f554fa9c9a9fd11f788",
+  "idempotency_key": "operate-projection-loader-v2-v1",
+  "occurred_at": "2026-08-07T20:16:42.092038Z",
+  "previous_digest": "sha256:4312abaa9ddcf8bfdd4b4cedaa6df4ab9ebc2edcc47b7598548b5b3a878542e4",
+  "request_fingerprint": "sha256:753f7f2d12100c135d12c361bec856cd3e337a8dd54a25ca2197e07310f3a76a",
+  "sequence": 18,
+  "type": "mutation_intent_recorded"
+}

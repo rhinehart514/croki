@@ -361,6 +361,12 @@ public struct ThreadDetailView: View {
                     renderUpdate: model.detailRenderUpdates[thread.id],
                     dynamicTypeSize: dynamicTypeSize,
                     isWorking: isWorking,
+                    thoughtViewClient: model.client,
+                    thoughtViewProjectID: currentThread.projectID,
+                    thoughtViewQuestion: detail.messages.last(where: { $0.role == .user })?.text
+                        ?? currentThread.title,
+                    thoughtViewAnchorMessageID: detail.messages.last(where: { $0.role == .user })?.id,
+                    onUseThoughtViewSelection: useThoughtViewSelection,
                     onDismissKeyboard: dismissKeyboard
                 )
             }
@@ -476,6 +482,13 @@ public struct ThreadDetailView: View {
                 }
                 dismissKeyboard()
             }
+    }
+
+    private func useThoughtViewSelection(_ selectionText: String) {
+        let separator = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "" : "\n\n"
+        draft += separator + selectionText
+        composerFocused = true
     }
 
     private var composerPowerFeatures: FeatureComposerPowerFeatures {
@@ -724,6 +737,7 @@ enum FeatureComposerDraftRestoration {
 /// while UIKit keeps offscreen messages out of the active view hierarchy.
 private struct FeatureTranscriptCollectionView: UIViewRepresentable {
     private static let workingIndicatorID = "__t3-working-indicator__"
+    private static let thoughtViewIDPrefix = "__t3-thought-view__:"
 
     private enum Section: Hashable {
         case transcript
@@ -734,6 +748,11 @@ private struct FeatureTranscriptCollectionView: UIViewRepresentable {
     let renderUpdate: FeatureDetailRenderUpdate?
     let dynamicTypeSize: DynamicTypeSize
     let isWorking: Bool
+    let thoughtViewClient: any FeatureClient
+    let thoughtViewProjectID: String
+    let thoughtViewQuestion: String
+    let thoughtViewAnchorMessageID: String?
+    let onUseThoughtViewSelection: (String) -> Void
     let onDismissKeyboard: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -763,6 +782,11 @@ private struct FeatureTranscriptCollectionView: UIViewRepresentable {
             renderUpdate: renderUpdate,
             dynamicTypeSize: dynamicTypeSize,
             isWorking: isWorking,
+            thoughtViewClient: thoughtViewClient,
+            thoughtViewProjectID: thoughtViewProjectID,
+            thoughtViewQuestion: thoughtViewQuestion,
+            thoughtViewAnchorMessageID: thoughtViewAnchorMessageID,
+            onUseThoughtViewSelection: onUseThoughtViewSelection,
             onDismissKeyboard: onDismissKeyboard,
             in: collectionView
         )
@@ -807,8 +831,17 @@ private struct FeatureTranscriptCollectionView: UIViewRepresentable {
         private var currentDetailRevision: UInt64?
         private var currentDynamicTypeSize: DynamicTypeSize?
         private var currentIsWorking = false
+        private var currentThoughtViewID: String?
+        private var thoughtViewConfiguration: ThoughtViewConfiguration?
         private var markdownPrefetches: [String: MarkdownPrefetch] = [:]
         private var onDismissKeyboard: (() -> Void)?
+
+        private struct ThoughtViewConfiguration {
+            let client: any FeatureClient
+            let projectID: String
+            let question: String
+            let onUse: (String) -> Void
+        }
 
         deinit {
             markdownPrefetches.values.forEach { $0.task.cancel() }
@@ -824,6 +857,22 @@ private struct FeatureTranscriptCollectionView: UIViewRepresentable {
                     .margins(.all, 0)
                     cell.backgroundConfiguration = UIBackgroundConfiguration.clear()
                     cell.accessibilityIdentifier = "thread-working-indicator"
+                    return
+                }
+                if messageID.hasPrefix(FeatureTranscriptCollectionView.thoughtViewIDPrefix),
+                   let configuration = self?.thoughtViewConfiguration {
+                    cell.contentConfiguration = UIHostingConfiguration {
+                        FeatureThoughtViewView(
+                            client: configuration.client,
+                            projectID: configuration.projectID,
+                            question: configuration.question,
+                            onUse: configuration.onUse
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .margins(.all, 0)
+                    cell.backgroundConfiguration = UIBackgroundConfiguration.clear()
+                    cell.accessibilityIdentifier = "thread-thought-view"
                     return
                 }
                 guard let message = self?.messagesByID[messageID] else {
@@ -859,22 +908,44 @@ private struct FeatureTranscriptCollectionView: UIViewRepresentable {
             renderUpdate: FeatureDetailRenderUpdate?,
             dynamicTypeSize: DynamicTypeSize,
             isWorking: Bool,
+            thoughtViewClient: any FeatureClient,
+            thoughtViewProjectID: String,
+            thoughtViewQuestion: String,
+            thoughtViewAnchorMessageID: String?,
+            onUseThoughtViewSelection: @escaping (String) -> Void,
             onDismissKeyboard: @escaping () -> Void,
             in collectionView: UICollectionView
         ) {
             guard let dataSource else { return }
             self.onDismissKeyboard = onDismissKeyboard
+            thoughtViewConfiguration = ThoughtViewConfiguration(
+                client: thoughtViewClient,
+                projectID: thoughtViewProjectID,
+                question: thoughtViewQuestion,
+                onUse: onUseThoughtViewSelection
+            )
+
+            let thoughtViewID = thoughtViewAnchorMessageID.map {
+                FeatureTranscriptCollectionView.thoughtViewIDPrefix + $0
+            }
 
             let threadChanged = currentThreadID != threadID
             let typeSizeChanged = currentDynamicTypeSize != dynamicTypeSize
             let revisionChanged = currentDetailRevision != renderUpdate?.revision
             let workingChanged = currentIsWorking != isWorking
-            guard threadChanged || typeSizeChanged || revisionChanged || workingChanged else { return }
+            let thoughtViewChanged = currentThoughtViewID != thoughtViewID
+            guard threadChanged || typeSizeChanged || revisionChanged || workingChanged || thoughtViewChanged else {
+                return
+            }
 
-            let incremental = !threadChanged
+            let incremental = !threadChanged && thoughtViewID == nil
                 ? incrementalState(messages: messages, renderUpdate: renderUpdate)
                 : nil
-            let state = incremental ?? fullState(messages: messages)
+            let state = incremental ?? fullState(
+                messages: messages,
+                thoughtViewID: thoughtViewID,
+                thoughtViewAnchorMessageID: thoughtViewAnchorMessageID
+            )
             let newIDs = state.ids
             let idsChanged = state.idsChanged
             let changedIDs = typeSizeChanged
@@ -884,6 +955,7 @@ private struct FeatureTranscriptCollectionView: UIViewRepresentable {
             currentDetailRevision = renderUpdate?.revision
             currentDynamicTypeSize = dynamicTypeSize
             currentIsWorking = isWorking
+            currentThoughtViewID = thoughtViewID
             guard threadChanged || idsChanged || !changedIDs.isEmpty || workingChanged else { return }
 
             if threadChanged {
@@ -1003,12 +1075,23 @@ private struct FeatureTranscriptCollectionView: UIViewRepresentable {
             )
         }
 
-        private func fullState(messages: [FeatureMessage]) -> MessageState {
+        private func fullState(
+            messages: [FeatureMessage],
+            thoughtViewID: String?,
+            thoughtViewAnchorMessageID: String?
+        ) -> MessageState {
             var seenMessageIDs = Set<String>()
             let uniqueMessages = Array(messages.reversed().filter {
                 seenMessageIDs.insert($0.id).inserted
             }.reversed())
-            let ids = uniqueMessages.map(\.id)
+            var ids: [String] = []
+            ids.reserveCapacity(uniqueMessages.count + (thoughtViewID == nil ? 0 : 1))
+            for message in uniqueMessages {
+                ids.append(message.id)
+                if message.id == thoughtViewAnchorMessageID, let thoughtViewID {
+                    ids.append(thoughtViewID)
+                }
+            }
             let updatedMessages = uniqueMessages.reduce(into: [String: FeatureMessage]()) {
                 $0[$1.id] = $1
             }
