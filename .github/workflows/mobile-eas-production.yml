@@ -77,6 +77,7 @@ concurrency:
 jobs:
   release_guard:
     name: Verify Croki mobile ownership
+    if: github.event_name != 'push' || vars.CROKI_MOBILE_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment:
