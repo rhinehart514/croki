@@ -18,6 +18,7 @@ export interface CrokiOverlayViolation {
     | "line-limit"
     | "missing-test"
     | "automatic-model-input"
+    | "required-brand-surface"
     | "shared-context-owner";
   readonly path: string;
   readonly message: string;
@@ -73,6 +74,14 @@ const CROKI_SOURCE_ROOTS = [
   "apps/mobile/src/features/croki",
   "apps/server/src/orchestration/Layers",
   "packages/shared/src",
+] as const;
+
+const REQUIRED_VISIBLE_BRAND_SURFACES = [
+  {
+    path: "apps/web/src/components/sidebar/SidebarChrome.tsx",
+    required: ["CrokiMark", "APP_BASE_NAME"],
+    forbidden: ["T3Wordmark", 'aria-label="T3"'],
+  },
 ] as const;
 
 function toRepoPath(value: string): string {
@@ -209,6 +218,35 @@ export function findBrandPolicyViolations(lines: readonly AddedOverlayLine[]) {
   return violations;
 }
 
+export function findRequiredBrandSurfaceViolations(
+  path: string,
+  contents: string,
+): readonly CrokiOverlayViolation[] {
+  const policy = REQUIRED_VISIBLE_BRAND_SURFACES.find(
+    (surface) => surface.path === toRepoPath(path),
+  );
+  if (!policy) return [];
+
+  const violations: CrokiOverlayViolation[] = [];
+  for (const required of policy.required) {
+    if (contents.includes(required)) continue;
+    violations.push({
+      code: "required-brand-surface",
+      path: policy.path,
+      message: `Required Croki brand token is missing: ${required}`,
+    });
+  }
+  for (const forbidden of policy.forbidden) {
+    if (!contents.includes(forbidden)) continue;
+    violations.push({
+      code: "required-brand-surface",
+      path: policy.path,
+      message: `Inherited visible brand token is forbidden: ${forbidden}`,
+    });
+  }
+  return violations;
+}
+
 function isBrandSurfacePath(path: string): boolean {
   if (!/\.(?:html|json|[cm]?[jt]sx?)$/u.test(path)) return false;
   if (path.startsWith(".croki/") || path.startsWith("docs/")) return false;
@@ -341,6 +379,20 @@ export function checkCrokiOverlay(
   readonly violations: readonly CrokiOverlayViolation[];
 } {
   const violations: CrokiOverlayViolation[] = [];
+  for (const surface of REQUIRED_VISIBLE_BRAND_SURFACES) {
+    const absolutePath = NodePath.join(repoRoot, surface.path);
+    if (!NodeFS.existsSync(absolutePath)) {
+      violations.push({
+        code: "required-brand-surface",
+        path: surface.path,
+        message: "Required Croki brand surface is missing.",
+      });
+      continue;
+    }
+    violations.push(
+      ...findRequiredBrandSurfaceViolations(surface.path, readRepoFile(repoRoot, surface.path)),
+    );
+  }
   const crokiWebFiles = walkFiles(repoRoot, "apps/web/src/components/croki");
   const componentFiles = crokiWebFiles.filter((path) => path.endsWith(".tsx") && !isTestPath(path));
   for (const path of componentFiles) {

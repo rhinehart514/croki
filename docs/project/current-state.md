@@ -1,18 +1,18 @@
 # Current project state
 
 Last audited: 2026-08-12
-Code baseline: Croki 0.4.12 on `croki/main`, synced through T3 Code `e321667b`
+Code baseline: Croki 0.4.13 on `croki/main`, synced through T3 Code `e321667b`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow application-aware overlay on the development environment rather than
 a second agent runtime.
 
-Croki 0.4.12 is the current repository implementation and stable release. See the [0.4.6 release
+Croki 0.4.13 is the current repository implementation and stable release. See the [0.4.6 release
 notes](./release-notes-0.4.6.md), [0.4.7 UI history
 notes](./release-notes-0.4.7.md), [0.4.8 quality-of-life
 notes](./release-notes-0.4.8.md), [0.4.9 control without interruption
 notes](./release-notes-0.4.9.md), [0.4.10 native-provider integration
-notes](./release-notes-0.4.10.md), [0.4.11 Thought Views candidate](./release-notes-0.4.11.md), [0.4.12 T3 sync notes](./release-notes-0.4.12.md), and [release ownership contract](../operations/release.md)
+notes](./release-notes-0.4.10.md), [0.4.11 Thought Views candidate](./release-notes-0.4.11.md), [0.4.12 T3 sync notes](./release-notes-0.4.12.md), [0.4.13 branding correction](./release-notes-0.4.13.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
 ## Working product
@@ -48,6 +48,13 @@ Croki currently provides:
 - one repository-owned application brief at `.croki/application.croki`, visible
   to the founder and attached to a model only through an explicit user action;
 - source-grounded Croki Senses perception, now rendered as automatic inline Views when it materially improves a Thread question.
+
+## 0.4.13 boundary
+
+0.4.13 restores the canonical Croki mark and name to the persistent sidebar
+header without reverting any of the T3-derived 0.4.12 interaction or layout
+updates. The Croki overlay check now treats that header as a required brand
+surface and rejects the inherited T3 wordmark.
 
 ## 0.4.12 boundary
 
@@ -309,7 +316,7 @@ rewriting its workspace, memory, skills, model, tools, or delegation settings.
   signing, Discord, and mobile destinations remain skipped until their specific
   flags and Croki-owned configuration are enabled.
 - Pushes to `croki/main` build unsigned macOS arm64 and Windows x64 installer
-  artifacts. A tagged GitHub release is the enabled 0.4.12 publication path.
+  artifacts. A tagged GitHub release is the enabled 0.4.13 publication path.
 
 ## Verification
 

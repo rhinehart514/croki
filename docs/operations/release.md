@@ -7,14 +7,14 @@ exact-version `croki-server` publication in the same release. A GitHub-only
 desktop release instead updates its bundled, desktop-managed server and compiles
 package-backed remote server updates out of the client.
 
-## 0.4.12 source candidate
+## 0.4.13 source candidate
 
-The 0.4.12 source candidate aligns the four manifests updated by the release
+The 0.4.13 source candidate aligns the four manifests updated by the release
 workflow (`apps/server`, `apps/desktop`, `apps/web`, and `packages/contracts`).
 It syncs Croki through T3 Code `e321667b` while preserving Croki's provider
-boundary, migration history, branding, and destination ownership. See the
-[0.4.12 release notes](../project/release-notes-0.4.12.md) for the product
-summary.
+boundary, migration history, branding, and destination ownership, and restores
+the Croki sidebar mark after the upstream sync. See the
+[0.4.13 release notes](../project/release-notes-0.4.13.md) for the product summary.
 
 ## Current behavior
 

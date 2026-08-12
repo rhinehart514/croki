@@ -8,6 +8,7 @@ import {
   containsAutomaticServerModelInput,
   extractImportSpecifiers,
   findBrandPolicyViolations,
+  findRequiredBrandSurfaceViolations,
   findUnretainedT3Identifiers,
   isArchivedStandaloneImport,
   isCrokiModelOrServicePath,
@@ -134,5 +135,18 @@ describe("check-croki-overlay", () => {
         { path: "apps/web/src/branding.test.ts", line: 'expect(name).toBe("Croki");' },
       ]),
     ).toEqual([]);
+  });
+
+  it("requires Croki branding on the persistent sidebar surface", () => {
+    const path = "apps/web/src/components/sidebar/SidebarChrome.tsx";
+    expect(
+      findRequiredBrandSurfaceViolations(
+        path,
+        'import { APP_BASE_NAME } from "../../branding"; <CrokiMark /> {APP_BASE_NAME}',
+      ),
+    ).toEqual([]);
+    expect(findRequiredBrandSurfaceViolations(path, '<T3Wordmark aria-label="T3" /> Code')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "required-brand-surface", path })]),
+    );
   });
 });
