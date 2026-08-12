@@ -99,7 +99,10 @@ export function SettingsEnvironmentsRouteScreen() {
                 accessibilityLabel: "Add environment",
                 icon: "plus",
                 onPress: () =>
-                  navigation.navigate("SettingsSheet", { screen: "SettingsEnvironmentNew" }),
+                  navigation.navigate("SettingsSheet", {
+                    screen: "SettingsContent",
+                    params: { screen: "SettingsEnvironmentNew" },
+                  }),
               },
             ]}
           />
@@ -109,7 +112,10 @@ export function SettingsEnvironmentsRouteScreen() {
           <NativeHeaderToolbar.Button
             icon="plus"
             onPress={() =>
-              navigation.navigate("SettingsSheet", { screen: "SettingsEnvironmentNew" })
+              navigation.navigate("SettingsSheet", {
+                screen: "SettingsContent",
+                params: { screen: "SettingsEnvironmentNew" },
+              })
             }
             separateBackground
             tintColor={headerIconColor}

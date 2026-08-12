@@ -19,6 +19,7 @@ import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { useThreadPr, type ThreadPr } from "../../state/use-thread-pr";
 import type { HomeGroupDisplayAction } from "../home/homeListItems";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
+import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
 import { resolveThreadStatus } from "./threadPresentation";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 
@@ -131,6 +132,7 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
       >
         <ProjectFavicon
           environmentId={props.project.environmentId}
+          faviconPath={props.project.faviconPath}
           open={!props.collapsed}
           size={compact ? 22 : 18}
           projectTitle={props.project.title}
@@ -426,8 +428,8 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
   readonly onArchiveThread: (thread: EnvironmentThreadShell) => void;
   readonly onDeleteThread: (thread: EnvironmentThreadShell) => void;
-  readonly titleRegenerationSupported: boolean;
   readonly onRegenerateThreadTitle: (thread: EnvironmentThreadShell) => void;
+  readonly titleRegenerationSupported: boolean;
   readonly onSwipeableWillOpen: (methods: SwipeableMethods) => void;
   readonly onSwipeableClose: (methods: SwipeableMethods) => void;
   readonly simultaneousSwipeGesture?: ComponentProps<
@@ -475,19 +477,14 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
     [onRegenerateThreadTitle, thread],
   );
   const menuActions = useMemo<MenuAction[]>(
-    () =>
-      props.titleRegenerationSupported
-        ? [
-            THREAD_ROW_MENU_ACTIONS[0]!,
-            {
-              id: "regenerate-title",
-              title: thread.titleRegeneration ? "Regenerating title…" : "Regenerate title",
-              image: "arrow.clockwise",
-              attributes: thread.titleRegeneration ? { disabled: true } : undefined,
-            },
-            THREAD_ROW_MENU_ACTIONS[1]!,
-          ]
-        : THREAD_ROW_MENU_ACTIONS,
+    () => [
+      THREAD_ROW_MENU_ACTIONS[0]!,
+      ...buildThreadTitleRegenerationMenuItems({
+        supported: props.titleRegenerationSupported,
+        isRegenerating: thread.titleRegeneration != null,
+      }),
+      THREAD_ROW_MENU_ACTIONS[1]!,
+    ],
     [props.titleRegenerationSupported, thread.titleRegeneration],
   );
   const primaryAction = useMemo(

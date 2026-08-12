@@ -82,7 +82,7 @@ The repository includes the reproducible Remotion studio used to express this re
 It carries source captures, motion provenance, landscape and portrait compositions,
 review generation, licensing notes, and deterministic validation. Croki-native project
 actions set up, launch, render, review, and validate the artifacts without restoring the
-retired `t3.json` configuration.
+retired `croki.json` configuration.
 
 ## The boundary
 

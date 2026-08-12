@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type {
   EnvironmentId,
   ModelSelection,
+  ProjectReadFileResult,
   ProviderInteractionMode,
   ProviderOptionSelection,
   RuntimeMode,
@@ -13,8 +14,14 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   MessageId,
+  CROKI_PROJECT_FILE_NAME,
   ThreadId,
 } from "@croki/contracts";
+import { parseCrokiProjectFile } from "@croki/shared/crokiProjectFile";
+import {
+  isDefaultThreadEnvModeSettled,
+  resolveDefaultThreadEnvMode,
+} from "@croki/shared/threadEnvMode";
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 
@@ -30,6 +37,8 @@ import {
 } from "../../lib/modelOptions";
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { appAtomRegistry } from "../../state/atom-registry";
+import { projectEnvironment } from "../../state/projects";
+import { useEnvironmentQuery } from "../../state/query";
 import {
   appendComposerDraftAttachments,
   clearComposerDraft,
@@ -345,10 +354,35 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const selectedProjectDraft = useComposerDraft(selectedProjectDraftKey);
   const prompt = selectedProjectDraft.text;
   const attachments = selectedProjectDraft.attachments;
-  // The server's configured default decides the mode until the user picks one
-  // explicitly — same resolution web uses for new draft threads.
-  const defaultWorkspaceMode: WorkspaceMode =
-    selectedEnvironmentServerConfig?.settings.defaultThreadEnvMode ?? "local";
+  // Default mode until the user picks one explicitly — same resolution web
+  // uses for new draft threads: per-project setting, then the repo's
+  // checked-in croki.json, then the server's configured default.
+  const crokiProjectFileQuery = useEnvironmentQuery(
+    selectedProject !== null && selectedProject.workspaceRoot !== ""
+      ? projectEnvironment.readFile({
+          environmentId: selectedProject.environmentId,
+          input: { cwd: selectedProject.workspaceRoot, relativePath: CROKI_PROJECT_FILE_NAME },
+        })
+      : null,
+  );
+  const crokiProjectFileData = crokiProjectFileQuery.data as ProjectReadFileResult | null;
+  const crokiProjectFileDefaultMode = useMemo(() => {
+    if (crokiProjectFileData === null || crokiProjectFileData.truncated) return null;
+    return parseCrokiProjectFile(crokiProjectFileData.contents)?.defaultThreadEnvMode ?? null;
+  }, [crokiProjectFileData]);
+  const defaultWorkspaceMode: WorkspaceMode = resolveDefaultThreadEnvMode({
+    projectSetting: selectedProject?.defaultThreadEnvMode,
+    projectFile: crokiProjectFileDefaultMode,
+    globalDefault: selectedEnvironmentServerConfig?.settings.defaultThreadEnvMode ?? "local",
+  });
+  // While unsettled the resolved default is provisional. Nothing may write
+  // it into the draft during that window (the auto-branch effect does), or
+  // the frozen interim value beats the croki.json default once it loads.
+  const defaultWorkspaceModeSettled = isDefaultThreadEnvModeSettled({
+    explicitMode: selectedProjectDraft.workspaceSelection?.mode,
+    projectSetting: selectedProject?.defaultThreadEnvMode,
+    projectFilePending: crokiProjectFileQuery.isPending,
+  });
   const workspaceMode = selectedProjectDraft.workspaceSelection?.mode ?? defaultWorkspaceMode;
   const selectedBranchName = selectedProjectDraft.workspaceSelection?.branch ?? null;
   const selectedWorktreePath = selectedProjectDraft.workspaceSelection?.worktreePath ?? null;
@@ -618,7 +652,11 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   }, [refreshBranches, selectedProject]);
 
   useEffect(() => {
-    if (workspaceMode !== "worktree" || selectedBranchName !== null) {
+    if (
+      !defaultWorkspaceModeSettled ||
+      workspaceMode !== "worktree" ||
+      selectedBranchName !== null
+    ) {
       return;
     }
     // The default may only exist as origin/<default> (isRemote), which
@@ -630,7 +668,14 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     if (preferredBranch) {
       selectBranch(preferredBranch);
     }
-  }, [allBranchRefs, availableBranches, selectBranch, selectedBranchName, workspaceMode]);
+  }, [
+    allBranchRefs,
+    availableBranches,
+    defaultWorkspaceModeSettled,
+    selectBranch,
+    selectedBranchName,
+    workspaceMode,
+  ]);
 
   const setRuntimeMode = useCallback(
     (value: RuntimeMode) => {

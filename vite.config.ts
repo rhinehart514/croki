@@ -109,6 +109,12 @@ export default defineConfig({
               message:
                 "Import from an explicit @croki/client-runtime/* subpath. The package has no root export.",
             },
+            {
+              name: "@pierre/diffs/react",
+              importNames: ["CodeView"],
+              message:
+                "Use StyledDiffCodeView so web diff surfaces share styling and virtualized geometry.",
+            },
           ],
         },
       ],

@@ -51,7 +51,7 @@ The guard rejects:
 
 - the inherited `pingdotgg/t3code` repository;
 - release pushes to `main`;
-- the inherited `t3` or `@t3tools/*` CLI package;
+- the inherited `t3` or `@croki/*` CLI package;
 - inherited `t3.codes` service destinations;
 - the inherited T3 EAS project;
 - incomplete signing, hosted web, relay, Discord, or mobile ownership.

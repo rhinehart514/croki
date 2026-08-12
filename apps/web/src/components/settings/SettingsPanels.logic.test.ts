@@ -12,6 +12,7 @@ import {
   backgroundActivitySharedPolicySettings,
   buildProviderInstanceUpdatePatch,
   formatDiagnosticsDescription,
+  getChangedTypographySettingLabels,
   hasChangedBackgroundActivitySettings,
   isProjectGroupingEnabled,
   projectGroupingModeFromToggle,
@@ -19,23 +20,16 @@ import {
   resolveDefaultProviderInstance,
 } from "./SettingsPanels.logic";
 
-describe("default provider configuration", () => {
-  it("renders a new driver such as OpenClaw without creating an instance first", () => {
-    const driver = ProviderDriverKind.make("openclaw");
-    expect(resolveDefaultProviderInstance({ driver })).toEqual({
-      driver,
-      enabled: true,
-      config: {},
-    });
-  });
-
-  it("preserves an existing configured instance", () => {
-    const driver = ProviderDriverKind.make("openclaw");
-    const explicitInstance = {
-      driver,
-      config: { agentId: "sol" },
-    } satisfies ProviderInstanceConfig;
-    expect(resolveDefaultProviderInstance({ driver, explicitInstance })).toBe(explicitInstance);
+describe("typography settings restore", () => {
+  it("detects family and size changes by font row", () => {
+    expect(getChangedTypographySettingLabels(DEFAULT_UNIFIED_SETTINGS)).toEqual([]);
+    expect(
+      getChangedTypographySettingLabels({
+        ...DEFAULT_UNIFIED_SETTINGS,
+        fontSizeInterface: 18,
+        fontFamilyCode: "Fira Code",
+      }),
+    ).toEqual(["Interface font", "Code font"]);
   });
 });
 

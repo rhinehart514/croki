@@ -209,6 +209,7 @@ function ThreadNavigationSidebarPane(
     unpinThread,
     regenerateThreadTitle,
     movePinnedThread,
+    regenerateThreadTitle,
   } = useThreadListActions();
   const threadListV2Enabled = useThreadListV2Enabled();
   const pendingTasks = usePendingNewTasks();
@@ -498,6 +499,15 @@ function ThreadNavigationSidebarPane(
     const supported = new Set<EnvironmentId>();
     for (const [environmentId, config] of serverConfigs) {
       if (config.environment.capabilities.threadPinReorder === true) {
+        supported.add(environmentId);
+      }
+    }
+    return supported;
+  }, [serverConfigs]);
+  const titleRegenerationEnvironmentIds = useMemo(() => {
+    const supported = new Set<EnvironmentId>();
+    for (const [environmentId, config] of serverConfigs) {
+      if (config.environment.capabilities.threadTitleRegeneration === true) {
         supported.add(environmentId);
       }
     }
@@ -950,9 +960,9 @@ function ThreadNavigationSidebarPane(
               onSelectThread={handleSelectThread}
               onDeleteThread={confirmDeleteThread}
               onArchiveThread={archiveThread}
-              settlementSupported={
-                thread.parentThreadId == null && settlementEnvironmentIds.has(thread.environmentId)
-              }
+              onRegenerateThreadTitle={regenerateThreadTitle}
+              titleRegenerationSupported={titleRegenerationEnvironmentIds.has(thread.environmentId)}
+              settlementSupported={settlementEnvironmentIds.has(thread.environmentId)}
               onSettleThread={settleThread}
               snoozeSupported={
                 thread.parentThreadId == null && snoozeEnvironmentIds.has(thread.environmentId)
@@ -1081,12 +1091,8 @@ function ThreadNavigationSidebarPane(
               fullSwipeWidth={props.width - 20}
               onArchiveThread={archiveThread}
               onDeleteThread={confirmDeleteThread}
-              titleRegenerationSupported={
-                thread.parentThreadId == null &&
-                serverConfigs.get(thread.environmentId)?.environment.capabilities
-                  .threadTitleRegeneration === true
-              }
               onRegenerateThreadTitle={regenerateThreadTitle}
+              titleRegenerationSupported={titleRegenerationEnvironmentIds.has(thread.environmentId)}
               onSelectThread={handleSelectThread}
               onSwipeableClose={handleSwipeableClose}
               onSwipeableWillOpen={handleSwipeableWillOpen}
@@ -1131,6 +1137,7 @@ function ThreadNavigationSidebarPane(
       savedConnectionsById,
       serverConfigs,
       threadSearchMatchByKey,
+      titleRegenerationEnvironmentIds,
       settleThread,
       settlementEnvironmentIds,
       showMoreSettled,

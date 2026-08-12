@@ -91,49 +91,9 @@
       "types": "./src/projectScripts.ts",
       "import": "./src/projectScripts.ts"
     },
-    "./crokiContext": {
-      "types": "./src/crokiContext.ts",
-      "import": "./src/crokiContext.ts"
-    },
-    "./crokiApplication": {
-      "types": "./src/crokiApplication.ts",
-      "import": "./src/crokiApplication.ts"
-    },
-    "./crokiConcepts": {
-      "types": "./src/crokiConcepts.ts",
-      "import": "./src/crokiConcepts.ts"
-    },
-    "./crokiScopes": {
-      "types": "./src/crokiScopes.ts",
-      "import": "./src/crokiScopes.ts"
-    },
-    "./crokiApplicationProgress": {
-      "types": "./src/crokiApplicationProgress.ts",
-      "import": "./src/crokiApplicationProgress.ts"
-    },
-    "./crokiCanvasActivity": {
-      "types": "./src/crokiCanvasActivity.ts",
-      "import": "./src/crokiCanvasActivity.ts"
-    },
-    "./crokiCanvasArtifact": {
-      "types": "./src/crokiCanvasArtifact.ts",
-      "import": "./src/crokiCanvasArtifact.ts"
-    },
-    "./crokiPerception": {
-      "types": "./src/crokiPerception.ts",
-      "import": "./src/crokiPerception.ts"
-    },
-    "./crokiThoughtView": {
-      "types": "./src/crokiThoughtView.ts",
-      "import": "./src/crokiThoughtView.ts"
-    },
-    "./crokiReleaseCandidate": {
-      "types": "./src/crokiReleaseCandidate.ts",
-      "import": "./src/crokiReleaseCandidate.ts"
-    },
-    "./crokiContextRecovery": {
-      "types": "./src/crokiContextRecovery.ts",
-      "import": "./src/crokiContextRecovery.ts"
+    "./threadEnvMode": {
+      "types": "./src/threadEnvMode.ts",
+      "import": "./src/threadEnvMode.ts"
     },
     "./crokiProjectFile": {
       "types": "./src/crokiProjectFile.ts",
@@ -250,6 +210,14 @@
     "./devProxy": {
       "types": "./src/devProxy.ts",
       "import": "./src/devProxy.ts"
+    },
+    "./usageMerge": {
+      "types": "./src/usageMerge.ts",
+      "import": "./src/usageMerge.ts"
+    },
+    "./usageFormat": {
+      "types": "./src/usageFormat.ts",
+      "import": "./src/usageFormat.ts"
     }
   },
   "scripts": {

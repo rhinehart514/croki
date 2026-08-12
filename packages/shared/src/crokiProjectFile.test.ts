@@ -1,7 +1,11 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildCrokiProjectFileJsonSchema, CrokiProjectFileFromJson } from "./crokiProjectFile.ts";
+import {
+  buildCrokiProjectFileJsonSchema,
+  CrokiProjectFileFromJson,
+  parseCrokiProjectFile,
+} from "./crokiProjectFile.ts";
 
 const decodeJson = Schema.decodeUnknownSync(CrokiProjectFileFromJson);
 
@@ -27,9 +31,15 @@ describe("buildCrokiProjectFileJsonSchema", () => {
       required?: ReadonlyArray<string>;
     };
 
-    expect(Object.keys(schema.properties).sort()).toEqual(["$schema", "iconPath", "scripts"]);
+    expect(Object.keys(schema.properties).sort()).toEqual([
+      "$schema",
+      "defaultThreadEnvMode",
+      "iconPath",
+      "scripts",
+    ]);
     expect(schema.required).toBeUndefined();
     expect(schema.properties.iconPath?.description).toContain("Workspace-relative path");
+    expect(schema.properties.defaultThreadEnvMode?.description).toContain("new threads start");
 
     const script = schema.properties.scripts?.items;
     expect(script?.required).toEqual(["name", "command"]);
@@ -65,5 +75,18 @@ describe("CrokiProjectFileFromJson", () => {
 
   it("fails on malformed JSON", () => {
     expect(() => decodeJson("{ not json")).toThrow();
+  });
+});
+
+describe("parseCrokiProjectFile", () => {
+  it("returns the decoded file for valid contents", () => {
+    expect(parseCrokiProjectFile('{ "defaultThreadEnvMode": "worktree" }')).toEqual({
+      defaultThreadEnvMode: "worktree",
+    });
+  });
+
+  it("returns null for malformed or invalid contents", () => {
+    expect(parseCrokiProjectFile("{ not json")).toBeNull();
+    expect(parseCrokiProjectFile('{ "defaultThreadEnvMode": "spaceship" }')).toBeNull();
   });
 });

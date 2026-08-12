@@ -1,3 +1,4 @@
+import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
 import { CrokiProjectFile, CROKI_PROJECT_FILE_SCHEMA_URL } from "@croki/contracts";
@@ -9,6 +10,18 @@ import { fromLenientJson } from "./schemaJson.ts";
  * decoded {@link CrokiProjectFile}.
  */
 export const CrokiProjectFileFromJson = fromLenientJson(CrokiProjectFile);
+
+const decodeCrokiProjectFile = Schema.decodeExit(CrokiProjectFileFromJson);
+
+/**
+ * Decode raw `croki.json` contents, treating invalid or malformed files as
+ * absent. Clients use this to read optional defaults (scripts, thread env
+ * mode) without surfacing decode errors to the user.
+ */
+export function parseCrokiProjectFile(contents: string): CrokiProjectFile | null {
+  const decoded = decodeCrokiProjectFile(contents);
+  return Exit.isSuccess(decoded) ? decoded.value : null;
+}
 
 /**
  * Build the publishable JSON Schema document for `croki.json` (draft 2020-12).
