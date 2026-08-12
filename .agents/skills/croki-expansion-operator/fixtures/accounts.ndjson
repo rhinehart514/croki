@@ -1,0 +1,2 @@
+{"account_id":"acct-alpha","company_name":"Alpha Studio","contact_ref":"crm-contact-alpha","relationship":"known-user","metadata":{"fixture":true}}
+{"account_id":"acct-beta","company_name":"Beta Works","contact_ref":null,"relationship":"unknown","metadata":{"fixture":true}}
