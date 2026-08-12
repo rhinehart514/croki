@@ -41,15 +41,6 @@ function environmentSupportsPinning(environmentId: EnvironmentThreadShell["envir
   );
 }
 
-function environmentSupportsTitleRegeneration(
-  environmentId: EnvironmentThreadShell["environmentId"],
-) {
-  return (
-    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
-      .threadTitleRegeneration === true
-  );
-}
-
 function environmentSupportsPinReorder(environmentId: EnvironmentThreadShell["environmentId"]) {
   return (
     appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
@@ -241,7 +232,6 @@ export function useThreadListActions(): {
   readonly unsettleThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly pinThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly unpinThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
-  readonly regenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly movePinnedThread: (
     thread: EnvironmentThreadShell,
     direction: "up" | "down",
@@ -551,33 +541,6 @@ export function useThreadListActions(): {
   );
 
   const confirmDeleteThread = useConfirmDeleteThread(executeAction);
-  const regenerateThreadTitle = useCallback(
-    async (thread: EnvironmentThreadShell) => {
-      if (
-        thread.parentThreadId != null ||
-        thread.titleRegeneration != null ||
-        !environmentSupportsTitleRegeneration(thread.environmentId)
-      ) {
-        return false;
-      }
-      const result = await updateMetadataMutation({
-        environmentId: thread.environmentId,
-        input: { threadId: thread.id, regenerateTitle: true },
-      });
-      if (result._tag === "Failure") {
-        const error = Cause.squash(result.cause);
-        Alert.alert(
-          "Could not regenerate thread title",
-          error instanceof Error && error.message.trim().length > 0
-            ? error.message
-            : "The thread title could not be regenerated.",
-        );
-        return false;
-      }
-      return true;
-    },
-    [updateMetadataMutation],
-  );
 
   return {
     archiveThread,
@@ -588,7 +551,6 @@ export function useThreadListActions(): {
     unsettleThread,
     pinThread,
     unpinThread,
-    regenerateThreadTitle,
     movePinnedThread,
     regenerateThreadTitle,
   };

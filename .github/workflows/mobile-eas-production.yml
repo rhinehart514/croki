@@ -6,7 +6,7 @@ name: Mobile EAS Production
 # fingerprint (platform-specific deps + pnpm version) and errors. On this Linux
 # runner, with corepack pinning pnpm 10.24 in eas.json, local == build.
 #
-# Every merge to main that touches the mobile app reconciles, per platform:
+# Every merge to croki/main that touches the mobile app reconciles, per platform:
 #   1. Store builds: if the latest production build's version differs from
 #      app.config.ts, cut a new build and submit it (TestFlight + Play internal
 #      track). Bumping `version` is therefore all it takes to
@@ -54,7 +54,7 @@ on:
         required: false
         type: string
   push:
-    branches: [main]
+    branches: [croki/main]
     paths:
       - apps/mobile/**
       - packages/client-runtime/**
@@ -132,7 +132,9 @@ jobs:
 
   production:
     name: EAS Production ${{ github.event_name == 'push' && 'auto' || inputs.mode }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    needs: release_guard
+    if: needs.release_guard.result == 'success' && (github.event_name == 'push' || inputs.mode != 'dry-run')
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -157,8 +159,8 @@ jobs:
         if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build' && inputs.version != ''
         uses: actions/create-github-app-token@v2
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.CROKI_RELEASE_APP_ID }}
+          private-key: ${{ secrets.CROKI_RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
       - name: Checkout
@@ -327,7 +329,7 @@ jobs:
         continue-on-error: true
         working-directory: apps/mobile
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_TOKEN: ${{ secrets.CROKI_EXPO_TOKEN }}
         run: |
           failed=0
           version="$(npx expo config --json --type public | jq -r '.version')"
@@ -351,7 +353,7 @@ jobs:
         if: steps.expo-token.outputs.present == 'true' && github.event_name == 'push'
         working-directory: apps/mobile
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_TOKEN: ${{ secrets.CROKI_EXPO_TOKEN }}
         run: |
           message="$(git log -1 --pretty=%s | head -c 120) ($(git rev-parse --short=9 HEAD))"
           for platform in ios android; do

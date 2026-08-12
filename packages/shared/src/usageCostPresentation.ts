@@ -1,6 +1,6 @@
 import type { UsagePricingStatus } from "@croki/contracts";
 
-import { formatPercent, formatUsd } from "./usageFormat";
+import { formatPercent, formatUsd } from "./usageFormat.ts";
 
 export type CostCompleteness = "complete" | "partial" | "unavailable";
 

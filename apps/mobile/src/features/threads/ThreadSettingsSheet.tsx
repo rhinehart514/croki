@@ -35,7 +35,7 @@ import { pendingModelAfterPress } from "./thread-settings-sheet-state";
 import type { ThreadSettingsSheetCloseReason } from "./use-thread-settings-sheet-presentation";
 
 /**
- * The everyday providers stay expanded; every other provider (OpenRouter
+ * The everyday harnesses stay expanded; every other provider (OpenRouter
  * catalogs and friends) folds behind its header so a 300-model catalog can't
  * bury the list.
  */
@@ -108,7 +108,7 @@ function ModelRow(props: {
 }
 
 /**
- * Provider section header with the provider logo. Secondary providers render
+ * Provider section header with the harness logo. Secondary providers render
  * as a tappable fold (count + chevron while collapsed); primary providers
  * and the group holding the current selection are static headers.
  */
@@ -251,20 +251,19 @@ function SwitchRow(props: {
 
 type SubmenuPage =
   | { readonly kind: "descriptor"; readonly id: string }
-  | { readonly kind: "runtime" }
-  | { readonly kind: "interaction" };
+  | { readonly kind: "runtime" };
 
 /**
  * Unified thread settings: the sheet is the provider-grouped model list
- * (primary providers expanded, other providers folded, legacy behind the
+ * (primary harnesses expanded, other providers folded, legacy behind the
  * top-right pill) with a Save button, plus compact disclosure rows whose
  * single-choice submenus stack in a small panel over the sheet so it never
  * changes size. Model changes stage until Save — while staged, the settings
  * rows edit the staged model's options and Save applies everything together.
  *
- * Callers control which providers are offered via providerGroups: an
+ * Callers control which harnesses are offered via providerGroups: an
  * existing thread must pass only its own provider's group, since a session
- * can't switch provider mid-thread.
+ * can't switch harness mid-thread.
  *
  * Rendered through an RN Modal (not the root OverlayPortal) so it also
  * presents above natively-presented form sheets like the new-task draft.
@@ -287,8 +286,6 @@ export function ThreadSettingsSheet(props: {
   readonly onUpdateOptionSelections: (selections: ReadonlyArray<ProviderOptionSelection>) => void;
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
-  readonly interactionMode: ProviderInteractionMode;
-  readonly onUpdateInteractionMode: (mode: ProviderInteractionMode) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -350,7 +347,7 @@ export function ThreadSettingsSheet(props: {
   const showLegacy = showLegacyToggle;
 
   // Stable settings rows: the union of descriptors across the primary
-  // providers' current models (plus whatever the displayed model advertises)
+  // harnesses' current models (plus whatever the displayed model advertises)
   // always renders, with unsupported rows disabled instead of vanishing when
   // the selection changes. Keyed by label, not id — Claude and Codex use
   // different ids for the same "Reasoning" concept.
@@ -435,35 +432,21 @@ export function ThreadSettingsSheet(props: {
             },
           })),
         }
-      : submenu?.kind === "interaction"
+      : activeDescriptor?.type === "select"
         ? {
-            title: "Interaction",
-            rows: INTERACTION_MODE_CHOICES.map((choice) => ({
-              id: choice.mode,
+            title: activeDescriptor.label,
+            rows: selectableChoices(activeDescriptor).map((choice) => ({
+              id: choice.id,
               label: choice.label,
-              selected: choice.mode === props.interactionMode,
+              selected: choice.id === getProviderOptionCurrentValue(activeDescriptor),
               onPress: () => {
                 void Haptics.selectionAsync();
-                props.onUpdateInteractionMode(choice.mode);
+                handleOptionChange(activeDescriptor.id, choice.id);
                 setSubmenu(null);
               },
             })),
           }
-        : activeDescriptor?.type === "select"
-          ? {
-              title: activeDescriptor.label,
-              rows: selectableChoices(activeDescriptor).map((choice) => ({
-                id: choice.id,
-                label: choice.label,
-                selected: choice.id === getProviderOptionCurrentValue(activeDescriptor),
-                onPress: () => {
-                  void Haptics.selectionAsync();
-                  handleOptionChange(activeDescriptor.id, choice.id);
-                  setSubmenu(null);
-                },
-              })),
-            }
-          : null;
+        : null;
 
   return (
     <Modal
@@ -611,14 +594,6 @@ export function ThreadSettingsSheet(props: {
                 RUNTIME_MODE_CHOICES.find((choice) => choice.mode === props.runtimeMode)?.label
               }
               onPress={() => setSubmenu({ kind: "runtime" })}
-            />
-            <DisclosureRow
-              label="Interaction"
-              value={
-                INTERACTION_MODE_CHOICES.find((choice) => choice.mode === props.interactionMode)
-                  ?.label
-              }
-              onPress={() => setSubmenu({ kind: "interaction" })}
             />
             <Pressable
               accessibilityRole="button"

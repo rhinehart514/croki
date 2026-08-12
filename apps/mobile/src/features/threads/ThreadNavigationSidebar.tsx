@@ -207,7 +207,6 @@ function ThreadNavigationSidebarPane(
     unsettleThread,
     pinThread,
     unpinThread,
-    regenerateThreadTitle,
     movePinnedThread,
     regenerateThreadTitle,
   } = useThreadListActions();
@@ -812,7 +811,6 @@ function ThreadNavigationSidebarPane(
       projectByKey,
       projectCwdByKey,
       projectTitleByProjectKey,
-      regenerateThreadTitle,
       savedConnectionsById,
       serverConfigs,
       snoozePresetMinute: nowMinute,
@@ -823,7 +821,6 @@ function ThreadNavigationSidebarPane(
       projectByKey,
       projectCwdByKey,
       projectTitleByProjectKey,
-      regenerateThreadTitle,
       savedConnectionsById,
       serverConfigs,
       nowMinute,
@@ -964,15 +961,9 @@ function ThreadNavigationSidebarPane(
               titleRegenerationSupported={titleRegenerationEnvironmentIds.has(thread.environmentId)}
               settlementSupported={settlementEnvironmentIds.has(thread.environmentId)}
               onSettleThread={settleThread}
-              snoozeSupported={
-                thread.parentThreadId == null && snoozeEnvironmentIds.has(thread.environmentId)
-              }
-              pinningSupported={
-                thread.parentThreadId == null && pinningEnvironmentIds.has(thread.environmentId)
-              }
-              pinReorderSupported={
-                thread.parentThreadId == null && pinReorderEnvironmentIds.has(thread.environmentId)
-              }
+              snoozeSupported={snoozeEnvironmentIds.has(thread.environmentId)}
+              pinningSupported={pinningEnvironmentIds.has(thread.environmentId)}
+              pinReorderSupported={pinReorderEnvironmentIds.has(thread.environmentId)}
               canMovePinnedUp={
                 arrangedPinnedKeys.indexOf(`${thread.environmentId}:${thread.id}`) > 0
               }
@@ -985,12 +976,6 @@ function ThreadNavigationSidebarPane(
               onUnsettleThread={unsettleThread}
               onPinThread={pinThread}
               onUnpinThread={unpinThread}
-              titleRegenerationSupported={
-                thread.parentThreadId == null &&
-                serverConfigs.get(thread.environmentId)?.environment.capabilities
-                  .threadTitleRegeneration === true
-              }
-              onRegenerateThreadTitle={regenerateThreadTitle}
               onMovePinnedThread={movePinnedThread}
               onChangeRequestState={handleChangeRequestState}
               projectCwd={projectCwdByKey.get(scopeKey) ?? null}

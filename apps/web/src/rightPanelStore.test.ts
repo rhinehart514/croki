@@ -217,43 +217,6 @@ describe("rightPanelStore", () => {
     expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refB)).toBeNull();
   });
 
-  it("opens Canvas as a durable singleton surface", () => {
-    useRightPanelStore.getState().open(refA, "canvas");
-    useRightPanelStore.getState().open(refA, "canvas");
-    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
-      id: "canvas",
-      kind: "canvas",
-    });
-    expect(
-      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
-    ).toHaveLength(1);
-  });
-
-  it("restores a persisted Canvas surface as the active workspace surface", () => {
-    expect(
-      migratePersistedRightPanelState({
-        byThreadKey: {
-          "env-1:thread-A": {
-            isOpen: true,
-            activeSurfaceId: "canvas",
-            surfaces: [
-              { id: "canvas", kind: "canvas" },
-              { id: "plan", kind: "plan" },
-            ],
-          },
-        },
-      }),
-    ).toEqual({
-      byThreadKey: {
-        "env-1:thread-A": {
-          isOpen: true,
-          activeSurfaceId: "canvas",
-          surfaces: [{ id: "canvas", kind: "canvas" }],
-        },
-      },
-    });
-  });
-
   it("opening a different kind keeps both surfaces and activates the new one", () => {
     useRightPanelStore.getState().open(refA, "agents");
     useRightPanelStore.getState().open(refA, "preview");
@@ -351,13 +314,12 @@ describe("rightPanelStore", () => {
     });
   });
 
-  it("removes persisted workspace surfaces when their workspace no longer exists", () => {
-    useRightPanelStore.getState().open(refA, "canvas");
+  it("removes persisted file surfaces when their workspace no longer exists", () => {
     useRightPanelStore.getState().openFile(refA, "src/index.ts");
     useRightPanelStore.getState().open(refA, "agents");
     useRightPanelStore.getState().openFile(refA, "README.md");
 
-    useRightPanelStore.getState().reconcileWorkspaceSurfaces(refA, false);
+    useRightPanelStore.getState().reconcileFileSurfaces(refA, false);
 
     expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
       isOpen: true,
@@ -365,9 +327,8 @@ describe("rightPanelStore", () => {
       surfaces: [{ id: "agents", kind: "agents" }],
     });
 
-    useRightPanelStore.getState().open(refB, "canvas");
     useRightPanelStore.getState().openFile(refB, "conductor.json");
-    useRightPanelStore.getState().reconcileWorkspaceSurfaces(refB, false);
+    useRightPanelStore.getState().reconcileFileSurfaces(refB, false);
     expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB)).toEqual({
       isOpen: false,
       activeSurfaceId: null,
@@ -532,15 +493,7 @@ describe("rightPanelStore", () => {
 
   it("closing the active surface activates a neighboring surface", () => {
     useRightPanelStore.getState().openBrowser(refA, "tab-a");
-    useRightPanelStore.getState().open(refA, "canvas");
     useRightPanelStore.getState().openTerminal(refA, "term-1");
-    useRightPanelStore.getState().activateSurface(refA, "canvas");
-    useRightPanelStore.getState().closeSurface(refA, "canvas");
-
-    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)?.id).toBe(
-      "terminal:term-1",
-    );
-
     useRightPanelStore.getState().closeSurface(refA, "terminal:term-1");
 
     expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)?.id).toBe(
@@ -562,38 +515,42 @@ describe("rightPanelStore", () => {
   it("closing other surfaces keeps the selected surface active", () => {
     useRightPanelStore.getState().openBrowser(refA, "tab-a");
     useRightPanelStore.getState().openFile(refA, "src/index.ts");
-    useRightPanelStore.getState().open(refA, "canvas");
     useRightPanelStore.getState().openTerminal(refA, "term-1");
 
-    useRightPanelStore.getState().closeOtherSurfaces(refA, "canvas");
+    useRightPanelStore.getState().closeOtherSurfaces(refA, "file:src/index.ts");
 
     expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
       isOpen: true,
-      activeSurfaceId: "canvas",
-      surfaces: [{ id: "canvas", kind: "canvas" }],
+      activeSurfaceId: "file:src/index.ts",
+      surfaces: [
+        {
+          id: "file:src/index.ts",
+          kind: "file",
+          relativePath: "src/index.ts",
+          revealLine: null,
+          revealRequestId: 1,
+        },
+      ],
     });
   });
 
   it("closing surfaces to the right activates the selected surface when active was removed", () => {
     useRightPanelStore.getState().openBrowser(refA, "tab-a");
-    useRightPanelStore.getState().open(refA, "canvas");
+    useRightPanelStore.getState().openFile(refA, "src/index.ts");
     useRightPanelStore.getState().openTerminal(refA, "term-1");
 
-    useRightPanelStore.getState().closeSurfacesToRight(refA, "canvas");
+    useRightPanelStore.getState().closeSurfacesToRight(refA, "browser:tab-a");
 
     expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
       isOpen: true,
-      activeSurfaceId: "canvas",
-      surfaces: [
-        { id: "browser:tab-a", kind: "preview", resourceId: "tab-a" },
-        { id: "canvas", kind: "canvas" },
-      ],
+      activeSurfaceId: "browser:tab-a",
+      surfaces: [{ id: "browser:tab-a", kind: "preview", resourceId: "tab-a" }],
     });
   });
 
   it("closing all surfaces closes the panel", () => {
     useRightPanelStore.getState().openBrowser(refA, "tab-a");
-    useRightPanelStore.getState().open(refA, "canvas");
+    useRightPanelStore.getState().openFile(refA, "src/index.ts");
 
     useRightPanelStore.getState().closeAllSurfaces(refA);
 

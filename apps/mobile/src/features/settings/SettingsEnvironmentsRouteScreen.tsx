@@ -21,7 +21,6 @@ import {
   SHOWCASE_CONNECTED_CLOUD_ENVIRONMENTS,
 } from "../showcase/showcaseEnvironmentRows";
 import { markNativeShowcaseReady } from "../showcase/nativeShowcaseScene";
-import { MobileServerUpdateRows } from "../updates/MobileServerUpdateRows";
 
 const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
 
@@ -166,8 +165,6 @@ export function SettingsEnvironmentsRouteScreen() {
             </Text>
           </View>
         )}
-
-        <MobileServerUpdateRows environments={connectedEnvironments} />
 
         {/* Always mounted: already-connected relay environments must stay
             visible (and removable) even when cloud config is missing or the

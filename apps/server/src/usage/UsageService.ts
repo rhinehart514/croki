@@ -1,8 +1,8 @@
 /**
  * UsageService - scans provider transcripts and returns priced usage buckets.
  *
- * The scan reads the provider CLIs' own session files rather than T3 Code's
- * orchestration projections, so usage covers turns driven outside T3 Code too.
+ * The scan reads the provider CLIs' own session files rather than Croki's
+ * orchestration projections, so usage covers turns driven outside Croki too.
  * This is the approach `ccusage` takes.
  *
  * Transcripts are append-only, so parsed records are memoised per file by
@@ -14,13 +14,7 @@
 import * as NodeOS from "node:os";
 
 import {
-  ClaudeSettings,
-  CodexSettings,
-  ProviderDriverKind,
   USAGE_CONTRACT_VERSION,
-  type ProviderInstanceConfig,
-  type ServerSettings as ServerSettingsValue,
-  type UsageBucket,
   type UsageProviderKind,
   type UsageSource,
   type UsageSummary,
@@ -40,8 +34,8 @@ import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 import { ServerConfig } from "../config.ts";
-import { expandHomePath } from "../pathExpansion.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
 import { parseRateTable, type RateTable } from "./usagePricing.ts";
@@ -49,7 +43,6 @@ import {
   listTranscriptFiles,
   readDirectoryVolumeId,
   readTranscriptRecords,
-  type TranscriptRecords,
 } from "./usageTranscriptReader.ts";
 import {
   decodeScanCache,
@@ -58,145 +51,7 @@ import {
   pruneScanCache,
   type ScanCache,
 } from "./usageScanCache.ts";
-type TranscriptReadResult =
-  | ({ readonly status: "ok" } & TranscriptRecords)
-  | { readonly status: "failed" };
-
-export interface UsageTranscriptDir {
-  readonly provider: UsageProviderKind;
-  readonly dir: string;
-}
-
-const decodeCodexSettings = Schema.decodeUnknownOption(CodexSettings);
-const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
-
-function providerEnvironmentValue(
-  environment: ProviderInstanceConfig["environment"],
-  name: string,
-): string | undefined {
-  let value: string | undefined;
-  for (const variable of environment ?? []) {
-    if (variable.name === name) value = variable.value;
-  }
-  return value;
-}
-
-/**
- * Resolves every physical transcript root represented by the effective
- * provider-instance map. This mirrors registry hydration: explicit canonical
- * entries win over their legacy mirror, while custom instances are additive.
- * Multiple instances sharing one provider home collapse to one scan/source.
- */
-export const resolveConfiguredTranscriptDirs = Effect.fn(
-  "UsageService.resolveConfiguredTranscriptDirs",
-)(function* (
-  settings: ServerSettingsValue,
-  processEnvironment: NodeJS.ProcessEnv = process.env,
-): Effect.fn.Return<ReadonlyArray<UsageTranscriptDir>, never, Path.Path> {
-  const path = yield* Path.Path;
-  const instances: ProviderInstanceConfig[] = Object.values(settings.providerInstances);
-
-  if (!Object.hasOwn(settings.providerInstances, "codex")) {
-    instances.push({
-      driver: ProviderDriverKind.make("codex"),
-      config: settings.providers.codex,
-    });
-  }
-  if (!Object.hasOwn(settings.providerInstances, "claudeAgent")) {
-    instances.push({
-      driver: ProviderDriverKind.make("claudeAgent"),
-      config: settings.providers.claudeAgent,
-    });
-  }
-
-  const roots: UsageTranscriptDir[] = [];
-  const seen = new Set<string>();
-  const append = (provider: UsageProviderKind, dir: string) => {
-    const key = `${provider}\0${dir}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    roots.push({ provider, dir });
-  };
-
-  for (const instance of instances) {
-    if (instance.driver === "codex") {
-      const config = Option.getOrUndefined(decodeCodexSettings(instance.config ?? {}));
-      if (config === undefined) continue;
-      const layout = yield* resolveCodexHomeLayout(config);
-      append("codex", path.join(layout.sharedHomePath, "sessions"));
-      continue;
-    }
-
-    if (instance.driver !== "claudeAgent") continue;
-    const config = Option.getOrUndefined(decodeClaudeSettings(instance.config ?? {}));
-    if (config === undefined) continue;
-
-    const configuredHome = config.homePath.trim();
-    const configuredEnvironment = (
-      providerEnvironmentValue(instance.environment, "CLAUDE_CONFIG_DIR") ??
-      processEnvironment.CLAUDE_CONFIG_DIR ??
-      ""
-    ).trim();
-    const configDir =
-      configuredHome.length > 0
-        ? path.resolve(expandHomePath(configuredHome))
-        : configuredEnvironment.length > 0
-          ? path.resolve(configuredEnvironment)
-          : path.join(NodeOS.homedir(), ".claude");
-    append("claude", path.join(configDir, "projects"));
-  }
-
-  return roots;
-});
-
-/**
- * Preserves the reader's failure signal instead of treating an unreadable
- * transcript as a legitimately empty file.
- */
-export function classifyTranscriptRead(transcript: TranscriptRecords | null): TranscriptReadResult {
-  return transcript === null
-    ? { status: "failed" }
-    : {
-        status: "ok",
-        records: dedupeWithinFile(transcript.records),
-        malformedRecords: transcript.malformedRecords,
-      };
-}
-
-/** Derives honest source provenance from the directory walk and file reads. */
-export function deriveSourceReadProvenance(input: {
-  readonly readableFiles: number;
-  readonly failedFiles: number;
-  readonly walkedDirectories: number;
-  readonly failedDirectories: number;
-  readonly malformedRecords: number;
-}): Pick<UsageSource, "status" | "message"> {
-  if (input.failedFiles === 0 && input.failedDirectories === 0 && input.malformedRecords === 0) {
-    return { status: "ok", message: null };
-  }
-
-  const failures: string[] = [];
-  if (input.failedDirectories > 0) {
-    const noun = input.failedDirectories === 1 ? "directory" : "directories";
-    failures.push(`${input.failedDirectories} transcript ${noun} could not be listed`);
-  }
-  if (input.failedFiles > 0) {
-    const noun = input.failedFiles === 1 ? "file" : "files";
-    failures.push(`${input.failedFiles} transcript ${noun} could not be read`);
-  }
-  if (input.malformedRecords > 0) {
-    const noun = input.malformedRecords === 1 ? "record" : "records";
-    failures.push(`${input.malformedRecords} usage ${noun} could not be interpreted`);
-  }
-
-  return {
-    status:
-      input.walkedDirectories === 0 || (input.failedFiles > 0 && input.readableFiles === 0)
-        ? "failed"
-        : "partial",
-    message: `${failures.join(" and ")}.`,
-  };
-}
+import type { UsageRecord } from "./usageTranscripts.ts";
 
 const LITELLM_RATES_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
@@ -329,6 +184,19 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  /**
+   * Claude's config dir is the home itself when overridden, but a default
+   * install nests transcripts under `~/.claude/projects`. Probe both.
+   */
+  const resolveClaudeTranscriptDir = (homePath: string) =>
+    Effect.gen(function* () {
+      const nested = path.join(homePath, ".claude", "projects");
+      const nestedExists = yield* fileSystem
+        .exists(nested)
+        .pipe(Effect.catchCause(() => Effect.succeed(false)));
+      return nestedExists ? nested : path.join(homePath, "projects");
+    });
+
   /** Resolves the transcript directory for each provider. */
   const resolveTranscriptDirs = Effect.fn("UsageService.resolveTranscriptDirs")(function* () {
     // A settings failure must surface as an error: swallowing it here would
@@ -347,7 +215,14 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-    return yield* resolveConfiguredTranscriptDirs(settings);
+    const claudeHome = yield* resolveClaudeHomePath(settings.providers.claudeAgent);
+    const claudeDir = yield* resolveClaudeTranscriptDir(claudeHome);
+    const codexLayout = yield* resolveCodexHomeLayout(settings.providers.codex);
+
+    return [
+      { provider: "claude" as const, dir: claudeDir },
+      { provider: "codex" as const, dir: path.join(codexLayout.sharedHomePath, "sessions") },
+    ];
   });
 
   /**
@@ -388,7 +263,7 @@ export const make = Effect.gen(function* () {
     size: number,
     mtimeMs: number,
     provider: UsageProviderKind,
-  ): Effect.Effect<TranscriptReadResult> =>
+  ): Effect.Effect<readonly UsageRecord[]> =>
     Effect.gen(function* () {
       const cached = fileCache.get(filePath);
       // Provider is part of the identity: if both providers were ever pointed
@@ -399,31 +274,20 @@ export const make = Effect.gen(function* () {
         cached.mtimeMs === mtimeMs &&
         cached.provider === provider
       ) {
-        return {
-          status: "ok",
-          records: cached.records,
-          malformedRecords: cached.malformedRecords,
-        };
+        return cached.records;
       }
 
       const parsed = yield* Effect.promise(() => readTranscriptRecords(filePath, provider));
-      const result = classifyTranscriptRead(parsed);
       // A read failure is not an empty transcript: caching it under this
       // (size, mtime) would silently drop the file's usage until it changes.
-      if (result.status === "failed") return result;
+      if (parsed === null) return [];
       // Stored already de-duplicated within the file, which is 99% of all
       // duplicates. The aggregator still runs the cross-file dedupe pass.
-      const records = result.records;
+      const records = dedupeWithinFile(parsed);
 
-      fileCache.set(filePath, {
-        size,
-        mtimeMs,
-        provider,
-        records,
-        malformedRecords: result.malformedRecords,
-      });
+      fileCache.set(filePath, { size, mtimeMs, provider, records });
       cacheDirty = true;
-      return result;
+      return records;
     });
 
   const readSummary = Effect.fn("UsageService.readSummary")(function* (input: UsageSummaryInput) {
@@ -491,14 +355,13 @@ export const make = Effect.gen(function* () {
 
     for (const { provider, dir } of dirs) {
       const volumeId = yield* Effect.promise(() => readDirectoryVolumeId(dir));
-      const fingerprint = { hostId, provider, resolvedHomePath: dir, volumeId };
       const exists = yield* fileSystem
         .exists(dir)
         .pipe(Effect.catchCause(() => Effect.succeed(false)));
 
       if (!exists) {
         sources.push({
-          fingerprint,
+          fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
           status: "missing",
           scannedFiles: 0,
           skippedFiles: 0,
@@ -509,41 +372,17 @@ export const make = Effect.gen(function* () {
         continue;
       }
 
-      // Keep aggregation and de-duplication inside one physical transcript
-      // source. The client can then drop an overlapping source from another
-      // environment without also dropping this environment's other roots.
-      const aggregator = new UsageAggregator({
-        timeZone: input.timeZone,
-        sinceDay: input.sinceDay,
-        untilDay: input.untilDay,
-        rates,
-        sourceFingerprint: fingerprint,
-      });
-
-      const listing = yield* Effect.promise(() => listTranscriptFiles(dir, windowStartMs));
-      // Absence only proves deletion when every subtree under the root was
-      // listed. Preserve cached entries after a partial walk.
-      if (listing.failedDirectories === 0 && listing.failedFiles === 0) walkedRoots.push(dir);
+      walkedRoots.push(dir);
+      const files = yield* Effect.promise(() => listTranscriptFiles(dir, windowStartMs));
       let scannedFiles = 0;
-      let skippedFiles = listing.failedFiles;
-      let readableFiles = 0;
-      let failedFiles = listing.failedFiles;
-      let malformedRecords = 0;
+      let skippedFiles = 0;
       // Distinct per directory. Buckets carry per-cell session counts, but a
       // session spans days and models, so clients total this figure instead.
       const sessionIds = new Set<string>();
 
-      for (const file of listing.files) {
+      for (const file of files) {
         livePaths.add(file.path);
-        const result = yield* readFileRecords(file.path, file.size, file.mtimeMs, provider);
-        if (result.status === "failed") {
-          failedFiles += 1;
-          skippedFiles += 1;
-          continue;
-        }
-        readableFiles += 1;
-        malformedRecords += result.malformedRecords;
-        const records = result.records;
+        const records = yield* readFileRecords(file.path, file.size, file.mtimeMs, provider);
         if (records.length === 0) {
           skippedFiles += 1;
           continue;
@@ -558,22 +397,14 @@ export const make = Effect.gen(function* () {
         }
       }
 
-      const provenance = deriveSourceReadProvenance({
-        readableFiles,
-        failedFiles,
-        walkedDirectories: listing.walkedDirectories,
-        failedDirectories: listing.failedDirectories,
-        malformedRecords,
-      });
-      buckets.push(...aggregator.finish().buckets);
       sources.push({
-        fingerprint,
-        status: provenance.status,
+        fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
+        status: "ok",
         scannedFiles,
         skippedFiles,
-        malformedRecords,
+        malformedRecords: 0,
         distinctSessions: sessionIds.size,
-        message: provenance.message,
+        message: null,
       });
     }
 
@@ -586,6 +417,7 @@ export const make = Effect.gen(function* () {
     if (pruned > 0) cacheDirty = true;
     yield* persistScanCache();
 
+    const aggregated = aggregator.finish();
     const readAt = yield* DateTime.now;
     const finishedAtMs = yield* Clock.currentTimeMillis;
 
@@ -595,7 +427,7 @@ export const make = Effect.gen(function* () {
       timeZone: input.timeZone,
       sinceDay: input.sinceDay,
       untilDay: input.untilDay,
-      buckets,
+      buckets: aggregated.buckets,
       sources,
       pricing: {
         status: ratesStatus,

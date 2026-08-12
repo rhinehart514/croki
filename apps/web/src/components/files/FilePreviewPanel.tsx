@@ -77,11 +77,10 @@ interface FilePreviewPanelProps {
   revealRequestId: number;
   onOpenFile: (relativePath: string) => void;
   onPendingChange: (relativePath: string, pending: boolean) => void;
-  onAddCanvasEvidence?: ((relativePath: string, line: number) => void) | undefined;
 }
 
-const FILE_EXPLORER_STORAGE_KEY = "croki.fileExplorerOpen";
-const RENDER_MARKDOWN_STORAGE_KEY = "croki.renderMarkdown";
+const FILE_EXPLORER_STORAGE_KEY = "t3code.fileExplorerOpen";
+const RENDER_MARKDOWN_STORAGE_KEY = "t3code.renderMarkdown";
 const FILE_SAVE_DEBOUNCE_MS = 500;
 const FILE_LINK_REVEAL_ATTRIBUTE = "data-file-link-reveal";
 const FILE_LINK_REVEAL_UNSAFE_CSS = `
@@ -393,7 +392,6 @@ interface EditableFileSurfaceProps {
   wordWrap: boolean;
   onPostRender: FilePostRender;
   onPendingChange: (relativePath: string, pending: boolean) => void;
-  onAddCanvasEvidence?: ((relativePath: string, line: number) => void) | undefined;
 }
 
 interface FileSelectionOverride {
@@ -443,7 +441,6 @@ function EditableFileSurface({
   wordWrap,
   onPostRender,
   onPendingChange,
-  onAddCanvasEvidence,
 }: EditableFileSurfaceProps) {
   const addReviewComment = useComposerDraftStore((store) => store.addReviewComment);
   const removeReviewComment = useComposerDraftStore((store) => store.removeReviewComment);
@@ -689,11 +686,6 @@ function EditableFileSurface({
                     onCancel={() => removeAnnotationEntry(entry.id)}
                     onComment={(text) => submitAnnotationEntry(entry.id, text)}
                     onDelete={() => removeAnnotationEntry(entry.id)}
-                    onAddCanvasEvidence={
-                      onAddCanvasEvidence
-                        ? () => onAddCanvasEvidence(relativePath, entry.endLine)
-                        : undefined
-                    }
                   />
                 ))}
               </div>
@@ -775,7 +767,6 @@ export default function FilePreviewPanel({
   revealRequestId,
   onOpenFile,
   onPendingChange,
-  onAddCanvasEvidence,
 }: FilePreviewPanelProps) {
   const { resolvedTheme } = useTheme();
   const wordWrap = useClientSettings((settings) => settings.wordWrap);
@@ -838,6 +829,7 @@ export default function FilePreviewPanel({
       return next;
     });
   };
+
   const handleOpenInBrowser = useCallback(() => {
     if (!absolutePath || !environmentHttpBaseUrl) return;
     void (async () => {
@@ -1013,7 +1005,6 @@ export default function FilePreviewPanel({
                 threadRef={threadRef}
                 contents={file.data.contents}
                 onPendingChange={onPendingChange}
-                onAddCanvasEvidence={onAddCanvasEvidence}
               />
             ) : file.data.truncated ? (
               <Virtualizer

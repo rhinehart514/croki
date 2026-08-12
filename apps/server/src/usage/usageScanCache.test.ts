@@ -28,23 +28,10 @@ function record(overrides: Partial<UsageRecord> = {}): UsageRecord {
   };
 }
 
-function cacheWith(
-  entries: readonly [
-    path: string,
-    mtimeMs: number,
-    records: readonly UsageRecord[],
-    malformedRecords?: number,
-  ][],
-): ScanCache {
+function cacheWith(entries: readonly [string, number, readonly UsageRecord[]][]): ScanCache {
   const cache: ScanCache = new Map();
-  for (const [path, mtimeMs, records, malformedRecords = 0] of entries) {
-    cache.set(path, {
-      size: records.length * 10,
-      mtimeMs,
-      provider: "claude",
-      records,
-      malformedRecords,
-    });
+  for (const [path, mtimeMs, records] of entries) {
+    cache.set(path, { size: records.length * 10, mtimeMs, provider: "claude", records });
   }
   return cache;
 }
@@ -52,7 +39,7 @@ function cacheWith(
 describe("scan cache round trip", () => {
   it("restores records unchanged", () => {
     const original = cacheWith([
-      ["/a.jsonl", 100, [record(), record({ dedupeKey: "msg_2:", model: "claude-opus-5" })], 2],
+      ["/a.jsonl", 100, [record(), record({ dedupeKey: "msg_2:", model: "claude-opus-5" })]],
       ["/b.jsonl", 200, [record({ sessionId: "session-b", reportedCostUsd: 1.5 })]],
     ]);
 
@@ -76,7 +63,6 @@ describe("scan cache round trip", () => {
     // A bad cache should cost one cold scan, never a broken page.
     expect(decodeScanCache(null).size).toBe(0);
     expect(decodeScanCache("nonsense").size).toBe(0);
-    expect(decodeScanCache({ version: 1, models: [], sessions: [], files: {} }).size).toBe(0);
     expect(decodeScanCache({ version: 999, models: [], sessions: [], files: {} }).size).toBe(0);
   });
 

@@ -4,24 +4,14 @@ import {
   type UsageBucket,
   type UsageDay,
   type UsageProviderKind,
-  type UsageSourceFingerprint,
-  type UsageSourceStatus,
   type UsageSummary,
 } from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { mergeUsage, type EnvironmentUsage } from "./usageMerge.ts";
 
-const defaultSourceFingerprint: UsageSourceFingerprint = {
-  hostId: "mac",
-  provider: "claude",
-  resolvedHomePath: "/a/.claude",
-  volumeId: "vol-mac",
-};
-
 function bucket(overrides: Partial<UsageBucket> = {}): UsageBucket {
   return {
-    sourceFingerprint: defaultSourceFingerprint,
     day: "2026-08-07" as UsageDay,
     provider: "claude",
     model: "claude-fable-5",
@@ -36,8 +26,6 @@ function bucket(overrides: Partial<UsageBucket> = {}): UsageBucket {
     cacheSavingsUsd: 2,
     costSource: "modelPriced",
     records: 5,
-    providerReportedRecords: 0,
-    modelPricedRecords: 5,
     unpricedRecords: 0,
     sessions: 1,
     ...overrides,
@@ -52,7 +40,6 @@ function summary(
     homePath: string;
     volumeId?: string;
     distinctSessions?: number;
-    status?: UsageSourceStatus;
   }[],
   contractVersion: number = USAGE_CONTRACT_VERSION,
 ): UsageSummary {
@@ -62,27 +49,7 @@ function summary(
     timeZone: "UTC",
     sinceDay: "2026-08-01" as UsageDay,
     untilDay: "2026-08-31" as UsageDay,
-    buckets: buckets.map((usageBucket) => {
-      const exactSource = sources.find(
-        (source) =>
-          source.hostId === usageBucket.sourceFingerprint.hostId &&
-          source.provider === usageBucket.sourceFingerprint.provider &&
-          source.homePath === usageBucket.sourceFingerprint.resolvedHomePath &&
-          (source.volumeId ?? `vol-${source.hostId}`) === usageBucket.sourceFingerprint.volumeId,
-      );
-      const source =
-        exactSource ?? sources.find((candidate) => candidate.provider === usageBucket.provider);
-      if (source === undefined) return usageBucket;
-      return {
-        ...usageBucket,
-        sourceFingerprint: {
-          hostId: source.hostId,
-          provider: source.provider,
-          resolvedHomePath: source.homePath,
-          volumeId: source.volumeId ?? `vol-${source.hostId}`,
-        },
-      };
-    }),
+    buckets,
     sources: sources.map((source) => ({
       fingerprint: {
         hostId: source.hostId,
@@ -90,7 +57,7 @@ function summary(
         resolvedHomePath: source.homePath,
         volumeId: source.volumeId ?? `vol-${source.hostId}`,
       },
-      status: source.status ?? "ok",
+      status: "ok" as const,
       scannedFiles: 1,
       skippedFiles: 0,
       malformedRecords: 0,
@@ -143,77 +110,6 @@ describe("mergeUsage", () => {
     expect(merged.sessions).toBe(1);
     expect(merged.duplicateSources).toHaveLength(1);
     expect(merged.contributingEnvironments).toEqual(["env-a"]);
-  });
-
-  it("keeps buckets scoped to their owned source when root sets overlap", () => {
-    const shared = {
-      provider: "claude" as const,
-      hostId: "mac",
-      homePath: "/shared/.claude",
-      volumeId: "vol-shared",
-    };
-    const unique = {
-      provider: "claude" as const,
-      hostId: "mac",
-      homePath: "/work/.claude",
-      volumeId: "vol-work",
-    };
-    const merged = mergeUsage(
-      [
-        environment("env-a", summary([bucket({ costUsd: 10 })], [shared])),
-        environment(
-          "env-b",
-          summary(
-            [
-              bucket({
-                costUsd: 10,
-                sourceFingerprint: {
-                  hostId: shared.hostId,
-                  provider: shared.provider,
-                  resolvedHomePath: shared.homePath,
-                  volumeId: shared.volumeId,
-                },
-              }),
-              bucket({
-                costUsd: 20,
-                sourceFingerprint: {
-                  hostId: unique.hostId,
-                  provider: unique.provider,
-                  resolvedHomePath: unique.homePath,
-                  volumeId: unique.volumeId,
-                },
-              }),
-            ],
-            [shared, unique],
-          ),
-        ),
-      ],
-      USAGE_CONTRACT_VERSION,
-    );
-
-    expect(merged.costUsd).toBe(30);
-    expect(merged.records).toBe(10);
-    expect(merged.contributingEnvironments).toEqual(["env-a", "env-b"]);
-  });
-
-  it("prefers a complete duplicate source over the lower environment id", () => {
-    const shared = {
-      provider: "claude" as const,
-      hostId: "mac",
-      homePath: "/shared/.claude",
-      volumeId: "vol-shared",
-    };
-    const merged = mergeUsage(
-      [
-        environment("env-a", summary([bucket({ costUsd: 7 })], [{ ...shared, status: "partial" }])),
-        environment("env-b", summary([bucket({ costUsd: 10 })], [shared])),
-      ],
-      USAGE_CONTRACT_VERSION,
-    );
-
-    expect(merged.costUsd).toBe(10);
-    expect(merged.contributingEnvironments).toEqual(["env-b"]);
-    expect(merged.duplicateSources).toEqual(["env-a: /shared/.claude"]);
   });
 
   it("drops only the duplicated provider, keeping the environment's other one", () => {
@@ -275,13 +171,7 @@ describe("mergeUsage", () => {
           summary(
             [
               bucket({ costUsd: 75 }),
-              bucket({
-                provider: "codex",
-                model: "gpt-5.6-sol",
-                costUsd: 25,
-                modelPricedRecords: 0,
-                unpricedRecords: 5,
-              }),
+              bucket({ provider: "codex", model: "gpt-5.6-sol", costUsd: 25, unpricedRecords: 5 }),
             ],
             [
               { provider: "claude", hostId: "mac", homePath: "/a/.claude" },
@@ -296,66 +186,7 @@ describe("mergeUsage", () => {
     expect(merged.providers[0]?.provider).toBe("claude");
     expect(merged.providers[0]?.costShare).toBeCloseTo(0.75, 5);
     expect(merged.costQuality.unpricedShare).toBeCloseTo(0.5, 5);
-    expect(merged.costQuality.unpricedRecords).toBe(5);
     expect(merged.costQuality.cacheSavingsUsd).toBe(4);
-    expect(merged.providers[1]?.unpricedRecords).toBe(5);
-    expect(merged.models[1]?.unpricedRecords).toBe(5);
-    expect(merged.daily[0]?.unpricedRecords).toBe(5);
-  });
-
-  it("uses explicit per-record cost provenance for mixed buckets", () => {
-    const merged = mergeUsage(
-      [
-        environment(
-          "env-a",
-          summary(
-            [
-              bucket({
-                records: 5,
-                providerReportedRecords: 2,
-                modelPricedRecords: 3,
-                costSource: "modelPriced",
-              }),
-            ],
-            [{ provider: "claude", hostId: "mac", homePath: "/a/.claude" }],
-          ),
-        ),
-      ],
-      USAGE_CONTRACT_VERSION,
-    );
-
-    expect(merged.costQuality.providerReportedShare).toBeCloseTo(0.4, 5);
-    expect(merged.costQuality.modelPricedShare).toBeCloseTo(0.6, 5);
-  });
-
-  it("preserves unavailable rate-table provenance for wholly unpriced usage", () => {
-    const unavailableSummary = {
-      ...summary(
-        [
-          bucket({
-            costUsd: 0,
-            costSource: "unpriced",
-            modelPricedRecords: 0,
-            unpricedRecords: 5,
-          }),
-        ],
-        [{ provider: "claude", hostId: "mac", homePath: "/a/.claude" }],
-      ),
-      pricing: {
-        status: "unavailable" as const,
-        source: "litellm",
-        fetchedAt: null,
-        knownModels: 0,
-      },
-    };
-
-    const merged = mergeUsage([environment("env-a", unavailableSummary)], USAGE_CONTRACT_VERSION);
-
-    expect(merged.costUsd).toBe(0);
-    expect(merged.totalTokens).toBeGreaterThan(0);
-    expect(merged.costQuality.unpricedRecords).toBe(merged.records);
-    expect(merged.costQuality.pricingStatuses).toEqual(["unavailable"]);
-    expect(merged.providers[0]).toMatchObject({ costUsd: 0, records: 5, unpricedRecords: 5 });
   });
 
   it("keeps two machines apart when hostname and home path collide", () => {

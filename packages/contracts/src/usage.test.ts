@@ -4,15 +4,10 @@ import * as Schema from "effect/Schema";
 import { USAGE_CONTRACT_VERSION, UsageBucket } from "./usage.ts";
 
 describe("usage contract", () => {
-  it("carries source scope and mixed per-record cost provenance in v4 buckets", () => {
+  it("carries hourly resolution and aggregate cost provenance in v4 buckets", () => {
     const decoded = Schema.decodeUnknownSync(UsageBucket)({
-      sourceFingerprint: {
-        hostId: "test-host",
-        provider: "claude",
-        resolvedHomePath: "/test/.claude/projects",
-        volumeId: "device:inode",
-      },
       day: "2026-08-08",
+      hourStart: "2026-08-08T14:00:00.000Z",
       provider: "claude",
       model: "claude-fable-5",
       totals: {
@@ -26,15 +21,12 @@ describe("usage contract", () => {
       cacheSavingsUsd: 0.1,
       costSource: "modelPriced",
       records: 3,
-      providerReportedRecords: 1,
-      modelPricedRecords: 2,
       unpricedRecords: 0,
       sessions: 1,
     });
 
     expect(USAGE_CONTRACT_VERSION).toBe(4);
-    expect(decoded.sourceFingerprint.resolvedHomePath).toBe("/test/.claude/projects");
-    expect(decoded.providerReportedRecords).toBe(1);
-    expect(decoded.modelPricedRecords).toBe(2);
+    expect(decoded.hourStart).toBe("2026-08-08T14:00:00.000Z");
+    expect(decoded.costSource).toBe("modelPriced");
   });
 });

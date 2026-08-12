@@ -23,9 +23,9 @@ describe("ResourceMonitorBinary", () => {
       });
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-resource-monitor-binary-",
+        prefix: "croki-resource-monitor-binary-",
       });
-      const binaryPath = `${baseDir}/t3-resource-monitor.exe`;
+      const binaryPath = `${baseDir}/croki-resource-monitor.exe`;
       yield* fileSystem.writeFileString(binaryPath, "binary");
 
       const service = yield* ResourceMonitorBinary.make().pipe(
@@ -33,7 +33,7 @@ describe("ResourceMonitorBinary", () => {
         Effect.provideService(HostProcessPlatform, "win32"),
         Effect.provideService(HostProcessArchitecture, "arm64"),
         Effect.provideService(HostProcessEnvironment, {
-          T3CODE_RESOURCE_MONITOR_PATH: binaryPath,
+          CROKI_RESOURCE_MONITOR_PATH: binaryPath,
         }),
       );
 

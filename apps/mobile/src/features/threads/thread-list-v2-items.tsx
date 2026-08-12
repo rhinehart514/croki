@@ -86,22 +86,6 @@ const LEGACY_MENU_ACTIONS: MenuAction[] = [
   { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true } },
 ];
 
-function withTitleRegeneration(
-  actions: readonly MenuAction[],
-  options: { readonly supported: boolean; readonly pending: boolean },
-): MenuAction[] {
-  if (!options.supported) return [...actions];
-  const deleteIndex = actions.findIndex((action) => action.id === "delete");
-  const item: MenuAction = {
-    id: "regenerate-title",
-    title: options.pending ? "Regenerating title…" : "Regenerate title",
-    image: "arrow.clockwise",
-    attributes: options.pending ? { disabled: true } : undefined,
-  };
-  if (deleteIndex < 0) return [...actions, item];
-  return [...actions.slice(0, deleteIndex), item, ...actions.slice(deleteIndex)];
-}
-
 /** Rounded-row radius shared with the v1 sidebar rows. */
 const SIDEBAR_V2_ROW_RADIUS = 12;
 
@@ -409,7 +393,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onArchiveThread,
     onPinThread,
     onUnpinThread,
-    onRegenerateThreadTitle,
     onMovePinnedThread,
     onChangeRequestState,
   } = props;
@@ -428,7 +411,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const pressedBackgroundColor = useThemeColor("--color-subtle");
   const selectedBackgroundColor = useThemeColor("--color-user-bubble");
   const pinTintColor = useThemeColor("--color-foreground-muted");
-  const workerRuleColor = useThemeColor("--color-border-subtle");
   const sidebarPane = props.pane === "sidebar";
   const selected = props.selected === true;
 
@@ -450,10 +432,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const handleUnsettle = useCallback(() => onUnsettleThread(thread), [onUnsettleThread, thread]);
   const handlePin = useCallback(() => onPinThread(thread), [onPinThread, thread]);
   const handleUnpin = useCallback(() => onUnpinThread(thread), [onUnpinThread, thread]);
-  const handleRegenerateTitle = useCallback(
-    () => onRegenerateThreadTitle(thread),
-    [onRegenerateThreadTitle, thread],
-  );
   const handleMovePinnedUp = useCallback(
     () => onMovePinnedThread?.(thread, "up"),
     [onMovePinnedThread, thread],
@@ -585,7 +563,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "unsnooze") handleUnsnooze();
       if (nativeEvent.event === "pin") handlePin();
       if (nativeEvent.event === "unpin") handleUnpin();
-      if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
       if (nativeEvent.event === "move-pin-up") handleMovePinnedUp();
       if (nativeEvent.event === "move-pin-down") handleMovePinnedDown();
       if (nativeEvent.event === "archive") handleArchive();
@@ -608,6 +585,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleRegenerateTitle,
       handleMovePinnedDown,
       handleMovePinnedUp,
+      handlePin,
       handleSettle,
       handleSnooze,
       handleUnpin,
@@ -674,30 +652,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : null,
     [handleMenuAction, snoozePresetActions, swipeActions.secondary, thread.title],
   );
-  const menuActions = useMemo(() => {
-    const base = snoozedRow
-      ? SNOOZED_MENU_ACTIONS
-      : !props.settlementSupported
-        ? LEGACY_MENU_ACTIONS
-        : canUnsettle
-          ? SLIM_MENU_ACTIONS
-          : swipeActions.secondary === "snooze"
-            ? snoozableCardMenuActions
-            : cardMenuActions;
-    return withTitleRegeneration(base, {
-      supported: props.titleRegenerationSupported,
-      pending: thread.titleRegeneration != null,
-    });
-  }, [
-    canUnsettle,
-    cardMenuActions,
-    props.settlementSupported,
-    props.titleRegenerationSupported,
-    snoozableCardMenuActions,
-    snoozedRow,
-    swipeActions.secondary,
-    thread.titleRegeneration,
-  ]);
   const swipeAccessibilityHint =
     secondaryAction === null
       ? `Opens the thread. Swipe left to ${primaryAction.label.toLowerCase()}.`
@@ -844,18 +798,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                     ? pressedBackgroundColor
                     : drawerColor,
                 borderRadius: SIDEBAR_V2_ROW_RADIUS,
-                borderLeftColor: workerRuleColor,
-                borderLeftWidth: thread.parentThreadId ? 1 : 0,
-                marginLeft: thread.parentThreadId ? 18 : 0,
                 paddingHorizontal: 12,
                 paddingVertical: 10,
               })
-            : ({ pressed }) => ({
-                borderLeftColor: workerRuleColor,
-                borderLeftWidth: thread.parentThreadId ? 1 : 0,
-                marginLeft: thread.parentThreadId ? 18 : 0,
-                opacity: pressed ? 0.7 : 1,
-              })
+            : ({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })
         }
       >
         {sidebarPane ? (
@@ -893,16 +839,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                     ? pressedBackgroundColor
                     : drawerColor,
                 borderRadius: SIDEBAR_V2_ROW_RADIUS,
-                borderLeftColor: workerRuleColor,
-                borderLeftWidth: thread.parentThreadId ? 1 : 0,
-                marginLeft: thread.parentThreadId ? 18 : 0,
               })
-            : ({ pressed }) => ({
-                borderLeftColor: workerRuleColor,
-                borderLeftWidth: thread.parentThreadId ? 1 : 0,
-                marginLeft: thread.parentThreadId ? 18 : 0,
-                opacity: pressed ? 0.7 : 1,
-              })
+            : ({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })
         }
       >
         {/* Settled history recedes: dimmed favicon + muted title. */}

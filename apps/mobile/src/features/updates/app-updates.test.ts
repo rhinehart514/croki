@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   createAppUpdateLaunchCheck,
-  needsNativeBuildUpdate,
   registerHiddenUpdateTap,
-  resolveNativeBuildUpdateRecovery,
   runAppUpdateCheck,
   type AppUpdateCheckState,
   type AppUpdateClient,
@@ -289,38 +287,5 @@ describe("registerHiddenUpdateTap", () => {
     }
 
     expect(count).toBe(0);
-  });
-});
-
-describe("native build update recovery", () => {
-  it("offers both supported iOS install channels", () => {
-    expect(resolveNativeBuildUpdateRecovery("ios")).toEqual({
-      actions: [
-        { label: "Open TestFlight", url: "itms-beta://" },
-        {
-          label: "Open App Store",
-          url: "https://apps.apple.com/us/app/croki-remote-claude-more/id6787819824",
-        },
-      ],
-      guidance: "Use the same channel that installed this app.",
-    });
-  });
-
-  it("opens Croki's Play Store listing on Android", () => {
-    expect(resolveNativeBuildUpdateRecovery("android")).toEqual({
-      actions: [
-        {
-          label: "Open Play Store",
-          url: "https://play.google.com/store/apps/details?id=com.croki.croki",
-        },
-      ],
-      guidance: "Install the latest Croki build from Google Play.",
-    });
-  });
-
-  it("replaces the OTA retry after no compatible update is found", () => {
-    expect(needsNativeBuildUpdate({ updatesEnabled: true, updateState: "current" })).toBe(true);
-    expect(needsNativeBuildUpdate({ updatesEnabled: false, updateState: "idle" })).toBe(true);
-    expect(needsNativeBuildUpdate({ updatesEnabled: true, updateState: "idle" })).toBe(false);
   });
 });

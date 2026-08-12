@@ -1,9 +1,6 @@
 import {
-  type CrokiThoughtView,
-  type CrokiThoughtViewStatement,
   type EnvironmentId,
   type MessageId,
-  type OrchestrationThreadActivity,
   type ScopedThreadRef,
   type ServerProviderSkill,
   type TurnId,
@@ -36,13 +33,12 @@ import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { FileDiff } from "@pierre/diffs/react";
 import {
   deriveTimelineEntries,
-  type GuidanceDeliveryState,
   workEntryIndicatesToolFailure,
   workEntryIndicatesToolNeutralStatus,
   workEntryIndicatesToolSuccess,
   workLogEntryIsToolLike,
 } from "../../session-logic";
-import { type ChatMessage, type TurnDiffSummary } from "../../types";
+import { type TurnDiffSummary } from "../../types";
 import {
   getRenderablePatch,
   resolveDiffThemeName,
@@ -56,7 +52,6 @@ import {
   ChevronRightIcon,
   CircleAlertIcon,
   EyeIcon,
-  EyeOffIcon,
   GlobeIcon,
   HammerIcon,
   MessageCircleIcon,
@@ -93,10 +88,6 @@ import {
   TIMELINE_MINIMAP_MIN_ITEMS,
   type TimelineLatestTurn,
 } from "./MessagesTimeline.logic";
-import {
-  canvasHarnessLabel,
-  type CanvasPresentationTimelineActivity,
-} from "./canvasThreadIntegration";
 import { TerminalContextInlineChip } from "./TerminalContextInlineChip";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
@@ -129,15 +120,6 @@ import {
   parseReviewCommentMessageSegments,
   type ReviewCommentContext,
 } from "../../reviewCommentContext";
-import type { CrokiContextReceipt } from "@croki/shared/crokiContext";
-import { CrokiAppliedContextReceipt } from "./CrokiContextPresentation";
-import { CoordinationWorkstreams } from "./CoordinationWorkstreams";
-import { useSmoothStreamingText } from "./useSmoothStreamingText";
-import { useMediaQuery } from "../../hooks/useMediaQuery";
-import { applicationAwarenessToolPreview } from "./applicationAwarenessPresentation";
-import { useAssetUrls } from "~/assets/assetUrls";
-import { uiHistoryEntryLabel } from "~/components/preview/uiHistory";
-import { CrokiInlineThoughtView } from "../croki/CrokiInlineThoughtView";
 
 // ---------------------------------------------------------------------------
 // Context — shared state consumed by every row component via Context.
@@ -155,35 +137,13 @@ interface TimelineRowSharedState {
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   activeThreadEnvironmentId: EnvironmentId;
-  crokiContextReceiptsByMessageId: ReadonlyMap<string, CrokiContextReceipt>;
-  guidanceDeliveryByMessageId: ReadonlyMap<string, GuidanceDeliveryState>;
   onRevertUserMessage: (messageId: MessageId) => void;
-  editFromHereUnavailableReason: string | null;
-  editFromHerePendingMessageId: MessageId | null;
-  onEditFromUserMessage: (message: ChatMessage) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
-  onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
-  canvasPresentationsByActivityId: ReadonlyMap<string, CanvasPresentationTimelineActivity>;
-  onOpenCanvasArtifact?: (presentation: CanvasPresentationTimelineActivity) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
   agentPanelModel: AgentPanelModel;
   onOpenAgents: () => void;
-  thoughtView?: MessagesTimelineThoughtView | undefined;
-}
-
-export interface MessagesTimelineThoughtView {
-  readonly view: CrokiThoughtView;
-  readonly anchorMessageId: MessageId;
-  readonly basisOpen: boolean;
-  readonly selectedObjectIds: readonly string[];
-  readonly updateAvailable: boolean;
-  readonly onToggleBasis: () => void;
-  readonly onReframe: () => void;
-  readonly onUpdate: () => void;
-  readonly onUse: (statement: CrokiThoughtViewStatement) => void;
-  readonly onOpenSource?: ((uri: string) => void) | undefined;
 }
 
 interface TimelineRowActivityState {
@@ -228,11 +188,6 @@ function TimelineLoadEarlierHeader({
 }
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
-const EMPTY_CROKI_CONTEXT_RECEIPTS: ReadonlyMap<string, CrokiContextReceipt> = new Map();
-const EMPTY_GUIDANCE_DELIVERIES: ReadonlyMap<string, GuidanceDeliveryState> = new Map();
-const EMPTY_CANVAS_PRESENTATIONS: ReadonlyMap<string, CanvasPresentationTimelineActivity> =
-  new Map();
-const EMPTY_COORDINATION_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = [];
 const TIMELINE_MAINTAIN_SCROLL_AT_END = {
   animated: false,
   on: {
@@ -260,20 +215,11 @@ interface MessagesTimelineProps {
   turnDiffSummaryByAssistantMessageId: Map<MessageId, TurnDiffSummary>;
   routeThreadKey: string;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
-  onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
-  canvasPresentationsByActivityId?: ReadonlyMap<string, CanvasPresentationTimelineActivity>;
-  coordinationActivities?: ReadonlyArray<OrchestrationThreadActivity>;
-  onOpenCanvasArtifact?: (presentation: CanvasPresentationTimelineActivity) => void;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
-  editFromHereUnavailableReason: string | null;
-  editFromHerePendingMessageId: MessageId | null;
-  onEditFromUserMessage: (message: ChatMessage) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
-  crokiContextReceiptsByMessageId?: ReadonlyMap<string, CrokiContextReceipt>;
-  guidanceDeliveryByMessageId?: ReadonlyMap<string, GuidanceDeliveryState>;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
@@ -295,7 +241,6 @@ interface MessagesTimelineProps {
   topFadeEnabled?: boolean;
   /** Non-null when older turns exist beyond the loaded window. */
   loadEarlier?: { readonly loading: boolean; readonly onLoadEarlier: () => void } | null;
-  thoughtView?: MessagesTimelineThoughtView | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -316,20 +261,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   turnDiffSummaryByAssistantMessageId,
   routeThreadKey,
   onOpenTurnDiff,
-  onPrepareCanvasUpdate,
-  canvasPresentationsByActivityId = EMPTY_CANVAS_PRESENTATIONS,
-  coordinationActivities = EMPTY_COORDINATION_ACTIVITIES,
-  onOpenCanvasArtifact,
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
-  editFromHereUnavailableReason,
-  editFromHerePendingMessageId,
-  onEditFromUserMessage,
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
-  crokiContextReceiptsByMessageId = EMPTY_CROKI_CONTEXT_RECEIPTS,
-  guidanceDeliveryByMessageId = EMPTY_GUIDANCE_DELIVERIES,
   markdownCwd,
   resolvedTheme,
   timestampFormat,
@@ -344,7 +280,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   hideEmptyPlaceholder = false,
   topFadeEnabled = false,
   loadEarlier = null,
-  thoughtView,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
@@ -462,8 +397,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     () =>
       deriveMessagesTimelineRows({
         timelineEntries,
-        canvasPresentationsByActivityId,
-        coordinationActivities,
         latestTurn,
         runningTurnId,
         expandedTurnIds,
@@ -472,13 +405,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         activeTurnStartedAt,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
-        thoughtView: thoughtView?.view,
-        thoughtViewAnchorMessageId: thoughtView?.anchorMessageId,
       }),
     [
       timelineEntries,
-      canvasPresentationsByActivityId,
-      coordinationActivities,
       latestTurn,
       runningTurnId,
       expandedTurnIds,
@@ -487,7 +416,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeTurnStartedAt,
       turnDiffSummaryByAssistantMessageId,
       revertTurnCountByUserMessageId,
-      thoughtView,
     ],
   );
   const rows = useStableRows(rawRows);
@@ -582,22 +510,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       skills,
       activeThreadEnvironmentId,
-      crokiContextReceiptsByMessageId,
-      guidanceDeliveryByMessageId,
       onRevertUserMessage,
-      editFromHereUnavailableReason,
-      editFromHerePendingMessageId,
-      onEditFromUserMessage,
       onImageExpand,
       onOpenTurnDiff,
-      onPrepareCanvasUpdate,
-      canvasPresentationsByActivityId,
-      ...(onOpenCanvasArtifact ? { onOpenCanvasArtifact } : {}),
       onToggleTurnFold,
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
-      thoughtView,
     }),
     [
       timestampFormat,
@@ -607,22 +526,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       skills,
       activeThreadEnvironmentId,
-      crokiContextReceiptsByMessageId,
-      guidanceDeliveryByMessageId,
       onRevertUserMessage,
-      editFromHereUnavailableReason,
-      editFromHerePendingMessageId,
-      onEditFromUserMessage,
       onImageExpand,
       onOpenTurnDiff,
-      onPrepareCanvasUpdate,
-      canvasPresentationsByActivityId,
-      onOpenCanvasArtifact,
       onToggleTurnFold,
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
-      thoughtView,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -661,10 +571,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   return (
     <TimelineRowCtx value={sharedState}>
       <TimelineRowActivityCtx value={activityState}>
-        <div
-          ref={setTimelineViewportElement}
-          className="thread-timeline-enter relative h-full min-h-0"
-        >
+        <div ref={setTimelineViewportElement} className="relative h-full min-h-0">
           <LegendList<MessagesTimelineRow>
             ref={listRef}
             data={rows}
@@ -1027,9 +934,6 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         (row.kind === "message" && row.message.role === "assistant" && !row.showAssistantMeta) ||
           row.kind === "work" ||
           row.kind === "work-toggle" ||
-          row.kind === "coordination" ||
-          row.kind === "canvas" ||
-          row.kind === "thought-view" ||
           row.kind === "turn-plan"
           ? "pb-2"
           : "pb-4",
@@ -1050,69 +954,12 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "turn-plan" ? <TurnPlanTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
-      {row.kind === "canvas" ? <CanvasPresentationTimelineRow row={row} /> : null}
-      {row.kind === "thought-view" ? <ThoughtViewTimelineRow row={row} /> : null}
-      {row.kind === "coordination" ? <CoordinationWorkstreams activities={row.activities} /> : null}
     </div>
   );
 });
 
-function ThoughtViewTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "thought-view" }> }) {
-  const thoughtView = use(TimelineRowCtx).thoughtView;
-  if (!thoughtView || thoughtView.view.id !== row.view.id) return null;
-  return (
-    <CrokiInlineThoughtView
-      view={row.view}
-      basisOpen={thoughtView.basisOpen}
-      selectedObjectIds={thoughtView.selectedObjectIds}
-      updateAvailable={thoughtView.updateAvailable}
-      onToggleBasis={thoughtView.onToggleBasis}
-      onReframe={thoughtView.onReframe}
-      onUpdate={thoughtView.onUpdate}
-      onUse={thoughtView.onUse}
-      {...(thoughtView.onOpenSource ? { onOpenSource: thoughtView.onOpenSource } : {})}
-    />
-  );
-}
-
-function CanvasPresentationTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "canvas" }> }) {
-  const ctx = use(TimelineRowCtx);
-  const { presentation } = row;
-  const label = canvasHarnessLabel(
-    presentation.harnessId ?? presentation.artifact?.harnessId ?? null,
-  );
-  const question = presentation.question ?? presentation.artifact?.question ?? null;
-  const revision = presentation.revision ?? presentation.artifact?.revision ?? null;
-  return (
-    <div className="flex min-w-0 items-center gap-2 border-s border-border/45 py-1 ps-3 text-[12px]">
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-foreground/85">
-          {presentation.artifact ? `${label} visual ready` : "Canvas visual unavailable"}
-        </p>
-        {question ? <p className="truncate text-foreground/75">{question}</p> : null}
-        <p className="truncate text-muted-foreground/65">
-          {presentation.summary}
-          {revision !== null ? ` · revision ${revision}` : null}
-        </p>
-      </div>
-      {ctx.onOpenCanvasArtifact ? (
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost"
-          className="shrink-0 text-xs text-foreground/80 hover:text-foreground"
-          onClick={() => ctx.onOpenCanvasArtifact?.(presentation)}
-        >
-          Open Canvas
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
-  const activity = use(TimelineRowActivityCtx);
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
   const terminalContexts = displayedUserMessage.contexts;
@@ -1193,16 +1040,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           markdownCwd={ctx.markdownCwd}
         />
       </div>
-      <CrokiAppliedContextReceipt
-        receipt={ctx.crokiContextReceiptsByMessageId.get(row.message.id) ?? null}
-      />
-      {row.message.turnId !== null ? (
-        <GuidanceDeliveryReceipt
-          delivery={ctx.guidanceDeliveryByMessageId.get(row.message.id) ?? null}
-          isActive={activity.activeTurnInProgress && activity.latestTurnId === row.message.turnId}
-        />
-      ) : null}
-      <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-100 transition-opacity duration-200 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
+      <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
             <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
@@ -1213,7 +1051,6 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             </TooltipPopup>
           </Tooltip>
           <div className="flex items-center gap-0.5">
-            <EditFromHereButton message={row.message} />
             {canRevertAgentWork && <RevertUserMessageButton messageId={row.message.id} />}
             {displayedUserMessage.copyText && (
               <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" />
@@ -1222,84 +1059,6 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         </div>
       </div>
     </div>
-  );
-}
-
-function GuidanceDeliveryReceipt({
-  delivery,
-  isActive,
-}: {
-  delivery: GuidanceDeliveryState | null;
-  isActive: boolean;
-}) {
-  if (delivery?.status === "failed") {
-    return (
-      <p
-        className="max-w-[80%] pe-1 text-xs text-destructive"
-        title={delivery.detail ?? undefined}
-        role="status"
-      >
-        Guidance not delivered
-      </p>
-    );
-  }
-  return (
-    <p className="max-w-[80%] pe-1 text-xs text-muted-foreground/70" role="status">
-      {delivery?.status === "delivered"
-        ? "Guidance delivered"
-        : isActive
-          ? "Delivering guidance…"
-          : "Guidance delivery unconfirmed"}
-    </p>
-  );
-}
-
-function EditFromHereButton({ message }: { message: ChatMessage }) {
-  const ctx = use(TimelineRowCtx);
-  const activity = use(TimelineRowActivityCtx);
-  const isPending = ctx.editFromHerePendingMessageId !== null;
-  const unavailableReason =
-    ctx.editFromHereUnavailableReason ??
-    (isPending
-      ? ctx.editFromHerePendingMessageId === message.id
-        ? "Creating conversation branch…"
-        : "Wait for the conversation branch to finish"
-      : activity.isRevertingCheckpoint
-        ? "Wait for the filesystem revert to finish"
-        : activity.isWorking
-          ? "Interrupt the current turn before editing from here"
-          : null);
-  const descriptionId = `edit-from-here-description-${message.id}`;
-
-  return (
-    <>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              aria-disabled={unavailableReason !== null}
-              aria-busy={ctx.editFromHerePendingMessageId === message.id || undefined}
-              aria-describedby={descriptionId}
-              onClick={() => {
-                if (unavailableReason === null) ctx.onEditFromUserMessage(message);
-              }}
-              aria-label="Edit from here"
-            />
-          }
-        >
-          <SquarePenIcon className="size-3" />
-        </TooltipTrigger>
-        <TooltipPopup side="top">
-          {unavailableReason ?? "Branch conversation from here. Files stay as they are."}
-        </TooltipPopup>
-      </Tooltip>
-      <span id={descriptionId} className="sr-only">
-        {unavailableReason ?? "Creates a conversation branch. Files stay as they are."}
-      </span>
-    </>
   );
 }
 
@@ -1351,43 +1110,22 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
-  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const displayedMessageText = useSmoothStreamingText({
-    text: messageText,
-    streaming: Boolean(row.message.streaming),
-    reducedMotion,
-  });
-  const assistantImages = row.message.attachments ?? [];
 
   return (
     <>
       <div className="relative min-w-0 px-1 py-0.5">
-        {assistantImages.length > 0 ? (
-          <div className="mb-3 grid max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
-            {assistantImages.map((image) => (
-              <AssistantTimelineImage
-                key={image.id}
-                image={image}
-                images={assistantImages}
-                onExpand={ctx.onImageExpand}
-              />
-            ))}
-          </div>
-        ) : null}
         <ChatMarkdown
-          text={displayedMessageText}
+          text={messageText}
           cwd={ctx.markdownCwd}
           threadRef={ctx.threadRef ?? undefined}
           isStreaming={Boolean(row.message.streaming)}
           skills={ctx.skills}
-          onImageExpand={ctx.onImageExpand}
         />
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
           routeThreadKey={ctx.routeThreadKey}
           resolvedTheme={ctx.resolvedTheme}
           onOpenTurnDiff={ctx.onOpenTurnDiff}
-          onPrepareCanvasUpdate={ctx.onPrepareCanvasUpdate}
         />
         {row.showAssistantMeta ? (
           <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
@@ -1408,43 +1146,6 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         ) : null}
       </div>
     </>
-  );
-}
-
-function AssistantTimelineImage(props: {
-  readonly image: NonNullable<TimelineMessage["attachments"]>[number];
-  readonly images: NonNullable<TimelineMessage["attachments"]>;
-  readonly onExpand: (preview: ExpandedImagePreview) => void;
-}) {
-  const [failed, setFailed] = useState(false);
-  return (
-    <div className="overflow-hidden border border-border/70 bg-black">
-      {props.image.previewUrl && !failed ? (
-        <button
-          type="button"
-          className="block w-full cursor-zoom-in outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          aria-label={`Expand ${props.image.name}`}
-          onClick={() => {
-            const preview = buildExpandedImagePreview(props.images, props.image.id);
-            if (preview) props.onExpand(preview);
-          }}
-        >
-          <img
-            src={props.image.previewUrl}
-            alt={props.image.name}
-            loading="lazy"
-            decoding="async"
-            referrerPolicy="no-referrer"
-            className="block max-h-[34rem] w-full object-contain"
-            onError={() => setFailed(true)}
-          />
-        </button>
-      ) : (
-        <div className="flex min-h-20 items-center justify-center px-3 py-4 text-xs text-muted-foreground">
-          {failed ? "Image unavailable" : props.image.name}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -1654,31 +1355,26 @@ const WorkGroupSection = memo(function WorkGroupSection({
     [groupedEntries],
   );
   const onlyToolEntries = nonEmptyEntries.every((entry) => workLogEntryIsToolLike(entry));
-  const onlyUiChecks = nonEmptyEntries.every((entry) => entry.uiCheck !== undefined);
-  const groupLabel = onlyUiChecks
-    ? "UI check"
-    : onlyToolEntries
-      ? nonEmptyEntries.length === 1
-        ? "1 tool call"
-        : `${nonEmptyEntries.length} tool calls`
-      : "Work Log";
+  const groupLabel = onlyToolEntries
+    ? nonEmptyEntries.length === 1
+      ? "1 tool call"
+      : `${nonEmptyEntries.length} tool calls`
+    : "Work Log";
 
   if (nonEmptyEntries.length === 0) return null;
 
   return (
     <section className="-mx-1 space-y-0.5 px-1 py-0.5" aria-label={groupLabel}>
-      {!onlyToolEntries && !onlyUiChecks && (
+      {!onlyToolEntries && (
         <p className="px-0.5 pb-0.5 font-medium text-secondary-label text-[11px]">{groupLabel}</p>
       )}
       <div className="space-y-px">
         {nonEmptyEntries.map((workEntry) => (
-          <Fragment key={workEntry.id}>
-            {workEntry.uiCheck ? (
-              <UiCheckReceiptRow workEntry={workEntry} />
-            ) : (
-              <SimpleWorkEntryRow workEntry={workEntry} workspaceRoot={workspaceRoot} />
-            )}
-          </Fragment>
+          <SimpleWorkEntryRow
+            key={workEntry.id}
+            workEntry={workEntry}
+            workspaceRoot={workspaceRoot}
+          />
         ))}
       </div>
     </section>
@@ -1734,13 +1430,11 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
   routeThreadKey,
   resolvedTheme,
   onOpenTurnDiff,
-  onPrepareCanvasUpdate,
 }: {
   turnSummary: TurnDiffSummary | undefined;
   routeThreadKey: string;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
-  onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
 }) {
   if (!turnSummary) return null;
   const checkpointFiles = turnSummary.files;
@@ -1753,7 +1447,6 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
       routeThreadKey={routeThreadKey}
       resolvedTheme={resolvedTheme}
       onOpenTurnDiff={onOpenTurnDiff}
-      onPrepareCanvasUpdate={onPrepareCanvasUpdate}
     />
   );
 });
@@ -1766,14 +1459,12 @@ function AssistantChangedFilesSectionInner({
   routeThreadKey,
   resolvedTheme,
   onOpenTurnDiff,
-  onPrepareCanvasUpdate,
 }: {
   turnSummary: TurnDiffSummary;
   checkpointFiles: TurnDiffSummary["files"];
   routeThreadKey: string;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
-  onPrepareCanvasUpdate?: ((turn: Pick<TurnDiffSummary, "turnId" | "files">) => void) | undefined;
 }) {
   const activity = use(TimelineRowActivityCtx);
   const isLatestTurn = activity.latestTurnId === turnSummary.turnId;
@@ -1786,7 +1477,6 @@ function AssistantChangedFilesSectionInner({
   );
   const [allDirectoriesExpanded, setAllDirectoriesExpanded] = useState(autoExpanded);
   const expanded = persistedExpanded ?? (isLatestTurn && autoExpanded);
-  const canPrepareCanvasUpdate = !isLatestTurn || !activity.activeTurnInProgress;
 
   return (
     <ChangedFilesCard
@@ -1801,11 +1491,6 @@ function AssistantChangedFilesSectionInner({
       }
       onToggleAllDirectories={() => setAllDirectoriesExpanded((current) => !current)}
       onOpenTurnDiff={onOpenTurnDiff}
-      onUpdateCanvas={
-        onPrepareCanvasUpdate && canPrepareCanvasUpdate
-          ? () => onPrepareCanvasUpdate(turnSummary)
-          : undefined
-      }
     />
   );
 }
@@ -2326,11 +2011,9 @@ function workToneIcon(tone: TimelineWorkEntry["tone"]): {
 }
 
 function workEntryPreview(
-  workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles" | "toolData">,
+  workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles">,
   workspaceRoot: string | undefined,
 ) {
-  const applicationPreview = applicationAwarenessToolPreview(workEntry.toolData);
-  if (applicationPreview) return applicationPreview;
   if (workEntry.command) return workEntry.command;
   if (workEntry.detail) return workEntry.detail;
   if ((workEntry.changedFiles?.length ?? 0) === 0) return null;
@@ -2696,93 +2379,5 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
         </div>
       ) : null}
     </div>
-  );
-});
-
-const UiCheckReceiptRow = memo(function UiCheckReceiptRow(props: { workEntry: TimelineWorkEntry }) {
-  const { activeThreadEnvironmentId, onImageExpand } = use(TimelineRowCtx);
-  const receipt = props.workEntry.uiCheck!;
-  const resources = useMemo(
-    () =>
-      receipt.screens.map((screen) => ({
-        _tag: "attachment" as const,
-        attachmentId: screen.attachmentId,
-      })),
-    [receipt.screens],
-  );
-  const assetUrls = useAssetUrls(activeThreadEnvironmentId, resources);
-  const images = useMemo(
-    () =>
-      receipt.screens.flatMap((screen, index) => {
-        const src = assetUrls[index];
-        return src
-          ? [
-              {
-                src,
-                name: `${uiHistoryEntryLabel(screen)} · ${screen.width}×${screen.height}`,
-              },
-            ]
-          : [];
-      }),
-    [assetUrls, receipt.screens],
-  );
-  const screenCount = receipt.screens.length;
-  const viewportCount = new Set(receipt.screens.map((screen) => `${screen.width}×${screen.height}`))
-    .size;
-  const label =
-    receipt.status === "checked"
-      ? `Checked ${screenCount} screen${screenCount === 1 ? "" : "s"}`
-      : receipt.status === "unavailable"
-        ? "Check unavailable"
-        : "Not checked";
-  const detail =
-    receipt.status === "checked"
-      ? [
-          `${viewportCount} size${viewportCount === 1 ? "" : "s"}`,
-          receipt.issueCount > 0
-            ? `${receipt.issueCount} browser issue${receipt.issueCount === 1 ? "" : "s"}`
-            : null,
-        ]
-          .filter((value): value is string => value !== null)
-          .join(" · ")
-      : receipt.status === "unavailable"
-        ? "Croki could not determine the final rendered state"
-        : "Visible changes have no rendered evidence";
-  const icon =
-    receipt.status === "checked" ? (
-      receipt.issueCount > 0 ? (
-        <CircleAlertIcon className="size-3.5 text-warning" aria-hidden />
-      ) : (
-        <CheckIcon className="size-3.5 text-muted-foreground" aria-hidden />
-      )
-    ) : receipt.status === "unavailable" ? (
-      <CircleAlertIcon className="size-3.5 text-warning" aria-hidden />
-    ) : (
-      <EyeOffIcon className="size-3.5 text-warning" aria-hidden />
-    );
-  const content = (
-    <>
-      <span className="flex size-5 shrink-0 items-center justify-center">{icon}</span>
-      <span className="min-w-0 flex-1 text-[12px] leading-5">
-        <span className="font-medium text-foreground/82">{label}</span>
-        <span className="ml-1.5 text-muted-foreground/55">· {detail}</span>
-      </span>
-      {images.length > 0 ? (
-        <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/55" aria-hidden />
-      ) : null}
-    </>
-  );
-
-  return images.length > 0 ? (
-    <button
-      type="button"
-      className="flex w-full cursor-pointer items-center gap-1.5 rounded-md px-0.5 py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
-      aria-label={`${label}. ${detail}. Open checked screens`}
-      onClick={() => onImageExpand({ images, index: images.length - 1 })}
-    >
-      {content}
-    </button>
-  ) : (
-    <div className="flex items-center gap-1.5 px-0.5 py-0.5">{content}</div>
   );
 });

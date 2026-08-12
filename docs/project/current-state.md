@@ -1,19 +1,18 @@
 # Current project state
 
-Last audited: 2026-08-08
-Code baseline: Croki native-provider integration on `croki/main`
+Last audited: 2026-08-12
+Code baseline: Croki 0.4.12 on `croki/main`, synced through T3 Code `e321667b`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow application-aware overlay on the development environment rather than
 a second agent runtime.
 
-Croki 0.4.11 is the current repository implementation candidate; 0.4.10 remains
-the latest tagged stable baseline inherited by it. See the [0.4.6 release
+Croki 0.4.12 is the current repository implementation and stable release. See the [0.4.6 release
 notes](./release-notes-0.4.6.md), [0.4.7 UI history
 notes](./release-notes-0.4.7.md), [0.4.8 quality-of-life
 notes](./release-notes-0.4.8.md), [0.4.9 control without interruption
 notes](./release-notes-0.4.9.md), [0.4.10 native-provider integration
-notes](./release-notes-0.4.10.md), [0.4.11 Thought Views candidate](./release-notes-0.4.11.md), and [release ownership contract](../operations/release.md)
+notes](./release-notes-0.4.10.md), [0.4.11 Thought Views candidate](./release-notes-0.4.11.md), [0.4.12 T3 sync notes](./release-notes-0.4.12.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
 ## Working product
@@ -49,6 +48,18 @@ Croki currently provides:
 - one repository-owned application brief at `.croki/application.croki`, visible
   to the founder and attached to a model only through an explicit user action;
 - source-grounded Croki Senses perception, now rendered as automatic inline Views when it materially improves a Thread question.
+
+## 0.4.12 boundary
+
+0.4.12 carries Croki onto T3 Code through upstream commit `e321667b`. It keeps
+the current T3 interaction and visual behavior across the web, desktop, server,
+and mobile clients while preserving Croki's names, storage keys, package
+ownership, historical migrations, and fail-closed release destinations.
+
+Every Codex `turn/start` receives the T3-derived Default or Plan host developer
+instruction block with Croki runtime identity and product-native Preview/MCP
+routing. Croki does not prepend a separate application or strategy prompt.
+Presentation-only Croki state is removed before a provider turn is sent.
 
 ## 0.4.11 boundary
 
@@ -278,9 +289,10 @@ rewriting its workspace, memory, skills, model, tools, or delegation settings.
 - UI history preserves individual model snapshots, but checked-flow timelines,
   semantic visual comparison, state discovery, responsive sweeps,
   accessibility embodiment, and production-behavior adapters remain planned.
-- Production releases, Croki CLI publication, Croki-owned relay and web
-  destinations, signing, and mobile production deployment remain disabled by
-  ownership guards.
+- GitHub desktop publication is enabled for `rhinehart514/croki` from
+  `croki/main`. CLI publication, Croki-owned relay and hosted web destinations,
+  signing, Discord, and mobile production deployment remain disabled by their
+  independent ownership guards.
 - Remote self-update and copied CLI launch commands still target the local
   `croki-server@<version>` package. They are not Croki release paths until the
   CLI package and publication destination are configured under Croki ownership.
@@ -297,7 +309,7 @@ rewriting its workspace, memory, skills, model, tools, or delegation settings.
   signing, Discord, and mobile destinations remain skipped until their specific
   flags and Croki-owned configuration are enabled.
 - Pushes to `croki/main` build unsigned macOS arm64 and Windows x64 installer
-  artifacts. A tagged GitHub release is the enabled 0.4.3 publication path.
+  artifacts. A tagged GitHub release is the enabled 0.4.12 publication path.
 
 ## Verification
 

@@ -5,7 +5,7 @@ import {
   describeCostCoverage,
   formatCoveredCost,
   formatPricingStatuses,
-} from "./usageCostPresentation";
+} from "./usageCostPresentation.ts";
 
 describe("usage cost presentation", () => {
   it("does not present wholly unpriced usage as zero cost", () => {

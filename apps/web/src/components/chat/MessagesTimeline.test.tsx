@@ -3,7 +3,6 @@ import { createRef, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
-import { CROKI_CONTEXT_RELATIVE_PATH, type CrokiContextReceipt } from "@croki/shared/crokiContext";
 
 vi.mock("@legendapp/list/react", async () => {
   const legendListTestId = "legend-list";
@@ -126,11 +125,6 @@ vi.mock("@pierre/diffs/react", () => {
   return { FileDiff: MockFileDiff };
 });
 
-vi.mock("~/assets/assetUrls", () => ({
-  useAssetUrls: (_environmentId: unknown, resources: ReadonlyArray<unknown>) =>
-    resources.map((_, index) => `https://example.com/checked-screen-${index + 1}.png`),
-}));
-
 function matchMedia() {
   return {
     matches: false,
@@ -192,9 +186,6 @@ function buildProps() {
     onOpenTurnDiff: () => {},
     revertTurnCountByUserMessageId: new Map(),
     onRevertUserMessage: () => {},
-    editFromHereUnavailableReason: null,
-    editFromHerePendingMessageId: null,
-    onEditFromUserMessage: () => {},
     isRevertingCheckpoint: false,
     onImageExpand: () => {},
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
@@ -235,148 +226,6 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
-  it("renders one plain completion receipt for a turn's checked screens", () => {
-    const turnId = TurnId.make("turn-ui-check");
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[
-          {
-            id: "ui-check:turn-ui-check",
-            kind: "work",
-            createdAt: MESSAGE_CREATED_AT,
-            entry: {
-              id: "croki.ui.check:turn-ui-check",
-              label: "Checked 2 screens",
-              tone: "info",
-              turnId,
-              createdAt: MESSAGE_CREATED_AT,
-              sourceActivityKind: "croki.ui.check",
-              uiCheck: {
-                status: "checked",
-                turnId,
-                createdAt: MESSAGE_CREATED_AT,
-                visibleFiles: ["apps/web/src/ProjectOverview.tsx"],
-                issueCount: 1,
-                screens: [
-                  {
-                    id: "screen-desktop",
-                    attachmentId: "attachment-desktop",
-                    url: "http://localhost:5173/",
-                    title: "Project overview",
-                    observedAt: MESSAGE_CREATED_AT,
-                    width: 1_280,
-                    height: 800,
-                    interactiveElementCount: 8,
-                    consoleErrorCount: 0,
-                    networkFailureCount: 0,
-                    actionCount: 2,
-                  },
-                  {
-                    id: "screen-tablet",
-                    attachmentId: "attachment-tablet",
-                    url: "http://localhost:5173/",
-                    title: "Project overview",
-                    observedAt: MESSAGE_CREATED_AT,
-                    width: 768,
-                    height: 1_024,
-                    interactiveElementCount: 8,
-                    consoleErrorCount: 1,
-                    networkFailureCount: 0,
-                    actionCount: 2,
-                  },
-                ],
-              },
-            },
-          },
-        ]}
-      />,
-    );
-
-    expect(markup).toContain("Checked 2 screens");
-    expect(markup).toContain("· 2 sizes · 1 browser issue");
-    expect(markup).toContain(
-      'aria-label="Checked 2 screens. 2 sizes · 1 browser issue. Open checked screens"',
-    );
-    expect(markup).not.toContain("Work Log");
-  });
-
-  it("renders visible work without evidence as a quiet non-interactive result", () => {
-    const turnId = TurnId.make("turn-ui-not-checked");
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[
-          {
-            id: "ui-check:turn-ui-not-checked",
-            kind: "work",
-            createdAt: MESSAGE_CREATED_AT,
-            entry: {
-              id: "croki.ui.check:turn-ui-not-checked",
-              label: "Not checked",
-              tone: "info",
-              turnId,
-              createdAt: MESSAGE_CREATED_AT,
-              sourceActivityKind: "croki.ui.check",
-              uiCheck: {
-                status: "not-checked",
-                turnId,
-                createdAt: MESSAGE_CREATED_AT,
-                visibleFiles: ["apps/web/src/ProjectOverview.tsx"],
-                issueCount: 0,
-                screens: [],
-              },
-            },
-          },
-        ]}
-      />,
-    );
-
-    expect(markup).toContain("Not checked");
-    expect(markup).toContain("Visible changes have no rendered evidence");
-    expect(markup).not.toContain("Open checked screens");
-    expect(markup).not.toContain("Work Log");
-  });
-
-  it("renders assistant image attachments and markdown images inline", () => {
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[
-          {
-            id: "entry-assistant-image",
-            kind: "message",
-            createdAt: MESSAGE_CREATED_AT,
-            message: {
-              id: MessageId.make("message-assistant-image"),
-              role: "assistant",
-              text: "Rendered result\n\n![Remote result](https://example.com/result.png)",
-              attachments: [
-                {
-                  type: "image",
-                  id: "assistant-image-1",
-                  name: "generated-result.png",
-                  mimeType: "image/png",
-                  sizeBytes: 128,
-                  previewUrl: "https://example.com/attachment.png",
-                },
-              ],
-              turnId: null,
-              createdAt: MESSAGE_CREATED_AT,
-              updatedAt: MESSAGE_CREATED_AT,
-              streaming: false,
-            },
-          },
-        ]}
-      />,
-    );
-
-    expect(markup).toContain('aria-label="Expand generated-result.png"');
-    expect(markup).toContain('data-chat-image-state="ready"');
-    expect(markup).toContain('aria-label="Expand Remote result"');
-    expect(markup).toContain('referrerPolicy="no-referrer"');
-  });
-
   it("uses the larger leading inset only when the top fade is enabled", () => {
     const timelineEntries = [buildUserTimelineEntry("Hello")];
 
@@ -391,92 +240,6 @@ describe("MessagesTimeline", () => {
     expect(compactMarkup).not.toContain("chat-timeline-scroll-fade");
     expect(fadedMarkup).toContain('class="h-10 sm:h-12"');
     expect(fadedMarkup).toContain("chat-timeline-scroll-fade");
-  });
-
-  it("reveals a newly mounted thread timeline as one surface", () => {
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[buildUserTimelineEntry("Smooth handoff")]}
-      />,
-    );
-
-    expect(markup).toContain("thread-timeline-enter");
-  });
-
-  it("attaches a content-free Canvas receipt to the matching sent message", () => {
-    const receipt: CrokiContextReceipt = {
-      status: "loaded",
-      relativePath: CROKI_CONTEXT_RELATIVE_PATH,
-      version: 1,
-      sha256: "b".repeat(64),
-      updatedAt: "2026-07-30T14:00:00.000Z",
-      activeCount: 2,
-      currentCount: 1,
-      provisionalCount: 1,
-      renderedChars: 420,
-      truncated: false,
-    };
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[buildUserTimelineEntry("Keep this text unchanged")]}
-        crokiContextReceiptsByMessageId={new Map([["message-1", receipt]])}
-      />,
-    );
-
-    expect(markup).toContain("Keep this text unchanged");
-    expect(markup).toContain('data-croki-context-receipt="loaded"');
-    expect(markup).toContain("Context applied");
-    expect(markup).toContain("bbbbbbbb");
-  });
-
-  it("shows honest pending, delivered, and failed states for running-turn guidance", () => {
-    const entry = buildUserTimelineEntry("Use SQLite, not Postgres.");
-    const guidanceEntry = {
-      ...entry,
-      message: { ...entry.message, turnId: TurnId.make("turn-running") },
-    };
-    const pending = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        activeTurnInProgress
-        latestTurn={{
-          turnId: TurnId.make("turn-running"),
-          state: "running",
-          startedAt: MESSAGE_CREATED_AT,
-          completedAt: null,
-        }}
-        timelineEntries={[guidanceEntry]}
-      />,
-    );
-    const interrupted = renderToStaticMarkup(
-      <MessagesTimeline {...buildProps()} timelineEntries={[guidanceEntry]} />,
-    );
-    const delivered = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[guidanceEntry]}
-        guidanceDeliveryByMessageId={new Map([["message-1", { status: "delivered" }]])}
-      />,
-    );
-    const failed = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[guidanceEntry]}
-        guidanceDeliveryByMessageId={
-          new Map([
-            ["message-1", { status: "failed", detail: "The active turn already completed." }],
-          ])
-        }
-      />,
-    );
-
-    expect(pending).toContain("Delivering guidance…");
-    expect(interrupted).toContain("Guidance delivery unconfirmed");
-    expect(delivered).toContain("Guidance delivered");
-    expect(failed).toContain("Guidance not delivered");
-    expect(failed).toContain('title="The active turn already completed."');
   });
 
   it("keeps assistant changed-files headers sticky below the thread header", () => {
@@ -523,7 +286,6 @@ describe("MessagesTimeline", () => {
             ],
           ])
         }
-        onPrepareCanvasUpdate={() => {}}
       />,
     );
 
@@ -534,7 +296,6 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("size-3");
     expect(markup).toContain('aria-label="Collapse all folders"');
     expect(markup).toContain('aria-label="Open diff"');
-    expect(markup).toContain('aria-label="Update Canvas"');
     expect(markup).toContain("1 changed file");
   });
 
@@ -703,62 +464,6 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("rounded-2xl bg-message p-3");
   });
 
-  it("offers Edit from here on a completed provider Thread", () => {
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[buildUserTimelineEntry("Try another direction.")]}
-      />,
-    );
-    const button = markup.match(/<button[^>]*aria-label="Edit from here"[^>]*>/)?.[0];
-
-    expect(button).toBeDefined();
-    expect(button).toContain('aria-disabled="false"');
-    expect(markup).toContain("Files stay as they are.");
-  });
-
-  it("keeps Edit from here visible but unavailable for unsupported providers", () => {
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        editFromHereUnavailableReason="Edit from here is available for Codex threads"
-        timelineEntries={[buildUserTimelineEntry("Try another direction.")]}
-      />,
-    );
-    const button = markup.match(/<button[^>]*aria-label="Edit from here"[^>]*>/)?.[0];
-
-    expect(button).toContain('aria-disabled="true"');
-    expect(button).not.toContain('disabled=""');
-    expect(markup).toContain("Edit from here is available for Codex threads");
-  });
-
-  it("exposes branch creation as a single in-flight action", () => {
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        editFromHerePendingMessageId={MessageId.make("message-1")}
-        timelineEntries={[
-          buildUserTimelineEntry("Try another direction."),
-          {
-            ...buildUserTimelineEntry("A different prompt."),
-            id: "entry-user-2",
-            message: {
-              ...buildUserTimelineEntry("A different prompt.").message,
-              id: MessageId.make("message-2"),
-            },
-          },
-        ]}
-      />,
-    );
-    const buttons = markup.match(/<button[^>]*aria-label="Edit from here"[^>]*>/g) ?? [];
-
-    expect(buttons).toHaveLength(2);
-    expect(buttons.every((button) => button.includes('aria-disabled="true"'))).toBe(true);
-    expect(buttons[0]).toContain('aria-busy="true"');
-    expect(markup).toContain("Creating conversation branch…");
-    expect(markup).toContain("Wait for the conversation branch to finish");
-  });
-
   it("renders inline terminal labels with the composer chip UI", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
@@ -863,16 +568,16 @@ describe("MessagesTimeline", () => {
               createdAt: "2026-03-17T19:12:28.000Z",
               label: "Updated files",
               tone: "tool",
-              changedFiles: ["C:/Users/mike/dev-stuff/croki/apps/web/src/session-logic.ts"],
+              changedFiles: ["C:/Users/mike/dev-stuff/t3code/apps/web/src/session-logic.ts"],
             },
           },
         ]}
-        workspaceRoot="C:/Users/mike/dev-stuff/croki"
+        workspaceRoot="C:/Users/mike/dev-stuff/t3code"
       />,
     );
 
-    expect(markup).toContain("croki/apps/web/src/session-logic.ts");
-    expect(markup).not.toContain("C:/Users/mike/dev-stuff/croki/apps/web/src/session-logic.ts");
+    expect(markup).toContain("t3code/apps/web/src/session-logic.ts");
+    expect(markup).not.toContain("C:/Users/mike/dev-stuff/t3code/apps/web/src/session-logic.ts");
   });
 
   it("renders review comment contexts as structured cards instead of raw tags", () => {

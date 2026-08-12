@@ -90,7 +90,6 @@ interface AnnotatableCodeViewProps {
     fileKey: string,
     collapsed: boolean,
   ) => ReactNode;
-  onAddCanvasEvidence?: ((filePath: string, line: number) => void) | undefined;
 }
 
 interface DiffSelectionContext {
@@ -107,7 +106,6 @@ export function AnnotatableCodeView({
   viewerRef,
   className,
   renderHeaderPrefix,
-  onAddCanvasEvidence,
 }: AnnotatableCodeViewProps) {
   const addReviewComment = useComposerDraftStore((store) => store.addReviewComment);
   const removeReviewComment = useComposerDraftStore((store) => store.removeReviewComment);
@@ -274,14 +272,6 @@ export function AnnotatableCodeView({
                 onCancel={() => removeEntry(entry.id)}
                 onComment={(text) => submitEntry(entry.id, text)}
                 onDelete={() => removeEntry(entry.id)}
-                onAddCanvasEvidence={
-                  entry.kind === "draft" && draft && onAddCanvasEvidence
-                    ? () => {
-                        const file = filesByKey.get(draft.fileKey);
-                        if (file) onAddCanvasEvidence(file.filePath, entry.range.end);
-                      }
-                    : undefined
-                }
               />
             ))}
           </div>

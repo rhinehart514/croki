@@ -31,6 +31,7 @@ export function HomeRouteScreen() {
   const { savedConnectionsById } = useSavedRemoteConnections();
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState("");
+
   useEffect(() => {
     void checkForAppUpdateOnLaunch();
   }, []);
@@ -43,7 +44,6 @@ export function HomeRouteScreen() {
     unsnoozeThread,
     pinThread,
     unpinThread,
-    regenerateThreadTitle,
     movePinnedThread,
     regenerateThreadTitle,
     unsettleThread,
@@ -186,7 +186,6 @@ export function HomeRouteScreen() {
           onUnsettleThread={unsettleThread}
           onPinThread={pinThread}
           onUnpinThread={unpinThread}
-          onRegenerateThreadTitle={regenerateThreadTitle}
           onMovePinnedThread={movePinnedThread}
           onRegenerateThreadTitle={regenerateThreadTitle}
           onEnvironmentChange={setSelectedEnvironmentId}

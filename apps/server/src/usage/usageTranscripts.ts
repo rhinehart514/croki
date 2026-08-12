@@ -22,15 +22,6 @@ export interface UsageRecord {
   readonly dedupeKey: string | null;
 }
 
-/** Outcome from parsing a line selected by the transcript reader. */
-export type UsageLineParseResult =
-  | { readonly status: "record"; readonly record: UsageRecord }
-  | { readonly status: "ignored" }
-  | { readonly status: "malformed" };
-
-const IGNORED_USAGE_LINE: UsageLineParseResult = { status: "ignored" };
-const MALFORMED_USAGE_LINE: UsageLineParseResult = { status: "malformed" };
-
 const EMPTY_TOTALS: UsageTokenTotals = {
   uncachedInputTokens: 0,
   cachedInputTokens: 0,
@@ -41,21 +32,6 @@ const EMPTY_TOTALS: UsageTokenTotals = {
 
 function int(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
-}
-
-function hasValidTokenShape(
-  record: Record<string, unknown>,
-  required: readonly string[],
-  optional: readonly string[],
-): boolean {
-  if (!required.every((key) => typeof record[key] === "number" && Number.isFinite(record[key]))) {
-    return false;
-  }
-  return optional.every(
-    (key) =>
-      record[key] === undefined ||
-      (typeof record[key] === "number" && Number.isFinite(record[key])),
-  );
 }
 
 function parseTimestampMs(value: unknown): number | null {
@@ -100,47 +76,38 @@ export function mightCarryUsage(line: string, provider: UsageProviderKind): bool
 /* -------------------------------------------------------------------------- */
 
 /**
- * Parses one usage candidate from a Claude Code transcript.
+ * Parses one line of a Claude Code transcript.
  *
- * T3 Code writes one record per assistant *content block*, and every one of
+ * Croki writes one record per assistant *content block*, and every one of
  * those records repeats the same complete `usage` object for the parent
  * message. Summing them overcounts by roughly 2.4x on a real workload, so the
  * caller must drop repeats by `dedupeKey` and keep the first.
  */
-export function parseClaudeLine(line: string): UsageLineParseResult {
+export function parseClaudeLine(line: string): UsageRecord | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
   } catch {
-    return MALFORMED_USAGE_LINE;
+    return null;
   }
-  if (typeof parsed !== "object" || parsed === null) return MALFORMED_USAGE_LINE;
+  if (typeof parsed !== "object" || parsed === null) return null;
 
   const record = parsed as Record<string, unknown>;
-  if (record["type"] !== "assistant") return MALFORMED_USAGE_LINE;
+  if (record["type"] !== "assistant") return null;
 
   const message = record["message"];
-  if (typeof message !== "object" || message === null) return MALFORMED_USAGE_LINE;
+  if (typeof message !== "object" || message === null) return null;
   const messageRecord = message as Record<string, unknown>;
 
   const usage = messageRecord["usage"];
-  if (typeof usage !== "object" || usage === null) return MALFORMED_USAGE_LINE;
+  if (typeof usage !== "object" || usage === null) return null;
   const usageRecord = usage as Record<string, unknown>;
-  if (
-    !hasValidTokenShape(
-      usageRecord,
-      ["input_tokens", "output_tokens"],
-      ["cache_read_input_tokens", "cache_creation_input_tokens"],
-    )
-  ) {
-    return MALFORMED_USAGE_LINE;
-  }
 
   const timestampMs = parseTimestampMs(record["timestamp"]);
-  if (timestampMs === null) return MALFORMED_USAGE_LINE;
+  if (timestampMs === null) return null;
 
   const model = typeof messageRecord["model"] === "string" ? messageRecord["model"] : "";
-  if (model.length === 0) return MALFORMED_USAGE_LINE;
+  if (model.length === 0) return null;
 
   const messageId = typeof messageRecord["id"] === "string" ? messageRecord["id"] : null;
   const requestId = typeof record["requestId"] === "string" ? record["requestId"] : null;
@@ -152,23 +119,20 @@ export function parseClaudeLine(line: string): UsageLineParseResult {
   const cost = record["costUSD"];
 
   return {
-    status: "record",
-    record: {
-      provider: "claude",
-      timestampMs,
-      model,
-      sessionId: typeof record["sessionId"] === "string" ? record["sessionId"] : "",
-      totals: {
-        uncachedInputTokens: int(usageRecord["input_tokens"]),
-        cachedInputTokens: int(usageRecord["cache_read_input_tokens"]),
-        cacheCreationTokens: int(usageRecord["cache_creation_input_tokens"]),
-        outputTokens: int(usageRecord["output_tokens"]),
-        // Anthropic folds thinking tokens into output and does not break them out.
-        reasoningTokens: 0,
-      },
-      reportedCostUsd: typeof cost === "number" && Number.isFinite(cost) ? cost : null,
-      dedupeKey,
+    provider: "claude",
+    timestampMs,
+    model,
+    sessionId: typeof record["sessionId"] === "string" ? record["sessionId"] : "",
+    totals: {
+      uncachedInputTokens: int(usageRecord["input_tokens"]),
+      cachedInputTokens: int(usageRecord["cache_read_input_tokens"]),
+      cacheCreationTokens: int(usageRecord["cache_creation_input_tokens"]),
+      outputTokens: int(usageRecord["output_tokens"]),
+      // Anthropic folds thinking tokens into output and does not break them out.
+      reasoningTokens: 0,
     },
+    reportedCostUsd: typeof cost === "number" && Number.isFinite(cost) ? cost : null,
+    dedupeKey,
   };
 }
 
@@ -226,25 +190,25 @@ function isForkedSessionMeta(payload: Record<string, unknown>): boolean {
 }
 
 /**
- * Feeds one selected line of a Codex rollout into `state`, distinguishing
- * records, known non-record events, and malformed usage candidates.
+ * Feeds one line of a Codex rollout into `state`, returning a record when the
+ * line was a usage event.
  *
  * Deltas come from `last_token_usage`. Summing those across a session
  * reconciles with the session's final `total_token_usage`, provided
  * consecutive duplicate events are dropped, which this does.
  */
-export function parseCodexLine(line: string, state: CodexScanState): UsageLineParseResult {
+export function parseCodexLine(line: string, state: CodexScanState): UsageRecord | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
   } catch {
-    return MALFORMED_USAGE_LINE;
+    return null;
   }
-  if (typeof parsed !== "object" || parsed === null) return MALFORMED_USAGE_LINE;
+  if (typeof parsed !== "object" || parsed === null) return null;
 
   const record = parsed as Record<string, unknown>;
   const payload = record["payload"];
-  if (typeof payload !== "object" || payload === null) return MALFORMED_USAGE_LINE;
+  if (typeof payload !== "object" || payload === null) return null;
   const payloadRecord = payload as Record<string, unknown>;
   const payloadType = payloadRecord["type"];
 
@@ -266,41 +230,29 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageLinePa
 
   if (record["type"] === "turn_context") {
     if (typeof payloadRecord["model"] === "string") state.model = payloadRecord["model"];
-    // Duplicate token_count emissions only repeat within a turn. Equal deltas
-    // in a later turn are genuine usage and must be counted again.
-    state.lastUsageSignature = null;
-    return IGNORED_USAGE_LINE;
+    return null;
   }
 
-  if (payloadType !== "token_count") return MALFORMED_USAGE_LINE;
+  if (payloadType !== "token_count") return null;
 
   const info = payloadRecord["info"];
-  if (typeof info !== "object" || info === null) return MALFORMED_USAGE_LINE;
+  if (typeof info !== "object" || info === null) return null;
   const last = (info as Record<string, unknown>)["last_token_usage"];
-  if (typeof last !== "object" || last === null) return MALFORMED_USAGE_LINE;
+  if (typeof last !== "object" || last === null) return null;
   const lastRecord = last as Record<string, unknown>;
-  if (
-    !hasValidTokenShape(
-      lastRecord,
-      ["input_tokens", "output_tokens"],
-      ["cached_input_tokens", "cache_write_input_tokens", "reasoning_output_tokens"],
-    )
-  ) {
-    return MALFORMED_USAGE_LINE;
-  }
 
   // Only an event that is otherwise eligible may consume the duplicate
   // signature. A token_count arriving before its turn_context (no model yet)
   // must not poison it, or the re-emitted copy after the model is known would
   // be skipped as a duplicate and those tokens never counted.
   const timestampMs = parseTimestampMs(record["timestamp"]);
-  if (timestampMs === null) return MALFORMED_USAGE_LINE;
-  if (state.model.length === 0) return MALFORMED_USAGE_LINE;
+  if (timestampMs === null) return null;
+  if (state.model.length === 0) return null;
 
   // Codex re-emits an unchanged token_count on some stream boundaries. Summing
   // those would double count, so identical consecutive payloads are skipped.
   const signature = JSON.stringify(lastRecord);
-  if (signature === state.lastUsageSignature) return IGNORED_USAGE_LINE;
+  if (signature === state.lastUsageSignature) return null;
   state.lastUsageSignature = signature;
 
   // In a forked rollout the copied parent history was already counted from the
@@ -329,7 +281,7 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageLinePa
     reasoningTokens: Math.min(outputTokens, int(lastRecord["reasoning_output_tokens"])),
   };
 
-  if (totalTokens(totals) === 0) return IGNORED_USAGE_LINE;
+  if (totalTokens(totals) === 0) return null;
 
   return {
     provider: "codex",

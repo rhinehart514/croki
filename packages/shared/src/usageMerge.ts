@@ -9,9 +9,7 @@
 import type {
   EnvironmentId,
   UsageBucket,
-  UsagePricingStatus,
   UsageProviderKind,
-  UsageSource,
   UsageSourceFingerprint,
   UsageSummary,
 } from "@croki/contracts";
@@ -27,7 +25,6 @@ export interface ProviderTotals {
   readonly costUsd: number;
   readonly totalTokens: number;
   readonly records: number;
-  readonly unpricedRecords: number;
   readonly costShare: number;
   readonly tokenShare: number;
 }
@@ -38,7 +35,6 @@ export interface ModelTotals {
   readonly costUsd: number;
   readonly totalTokens: number;
   readonly records: number;
-  readonly unpricedRecords: number;
   readonly costShare: number;
 }
 
@@ -46,12 +42,7 @@ export interface DailyTotals {
   readonly day: string;
   readonly costUsd: number;
   readonly totalTokens: number;
-  readonly records: number;
-  readonly unpricedRecords: number;
-  readonly byProvider: ReadonlyMap<
-    UsageProviderKind,
-    { costUsd: number; totalTokens: number; records: number; unpricedRecords: number }
-  >;
+  readonly byProvider: ReadonlyMap<UsageProviderKind, { costUsd: number; totalTokens: number }>;
 }
 
 export interface HourlyTotals {
@@ -66,10 +57,7 @@ export interface CostQuality {
   readonly providerReportedShare: number;
   readonly modelPricedShare: number;
   readonly unpricedShare: number;
-  readonly unpricedRecords: number;
   readonly cacheSavingsUsd: number;
-  /** Rate-table states reported by environments that contributed usage. */
-  readonly pricingStatuses: readonly UsagePricingStatus[];
 }
 
 export interface MergedUsage {
@@ -115,8 +103,9 @@ function fingerprintKey(fingerprint: UsageSourceFingerprint): string {
  *
  * Several environments on one machine (worktree servers, for instance) resolve
  * the same provider home and would otherwise double count every token. The
- * most complete readable source claims a fingerprint; status ties break by
- * environment id so the winner does not change between renders.
+ * first environment in a stable order claims a fingerprint; the rest have that
+ * provider's buckets dropped. Environments are sorted by id so the winner does
+ * not change between renders.
  */
 function claimSources(environments: readonly EnvironmentUsage[]): {
   readonly ownerByFingerprint: ReadonlyMap<string, EnvironmentId>;
@@ -124,51 +113,22 @@ function claimSources(environments: readonly EnvironmentUsage[]): {
 } {
   const ownerByFingerprint = new Map<string, EnvironmentId>();
   const duplicates: string[] = [];
-  const candidatesByFingerprint = new Map<
-    string,
-    Array<{ readonly environment: EnvironmentUsage; readonly source: UsageSource }>
-  >();
 
-  for (const environment of environments) {
+  const ordered = [...environments].sort((a, b) => a.environmentId.localeCompare(b.environmentId));
+
+  for (const environment of ordered) {
     for (const source of environment.summary.sources) {
       if (source.status === "missing") continue;
       const key = fingerprintKey(source.fingerprint);
-      const candidates = candidatesByFingerprint.get(key) ?? [];
-      candidates.push({ environment, source });
-      candidatesByFingerprint.set(key, candidates);
+      if (ownerByFingerprint.has(key)) {
+        duplicates.push(`${environment.label}: ${source.fingerprint.resolvedHomePath}`);
+        continue;
+      }
+      ownerByFingerprint.set(key, environment.environmentId);
     }
   }
 
-  for (const [key, candidates] of candidatesByFingerprint) {
-    candidates.sort(
-      (a, b) =>
-        sourceStatusRank(b.source.status) - sourceStatusRank(a.source.status) ||
-        a.environment.environmentId.localeCompare(b.environment.environmentId),
-    );
-    const winner = candidates[0];
-    if (winner === undefined) continue;
-    ownerByFingerprint.set(key, winner.environment.environmentId);
-    for (const duplicate of candidates.slice(1)) {
-      duplicates.push(
-        `${duplicate.environment.label}: ${duplicate.source.fingerprint.resolvedHomePath}`,
-      );
-    }
-  }
-
-  return { ownerByFingerprint, duplicates: duplicates.sort() };
-}
-
-function sourceStatusRank(status: UsageSource["status"]): number {
-  switch (status) {
-    case "ok":
-      return 3;
-    case "partial":
-      return 2;
-    case "failed":
-      return 1;
-    case "missing":
-      return 0;
-  }
+  return { ownerByFingerprint, duplicates };
 }
 
 /** Sources this environment owns after fingerprint claims, plus their buckets. */
@@ -176,22 +136,20 @@ function ownedContribution(
   environment: EnvironmentUsage,
   ownerByFingerprint: ReadonlyMap<string, EnvironmentId>,
 ): { readonly buckets: readonly UsageBucket[]; readonly sessions: number } {
-  const ownedFingerprints = new Set<string>();
+  const ownedProviders = new Set<UsageProviderKind>();
   let sessions = 0;
   for (const source of environment.summary.sources) {
     if (source.status === "missing") continue;
     const key = fingerprintKey(source.fingerprint);
     if (ownerByFingerprint.get(key) === environment.environmentId) {
-      ownedFingerprints.add(key);
+      ownedProviders.add(source.fingerprint.provider);
       // Distinct within a directory. Summing per-bucket session counts instead
       // would count a session once per day and model it spans.
       sessions += source.distinctSessions;
     }
   }
   return {
-    buckets: environment.summary.buckets.filter((bucket) =>
-      ownedFingerprints.has(fingerprintKey(bucket.sourceFingerprint)),
-    ),
+    buckets: environment.summary.buckets.filter((bucket) => ownedProviders.has(bucket.provider)),
     sessions,
   };
 }
@@ -224,9 +182,7 @@ const EMPTY_MERGED: MergedUsage = {
     providerReportedShare: 0,
     modelPricedShare: 0,
     unpricedShare: 0,
-    unpricedRecords: 0,
     cacheSavingsUsd: 0,
-    pricingStatuses: [],
   },
   duplicateSources: [],
   contributingEnvironments: [],
@@ -268,35 +224,22 @@ export function mergeUsage(
   let sessions = 0;
   let cacheSavingsUsd = 0;
   let providerReportedRecords = 0;
-  let modelPricedRecords = 0;
   let unpricedRecords = 0;
-  const pricingStatuses = new Set<UsagePricingStatus>();
 
   const providerAccumulator = new Map<
     UsageProviderKind,
-    { costUsd: number; totalTokens: number; records: number; unpricedRecords: number }
+    { costUsd: number; totalTokens: number; records: number }
   >();
   const modelAccumulator = new Map<
     string,
-    {
-      provider: UsageProviderKind;
-      costUsd: number;
-      totalTokens: number;
-      records: number;
-      unpricedRecords: number;
-    }
+    { provider: UsageProviderKind; costUsd: number; totalTokens: number; records: number }
   >();
   const dailyAccumulator = new Map<
     string,
     {
       costUsd: number;
       totalTokens: number;
-      records: number;
-      unpricedRecords: number;
-      byProvider: Map<
-        UsageProviderKind,
-        { costUsd: number; totalTokens: number; records: number; unpricedRecords: number }
-      >;
+      byProvider: Map<UsageProviderKind, { costUsd: number; totalTokens: number }>;
     }
   >();
   const hourlyAccumulator = new Map<
@@ -316,10 +259,7 @@ export function mergeUsage(
       environment,
       ownerByFingerprint,
     );
-    if (buckets.length > 0) {
-      contributingEnvironments.push(environment.environmentId);
-      pricingStatuses.add(environment.summary.pricing.status);
-    }
+    if (buckets.length > 0) contributingEnvironments.push(environment.environmentId);
     sessions += environmentSessions;
 
     for (const bucket of buckets) {
@@ -334,19 +274,16 @@ export function mergeUsage(
       reasoningTokens += bucket.totals.reasoningTokens;
       records += bucket.records;
       unpricedRecords += bucket.unpricedRecords;
-      providerReportedRecords += bucket.providerReportedRecords;
-      modelPricedRecords += bucket.modelPricedRecords;
+      if (bucket.costSource === "providerReported") providerReportedRecords += bucket.records;
 
       const provider = providerAccumulator.get(bucket.provider) ?? {
         costUsd: 0,
         totalTokens: 0,
         records: 0,
-        unpricedRecords: 0,
       };
       provider.costUsd += bucket.costUsd;
       provider.totalTokens += tokens;
       provider.records += bucket.records;
-      provider.unpricedRecords += bucket.unpricedRecords;
       providerAccumulator.set(bucket.provider, provider);
 
       const modelKey = `${bucket.provider} ${bucket.model}`;
@@ -355,38 +292,22 @@ export function mergeUsage(
         costUsd: 0,
         totalTokens: 0,
         records: 0,
-        unpricedRecords: 0,
       };
       model.costUsd += bucket.costUsd;
       model.totalTokens += tokens;
       model.records += bucket.records;
-      model.unpricedRecords += bucket.unpricedRecords;
       modelAccumulator.set(modelKey, model);
 
       const day = dailyAccumulator.get(bucket.day) ?? {
         costUsd: 0,
         totalTokens: 0,
-        records: 0,
-        unpricedRecords: 0,
-        byProvider: new Map<
-          UsageProviderKind,
-          { costUsd: number; totalTokens: number; records: number; unpricedRecords: number }
-        >(),
+        byProvider: new Map<UsageProviderKind, { costUsd: number; totalTokens: number }>(),
       };
       day.costUsd += bucket.costUsd;
       day.totalTokens += tokens;
-      day.records += bucket.records;
-      day.unpricedRecords += bucket.unpricedRecords;
-      const dayProvider = day.byProvider.get(bucket.provider) ?? {
-        costUsd: 0,
-        totalTokens: 0,
-        records: 0,
-        unpricedRecords: 0,
-      };
+      const dayProvider = day.byProvider.get(bucket.provider) ?? { costUsd: 0, totalTokens: 0 };
       dayProvider.costUsd += bucket.costUsd;
       dayProvider.totalTokens += tokens;
-      dayProvider.records += bucket.records;
-      dayProvider.unpricedRecords += bucket.unpricedRecords;
       day.byProvider.set(bucket.provider, dayProvider);
       dailyAccumulator.set(bucket.day, day);
 
@@ -420,7 +341,6 @@ export function mergeUsage(
       costUsd: totals.costUsd,
       totalTokens: totals.totalTokens,
       records: totals.records,
-      unpricedRecords: totals.unpricedRecords,
       costShare: costUsd === 0 ? 0 : totals.costUsd / costUsd,
       tokenShare: totalTokens === 0 ? 0 : totals.totalTokens / totalTokens,
     }))
@@ -433,7 +353,6 @@ export function mergeUsage(
       costUsd: totals.costUsd,
       totalTokens: totals.totalTokens,
       records: totals.records,
-      unpricedRecords: totals.unpricedRecords,
       costShare: costUsd === 0 ? 0 : totals.costUsd / costUsd,
     }))
     .sort((a, b) => b.costUsd - a.costUsd || b.totalTokens - a.totalTokens);
@@ -443,8 +362,6 @@ export function mergeUsage(
       day,
       costUsd: totals.costUsd,
       totalTokens: totals.totalTokens,
-      records: totals.records,
-      unpricedRecords: totals.unpricedRecords,
       byProvider: totals.byProvider,
     }))
     .sort((a, b) => a.day.localeCompare(b.day));
@@ -470,10 +387,9 @@ export function mergeUsage(
     costQuality: {
       providerReportedShare: records === 0 ? 0 : providerReportedRecords / records,
       unpricedShare: records === 0 ? 0 : unpricedRecords / records,
-      unpricedRecords,
-      modelPricedShare: records === 0 ? 0 : modelPricedRecords / records,
+      modelPricedShare:
+        records === 0 ? 0 : (records - providerReportedRecords - unpricedRecords) / records,
       cacheSavingsUsd,
-      pricingStatuses: [...pricingStatuses].sort(),
     },
     duplicateSources: duplicates,
     contributingEnvironments,

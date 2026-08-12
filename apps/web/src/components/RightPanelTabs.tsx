@@ -82,7 +82,7 @@ export interface PullRequestTabStatus {
 }
 
 const SURFACE_DISABLED_REASONS = {
-  browser: "Browser previews are only available in the T3 Code desktop app.",
+  browser: "Browser previews are only available in the Croki desktop app.",
   terminal: "Terminal surfaces are only available from a project thread.",
   files: "Files are only available when a project is open.",
   diff: "Diff is only available for server threads in Git repositories.",
@@ -168,21 +168,9 @@ function RightPanelEmptyState(props: {
   const [highlight, setHighlight] = useState(-1);
 
   const actions = [
-    ...(props.canvasAvailable
-      ? [
-          {
-            label: "Canvas",
-            description: "See live agent perception and source relationships.",
-            icon: CircleDot,
-            available: props.filesAvailable,
-            disabledReason: SURFACE_DISABLED_REASONS.files,
-            onClick: props.onAddCanvas,
-          },
-        ]
-      : []),
     {
-      label: "Preview",
-      description: "Open and interact with a running app.",
+      label: "Browser",
+      description: "Open a local app or URL.",
       icon: Globe2,
       shortcut: "B",
       available: props.browserAvailable,
@@ -421,8 +409,6 @@ function surfaceTitle(
   switch (surface.kind) {
     case "diff":
       return "Diff";
-    case "canvas":
-      return "Canvas";
     case "files":
       return "Files";
     case "file":
@@ -438,12 +424,12 @@ function surfaceTitle(
       return "Agents";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
-      if (!snapshot || snapshot.navStatus._tag === "Idle") return "Preview";
+      if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
       if (snapshot.navStatus.title.trim().length > 0) return snapshot.navStatus.title;
       try {
-        return new URL(snapshot.navStatus.url).host || "Preview";
+        return new URL(snapshot.navStatus.url).host || "Browser";
       } catch {
-        return "Preview";
+        return "Browser";
       }
     }
   }
@@ -465,7 +451,7 @@ function PreviewFavicon({ url }: { url: string | null }) {
   );
 }
 
-export function RightPanelSurfaceIcon({
+function SurfaceIcon({
   surface,
   sessions,
   theme,
@@ -483,14 +469,7 @@ export function RightPanelSurfaceIcon({
       return <PreviewFavicon url={url} />;
     }
     case "diff":
-      return <FileDiff className="size-3.5 shrink-0" />;
-    case "canvas":
-      return (
-        <CircleDot
-          data-surface-icon-state={active ? "active" : "inactive"}
-          className={cn("size-3.5 shrink-0", active ? "text-primary" : "text-current")}
-        />
-      );
+      return <FileDiff className="size-3 shrink-0" />;
     case "files":
       return <Files className="size-3 shrink-0" />;
     case "file":
@@ -654,7 +633,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     onClick={() => props.onCloseSurface(surface)}
                   >
                     <span className="relative flex size-3 items-center justify-center group-hover/tab:hidden group-focus-visible/close:hidden">
-                      <RightPanelSurfaceIcon
+                      <SurfaceIcon
                         surface={surface}
                         sessions={props.previewSessions}
                         theme={resolvedTheme}
@@ -677,12 +656,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                           className="cursor-pointer flex min-w-0 items-center"
                           onClick={() => props.onActivate(surface)}
                         >
-                          <RightPanelSurfaceIcon
-                            surface={surface}
-                            sessions={props.previewSessions}
-                            theme={resolvedTheme}
-                            active={active}
-                          />
                           <span className="truncate">{title}</span>
                         </button>
                       }
@@ -701,23 +674,13 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                   <Plus className="size-3.5" />
                 </MenuTrigger>
                 <MenuPopup align="start" side="bottom" sideOffset={6} className="min-w-44">
-                  {props.canvasAvailable ? (
-                    <SurfaceMenuItem
-                      available={props.filesAvailable}
-                      disabledReason={SURFACE_DISABLED_REASONS.files}
-                      onClick={props.onAddCanvas}
-                    >
-                      <CircleDot />
-                      Canvas
-                    </SurfaceMenuItem>
-                  ) : null}
                   <SurfaceMenuItem
                     available={props.browserAvailable}
                     disabledReason={SURFACE_DISABLED_REASONS.browser}
                     onClick={props.onAddBrowser}
                   >
                     <Globe2 />
-                    Preview
+                    Browser
                   </SurfaceMenuItem>
                   <SurfaceMenuItem
                     available={props.terminalAvailable}
@@ -769,8 +732,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
         {props.activeSurfaceId === null ? (
           <RightPanelEmptyState
-            onAddCanvas={props.onAddCanvas}
-            canvasAvailable={props.canvasAvailable}
             onAddBrowser={props.onAddBrowser}
             onAddTerminal={props.onAddTerminal}
             onAddDiff={props.onAddDiff}

@@ -15,7 +15,6 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { resolveStorage } from "./lib/storage";
 
 export const RIGHT_PANEL_KINDS = [
-  "canvas",
   "diff",
   "files",
   "file",
@@ -38,7 +37,6 @@ export type RightPanelSurface =
       splitDirection?: "horizontal" | "vertical";
     }
   | { id: "diff"; kind: "diff" }
-  | { id: "canvas"; kind: "canvas" }
   | { id: "files"; kind: "files" }
   | {
       id: `file:${string}`;
@@ -105,7 +103,7 @@ interface RightPanelStoreState {
   closeSurfacesToRight: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeAllSurfaces: (ref: ScopedThreadRef) => void;
   reconcileBrowserSurfaces: (ref: ScopedThreadRef, tabIds: readonly string[]) => void;
-  reconcileWorkspaceSurfaces: (ref: ScopedThreadRef, workspaceAvailable: boolean) => void;
+  reconcileFileSurfaces: (ref: ScopedThreadRef, workspaceAvailable: boolean) => void;
   show: (ref: ScopedThreadRef) => void;
   close: (ref: ScopedThreadRef) => void;
   toggleVisibility: (ref: ScopedThreadRef) => void;
@@ -126,8 +124,6 @@ const singletonSurface = (
   kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request">,
 ): RightPanelSurface => {
   switch (kind) {
-    case "canvas":
-      return { id: "canvas", kind };
     case "diff":
       return { id: "diff", kind };
     case "files":
@@ -555,13 +551,12 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             };
           }),
         })),
-      reconcileWorkspaceSurfaces: (ref, workspaceAvailable) =>
+      reconcileFileSurfaces: (ref, workspaceAvailable) =>
         set((state) => ({
           byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(ref), (current) => {
             if (workspaceAvailable) return current;
             const surfaces = current.surfaces.filter(
-              (surface) =>
-                surface.kind !== "canvas" && surface.kind !== "files" && surface.kind !== "file",
+              (surface) => surface.kind !== "files" && surface.kind !== "file",
             );
             if (surfaces.length === current.surfaces.length) return current;
             const activeStillExists = surfaces.some(

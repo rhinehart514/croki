@@ -102,14 +102,7 @@ export function DiffCommentAnnotation({
         }}
       />
       <div className="mt-1.5 flex items-center gap-1">
-        {onAddCanvasEvidence ? (
-          <Button className="mr-auto" variant="outline" size="xs" onClick={onAddCanvasEvidence}>
-            <CircleDot className="size-3.5" />
-            Add to Canvas
-          </Button>
-        ) : (
-          <span className="mr-auto text-[10px] text-muted-foreground/70">⌘/Ctrl Enter to send</span>
-        )}
+        <span className="mr-auto text-[10px] text-muted-foreground/70">⌘/Ctrl Enter to send</span>
         <Button
           className="text-muted-foreground hover:text-foreground"
           variant="ghost"

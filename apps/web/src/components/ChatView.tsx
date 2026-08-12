@@ -44,14 +44,8 @@ import {
 } from "@croki/shared/model";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@croki/shared/chatList";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@croki/shared/projectScripts";
-import { serializeComposerFileLink } from "@croki/shared/composerTrigger";
 import { truncate } from "@croki/shared/String";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@croki/shared/terminalLabels";
-import type { CrokiContextReference } from "@croki/shared/crokiContext";
-import {
-  CROKI_APPLICATION_LEGACY_RELATIVE_PATH,
-  CROKI_APPLICATION_RELATIVE_PATH,
-} from "@croki/shared/crokiApplication";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -66,7 +60,7 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 import {
   isAtomCommandInterrupted,
@@ -80,7 +74,6 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
-import { isThreadAttentionHash } from "./Sidebar.logic";
 import {
   collapseExpandedComposerCursor,
   parseStandaloneComposerSlashCommand,
@@ -94,7 +87,6 @@ import {
   deriveActivePlanState,
   deriveTurnPlans,
   findLatestProposedPlan,
-  deriveGuidanceDeliveryByMessageId,
   deriveWorkLogEntries,
   hasActionableProposedPlan,
   isLatestTurnSettled,
@@ -129,11 +121,7 @@ import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { buildTemporaryWorktreeBranchName } from "@croki/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import {
-  RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY,
-  rightPanelUsesSheet,
-  rightPanelUsesWorkspaceLayout,
-} from "../rightPanelLayout";
+import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import {
   pullRequestSurfaceId,
   selectActiveRightPanel,
@@ -149,7 +137,6 @@ import {
 } from "../previewStateStore";
 import { addBrowserSurface } from "./preview/addBrowserSurface";
 import { closePreviewSession } from "./preview/closePreviewSession";
-import { openPreviewSession } from "./preview/openPreviewSession";
 import { ThreadPreviewMiniPlayer } from "./preview/ThreadPreviewMiniPlayer";
 import { subscribePreviewAction } from "./preview/previewActionBus";
 import { getConfiguredPreviewUrls } from "./preview/previewEmptyStateLogic";
@@ -199,12 +186,10 @@ import {
 } from "../hooks/useSettings";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
-import { useForkThread } from "../hooks/useForkThread";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
 import { preventRepeatedTerminalCloseShortcut } from "../lib/terminalCloseShortcut";
 import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
-import { editFromHereDraftFromMessageText, restoreEditFromHereImages } from "../lib/editFromHere";
 import {
   derivePhysicalProjectKey,
   deriveLogicalProjectKeyFromSettings,
@@ -235,7 +220,6 @@ import { environmentCatalog } from "../connection/catalog";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { projectEnvironment } from "../state/projects";
-import { orchestrationEnvironment } from "../state/orchestration";
 import { useEnvironmentQuery } from "../state/query";
 import {
   primaryServerAvailableEditorsAtom,
@@ -254,34 +238,15 @@ import {
   useThread,
   useThreadRefs,
   useThreadShell,
-  useThreadShells,
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
-import {
-  appendCanvasSelectionToPrompt,
-  appendCrokiPerceptionFocusToPrompt,
-  deriveCanvasPerceptionFrame,
-  deriveCanvasPresentationActivities,
-  type CanvasPerceptionFrame,
-  type CanvasPresentationTimelineActivity,
-  type HarnessCanvasArtifactNode,
-} from "./chat/canvasThreadIntegration";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
-import { MessagesTimeline, type MessagesTimelineThoughtView } from "./chat/MessagesTimeline";
+import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { ChatHeader } from "./chat/ChatHeader";
-import { deriveCrokiContextReceiptsByMessageId } from "./chat/CrokiContextPresentation.logic";
-import { deriveCrokiApplicationStateWithLegacy } from "./chat/CrokiApplicationPresentation.logic";
-import {
-  buildCrokiGtmExplorationPrompt,
-  buildCrokiRepositoryBootstrapPrompt,
-  buildCrokiTurnUpdatePrompt,
-  mergePreparedComposerPrompt,
-} from "./chat/CrokiProposalPrompts.logic";
-import { useProjectFileQuery } from "./files/projectFilesQueryState";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
@@ -329,7 +294,6 @@ import {
   scheduleEnvironmentReconnectWarning,
   hasServerAcknowledgedLocalDispatch,
   isBranchMismatchDismissedForSession,
-  isEditFromHerePreparationFailure,
   shouldShowBranchMismatchBanner,
   getStartedThreadModelChangeBlockReason,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
@@ -374,7 +338,6 @@ import {
   resolveServerConfigVersionMismatch,
   resolveServerSelfUpdateCapability,
   serverUpdateGuidance,
-  serverUpdatePathAvailable,
 } from "../versionSkew";
 import { useAssetUrls } from "../assets/assetUrls";
 
@@ -384,7 +347,6 @@ const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
-
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -458,13 +420,11 @@ function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   return [attachTransitionGroupRef, attachComposerAnchorRef, captureComposerRect] as const;
 }
 const PreviewPanel = lazy(() =>
-  import("./preview/PreviewPanel").then((module) => ({
-    default: module.PreviewPanel,
-  })),
+  import("./preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
 );
 const DiffPanel = lazy(() => import("./DiffPanel"));
 const FilePreviewPanel = lazy(() => import("./files/FilePreviewPanel"));
-const EMPTY_PENDING_SURFACE_IDS: ReadonlySet<string> = new Set();
+const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
 const TYPE_TO_FOCUS_EDITABLE_SELECTOR = [
   "input",
   "textarea",
@@ -707,9 +667,7 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
   const draftThread = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
-  const serverThread = useThread(threadRef, {
-    waitForShell: draftThread !== null,
-  });
+  const serverThread = useThread(threadRef, { waitForShell: draftThread !== null });
   const projectRef = serverThread
     ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
     : draftThread
@@ -1078,9 +1036,7 @@ const PersistentThreadTerminalPanel = memo(function PersistentThreadTerminalPane
   closeShortcutLabel,
 }: PersistentThreadTerminalPanelProps) {
   const draftThread = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
-  const serverThread = useThread(threadRef, {
-    waitForShell: draftThread !== null,
-  });
+  const serverThread = useThread(threadRef, { waitForShell: draftThread !== null });
   const projectRef = serverThread
     ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
     : draftThread
@@ -1237,46 +1193,32 @@ function ChatViewContent(props: ChatViewProps) {
   const draftId = routeKind === "draft" ? props.draftId : null;
   const threadSyncPhase = routeKind === "server" ? (props.threadSyncPhase ?? null) : null;
   const threadDetailLoading = threadSyncPhase === "loading";
-  const routeHash = useLocation({ select: (location) => location.hash });
   const handleNewThread = useNewThreadHandler();
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
   );
   const routeThreadKey = useMemo(() => scopedThreadKey(routeThreadRef), [routeThreadRef]);
-  const updateProject = useAtomCommand(projectEnvironment.update, {
-    reportFailure: false,
-  });
+  const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
   });
   const openTerminal = useAtomCommand(terminalEnvironment.open, "terminal open");
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
-  const createThread = useAtomCommand(threadEnvironment.create, {
-    reportFailure: false,
-  });
-  const deleteThread = useAtomCommand(threadEnvironment.delete, {
-    reportFailure: false,
-  });
+  const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
+  const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
-  const switchGitRef = useAtomCommand(vcsEnvironment.switchRef, {
-    reportFailure: false,
-  });
+  const switchGitRef = useAtomCommand(vcsEnvironment.switchRef, { reportFailure: false });
   const setThreadRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
     reportFailure: false,
   });
   const setThreadInteractionMode = useAtomCommand(threadEnvironment.setInteractionMode, {
     reportFailure: false,
   });
-  const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, {
-    reportFailure: false,
-  });
-  const steerThreadTurn = useAtomCommand(threadEnvironment.steerTurn, {
-    reportFailure: false,
-  });
+  const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, {
     reportFailure: false,
   });
@@ -1289,22 +1231,11 @@ function ChatViewContent(props: ChatViewProps) {
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
-  const forkThread = useForkThread();
-  const editFromHereRequestRef = useRef<{
-    readonly threadKey: string;
-    readonly messageId: MessageId;
-  } | null>(null);
-  const [editFromHerePendingMessageId, setEditFromHerePendingMessageId] =
-    useState<MessageId | null>(null);
-  const openPreview = useAtomCommand(previewEnvironment.open, {
-    reportFailure: false,
-  });
+  const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
   const closePreview = useAtomCommand(previewEnvironment.close, "preview close");
   const { environments } = useEnvironments();
   const primaryEnvironment = usePrimaryEnvironment();
-  const retryEnvironment = useAtomCommand(environmentCatalog.retryNow, {
-    reportFailure: false,
-  });
+  const retryEnvironment = useAtomCommand(environmentCatalog.retryNow, { reportFailure: false });
   const environmentById = useMemo(
     () => new Map(environments.map((environment) => [environment.environmentId, environment])),
     [environments],
@@ -1319,9 +1250,7 @@ function ChatViewContent(props: ChatViewProps) {
         : null,
   );
   const routeServerThreadShell = useThreadShell(routeKind === "server" ? routeThreadRef : null);
-  const serverThread = useThread(routeThreadRef, {
-    waitForShell: draftThread !== null,
-  });
+  const serverThread = useThread(routeThreadRef, { waitForShell: draftThread !== null });
   const loadingServerThread = useMemo(
     () =>
       threadDetailLoading && routeServerThreadShell
@@ -1647,61 +1576,6 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThreadEnvironmentId, activeThreadId],
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
-  const forkSourceThreadRef = useMemo(
-    () =>
-      activeThread?.forkedFromThreadId
-        ? scopeThreadRef(activeThread.environmentId, activeThread.forkedFromThreadId)
-        : null,
-    [activeThread],
-  );
-  const forkSourceThread = useThreadShell(forkSourceThreadRef);
-  const activeThreadKeyRef = useRef(activeThreadKey);
-  activeThreadKeyRef.current = activeThreadKey;
-  useEffect(() => {
-    const request = editFromHereRequestRef.current;
-    if (request !== null && request.threadKey !== activeThreadKey) {
-      editFromHereRequestRef.current = null;
-      setEditFromHerePendingMessageId(null);
-    }
-  }, [activeThreadKey]);
-  const continueInParent = useCallback(() => {
-    if (!activeThread?.parentThreadId) return;
-    void navigate({
-      to: "/$environmentId/$threadId",
-      params: {
-        environmentId: activeThread.environmentId,
-        threadId: activeThread.parentThreadId,
-      },
-    });
-  }, [activeThread, navigate]);
-  const [canvasSelectionState, setCanvasSelectionState] = useState<{
-    readonly threadKey: string | null;
-    readonly artifactId: string | null;
-    readonly nodeIds: readonly string[];
-  }>({ threadKey: activeThreadKey, artifactId: null, nodeIds: [] });
-  const [canvasViewedArtifactId, setCanvasViewedArtifactId] = useState<string | null>(null);
-  const [canvasBaseView, setCanvasBaseView] = useState<"release" | "context">("release");
-  const canvasSelectionNodeIds =
-    canvasSelectionState.threadKey === activeThreadKey ? canvasSelectionState.nodeIds : [];
-  const handleCanvasSelectionChange = useCallback(
-    (nodeIds: readonly string[], artifactId: string | null) => {
-      setCanvasSelectionState({
-        threadKey: activeThreadKey,
-        artifactId,
-        nodeIds: [...new Set(nodeIds)],
-      });
-    },
-    [activeThreadKey],
-  );
-  useEffect(() => {
-    setCanvasViewedArtifactId(null);
-    setCanvasBaseView("release");
-    setCanvasSelectionState({
-      threadKey: activeThreadKey,
-      artifactId: null,
-      nodeIds: [],
-    });
-  }, [activeThreadKey]);
   const [timelineAnchor, setTimelineAnchor] = useState<{
     readonly threadKey: string | null;
     readonly messageId: MessageId | null;
@@ -1756,17 +1630,6 @@ function ChatViewContent(props: ChatViewProps) {
   const rightPanelMaximized =
     canMaximizeRightPanel && maximizedRightPanelThreadKey === routeThreadKey;
   const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUseRightPanelSheet;
-
-  useEffect(() => {
-    if (
-      !activeThreadRef ||
-      !rightPanelState.surfaces.some((surface) => surface.kind === "canvas")
-    ) {
-      return;
-    }
-    setCanvasSelectionState((current) => ({ ...current, artifactId: null, nodeIds: [] }));
-    useRightPanelStore.getState().closeSurface(activeThreadRef, "canvas");
-  }, [activeThreadRef, rightPanelState.surfaces]);
 
   useEffect(() => {
     if (!activeThreadRef) return;
@@ -1843,8 +1706,35 @@ function ChatViewContent(props: ChatViewProps) {
     activeThread ? environmentShell.stateAtom(activeThread.environmentId) : null,
   );
   const activeEnvironmentBootstrapComplete = activeEnvironmentShell.data?.snapshot._tag === "Some";
+  const activeProjectKey = activeProject
+    ? `${activeProject.environmentId}:${activeProject.workspaceRoot}`
+    : null;
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const clientSettingsHydrated = useClientSettingsHydrated();
+  const [pendingFileSurfaceIdsByProject, setPendingFileSurfaceIdsByProject] = useState<
+    ReadonlyMap<string, ReadonlySet<string>>
+  >(() => new Map());
+  const pendingFileSurfaceIds = activeProjectKey
+    ? (pendingFileSurfaceIdsByProject.get(activeProjectKey) ?? EMPTY_PENDING_FILE_SURFACE_IDS)
+    : EMPTY_PENDING_FILE_SURFACE_IDS;
+  const handleFilePendingChange = useCallback(
+    (relativePath: string, pending: boolean) => {
+      if (!activeProjectKey) return;
+      setPendingFileSurfaceIdsByProject((currentByProject) => {
+        const current = currentByProject.get(activeProjectKey) ?? EMPTY_PENDING_FILE_SURFACE_IDS;
+        const surfaceId = `file:${relativePath}`;
+        if (current.has(surfaceId) === pending) return currentByProject;
+        const next = new Set(current);
+        if (pending) next.add(surfaceId);
+        else next.delete(surfaceId);
+        const nextByProject = new Map(currentByProject);
+        if (next.size === 0) nextByProject.delete(activeProjectKey);
+        else nextByProject.set(activeProjectKey, next);
+        return nextByProject;
+      });
+    },
+    [activeProjectKey],
+  );
   const configuredPreviewUrls = useMemo(
     () => getConfiguredPreviewUrls(activeProject?.scripts),
     [activeProject?.scripts],
@@ -1852,9 +1742,7 @@ function ChatViewContent(props: ChatViewProps) {
 
   useEffect(() => {
     if (!activeThreadRef || !activeEnvironmentBootstrapComplete) return;
-    useRightPanelStore
-      .getState()
-      .reconcileWorkspaceSurfaces(activeThreadRef, activeProject !== null);
+    useRightPanelStore.getState().reconcileFileSurfaces(activeThreadRef, activeProject !== null);
   }, [activeEnvironmentBootstrapComplete, activeProject, activeThreadRef]);
 
   // Compute the list of environments this logical project spans, used to
@@ -2292,21 +2180,8 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
   const phase = derivePhase(activeThread?.session ?? null);
-  const canSteerRunningTurn =
-    phase === "running" && activeThread?.session?.providerName === ProviderDriverKind.make("codex");
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
-  const workLogEntries = useMemo(
-    () => deriveWorkLogEntries(threadActivities, activeThread?.checkpoints ?? []),
-    [activeThread?.checkpoints, threadActivities],
-  );
-  const guidanceDeliveryByMessageId = useMemo(
-    () => deriveGuidanceDeliveryByMessageId(threadActivities),
-    [threadActivities],
-  );
-  const crokiContextReceiptsByMessageId = useMemo(
-    () => deriveCrokiContextReceiptsByMessageId(threadActivities),
-    [threadActivities],
-  );
+  const workLogEntries = useMemo(() => deriveWorkLogEntries(threadActivities), [threadActivities]);
   const turnPlans = useMemo(() => deriveTurnPlans(threadActivities), [threadActivities]);
   // Native subagent fold: memoized by activity-list identity, shared by the
   // Agents surface, live strip, and workflow cards. v2Projection is null
@@ -2395,26 +2270,6 @@ function ChatViewContent(props: ChatViewProps) {
     latestTurnSettled &&
     hasActionableProposedPlan(activeProposedPlan);
   const activePendingApproval = pendingApprovals[0] ?? null;
-  const attentionTargetKind = activePendingApproval
-    ? "approval"
-    : activePendingUserInput
-      ? "input"
-      : threadError
-        ? "failure"
-        : null;
-  useEffect(() => {
-    if (!isThreadAttentionHash(routeHash) || attentionTargetKind === null) return;
-    const frame = window.requestAnimationFrame(() => {
-      const target = document.querySelector<HTMLElement>(
-        `[data-thread-attention-target="${attentionTargetKind}"]`,
-      );
-      if (!target) return;
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      target.focus({ preventScroll: true });
-      void navigate({ hash: "", replace: true });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [attentionTargetKind, navigate, routeHash, threadId]);
   const {
     beginLocalDispatch,
     resetLocalDispatch,
@@ -2796,203 +2651,6 @@ function ChatViewContent(props: ChatViewProps) {
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
-  // Application focus must describe the same checkout that @file mentions and
-  // the file panel use for this Thread, including a Thread-owned worktree.
-  const crokiWorkspaceRoot = activeWorkspaceRoot;
-  const crokiApplicationFileQuery = useProjectFileQuery(
-    activeProject?.environmentId ?? environmentId,
-    crokiWorkspaceRoot ?? ".",
-    CROKI_APPLICATION_RELATIVE_PATH,
-    activeProject !== null && crokiWorkspaceRoot !== undefined,
-  );
-  const legacyCrokiApplicationFileQuery = useProjectFileQuery(
-    activeProject?.environmentId ?? environmentId,
-    crokiWorkspaceRoot ?? ".",
-    CROKI_APPLICATION_LEGACY_RELATIVE_PATH,
-    activeProject !== null && crokiWorkspaceRoot !== undefined,
-  );
-  const crokiApplicationContext = useMemo(() => {
-    if (!activeProject || !crokiWorkspaceRoot) return null;
-    return deriveCrokiApplicationStateWithLegacy(
-      {
-        data: crokiApplicationFileQuery.data,
-        error: crokiApplicationFileQuery.error,
-        failure: crokiApplicationFileQuery.failure,
-        isPending: crokiApplicationFileQuery.isPending,
-      },
-      {
-        data: legacyCrokiApplicationFileQuery.data,
-        error: legacyCrokiApplicationFileQuery.error,
-        failure: legacyCrokiApplicationFileQuery.failure,
-        isPending: legacyCrokiApplicationFileQuery.isPending,
-      },
-    );
-  }, [
-    activeProject,
-    crokiWorkspaceRoot,
-    crokiApplicationFileQuery.data,
-    crokiApplicationFileQuery.error,
-    crokiApplicationFileQuery.failure,
-    crokiApplicationFileQuery.isPending,
-    legacyCrokiApplicationFileQuery.data,
-    legacyCrokiApplicationFileQuery.error,
-    legacyCrokiApplicationFileQuery.failure,
-    legacyCrokiApplicationFileQuery.isPending,
-  ]);
-  const projectThreadShells = useThreadShells();
-  const activeWorkerThreads = useMemo(
-    () =>
-      activeThread
-        ? projectThreadShells.filter(
-            (thread) =>
-              thread.environmentId === activeThread.environmentId &&
-              thread.parentThreadId === activeThread.id &&
-              thread.archivedAt === null,
-          )
-        : [],
-    [activeThread, projectThreadShells],
-  );
-  const workerView = activeThread?.workerView ?? "threads";
-  const updateWorkerView = useCallback(
-    (nextWorkerView: "threads" | "activity") => {
-      if (!activeServerThread || nextWorkerView === workerView) return;
-      void updateThreadMetadata({
-        environmentId: activeServerThread.environmentId,
-        input: { threadId: activeServerThread.id, workerView: nextWorkerView },
-      }).then((result) => {
-        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-          toastManager.add({
-            type: "error",
-            title: "Workers view could not be changed",
-            description: chatActionErrorMessage(squashAtomCommandFailure(result)),
-          });
-        }
-      });
-    },
-    [activeServerThread, updateThreadMetadata, workerView],
-  );
-  useEffect(() => {
-    if (!latestTurnSettled || !activeLatestTurn?.turnId) return;
-    crokiApplicationFileQuery.refresh();
-    legacyCrokiApplicationFileQuery.refresh();
-  }, [
-    activeLatestTurn?.turnId,
-    crokiApplicationFileQuery.refresh,
-    latestTurnSettled,
-    legacyCrokiApplicationFileQuery.refresh,
-  ]);
-  const activeWorkspaceKey =
-    activeProject && activeWorkspaceRoot
-      ? `${activeProject.environmentId}:${activeWorkspaceRoot}`
-      : null;
-  const canvasPresentationActivities = useMemo(
-    () => deriveCanvasPresentationActivities(threadActivities),
-    [threadActivities],
-  );
-  const canvasPerceptionFrame = useMemo<CanvasPerceptionFrame>(
-    () =>
-      deriveCanvasPerceptionFrame({
-        threadId: activeThread?.id ? String(activeThread.id) : "unknown-thread",
-        activities: threadActivities,
-        checkpoints: activeThread?.checkpoints ?? [],
-        activeTurnId: activeThread?.latestTurn?.turnId
-          ? String(activeThread.latestTurn.turnId)
-          : null,
-      }),
-    [
-      activeThread?.checkpoints,
-      activeThread?.id,
-      activeThread?.latestTurn?.turnId,
-      threadActivities,
-    ],
-  );
-  const latestUserMessage = activeThread?.messages.findLast((message) => message.role === "user");
-  const canvasQuestion = latestUserMessage?.text.trim() ?? null;
-  const projectPerceptionQuery = useEnvironmentQuery(
-    activeProject && canvasQuestion
-      ? orchestrationEnvironment.projectPerception({
-          environmentId: activeProject.environmentId,
-          input: { projectId: activeProject.id, limit: 200 },
-        })
-      : null,
-  );
-  const canvasWorkingModel = projectPerceptionQuery.data ?? canvasPerceptionFrame;
-  const inlineThoughtView = useCrokiThoughtView({
-    frame: canvasWorkingModel,
-    question: canvasQuestion,
-  });
-  const hasNativeCanvasPerception = canvasWorkingModel.objects.some(
-    (object) =>
-      object.source.kind !== "thread" &&
-      object.source.kind !== "canvas" &&
-      object.source.kind !== "context",
-  );
-  const hasCanvasPerceptionSelection = canvasSelectionNodeIds.some((id) =>
-    canvasWorkingModel.objects.some((object) => object.id === id),
-  );
-  const canvasPresentationsByActivityId = useMemo(
-    () =>
-      new Map(
-        canvasPresentationActivities.map(
-          (presentation) => [presentation.activityId, presentation] as const,
-        ),
-      ),
-    [canvasPresentationActivities],
-  );
-  const latestCanvasPresentation =
-    canvasPresentationActivities.findLast((presentation) => presentation.artifact !== null) ?? null;
-  const viewedCanvasPresentation =
-    canvasViewedArtifactId === null
-      ? null
-      : (canvasPresentationActivities.find(
-          (presentation) => presentation.artifact?.id === canvasViewedArtifactId,
-        ) ?? null);
-  const selectedCanvasPresentation =
-    canvasSelectionState.artifactId === null
-      ? viewedCanvasPresentation
-      : (canvasPresentationActivities.find(
-          (presentation) => presentation.artifact?.id === canvasSelectionState.artifactId,
-        ) ?? null);
-  const selectedCanvasNodes = useMemo<readonly HarnessCanvasArtifactNode[]>(() => {
-    if (!selectedCanvasPresentation?.artifact || canvasSelectionNodeIds.length === 0) return [];
-    const ids = new Set(canvasSelectionNodeIds);
-    return selectedCanvasPresentation.artifact.nodes.filter((node) => ids.has(node.id));
-  }, [canvasSelectionNodeIds, selectedCanvasPresentation]);
-  const [pendingSurfaceIdsByWorkspace, setPendingSurfaceIdsByWorkspace] = useState<
-    ReadonlyMap<string, ReadonlySet<string>>
-  >(() => new Map());
-  const pendingSurfaceIds = activeWorkspaceKey
-    ? (pendingSurfaceIdsByWorkspace.get(activeWorkspaceKey) ?? EMPTY_PENDING_SURFACE_IDS)
-    : EMPTY_PENDING_SURFACE_IDS;
-  const handleSurfacePendingChange = useCallback(
-    (surfaceId: string, pending: boolean) => {
-      if (!activeWorkspaceKey) return;
-      setPendingSurfaceIdsByWorkspace((currentByWorkspace) => {
-        const current = currentByWorkspace.get(activeWorkspaceKey) ?? EMPTY_PENDING_SURFACE_IDS;
-        if (current.has(surfaceId) === pending) return currentByWorkspace;
-        const next = new Set(current);
-        if (pending) next.add(surfaceId);
-        else next.delete(surfaceId);
-        const nextByWorkspace = new Map(currentByWorkspace);
-        if (next.size === 0) nextByWorkspace.delete(activeWorkspaceKey);
-        else nextByWorkspace.set(activeWorkspaceKey, next);
-        return nextByWorkspace;
-      });
-    },
-    [activeWorkspaceKey],
-  );
-  const handleFilePendingChange = useCallback(
-    (relativePath: string, pending: boolean) => {
-      handleSurfacePendingChange(`file:${relativePath}`, pending);
-    },
-    [handleSurfacePendingChange],
-  );
-  const handleCanvasPendingChange = useCallback(
-    (pending: boolean) => {
-      handleSurfacePendingChange("canvas", pending);
-    },
-    [handleSurfacePendingChange],
-  );
   const activeTerminalLaunchContext =
     terminalUiLaunchContext?.threadId === activeThreadId ? terminalUiLaunchContext : null;
   // Default true while loading to avoid toolbar flicker.
@@ -3080,10 +2738,7 @@ function ChatViewContent(props: ChatViewProps) {
     (targetThreadId: ThreadId | null, error: string | null) => {
       if (!targetThreadId) return;
       const nextError = sanitizeThreadErrorMessage(error);
-      const nextEntry: LocalThreadErrorEntry = {
-        message: nextError,
-        at: Date.now(),
-      };
+      const nextEntry: LocalThreadErrorEntry = { message: nextError, at: Date.now() };
       if (
         shouldWriteThreadErrorToCurrentServerThread({
           activeServerThread,
@@ -3124,45 +2779,6 @@ function ChatViewContent(props: ChatViewProps) {
       focusComposer();
     });
   }, [focusComposer]);
-  const addApplicationSourceToMessage = useCallback(
-    (relativePath: string) => {
-      composerRef.current?.insertTextAtEnd(`${serializeComposerFileLink(relativePath)} `, {
-        ensureLeadingBoundary: true,
-      });
-      scheduleComposerFocus();
-    },
-    [scheduleComposerFocus],
-  );
-  const prepareCrokiComposerRequest = useCallback(
-    (request: string) => {
-      const storedPrompt =
-        useComposerDraftStore.getState().getComposerDraft(composerDraftTarget)?.prompt ??
-        promptRef.current;
-      const nextPrompt = mergePreparedComposerPrompt(storedPrompt, request);
-      promptRef.current = nextPrompt;
-      setComposerDraftPrompt(composerDraftTarget, nextPrompt);
-      scheduleComposerFocus();
-    },
-    [composerDraftTarget, scheduleComposerFocus, setComposerDraftPrompt],
-  );
-  const prepareTurnCanvasUpdate = useCallback(
-    (turn: Pick<TurnDiffSummary, "turnId" | "files">) => {
-      if (!crokiWorkspaceRoot) return;
-      prepareCrokiComposerRequest(buildCrokiTurnUpdatePrompt(turn, crokiWorkspaceRoot));
-    },
-    [crokiWorkspaceRoot, prepareCrokiComposerRequest],
-  );
-  const prepareCanvasFromRepository = useCallback(() => {
-    if (!crokiWorkspaceRoot) return;
-    prepareCrokiComposerRequest(buildCrokiRepositoryBootstrapPrompt(crokiWorkspaceRoot));
-    if (activeThreadRef) {
-      useRightPanelStore.getState().close(activeThreadRef);
-    }
-  }, [activeThreadRef, crokiWorkspaceRoot, prepareCrokiComposerRequest]);
-  const prepareCanvasGtmExploration = useCallback(() => {
-    if (!crokiWorkspaceRoot) return;
-    prepareCrokiComposerRequest(buildCrokiGtmExplorationPrompt(crokiWorkspaceRoot));
-  }, [crokiWorkspaceRoot, prepareCrokiComposerRequest]);
   const addTerminalContextToDraft = useCallback(
     (selection: TerminalContextSelection) => {
       composerRef.current?.addTerminalContext(selection);
@@ -3402,10 +3018,7 @@ function ChatViewContent(props: ChatViewProps) {
         storeSetActiveTerminal(activeThreadRef, targetTerminalId);
       }
 
-      const openResult = await openTerminal({
-        environmentId,
-        input: openTerminalInput,
-      });
+      const openResult = await openTerminal({ environmentId, input: openTerminalInput });
       if (openResult._tag === "Failure") {
         if (!isAtomCommandInterrupted(openResult)) {
           const error = squashAtomCommandFailure(openResult);
@@ -3652,147 +3265,6 @@ function ChatViewContent(props: ChatViewProps) {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "agents");
   }, [activeThreadRef]);
-  const addCanvasSurface = useCallback(() => {
-    if (!canvasEnabled || !activeThreadRef || !activeProject || !crokiWorkspaceRoot) return;
-    useRightPanelStore.getState().open(activeThreadRef, "canvas");
-  }, [activeProject, activeThreadRef, canvasEnabled, crokiWorkspaceRoot]);
-  const openReleaseCanvas = useCallback(() => {
-    setCanvasViewedArtifactId(null);
-    setCanvasBaseView("release");
-    setCanvasSelectionState((current) => ({ ...current, artifactId: null, nodeIds: [] }));
-    addCanvasSurface();
-  }, [addCanvasSurface]);
-  const openContextCanvas = useCallback(() => {
-    setCanvasViewedArtifactId(null);
-    setCanvasBaseView("context");
-    setCanvasSelectionState((current) => ({ ...current, artifactId: null, nodeIds: [] }));
-    addCanvasSurface();
-  }, [addCanvasSurface]);
-  const openCanvasSourceThread = useCallback(
-    (threadId: string) => {
-      if (!activeProject) return;
-      void navigate({
-        to: "/$environmentId/$threadId",
-        params: { environmentId: activeProject.environmentId, threadId },
-      });
-    },
-    [activeProject, navigate],
-  );
-  const openCanvasReference = useCallback(
-    (reference: CrokiContextReference) => {
-      if (!activeThreadRef) return;
-      if (reference.kind === "file") {
-        useRightPanelStore.getState().openFile(activeThreadRef, reference.path, reference.line);
-        return;
-      }
-      let url: URL;
-      try {
-        url = new URL(reference.url);
-      } catch {
-        return;
-      }
-      if (url.protocol !== "http:" && url.protocol !== "https:") return;
-      void openPreviewSession({ openPreview, threadRef: activeThreadRef, url: url.href });
-    },
-    [activeThreadRef, openPreview],
-  );
-  const openThoughtViewSource = useCallback(
-    (uri: string) => {
-      if (uri.startsWith("http://") || uri.startsWith("https://")) {
-        openCanvasReference({ kind: "url", url: uri });
-        return;
-      }
-      openCanvasReference({ kind: "file", path: uri.replace(/^file:\/\//, "") });
-    },
-    [openCanvasReference],
-  );
-  const thoughtViewPresentation = useMemo<MessagesTimelineThoughtView | undefined>(() => {
-    if (!inlineThoughtView.thoughtView || !latestUserMessage) return undefined;
-    return {
-      view: inlineThoughtView.thoughtView,
-      anchorMessageId: latestUserMessage.id,
-      basisOpen: inlineThoughtView.basisOpen,
-      selectedObjectIds: canvasSelectionNodeIds,
-      updateAvailable: inlineThoughtView.updateAvailable,
-      onToggleBasis: inlineThoughtView.toggleBasis,
-      onReframe: inlineThoughtView.reframe,
-      onUpdate: inlineThoughtView.update,
-      onUse: (statement) => {
-        handleCanvasSelectionChange([statement.objectId], null);
-        scheduleComposerFocus();
-      },
-      onOpenSource: openThoughtViewSource,
-    };
-  }, [
-    canvasSelectionNodeIds,
-    handleCanvasSelectionChange,
-    inlineThoughtView.basisOpen,
-    inlineThoughtView.reframe,
-    inlineThoughtView.thoughtView,
-    inlineThoughtView.toggleBasis,
-    inlineThoughtView.update,
-    inlineThoughtView.updateAvailable,
-    latestUserMessage,
-    openThoughtViewSource,
-    scheduleComposerFocus,
-  ]);
-  const openCanvasArtifact = useCallback(
-    (presentation: CanvasPresentationTimelineActivity) => {
-      setCanvasViewedArtifactId(presentation.artifact?.id ?? null);
-      setCanvasBaseView("release");
-      setCanvasSelectionState((current) => ({
-        ...current,
-        artifactId: presentation.artifact?.id ?? null,
-        nodeIds: [],
-      }));
-      addCanvasSurface();
-    },
-    [addCanvasSurface],
-  );
-  useRegisterCanvasCommand(
-    canvasEnabled
-      ? {
-          onOpenCanvas: activeProject && crokiWorkspaceRoot ? openReleaseCanvas : undefined,
-          unavailableReason:
-            activeProject && crokiWorkspaceRoot
-              ? undefined
-              : "Open a project workspace to use Canvas.",
-        }
-      : null,
-  );
-  const captureCanvasEvidence = useCallback(
-    (reference: CrokiContextReference, title: string) => {
-      if (!activeProject || !crokiWorkspaceRoot) return;
-      const result = addProvisionalCrokiEvidence({
-        environmentId: activeProject.environmentId,
-        workspaceRoot: crokiWorkspaceRoot,
-        productName: activeProject.title,
-        reference,
-        title,
-      });
-      if (result === "unavailable") {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Unable to add Canvas evidence",
-            description: "Open or repair the Canvas before capturing this reference.",
-          }),
-        );
-        return;
-      }
-      openContextCanvas();
-    },
-    [activeProject, crokiWorkspaceRoot, openContextCanvas],
-  );
-  const captureFileCanvasEvidence = useCallback(
-    (relativePath: string, line: number) => {
-      captureCanvasEvidence(
-        { kind: "file", path: relativePath, line },
-        `Evidence from ${relativePath}:${line}`,
-      );
-    },
-    [captureCanvasEvidence],
-  );
   const openFileSurface = useCallback(
     (relativePath: string) => {
       if (!activeThreadRef || !activeProject) return;
@@ -3928,11 +3400,7 @@ function ChatViewContent(props: ChatViewProps) {
       if (!activeThreadRef || activeRightPanelSurface?.kind !== "terminal") return;
       void closeTerminalMutation({
         environmentId: activeThreadRef.environmentId,
-        input: {
-          threadId: activeThreadRef.threadId,
-          terminalId,
-          deleteHistory: true,
-        },
+        input: { threadId: activeThreadRef.threadId, terminalId, deleteHistory: true },
       });
       storeCloseTerminal(activeThreadRef, terminalId);
       useRightPanelStore
@@ -3989,11 +3457,7 @@ function ChatViewContent(props: ChatViewProps) {
             storeCloseTerminal(activeThreadRef, terminalId);
             void closeTerminalMutation({
               environmentId: activeThreadRef.environmentId,
-              input: {
-                threadId: activeThreadRef.threadId,
-                terminalId,
-                deleteHistory: true,
-              },
+              input: { threadId: activeThreadRef.threadId, terminalId, deleteHistory: true },
             });
           }
         }
@@ -4849,11 +4313,7 @@ function ChatViewContent(props: ChatViewProps) {
     if (nextBranch !== activeThread.branch) {
       const updateResult = await updateThreadMetadata({
         environmentId,
-        input: {
-          threadId: activeThread.id,
-          branch: nextBranch,
-          worktreePath: null,
-        },
+        input: { threadId: activeThread.id, branch: nextBranch, worktreePath: null },
       });
       if (updateResult._tag === "Failure") {
         setIsRestoringThreadBranch(false);
@@ -5544,18 +5004,6 @@ function ChatViewContent(props: ChatViewProps) {
       }
       return;
     }
-    const steeringTurnId =
-      phase === "running" && canSteerRunningTurn
-        ? (activeThread.session?.activeTurnId ?? null)
-        : null;
-    if (phase === "running" && steeringTurnId === null) {
-      setThreadError(
-        activeThread.id,
-        "This provider cannot accept guidance while its current turn is running.",
-      );
-      return;
-    }
-    const isSteeringRunningTurn = steeringTurnId !== null;
     if (!activeProject) {
       toastManager.add(
         stackedThreadToast({
@@ -5567,8 +5015,7 @@ function ChatViewContent(props: ChatViewProps) {
       return;
     }
     const threadIdForSend = activeThread.id;
-    const isFirstMessage =
-      !isSteeringRunningTurn && (!isServerThread || activeThread.messages.length === 0);
+    const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
     const baseBranchForWorktree =
       isFirstMessage && sendEnvMode === "worktree" && !activeThread.worktreePath
         ? activeThreadBranch
@@ -5606,7 +5053,6 @@ function ChatViewContent(props: ChatViewProps) {
     const composerElementContextsSnapshot = [...composerElementContexts];
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
     const composerReviewCommentsSnapshot: ReviewCommentContext[] = [...composerReviewComments];
-    const canvasSelectionSnapshot = directAnnotation ? [] : [...selectedCanvasNodes];
     const messageTextWithContexts = appendElementContextsToPrompt(
       appendTerminalContextsToPrompt(promptForSend, composerTerminalContextsSnapshot),
       composerElementContextsSnapshot,
@@ -5615,21 +5061,9 @@ function ChatViewContent(props: ChatViewProps) {
       (text, annotation) => appendPreviewAnnotationPrompt(text, annotation),
       messageTextWithContexts,
     );
-    const messageTextWithReviewComments = appendReviewCommentsToPrompt(
+    const messageTextForSend = appendReviewCommentsToPrompt(
       messageTextWithPreviewAnnotations,
       composerReviewCommentsSnapshot,
-    );
-    const messageTextForSend = appendCanvasSelectionToPrompt(
-      messageTextWithReviewComments,
-      canvasSelectionSnapshot,
-      {
-        includeLegacySerialization: !hasNativeCanvasPerception || !hasCanvasPerceptionSelection,
-      },
-    );
-    const messageTextWithPerceptionFocus = appendCrokiPerceptionFocusToPrompt(
-      messageTextForSend,
-      directAnnotation ? [] : canvasSelectionNodeIds,
-      canvasWorkingModel,
     );
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
@@ -5638,7 +5072,7 @@ function ChatViewContent(props: ChatViewProps) {
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: messageTextWithPerceptionFocus || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+      text: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
     });
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
@@ -5679,7 +5113,7 @@ function ChatViewContent(props: ChatViewProps) {
         role: "user",
         text: outgoingMessageText,
         ...(optimisticAttachments.length > 0 ? { attachments: optimisticAttachments } : {}),
-        turnId: steeringTurnId,
+        turnId: null,
         createdAt: messageCreatedAt,
         updatedAt: messageCreatedAt,
         streaming: false,
@@ -5744,7 +5178,7 @@ function ChatViewContent(props: ChatViewProps) {
       }
     }
 
-    if (failure === null && isServerThread && !isSteeringRunningTurn) {
+    if (failure === null && isServerThread) {
       const settingsResult = await persistThreadSettingsForNextTurn({
         threadId: threadIdForSend,
         createdAt: messageCreatedAt,
@@ -5798,36 +5232,24 @@ function ChatViewContent(props: ChatViewProps) {
             }
           : undefined;
       beginLocalDispatch({ preparingWorktree: false });
-      const message = {
-        messageId: messageIdForSend,
-        role: "user" as const,
-        text: outgoingMessageText,
-        attachments: turnAttachmentsResult.value,
-      };
-      const startResult = isSteeringRunningTurn
-        ? await steerThreadTurn({
-            environmentId,
-            input: {
-              threadId: threadIdForSend,
-              expectedTurnId: steeringTurnId,
-              message,
-              createdAt: messageCreatedAt,
-            },
-          })
-        : await startThreadTurn({
-            environmentId,
-            input: {
-              threadId: threadIdForSend,
-              message,
-              modelSelection: ctxSelectedModelSelection,
-              titleSeed: title,
-              runtimeMode,
-              interactionMode,
-              canvasEnabled,
-              ...(bootstrap ? { bootstrap } : {}),
-              createdAt: messageCreatedAt,
-            },
-          });
+      const startResult = await startThreadTurn({
+        environmentId,
+        input: {
+          threadId: threadIdForSend,
+          message: {
+            messageId: messageIdForSend,
+            role: "user",
+            text: outgoingMessageText,
+            attachments: turnAttachmentsResult.value,
+          },
+          modelSelection: ctxSelectedModelSelection,
+          titleSeed: title,
+          runtimeMode,
+          interactionMode,
+          ...(bootstrap ? { bootstrap } : {}),
+          createdAt: messageCreatedAt,
+        },
+      });
       if (startResult._tag === "Failure") {
         failure = startResult;
       } else {
@@ -5887,7 +5309,6 @@ function ChatViewContent(props: ChatViewProps) {
       );
       resetLocalDispatch();
     }
-    return turnStartSucceeded;
   };
 
   const onInterrupt = async () => {
@@ -6103,10 +5524,6 @@ function ChatViewContent(props: ChatViewProps) {
       } = sendCtx;
 
       const threadIdForSend = activeThread.id;
-      const canvasSelectionSnapshot = [...selectedCanvasNodes];
-      const planFollowUpText = appendCanvasSelectionToPrompt(trimmed, canvasSelectionSnapshot, {
-        includeLegacySerialization: !hasNativeCanvasPerception || !hasCanvasPerceptionSelection,
-      });
       const messageIdForSend = newMessageId();
       const messageCreatedAt = new Date().toISOString();
       const outgoingMessageText = formatOutgoingPrompt({
@@ -6114,11 +5531,7 @@ function ChatViewContent(props: ChatViewProps) {
         model: ctxSelectedModel,
         models: ctxSelectedProviderModels,
         effort: ctxSelectedPromptEffort,
-        text: appendCrokiPerceptionFocusToPrompt(
-          planFollowUpText,
-          canvasSelectionNodeIds,
-          canvasWorkingModel,
-        ),
+        text: trimmed,
       });
 
       sendInFlightRef.current = true;
@@ -6187,7 +5600,6 @@ function ChatViewContent(props: ChatViewProps) {
             titleSeed: activeThread.title,
             runtimeMode,
             interactionMode: nextInteractionMode,
-            canvasEnabled,
             ...(nextInteractionMode === "default" && activeProposedPlan
               ? {
                   sourceProposedPlan: {
@@ -6226,10 +5638,6 @@ function ChatViewContent(props: ChatViewProps) {
       activeProposedPlan,
       acknowledgeActiveThreadWoke,
       beginLocalDispatch,
-      canvasWorkingModel,
-      canvasSelectionNodeIds,
-      hasCanvasPerceptionSelection,
-      hasNativeCanvasPerception,
       isConnecting,
       isSendBusy,
       isServerThread,
@@ -6237,7 +5645,6 @@ function ChatViewContent(props: ChatViewProps) {
       persistThreadSettingsForNextTurn,
       resetLocalDispatch,
       runtimeMode,
-      selectedCanvasNodes,
       setComposerDraftInteractionMode,
       setThreadError,
       startThreadTurn,
@@ -6325,7 +5732,6 @@ function ChatViewContent(props: ChatViewProps) {
           titleSeed: nextThreadTitle,
           runtimeMode,
           interactionMode: "default",
-          canvasEnabled,
           sourceProposedPlan: {
             threadId: activeThread.id,
             planId: activeProposedPlan.id,
@@ -6390,7 +5796,6 @@ function ChatViewContent(props: ChatViewProps) {
     activeThreadBranch,
     activeThread,
     beginLocalDispatch,
-    canvasEnabled,
     activeEnvironmentUnavailable,
     createThread,
     deleteThread,
@@ -6570,80 +5975,6 @@ function ChatViewContent(props: ChatViewProps) {
     }
     void onRevertToTurnCountRef.current(targetTurnCount);
   }, []);
-  const editFromHereUnavailableReason =
-    serverConfig?.environment.capabilities.threadEditFromHere !== true
-      ? "Edit from here requires an updated Croki server"
-      : selectedProvider !== "codex"
-        ? "Edit from here is available for Codex threads"
-        : null;
-  const onEditFromUserMessage = useCallback(
-    async (message: ChatMessage) => {
-      if (
-        !activeThreadRef ||
-        !activeThreadKey ||
-        editFromHereUnavailableReason !== null ||
-        editFromHereRequestRef.current !== null
-      ) {
-        return;
-      }
-
-      const request = { threadKey: activeThreadKey, messageId: message.id } as const;
-      editFromHereRequestRef.current = request;
-      setEditFromHerePendingMessageId(message.id);
-      let restoredImages: Awaited<ReturnType<typeof restoreEditFromHereImages>>["images"] = [];
-      try {
-        const draft = editFromHereDraftFromMessageText(message.text);
-        const restored = await restoreEditFromHereImages(message.attachments ?? []);
-        restoredImages = restored.images;
-        if (activeThreadKeyRef.current !== request.threadKey) {
-          for (const image of restored.images) URL.revokeObjectURL(image.previewUrl);
-          return;
-        }
-
-        const targetThreadRef = await forkThread(activeThreadRef, {
-          sourceMessageId: message.id,
-          failureTitle: "Could not edit from here",
-          prepareTarget: (targetRef) => {
-            const store = useComposerDraftStore.getState();
-            store.setPrompt(targetRef, draft.prompt);
-            store.setReviewComments(targetRef, draft.reviewComments);
-            store.addImages(targetRef, restored.images);
-          },
-          shouldOpenTarget: () => activeThreadKeyRef.current === request.threadKey,
-        });
-
-        if (targetThreadRef === null) {
-          for (const image of restored.images) URL.revokeObjectURL(image.previewUrl);
-          return;
-        }
-        if (restored.failedCount > 0) {
-          toastManager.add(
-            stackedThreadToast({
-              type: "warning",
-              title: `Branch created without ${restored.failedCount === 1 ? "an image" : `${restored.failedCount} images`}`,
-              description:
-                "The original Thread is unchanged. Add the missing image again before sending.",
-            }),
-          );
-        }
-      } catch (error) {
-        for (const image of restoredImages) URL.revokeObjectURL(image.previewUrl);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not edit from here",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          }),
-        );
-      } finally {
-        if (editFromHereRequestRef.current === request) {
-          editFromHereRequestRef.current = null;
-          setEditFromHerePendingMessageId(null);
-        }
-      }
-    },
-    [activeThreadKey, activeThreadRef, editFromHereUnavailableReason, forkThread],
-  );
 
   // Empty state: no active thread
   if (!activeThread) {
@@ -6693,7 +6024,6 @@ function ChatViewContent(props: ChatViewProps) {
           threadRef={activeThreadRef}
           tabId={activeRightPanelSurface.resourceId}
           configuredUrls={configuredPreviewUrls}
-          activities={threadActivities}
           visible
           onSendAnnotation={(annotation, image) => {
             void onSend(undefined, { annotation, image });
@@ -6725,7 +6055,6 @@ function ChatViewContent(props: ChatViewProps) {
           mode="embedded"
           composerDraftTarget={composerDraftTarget}
           initialGitScope={initialDiffPanelGitScope}
-          onAddCanvasEvidence={canvasEnabled ? captureFileCanvasEvidence : undefined}
         />
       </Suspense>
     ) : activeRightPanelSurface?.kind === "pull-request" && !pullRequestsCapabilityKnown ? (
@@ -6733,7 +6062,7 @@ function ChatViewContent(props: ChatViewProps) {
     ) : activeRightPanelSurface?.kind === "pull-request" && !supportsPullRequests ? (
       <PullRequestsUnavailableState
         title="Pull requests unavailable"
-        error="Update this environment's T3 Code server to browse pull requests."
+        error="Update this environment's Croki server to browse pull requests."
       />
     ) : activeRightPanelSurface?.kind === "pull-request" ? (
       // No onClose: the surface tab's own X owns closing here, and a second X in the header
@@ -6783,7 +6112,6 @@ function ChatViewContent(props: ChatViewProps) {
           revealRequestId={activeFileSurface?.revealRequestId ?? 0}
           onOpenFile={openFileSurface}
           onPendingChange={handleFilePendingChange}
-          onAddCanvasEvidence={canvasEnabled ? captureFileCanvasEvidence : undefined}
         />
       </Suspense>
     ) : null
@@ -6795,10 +6123,8 @@ function ChatViewContent(props: ChatViewProps) {
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
-          rightPanelMaximized ? "invisible w-0 flex-none overflow-hidden" : "flex-1",
+          rightPanelMaximized ? "w-0 flex-none" : "flex-1",
         )}
-        inert={rightPanelMaximized ? true : undefined}
-        aria-hidden={rightPanelMaximized ? true : undefined}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
       >
         {/* Top bar */}
@@ -6826,7 +6152,6 @@ function ChatViewContent(props: ChatViewProps) {
             activeThreadId={activeThread.id}
             {...(routeKind === "draft" && draftId ? { draftId } : {})}
             activeThreadTitle={activeThread.title}
-            forkedFromThreadTitle={forkSourceThread?.title}
             isServerThread={isServerThread}
             changeRequestState={activeThreadPr?.state ?? null}
             activeProjectName={activeProject?.title}
@@ -6840,22 +6165,12 @@ function ChatViewContent(props: ChatViewProps) {
             keybindings={keybindings}
             availableEditors={availableEditors}
             rightPanelOpen={rightPanelOpen}
-            workerCount={
-              !activeThread.parentThreadId &&
-              serverConfig?.environment.capabilities.workerView === true
-                ? activeWorkerThreads.length
-                : 0
-            }
-            workerView={workerView}
             gitCwd={gitCwd}
             onNewThreadInProject={handleNewThreadInActiveProject}
-            onOpenApplicationSource={openFileSurface}
-            onAddApplicationSource={addApplicationSourceToMessage}
             onRunProjectScript={runProjectScript}
             onAddProjectScript={saveProjectScript}
             onUpdateProjectScript={updateProjectScript}
             onDeleteProjectScript={deleteProjectScript}
-            onWorkerViewChange={updateWorkerView}
           />
         </header>
 
@@ -6899,20 +6214,10 @@ function ChatViewContent(props: ChatViewProps) {
                 }
                 turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
                 activeThreadEnvironmentId={activeThread.environmentId}
-                crokiContextReceiptsByMessageId={crokiContextReceiptsByMessageId}
-                guidanceDeliveryByMessageId={guidanceDeliveryByMessageId}
                 routeThreadKey={routeThreadKey}
                 onOpenTurnDiff={onOpenTurnDiff}
-                onPrepareCanvasUpdate={prepareTurnCanvasUpdate}
-                {...(canvasEnabled ? { canvasPresentationsByActivityId } : {})}
-                {...(workerView === "activity" ? { coordinationActivities: threadActivities } : {})}
-                {...(canvasEnabled ? { onOpenCanvasArtifact: openCanvasArtifact } : {})}
-                {...(thoughtViewPresentation ? { thoughtView: thoughtViewPresentation } : {})}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
-                editFromHereUnavailableReason={editFromHereUnavailableReason}
-                editFromHerePendingMessageId={editFromHerePendingMessageId}
-                onEditFromUserMessage={onEditFromUserMessage}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 markdownCwd={gitCwd ?? undefined}
@@ -6995,9 +6300,7 @@ function ChatViewContent(props: ChatViewProps) {
                     className="relative"
                     style={
                       forceExpandedMobileComposer
-                        ? {
-                            viewTransitionName: MOBILE_COMPOSER_VIEW_TRANSITION_NAME,
-                          }
+                        ? { viewTransitionName: MOBILE_COMPOSER_VIEW_TRANSITION_NAME }
                         : undefined
                     }
                   >
@@ -7112,9 +6415,7 @@ function ChatViewContent(props: ChatViewProps) {
                                 envLocked={envLocked}
                                 onComposerFocusRequest={scheduleComposerFocus}
                                 {...(canCheckoutPullRequestIntoThread
-                                  ? {
-                                      onCheckoutPullRequestRequest: openPullRequestDialog,
-                                    }
+                                  ? { onCheckoutPullRequestRequest: openPullRequestDialog }
                                   : {})}
                                 {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
                                 availableEnvironments={logicalProjectEnvironments}
@@ -7217,9 +6518,9 @@ function ChatViewContent(props: ChatViewProps) {
         <RightPanelTabs
           mode="inline"
           maximized={rightPanelMaximized}
-          surfaces={visibleRightPanelSurfaces}
+          surfaces={rightPanelState.surfaces}
           activeSurfaceId={activeRightPanelSurface?.id ?? null}
-          pendingSurfaceIds={pendingSurfaceIds}
+          pendingSurfaceIds={pendingFileSurfaceIds}
           previewSessions={activePreviewState.sessions}
           terminalLabelsById={activeTerminalLabelsById}
           onActivate={activateRightPanelSurface}
@@ -7234,8 +6535,6 @@ function ChatViewContent(props: ChatViewProps) {
           onAddFiles={addFilesSurface}
           onAddPullRequest={addPullRequestSurface}
           onAddAgents={addAgentsSurface}
-          onAddCanvas={addCanvasSurface}
-          canvasAvailable={canvasEnabled}
           browserAvailable={isPreviewSupportedInRuntime()}
           terminalAvailable={activeProject !== null}
           diffAvailable={isServerThread && isGitRepo}
@@ -7253,9 +6552,9 @@ function ChatViewContent(props: ChatViewProps) {
           <RightPanelTabs
             mode="sheet"
             layoutControls={panelToggleControls}
-            surfaces={visibleRightPanelSurfaces}
+            surfaces={rightPanelState.surfaces}
             activeSurfaceId={activeRightPanelSurface?.id ?? null}
-            pendingSurfaceIds={pendingSurfaceIds}
+            pendingSurfaceIds={pendingFileSurfaceIds}
             previewSessions={activePreviewState.sessions}
             terminalLabelsById={activeTerminalLabelsById}
             onActivate={activateRightPanelSurface}

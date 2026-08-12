@@ -130,7 +130,6 @@ import {
   resolveAdjacentThreadId,
   resolveSettledTimestamp,
   resolveSidebarThreadStatus,
-  resolveThreadAttention,
   searchSidebarThreadsByTitle,
   shouldCreateNewThreadInCurrentProject,
   resolveWorkingStartedAt,
@@ -138,7 +137,6 @@ import {
   sortPinnedThreadsForSidebar,
   sortSettledThreadsForSidebar,
   sortThreadsForSidebar,
-  THREAD_ATTENTION_HASH,
 } from "./Sidebar.logic";
 import { resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
 import {
@@ -182,8 +180,8 @@ import {
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 // Keep the v2 key so existing preferences survive the v2-to-default rename.
-const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:settled-expanded";
-const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:snoozed-expanded";
+const SETTLED_SHELF_EXPANDED_KEY = "croki:sidebar-v2:settled-expanded";
+const SNOOZED_SHELF_EXPANDED_KEY = "croki:sidebar-v2:snoozed-expanded";
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
@@ -688,12 +686,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   projectTitle: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
   timestampFormat: TimestampFormat;
-  onThreadClick: (
-    event: ReactMouseEvent,
-    threadRef: ScopedThreadRef,
-    needsAttention: boolean,
-  ) => void;
-  onThreadActivate: (threadRef: ScopedThreadRef, needsAttention?: boolean) => void;
+  onThreadClick: (event: ReactMouseEvent, threadRef: ScopedThreadRef) => void;
+  onThreadActivate: (threadRef: ScopedThreadRef) => void;
   onStartRename: (threadRef: ScopedThreadRef, title: string) => void;
   onRenameTitleChange: (title: string) => void;
   onCommitRename: (threadRef: ScopedThreadRef, title: string, originalTitle: string) => void;
@@ -708,7 +702,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   onUnpin: (threadRef: ScopedThreadRef) => void;
   onAcknowledgeWoke: (threadRef: ScopedThreadRef, visitedAt: string) => void;
   onChangeRequestState: (threadKey: string, state: "open" | "closed" | "merged" | null) => void;
-  isChild?: boolean;
 }) {
   const {
     isRenaming,
@@ -766,8 +759,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Same semantics as the legacy sidebar (never-visited counts as read):
   // switching sidebars must not light up every historical thread as unread.
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
-  const attention = resolveThreadAttention({ ...thread, lastVisitedAt });
-  const status = resolveSidebarThreadStatus({ ...thread, lastVisitedAt });
+  const status = resolveSidebarThreadStatus(thread);
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so the pill clears only when the user re-engages:
@@ -783,9 +775,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
     prState !== "merged" &&
     prState !== "closed";
-  // Autonomous work recedes. Approval, input, and fresh failure states remain
-  // prominent because they name the founder's next action.
-  const isInFlight = status === "working" || status === "monitoring";
+  // In-flight rows (working, or waiting on approval/input) fade as a whole:
+  // there is nothing for the user to do yet, so prominence is reserved for
+  // rows that need a human — done (unread), read-but-unsettled, failed, and
+  // freshly woken. The status label keeps its hue, so waiting rows stay
+  // findable. In-flight rows recede the same as read-ready ones (inbox-zero:
+  // working threads aren't your problem yet) — only the colored status label
+  // stands out.
+  const isInFlight =
+    status === "working" || status === "monitoring" || status === "approval" || status === "input";
   const shouldRecede =
     (status === "ready" || isInFlight) && !isUnread && !isWoke && !props.isActive && !isSelected;
   // Status hues follow the system-wide convention set by sidebar v1 and the
@@ -813,13 +811,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           }
         : status === "approval"
           ? {
-              label: attention?.label ?? "Needs Approval",
+              label: "Approval",
               icon: null,
               className: "text-amber-700 dark:text-amber-300",
             }
           : status === "input"
             ? {
-                label: attention?.label ?? "Needs Input",
+                label: "Input",
                 icon: null,
                 className: "text-indigo-600 dark:text-indigo-300",
               }
@@ -889,14 +887,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
 
   const handleClick = useCallback(
     (event: ReactMouseEvent) => {
-      if (props.isChild && (event.metaKey || event.ctrlKey || event.shiftKey)) {
-        event.preventDefault();
-        onThreadActivate(threadRef, attention !== null);
-        return;
-      }
-      onThreadClick(event, threadRef, attention !== null);
+      onThreadClick(event, threadRef);
     },
-    [attention, onThreadActivate, onThreadClick, props.isChild, threadRef],
+    [onThreadClick, threadRef],
   );
   const handleAcknowledgeWokeClick = useCallback(
     (event: ReactMouseEvent) => {
@@ -910,23 +903,21 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const handleContextMenu = useCallback(
     (event: ReactMouseEvent) => {
       event.preventDefault();
-      if (props.isChild) return;
       onContextMenu(threadRef, { x: event.clientX, y: event.clientY });
     },
-    [onContextMenu, props.isChild, threadRef],
+    [onContextMenu, threadRef],
   );
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
       if (event.target !== event.currentTarget) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
-      onThreadActivate(threadRef, attention !== null);
+      onThreadActivate(threadRef);
     },
-    [attention, onThreadActivate, threadRef],
+    [onThreadActivate, threadRef],
   );
   const handleDoubleClick = useCallback(
     (event: ReactMouseEvent) => {
-      if (props.isChild) return;
       if (isRenaming || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
         return;
       }
@@ -934,7 +925,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       event.preventDefault();
       onStartRename(threadRef, thread.title);
     },
-    [isRenaming, onStartRename, props.isChild, thread.title, threadRef],
+    [isRenaming, onStartRename, thread.title, threadRef],
   );
   const renameCommittedRef = useRef(false);
   useEffect(() => {
@@ -1127,10 +1118,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     return (
       <li
         data-thread-item
-        className={cn(
-          "list-none [content-visibility:auto] [contain-intrinsic-size:auto_34px]",
-          props.isChild && "ml-5 border-l border-border/60 pl-2",
-        )}
+        className="list-none [content-visibility:auto] [contain-intrinsic-size:auto_34px]"
       >
         <Tooltip>
           <TooltipTrigger
@@ -1276,7 +1264,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       {...(sortable?.listeners ?? {})}
       className={cn(
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_96px]",
-        props.isChild && "ml-5 border-l border-border/60 pl-2",
         sortable?.isDragging && "z-20 opacity-80",
       )}
     >
@@ -1914,7 +1901,6 @@ export default function Sidebar() {
     activeThreads,
     snoozedThreads,
     settledThreads,
-    childThreadsByParentKey,
     snoozeNow,
   } = useMemo(() => {
     const now = `${nowMinute}:00.000Z`;
@@ -1924,41 +1910,17 @@ export default function Sidebar() {
     // memo exactly at the next wake boundary.
     void snoozeWakeTick;
     const preciseNow = new Date().toISOString();
-    const isInProjectScope = (thread: EnvironmentThreadShell) =>
-      scopedProjectKeys === null ||
-      scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`);
-    const visibleChildParentKeys = new Set(
-      threads
-        .filter(
-          (thread) =>
-            thread.archivedAt === null && thread.parentThreadId && isInProjectScope(thread),
-        )
-        .map((thread) => `${thread.environmentId}:${thread.parentThreadId}`),
-    );
     const visible = threads.filter(
       (thread) =>
-        isInProjectScope(thread) &&
-        (thread.archivedAt === null ||
-          visibleChildParentKeys.has(`${thread.environmentId}:${thread.id}`)),
+        thread.archivedAt === null &&
+        (scopedProjectKeys === null ||
+          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
     );
-    const childThreadsByParentKey = new Map<string, EnvironmentThreadShell[]>();
-    const visibleByThreadKey = new Map(
-      visible.map((thread) => [`${thread.environmentId}:${thread.id}`, thread]),
-    );
-    for (const child of visible) {
-      if (!child.parentThreadId) continue;
-      const parentKey = `${child.environmentId}:${child.parentThreadId}`;
-      if ((visibleByThreadKey.get(parentKey)?.workerView ?? "threads") !== "threads") continue;
-      const siblings = childThreadsByParentKey.get(parentKey) ?? [];
-      siblings.push(child);
-      childThreadsByParentKey.set(parentKey, siblings);
-    }
-    const parentThreads = visible.filter((thread) => !thread.parentThreadId);
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const snoozed: EnvironmentThreadShell[] = [];
     const settled: EnvironmentThreadShell[] = [];
-    for (const thread of parentThreads) {
+    for (const thread of visible) {
       // Threads on servers without the settlement capability (old server,
       // or descriptor not loaded yet) never classify as settled: the user
       // could neither un-settle nor pin them, so auto-settling them would
@@ -2016,7 +1978,6 @@ export default function Sidebar() {
           firstValidTimestampMs(right.snoozedUntil ?? null),
       ),
       settledThreads: sortSettledThreadsForSidebar(settled),
-      childThreadsByParentKey,
       snoozeNow: preciseNow,
     };
   }, [
@@ -2034,14 +1995,8 @@ export default function Sidebar() {
   const [activeSearchResultIndex, setActiveSearchResultIndex] = useState(0);
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
   const searchableThreads = useMemo(
-    () =>
-      [...pinnedThreads, ...activeThreads, ...snoozedThreads, ...settledThreads].flatMap(
-        (thread) => [
-          thread,
-          ...(childThreadsByParentKey.get(`${thread.environmentId}:${thread.id}`) ?? []),
-        ],
-      ),
-    [activeThreads, childThreadsByParentKey, pinnedThreads, settledThreads, snoozedThreads],
+    () => [...pinnedThreads, ...activeThreads, ...snoozedThreads, ...settledThreads],
+    [activeThreads, pinnedThreads, settledThreads, snoozedThreads],
   );
   const threadSearchResults = useMemo(
     () => searchSidebarThreadsByTitle(searchableThreads, threadSearchQuery),
@@ -2080,17 +2035,6 @@ export default function Sidebar() {
     return () => window.clearTimeout(id);
   }, [snoozedThreads]);
 
-  const routeParentThreadKey = useMemo(() => {
-    if (routeThreadKey === null) return null;
-    const routeThread = threads.find(
-      (thread) =>
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
-    );
-    return routeThread?.parentThreadId
-      ? scopedThreadKey(scopeThreadRef(routeThread.environmentId, routeThread.parentThreadId))
-      : routeThreadKey;
-  }, [routeThreadKey, threads]);
-
   // The settled tail renders in pages: history shouldn't dominate the
   // sidebar, and the common lookups are recent. Expansion resets when the
   // filter context changes so a scope/search flip never inherits a deep
@@ -2108,18 +2052,17 @@ export default function Sidebar() {
     // The open thread must never hide under "Show more": navigating into a
     // deep settled thread (search, deep link) pulls its row into the visible
     // tail so the highlight and the un-settle affordance stay reachable.
-    if (routeParentThreadKey !== null) {
+    if (routeThreadKey !== null) {
       const routeThread = settledThreads
         .slice(settledVisibleCount)
         .find(
           (thread) =>
-            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) ===
-            routeParentThreadKey,
+            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
         );
       if (routeThread !== undefined) visible.push(routeThread);
     }
     return visible;
-  }, [routeParentThreadKey, settledThreads, settledVisibleCount]);
+  }, [routeThreadKey, settledThreads, settledVisibleCount]);
   const hiddenSettledCount = settledThreads.length - visibleSettledThreads.length;
   const showMoreSettled = useCallback(
     () => setSettledVisibleCount((count) => count + SETTLED_TAIL_PAGE_COUNT),
@@ -2136,13 +2079,13 @@ export default function Sidebar() {
   );
   const renderedSettledThreads = useMemo(() => {
     if (settledShelfExpanded) return visibleSettledThreads;
-    if (routeParentThreadKey === null) return [];
+    if (routeThreadKey === null) return [];
     const routeThread = visibleSettledThreads.find(
       (thread) =>
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeParentThreadKey,
+        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
     );
     return routeThread === undefined ? [] : [routeThread];
-  }, [routeParentThreadKey, settledShelfExpanded, visibleSettledThreads]);
+  }, [routeThreadKey, settledShelfExpanded, visibleSettledThreads]);
 
   // The snoozed shelf is collapsed by default: out of the way, never gone.
   // Collapsed threads don't render (and so don't participate in jump
@@ -2162,32 +2105,17 @@ export default function Sidebar() {
     // snoozed thread reached by route (deep link, open before snoozing
     // elsewhere) keeps its row — with highlight and wake affordance — same
     // exception the settled tail's "Show more" makes.
-    if (routeParentThreadKey === null) return [];
+    if (routeThreadKey === null) return [];
     const routeThread = snoozedThreads.find(
       (thread) =>
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeParentThreadKey,
+        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
     );
     return routeThread === undefined ? [] : [routeThread];
-  }, [routeParentThreadKey, snoozedShelfExpanded, snoozedThreads]);
+  }, [routeThreadKey, snoozedShelfExpanded, snoozedThreads]);
 
   const orderedThreads = useMemo(
-    () =>
-      [
-        ...pinnedThreads,
-        ...activeThreads,
-        ...visibleSnoozedThreads,
-        ...renderedSettledThreads,
-      ].flatMap((thread) => [
-        thread,
-        ...(childThreadsByParentKey.get(`${thread.environmentId}:${thread.id}`) ?? []),
-      ]),
-    [
-      activeThreads,
-      childThreadsByParentKey,
-      pinnedThreads,
-      renderedSettledThreads,
-      visibleSnoozedThreads,
-    ],
+    () => [...pinnedThreads, ...activeThreads, ...visibleSnoozedThreads, ...renderedSettledThreads],
+    [pinnedThreads, activeThreads, visibleSnoozedThreads, renderedSettledThreads],
   );
   const orderedThreadKeys = useMemo(
     () =>
@@ -2260,7 +2188,7 @@ export default function Sidebar() {
   // history stays readable without un-settling, and sending a message or
   // starting a session un-settles server-side.
   const navigateToThread = useCallback(
-    (threadRef: ScopedThreadRef, needsAttention = false) => {
+    (threadRef: ScopedThreadRef) => {
       if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
         clearSelection();
       }
@@ -2271,7 +2199,6 @@ export default function Sidebar() {
       void router.navigate({
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams(threadRef),
-        hash: needsAttention ? THREAD_ATTENTION_HASH : "",
       });
     },
     [clearSelection, isMobile, router, setOpenMobile, setSelectionAnchor],
@@ -2299,10 +2226,7 @@ export default function Sidebar() {
   const selectThreadSearchResult = useCallback(
     (thread: EnvironmentThreadShell) => {
       clearThreadSearch();
-      const threadRef = scopeThreadRef(thread.environmentId, thread.id);
-      const lastVisitedAt =
-        useUiStateStore.getState().threadLastVisitedAtById[scopedThreadKey(threadRef)];
-      navigateToThread(threadRef, resolveThreadAttention({ ...thread, lastVisitedAt }) !== null);
+      navigateToThread(scopeThreadRef(thread.environmentId, thread.id));
     },
     [clearThreadSearch, navigateToThread],
   );
@@ -2382,7 +2306,7 @@ export default function Sidebar() {
   );
 
   const handleThreadClick = useCallback(
-    (event: ReactMouseEvent, threadRef: ScopedThreadRef, needsAttention: boolean) => {
+    (event: ReactMouseEvent, threadRef: ScopedThreadRef) => {
       const isMac = isMacPlatform(navigator.platform);
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
       const threadKey = scopedThreadKey(threadRef);
@@ -2399,7 +2323,7 @@ export default function Sidebar() {
       if (isTrailingDoubleClick(event.detail)) {
         return;
       }
-      navigateToThread(threadRef, needsAttention);
+      navigateToThread(threadRef);
     },
     [navigateToThread, rangeSelectTo, toggleThreadSelection],
   );
@@ -3566,7 +3490,6 @@ export default function Sidebar() {
                     thread: EnvironmentThreadShell,
                     section: "pinned" | "active" | "snoozed" | "settled",
                     sortable?: SortablePinnedRowBag,
-                    isChild = false,
                   ) => {
                     const threadKey = scopedThreadKey(
                       scopeThreadRef(thread.environmentId, thread.id),
@@ -3599,21 +3522,18 @@ export default function Sidebar() {
                               : "settle"
                         }
                         settlementSupported={
-                          !isChild &&
                           serverConfigs.get(thread.environmentId)?.environment.capabilities
                             .threadSettlement === true
                         }
                         snoozeSupported={
-                          !isChild &&
                           serverConfigs.get(thread.environmentId)?.environment.capabilities
                             .threadSnooze === true
                         }
                         pinningSupported={
-                          !isChild &&
                           serverConfigs.get(thread.environmentId)?.environment.capabilities
                             .threadPinning === true
                         }
-                        isPinned={!isChild && section === "pinned"}
+                        isPinned={section === "pinned"}
                         sortable={sortable}
                         snoozeWakeLabelText={
                           section === "snoozed" && thread.snoozedUntil != null
@@ -3663,7 +3583,6 @@ export default function Sidebar() {
                         onUnpin={attemptUnpin}
                         onAcknowledgeWoke={acknowledgeWoke}
                         onChangeRequestState={handleChangeRequestState}
-                        isChild={isChild}
                       />
                     );
                   };
@@ -3704,11 +3623,11 @@ export default function Sidebar() {
                             scopeThreadRef(thread.environmentId, thread.id),
                           );
                           if (!reorderablePinnedKeys.has(threadKey)) {
-                            return renderThreadWithChildren(thread, "pinned");
+                            return renderThreadRow(thread, "pinned");
                           }
                           return (
                             <SortablePinnedThreadRow key={threadKey} id={threadKey}>
-                              {(bag) => renderThreadWithChildren(thread, "pinned", bag)}
+                              {(bag) => renderThreadRow(thread, "pinned", bag)}
                             </SortablePinnedThreadRow>
                           );
                         })}
@@ -3726,7 +3645,7 @@ export default function Sidebar() {
                     );
                   }
                   for (const thread of activeThreads) {
-                    items.push(...renderThreadWithChildren(thread, "active"));
+                    items.push(renderThreadRow(thread, "active"));
                   }
                   // Snoozed shelf: between the inbox and Settled — out of the
                   // way, never gone. The header always renders while anything
@@ -3764,7 +3683,7 @@ export default function Sidebar() {
                       </li>,
                     );
                     for (const thread of visibleSnoozedThreads) {
-                      items.push(...renderThreadWithChildren(thread, "snoozed"));
+                      items.push(renderThreadRow(thread, "snoozed"));
                     }
                   }
                   if (settledThreads.length > 0) {
@@ -3799,7 +3718,7 @@ export default function Sidebar() {
                     );
                   }
                   for (const thread of renderedSettledThreads) {
-                    items.push(...renderThreadWithChildren(thread, "settled"));
+                    items.push(renderThreadRow(thread, "settled"));
                   }
                   return items;
                 })()}

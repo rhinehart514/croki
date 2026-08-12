@@ -111,7 +111,6 @@ interface HomeScreenProps {
   readonly onUnsettleThread: (thread: EnvironmentThreadShell) => void;
   readonly onPinThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly onUnpinThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
-  readonly onRegenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly onMovePinnedThread: (
     thread: EnvironmentThreadShell,
     direction: "up" | "down",
@@ -738,7 +737,7 @@ export function HomeScreen(props: HomeScreenProps) {
         settledShelfHeaderIndex: threadListV2Layout.settledShelfHeaderIndex,
         snoozeLabelNow: `${nowMinute}:00.000Z`,
       }),
-    [nowMinute, settledShelfExpanded, snoozedShelfExpanded, threadListV2Layout, v2PendingTasks],
+    [settledShelfExpanded, snoozedShelfExpanded, threadListV2Layout, v2PendingTasks],
   );
 
   const renderV2Item = useCallback(
@@ -832,15 +831,9 @@ export function HomeScreen(props: HomeScreenProps) {
           titleRegenerationSupported={titleRegenerationEnvironmentIds.has(thread.environmentId)}
           settlementSupported={settlementEnvironmentIds.has(thread.environmentId)}
           onSettleThread={handleSettleThread}
-          snoozeSupported={
-            thread.parentThreadId == null && snoozeEnvironmentIds.has(thread.environmentId)
-          }
-          pinningSupported={
-            thread.parentThreadId == null && pinningEnvironmentIds.has(thread.environmentId)
-          }
-          pinReorderSupported={
-            thread.parentThreadId == null && pinReorderEnvironmentIds.has(thread.environmentId)
-          }
+          snoozeSupported={snoozeEnvironmentIds.has(thread.environmentId)}
+          pinningSupported={pinningEnvironmentIds.has(thread.environmentId)}
+          pinReorderSupported={pinReorderEnvironmentIds.has(thread.environmentId)}
           canMovePinnedUp={arrangedPinnedKeys.indexOf(`${thread.environmentId}:${thread.id}`) > 0}
           canMovePinnedDown={(() => {
             const index = arrangedPinnedKeys.indexOf(`${thread.environmentId}:${thread.id}`);
@@ -851,12 +844,6 @@ export function HomeScreen(props: HomeScreenProps) {
           onUnsettleThread={handleUnsettleThread}
           onPinThread={handlePinThread}
           onUnpinThread={handleUnpinThread}
-          titleRegenerationSupported={
-            thread.parentThreadId == null &&
-            serverConfigs.get(thread.environmentId)?.environment.capabilities
-              .threadTitleRegeneration === true
-          }
-          onRegenerateThreadTitle={props.onRegenerateThreadTitle}
           onMovePinnedThread={handleMovePinnedThread}
           onChangeRequestState={handleChangeRequestState}
           projectCwd={
@@ -887,7 +874,6 @@ export function HomeScreen(props: HomeScreenProps) {
       projectCwdByKey,
       props.onArchiveThread,
       props.onDeletePendingTask,
-      props.onRegenerateThreadTitle,
       props.onSelectPendingTask,
       props.onSelectThread,
       props.savedConnectionsById,
@@ -917,8 +903,8 @@ export function HomeScreen(props: HomeScreenProps) {
       serverConfigs,
       savedConnectionsById: props.savedConnectionsById,
       searchQuery: props.searchQuery,
-      threadSearchMatchByKey,
       snoozePresetMinute: nowMinute,
+      threadSearchMatchByKey,
     }),
     [
       projectByKey,
@@ -926,8 +912,8 @@ export function HomeScreen(props: HomeScreenProps) {
       props.searchQuery,
       props.savedConnectionsById,
       serverConfigs,
-      threadSearchMatchByKey,
       nowMinute,
+      threadSearchMatchByKey,
       v2ProjectTitleByProjectKey,
     ],
   );
@@ -1029,13 +1015,11 @@ export function HomeScreen(props: HomeScreenProps) {
       props.onArchiveThread,
       props.onDeletePendingTask,
       props.onDeleteThread,
-      props.onRegenerateThreadTitle,
       props.onNewThreadInProject,
       props.onSelectPendingTask,
       props.onSelectThread,
       props.searchQuery,
       props.savedConnectionsById,
-      serverConfigs,
       threadSearchMatchByKey,
       titleRegenerationEnvironmentIds,
       updateGroupDisplay,

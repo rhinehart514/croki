@@ -742,7 +742,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       // rather than issuing a new one: sessions that go a long time between
       // browser tool calls used to lose the toolkit outright.
       yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
-      const turn = yield* routed.adapter.sendTurn(input);
+      // Canvas is Croki presentation state, not provider prompt state. Keep it
+      // available to orchestration while sending only the provider contract.
+      const { canvasEnabled: _canvasEnabled, ...providerInput } = input;
+      const turn = yield* routed.adapter.sendTurn(providerInput);
       yield* directory.upsert({
         threadId: input.threadId,
         provider: routed.adapter.provider,

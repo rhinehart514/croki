@@ -421,7 +421,7 @@ const T3_CHAT_LIGHT_COLORS: ThemeColors = {
   messageActionForeground: "#ffffff",
   messageActionHover: "#c12269",
   // T3 Chat uses a light lavender code surface in light mode. Keeping the
-  // dark plum pair here also leaked the dark palette into T3 Code's diffs.
+  // dark plum pair here also leaked the dark palette into Croki's diffs.
   codeBackground: "#f5ecf9",
   codeForeground: "#673c8b",
   // The live sidebar is transparent over Croki's outer shell. Use that

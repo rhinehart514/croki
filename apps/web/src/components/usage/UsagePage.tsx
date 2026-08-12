@@ -16,6 +16,7 @@ import {
   formatHourShort,
   formatPercent,
   formatTokens,
+  formatUsd,
   makeWindow,
 } from "@croki/shared/usageFormat";
 import { ScrollArea } from "../ui/scroll-area";
@@ -474,7 +475,7 @@ function Metric({
  * that are still answering never reach this notice; the page shows the
  * loading skeleton until every one is terminal.
  */
-export function UsageCoverageNotice({
+function UsageCoverageNotice({
   environments,
   duplicateSources,
   staleEnvironments,
@@ -483,10 +484,9 @@ export function UsageCoverageNotice({
   readonly duplicateSources: readonly string[];
   readonly staleEnvironments: readonly string[];
 }) {
-  const staleEnvironmentIds = new Set(staleEnvironments);
   const failed = environments.filter((environment) => environment.error !== null);
   const stale = environments.filter((environment) =>
-    staleEnvironmentIds.has(environment.environmentId),
+    staleEnvironments.includes(environment.environmentId),
   );
   if (failed.length === 0 && stale.length === 0 && duplicateSources.length === 0) {
     return null;
@@ -495,22 +495,11 @@ export function UsageCoverageNotice({
   return (
     <div className="flex flex-col gap-1 border border-border px-3 py-2 text-xs text-muted-foreground">
       {failed.map((environment) => (
-        <span key={environment.environmentId}>{environment.label} could not report usage.</span>
+        <span key={environment.label}>{environment.label} could not report usage.</span>
       ))}
       {stale.map((environment) => (
-        <span key={environment.environmentId}>
+        <span key={environment.label}>
           {environment.label} runs an older server version and is excluded from totals.
-        </span>
-      ))}
-      {incompleteSources.map(({ environment, source }) => (
-        <span
-          key={`${environment.environmentId}:${source.fingerprint.provider}:${source.fingerprint.resolvedHomePath}:${source.fingerprint.volumeId}`}
-        >
-          {environment.label} · {PROVIDER_LABEL[source.fingerprint.provider]} at{" "}
-          {source.fingerprint.resolvedHomePath}{" "}
-          {source.status === "partial"
-            ? "reported partial usage. Totals include readable transcripts only."
-            : "could not report usage. Totals exclude this source."}
         </span>
       ))}
       {duplicateSources.length > 0 ? (

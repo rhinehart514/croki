@@ -936,7 +936,7 @@ function PullRequestsRouteView() {
       ) : !pullRequestsSupported ? (
         <PullRequestsUnavailableState
           title="Pull requests unavailable"
-          error="Update this environment's T3 Code server to browse pull requests."
+          error="Update this environment's Croki server to browse pull requests."
         />
       ) : firstLoad ? (
         <PullRequestListGhost rows={7} />
@@ -1117,7 +1117,7 @@ function PullRequestsRouteView() {
         {rightPanelState.isOpen && activePullRequestSurface && pullRequestEnvironmentId !== null ? (
           <RightPanelTabs
             mode="inline"
-            widthStorageKey="t3code:pull-request-panel-width"
+            widthStorageKey="croki:pull-request-panel-width"
             // Default to roughly half the viewport: the PR list needs more
             // room than a chat, so the 540px chat-preview default squashes
             // it. SSR has no window, so fall back to a reasonable width.

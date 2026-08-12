@@ -4,7 +4,6 @@ import {
   type ProjectScript,
   type ResolvedKeybindingsConfig,
   type ThreadId,
-  type WorkerView,
 } from "@croki/contracts";
 import { scopeThreadRef } from "@croki/client-runtime/environment";
 import {
@@ -43,16 +42,12 @@ import {
   WorkspaceBreadcrumbSeparator,
 } from "../WorkspaceBreadcrumb";
 import { cn } from "~/lib/utils";
-import { CrokiApplicationFocus } from "./CrokiApplicationFocus";
-import type { CrokiApplicationState } from "./CrokiApplicationPresentation.logic";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   draftId?: DraftId;
   activeThreadTitle: string;
-  forkedFromThreadTitle: string | undefined;
   /** Drafts have no server thread yet, so the title carries no action menu. */
   isServerThread: boolean;
   /** PR state feeding the settled classification, resolved by ChatView. */
@@ -69,8 +64,6 @@ interface ChatHeaderProps {
   gitCwd: string | null;
   readonly onOpenPullRequest?: ((number: number) => void) | undefined;
   onNewThreadInProject: () => void;
-  onAddApplicationSource: (relativePath: string) => void;
-  onOpenApplicationSource: (relativePath: string) => void;
   onRunProjectScript: (script: ProjectScript) => void;
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<ProjectScriptActionResult>;
   onUpdateProjectScript: (
@@ -78,7 +71,6 @@ interface ChatHeaderProps {
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
-  onWorkerViewChange: (view: WorkerView) => void;
 }
 
 /**
@@ -112,7 +104,6 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   draftId,
   activeThreadTitle,
-  forkedFromThreadTitle,
   isServerThread,
   changeRequestState,
   activeProjectName,
@@ -127,13 +118,10 @@ export const ChatHeader = memo(function ChatHeader({
   gitCwd,
   onOpenPullRequest,
   onNewThreadInProject,
-  onAddApplicationSource,
-  onOpenApplicationSource,
   onRunProjectScript,
   onAddProjectScript,
   onUpdateProjectScript,
   onDeleteProjectScript,
-  onWorkerViewChange,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const fileScripts = useCrokiProjectFileScripts(
@@ -319,22 +307,6 @@ export const ChatHeader = memo(function ChatHeader({
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
-        {workerCount > 0 ? (
-          <Select
-            value={workerView}
-            onValueChange={(value) => {
-              if (value === "threads" || value === "activity") onWorkerViewChange(value);
-            }}
-          >
-            <SelectTrigger size="sm" aria-label="Worker presentation">
-              <SelectValue>{workerView === "threads" ? "Separate chats" : "In Thread"}</SelectValue>
-            </SelectTrigger>
-            <SelectPopup align="end">
-              <SelectItem value="threads">Separate chats</SelectItem>
-              <SelectItem value="activity">In Thread</SelectItem>
-            </SelectPopup>
-          </Select>
-        ) : null}
         {activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}

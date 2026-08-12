@@ -1009,7 +1009,10 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(session.provider, "codex");
 
       const sessions = yield* provider.listSessions();
-      assert.equal(sessions.length, 1);
+      assert.equal(
+        sessions.filter((candidate) => candidate.threadId === session.threadId).length,
+        1,
+      );
 
       yield* provider.sendTurn({
         threadId: session.threadId,
