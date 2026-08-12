@@ -11,13 +11,16 @@ there, never in the client.
 
 Croki is a harness host, not a harness. The default provider request contains
 the user's message, ordinary user-selected attachments, and provider-required
-protocol data. `ProviderCommandReactor` must not prepend Croki behavioral
-instructions, application briefs, sibling activity, progress summaries, or
-other hidden project context.
+protocol data. Codex session setup also preserves T3 Code's host-level contract
+for collaboration modes, actual tool availability, Preview routing, and
+runtime identity. `ProviderCommandReactor` must not prepend Croki task strategy,
+application briefs, sibling activity, progress summaries, or other hidden
+project context.
 
-Anything Croki applies that can affect the model must originate in an explicit
-user action, remain visible and removable before send, retain its source and
-scope on the resulting turn, and be reversible. Persistent configuration uses
+The host contract is fixed infrastructure and must remain product-neutral.
+Anything task-specific that Croki applies must originate in an explicit user
+action, remain visible and removable before send, retain its source and scope
+on the resulting turn, and be reversible. Persistent configuration uses
 provider- or repository-native instructions, skills, plugins, and MCP settings.
 Provider runtime, instructions, context attachments, tool availability, and
 read-only senses are separate contracts. Historical Product, GTM, Venture,

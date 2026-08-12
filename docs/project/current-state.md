@@ -43,6 +43,9 @@ Croki currently provides:
 - matching server-update actions on web, desktop, and mobile. Mobile OTA checks
   remain disabled unless a non-inherited `CROKI_EAS_PROJECT_ID` is supplied;
 - Croki branding and completion feedback;
+- T3-derived Codex collaboration-mode instructions that identify the Croki
+  runtime, explain product-native Preview routing, and preserve the real
+  `request_user_input` availability boundary without adding a task workflow;
 - one repository-owned application brief at `.croki/application.croki`, visible
   to the founder and attached to a model only through an explicit user action;
 - source-grounded Croki Senses perception, now rendered as automatic inline Views when it materially improves a Thread question.
@@ -234,16 +237,19 @@ portfolio objects.
 
 Croki is a harness host, not a harness. A default turn consists of the user's
 message and ordinary user-selected attachments plus provider-required protocol
-data. Croki adds no persona, planning loop, delegation policy, tool policy,
-workflow instruction, application brief, project summary, sibling activity, or
-other hidden context.
+data. Codex also receives the same thin host contract inherited from T3 Code:
+collaboration-mode semantics, actual tool availability, product-native Preview
+routing, and runtime identity. Croki adds no persona, task strategy, planning
+loop, delegation policy, workflow instruction, application brief, project
+summary, sibling activity, or other hidden task context.
 
-Instructions, context, tools, runtime, and senses stay separate. Anything Croki
-applies that can affect the model is chosen by the user, visible before send,
-scoped, recorded on the turn, removable, and reversible. Persistent behavior
-uses provider- or repository-native mechanisms such as `AGENTS.md`, skills,
-plugins, MCP configuration, and provider-owned project instructions; Croki does
-not emulate it by repeating a hidden prompt.
+Instructions, context, tools, runtime, and senses stay separate. The fixed host
+contract is infrastructure, not task configuration. Anything task-specific
+that Croki applies is chosen by the user, visible before send, scoped, recorded
+on the turn, removable, and reversible. Persistent behavior uses provider- or
+repository-native mechanisms such as `AGENTS.md`, skills, plugins, MCP
+configuration, and provider-owned project instructions; Croki does not emulate
+it by repeating a hidden prompt.
 
 Product, GTM, Venture, Parallel Threads, and former `Native` behavior IDs remain
 readable only for historical turns and migrations. They are not active composer

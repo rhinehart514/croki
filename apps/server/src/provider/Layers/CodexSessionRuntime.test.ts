@@ -170,12 +170,16 @@ describe("buildTurnStartParams", () => {
         settings: {
           model: "gpt-5.3-codex",
           reasoning_effort: "medium",
+          developer_instructions: buildCodexDeveloperInstructions("default", {
+            model: "gpt-5.3-codex",
+            reasoningEffort: "medium",
+          }),
         },
       },
     });
   });
 
-  it("reports fallback model and effort without adding default instructions", () => {
+  it("reports the same fallback model and effort in settings and instructions", () => {
     const params = Effect.runSync(
       buildTurnStartParams({
         threadId: "provider-thread-1",
@@ -188,7 +192,7 @@ describe("buildTurnStartParams", () => {
     const settings = params.collaborationMode?.settings;
     NodeAssert.equal(settings?.model, DEFAULT_MODEL);
     NodeAssert.equal(settings?.reasoning_effort, "medium");
-    NodeAssert.equal(settings?.developer_instructions, undefined);
+    NodeAssert.ok(settings?.developer_instructions?.includes(`as ${DEFAULT_MODEL} with medium`));
   });
 
   it.effect("routes approvals to the auto reviewer in auto mode", () =>
@@ -243,24 +247,63 @@ describe("buildTurnStartParams", () => {
 });
 
 describe("buildCodexDeveloperInstructions", () => {
-  it("adds no Croki-authored instructions to default turns", () => {
+  it("appends runtime info after the default host instructions", () => {
     const instructions = buildCodexDeveloperInstructions("default", {
       model: "gpt-5.3-codex",
       reasoningEffort: "high",
     });
 
-    NodeAssert.equal(CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS, undefined);
-    NodeAssert.equal(instructions, undefined);
+    NodeAssert.ok(instructions.startsWith(CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS));
+    NodeAssert.match(instructions, /Croki/);
+    NodeAssert.match(instructions, /Codex harness/);
+    NodeAssert.match(instructions, /as gpt-5\.3-codex with high reasoning effort/);
   });
 
-  it("keeps explicit Plan mode user-selected and provider-scoped", () => {
+  it("includes runtime info alongside plan mode instructions", () => {
     const instructions = buildCodexDeveloperInstructions("plan", {
       model: "gpt-5.3-codex",
       reasoningEffort: "medium",
     });
 
-    NodeAssert.equal(instructions, CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS);
-    NodeAssert.doesNotMatch(instructions ?? "", /Croki|T3|preview_open|runtime_info/);
+    NodeAssert.ok(instructions.startsWith(CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS));
+    NodeAssert.match(instructions, /as gpt-5\.3-codex with medium reasoning effort/);
+  });
+
+  it("varies with the model and effort of each turn", () => {
+    const first = buildCodexDeveloperInstructions("default", {
+      model: "gpt-5.3-codex",
+      reasoningEffort: "medium",
+    });
+    const second = buildCodexDeveloperInstructions("default", {
+      model: "gpt-5.4",
+      reasoningEffort: "high",
+    });
+
+    NodeAssert.notEqual(first, second);
+  });
+
+  it("flattens multiline metadata into single-line runtime info", () => {
+    const instructions = buildCodexDeveloperInstructions("default", {
+      model: "gpt\n5.3\ncodex",
+      reasoningEffort: " high\neffort ",
+    });
+
+    NodeAssert.match(instructions, /as gpt 5\.3 codex with high effort reasoning effort/);
+    NodeAssert.doesNotMatch(instructions, /<runtime_info>[^<]*\n/);
+  });
+});
+
+describe("Croki browser developer instructions", () => {
+  it("prefers the product-native preview tools in both collaboration modes", () => {
+    for (const instructions of [
+      CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
+      CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
+    ]) {
+      NodeAssert.match(instructions, /Croki/);
+      NodeAssert.match(instructions, /preview_status/);
+      NodeAssert.match(instructions, /preview_open/);
+      NodeAssert.match(instructions, /Do not switch to global browser skills/);
+    }
   });
 });
 

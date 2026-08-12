@@ -6,10 +6,14 @@ The developer experience is a normal repository that has gained product awarenes
 
 Croki is a harness host, not a harness. A fresh Thread uses the selected
 provider's native behavior and native project configuration. Croki adds no
-behavioral instruction or hidden application, sibling-Thread, progress, or
-project context by default. Anything Croki applies that can affect the model is
-chosen by the user, visible before sending, scoped, recorded with the turn,
-removable, and reversible.
+persona, task strategy, workflow, delegation policy, or hidden application,
+sibling-Thread, progress, or project context by default. Codex retains T3
+Code's thin host contract for collaboration-mode semantics, tool availability,
+product-native Preview routing, and honest runtime identity. That stable host
+contract explains the environment; it must never direct the substance or
+sequence of the user's work. Any task-specific instruction or context Croki
+applies is chosen by the user, visible before sending, scoped, recorded with
+the turn, removable, and reversible.
 
 ## Product nouns and behavior
 
@@ -33,8 +37,9 @@ removable, and reversible.
   reveal provider-owned system instructions.
 - Provider runtime, instructions, context, tools, and senses are distinct.
   Enabling a tool changes tool availability only; it does not add a Croki tool
-  policy or behavioral prompt. Opening Preview, a project, or an
-  application brief never applies anything to the model.
+  policy or task strategy. The fixed Codex host contract may explain how to
+  reach product-native Preview tools; opening Preview, a project, or an
+  application brief never applies task context to the model.
 - Persistent model configuration uses provider- or repository-native mechanisms
   such as `AGENTS.md`, skills, plugins, MCP configuration, and provider-owned
   project instructions. Croki may make these easy to discover, inspect, install,

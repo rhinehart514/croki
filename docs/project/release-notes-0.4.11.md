@@ -32,6 +32,12 @@ New turns no longer expose Product or GTM harness choices. Build and Plan remain
 the native ADE interaction choices. Historical harness identifiers and receipts
 remain readable for installed-state and wire compatibility.
 
+Codex restores T3 Code's fixed session-host instructions for Default and Plan
+mode semantics, actual structured-input availability, product-native Preview
+routing, and runtime identity. Those instructions explain the host without
+adding Croki application context, task strategy, workflow, persona, or
+delegation policy.
+
 ## Verification completed
 
 - all contracts, shared, web, and React Native suites: 3,498 tests passed;

@@ -87,18 +87,23 @@ When the product contract changes, update the copy, tests, docs, migrations, and
 - **Docs.** `docs/` splits by audience. Behavior changes that a user would notice belong in `docs/user/` (shipped-product voice, no repo tooling or source paths); architecture and contributor changes in `docs/internals/`; runbooks in `docs/operations/`; new vocabulary in `docs/internals/glossary.md`.
 
 - Croki is a harness host, not a harness. A default turn uses the selected
-  provider's native behavior and adds no Croki-authored persona, planning loop,
-  delegation policy, tool policy, workflow, behavioral instruction, application
-  brief, sibling activity, project summary, or hidden context.
-- Anything Croki applies that can affect the model must be chosen by the user,
-  visible before send, scoped to the turn or a provider-native persistence
-  mechanism, recorded with the turn, removable, and reversible. The absence of
-  applied configuration is the default; do not create a selectable `Native`
-  mode or silently emulate persistence by repeating prompts.
+  provider's native behavior and adds no Croki-authored persona, task strategy,
+  planning loop, delegation policy, workflow, application brief, sibling
+  activity, project summary, or hidden context. Codex keeps the T3-derived host
+  contract that explains collaboration modes, product-native Preview routing,
+  tool availability, and runtime identity. Keep that contract operational and
+  product-neutral; it cannot become a Croki workflow or policy for the task.
+- Anything task-specific that Croki applies must be chosen by the user, visible
+  before send, scoped to the turn or a provider-native persistence mechanism,
+  recorded with the turn, removable, and reversible. The absence of applied
+  task configuration is the default; do not create a selectable `Native` mode
+  or silently emulate persistence by repeating prompts.
 - Instructions, context attachments, provider runtime, tools, and senses are
-  distinct. Enabling a tool does not authorize Croki to add instructions about
-  when or how the model should use it. Opening, closing, selecting, or arranging
-  Canvas must not change provider behavior, context, tool access, or authority.
+  distinct. The fixed Codex host contract may route browser work to the shared
+  Preview tools, but enabling another tool does not authorize task-specific
+  instructions about when or how to use it. Opening, closing, selecting, or
+  arranging Canvas must not change provider behavior, context, tool access, or
+  authority.
 - Prefer provider- and repository-native configuration such as `AGENTS.md`,
   skills, plugins, MCP configuration, and provider-owned project instructions.
   Croki may discover, explain, open, install, enable, or attach them, but must

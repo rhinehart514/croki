@@ -39,7 +39,8 @@ silently establish product truth.
 
 ## User-applied model configuration
 
-Croki adds no built-in Product, GTM, Venture, planning, or delegation behavior.
+Croki adds no built-in Product, GTM, Venture, task-planning workflow, or
+delegation behavior.
 Those historical behavior IDs remain readable on older turns and migrations but
 are unavailable for new turns. A founder who wants specialized behavior applies
 provider-native project instructions, a skill, a plugin, or an explicit
@@ -56,6 +57,12 @@ Provider runtime, instructions, context, tools, and senses remain separate.
 Opening Canvas or Preview, enabling a tool, or selecting a file does not add a
 Croki-authored instruction. Persistent configuration uses the provider's or
 repository's native mechanism rather than a Croki prompt repeated every turn.
+
+Codex retains T3 Code's thin session-host contract. It explains Default and
+Plan collaboration modes, the actual structured-input boundary, how to reach
+Croki's shared Preview tools, and which Croki/Codex runtime is active. It does
+not include application direction, a task workflow, a persona, or a delegation
+policy, and it does not turn Croki into the agent.
 
 ## Croki Senses and Canvas
 

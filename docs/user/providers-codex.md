@@ -28,6 +28,17 @@ Log in with Codex normally:
 codex login
 ```
 
+## What Croki Adds To A Codex Session
+
+Croki keeps T3 Code's small host contract so Codex can operate reliably inside
+the app. It tells Codex whether Default or Plan collaboration mode is active,
+which structured input is actually available, how to use the shared Preview
+browser, and which Croki/Codex runtime is active.
+
+This does not add an application brief, product strategy, workflow, persona,
+or delegation policy. Repository instructions, selected files, skills, and
+other task context still use their normal visible or Codex-native paths.
+
 ## I Want Work And Personal Codex Accounts
 
 Use one real Codex home and one shadow home.
