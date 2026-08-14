@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
-import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { DatabaseSync } from "node:sqlite";
+import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeSqlite from "node:sqlite";
+import * as NodeURL from "node:url";
 
-const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
-const SKILL_DIRECTORY = resolve(SCRIPT_DIRECTORY, "..");
-const REPOSITORY_ROOT = resolve(SKILL_DIRECTORY, "../../..");
-const DEFAULT_STATE_DIRECTORY = resolve(REPOSITORY_ROOT, ".gtm-expansion");
-const DEFAULT_POLICY_FILE = resolve(SKILL_DIRECTORY, "config/triggers.json");
+const SCRIPT_DIRECTORY = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+const SKILL_DIRECTORY = NodePath.resolve(SCRIPT_DIRECTORY, "..");
+const REPOSITORY_ROOT = NodePath.resolve(SKILL_DIRECTORY, "../../..");
+const DEFAULT_STATE_DIRECTORY = NodePath.resolve(REPOSITORY_ROOT, ".gtm-expansion");
+const DEFAULT_POLICY_FILE = NodePath.resolve(SKILL_DIRECTORY, "config/triggers.json");
 
 function parseArguments(values) {
   const flags = {};
@@ -44,7 +44,7 @@ function required(flags, key) {
 function stateDirectory(flags) {
   const configured = flags.state;
   return configured && configured !== true
-    ? resolve(process.cwd(), String(configured))
+    ? NodePath.resolve(process.cwd(), String(configured))
     : DEFAULT_STATE_DIRECTORY;
 }
 
@@ -65,12 +65,12 @@ function boundedJson(value, label, maxLength = 12000) {
 }
 
 function stableHash(value) {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  return NodeCrypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 function readNdjson(file) {
-  const path = resolve(process.cwd(), file);
-  const lines = readFileSync(path, "utf8").split(/\r?\n/u);
+  const path = NodePath.resolve(process.cwd(), file);
+  const lines = NodeFS.readFileSync(path, "utf8").split(/\r?\n/u);
   const rows = [];
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index].trim();
@@ -80,7 +80,9 @@ function readNdjson(file) {
     try {
       rows.push(JSON.parse(line));
     } catch (error) {
-      throw new Error(path + ":" + (index + 1) + " is invalid JSON: " + error.message);
+      throw new Error(path + ":" + (index + 1) + " is invalid JSON: " + error.message, {
+        cause: error,
+      });
     }
   }
   return rows;
@@ -89,9 +91,9 @@ function readNdjson(file) {
 function loadPolicy(flags) {
   const file =
     flags.policy && flags.policy !== true
-      ? resolve(process.cwd(), String(flags.policy))
+      ? NodePath.resolve(process.cwd(), String(flags.policy))
       : DEFAULT_POLICY_FILE;
-  const policy = JSON.parse(readFileSync(file, "utf8"));
+  const policy = JSON.parse(NodeFS.readFileSync(file, "utf8"));
   if (policy.schema_version !== 1 || typeof policy.policy_version !== "string") {
     throw new Error("Unsupported trigger policy at " + file + ".");
   }
@@ -102,9 +104,9 @@ function loadPolicy(flags) {
 }
 
 function openDatabase(directory) {
-  mkdirSync(directory, { recursive: true });
-  const databaseFile = resolve(directory, "state.sqlite");
-  const database = new DatabaseSync(databaseFile);
+  NodeFS.mkdirSync(directory, { recursive: true });
+  const databaseFile = NodePath.resolve(directory, "state.sqlite");
+  const database = new NodeSqlite.DatabaseSync(databaseFile);
   database.exec(
     [
       "PRAGMA foreign_keys = ON;",
@@ -196,7 +198,7 @@ function openDatabase(directory) {
 }
 
 function runMutation(database, command, operation) {
-  const runId = randomUUID();
+  const runId = NodeCrypto.randomUUID();
   const startedAt = new Date().toISOString();
   database
     .prepare("INSERT INTO runs(run_id, command, started_at, status) VALUES (?, ?, ?, 'running')")
@@ -440,7 +442,7 @@ function importAccounts(database, rows) {
 function opportunityId(accountId, ruleId) {
   return (
     "opp_" +
-    createHash("sha256")
+    NodeCrypto.createHash("sha256")
       .update(accountId + "\0" + ruleId)
       .digest("hex")
       .slice(0, 20)
@@ -703,7 +705,7 @@ function decide(database, flags) {
     database
       .prepare("UPDATE opportunities SET status = ?, updated_at = ? WHERE opportunity_id = ?")
       .run(statusByVerdict[verdict], decidedAt, id);
-    const decisionId = randomUUID();
+    const decisionId = NodeCrypto.randomUUID();
     database
       .prepare(
         "INSERT INTO decisions(decision_id, opportunity_id, verdict, reason, decided_by, decided_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -720,7 +722,7 @@ function decide(database, flags) {
 function prepareAction(database, flags, policy) {
   const id = required(flags, "id");
   const channel = required(flags, "channel");
-  const contentFile = resolve(process.cwd(), required(flags, "content-file"));
+  const contentFile = NodePath.resolve(process.cwd(), required(flags, "content-file"));
   const createdBy = required(flags, "by");
   const evidenceIds = required(flags, "evidence")
     .split(",")
@@ -731,10 +733,10 @@ function prepareAction(database, flags, policy) {
       "The Croki expansion offer is open. Record Jacob's consequential choice in the policy before preparing action.",
     );
   }
-  if (!existsSync(contentFile)) {
+  if (!NodeFS.existsSync(contentFile)) {
     throw new Error("Content file not found: " + contentFile);
   }
-  const content = readFileSync(contentFile, "utf8").trim();
+  const content = NodeFS.readFileSync(contentFile, "utf8").trim();
   if (!content || content.length > 20000) {
     throw new Error("Draft content must contain 1 to 20000 characters.");
   }
@@ -779,7 +781,7 @@ function prepareAction(database, flags, policy) {
         "Draft claims reference evidence outside the opportunity: " + invalidEvidence.join(", "),
       );
     }
-    const actionId = randomUUID();
+    const actionId = NodeCrypto.randomUUID();
     const createdAt = new Date().toISOString();
     database
       .prepare(
@@ -825,7 +827,7 @@ function recordOutcome(database, flags) {
     if (!opportunity) {
       throw new Error("Opportunity not found: " + id);
     }
-    const outcomeId = randomUUID();
+    const outcomeId = NodeCrypto.randomUUID();
     const recordedAt = new Date().toISOString();
     database
       .prepare(

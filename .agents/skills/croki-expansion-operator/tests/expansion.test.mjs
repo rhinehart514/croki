@@ -1,28 +1,28 @@
-import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import test from "node:test";
+import * as NodeAssert from "node:assert/strict";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeTest from "node:test";
+import * as NodeURL from "node:url";
 
-const TEST_DIRECTORY = dirname(fileURLToPath(import.meta.url));
-const SKILL_DIRECTORY = resolve(TEST_DIRECTORY, "..");
-const CLI = resolve(SKILL_DIRECTORY, "scripts/expansion.mjs");
-const USAGE_FIXTURE = resolve(SKILL_DIRECTORY, "fixtures/usage.ndjson");
-const ACCOUNT_FIXTURE = resolve(SKILL_DIRECTORY, "fixtures/accounts.ndjson");
-const POLICY_FILE = resolve(SKILL_DIRECTORY, "config/triggers.json");
+const TEST_DIRECTORY = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+const SKILL_DIRECTORY = NodePath.resolve(TEST_DIRECTORY, "..");
+const CLI = NodePath.resolve(SKILL_DIRECTORY, "scripts/expansion.mjs");
+const USAGE_FIXTURE = NodePath.resolve(SKILL_DIRECTORY, "fixtures/usage.ndjson");
+const ACCOUNT_FIXTURE = NodePath.resolve(SKILL_DIRECTORY, "fixtures/accounts.ndjson");
+const POLICY_FILE = NodePath.resolve(SKILL_DIRECTORY, "config/triggers.json");
 
 function execute(argumentsList, options = {}) {
-  const result = spawnSync(process.execPath, [CLI, ...argumentsList], {
+  const result = NodeChildProcess.spawnSync(process.execPath, [CLI, ...argumentsList], {
     cwd: options.cwd ?? SKILL_DIRECTORY,
     encoding: "utf8",
   });
   if (options.expectFailure) {
-    assert.notEqual(result.status, 0, "command unexpectedly succeeded");
+    NodeAssert.notEqual(result.status, 0, "command unexpectedly succeeded");
     return result;
   }
-  assert.equal(result.status, 0, result.stderr);
+  NodeAssert.equal(result.status, 0, result.stderr);
   return result;
 }
 
@@ -30,15 +30,15 @@ function executeJson(argumentsList, options) {
   return JSON.parse(execute(argumentsList, options).stdout);
 }
 
-test("nominates evidence-backed opportunities and resumes without duplication", () => {
-  const state = mkdtempSync(resolve(tmpdir(), "croki-expansion-test-"));
+NodeTest.test("nominates evidence-backed opportunities and resumes without duplication", () => {
+  const state = NodeFS.mkdtempSync(NodePath.resolve(NodeOS.tmpdir(), "croki-expansion-test-"));
   try {
     const initialized = executeJson(["init", "--state", state]);
-    assert.equal(initialized.initialized, true);
+    NodeAssert.equal(initialized.initialized, true);
 
     executeJson(["ingest-accounts", "--state", state, "--input", ACCOUNT_FIXTURE]);
     const firstImport = executeJson(["ingest-usage", "--state", state, "--input", USAGE_FIXTURE]);
-    assert.equal(firstImport.inserted, 10);
+    NodeAssert.equal(firstImport.inserted, 10);
 
     const repeatedImport = executeJson([
       "ingest-usage",
@@ -47,8 +47,8 @@ test("nominates evidence-backed opportunities and resumes without duplication", 
       "--input",
       USAGE_FIXTURE,
     ]);
-    assert.equal(repeatedImport.inserted, 0);
-    assert.equal(repeatedImport.duplicates, 10);
+    NodeAssert.equal(repeatedImport.inserted, 0);
+    NodeAssert.equal(repeatedImport.duplicates, 10);
 
     const firstEvaluation = executeJson([
       "evaluate",
@@ -57,19 +57,19 @@ test("nominates evidence-backed opportunities and resumes without duplication", 
       "--now",
       "2026-08-12T12:00:00.000Z",
     ]);
-    assert.equal(firstEvaluation.opportunities_nominated, 3);
+    NodeAssert.equal(firstEvaluation.opportunities_nominated, 3);
 
     const firstQueue = executeJson(["queue", "--state", state]);
-    assert.equal(firstQueue.length, 3);
-    assert.equal(
+    NodeAssert.equal(firstQueue.length, 3);
+    NodeAssert.equal(
       firstQueue.some((item) => item.account.account_id === "acct-noise"),
       false,
     );
-    assert.equal(
+    NodeAssert.equal(
       firstQueue.some((item) => item.trigger.rule_id === "managed-tunnel-capacity-pressure"),
       true,
     );
-    assert.equal(
+    NodeAssert.equal(
       firstQueue.every((item) => item.readiness.delivery_implemented === false),
       true,
     );
@@ -81,98 +81,123 @@ test("nominates evidence-backed opportunities and resumes without duplication", 
       "--now",
       "2026-08-12T12:00:00.000Z",
     ]);
-    assert.equal(secondEvaluation.opportunities_nominated, 3);
-    assert.equal(executeJson(["queue", "--state", state]).length, 3);
+    NodeAssert.equal(secondEvaluation.opportunities_nominated, 3);
+    NodeAssert.equal(executeJson(["queue", "--state", state]).length, 3);
 
     const status = executeJson(["status", "--state", state]);
-    assert.equal(status.counts.source_events, 10);
-    assert.equal(status.capabilities.delivery, false);
-    assert.equal(status.offer_status, "open");
+    NodeAssert.equal(status.counts.source_events, 10);
+    NodeAssert.equal(status.capabilities.delivery, false);
+    NodeAssert.equal(status.offer_status, "open");
   } finally {
-    rmSync(state, { recursive: true, force: true });
+    NodeFS.rmSync(state, { recursive: true, force: true });
   }
 });
 
-test("gates drafts on advancement, confirmed offer, contact reference, and evidence", () => {
-  const state = mkdtempSync(resolve(tmpdir(), "croki-expansion-gate-test-"));
-  try {
-    executeJson(["init", "--state", state]);
-    executeJson(["ingest-accounts", "--state", state, "--input", ACCOUNT_FIXTURE]);
-    executeJson(["ingest-usage", "--state", state, "--input", USAGE_FIXTURE]);
-    executeJson(["evaluate", "--state", state, "--now", "2026-08-12T12:00:00.000Z"]);
-    const opportunity = executeJson(["queue", "--state", state]).find(
-      (item) => item.trigger.rule_id === "multi-environment-remote-workflow",
+NodeTest.test(
+  "gates drafts on advancement, confirmed offer, contact reference, and evidence",
+  () => {
+    const state = NodeFS.mkdtempSync(
+      NodePath.resolve(NodeOS.tmpdir(), "croki-expansion-gate-test-"),
     );
-    assert.ok(opportunity);
+    try {
+      executeJson(["init", "--state", state]);
+      executeJson(["ingest-accounts", "--state", state, "--input", ACCOUNT_FIXTURE]);
+      executeJson(["ingest-usage", "--state", state, "--input", USAGE_FIXTURE]);
+      executeJson(["evaluate", "--state", state, "--now", "2026-08-12T12:00:00.000Z"]);
+      const opportunity = executeJson(["queue", "--state", state]).find(
+        (item) => item.trigger.rule_id === "multi-environment-remote-workflow",
+      );
+      NodeAssert.ok(opportunity);
 
-    const draftFile = resolve(state, "draft.txt");
-    writeFileSync(
-      draftFile,
-      "You are operating Croki across multiple environments. I would like to understand what broader use would require.",
-      "utf8",
-    );
-    const beforeDecision = execute(
-      [
-        "prepare-action",
+      const draftFile = NodePath.resolve(state, "draft.txt");
+      NodeFS.writeFileSync(
+        draftFile,
+        "You are operating Croki across multiple environments. I would like to understand what broader use would require.",
+        "utf8",
+      );
+      const beforeDecision = execute(
+        [
+          "prepare-action",
+          "--state",
+          state,
+          "--id",
+          opportunity.opportunity_id,
+          "--channel",
+          "email",
+          "--content-file",
+          draftFile,
+          "--evidence",
+          opportunity.evidence[0].event_id,
+          "--by",
+          "fixture-reviewer",
+        ],
+        { expectFailure: true },
+      );
+      NodeAssert.match(beforeDecision.stderr, /offer is open/iu);
+
+      executeJson([
+        "decide",
         "--state",
         state,
         "--id",
         opportunity.opportunity_id,
-        "--channel",
-        "email",
-        "--content-file",
-        draftFile,
-        "--evidence",
-        opportunity.evidence[0].event_id,
+        "--verdict",
+        "advance",
+        "--reason",
+        "The fixture contains repeated multi-environment behavior.",
         "--by",
         "fixture-reviewer",
-      ],
-      { expectFailure: true },
-    );
-    assert.match(beforeDecision.stderr, /offer is open/iu);
+      ]);
 
-    executeJson([
-      "decide",
-      "--state",
-      state,
-      "--id",
-      opportunity.opportunity_id,
-      "--verdict",
-      "advance",
-      "--reason",
-      "The fixture contains repeated multi-environment behavior.",
-      "--by",
-      "fixture-reviewer",
-    ]);
+      const stillOpen = execute(
+        [
+          "prepare-action",
+          "--state",
+          state,
+          "--id",
+          opportunity.opportunity_id,
+          "--channel",
+          "email",
+          "--content-file",
+          draftFile,
+          "--evidence",
+          opportunity.evidence[0].event_id,
+          "--by",
+          "fixture-reviewer",
+        ],
+        { expectFailure: true },
+      );
+      NodeAssert.match(stillOpen.stderr, /offer is open/iu);
 
-    const stillOpen = execute(
-      [
-        "prepare-action",
-        "--state",
-        state,
-        "--id",
-        opportunity.opportunity_id,
-        "--channel",
-        "email",
-        "--content-file",
-        draftFile,
-        "--evidence",
-        opportunity.evidence[0].event_id,
-        "--by",
-        "fixture-reviewer",
-      ],
-      { expectFailure: true },
-    );
-    assert.match(stillOpen.stderr, /offer is open/iu);
+      const confirmedPolicy = JSON.parse(NodeFS.readFileSync(POLICY_FILE, "utf8"));
+      confirmedPolicy.policy_version = "fixture-confirmed";
+      confirmedPolicy.offer_status = "confirmed";
+      const confirmedPolicyFile = NodePath.resolve(state, "confirmed-policy.json");
+      NodeFS.writeFileSync(confirmedPolicyFile, JSON.stringify(confirmedPolicy, null, 2), "utf8");
 
-    const confirmedPolicy = JSON.parse(readFileSync(POLICY_FILE, "utf8"));
-    confirmedPolicy.policy_version = "fixture-confirmed";
-    confirmedPolicy.offer_status = "confirmed";
-    const confirmedPolicyFile = resolve(state, "confirmed-policy.json");
-    writeFileSync(confirmedPolicyFile, JSON.stringify(confirmedPolicy, null, 2), "utf8");
+      const wrongEvidence = execute(
+        [
+          "prepare-action",
+          "--state",
+          state,
+          "--policy",
+          confirmedPolicyFile,
+          "--id",
+          opportunity.opportunity_id,
+          "--channel",
+          "email",
+          "--content-file",
+          draftFile,
+          "--evidence",
+          "noise-01",
+          "--by",
+          "fixture-reviewer",
+        ],
+        { expectFailure: true },
+      );
+      NodeAssert.match(wrongEvidence.stderr, /outside the opportunity/iu);
 
-    const wrongEvidence = execute(
-      [
+      const prepared = executeJson([
         "prepare-action",
         "--state",
         state,
@@ -185,46 +210,28 @@ test("gates drafts on advancement, confirmed offer, contact reference, and evide
         "--content-file",
         draftFile,
         "--evidence",
-        "noise-01",
+        opportunity.evidence[0].event_id,
         "--by",
         "fixture-reviewer",
-      ],
-      { expectFailure: true },
-    );
-    assert.match(wrongEvidence.stderr, /outside the opportunity/iu);
+      ]);
+      NodeAssert.equal(prepared.status, "action-drafted");
+      NodeAssert.equal(prepared.delivery_implemented, false);
 
-    const prepared = executeJson([
-      "prepare-action",
-      "--state",
-      state,
-      "--policy",
-      confirmedPolicyFile,
-      "--id",
-      opportunity.opportunity_id,
-      "--channel",
-      "email",
-      "--content-file",
-      draftFile,
-      "--evidence",
-      opportunity.evidence[0].event_id,
-      "--by",
-      "fixture-reviewer",
-    ]);
-    assert.equal(prepared.status, "action-drafted");
-    assert.equal(prepared.delivery_implemented, false);
+      const absentSender = execute(["send", "--state", state], { expectFailure: true });
+      NodeAssert.match(absentSender.stderr, /Unknown command/iu);
+    } finally {
+      NodeFS.rmSync(state, { recursive: true, force: true });
+    }
+  },
+);
 
-    const absentSender = execute(["send", "--state", state], { expectFailure: true });
-    assert.match(absentSender.stderr, /Unknown command/iu);
-  } finally {
-    rmSync(state, { recursive: true, force: true });
-  }
-});
-
-test("normalizes bounded Axiom exports and skips unresolved or irrelevant spans", () => {
-  const state = mkdtempSync(resolve(tmpdir(), "croki-expansion-axiom-test-"));
+NodeTest.test("normalizes bounded Axiom exports and skips unresolved or irrelevant spans", () => {
+  const state = NodeFS.mkdtempSync(
+    NodePath.resolve(NodeOS.tmpdir(), "croki-expansion-axiom-test-"),
+  );
   try {
-    const exportFile = resolve(state, "axiom.ndjson");
-    writeFileSync(
+    const exportFile = NodePath.resolve(state, "axiom.ndjson");
+    NodeFS.writeFileSync(
       exportFile,
       [
         JSON.stringify({
@@ -265,9 +272,9 @@ test("normalizes bounded Axiom exports and skips unresolved or irrelevant spans"
       "utf8",
     );
     const result = executeJson(["ingest-axiom", "--state", state, "--input", exportFile]);
-    assert.equal(result.inserted, 2);
-    assert.equal(result.skipped.unmapped_span, 1);
-    assert.equal(result.skipped.unresolved_account, 1);
+    NodeAssert.equal(result.inserted, 2);
+    NodeAssert.equal(result.skipped.unmapped_span, 1);
+    NodeAssert.equal(result.skipped.unresolved_account, 1);
 
     const evaluation = executeJson([
       "evaluate",
@@ -276,11 +283,11 @@ test("normalizes bounded Axiom exports and skips unresolved or irrelevant spans"
       "--now",
       "2026-08-12T12:00:00.000Z",
     ]);
-    assert.equal(evaluation.opportunities_nominated, 1);
+    NodeAssert.equal(evaluation.opportunities_nominated, 1);
     const packet = executeJson(["queue", "--state", state])[0];
-    assert.equal(packet.trigger.rule_id, "managed-tunnel-capacity-pressure");
-    assert.equal(packet.evidence.length, 1);
-    assert.deepEqual(Object.keys(packet.evidence[0].properties).sort(), [
+    NodeAssert.equal(packet.trigger.rule_id, "managed-tunnel-capacity-pressure");
+    NodeAssert.equal(packet.evidence.length, 1);
+    NodeAssert.deepEqual(Object.keys(packet.evidence[0].properties).sort(), [
       "endpoint",
       "environment_id",
       "error_type",
@@ -290,6 +297,6 @@ test("normalizes bounded Axiom exports and skips unresolved or irrelevant spans"
       "status_code",
     ]);
   } finally {
-    rmSync(state, { recursive: true, force: true });
+    NodeFS.rmSync(state, { recursive: true, force: true });
   }
 });
