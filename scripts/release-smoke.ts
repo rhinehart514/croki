@@ -260,7 +260,7 @@ function assertCrokiReleaseGuards(): void {
     'install_workspace_filters=(\n  "${release_workspace_filters[@]}"\n  --filter "@croki/oxlint-plugin-croki..."',
     'install --frozen-lockfile "${install_workspace_filters[@]}"',
     'run "${release_workspace_filters[@]}" typecheck',
-    'release_test_files=(\n  apps/desktop/src/electron/ElectronUpdater.test.ts\n  apps/desktop/src/updates/DesktopUpdates.test.ts\n  apps/desktop/src/updates/updateChannels.test.ts',
+    "release_test_files=(\n  apps/desktop/src/electron/ElectronUpdater.test.ts\n  apps/desktop/src/updates/DesktopUpdates.test.ts\n  apps/desktop/src/updates/updateChannels.test.ts",
     'test run "${release_test_files[@]}"',
     '"$node_bin" scripts/release-smoke.ts',
     "refs/heads/$branch",
