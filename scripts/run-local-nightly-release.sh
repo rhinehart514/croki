@@ -43,6 +43,9 @@ readonly release_workspace_filters=(
   --filter "@croki/desktop..."
   --filter "croki-server..."
   --filter "@croki/scripts..."
+)
+readonly install_workspace_filters=(
+  "${release_workspace_filters[@]}"
   --filter "@croki/oxlint-plugin-croki..."
 )
 export PATH="$(dirname "$node_bin"):$PATH"
@@ -157,7 +160,7 @@ mkdir -p "$work_root/checkout" "$work_root/artifacts"
 cd "$work_root/checkout"
 
 log "Installing the locked workspace dependencies."
-"$vp_bin" install --frozen-lockfile "${release_workspace_filters[@]}"
+"$vp_bin" install --frozen-lockfile "${install_workspace_filters[@]}"
 "$vp_bin" run --filter @croki/desktop ensure:electron
 
 readonly nightly_date="$(date -u +%Y%m%d)"
