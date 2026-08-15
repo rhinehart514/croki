@@ -116,11 +116,14 @@ The publisher prefers Node 24 from Homebrew and accepts a user-installed Vite+
 binary from its native or pnpm location, or the repository's locked
 `node_modules/.bin/vp`. It fails before
 fetching or building when Node does not satisfy Croki's `^24.13.1` runtime.
-The isolated checkout installs and validates only the desktop artifact's
+The isolated checkout installs and typechecks only the desktop artifact's
 workspace dependency closure (desktop, bundled server, bundled web client, and
 their shared packages), plus the repository lint plugin used by the release
 gate, rather than pulling unrelated mobile and hosted-service dependencies onto
-the release Mac.
+the release Mac. A single test runner then executes the release-critical
+desktop updater, updater UI, artifact, manifest, and nightly-version suites,
+followed by the release smoke guards. Keeping those tests in one runner avoids
+nested test-runner conflicts in an isolated filtered workspace.
 
 This zero-cost path intentionally produces an unsigned/ad-hoc macOS build.
 Users must approve its first launch in macOS. Developer ID signing,

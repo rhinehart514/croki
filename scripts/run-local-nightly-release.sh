@@ -48,6 +48,18 @@ readonly install_workspace_filters=(
   "${release_workspace_filters[@]}"
   --filter "@croki/oxlint-plugin-croki..."
 )
+readonly release_test_files=(
+  apps/desktop/src/electron/ElectronUpdater.test.ts
+  apps/desktop/src/updates/DesktopUpdates.test.ts
+  apps/desktop/src/updates/updateChannels.test.ts
+  apps/web/src/components/desktopUpdate.logic.test.ts
+  apps/web/src/components/desktopUpdate.toast.test.tsx
+  apps/web/src/state/desktopUpdate.test.ts
+  scripts/build-desktop-artifact.test.ts
+  scripts/merge-update-manifests.test.ts
+  scripts/resolve-nightly-release.test.ts
+  scripts/update-release-package-versions.test.ts
+)
 export PATH="$(dirname "$node_bin"):$PATH"
 
 work_root=""
@@ -184,7 +196,8 @@ fi
 log "Validating commit $target_sha before publication."
 "$vp_bin" check
 "$vp_bin" run "${release_workspace_filters[@]}" typecheck
-"$vp_bin" run "${release_workspace_filters[@]}" test
+"$vp_bin" test run "${release_test_files[@]}"
+"$node_bin" scripts/release-smoke.ts
 
 "$node_bin" scripts/update-release-package-versions.ts "$version"
 
