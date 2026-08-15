@@ -116,6 +116,9 @@ The publisher prefers Node 24 from Homebrew and accepts a user-installed Vite+
 binary from its native or pnpm location, or the repository's locked
 `node_modules/.bin/vp`. It fails before
 fetching or building when Node does not satisfy Croki's `^24.13.1` runtime.
+The external Vite+ binary only bootstraps the filtered dependency install; all
+validation, tests, and builds then use the isolated checkout's locked Vite+
+binary so the runner and imported test APIs share one Vitest runtime.
 The isolated checkout installs and typechecks only the desktop artifact's
 workspace dependency closure (desktop, bundled server, bundled web client, and
 their shared packages), plus the repository lint plugin used by the release

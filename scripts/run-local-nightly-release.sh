@@ -173,7 +173,9 @@ cd "$work_root/checkout"
 
 log "Installing the locked workspace dependencies."
 "$vp_bin" install --frozen-lockfile "${install_workspace_filters[@]}"
-"$vp_bin" run --filter @croki/desktop ensure:electron
+readonly checkout_vp_bin="$PWD/node_modules/.bin/vp"
+require_executable "$checkout_vp_bin"
+"$checkout_vp_bin" run --filter @croki/desktop ensure:electron
 
 readonly nightly_date="$(date -u +%Y%m%d)"
 readonly nightly_run_number="$(date -u +%s)"
@@ -194,9 +196,9 @@ if "$gh_bin" release view "$tag" --repo "$update_repository" >/dev/null 2>&1; th
 fi
 
 log "Validating commit $target_sha before publication."
-"$vp_bin" check
-"$vp_bin" run "${release_workspace_filters[@]}" typecheck
-"$vp_bin" test run "${release_test_files[@]}"
+"$checkout_vp_bin" check
+"$checkout_vp_bin" run "${release_workspace_filters[@]}" typecheck
+"$checkout_vp_bin" test run "${release_test_files[@]}"
 "$node_bin" scripts/release-smoke.ts
 
 "$node_bin" scripts/update-release-package-versions.ts "$version"
@@ -204,7 +206,7 @@ log "Validating commit $target_sha before publication."
 log "Building unsigned macOS arm64 artifacts for $tag."
 CROKI_DESKTOP_UPDATE_REPOSITORY="$update_repository" \
   VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE=false \
-  "$vp_bin" run dist:desktop:artifact \
+  "$checkout_vp_bin" run dist:desktop:artifact \
     --platform mac \
     --target dmg \
     --arch arm64 \
