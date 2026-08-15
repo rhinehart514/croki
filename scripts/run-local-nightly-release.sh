@@ -37,6 +37,10 @@ resolve_node_bin() {
 
 readonly vp_bin="$(resolve_vp_bin)"
 readonly node_bin="$(resolve_node_bin)"
+readonly release_workspace_filters=(
+  --filter "@croki/desktop..."
+  --filter "croki-server..."
+)
 export PATH="$(dirname "$node_bin"):$PATH"
 
 work_root=""
@@ -149,7 +153,7 @@ mkdir -p "$work_root/checkout" "$work_root/artifacts"
 cd "$work_root/checkout"
 
 log "Installing the locked workspace dependencies."
-"$vp_bin" install --frozen-lockfile
+"$vp_bin" install --frozen-lockfile "${release_workspace_filters[@]}"
 "$vp_bin" run --filter @croki/desktop ensure:electron
 
 readonly nightly_date="$(date -u +%Y%m%d)"
@@ -172,8 +176,8 @@ fi
 
 log "Validating commit $target_sha before publication."
 "$vp_bin" check
-"$vp_bin" run typecheck
-"$vp_bin" run test
+"$vp_bin" run "${release_workspace_filters[@]}" typecheck
+"$vp_bin" run "${release_workspace_filters[@]}" test
 
 "$node_bin" scripts/update-release-package-versions.ts "$version"
 
