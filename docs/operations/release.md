@@ -118,8 +118,9 @@ binary from its native or pnpm location, or the repository's locked
 fetching or building when Node does not satisfy Croki's `^24.13.1` runtime.
 The isolated checkout installs and validates only the desktop artifact's
 workspace dependency closure (desktop, bundled server, bundled web client, and
-their shared packages), rather than pulling unrelated mobile and hosted-service
-dependencies onto the release Mac.
+their shared packages), plus the repository lint plugin used by the release
+gate, rather than pulling unrelated mobile and hosted-service dependencies onto
+the release Mac.
 
 This zero-cost path intentionally produces an unsigned/ad-hoc macOS build.
 Users must approve its first launch in macOS. Developer ID signing,

@@ -256,7 +256,7 @@ function assertCrokiReleaseGuards(): void {
     'api "repos/$source_repository/git/ref/heads/$branch"',
     "--mirror --filter=blob:none",
     "Removing an incomplete release mirror.",
-    'release_workspace_filters=(\n  --filter "@croki/desktop..."\n  --filter "croki-server..."\n  --filter "@croki/scripts..."',
+    'release_workspace_filters=(\n  --filter "@croki/desktop..."\n  --filter "croki-server..."\n  --filter "@croki/scripts..."\n  --filter "@croki/oxlint-plugin-croki..."',
     'install --frozen-lockfile "${release_workspace_filters[@]}"',
     'run "${release_workspace_filters[@]}" typecheck',
     'run "${release_workspace_filters[@]}" test',

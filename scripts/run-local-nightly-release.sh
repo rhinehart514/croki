@@ -43,6 +43,7 @@ readonly release_workspace_filters=(
   --filter "@croki/desktop..."
   --filter "croki-server..."
   --filter "@croki/scripts..."
+  --filter "@croki/oxlint-plugin-croki..."
 )
 export PATH="$(dirname "$node_bin"):$PATH"
 
