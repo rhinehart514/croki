@@ -21,11 +21,16 @@ the Croki sidebar mark after the upstream sync. See the
 - `croki/main` receives full CI and Croki overlay checks.
 - Pushes to `croki/main` build an unsigned Windows x64 installer artifact.
 - Manual release dispatch defaults to a dry-run destination plan.
-- Tagged and scheduled GitHub release paths can be enabled with
+- Tagged and manually dispatched GitHub release paths can be enabled with
   `CROKI_RELEASE_ENABLED=true`, `CROKI_RELEASE_REPOSITORY=rhinehart514/croki`,
   and `CROKI_RELEASE_BRANCH=croki/main`. Relay, CLI, web, signing, Discord, and
   mobile paths remain skipped unless their own enable flags and configuration
   validate.
+- Nightly macOS arm64 releases run on the Mac Studio at 02:15 local time through
+  `com.croki.nightly-release`. The local publisher checks `croki/main` against
+  the latest nightly tag, validates and builds an isolated checkout, then uploads
+  the DMG and updater metadata directly to GitHub Releases. It does not use
+  GitHub-hosted runners or Actions artifact storage.
 - The local server package is `croki-server` and its metadata points at the
   Croki repository. Set `CROKI_CLI_PUBLISH_ENABLED=true` and
   `CROKI_CLI_PACKAGE=croki-server` only for a release that should publish it to
@@ -77,6 +82,31 @@ npm run release:croki:plan
 npm run release:smoke
 npm run check:croki
 ```
+
+## Zero-cost nightly publisher
+
+Install or refresh the per-user macOS schedule with:
+
+```sh
+npm run release:nightly:install
+```
+
+Test prerequisites and change detection without building or publishing:
+
+```sh
+CROKI_NIGHTLY_DRY_RUN=true npm run release:nightly:local
+```
+
+The publisher requires an Apple Silicon Mac, the repository's pinned Node and
+Vite+ tools, Rust, and an authenticated GitHub CLI. It creates its mirror and
+temporary worktrees under `~/Library/Application Support/Croki Nightly Release`
+and writes launch logs under `~/Library/Logs/Croki`.
+
+This zero-cost path intentionally produces an unsigned/ad-hoc macOS build.
+Users must approve its first launch in macOS. Developer ID signing,
+notarization, and the equivalent silent updater experience require Apple-owned
+credentials and are not claimed by this publisher. Stable cross-platform
+releases remain available through the manually dispatched GitHub workflow.
 
 ## Exact-version update invariant
 

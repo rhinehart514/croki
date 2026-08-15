@@ -174,6 +174,14 @@ function assertCrokiReleaseGuards(): void {
     NodePath.resolve(repoRoot, ".github/workflows/release.yml"),
     "utf8",
   );
+  const localNightlyPublisher = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, "scripts/run-local-nightly-release.sh"),
+    "utf8",
+  );
+  const localNightlyInstaller = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, "scripts/install-local-nightly-launch-agent.sh"),
+    "utf8",
+  );
   const relayWorkflow = NodeFS.readFileSync(
     NodePath.resolve(repoRoot, ".github/workflows/deploy-relay.yml"),
     "utf8",
@@ -205,7 +213,7 @@ function assertCrokiReleaseGuards(): void {
     "dry_run",
     "node scripts/croki-release-plan.ts",
     "inputs.dry_run != true",
-    "needs: [release_guard, check_changes]",
+    "needs: [release_guard]",
     "vars.CROKI_CLI_PUBLISH_ENABLED != 'true' && needs.publish_cli.result == 'skipped'",
     "VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE",
     "croki-release-plan.ts --production",
@@ -226,6 +234,40 @@ function assertCrokiReleaseGuards(): void {
       releaseWorkflow,
       inheritedReleaseTarget,
       `Release workflow still targets inherited T3 release state: ${inheritedReleaseTarget}`,
+    );
+  }
+  assertNotContains(
+    releaseWorkflow,
+    "schedule:",
+    "Release workflow must not schedule billable GitHub-hosted nightlies.",
+  );
+  for (const guard of [
+    "refs/heads/$branch",
+    "No changes on $branch since $latest_nightly_tag",
+    'vp_bin" check',
+    "--platform mac",
+    "--arch arm64",
+    "--prerelease",
+    "--latest=false",
+    'release view "$tag"',
+  ]) {
+    assertContains(
+      localNightlyPublisher,
+      guard,
+      `Local nightly publisher is missing guard: ${guard}`,
+    );
+  }
+  for (const guard of [
+    "com.croki.nightly-release",
+    "StartCalendarInterval",
+    "<integer>2</integer>",
+    "<integer>15</integer>",
+    "launchctl bootstrap",
+  ]) {
+    assertContains(
+      localNightlyInstaller,
+      guard,
+      `Local nightly installer is missing guard: ${guard}`,
     );
   }
 
