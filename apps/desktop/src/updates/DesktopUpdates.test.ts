@@ -304,6 +304,10 @@ describe("DesktopUpdates", () => {
 
         yield* updates.setChannel("nightly");
         assert.equal(harness.fullChangelog(), true);
+        assert.deepEqual(harness.feedUrls().at(-1), {
+          provider: "generic",
+          url: "http://localhost:4141",
+        });
 
         harness.emit("update-available", {
           version: "1.2.4-nightly.20260709.766",

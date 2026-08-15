@@ -3,6 +3,19 @@
 The Croki web or desktop app and the server it connects to work best when they use the same
 version. If they do not match, Croki shows a warning with the right update option for that server.
 
+## Updating the Desktop App
+
+In the desktop app, open **Settings** → **About** and choose an **Update track**:
+
+- **Stable** follows full Croki releases.
+- **Nightly** follows the newest macOS nightly release.
+
+Changing tracks immediately checks that track. When a release is available,
+use **Download** in Settings or the update button in the sidebar. Croki shows
+download progress, then changes the action to **Install** so you can restart
+into the downloaded version. Switching back to Stable uses the stable feed;
+you do not need to download a release manually from GitHub.
+
 ## Where to Find the Update
 
 You may see the warning in either of these places:

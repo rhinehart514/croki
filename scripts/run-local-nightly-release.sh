@@ -8,12 +8,36 @@ readonly branch="${CROKI_NIGHTLY_BRANCH:-croki/main}"
 readonly state_root="${CROKI_NIGHTLY_STATE_ROOT:-$HOME/Library/Application Support/Croki Nightly Release}"
 readonly mirror_dir="$state_root/repository.git"
 readonly lock_dir="$state_root/run.lock"
-readonly vp_bin="${CROKI_NIGHTLY_VP_BIN:-$HOME/.vite-plus/bin/vp}"
 readonly gh_bin="${CROKI_NIGHTLY_GH_BIN:-/opt/homebrew/bin/gh}"
-readonly node_bin="${CROKI_NIGHTLY_NODE_BIN:-/opt/homebrew/bin/node}"
 readonly git_bin="${CROKI_NIGHTLY_GIT_BIN:-/usr/bin/git}"
 readonly unzip_bin="${CROKI_NIGHTLY_UNZIP_BIN:-/usr/bin/unzip}"
 readonly dry_run="${CROKI_NIGHTLY_DRY_RUN:-false}"
+readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly repository_root="$(cd "$script_dir/.." && pwd)"
+
+resolve_vp_bin() {
+  if [[ -n "${CROKI_NIGHTLY_VP_BIN:-}" ]]; then
+    printf '%s\n' "$CROKI_NIGHTLY_VP_BIN"
+  elif [[ -x "$HOME/.vite-plus/bin/vp" ]]; then
+    printf '%s\n' "$HOME/.vite-plus/bin/vp"
+  else
+    printf '%s\n' "$repository_root/node_modules/.bin/vp"
+  fi
+}
+
+resolve_node_bin() {
+  if [[ -n "${CROKI_NIGHTLY_NODE_BIN:-}" ]]; then
+    printf '%s\n' "$CROKI_NIGHTLY_NODE_BIN"
+  elif [[ -x "/opt/homebrew/opt/node@24/bin/node" ]]; then
+    printf '%s\n' "/opt/homebrew/opt/node@24/bin/node"
+  else
+    printf '%s\n' "/opt/homebrew/bin/node"
+  fi
+}
+
+readonly vp_bin="$(resolve_vp_bin)"
+readonly node_bin="$(resolve_node_bin)"
+export PATH="$(dirname "$node_bin"):$PATH"
 
 work_root=""
 
@@ -58,6 +82,11 @@ for executable in "$vp_bin" "$gh_bin" "$node_bin" "$git_bin" "$unzip_bin"; do
   require_executable "$executable"
 done
 
+"$node_bin" -e '
+  const [major, minor, patch] = process.versions.node.split(".").map(Number);
+  if (major !== 24 || minor < 13 || (minor === 13 && patch < 1)) process.exit(1);
+' || fail "Local nightlies require Node ^24.13.1; found $($node_bin --version) at $node_bin."
+
 mkdir -p "$state_root"
 if ! mkdir "$lock_dir" 2>/dev/null; then
   if [[ -f "$lock_dir/pid" ]]; then
@@ -76,16 +105,24 @@ trap cleanup EXIT INT TERM
 
 "$gh_bin" auth status --hostname github.com >/dev/null 2>&1 || fail "GitHub CLI is not authenticated."
 
-if [[ ! -d "$mirror_dir" ]]; then
-  log "Creating the isolated release mirror."
-  "$gh_bin" repo clone "$source_repository" "$mirror_dir" -- --mirror
-fi
-
-log "Fetching $source_repository and pruning stale refs."
-"$git_bin" --git-dir="$mirror_dir" remote update --prune
-
 readonly branch_ref="refs/heads/$branch"
-target_sha="$("$git_bin" --git-dir="$mirror_dir" rev-parse "$branch_ref")" || fail "Branch $branch was not found in $source_repository."
+if [[ "$dry_run" == "true" ]]; then
+  target_sha="$("$gh_bin" api "repos/$source_repository/git/ref/heads/$branch" --jq .object.sha)" || fail "Branch $branch was not found in $source_repository."
+else
+  if [[ -d "$mirror_dir" ]] &&
+    [[ "$("$git_bin" --git-dir="$mirror_dir" rev-parse --is-bare-repository 2>/dev/null || true)" != "true" ]]; then
+    log "Removing an incomplete release mirror."
+    rm -rf "$mirror_dir"
+  fi
+  if [[ ! -d "$mirror_dir" ]]; then
+    log "Creating the isolated release mirror."
+    "$gh_bin" repo clone "$source_repository" "$mirror_dir" -- --mirror --filter=blob:none
+  fi
+
+  log "Fetching $source_repository and pruning stale refs."
+  "$git_bin" --git-dir="$mirror_dir" remote update --prune
+  target_sha="$("$git_bin" --git-dir="$mirror_dir" rev-parse "$branch_ref")" || fail "Branch $branch was not found in $source_repository."
+fi
 latest_nightly_tag="$("$gh_bin" release list --repo "$update_repository" --limit 100 \
   --json tagName,isPrerelease,publishedAt \
   --jq '[.[] | select(.isPrerelease and (.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\.")))] | sort_by(.publishedAt) | reverse | .[0].tagName // ""')"

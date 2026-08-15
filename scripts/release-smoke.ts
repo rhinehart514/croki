@@ -249,6 +249,12 @@ function assertCrokiReleaseGuards(): void {
   for (const guard of [
     'source_repository="${CROKI_NIGHTLY_SOURCE_REPOSITORY:-rhinehart514/croki}"',
     'update_repository="${CROKI_NIGHTLY_UPDATE_REPOSITORY:-rhinehart514/croki-releases}"',
+    "repository_root/node_modules/.bin/vp",
+    "/opt/homebrew/opt/node@24/bin/node",
+    "Local nightlies require Node ^24.13.1",
+    'api "repos/$source_repository/git/ref/heads/$branch"',
+    "--mirror --filter=blob:none",
+    "Removing an incomplete release mirror.",
     "refs/heads/$branch",
     "No changes on $branch since $latest_source_sha",
     'rm -f "$lock_dir/pid"',

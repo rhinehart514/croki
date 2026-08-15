@@ -28,7 +28,10 @@ import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
-import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
+import {
+  resolveDefaultDesktopUpdateChannel,
+  resolveDesktopGitHubUpdateFeed,
+} from "./updateChannels.ts";
 import {
   createInitialDesktopUpdateState,
   reduceDesktopUpdateStateOnCheckFailure,
@@ -332,6 +335,20 @@ export const make = Effect.gen(function* () {
   ) {
     yield* Effect.annotateCurrentSpan({ channel });
     const allowsPrerelease = channel === "nightly";
+    if (config.mockUpdates) {
+      yield* electronUpdater.setFeedURL({
+        provider: "generic",
+        url: `http://localhost:${config.mockUpdateServerPort}`,
+      } as ElectronUpdater.ElectronUpdaterFeedUrl);
+    } else {
+      const appUpdateYmlConfig = yield* Ref.get(appUpdateYmlConfigRef);
+      if (Option.isSome(appUpdateYmlConfig)) {
+        const feed = resolveDesktopGitHubUpdateFeed(appUpdateYmlConfig.value, channel);
+        if (feed) {
+          yield* electronUpdater.setFeedURL(feed as ElectronUpdater.ElectronUpdaterFeedUrl);
+        }
+      }
+    }
     yield* electronUpdater.setChannel(channel);
     yield* electronUpdater.setAllowPrerelease(allowsPrerelease);
     yield* electronUpdater.setAllowDowngrade(allowsPrerelease);
@@ -715,13 +732,6 @@ export const make = Effect.gen(function* () {
 
       const appUpdateYmlConfig = yield* readAppUpdateYml;
       yield* Ref.set(appUpdateYmlConfigRef, appUpdateYmlConfig);
-
-      if (config.mockUpdates) {
-        yield* electronUpdater.setFeedURL({
-          provider: "generic",
-          url: `http://localhost:${config.mockUpdateServerPort}`,
-        } as ElectronUpdater.ElectronUpdaterFeedUrl);
-      }
 
       const settings = yield* desktopSettings.get;
       const enabled = yield* shouldEnableAutoUpdates;
