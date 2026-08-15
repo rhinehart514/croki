@@ -247,13 +247,17 @@ function assertCrokiReleaseGuards(): void {
     "Local nightly publisher must forward build flags without a positional delimiter.",
   );
   for (const guard of [
+    'source_repository="${CROKI_NIGHTLY_SOURCE_REPOSITORY:-rhinehart514/croki}"',
+    'update_repository="${CROKI_NIGHTLY_UPDATE_REPOSITORY:-rhinehart514/croki-releases}"',
     "refs/heads/$branch",
-    "No changes on $branch since $latest_nightly_tag",
+    "No changes on $branch since $latest_source_sha",
     'rm -f "$lock_dir/pid"',
     'vp_bin" check',
     "--platform mac",
     "--arch arm64",
-    'CROKI_DESKTOP_UPDATE_REPOSITORY="$repository"',
+    'CROKI_DESKTOP_UPDATE_REPOSITORY="$update_repository"',
+    "Croki source commit: $target_sha",
+    '--repo "$update_repository"',
     "--prerelease",
     "--latest=false",
     'release view "$tag"',
@@ -264,6 +268,11 @@ function assertCrokiReleaseGuards(): void {
       `Local nightly publisher is missing guard: ${guard}`,
     );
   }
+  assertNotContains(
+    localNightlyPublisher,
+    '--target "$target_sha"',
+    "Public binary releases must not target an unreachable private source commit.",
+  );
   for (const guard of [
     "com.croki.nightly-release",
     "StartCalendarInterval",

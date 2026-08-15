@@ -28,8 +28,11 @@ the Croki sidebar mark after the upstream sync. See the
   validate.
 - Nightly macOS arm64 releases run on the Mac Studio at 02:15 local time through
   `com.croki.nightly-release`. The local publisher checks `croki/main` against
-  the latest nightly tag, validates and builds an isolated checkout, then uploads
-  the DMG and updater metadata directly to GitHub Releases. It does not use
+  the source commit recorded on the latest nightly, validates and builds an
+  isolated checkout from the private `rhinehart514/croki` repository, then
+  uploads the DMG and updater metadata to the public binary-only
+  `rhinehart514/croki-releases` repository. That public repository lets the
+  packaged app fetch updates without a GitHub token. The publisher does not use
   GitHub-hosted runners or Actions artifact storage.
 - The local server package is `croki-server` and its metadata points at the
   Croki repository. Set `CROKI_CLI_PUBLISH_ENABLED=true` and
@@ -100,7 +103,10 @@ CROKI_NIGHTLY_DRY_RUN=true npm run release:nightly:local
 The publisher requires an Apple Silicon Mac, the repository's pinned Node and
 Vite+ tools, Rust, and an authenticated GitHub CLI. It creates its mirror and
 temporary worktrees under `~/Library/Application Support/Croki Nightly Release`
-and writes launch logs under `~/Library/Logs/Croki`.
+and writes launch logs under `~/Library/Logs/Croki`. Override the private source
+with `CROKI_NIGHTLY_SOURCE_REPOSITORY` or the public updater destination with
+`CROKI_NIGHTLY_UPDATE_REPOSITORY`; their defaults are `rhinehart514/croki` and
+`rhinehart514/croki-releases` respectively.
 
 This zero-cost path intentionally produces an unsigned/ad-hoc macOS build.
 Users must approve its first launch in macOS. Developer ID signing,
