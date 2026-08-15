@@ -137,7 +137,7 @@ log "Validating commit $target_sha before publication."
 
 log "Building unsigned macOS arm64 artifacts for $tag."
 VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE=false \
-  "$vp_bin" run dist:desktop:artifact -- \
+  "$vp_bin" run dist:desktop:artifact \
     --platform mac \
     --target dmg \
     --arch arm64 \

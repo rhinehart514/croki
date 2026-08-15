@@ -241,6 +241,11 @@ function assertCrokiReleaseGuards(): void {
     "schedule:",
     "Release workflow must not schedule billable GitHub-hosted nightlies.",
   );
+  assertNotContains(
+    localNightlyPublisher,
+    "run dist:desktop:artifact -- \\\\",
+    "Local nightly publisher must forward build flags without a positional delimiter.",
+  );
   for (const guard of [
     "refs/heads/$branch",
     "No changes on $branch since $latest_nightly_tag",
