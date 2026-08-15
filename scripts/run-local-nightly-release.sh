@@ -20,6 +20,8 @@ resolve_vp_bin() {
     printf '%s\n' "$CROKI_NIGHTLY_VP_BIN"
   elif [[ -x "$HOME/.vite-plus/bin/vp" ]]; then
     printf '%s\n' "$HOME/.vite-plus/bin/vp"
+  elif [[ -x "$HOME/Library/pnpm/vp" ]]; then
+    printf '%s\n' "$HOME/Library/pnpm/vp"
   else
     printf '%s\n' "$repository_root/node_modules/.bin/vp"
   fi
@@ -40,6 +42,7 @@ readonly node_bin="$(resolve_node_bin)"
 readonly release_workspace_filters=(
   --filter "@croki/desktop..."
   --filter "croki-server..."
+  --filter "@croki/scripts..."
 )
 export PATH="$(dirname "$node_bin"):$PATH"
 

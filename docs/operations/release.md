@@ -112,8 +112,9 @@ with `CROKI_NIGHTLY_SOURCE_REPOSITORY` or the public updater destination with
 `CROKI_NIGHTLY_UPDATE_REPOSITORY`; their defaults are `rhinehart514/croki` and
 `rhinehart514/croki-releases` respectively.
 
-The publisher prefers Node 24 from Homebrew and accepts either a user-installed
-Vite+ binary or the repository's locked `node_modules/.bin/vp`. It fails before
+The publisher prefers Node 24 from Homebrew and accepts a user-installed Vite+
+binary from its native or pnpm location, or the repository's locked
+`node_modules/.bin/vp`. It fails before
 fetching or building when Node does not satisfy Croki's `^24.13.1` runtime.
 The isolated checkout installs and validates only the desktop artifact's
 workspace dependency closure (desktop, bundled server, bundled web client, and
