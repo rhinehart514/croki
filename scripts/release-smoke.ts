@@ -244,6 +244,7 @@ function assertCrokiReleaseGuards(): void {
   for (const guard of [
     "refs/heads/$branch",
     "No changes on $branch since $latest_nightly_tag",
+    'rm -f "$lock_dir/pid"',
     'vp_bin" check',
     "--platform mac",
     "--arch arm64",

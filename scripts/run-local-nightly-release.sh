@@ -34,6 +34,7 @@ cleanup() {
   if [[ -n "$work_root" && -d "$work_root" ]]; then
     rm -rf "$work_root"
   fi
+  rm -f "$lock_dir/pid"
   rmdir "$lock_dir" >/dev/null 2>&1 || true
   exit "$exit_code"
 }
@@ -64,6 +65,7 @@ if ! mkdir "$lock_dir" 2>/dev/null; then
       exit 0
     fi
   fi
+  rm -f "$lock_dir/pid"
   rmdir "$lock_dir" 2>/dev/null || fail "Could not clear stale release lock at $lock_dir."
   mkdir "$lock_dir" || fail "Could not acquire release lock at $lock_dir."
 fi
