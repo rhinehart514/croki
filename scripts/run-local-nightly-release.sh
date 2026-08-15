@@ -136,7 +136,8 @@ log "Validating commit $target_sha before publication."
 "$node_bin" scripts/update-release-package-versions.ts "$version"
 
 log "Building unsigned macOS arm64 artifacts for $tag."
-VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE=false \
+CROKI_DESKTOP_UPDATE_REPOSITORY="$repository" \
+  VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE=false \
   "$vp_bin" run dist:desktop:artifact \
     --platform mac \
     --target dmg \

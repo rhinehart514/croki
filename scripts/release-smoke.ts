@@ -253,6 +253,7 @@ function assertCrokiReleaseGuards(): void {
     'vp_bin" check',
     "--platform mac",
     "--arch arm64",
+    'CROKI_DESKTOP_UPDATE_REPOSITORY="$repository"',
     "--prerelease",
     "--latest=false",
     'release view "$tag"',
