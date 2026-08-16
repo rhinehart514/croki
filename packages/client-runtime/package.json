@@ -135,6 +135,18 @@
       "types": "./src/state/subagentRuntime.ts",
       "default": "./src/state/subagentRuntime.ts"
     },
+    "./state/thread-evidence": {
+      "types": "./src/state/threadEvidence.ts",
+      "default": "./src/state/threadEvidence.ts"
+    },
+    "./state/current-reality": {
+      "types": "./src/state/current-reality.ts",
+      "default": "./src/state/current-reality.ts"
+    },
+    "./state/turn-result": {
+      "types": "./src/state/turn-result.ts",
+      "default": "./src/state/turn-result.ts"
+    },
     "./state/thread-sort": {
       "types": "./src/state/threadSort.ts",
       "default": "./src/state/threadSort.ts"
