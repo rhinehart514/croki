@@ -105,6 +105,7 @@ import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as ProjectAccessService from "./identity/ProjectAccessService.ts";
 import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import * as PresenceService from "./presence/PresenceService.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
@@ -430,6 +431,7 @@ const makeWsRpcLayer = (
         ),
       );
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const projectAccess = yield* ProjectAccessService.ProjectAccessService;
       const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
       const automaticGitFetchInterval = serverSettings.getSettings.pipe(
         Effect.map(
@@ -1874,6 +1876,64 @@ const makeWsRpcLayer = (
             {
               "rpc.aggregate": "source-control",
             },
+          ),
+        [WS_METHODS.identityCurrent]: (_input) =>
+          observeRpcEffect(WS_METHODS.identityCurrent, projectAccess.current(currentSessionId), {
+            "rpc.aggregate": "identity",
+          }),
+        [WS_METHODS.identityRegister]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.identityRegister,
+            projectAccess.register(currentSessionId, input),
+            { "rpc.aggregate": "identity" },
+          ),
+        [WS_METHODS.projectsEnsureOwner]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsEnsureOwner,
+            projectAccess.ensureProjectOwner(currentSessionId, input.projectId),
+            { "rpc.aggregate": "project-access" },
+          ),
+        [WS_METHODS.projectsCreateInvitation]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsCreateInvitation,
+            projectAccess.createInvitation(currentSessionId, input),
+            { "rpc.aggregate": "project-access" },
+          ),
+        [WS_METHODS.projectsAcceptInvitation]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsAcceptInvitation,
+            projectAccess.acceptInvitation(currentSessionId, input),
+            { "rpc.aggregate": "project-access" },
+          ),
+        [WS_METHODS.projectsListMembers]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsListMembers,
+            projectAccess.listMembers(currentSessionId, input.projectId),
+            { "rpc.aggregate": "project-access" },
+          ),
+        [WS_METHODS.projectsListInvitations]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsListInvitations,
+            projectAccess.listInvitations(currentSessionId, input),
+            { "rpc.aggregate": "project-access" },
+          ),
+        [WS_METHODS.projectsRevokeInvitation]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsRevokeInvitation,
+            projectAccess.revokeInvitation(currentSessionId, input),
+            { "rpc.aggregate": "project-access" },
+          ),
+        [WS_METHODS.projectsRemoveMember]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsRemoveMember,
+            projectAccess.removeMember(currentSessionId, input),
+            { "rpc.aggregate": "project-access" },
+          ),
+        [WS_METHODS.projectsTransferOwnership]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsTransferOwnership,
+            projectAccess.transferOwnership(currentSessionId, input),
+            { "rpc.aggregate": "project-access" },
           ),
         [WS_METHODS.projectsSearchEntries]: (input) =>
           observeRpcEffect(

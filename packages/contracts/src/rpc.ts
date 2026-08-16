@@ -9,6 +9,25 @@ import {
   EnvironmentAuthorizationError,
 } from "./auth.ts";
 import {
+  IdentityCurrent,
+  IdentityOperationError,
+  IdentityRegisterInput,
+  ProjectInvitationAcceptInput,
+  ProjectInvitationCreateInput,
+  ProjectInvitationCreated,
+  ProjectInvitationError,
+  ProjectInvitationListInput,
+  ProjectInvitationListResult,
+  ProjectInvitationRevokeInput,
+  ProjectMembership,
+  ProjectMembershipError,
+  ProjectMembershipEnsureOwnerInput,
+  ProjectMembershipListInput,
+  ProjectMembershipListResult,
+  ProjectMembershipRemoveInput,
+  ProjectMembershipTransferInput,
+} from "./identity.ts";
+import {
   BackgroundPolicySnapshot,
   ClientActivityReportInput,
   HostPowerSnapshot,
@@ -203,6 +222,16 @@ export const WS_METHODS = {
   projectsList: "projects.list",
   projectsAdd: "projects.add",
   projectsRemove: "projects.remove",
+  identityCurrent: "identity.current",
+  identityRegister: "identity.register",
+  projectsEnsureOwner: "projects.ensureOwner",
+  projectsCreateInvitation: "projects.createInvitation",
+  projectsAcceptInvitation: "projects.acceptInvitation",
+  projectsListMembers: "projects.listMembers",
+  projectsListInvitations: "projects.listInvitations",
+  projectsRevokeInvitation: "projects.revokeInvitation",
+  projectsRemoveMember: "projects.removeMember",
+  projectsTransferOwnership: "projects.transferOwnership",
   projectsListEntries: "projects.listEntries",
   projectsListComponents: "projects.listComponents",
   projectsReadFile: "projects.readFile",
@@ -604,6 +633,101 @@ export const WsSourceControlPublishRepositoryRpc = Rpc.make(
     error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
   },
 );
+
+export const WsIdentityCurrentRpc = Rpc.make(WS_METHODS.identityCurrent, {
+  payload: Schema.Struct({}),
+  success: IdentityCurrent,
+  error: Schema.Union([IdentityOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsIdentityRegisterRpc = Rpc.make(WS_METHODS.identityRegister, {
+  payload: IdentityRegisterInput,
+  success: IdentityCurrent,
+  error: Schema.Union([IdentityOperationError, EnvironmentAuthorizationError]),
+});
+
+export const WsProjectsEnsureOwnerRpc = Rpc.make(WS_METHODS.projectsEnsureOwner, {
+  payload: ProjectMembershipEnsureOwnerInput,
+  success: ProjectMembership,
+  error: Schema.Union([
+    ProjectMembershipError,
+    IdentityOperationError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const WsProjectsCreateInvitationRpc = Rpc.make(WS_METHODS.projectsCreateInvitation, {
+  payload: ProjectInvitationCreateInput,
+  success: ProjectInvitationCreated,
+  error: Schema.Union([
+    ProjectInvitationError,
+    ProjectMembershipError,
+    IdentityOperationError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const WsProjectsAcceptInvitationRpc = Rpc.make(WS_METHODS.projectsAcceptInvitation, {
+  payload: ProjectInvitationAcceptInput,
+  success: ProjectMembership,
+  error: Schema.Union([
+    ProjectInvitationError,
+    ProjectMembershipError,
+    IdentityOperationError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const WsProjectsListMembersRpc = Rpc.make(WS_METHODS.projectsListMembers, {
+  payload: ProjectMembershipListInput,
+  success: ProjectMembershipListResult,
+  error: Schema.Union([
+    ProjectMembershipError,
+    IdentityOperationError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const WsProjectsListInvitationsRpc = Rpc.make(WS_METHODS.projectsListInvitations, {
+  payload: ProjectInvitationListInput,
+  success: ProjectInvitationListResult,
+  error: Schema.Union([
+    ProjectMembershipError,
+    IdentityOperationError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const WsProjectsRevokeInvitationRpc = Rpc.make(WS_METHODS.projectsRevokeInvitation, {
+  payload: ProjectInvitationRevokeInput,
+  success: Schema.Void,
+  error: Schema.Union([
+    ProjectInvitationError,
+    ProjectMembershipError,
+    IdentityOperationError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const WsProjectsRemoveMemberRpc = Rpc.make(WS_METHODS.projectsRemoveMember, {
+  payload: ProjectMembershipRemoveInput,
+  success: Schema.Void,
+  error: Schema.Union([
+    ProjectMembershipError,
+    IdentityOperationError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const WsProjectsTransferOwnershipRpc = Rpc.make(WS_METHODS.projectsTransferOwnership, {
+  payload: ProjectMembershipTransferInput,
+  success: ProjectMembership,
+  error: Schema.Union([
+    ProjectMembershipError,
+    IdentityOperationError,
+    EnvironmentAuthorizationError,
+  ]),
+});
 
 export const WsProjectsSearchEntriesRpc = Rpc.make(WS_METHODS.projectsSearchEntries, {
   payload: ProjectSearchEntriesInput,
@@ -1059,6 +1183,16 @@ export const WsRpcGroup = RpcGroup.make(
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
+  WsIdentityCurrentRpc,
+  WsIdentityRegisterRpc,
+  WsProjectsEnsureOwnerRpc,
+  WsProjectsCreateInvitationRpc,
+  WsProjectsAcceptInvitationRpc,
+  WsProjectsListMembersRpc,
+  WsProjectsListInvitationsRpc,
+  WsProjectsRevokeInvitationRpc,
+  WsProjectsRemoveMemberRpc,
+  WsProjectsTransferOwnershipRpc,
   WsProjectsListEntriesRpc,
   WsProjectsListComponentsRpc,
   WsProjectsReadFileRpc,

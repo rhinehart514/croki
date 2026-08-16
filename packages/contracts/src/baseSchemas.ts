@@ -68,6 +68,12 @@ export const TurnId = makeEntityId("TurnId");
 export type TurnId = typeof TurnId.Type;
 export const AuthSessionId = makeEntityId("AuthSessionId");
 export type AuthSessionId = typeof AuthSessionId.Type;
+export const PersonId = makeEntityId("PersonId");
+export type PersonId = typeof PersonId.Type;
+export const DeviceId = makeEntityId("DeviceId");
+export type DeviceId = typeof DeviceId.Type;
+export const ProjectInvitationId = makeEntityId("ProjectInvitationId");
+export type ProjectInvitationId = typeof ProjectInvitationId.Type;
 export const RpcClientId = NonNegativeInt.pipe(Schema.brand("RpcClientId"));
 export type RpcClientId = typeof RpcClientId.Type;
 

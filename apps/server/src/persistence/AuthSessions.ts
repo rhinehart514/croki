@@ -8,8 +8,10 @@ import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 
 import {
   AuthClientMetadataDeviceType,
+  DeviceId,
   AuthEnvironmentScopes,
   AuthSessionId,
+  PersonId,
   ServerAuthSessionMethod,
 } from "@croki/contracts";
 
@@ -33,6 +35,8 @@ export type AuthSessionClientMetadataRecord = typeof AuthSessionClientMetadataRe
 export const AuthSessionRecord = Schema.Struct({
   sessionId: AuthSessionId,
   subject: Schema.String,
+  personId: Schema.NullOr(PersonId),
+  deviceId: Schema.NullOr(DeviceId),
   scopes: AuthEnvironmentScopes,
   method: ServerAuthSessionMethod,
   client: AuthSessionClientMetadataRecord,
@@ -46,6 +50,8 @@ export type AuthSessionRecord = typeof AuthSessionRecord.Type;
 export const CreateAuthSessionInput = Schema.Struct({
   sessionId: AuthSessionId,
   subject: Schema.String,
+  personId: Schema.optionalKey(PersonId),
+  deviceId: Schema.optionalKey(DeviceId),
   scopes: AuthEnvironmentScopes,
   method: ServerAuthSessionMethod,
   client: AuthSessionClientMetadataRecord,
@@ -82,6 +88,25 @@ export const SetAuthSessionLastConnectedAtInput = Schema.Struct({
 });
 export type SetAuthSessionLastConnectedAtInput = typeof SetAuthSessionLastConnectedAtInput.Type;
 
+export const BindAuthSessionInput = Schema.Struct({
+  sessionId: AuthSessionId,
+  personId: PersonId,
+  deviceId: DeviceId,
+});
+export type BindAuthSessionInput = typeof BindAuthSessionInput.Type;
+
+export const RevokeAuthSessionsByDeviceInput = Schema.Struct({
+  deviceId: DeviceId,
+  revokedAt: Schema.DateTimeUtcFromString,
+});
+export type RevokeAuthSessionsByDeviceInput = typeof RevokeAuthSessionsByDeviceInput.Type;
+
+export const RevokeAuthSessionsByPersonInput = Schema.Struct({
+  personId: PersonId,
+  revokedAt: Schema.DateTimeUtcFromString,
+});
+export type RevokeAuthSessionsByPersonInput = typeof RevokeAuthSessionsByPersonInput.Type;
+
 export class AuthSessionRepository extends Context.Service<
   AuthSessionRepository,
   {
@@ -103,12 +128,23 @@ export class AuthSessionRepository extends Context.Service<
     readonly setLastConnectedAt: (
       input: SetAuthSessionLastConnectedAtInput,
     ) => Effect.Effect<void, AuthSessionRepositoryError>;
+    readonly bindIdentity: (
+      input: BindAuthSessionInput,
+    ) => Effect.Effect<boolean, AuthSessionRepositoryError>;
+    readonly revokeByDevice: (
+      input: RevokeAuthSessionsByDeviceInput,
+    ) => Effect.Effect<ReadonlyArray<AuthSessionId>, AuthSessionRepositoryError>;
+    readonly revokeByPerson: (
+      input: RevokeAuthSessionsByPersonInput,
+    ) => Effect.Effect<ReadonlyArray<AuthSessionId>, AuthSessionRepositoryError>;
   }
 >()("croki-server/persistence/AuthSessions/AuthSessionRepository") {}
 
 const AuthSessionDbRow = Schema.Struct({
   sessionId: AuthSessionId,
   subject: Schema.String,
+  personId: Schema.NullOr(PersonId),
+  deviceId: Schema.NullOr(DeviceId),
   scopes: Schema.fromJsonString(AuthEnvironmentScopes),
   method: ServerAuthSessionMethod,
   clientLabel: Schema.NullOr(Schema.String),
@@ -126,6 +162,8 @@ const AuthSessionDbRow = Schema.Struct({
 const AuthSessionRawDbRow = Schema.Struct({
   sessionId: Schema.String,
   subject: Schema.Unknown,
+  personId: Schema.Unknown,
+  deviceId: Schema.Unknown,
   scopes: Schema.Unknown,
   method: Schema.Unknown,
   clientLabel: Schema.Unknown,
@@ -146,6 +184,8 @@ function toAuthSessionRecord(row: typeof AuthSessionDbRow.Type): AuthSessionReco
   return {
     sessionId: row.sessionId,
     subject: row.subject,
+    personId: row.personId,
+    deviceId: row.deviceId,
     scopes: row.scopes,
     method: row.method,
     client: {
@@ -188,6 +228,8 @@ export const make = Effect.gen(function* () {
         INSERT INTO auth_sessions (
           session_id,
           subject,
+          person_id,
+          device_id,
           scopes,
           method,
           client_label,
@@ -203,6 +245,8 @@ export const make = Effect.gen(function* () {
         VALUES (
           ${input.sessionId},
           ${input.subject},
+          ${input.personId ?? null},
+          ${input.deviceId ?? null},
           ${JSON.stringify(input.scopes)},
           ${input.method},
           ${input.client.label},
@@ -226,6 +270,8 @@ export const make = Effect.gen(function* () {
         SELECT
           session_id AS "sessionId",
           subject AS "subject",
+          person_id AS "personId",
+          device_id AS "deviceId",
           scopes AS "scopes",
           method AS "method",
           client_label AS "clientLabel",
@@ -251,6 +297,8 @@ export const make = Effect.gen(function* () {
         SELECT
           session_id AS "sessionId",
           subject AS "subject",
+          person_id AS "personId",
+          device_id AS "deviceId",
           scopes AS "scopes",
           method AS "method",
           client_label AS "clientLabel",
@@ -278,6 +326,47 @@ export const make = Effect.gen(function* () {
         SET last_connected_at = ${lastConnectedAt}
         WHERE session_id = ${sessionId}
           AND revoked_at IS NULL
+      `,
+  });
+
+  const bindIdentityRow = SqlSchema.findAll({
+    Request: BindAuthSessionInput,
+    Result: Schema.Struct({ sessionId: AuthSessionId }),
+    execute: ({ sessionId, personId, deviceId }) =>
+      sql`
+        UPDATE auth_sessions
+        SET person_id = ${personId}, device_id = ${deviceId}
+        WHERE session_id = ${sessionId}
+          AND revoked_at IS NULL
+          AND (person_id IS NULL OR person_id = ${personId})
+          AND (device_id IS NULL OR device_id = ${deviceId})
+        RETURNING session_id AS "sessionId"
+      `,
+  });
+
+  const revokeSessionsByDeviceRows = SqlSchema.findAll({
+    Request: RevokeAuthSessionsByDeviceInput,
+    Result: Schema.Struct({ sessionId: AuthSessionId }),
+    execute: ({ deviceId, revokedAt }) =>
+      sql`
+        UPDATE auth_sessions
+        SET revoked_at = ${revokedAt}
+        WHERE device_id = ${deviceId}
+          AND revoked_at IS NULL
+        RETURNING session_id AS "sessionId"
+      `,
+  });
+
+  const revokeSessionsByPersonRows = SqlSchema.findAll({
+    Request: RevokeAuthSessionsByPersonInput,
+    Result: Schema.Struct({ sessionId: AuthSessionId }),
+    execute: ({ personId, revokedAt }) =>
+      sql`
+        UPDATE auth_sessions
+        SET revoked_at = ${revokedAt}
+        WHERE person_id = ${personId}
+          AND revoked_at IS NULL
+        RETURNING session_id AS "sessionId"
       `,
   });
 
@@ -404,6 +493,40 @@ export const make = Effect.gen(function* () {
       ),
     );
 
+  const bindIdentity: AuthSessionRepository["Service"]["bindIdentity"] = (input) =>
+    bindIdentityRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "AuthSessionRepository.bindIdentity:query",
+          "AuthSessionRepository.bindIdentity:decodeRows",
+          { sessionId: input.sessionId },
+        ),
+      ),
+      Effect.map((rows) => rows.length > 0),
+    );
+
+  const revokeByDevice: AuthSessionRepository["Service"]["revokeByDevice"] = (input) =>
+    revokeSessionsByDeviceRows(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "AuthSessionRepository.revokeByDevice:query",
+          "AuthSessionRepository.revokeByDevice:decodeRows",
+        ),
+      ),
+      Effect.map((rows) => rows.map((row) => row.sessionId)),
+    );
+
+  const revokeByPerson: AuthSessionRepository["Service"]["revokeByPerson"] = (input) =>
+    revokeSessionsByPersonRows(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "AuthSessionRepository.revokeByPerson:query",
+          "AuthSessionRepository.revokeByPerson:decodeRows",
+        ),
+      ),
+      Effect.map((rows) => rows.map((row) => row.sessionId)),
+    );
+
   return {
     create,
     getById,
@@ -411,6 +534,9 @@ export const make = Effect.gen(function* () {
     revoke,
     revokeAllExcept,
     setLastConnectedAt,
+    bindIdentity,
+    revokeByDevice,
+    revokeByPerson,
   } satisfies AuthSessionRepository["Service"];
 });
 

@@ -86,6 +86,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import { authHttpApiLayer, environmentAuthenticatedAuthLayer } from "./auth/http.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as ProjectAccessService from "./identity/ProjectAccessService.ts";
 import {
   connectHttpApiLayer,
   pendingServiceUpdateExists,
@@ -401,7 +402,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(ProjectFaviconResolverLayerLive),
   Layer.provideMerge(RepositoryIdentityResolver.layer),
   Layer.provideMerge(ServerEnvironment.layer),
-  Layer.provideMerge(AuthLayerLive),
+  Layer.provideMerge(ProjectAccessService.layer.pipe(Layer.provideMerge(AuthLayerLive))),
   Layer.provideMerge(ServerSecretStore.layer),
   Layer.provideMerge(
     Layer.mergeAll(

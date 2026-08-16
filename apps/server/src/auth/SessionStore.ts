@@ -2,6 +2,8 @@ import {
   AuthSessionId,
   AuthStandardClientScopes,
   AuthEnvironmentScopes,
+  type DeviceId,
+  type PersonId,
   type AuthClientMetadata,
   type AuthClientSession,
   type AuthEnvironmentScope,
@@ -38,6 +40,8 @@ export interface IssuedSession {
   readonly expiresAt: DateTime.DateTime;
   readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
   readonly proofKeyThumbprint?: string;
+  readonly personId?: PersonId;
+  readonly deviceId?: DeviceId;
 }
 
 export interface VerifiedSession {
@@ -49,6 +53,8 @@ export interface VerifiedSession {
   readonly subject: string;
   readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
   readonly proofKeyThumbprint?: string;
+  readonly personId?: PersonId;
+  readonly deviceId?: DeviceId;
 }
 
 export type SessionCredentialChange =
@@ -366,6 +372,8 @@ export class SessionStore extends Context.Service<
       readonly scopes?: ReadonlyArray<AuthEnvironmentScope>;
       readonly client?: AuthClientMetadata;
       readonly proofKeyThumbprint?: string;
+      readonly personId?: PersonId;
+      readonly deviceId?: DeviceId;
     }) => Effect.Effect<IssuedSession, SessionCredentialInternalError>;
     readonly verify: (token: string) => Effect.Effect<VerifiedSession, SessionCredentialError>;
     readonly issueWebSocketToken: (
@@ -499,6 +507,8 @@ export const make = Effect.gen(function* () {
         toAuthClientSession({
           sessionId: row.value.sessionId,
           subject: row.value.subject,
+          ...(row.value.personId === null ? {} : { personId: row.value.personId }),
+          ...(row.value.deviceId === null ? {} : { deviceId: row.value.deviceId }),
           scopes: row.value.scopes,
           method: row.value.method,
           client: toClientMetadata(row.value.client),
@@ -624,6 +634,8 @@ export const make = Effect.gen(function* () {
             os: client.os ?? null,
             browser: client.browser ?? null,
           },
+          ...(input?.personId === undefined ? {} : { personId: input.personId }),
+          ...(input?.deviceId === undefined ? {} : { deviceId: input.deviceId }),
           issuedAt,
           expiresAt,
         })
@@ -639,6 +651,8 @@ export const make = Effect.gen(function* () {
           expiresAt,
           lastConnectedAt: null,
           connected: false,
+          ...(input?.personId === undefined ? {} : { personId: input.personId }),
+          ...(input?.deviceId === undefined ? {} : { deviceId: input.deviceId }),
         }),
       );
 
@@ -650,6 +664,8 @@ export const make = Effect.gen(function* () {
         expiresAt: expiresAt,
         scopes: claims.scopes,
         ...(claims.jkt ? { proofKeyThumbprint: claims.jkt } : {}),
+        ...(input?.personId === undefined ? {} : { personId: input.personId }),
+        ...(input?.deviceId === undefined ? {} : { deviceId: input.deviceId }),
       } satisfies IssuedSession;
     },
   );
@@ -712,6 +728,8 @@ export const make = Effect.gen(function* () {
         subject: claims.sub,
         scopes: claims.scopes,
         ...(claims.jkt ? { proofKeyThumbprint: claims.jkt } : {}),
+        ...(row.value.personId === null ? {} : { personId: row.value.personId }),
+        ...(row.value.deviceId === null ? {} : { deviceId: row.value.deviceId }),
       } satisfies VerifiedSession;
     },
   );
@@ -817,6 +835,8 @@ export const make = Effect.gen(function* () {
       expiresAt: row.value.expiresAt,
       subject: row.value.subject,
       scopes: row.value.scopes,
+      ...(row.value.personId === null ? {} : { personId: row.value.personId }),
+      ...(row.value.deviceId === null ? {} : { deviceId: row.value.deviceId }),
     } satisfies VerifiedSession;
   });
 
@@ -830,6 +850,8 @@ export const make = Effect.gen(function* () {
         toAuthClientSession({
           sessionId: row.sessionId,
           subject: row.subject,
+          ...(row.personId === null ? {} : { personId: row.personId }),
+          ...(row.deviceId === null ? {} : { deviceId: row.deviceId }),
           scopes: row.scopes,
           method: row.method,
           client: toClientMetadata(row.client),

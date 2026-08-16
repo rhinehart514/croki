@@ -12,6 +12,8 @@ import {
   type AuthPairingLink,
   type AuthPairingCredentialResult,
   type AuthSessionId,
+  type DeviceId,
+  type PersonId,
   type AuthSessionState,
   type ServerAuthDescriptor,
   type ServerAuthSessionMethod,
@@ -69,6 +71,8 @@ export interface AuthenticatedSession {
   readonly client: AuthClientMetadata;
   readonly proofKeyThumbprint?: string;
   readonly expiresAt?: DateTime.DateTime;
+  readonly personId?: PersonId;
+  readonly deviceId?: DeviceId;
 }
 
 const serverAuthInternalErrorContext = {
@@ -590,6 +594,8 @@ export const make = Effect.gen(function* () {
         client: session.client,
         ...(session.proofKeyThumbprint ? { proofKeyThumbprint: session.proofKeyThumbprint } : {}),
         ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
+        ...(session.personId ? { personId: session.personId } : {}),
+        ...(session.deviceId ? { deviceId: session.deviceId } : {}),
       })),
       mapSessionVerificationErrors,
     );
@@ -957,6 +963,8 @@ export const make = Effect.gen(function* () {
               scopes: session.scopes,
               client: session.client,
               ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
+              ...(session.personId ? { personId: session.personId } : {}),
+              ...(session.deviceId ? { deviceId: session.deviceId } : {}),
             })),
             mapSessionVerificationErrors,
           );
