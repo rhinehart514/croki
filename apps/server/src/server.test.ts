@@ -140,6 +140,7 @@ import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as ProjectAccessService from "./identity/ProjectAccessService.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
@@ -276,7 +277,8 @@ const browserOtlpTracingLayer = Layer.mergeAll(
 );
 
 const makeAuthTestLayer = () =>
-  EnvironmentAuth.layer.pipe(
+  ProjectAccessService.layer.pipe(
+    Layer.provideMerge(EnvironmentAuth.layer),
     Layer.provide(SqlitePersistenceMemory),
     Layer.provide(ServerSecretStore.layer),
   );

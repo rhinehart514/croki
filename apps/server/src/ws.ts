@@ -370,6 +370,8 @@ function toAuthAccessStreamEvent(
 const makeWsRpcLayer = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
+  presence: PresenceService.PresenceService["Service"],
+  projectAccess: ProjectAccessService.ProjectAccessService["Service"],
 ) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -407,7 +409,6 @@ const makeWsRpcLayer = (
       const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
-      const presence = yield* PresenceService.PresenceService;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
       const presenceParticipantIds = yield* Ref.make(new Set<string>());
       yield* Effect.addFinalizer(() =>
@@ -435,7 +436,6 @@ const makeWsRpcLayer = (
         ),
       );
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
-      const projectAccess = yield* ProjectAccessService.ProjectAccessService;
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const resourceAuthorization = ResourceAuthorization.make({
@@ -2922,6 +2922,8 @@ export const websocketRpcRouteLayer = Layer.unwrap(
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
+    const presence = yield* PresenceService.PresenceService;
+    const projectAccess = yield* ProjectAccessService.ProjectAccessService;
     return HttpRouter.add(
       "GET",
       "/ws",
@@ -2941,7 +2943,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           disableTracing: true,
         }).pipe(
           Effect.provide(
-            makeWsRpcLayer(session, previewAutomationBroker).pipe(
+            makeWsRpcLayer(session, previewAutomationBroker, presence, projectAccess).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
@@ -2985,4 +2987,4 @@ export const websocketRpcRouteLayer = Layer.unwrap(
       ),
     );
   }),
-);
+).pipe(Layer.provide(PresenceService.layer));
