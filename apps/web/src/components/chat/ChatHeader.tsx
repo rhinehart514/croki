@@ -42,6 +42,7 @@ import {
   WorkspaceBreadcrumbSeparator,
 } from "../WorkspaceBreadcrumb";
 import { cn } from "~/lib/utils";
+import { ThreadPresenceSummary } from "./ThreadPresence";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -300,6 +301,11 @@ export const ChatHeader = memo(function ChatHeader({
           )}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
+      <ThreadPresenceSummary
+        enabled={isServerThread}
+        environmentId={activeThreadEnvironmentId}
+        threadId={activeThreadId}
+      />
       <div
         data-chat-header-actions
         className={cn(

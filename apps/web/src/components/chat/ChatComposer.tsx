@@ -106,6 +106,7 @@ import { buildExpandedImagePreview, type ExpandedImagePreview } from "./Expanded
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
 import { Separator } from "../ui/separator";
+import { ThreadTypingIndicator, useThreadPresenceController } from "./ThreadPresence";
 
 type ComposerCommandMenuPosition = {
   bottom: number;
@@ -956,6 +957,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isMobileViewport = useMediaQuery("max-sm");
   const isComposerCollapsedMobile =
     isMobileViewport && !forceExpandedOnMobile && !isComposerFocused;
+
+  useThreadPresenceController({
+    environmentId,
+    threadId: activeThreadId,
+    enabled: _isServerThread && activeThreadId !== null,
+    typing: isComposerFocused && prompt.trim().length > 0,
+  });
 
   // ------------------------------------------------------------------
   // Refs
@@ -2655,6 +2663,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       className="mx-auto w-full min-w-0 max-w-3xl"
       data-chat-composer-form="true"
     >
+      <ThreadTypingIndicator
+        enabled={_isServerThread && activeThreadId !== null}
+        environmentId={environmentId}
+        threadId={activeThreadId}
+      />
       <div
         className={cn(
           "group rounded-[22px] p-px transition-colors duration-200",

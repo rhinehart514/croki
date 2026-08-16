@@ -196,6 +196,7 @@ import {
   CodexVoiceStartInput,
   CodexVoiceThreadInput,
 } from "./codexVoice.ts";
+import { PresenceStreamEvent, PresenceSubscribeInput, PresenceUpdateInput } from "./presence.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -319,6 +320,10 @@ export const WS_METHODS = {
   subscribeBackgroundPolicy: "subscribeBackgroundPolicy",
   subscribeResourceTelemetry: "subscribeResourceTelemetry",
   codexVoiceSubscribe: "codexVoice.subscribe",
+
+  // Ephemeral collaboration signals (never persisted)
+  presenceUpdate: "presence.update",
+  presenceSubscribe: "presence.subscribe",
 } as const;
 
 export const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -996,10 +1001,25 @@ export const WsCodexVoiceSubscribeRpc = Rpc.make(WS_METHODS.codexVoiceSubscribe,
   stream: true,
 });
 
+export const WsPresenceUpdateRpc = Rpc.make(WS_METHODS.presenceUpdate, {
+  payload: PresenceUpdateInput,
+  success: Schema.Void,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsPresenceSubscribeRpc = Rpc.make(WS_METHODS.presenceSubscribe, {
+  payload: PresenceSubscribeInput,
+  success: PresenceStreamEvent,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
 export const WsRpcGroup = RpcGroup.make(
   WsCodexVoiceStartRpc,
   WsCodexVoiceStopRpc,
   WsCodexVoiceSubscribeRpc,
+  WsPresenceUpdateRpc,
+  WsPresenceSubscribeRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,

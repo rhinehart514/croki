@@ -106,6 +106,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
+import * as PresenceService from "./presence/PresenceService.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
@@ -401,7 +402,9 @@ const makeWsRpcLayer = (
       const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
+      const presence = yield* PresenceService.PresenceService;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
+      const presenceParticipantIds = yield* Ref.make(new Set<string>());
       yield* Effect.addFinalizer(() =>
         Ref.get(rpcClientIds).pipe(
           Effect.flatMap((clientIds) =>
@@ -412,6 +415,16 @@ const makeWsRpcLayer = (
                 discard: true,
               },
             ),
+          ),
+          Effect.ignore,
+        ),
+      );
+      yield* Effect.addFinalizer(() =>
+        Ref.get(presenceParticipantIds).pipe(
+          Effect.flatMap((participantIds) =>
+            Effect.forEach(participantIds, (participantId) => presence.leave(participantId), {
+              discard: true,
+            }),
           ),
           Effect.ignore,
         ),
@@ -506,6 +519,16 @@ const makeWsRpcLayer = (
       const serverEventId = randomUUID.pipe(Effect.map(EventId.make));
       const serverCommandId = (tag: string) =>
         randomUUID.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
+
+      const presenceIdentityFor = (metadata: { readonly client: { readonly id: number } }) => {
+        const participantId = `${currentSessionId}:${metadata.client.id}`;
+        return {
+          participantId,
+          label: (currentSession.client.label ?? currentSession.subject) || "Anonymous",
+          deviceType: currentSession.client.deviceType,
+          ...(currentSession.client.os ? { os: currentSession.client.os } : {}),
+        };
+      };
 
       const loadAuthAccessSnapshot = () =>
         Effect.all({
@@ -1699,6 +1722,28 @@ const makeWsRpcLayer = (
               ),
             ),
           ),
+        [WS_METHODS.presenceUpdate]: (input, metadata) => {
+          const identity = presenceIdentityFor(metadata);
+          return Ref.update(presenceParticipantIds, (participantIds) => {
+            const next = new Set(participantIds);
+            next.add(identity.participantId);
+            return next;
+          }).pipe(
+            Effect.andThen(
+              observeRpcEffect(WS_METHODS.presenceUpdate, presence.update(identity, input), {
+                "rpc.aggregate": "presence",
+              }),
+            ),
+          );
+        },
+        [WS_METHODS.presenceSubscribe]: (input, metadata) => {
+          const identity = presenceIdentityFor(metadata);
+          return observeRpcStreamEffect(
+            WS_METHODS.presenceSubscribe,
+            presence.subscribe(input, identity.participantId),
+            { "rpc.aggregate": "presence" },
+          );
+        },
         [WS_METHODS.serverReportHostPowerState]: (input) =>
           observeRpcEffect(
             WS_METHODS.serverReportHostPowerState,
