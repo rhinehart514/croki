@@ -37,6 +37,7 @@ import {
   ThreadUnsnoozedPayload,
   ThreadRevertedPayload,
   ThreadSessionSetPayload,
+  ThreadTurnStartRequestedPayload,
   ThreadTurnDiffCompletedPayload,
 } from "./Schemas.ts";
 
@@ -207,7 +208,12 @@ function openBlockingRequestIds(
     if (requestId === null) continue;
     if (activity.kind === "approval.requested" || activity.kind === "user-input.requested") {
       openRequestIds.add(requestId);
-    } else if (activity.kind === "approval.resolved" || activity.kind === "user-input.resolved") {
+    } else if (
+      activity.kind === "approval.resolved" ||
+      activity.kind === "user-input.resolved" ||
+      activity.kind === "approval.response.accepted" ||
+      activity.kind === "user-input.response.accepted"
+    ) {
       openRequestIds.delete(requestId);
     } else if (
       activity.kind === "provider.approval.respond.failed" ||
@@ -337,6 +343,7 @@ export function projectEvent(
             parentThreadId: payload.parentThreadId ?? null,
             workerView: "threads",
             latestTurn: null,
+            queuedTurnStarts: [],
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
             archivedAt: null,
@@ -757,6 +764,54 @@ export function projectEvent(
         };
       });
 
+    case "thread.turn-start-requested":
+      return decodeForEvent(
+        ThreadTurnStartRequestedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => {
+          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          if (!thread) {
+            return nextBase;
+          }
+
+          // The pending-start projection also keeps the current start while
+          // provider startup is in flight. The read-model queue is narrower:
+          // it contains only ordinary sends explicitly accepted behind an
+          // active turn, never the current start itself.
+          if (payload.queued !== true) {
+            return nextBase;
+          }
+
+          const queuedTurnStarts = [
+            ...(thread.queuedTurnStarts ?? []).filter(
+              (entry) => entry.messageId !== payload.messageId,
+            ),
+            {
+              messageId: payload.messageId,
+              requestedAt: payload.createdAt,
+              ...(payload.sourceProposedPlan !== undefined
+                ? { sourceProposedPlan: payload.sourceProposedPlan }
+                : {}),
+            },
+          ].toSorted(
+            (left, right) =>
+              left.requestedAt.localeCompare(right.requestedAt) ||
+              left.messageId.localeCompare(right.messageId),
+          );
+
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              queuedTurnStarts,
+              updatedAt: event.occurredAt,
+            }),
+          };
+        }),
+      );
+
     case "thread.session-set":
       return Effect.gen(function* () {
         const payload = yield* decodeForEvent(
@@ -777,6 +832,21 @@ export function projectEvent(
           "session",
         );
 
+        // A transition into a new running turn adopts exactly one queued
+        // primary start.  Repeated session writes for the same active turn
+        // must not consume additional FIFO entries.
+        const isNewRunningTurn =
+          session.status === "running" &&
+          session.activeTurnId !== null &&
+          !(
+            thread.session?.status === "running" &&
+            thread.session.activeTurnId === session.activeTurnId
+          );
+        const queuedTurnStarts =
+          isNewRunningTurn && (thread.queuedTurnStarts?.length ?? 0) > 0
+            ? thread.queuedTurnStarts?.slice(1)
+            : thread.queuedTurnStarts;
+
         // Leaving the "running" session status is the turn-end signal: settle
         // a still-running latest turn so its duration reflects the whole turn.
         const settledTurnState = settledTurnStateForSessionStatus(session.status);
@@ -784,6 +854,7 @@ export function projectEvent(
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, {
             session,
+            ...(queuedTurnStarts !== undefined ? { queuedTurnStarts } : {}),
             latestTurn:
               session.status === "running" && session.activeTurnId !== null
                 ? {

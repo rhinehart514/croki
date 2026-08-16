@@ -22,6 +22,7 @@ import {
   type OrchestrationProject,
   type OrchestrationSession,
   type OrchestrationThreadActivity,
+  type OrchestrationQueuedTurnStart,
   type OrchestrationThreadShell,
   ModelSelection,
   ProjectId,
@@ -53,6 +54,7 @@ import { ProjectionThreadMessage } from "../../persistence/Services/ProjectionTh
 import { ProjectionThreadProposedPlan } from "../../persistence/Services/ProjectionThreadProposedPlans.ts";
 import { ProjectionThreadSession } from "../../persistence/Services/ProjectionThreadSessions.ts";
 import { ProjectionThread } from "../../persistence/Services/ProjectionThreads.ts";
+import { ProjectionPendingTurnStart } from "../../persistence/Services/ProjectionTurns.ts";
 import {
   decodeThreadDetailPageCursor,
   encodeThreadDetailPageCursor,
@@ -97,6 +99,7 @@ const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
   }),
 );
 const ProjectionThreadSessionDbRowSchema = ProjectionThreadSession;
+const ProjectionPendingTurnStartDbRowSchema = ProjectionPendingTurnStart;
 const ProjectionCheckpointDbRowSchema = ProjectionCheckpoint.mapFields(
   Struct.assign({
     files: Schema.fromJsonString(Schema.Array(OrchestrationCheckpointFile)),
@@ -142,6 +145,16 @@ const ProjectIdLookupInput = Schema.Struct({
 const ThreadIdLookupInput = Schema.Struct({
   threadId: ThreadId,
 });
+
+// The projection table uses one pending placeholder for the start currently
+// being opened, followed by durable FIFO placeholders for later ordinary
+// sends.  The placeholder is an internal binding detail, so read models expose
+// only the actual next-turn queue while a provider session is starting.
+const visibleQueuedTurnStarts = (
+  pending: ReadonlyArray<OrchestrationQueuedTurnStart>,
+  session: OrchestrationSession | null,
+): ReadonlyArray<OrchestrationQueuedTurnStart> =>
+  session?.status === "starting" && session.activeTurnId === null ? pending.slice(1) : pending;
 // Windowed reads order turns by the stable keyset (anchor, turn key), where
 // anchor is requested_at and turn key is
 // COALESCE(turn_id, ''). Both are event-derived, so cursors survive the
@@ -650,6 +663,26 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           updated_at AS "updatedAt"
         FROM projection_thread_sessions
         ORDER BY thread_id ASC
+      `,
+  });
+
+  const listPendingTurnStartRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionPendingTurnStartDbRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          thread_id AS "threadId",
+          pending_message_id AS "messageId",
+          source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
+          source_proposed_plan_id AS "sourceProposedPlanId",
+          requested_at AS "requestedAt"
+        FROM projection_turns
+        WHERE turn_id IS NULL
+          AND state = 'pending'
+          AND pending_message_id IS NOT NULL
+          AND checkpoint_turn_count IS NULL
+        ORDER BY thread_id ASC, requested_at ASC, pending_message_id ASC
       `,
   });
 
@@ -1178,6 +1211,27 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  const listPendingTurnStartRowsByThread = SqlSchema.findAll({
+    Request: ThreadIdLookupInput,
+    Result: ProjectionPendingTurnStartDbRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT
+          thread_id AS "threadId",
+          pending_message_id AS "messageId",
+          source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
+          source_proposed_plan_id AS "sourceProposedPlanId",
+          requested_at AS "requestedAt"
+        FROM projection_turns
+        WHERE thread_id = ${threadId}
+          AND turn_id IS NULL
+          AND state = 'pending'
+          AND pending_message_id IS NOT NULL
+          AND checkpoint_turn_count IS NULL
+        ORDER BY requested_at ASC, pending_message_id ASC
+      `,
+  });
+
   const getThreadSessionRowByThread = SqlSchema.findOneOption({
     Request: ThreadIdLookupInput,
     Result: ProjectionThreadSessionDbRowSchema,
@@ -1520,6 +1574,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               ),
             ),
           ),
+          listPendingTurnStartRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getSnapshot:listPendingTurnStarts:query",
+                "ProjectionSnapshotQuery.getSnapshot:listPendingTurnStarts:decodeRows",
+              ),
+            ),
+          ),
           listCheckpointRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -1555,6 +1617,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             proposedPlanRows,
             activityRows,
             sessionRows,
+            pendingTurnStartRows,
             checkpointRows,
             latestTurnRows,
             stateRows,
@@ -1566,6 +1629,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               const checkpointsByThread = new Map<string, Array<OrchestrationCheckpointSummary>>();
               const sessionsByThread = new Map<string, OrchestrationSession>();
               const latestTurnByThread = new Map<string, OrchestrationLatestTurn>();
+              const pendingTurnStartsByThread = new Map<
+                string,
+                Array<OrchestrationQueuedTurnStart>
+              >();
 
               let updatedAt: string | null = null;
 
@@ -1693,6 +1760,24 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 });
               }
 
+              for (const row of pendingTurnStartRows) {
+                updatedAt = maxIso(updatedAt, row.requestedAt);
+                const pending = pendingTurnStartsByThread.get(row.threadId) ?? [];
+                pending.push({
+                  messageId: row.messageId,
+                  requestedAt: row.requestedAt,
+                  ...(row.sourceProposedPlanThreadId !== null && row.sourceProposedPlanId !== null
+                    ? {
+                        sourceProposedPlan: {
+                          threadId: row.sourceProposedPlanThreadId,
+                          planId: row.sourceProposedPlanId,
+                        },
+                      }
+                    : {}),
+                });
+                pendingTurnStartsByThread.set(row.threadId, pending);
+              }
+
               const repositoryIdentities = yield* resolveRepositoryIdentitiesForProjects(
                 projectRows,
                 { includeDeleted: true },
@@ -1725,6 +1810,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 parentThreadId: row.parentThreadId,
                 workerView: row.workerView,
                 latestTurn: latestTurnByThread.get(row.threadId) ?? null,
+                queuedTurnStarts: visibleQueuedTurnStarts(
+                  pendingTurnStartsByThread.get(row.threadId) ?? [],
+                  sessionsByThread.get(row.threadId) ?? null,
+                ),
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
                 archivedAt: row.archivedAt,
@@ -1793,11 +1882,27 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               ),
             ),
           ),
+          listThreadActivityRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listThreadActivities:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listThreadActivities:decodeRows",
+              ),
+            ),
+          ),
           listThreadSessionRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
                 "ProjectionSnapshotQuery.getCommandReadModel:listThreadSessions:query",
                 "ProjectionSnapshotQuery.getCommandReadModel:listThreadSessions:decodeRows",
+              ),
+            ),
+          ),
+          listPendingTurnStartRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listPendingTurnStarts:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listPendingTurnStarts:decodeRows",
               ),
             ),
           ),
@@ -1821,7 +1926,16 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       )
       .pipe(
         Effect.flatMap(
-          ([projectRows, threadRows, proposedPlanRows, sessionRows, latestTurnRows, stateRows]) =>
+          ([
+            projectRows,
+            threadRows,
+            proposedPlanRows,
+            activityRows,
+            sessionRows,
+            pendingTurnStartRows,
+            latestTurnRows,
+            stateRows,
+          ]) =>
             Effect.sync(() => {
               let updatedAt: string | null = null;
               const projects: OrchestrationProject[] = [];
@@ -1897,6 +2011,11 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 latestTurnByThread.set(row.threadId, mapLatestTurn(row));
               }
               const proposedPlansByThread = new Map<string, Array<OrchestrationProposedPlan>>();
+              const activitiesByThread = new Map<string, Array<OrchestrationThreadActivity>>();
+              const pendingTurnStartsByThread = new Map<
+                string,
+                Array<OrchestrationQueuedTurnStart>
+              >();
               const sessionByThread = new Map<string, OrchestrationSession>();
 
               for (let index = 0; index < sessionRows.length; index += 1) {
@@ -1905,6 +2024,46 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   continue;
                 }
                 sessionByThread.set(row.threadId, mapSessionRow(row));
+              }
+
+              for (let index = 0; index < activityRows.length; index += 1) {
+                const row = activityRows[index];
+                if (!row) {
+                  continue;
+                }
+                const threadActivities = activitiesByThread.get(row.threadId) ?? [];
+                threadActivities.push({
+                  id: row.activityId,
+                  tone: row.tone,
+                  kind: row.kind,
+                  summary: row.summary,
+                  payload: row.payload,
+                  turnId: row.turnId,
+                  ...(row.sequence !== null ? { sequence: row.sequence } : {}),
+                  createdAt: row.createdAt,
+                });
+                activitiesByThread.set(row.threadId, threadActivities);
+              }
+
+              for (let index = 0; index < pendingTurnStartRows.length; index += 1) {
+                const row = pendingTurnStartRows[index];
+                if (!row) {
+                  continue;
+                }
+                const pending = pendingTurnStartsByThread.get(row.threadId) ?? [];
+                pending.push({
+                  messageId: row.messageId,
+                  requestedAt: row.requestedAt,
+                  ...(row.sourceProposedPlanThreadId !== null && row.sourceProposedPlanId !== null
+                    ? {
+                        sourceProposedPlan: {
+                          threadId: row.sourceProposedPlanThreadId,
+                          planId: row.sourceProposedPlanId,
+                        },
+                      }
+                    : {}),
+                });
+                pendingTurnStartsByThread.set(row.threadId, pending);
               }
 
               for (let index = 0; index < proposedPlanRows.length; index += 1) {
@@ -1935,6 +2094,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   parentThreadId: row.parentThreadId,
                   workerView: row.workerView,
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
+                  queuedTurnStarts: visibleQueuedTurnStarts(
+                    pendingTurnStartsByThread.get(row.threadId) ?? [],
+                    sessionByThread.get(row.threadId) ?? null,
+                  ),
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
                   archivedAt: row.archivedAt,
@@ -1948,7 +2111,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   deletedAt: row.deletedAt,
                   messages: [],
                   proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
-                  activities: [],
+                  activities: activitiesByThread.get(row.threadId) ?? [],
                   checkpoints: [],
                   session: sessionByThread.get(row.threadId) ?? null,
                 });
@@ -2666,6 +2829,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         checkpointRows,
         latestTurnRow,
         sessionRow,
+        pendingTurnStartRows,
       ] = yield* Effect.all([
         getActiveThreadRowById({ threadId }).pipe(
           Effect.mapError(
@@ -2729,6 +2893,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             ),
           ),
         ),
+        listPendingTurnStartRowsByThread({ threadId }).pipe(
+          Effect.mapError(
+            toPersistenceSqlOrDecodeError(
+              "ProjectionSnapshotQuery.getThreadDetailById:listPendingTurnStarts:query",
+              "ProjectionSnapshotQuery.getThreadDetailById:listPendingTurnStarts:decodeRows",
+            ),
+          ),
+        ),
       ]);
 
       if (Option.isNone(threadRow)) {
@@ -2748,6 +2920,21 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         parentThreadId: threadRow.value.parentThreadId,
         workerView: threadRow.value.workerView,
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
+        queuedTurnStarts: visibleQueuedTurnStarts(
+          pendingTurnStartRows.map((row) => ({
+            messageId: row.messageId,
+            requestedAt: row.requestedAt,
+            ...(row.sourceProposedPlanThreadId !== null && row.sourceProposedPlanId !== null
+              ? {
+                  sourceProposedPlan: {
+                    threadId: row.sourceProposedPlanThreadId,
+                    planId: row.sourceProposedPlanId,
+                  },
+                }
+              : {}),
+          })),
+          Option.isSome(sessionRow) ? mapSessionRow(sessionRow.value) : null,
+        ),
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,
         archivedAt: threadRow.value.archivedAt,

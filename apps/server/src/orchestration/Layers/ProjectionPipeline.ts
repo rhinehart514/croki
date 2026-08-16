@@ -176,7 +176,12 @@ function sourceMessagesForFork(
 }
 
 function activityEndsOpenRequest(activity: ProjectionThreadActivity): boolean {
-  if (activity.kind === "approval.resolved" || activity.kind === "user-input.resolved") {
+  if (
+    activity.kind === "approval.resolved" ||
+    activity.kind === "user-input.resolved" ||
+    activity.kind === "approval.response.accepted" ||
+    activity.kind === "user-input.response.accepted"
+  ) {
     return true;
   }
   if (
@@ -270,6 +275,11 @@ function derivePendingUserInputCountFromActivities(
     }
 
     if (activity.kind === "user-input.resolved") {
+      openRequestIds.delete(requestId);
+      continue;
+    }
+
+    if (activity.kind === "user-input.response.accepted") {
       openRequestIds.delete(requestId);
       continue;
     }
@@ -1600,13 +1610,18 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         }
 
         case "thread.turn-start-requested": {
-          yield* projectionTurnRepository.replacePendingTurnStart({
+          const pendingStart = {
             threadId: event.payload.threadId,
             messageId: event.payload.messageId,
             sourceProposedPlanThreadId: event.payload.sourceProposedPlan?.threadId ?? null,
             sourceProposedPlanId: event.payload.sourceProposedPlan?.planId ?? null,
             requestedAt: event.payload.createdAt,
-          });
+          };
+          if (event.payload.queued === true) {
+            yield* projectionTurnRepository.enqueuePendingTurnStart(pendingStart);
+          } else {
+            yield* projectionTurnRepository.replacePendingTurnStart(pendingStart);
+          }
           return;
         }
 
@@ -1619,14 +1634,27 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         case "thread.session-set": {
           const turnId = event.payload.session.activeTurnId;
           if (turnId === null || event.payload.session.status !== "running") {
+            const previousSession = yield* projectionThreadSessionRepository.getByThreadId({
+              threadId: event.payload.threadId,
+            });
             if (
-              event.payload.session.status === "error" ||
-              event.payload.session.status === "stopped" ||
-              event.payload.session.status === "interrupted"
+              (event.payload.session.status === "error" ||
+                event.payload.session.status === "stopped" ||
+                event.payload.session.status === "interrupted") &&
+              (Option.isNone(previousSession) || previousSession.value.status !== "running")
             ) {
-              yield* projectionTurnRepository.deletePendingTurnStartByThreadId({
+              // A startup failure has no active primary turn to release. Drop
+              // only its oldest pending placeholder so ordinary sends queued
+              // behind that failed start remain durable and FIFO.
+              const pendingStart = yield* projectionTurnRepository.getPendingTurnStartByThreadId({
                 threadId: event.payload.threadId,
               });
+              if (Option.isSome(pendingStart)) {
+                yield* projectionTurnRepository.deletePendingTurnStartByMessageId({
+                  threadId: event.payload.threadId,
+                  messageId: pendingStart.value.messageId,
+                });
+              }
             }
             // Leaving the "running" session status is the turn-end signal:
             // settle still-running turns so their duration reflects the whole
@@ -1747,9 +1775,12 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             });
           }
 
-          yield* projectionTurnRepository.deletePendingTurnStartByThreadId({
-            threadId: event.payload.threadId,
-          });
+          if (Option.isSome(pendingTurnStart)) {
+            yield* projectionTurnRepository.deletePendingTurnStartByMessageId({
+              threadId: event.payload.threadId,
+              messageId: pendingTurnStart.value.messageId,
+            });
+          }
           return;
         }
 
@@ -1953,7 +1984,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           const existingRow = yield* projectionPendingApprovalRepository.getByRequestId({
             requestId,
           });
-          if (event.payload.activity.kind === "approval.resolved") {
+          if (
+            event.payload.activity.kind === "approval.resolved" ||
+            event.payload.activity.kind === "approval.response.accepted"
+          ) {
             const resolvedDecisionRaw =
               typeof event.payload.activity.payload === "object" &&
               event.payload.activity.payload !== null &&

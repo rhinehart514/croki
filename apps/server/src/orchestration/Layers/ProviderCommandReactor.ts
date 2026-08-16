@@ -65,6 +65,13 @@ type ProviderIntentEvent = Extract<
       | "thread.session-stop-requested";
   }
 >;
+type TurnStartRequestedEvent = Extract<
+  ProviderIntentEvent,
+  { type: "thread.turn-start-requested" }
+>;
+type ProviderWorkerEvent =
+  | ProviderIntentEvent
+  | Extract<OrchestrationEvent, { type: "thread.session-set" }>;
 
 function toNonEmptyProviderInput(value: string | undefined): string | undefined {
   const normalized = value?.trim();
@@ -341,6 +348,31 @@ const make = Effect.gen(function* () {
     );
 
   const threadModelSelections = new Map<string, ModelSelection>();
+  // The event store is the source of truth for the durable queue; these maps
+  // only serialize provider side effects between projection updates. A thread
+  // can have at most one provider turn in this lane at a time.
+  const queuedTurnStartsByThread = new Map<ThreadId, Array<TurnStartRequestedEvent>>();
+  const primaryLaneBusyThreads = new Set<ThreadId>();
+
+  const enqueueTurnStart = (event: TurnStartRequestedEvent) => {
+    const current = queuedTurnStartsByThread.get(event.payload.threadId) ?? [];
+    if (
+      current.some(
+        (entry) =>
+          entry.payload.messageId === event.payload.messageId || entry.eventId === event.eventId,
+      )
+    ) {
+      return;
+    }
+    queuedTurnStartsByThread.set(
+      event.payload.threadId,
+      [...current, event].toSorted(
+        (left, right) =>
+          left.payload.createdAt.localeCompare(right.payload.createdAt) ||
+          left.eventId.localeCompare(right.eventId),
+      ),
+    );
+  };
 
   const appendProviderFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -1107,16 +1139,38 @@ const make = Effect.gen(function* () {
   );
 
   const processTurnStartRequested = Effect.fn("processTurnStartRequested")(function* (
-    event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
+    event: TurnStartRequestedEvent,
+    options?: { readonly fromQueue?: boolean },
   ) {
-    const key = turnStartKeyForEvent(event);
-    if (yield* hasHandledTurnStartRecently(key)) {
-      return;
-    }
-
+    const fromQueue = options?.fromQueue === true;
     const thread = yield* resolveThread(event.payload.threadId);
     if (!thread) {
       return;
+    }
+
+    // ProjectionSnapshotQuery also exposes the current pending start so the
+    // ingestion path can bind its provider turn. It is not a next-turn queue
+    // entry. Only an explicitly queued event may use older pending entries as
+    // a FIFO guard; otherwise the current start would deadlock itself before
+    // the provider is ever called.
+    const hasEarlierQueuedStart =
+      event.payload.queued === true &&
+      (thread.queuedTurnStarts?.some((entry) => entry.messageId !== event.payload.messageId) ??
+        false);
+    const laneBusy =
+      thread.session?.status === "running" ||
+      thread.latestTurn?.state === "running" ||
+      hasEarlierQueuedStart;
+    if (!fromQueue && laneBusy) {
+      enqueueTurnStart(event);
+      return;
+    }
+
+    if (!fromQueue) {
+      const key = turnStartKeyForEvent(event);
+      if (yield* hasHandledTurnStartRecently(key)) {
+        return;
+      }
     }
 
     const message = thread.messages.find((entry) => entry.id === event.payload.messageId);
@@ -1131,6 +1185,8 @@ const make = Effect.gen(function* () {
       });
       return;
     }
+
+    primaryLaneBusyThreads.add(event.payload.threadId);
 
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
@@ -1215,12 +1271,69 @@ const make = Effect.gen(function* () {
     );
 
     if (Option.isNone(sendTurnRequest)) {
+      primaryLaneBusyThreads.delete(event.payload.threadId);
       return;
     }
 
-    yield* providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
+    const sendTurn = providerService.sendTurn(sendTurnRequest.value).pipe(
+      Effect.catchCause(recoverTurnStartFailure),
+      Effect.ensuring(
+        Effect.sync(() => {
+          primaryLaneBusyThreads.delete(event.payload.threadId);
+        }),
+      ),
+    );
+    // Keep the event worker responsive to provider runtime events and later
+    // user commands. Session starts themselves remain serialized by the
+    // worker; this fiber only waits for the provider request to settle.
+    primaryLaneBusyThreads.delete(event.payload.threadId);
+    yield* sendTurn.pipe(Effect.forkScoped);
+  });
+
+  const drainQueuedTurnStarts = Effect.fn("drainQueuedTurnStarts")(function* (threadId: ThreadId) {
+    const thread = yield* resolveThread(threadId);
+    if (!thread) {
+      queuedTurnStartsByThread.delete(threadId);
+      primaryLaneBusyThreads.delete(threadId);
+      return;
+    }
+    if (
+      primaryLaneBusyThreads.has(threadId) ||
+      thread.session?.status === "starting" ||
+      thread.session?.status === "running" ||
+      thread.latestTurn?.state === "running"
+    ) {
+      return;
+    }
+
+    const next = queuedTurnStartsByThread.get(threadId)?.[0];
+    if (!next) {
+      return;
+    }
+    const remaining = queuedTurnStartsByThread.get(threadId)?.slice(1) ?? [];
+    if (remaining.length === 0) {
+      queuedTurnStartsByThread.delete(threadId);
+    } else {
+      queuedTurnStartsByThread.set(threadId, remaining);
+    }
+    yield* processTurnStartRequested(next, { fromQueue: true });
+  });
+
+  const processSessionSetForQueue = Effect.fn("processSessionSetForQueue")(function* (
+    event: Extract<OrchestrationEvent, { type: "thread.session-set" }>,
+  ) {
+    const status = event.payload.session.status;
+    if (status === "starting" || status === "running") {
+      return;
+    }
+    primaryLaneBusyThreads.delete(event.payload.threadId);
+    // An explicit stop leaves accepted FIFO starts durable, but does not
+    // resurrect a provider session behind the user's back. A later start (or
+    // reactor restart) will drain the persisted entries.
+    if (status === "stopped") {
+      return;
+    }
+    yield* drainQueuedTurnStarts(event.payload.threadId);
   });
 
   const processTurnSteerRequested = Effect.fn("processTurnSteerRequested")(function* (
@@ -1295,8 +1408,26 @@ const make = Effect.gen(function* () {
       });
     }
 
-    // Orchestration turn ids are not provider turn ids, so interrupt by session.
-    yield* providerService.interruptTurn({ threadId: event.payload.threadId });
+    // The decider pins this event to the active orchestration turn. Preserve
+    // that expectation through the provider facade so a late interrupt cannot
+    // cancel a newer turn on adapters that support turn-scoped cancellation.
+    yield* providerService
+      .interruptTurn({
+        threadId: event.payload.threadId,
+        ...(event.payload.turnId !== undefined ? { turnId: event.payload.turnId } : {}),
+      })
+      .pipe(
+        Effect.catchCause((cause) =>
+          appendProviderFailureActivity({
+            threadId: event.payload.threadId,
+            kind: "provider.turn.interrupt.failed",
+            summary: "Provider turn interrupt failed",
+            detail: formatFailureDetail(cause),
+            turnId: event.payload.turnId ?? null,
+            createdAt: event.payload.createdAt,
+          }),
+        ),
+      );
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (
@@ -1565,7 +1696,7 @@ const make = Effect.gen(function* () {
   });
 
   const processDomainEvent = Effect.fn("processDomainEvent")(function* (
-    event: ProviderIntentEvent,
+    event: ProviderWorkerEvent,
   ) {
     yield* Effect.annotateCurrentSpan({
       "orchestration.event_type": event.type,
@@ -1613,10 +1744,13 @@ const make = Effect.gen(function* () {
       case "thread.session-stop-requested":
         yield* processSessionStopRequested(event);
         return;
+      case "thread.session-set":
+        yield* processSessionSetForQueue(event);
+        return;
     }
   });
 
-  const processDomainEventSafely = (event: ProviderIntentEvent) =>
+  const processDomainEventSafely = (event: ProviderWorkerEvent) =>
     processDomainEvent(event).pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
@@ -1653,7 +1787,8 @@ const make = Effect.gen(function* () {
         event.type === "thread.turn-interrupt-requested" ||
         event.type === "thread.approval-response-requested" ||
         event.type === "thread.user-input-response-requested" ||
-        event.type === "thread.session-stop-requested"
+        event.type === "thread.session-stop-requested" ||
+        event.type === "thread.session-set"
       ) {
         return yield* worker.enqueue(event);
       }
@@ -1668,9 +1803,43 @@ const make = Effect.gen(function* () {
         : Stream.fromSubscription(yield* orchestrationEngine.subscribeDomainEvents);
     yield* forkParked(Stream.runForEach(domainEvents, processEvent));
 
-    // The domain event stream is hot, so work pending before this reactor
-    // starts cannot be resumed. Correlated completions only clear the request
-    // captured here, leaving any newer request untouched.
+    // Rehydrate only still-pending queued starts.  Historical start events
+    // are retained forever, so replaying every queued marker would duplicate
+    // already-adopted turns; the projection's pending placeholders are the
+    // durable truth for what remains to drain after a restart.
+    const pendingQueueMessageKeys = yield* projectionSnapshotQuery.getSnapshot().pipe(
+      Effect.map(
+        (snapshot) =>
+          new Set(
+            snapshot.threads.flatMap((thread) =>
+              (thread.queuedTurnStarts ?? []).map((entry) => `${thread.id}:${entry.messageId}`),
+            ),
+          ),
+      ),
+      Effect.catchCause((cause) =>
+        Effect.logWarning("provider command reactor failed to read pending turn starts", {
+          cause: Cause.pretty(cause),
+        }).pipe(Effect.as(new Set<string>())),
+      ),
+    );
+    if (pendingQueueMessageKeys.size > 0) {
+      yield* Stream.runForEach(orchestrationEngine.readEvents(0, 1_000_000), (event) =>
+        event.type === "thread.turn-start-requested" &&
+        event.payload.queued === true &&
+        pendingQueueMessageKeys.has(`${event.payload.threadId}:${event.payload.messageId}`)
+          ? worker.enqueue(event)
+          : Effect.void,
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("provider command reactor failed to replay pending turn starts", {
+            cause: Cause.pretty(cause),
+          }),
+        ),
+      );
+    }
+
+    // Correlated completions only clear the request captured here, leaving any
+    // newer request untouched.
     const clearInterrupted = clearInterruptedThreadTitleRegenerations(
       interruptedTitleRegenerations,
     ).pipe(

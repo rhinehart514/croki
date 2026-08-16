@@ -383,6 +383,20 @@ export const OrchestrationLatestTurn = Schema.Struct({
 });
 export type OrchestrationLatestTurn = typeof OrchestrationLatestTurn.Type;
 
+/**
+ * A primary turn start that has been accepted while another primary turn is
+ * active.  These entries are intentionally message-based: no provider turn
+ * id exists until the canonical lane adopts the message.  Keeping the queue
+ * in the thread detail makes the wait durable and observable without adding a
+ * second command or transport contract.
+ */
+export const OrchestrationQueuedTurnStart = Schema.Struct({
+  messageId: MessageId,
+  requestedAt: IsoDateTime,
+  sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+});
+export type OrchestrationQueuedTurnStart = typeof OrchestrationQueuedTurnStart.Type;
+
 export const ThreadTitleRegeneration = Schema.Struct({
   requestId: CommandId,
   startedAt: IsoDateTime,
@@ -413,6 +427,10 @@ export const OrchestrationThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
+  // Optional so clients decoding snapshots from before canonical-lane queue
+  // persistence continue to work.  New snapshots include an array (possibly
+  // empty) so ordinary sends waiting behind a running turn are visible.
+  queuedTurnStarts: Schema.optional(Schema.Array(OrchestrationQueuedTurnStart)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -1376,6 +1394,8 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   /** Historical event metadata. New events never write this field. */
   harnessId: Schema.optional(CrokiHarnessId),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  /** True when this ordinary send waits for the current primary turn. */
+  queued: Schema.optional(Schema.Boolean),
   createdAt: IsoDateTime,
 });
 

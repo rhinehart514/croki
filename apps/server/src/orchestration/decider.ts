@@ -78,7 +78,15 @@ function isStaleRequestFailureDetail(payload: Record<string, unknown> | null): b
 function hasOpenBlockingRequest(thread: {
   readonly activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>;
 }): boolean {
-  const openRequestIds = new Set<string>();
+  return openBlockingRequestIds(thread).size > 0;
+}
+
+type BlockingRequestKind = "approval" | "user-input";
+
+function openBlockingRequestIds(thread: {
+  readonly activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>;
+}): ReadonlyMap<string, BlockingRequestKind> {
+  const openRequestIds = new Map<string, BlockingRequestKind>();
   for (const activity of thread.activities) {
     const payload =
       typeof activity.payload === "object" && activity.payload !== null
@@ -86,9 +94,16 @@ function hasOpenBlockingRequest(thread: {
         : null;
     const requestId = typeof payload?.requestId === "string" ? payload.requestId : null;
     if (requestId === null) continue;
-    if (activity.kind === "approval.requested" || activity.kind === "user-input.requested") {
-      openRequestIds.add(requestId);
+    if (activity.kind === "approval.requested") {
+      openRequestIds.set(requestId, "approval");
+    } else if (activity.kind === "user-input.requested") {
+      openRequestIds.set(requestId, "user-input");
     } else if (activity.kind === "approval.resolved" || activity.kind === "user-input.resolved") {
+      openRequestIds.delete(requestId);
+    } else if (
+      activity.kind === "approval.response.accepted" ||
+      activity.kind === "user-input.response.accepted"
+    ) {
       openRequestIds.delete(requestId);
     } else if (
       (activity.kind === "provider.approval.respond.failed" ||
@@ -98,7 +113,16 @@ function hasOpenBlockingRequest(thread: {
       openRequestIds.delete(requestId);
     }
   }
-  return openRequestIds.size > 0;
+  return openRequestIds;
+}
+
+function openBlockingRequestKind(
+  thread: {
+    readonly activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>;
+  },
+  requestId: string,
+): BlockingRequestKind | undefined {
+  return openBlockingRequestIds(thread).get(requestId);
 }
 
 /**
@@ -154,6 +178,29 @@ function threadHasQueuedTurnStart(
     Number.isFinite(latestUserMessageAtMs) &&
     latestUserMessageAtMs > latestTurnAtMs &&
     Math.abs(queuedAgeMs) <= QUEUED_TURN_START_GRACE_MS
+  );
+}
+
+function threadHasPrimaryLaneWork(thread: {
+  readonly latestTurn: {
+    readonly state: string;
+    readonly requestedAt: string;
+    readonly startedAt: string | null;
+    readonly completedAt: string | null;
+  } | null;
+  readonly session: { readonly status: string } | null;
+  readonly queuedTurnStarts?: ReadonlyArray<unknown> | undefined;
+  readonly messages: ReadonlyArray<{ readonly role: string; readonly createdAt: string }>;
+}): boolean {
+  // `starting` is provider-session preparation, not an active turn. The
+  // provider call itself is serialized by ProviderCommandReactor; once a
+  // session reports a running turn, later ordinary sends join the durable
+  // FIFO instead of competing with that turn.
+  const sessionBusy = thread.session?.status === "running";
+  return (
+    sessionBusy ||
+    thread.latestTurn?.state === "running" ||
+    (thread.queuedTurnStarts?.length ?? 0) > 0
   );
 }
 
@@ -1088,6 +1135,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         threadId: command.threadId,
         parentThreadId: targetThread.parentThreadId,
       });
+      const queued = threadHasPrimaryLaneWork(targetThread);
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({
@@ -1152,9 +1200,37 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           interactionMode: targetThread.interactionMode,
           canvasEnabled: command.canvasEnabled ?? false,
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
+          ...(queued ? { queued: true } : {}),
           createdAt: command.createdAt,
         },
       };
+      const queuedActivityBase = queued
+        ? yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          })
+        : undefined;
+      const queuedActivityEvent: Omit<OrchestrationEvent, "sequence"> | undefined =
+        queuedActivityBase === undefined
+          ? undefined
+          : {
+              ...queuedActivityBase,
+              type: "thread.activity-appended",
+              payload: {
+                threadId: command.threadId,
+                activity: {
+                  id: queuedActivityBase.eventId,
+                  tone: "info",
+                  kind: "turn.queued",
+                  summary: "Queued for next turn",
+                  payload: { messageId: command.message.messageId },
+                  turnId: null,
+                  createdAt: command.createdAt,
+                },
+              },
+            };
       // Real activity resets ANY override: it wakes an explicitly settled
       // thread, and it clears a keep-active pin back to neutral so the
       // thread can auto-settle again after this burst of work goes stale.
@@ -1193,7 +1269,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           },
         });
       }
-      return [...lifecycleResetEvents, userMessageEvent, turnStartRequestedEvent];
+      return [
+        ...lifecycleResetEvents,
+        userMessageEvent,
+        turnStartRequestedEvent,
+        ...(queuedActivityEvent !== undefined ? [queuedActivityEvent] : []),
+      ];
     }
 
     case "thread.turn.steer": {
@@ -1257,11 +1338,30 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.turn.interrupt": {
-      yield* requireThread({
+      const targetThread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: targetThread.parentThreadId,
+      });
+      const activeTurnId =
+        targetThread.session?.status === "running" ? targetThread.session.activeTurnId : null;
+      if (activeTurnId === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has no active running turn to interrupt`,
+        });
+      }
+      if (command.turnId !== undefined && command.turnId !== activeTurnId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} is not running expected turn ${command.turnId}`,
+        });
+      }
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -1272,19 +1372,26 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         type: "thread.turn-interrupt-requested",
         payload: {
           threadId: command.threadId,
-          ...(command.turnId !== undefined ? { turnId: command.turnId } : {}),
+          turnId: activeTurnId,
           createdAt: command.createdAt,
         },
       };
     }
 
     case "thread.approval.respond": {
-      yield* requireThread({
+      const targetThread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
-      return {
+      const requestKind = openBlockingRequestKind(targetThread, command.requestId);
+      if (requestKind !== "approval") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `approval request '${command.requestId}' is not pending on thread '${command.threadId}'`,
+        });
+      }
+      const responseEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
@@ -1302,15 +1409,49 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           createdAt: command.createdAt,
         },
       };
+      const acceptedBase = yield* withEventBase({
+        aggregateKind: "thread",
+        aggregateId: command.threadId,
+        occurredAt: command.createdAt,
+        commandId: command.commandId,
+        metadata: { requestId: command.requestId },
+      });
+      return [
+        responseEvent,
+        {
+          ...acceptedBase,
+          causationEventId: responseEvent.eventId,
+          type: "thread.activity-appended",
+          payload: {
+            threadId: command.threadId,
+            activity: {
+              id: acceptedBase.eventId,
+              tone: "info",
+              kind: "approval.response.accepted",
+              summary: "Approval response accepted",
+              payload: { requestId: command.requestId, decision: command.decision },
+              turnId: null,
+              createdAt: command.createdAt,
+            },
+          },
+        },
+      ];
     }
 
     case "thread.user-input.respond": {
-      yield* requireThread({
+      const targetThread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
-      return {
+      const requestKind = openBlockingRequestKind(targetThread, command.requestId);
+      if (requestKind !== "user-input") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `user-input request '${command.requestId}' is not pending on thread '${command.threadId}'`,
+        });
+      }
+      const responseEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
@@ -1328,6 +1469,33 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           createdAt: command.createdAt,
         },
       };
+      const acceptedBase = yield* withEventBase({
+        aggregateKind: "thread",
+        aggregateId: command.threadId,
+        occurredAt: command.createdAt,
+        commandId: command.commandId,
+        metadata: { requestId: command.requestId },
+      });
+      return [
+        responseEvent,
+        {
+          ...acceptedBase,
+          causationEventId: responseEvent.eventId,
+          type: "thread.activity-appended",
+          payload: {
+            threadId: command.threadId,
+            activity: {
+              id: acceptedBase.eventId,
+              tone: "info",
+              kind: "user-input.response.accepted",
+              summary: "User input response accepted",
+              payload: { requestId: command.requestId },
+              turnId: null,
+              createdAt: command.createdAt,
+            },
+          },
+        },
+      ];
     }
 
     case "thread.checkpoint.revert": {

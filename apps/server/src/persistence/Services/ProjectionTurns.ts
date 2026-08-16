@@ -99,6 +99,13 @@ export const DeleteProjectionTurnsByThreadInput = Schema.Struct({
 });
 export type DeleteProjectionTurnsByThreadInput = typeof DeleteProjectionTurnsByThreadInput.Type;
 
+export const DeleteProjectionPendingTurnStartByMessageInput = Schema.Struct({
+  threadId: ThreadId,
+  messageId: MessageId,
+});
+export type DeleteProjectionPendingTurnStartByMessageInput =
+  typeof DeleteProjectionPendingTurnStartByMessageInput.Type;
+
 export const ClearCheckpointTurnConflictInput = Schema.Struct({
   threadId: ThreadId,
   turnId: TurnId,
@@ -121,6 +128,11 @@ export interface ProjectionTurnRepositoryShape {
     row: ProjectionPendingTurnStart,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
 
+  /** Inserts a pending start without evicting older FIFO entries. */
+  readonly enqueuePendingTurnStart: (
+    row: ProjectionPendingTurnStart,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+
   /**
    * Returns the newest pending-start placeholder for a thread; this is expected to be at most one row after replacement writes.
    */
@@ -133,6 +145,11 @@ export interface ProjectionTurnRepositoryShape {
    */
   readonly deletePendingTurnStartByThreadId: (
     input: GetProjectionPendingTurnStartInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+
+  /** Deletes the one pending placeholder adopted by a concrete provider turn. */
+  readonly deletePendingTurnStartByMessageId: (
+    input: DeleteProjectionPendingTurnStartByMessageInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
 
   /**
