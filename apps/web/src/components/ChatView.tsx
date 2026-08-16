@@ -153,6 +153,9 @@ import {
   deriveAgentPanelModel,
   foldSubagentActivities,
 } from "@croki/client-runtime/state/subagentRuntime";
+import { deriveCurrentReality } from "@croki/client-runtime/state/current-reality";
+import { deriveTurnResult } from "@croki/client-runtime/state/turn-result";
+import type { ThreadEvidenceProvenance } from "@croki/client-runtime/state/thread-evidence";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -243,10 +246,12 @@ import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
+import { CurrentReality } from "./chat/CurrentReality";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { ChatHeader } from "./chat/ChatHeader";
+import { TurnResult } from "./chat/TurnResult";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
@@ -1359,6 +1364,7 @@ function ChatViewContent(props: ChatViewProps) {
   const [terminalFocusRequestId, setTerminalFocusRequestId] = useState(0);
   const [pullRequestDialogState, setPullRequestDialogState] =
     useState<PullRequestDialogState | null>(null);
+  const [dismissedCurrentRealityKey, setDismissedCurrentRealityKey] = useState<string | null>(null);
   const [terminalUiLaunchContext, setTerminalUiLaunchContext] =
     useState<TerminalLaunchContext | null>(null);
   const [attachmentPreviewHandoffByMessageId, setAttachmentPreviewHandoffByMessageId] = useState<
@@ -4164,6 +4170,44 @@ function ChatViewContent(props: ChatViewProps) {
     activeThreadPr?.state,
     activeThreadWokeAt,
   ]);
+  const currentReality = useMemo(() => {
+    if (
+      !isServerThread ||
+      activeThread === undefined ||
+      (activeThread.messages.length === 0 &&
+        activeThread.latestTurn === null &&
+        activeThread.activities.length === 0 &&
+        activeThread.checkpoints.length === 0)
+    ) {
+      return null;
+    }
+    return deriveCurrentReality({
+      thread: activeThread,
+      lastVisitedAt: activeThreadLastVisitedAt ?? null,
+    });
+  }, [activeThread, activeThreadLastVisitedAt, isServerThread]);
+  const currentRealityKey = currentReality
+    ? `${currentReality.threadId}:${currentReality.changedAt ?? "unknown"}`
+    : null;
+  const showCurrentReality =
+    currentReality !== null &&
+    currentReality.showOnEntry &&
+    currentRealityKey !== dismissedCurrentRealityKey;
+  const dismissCurrentReality = useCallback(() => {
+    if (currentRealityKey !== null) {
+      setDismissedCurrentRealityKey(currentRealityKey);
+    }
+    if (activeThreadRef !== null && currentReality !== null && currentReality.changedAt !== null) {
+      markThreadVisited(scopedThreadKey(activeThreadRef), currentReality.changedAt);
+    }
+  }, [activeThreadRef, currentReality, currentRealityKey, markThreadVisited]);
+  const turnResult = useMemo(() => {
+    if (!isServerThread || activeThread === undefined) return null;
+    return deriveTurnResult({
+      thread: activeThread,
+      turnId: activeLatestTurn?.turnId ?? null,
+    });
+  }, [activeLatestTurn?.turnId, activeThread, isServerThread]);
   const activeThreadSettled = useMemo(() => {
     if (activeThreadShell === null || !supportsSettlement) return false;
     return effectiveSettled(activeThreadShell, {
@@ -5962,6 +6006,91 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [activeThreadRef, isServerThread, onDiffPanelOpen],
   );
+  const openEvidenceSource = useCallback(
+    (source: ThreadEvidenceProvenance) => {
+      const evidence = source.target;
+      const destinationThreadId = evidence.workerThreadId ?? evidence.threadId;
+      if (!activeThreadRef) return;
+      if (destinationThreadId !== activeThreadRef.threadId) {
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: {
+            environmentId: activeThreadRef.environmentId,
+            threadId: destinationThreadId,
+          },
+        });
+        return;
+      }
+
+      switch (evidence.surface) {
+        case "thread":
+          // Thread evidence is already in the canonical conversation. Move to
+          // the live edge so a source from the latest turn is immediately in
+          // view without introducing a second reader surface.
+          scrollToEnd(true);
+          return;
+        case "diff":
+          if (evidence.turnId) {
+            onOpenTurnDiff(evidence.turnId, evidence.filePath);
+          } else {
+            addDiffSurface();
+          }
+          return;
+        case "files":
+          if (evidence.filePath) {
+            openFileSurface(evidence.filePath);
+          } else {
+            addFilesSurface();
+          }
+          return;
+        case "preview":
+          if (!isPreviewSupportedInRuntime()) return;
+          if (activePreviewState.activeTabId) {
+            useRightPanelStore
+              .getState()
+              .openBrowser(activeThreadRef, activePreviewState.activeTabId);
+          } else {
+            createBrowserSurface();
+          }
+          return;
+        case "terminal": {
+          const existingTerminalId = activeKnownTerminalIds[0];
+          if (existingTerminalId) {
+            useRightPanelStore.getState().openTerminal(activeThreadRef, existingTerminalId);
+          } else {
+            addTerminalSurface();
+          }
+          return;
+        }
+        case "review":
+          if (activeThreadPr?.number && threadRepository !== null) {
+            openThreadPullRequest(activeThreadPr.number);
+          } else {
+            addDiffSurface();
+          }
+          return;
+        case "git":
+          addDiffSurface();
+          return;
+      }
+    },
+    [
+      activeKnownTerminalIds,
+      activePreviewState.activeTabId,
+      activeThreadPr?.number,
+      activeThreadRef,
+      addDiffSurface,
+      addFilesSurface,
+      addTerminalSurface,
+      createBrowserSurface,
+      navigate,
+      onOpenTurnDiff,
+      openFileSurface,
+      openThreadPullRequest,
+      scrollToEnd,
+      threadRepository,
+    ],
+  );
   // Both the Map and the revert handler are read from refs at call-time so
   // the callback reference is fully stable and never busts context identity.
   const revertTurnCountRef = useRef(revertTurnCountByUserMessageId);
@@ -6197,6 +6326,20 @@ function ChatViewContent(props: ChatViewProps) {
             <div className="relative flex min-h-0 flex-1 flex-col">
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
+                topContent={
+                  showCurrentReality && currentReality ? (
+                    <CurrentReality
+                      reality={currentReality}
+                      onOpenSource={openEvidenceSource}
+                      onDismiss={dismissCurrentReality}
+                    />
+                  ) : null
+                }
+                bottomContent={
+                  turnResult ? (
+                    <TurnResult result={turnResult} onOpenSource={openEvidenceSource} />
+                  ) : null
+                }
                 agentPanelModel={agentPanelModel}
                 onOpenAgents={addAgentsSurface}
                 key={activeThread.id}

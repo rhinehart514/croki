@@ -226,6 +226,24 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("keeps entry context before the conversation and a receipt after it", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        topContent={<div data-testid="current-reality">Current reality</div>}
+        bottomContent={<div data-testid="turn-result">Turn result</div>}
+        timelineEntries={[buildUserTimelineEntry("Hello")]}
+      />,
+    );
+
+    const realityIndex = markup.indexOf('data-testid="current-reality"');
+    const messageIndex = markup.indexOf("Hello");
+    const resultIndex = markup.indexOf('data-testid="turn-result"');
+    expect(realityIndex).toBeGreaterThanOrEqual(0);
+    expect(messageIndex).toBeGreaterThan(realityIndex);
+    expect(resultIndex).toBeGreaterThan(messageIndex);
+  });
+
   it("uses the larger leading inset only when the top fade is enabled", () => {
     const timelineEntries = [buildUserTimelineEntry("Hello")];
 

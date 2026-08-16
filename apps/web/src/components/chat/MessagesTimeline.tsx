@@ -202,6 +202,10 @@ const TIMELINE_MAINTAIN_SCROLL_AT_END = {
 // ---------------------------------------------------------------------------
 
 interface MessagesTimelineProps {
+  /** Optional source-grounded context that belongs at the top of the thread. */
+  topContent?: ReactNode;
+  /** Optional factual receipt rendered after the latest timeline row. */
+  bottomContent?: ReactNode;
   agentPanelModel?: AgentPanelModel;
   onOpenAgents?: () => void;
   isWorking: boolean;
@@ -248,6 +252,8 @@ interface MessagesTimelineProps {
 // ---------------------------------------------------------------------------
 
 export const MessagesTimeline = memo(function MessagesTimeline({
+  topContent,
+  bottomContent,
   isWorking,
   workingStepLabel = null,
   activeTurnInProgress,
@@ -557,6 +563,38 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [],
   );
 
+  const listHeader = useMemo(() => {
+    const baseHeader =
+      loadEarlier !== null ? (
+        <TimelineLoadEarlierHeader
+          loading={loadEarlier.loading}
+          onLoadEarlier={loadEarlier.onLoadEarlier}
+          fade={topFadeEnabled}
+        />
+      ) : topFadeEnabled ? (
+        TIMELINE_LIST_FADE_HEADER
+      ) : (
+        TIMELINE_LIST_HEADER
+      );
+    if (topContent === undefined || topContent === null) return baseHeader;
+    return (
+      <>
+        {baseHeader}
+        {topContent}
+      </>
+    );
+  }, [loadEarlier, topContent, topFadeEnabled]);
+
+  const listFooter = useMemo(() => {
+    if (bottomContent === undefined || bottomContent === null) return TIMELINE_LIST_FOOTER;
+    return (
+      <>
+        {bottomContent}
+        {TIMELINE_LIST_FOOTER}
+      </>
+    );
+  }, [bottomContent]);
+
   if (rows.length === 0 && !isWorking) {
     if (hideEmptyPlaceholder) {
       return null;
@@ -593,20 +631,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               "scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain px-3 [overflow-anchor:none] sm:px-5",
               topFadeEnabled && "chat-timeline-scroll-fade",
             )}
-            ListHeaderComponent={
-              loadEarlier !== null ? (
-                <TimelineLoadEarlierHeader
-                  loading={loadEarlier.loading}
-                  onLoadEarlier={loadEarlier.onLoadEarlier}
-                  fade={topFadeEnabled}
-                />
-              ) : topFadeEnabled ? (
-                TIMELINE_LIST_FADE_HEADER
-              ) : (
-                TIMELINE_LIST_HEADER
-              )
-            }
-            ListFooterComponent={TIMELINE_LIST_FOOTER}
+            ListHeaderComponent={listHeader}
+            ListFooterComponent={listFooter}
           />
           <TimelineMinimap
             items={minimapItems}
