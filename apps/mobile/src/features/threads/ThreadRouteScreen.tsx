@@ -674,6 +674,15 @@ function ThreadRouteContent(
   const handleOpenConnectionEditor = useCallback(() => {
     void navigation.navigate("Connections");
   }, [navigation]);
+  const handleOpenProjectPeople = useCallback(() => {
+    if (!selectedThread) {
+      return;
+    }
+    void navigation.navigate("ProjectPeople", {
+      environmentId: String(selectedThread.environmentId),
+      projectId: String(selectedThread.projectId),
+    });
+  }, [navigation, selectedThread]);
   const handleStopThread = useCallback(() => {
     if (
       !selectedThread ||
@@ -885,6 +894,11 @@ function ThreadRouteContent(
         onPress: props.onReturnToThread,
       });
     }
+    actions.push({
+      accessibilityLabel: "Project people",
+      icon: "person.crop.circle",
+      onPress: handleOpenProjectPeople,
+    });
     if (selectedThreadCwd !== null) {
       actions.push({
         accessibilityLabel: "Open files",
@@ -915,6 +929,7 @@ function ThreadRouteContent(
   }, [
     fileInspector.supported,
     handleOpenFilesInspector,
+    handleOpenProjectPeople,
     handleOpenTerminal,
     handleOpenGitInspector,
     handleToggleInspector,
@@ -1018,7 +1033,7 @@ function ThreadRouteContent(
     <>
       {activeInspectorRenderer ? <InspectorPaneRoleActivation /> : null}
       <NativeStackScreenOptions
-        optionsVersion={[showWorkerViewControl, workerView]}
+        optionsVersion={[showWorkerViewControl, workerView, selectedThread.projectId]}
         options={{
           // Android draws its own in-flow header (AndroidScreenHeader below);
           // the native stack header stays iOS-only.
@@ -1050,6 +1065,13 @@ function ThreadRouteContent(
             Platform.OS === "ios"
               ? () => [
                   ...workerHeaderItems,
+                  withNativeGlassHeaderItem({
+                    accessibilityLabel: "Project people",
+                    icon: { name: "person.crop.circle", type: "sfSymbol" as const },
+                    identifier: "thread-project-people",
+                    onPress: handleOpenProjectPeople,
+                    type: "button" as const,
+                  }),
                   ...(layout.usesSplitView ? threadCenterHeaderItems : compactRightHeaderItems),
                 ]
               : undefined,

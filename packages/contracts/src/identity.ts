@@ -46,6 +46,23 @@ export const ProjectMembership = Schema.Struct({
 });
 export type ProjectMembership = typeof ProjectMembership.Type;
 
+/**
+ * The member list is a founder-facing read model, not the write-side
+ * membership record. Keeping the person's display name here avoids making
+ * every People surface perform a second identity lookup (and never exposes
+ * provider credentials or auth subjects).
+ */
+export const ProjectMember = Schema.Struct({
+  projectId: ProjectId,
+  personId: PersonId,
+  displayName: TrimmedNonEmptyString,
+  role: ProjectMembershipRole,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  removedAt: Schema.NullOr(IsoDateTime),
+});
+export type ProjectMember = typeof ProjectMember.Type;
+
 export const ProjectInvitationState = Schema.Literals([
   "created",
   "accepted",
@@ -114,7 +131,7 @@ export type ProjectMembershipListInput = typeof ProjectMembershipListInput.Type;
 
 export const ProjectMembershipListResult = Schema.Struct({
   projectId: ProjectId,
-  members: Schema.Array(ProjectMembership),
+  members: Schema.Array(ProjectMember),
 });
 export type ProjectMembershipListResult = typeof ProjectMembershipListResult.Type;
 

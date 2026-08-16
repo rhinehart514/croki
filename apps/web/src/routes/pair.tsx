@@ -29,6 +29,13 @@ export const Route = createFileRoute("/pair")({
 function PairRouteView() {
   const { authGateState } = Route.useRouteContext();
   const navigate = useNavigate();
+  const returnTo =
+    typeof window !== "undefined"
+      ? (() => {
+          const candidate = new URL(window.location.href).searchParams.get("returnTo");
+          return candidate?.startsWith("/") ? candidate : null;
+        })()
+      : null;
 
   if (!authGateState) {
     return null;
@@ -42,6 +49,10 @@ function PairRouteView() {
     <PairingRouteSurface
       auth={authGateState.auth}
       onAuthenticated={() => {
+        if (returnTo !== null) {
+          window.location.assign(returnTo);
+          return;
+        }
         void navigate({ to: "/", replace: true });
       }}
       {...(authGateState.errorMessage ? { initialErrorMessage: authGateState.errorMessage } : {})}

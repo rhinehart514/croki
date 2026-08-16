@@ -109,6 +109,7 @@ import {
   SettingsSection,
 } from "./settingsLayout";
 import { ProjectFaviconPickerDialog } from "./ProjectFaviconPickerDialog";
+import { ProjectPeoplePanel } from "./ProjectPeoplePanel";
 
 export const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> = {
   repository: "Group by repository",
@@ -1141,6 +1142,11 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
             />
           ) : null}
         </SettingsSection>
+
+        <ProjectPeoplePanel
+          environmentId={representative.environmentId}
+          projectId={representative.id}
+        />
 
         <SettingsSection title="Danger">
           <SettingsRow

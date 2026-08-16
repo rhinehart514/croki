@@ -18,6 +18,7 @@ import {
   ProjectMembershipError,
   ProjectMembershipFailureReason,
   ProjectMembershipListResult,
+  ProjectMember,
   type ProjectMembershipRole,
   ProjectMembershipTransferInput,
   ProjectMembershipRemoveInput,
@@ -119,6 +120,14 @@ const mapProjectAccessError = (cause: unknown): ProjectAccessError =>
     : identityFailure(`Project access operation failed: ${String(cause)}`);
 
 const toMembership = (record: ProjectAccess.ProjectMembershipRecord): ProjectMembership => record;
+
+const toMember = (
+  record: ProjectAccess.ProjectMembershipRecord,
+  person: Person,
+): ProjectMember => ({
+  ...toMembership(record),
+  displayName: person.displayName,
+});
 
 const invitationState = (
   invitation: ProjectAccess.ProjectInvitationRecord,
@@ -343,14 +352,23 @@ export const make = Effect.gen(function* () {
 
   const listMembers: ProjectAccessService["Service"]["listMembers"] = (sessionId, projectId) =>
     authorizeProject(sessionId, projectId).pipe(
-      Effect.flatMap(() => access.listMemberships({ projectId })),
-      Effect.map(
-        (members) =>
-          ({
-            projectId,
-            members: members.map(toMembership),
-          }) satisfies ProjectMembershipListResult,
+      Effect.flatMap(() =>
+        access.listMemberships({ projectId }).pipe(
+          Effect.flatMap((members) =>
+            Effect.forEach(members, (member) =>
+              identity.getPerson({ personId: member.personId }).pipe(
+                Effect.flatMap(
+                  Option.match({
+                    onNone: () => identityFailure("A Project Member identity could not be read."),
+                    onSome: (person) => Effect.succeed(toMember(member, person)),
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
+      Effect.map((members) => ({ projectId, members }) satisfies ProjectMembershipListResult),
       Effect.mapError(mapMembershipError),
     );
 

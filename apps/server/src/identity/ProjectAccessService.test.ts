@@ -74,6 +74,15 @@ it.layer(serviceLayer)("ProjectAccessService", (it) => {
       });
       assert.equal(acceptedMembership.role, "member");
 
+      const listedMembers = yield* access.listMembers(ownerSession, projectId);
+      assert.deepEqual(
+        listedMembers.members.map((member) => [member.displayName, member.role]),
+        [
+          ["Owner", "owner"],
+          ["Member", "member"],
+        ],
+      );
+
       const secondAttempt = yield* Effect.flip(
         access.acceptInvitation(memberSession, { secret: invitation.secret }),
       );

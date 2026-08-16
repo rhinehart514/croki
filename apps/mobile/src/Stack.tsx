@@ -31,6 +31,7 @@ import { GitCommitSheet } from "./features/threads/git/GitCommitSheet";
 import { GitConfirmSheet } from "./features/threads/git/GitConfirmSheet";
 import { GitOverviewSheet } from "./features/threads/git/GitOverviewSheet";
 import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
+import { ProjectPeopleRouteScreen } from "./features/people/ProjectPeopleRouteScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
 import { HomeRouteScreen } from "./features/home/HomeRouteScreen";
@@ -422,6 +423,11 @@ export const RootStack = createNativeStackNavigator({
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,
       linking: THREAD_LINKING_PREFIX,
+      options: GLASS_HEADER_OPTIONS,
+    }),
+    ProjectPeople: createNativeStackScreen({
+      screen: ProjectPeopleRouteScreen,
+      linking: "projects/:environmentId/:projectId/people",
       options: GLASS_HEADER_OPTIONS,
     }),
     ThreadTerminal: createNativeStackScreen({
