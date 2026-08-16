@@ -60,7 +60,7 @@ readonly release_test_files=(
   scripts/resolve-nightly-release.test.ts
   scripts/update-release-package-versions.test.ts
 )
-export PATH="$(dirname "$node_bin"):$PATH"
+export PATH="$(dirname "$node_bin"):$(dirname "$vp_bin"):$PATH"
 
 work_root=""
 
