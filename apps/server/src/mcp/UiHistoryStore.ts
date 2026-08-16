@@ -10,6 +10,7 @@ import {
   type OrchestrationThread,
   UI_HISTORY_ACTIVITY_KIND,
   UiHistoryActivityPayload,
+  type PreviewAutomationSnapshotConcept,
   type PreviewAutomationSnapshot,
   type ThreadId,
   type UiHistoryEntry,
@@ -60,6 +61,7 @@ export interface UiHistoryStoreShape {
   readonly record: (
     threadId: ThreadId,
     snapshot: PreviewAutomationSnapshot,
+    concept?: PreviewAutomationSnapshotConcept,
   ) => Effect.Effect<UiHistoryEntry, UiHistoryStoreError>;
   readonly list: (
     threadId: ThreadId,
@@ -289,7 +291,7 @@ const make = Effect.gen(function* () {
   );
 
   const record: UiHistoryStoreShape["record"] = Effect.fn("UiHistoryStore.record")(
-    function* (threadId, snapshot) {
+    function* (threadId, snapshot, concept) {
       const thread = yield* resolveThread(threadId);
       const attachmentId = createAttachmentId(String(threadId));
       if (!attachmentId) {
@@ -320,6 +322,7 @@ const make = Effect.gen(function* () {
         attachmentId,
         url: bounded(snapshot.url, 4_096),
         title: bounded(snapshot.title, 512),
+        ...(concept === undefined ? {} : { concept }),
         observedAt,
         width: snapshot.screenshot.width,
         height: snapshot.screenshot.height,

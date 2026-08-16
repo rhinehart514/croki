@@ -66,6 +66,7 @@ import { ComposerStashMenu } from "./ComposerStashMenu";
 import { compressImageForStash, compressImageToByteLimit } from "../../lib/imageCompression";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { getTerminalFocusOwner } from "../../lib/terminalFocus";
+import { replaceTrailingConceptSelection } from "../../lib/conceptSelection";
 import { resolveShortcutCommand } from "../../keybindings";
 import {
   type TerminalContextDraft,
@@ -564,6 +565,7 @@ export interface ChatComposerProps {
   composerTerminalContextsRef: React.RefObject<TerminalContextDraft[]>;
   composerElementContextsRef: React.RefObject<ElementContextDraft[]>;
   composerRef: React.RefObject<ChatComposerHandle | null>;
+  conceptSelectionDraft: { readonly id: string; readonly text: string } | null;
 
   // Callbacks
   onSend: (e?: { preventDefault: () => void }) => void;
@@ -648,6 +650,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerImagesRef,
     composerTerminalContextsRef,
     composerElementContextsRef,
+    conceptSelectionDraft,
     onSend,
     onInterrupt,
     onImplementPlanInNewThread,
@@ -2437,6 +2440,32 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       needsLeadingSpace ? ` ${text}` : text,
     );
   };
+
+  const handledConceptSelectionDraftIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      conceptSelectionDraft === null ||
+      handledConceptSelectionDraftIdRef.current === conceptSelectionDraft.id ||
+      isConnecting ||
+      isComposerApprovalState ||
+      pendingUserInputs.length > 0 ||
+      projectSelectionRequired
+    ) {
+      return;
+    }
+    const prompt = promptRef.current;
+    const nextPrompt = replaceTrailingConceptSelection(prompt, conceptSelectionDraft.text);
+    const inserted = applyPromptReplacement(0, prompt.length, nextPrompt);
+    if (inserted) handledConceptSelectionDraftIdRef.current = conceptSelectionDraft.id;
+  }, [
+    applyPromptReplacement,
+    conceptSelectionDraft,
+    isComposerApprovalState,
+    isConnecting,
+    pendingUserInputs.length,
+    projectSelectionRequired,
+    promptRef,
+  ]);
 
   // File-tree drags land as mentions. Handled in the capture phase so the
   // editor never sees the drop; the load-bearing rules (native stop, "move"

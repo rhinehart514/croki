@@ -124,6 +124,16 @@ page evidence, and the read-only `ui_history` model tool can list or reopen it
 in a later turn. Preview projects recent checked screens under **UI history**;
 there is no separate authored history database or design workflow.
 
+An explicit concept label on two or more same-turn snapshots now turns that
+turn's receipt into a ranked concept set. The set preserves up to ten
+alternatives and the model's proposed order. The founder can inspect, drag or
+keyboard-sort, compare two, and mark each option Keep, Question, or Reject.
+Continue and Remix write the
+ranked choices into the native composer as visible editable text; they never
+send a turn or change provider behavior automatically. Unlabeled snapshots keep
+the ordinary checked-screen receipt, so Croki does not guess which screens are
+ideas.
+
 Likely user-visible turns now also receive one compact result after the answer.
 Same-turn snapshots collapse into **Checked _n_ screens** and open as a gallery;
 visible checkpoint files without a snapshot say **Not checked**; nonvisual turns
@@ -132,10 +142,11 @@ when turn internals fold. It proves only that those screens were captured during
 the turn, not complete design, flow, accessibility, breakpoint, or production
 coverage.
 
-UI history currently records individual screens. It does not yet compare
-checkpoints, connect action sequences into checked flows, discover missing
-states, sweep responsive widths, or import production behavior. Capture and the
-founder-facing history control currently share Preview's desktop-only boundary.
+Outside explicit same-turn concept sets, UI history records individual screens.
+It does not yet compare checkpoints, connect action sequences into checked
+flows, discover missing states, sweep responsive widths, or import production
+behavior. Capture and the founder-facing history control currently share
+Preview's desktop-only boundary.
 Images follow Thread attachment cleanup, but rolling retention and
 deduplication are not yet needed or implemented for explicit model checks.
 

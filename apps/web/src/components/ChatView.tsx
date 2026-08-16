@@ -245,6 +245,8 @@ import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
+import type { RankedConceptChoice } from "./chat/conceptSetLogic";
+import { formatConceptSelection } from "../lib/conceptSelection";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
@@ -1338,6 +1340,11 @@ function ChatViewContent(props: ChatViewProps) {
   const [localDraftErrorsByDraftId, setLocalDraftErrorsByDraftId] = useState<
     Record<string, LocalThreadErrorEntry>
   >({});
+  const [conceptSelectionDraft, setConceptSelectionDraft] = useState<{
+    readonly id: string;
+    readonly text: string;
+  } | null>(null);
+  const conceptSelectionDraftSequenceRef = useRef(0);
   const [localServerErrorsByThreadKey, setLocalServerErrorsByThreadKey] = useState<
     Record<string, LocalThreadErrorEntry>
   >({});
@@ -2181,7 +2188,10 @@ function ChatViewContent(props: ChatViewProps) {
   const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
   const phase = derivePhase(activeThread?.session ?? null);
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
-  const workLogEntries = useMemo(() => deriveWorkLogEntries(threadActivities), [threadActivities]);
+  const workLogEntries = useMemo(
+    () => deriveWorkLogEntries(threadActivities, activeThread?.checkpoints ?? []),
+    [activeThread?.checkpoints, threadActivities],
+  );
   const turnPlans = useMemo(() => deriveTurnPlans(threadActivities), [threadActivities]);
   // Native subagent fold: memoized by activity-list identity, shared by the
   // Agents surface, live strip, and workflow cards. v2Projection is null
@@ -2774,6 +2784,20 @@ function ChatViewContent(props: ChatViewProps) {
   const focusComposer = useCallback(() => {
     composerRef.current?.focusAtEnd();
   }, [composerRef]);
+  const addConceptSelectionToDraft = useCallback(
+    (action: "continue" | "remix", concepts: ReadonlyArray<RankedConceptChoice>) => {
+      if (concepts.length === 0) return false;
+      const selection = formatConceptSelection({ action, concepts });
+      if (selection.length === 0) return false;
+      conceptSelectionDraftSequenceRef.current += 1;
+      setConceptSelectionDraft({
+        id: `${routeThreadKey}:${conceptSelectionDraftSequenceRef.current}`,
+        text: selection,
+      });
+      return true;
+    },
+    [routeThreadKey],
+  );
   const scheduleComposerFocus = useCallback(() => {
     window.requestAnimationFrame(() => {
       focusComposer();
@@ -6025,6 +6049,7 @@ function ChatViewContent(props: ChatViewProps) {
           tabId={activeRightPanelSurface.resourceId}
           configuredUrls={configuredPreviewUrls}
           visible
+          activities={threadActivities}
           onSendAnnotation={(annotation, image) => {
             void onSend(undefined, { annotation, image });
           }}
@@ -6220,6 +6245,10 @@ function ChatViewContent(props: ChatViewProps) {
                 onRevertUserMessage={onRevertUserMessage}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
+                onContinueWithConcept={(concepts) =>
+                  addConceptSelectionToDraft("continue", concepts)
+                }
+                onRemixConcepts={(concepts) => addConceptSelectionToDraft("remix", concepts)}
                 markdownCwd={gitCwd ?? undefined}
                 resolvedTheme={resolvedTheme}
                 timestampFormat={timestampFormat}
@@ -6361,6 +6390,7 @@ function ChatViewContent(props: ChatViewProps) {
                             composerImagesRef={composerImagesRef}
                             composerTerminalContextsRef={composerTerminalContextsRef}
                             composerElementContextsRef={composerElementContextsRef}
+                            conceptSelectionDraft={conceptSelectionDraft}
                             onSend={onSend}
                             onInterrupt={onInterrupt}
                             onImplementPlanInNewThread={onImplementPlanInNewThread}

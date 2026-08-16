@@ -65,8 +65,13 @@ const projectScreen = {
     height: historyEntry.height,
   },
 };
+const recordedConcepts: unknown[] = [];
 const UiHistoryTestLayer = UiHistoryStore.testingLayer({
-  record: () => Effect.succeed(historyEntry),
+  record: (_threadId, _snapshot, concept) =>
+    Effect.sync(() => {
+      recordedConcepts.push(concept);
+      return historyEntry;
+    }),
   list: () => Effect.succeed({ entries: [historyEntry], truncated: false }),
   read: (_threadId, id) =>
     Effect.succeed(
@@ -207,6 +212,7 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
 it.effect("registers annotated tools and preserves authenticated request context", () =>
   Effect.scoped(
     Effect.gen(function* () {
+      recordedConcepts.length = 0;
       const server = yield* McpServer.McpServer;
       const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
       const routedRequests: Array<{
@@ -308,18 +314,42 @@ it.effect("registers annotated tools and preserves authenticated request context
         );
       expect(malformed._tag).toBe("InvalidParams");
 
+      const concept = {
+        id: "direction-a",
+        title: "Focused workflow",
+        summary: "Keep the founder in the checked result.",
+        tradeoff: "Requires a smaller first release.",
+        initialRank: 80,
+      };
+      const labeledSnapshot = yield* server
+        .callTool({
+          name: "preview_snapshot",
+          arguments: { tabId: alternateTabId, concept },
+        })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(labeledSnapshot.isError).toBe(false);
+      expect(labeledSnapshot.content.some((content) => content.type === "image")).toBe(true);
+      expect(labeledSnapshot.structuredContent).toMatchObject({
+        screenshot: { mimeType: "image/png", width: 10, height: 5 },
+        uiHistory: { saved: true, id: historyEntry.id },
+      });
+      expect(recordedConcepts.at(-1)).toEqual(concept);
+      const routedLabeledSnapshot = routedRequests.find(
+        ({ operation }) => operation === "snapshot",
+      );
+      expect(routedLabeledSnapshot?.tabId).toBe(alternateTabId);
+
       const snapshot = yield* server
-        .callTool({ name: "preview_snapshot", arguments: { tabId: alternateTabId } })
+        .callTool({ name: "preview_snapshot", arguments: {} })
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
       expect(snapshot.isError).toBe(false);
-      expect(snapshot.content.some((content) => content.type === "image")).toBe(true);
-      expect(snapshot.structuredContent).toMatchObject({
-        screenshot: { mimeType: "image/png", width: 10, height: 5 },
-        uiHistory: { saved: true, id: historyEntry.id },
-      });
+      expect(recordedConcepts.at(-1)).toBeUndefined();
       expect(routedRequests.find(({ operation }) => operation === "snapshot")?.tabId).toBe(
         alternateTabId,
       );

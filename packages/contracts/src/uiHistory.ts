@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import { IsoDateTime, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { CrokiPerceptionFrameReference } from "./perception.ts";
+import { PreviewAutomationSnapshotConcept } from "./previewAutomation.ts";
 
 export const UI_HISTORY_ACTIVITY_KIND = "preview.snapshot" as const;
 
@@ -11,6 +12,7 @@ export const UiHistoryEntry = Schema.Struct({
   attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
   url: Schema.String.check(Schema.isMaxLength(4_096)),
   title: Schema.String.check(Schema.isMaxLength(512)),
+  concept: Schema.optional(PreviewAutomationSnapshotConcept),
   observedAt: IsoDateTime,
   width: NonNegativeInt,
   height: NonNegativeInt,

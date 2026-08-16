@@ -7,7 +7,9 @@ import type {
   PreviewAutomationResizeResult,
   PreviewAutomationSetColorSchemeResult,
   PreviewAutomationSnapshot,
+  PreviewAutomationSnapshotInput,
   PreviewAutomationStatus,
+  PreviewAutomationTabTargetInput,
   PreviewTabId,
 } from "@croki/contracts";
 
@@ -25,6 +27,13 @@ export function normalizePreviewOpenInput(
     show: open,
     reuseExistingTab: input.reuseExistingTab ?? true,
   };
+}
+
+export function stripPreviewSnapshotConcept(
+  input: PreviewAutomationSnapshotInput,
+): PreviewAutomationTabTargetInput {
+  const { concept: _concept, ...operationInput } = input;
+  return operationInput;
 }
 
 const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
@@ -70,7 +79,8 @@ const handlers = {
     invokeTargeted<PreviewAutomationResizeResult>("resize", input, input.timeoutMs),
   preview_set_appearance: (input) =>
     invokeTargeted<PreviewAutomationSetColorSchemeResult>("setColorScheme", input),
-  preview_snapshot: (input) => invokeTargeted<PreviewAutomationSnapshot>("snapshot", input ?? {}),
+  preview_snapshot: (input) =>
+    invokeTargeted<PreviewAutomationSnapshot>("snapshot", stripPreviewSnapshotConcept(input ?? {})),
   preview_click: (input) =>
     invokeTargeted<void>("click", input, input.timeoutMs).pipe(Effect.as(null)),
   preview_type: (input) =>

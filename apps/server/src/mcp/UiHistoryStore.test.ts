@@ -156,7 +156,14 @@ it.effect("records, lists, and reopens a checked screen", () =>
         ),
       );
 
-      const entry = yield* store.record(threadId, snapshot);
+      const concept = {
+        id: "direction-a",
+        title: "Focused workflow",
+        summary: "Keep the founder in the checked result.",
+        tradeoff: "Requires a smaller first release.",
+        initialRank: 80,
+      } as const;
+      const entry = yield* store.record(threadId, snapshot, concept);
       const listed = yield* store.list(threadId);
       const reopened = yield* store.read(threadId, entry.id);
       const projectHistory = yield* store.listProject(threadId);
@@ -171,6 +178,7 @@ it.effect("records, lists, and reopens a checked screen", () =>
 
       expect(entry).toMatchObject({
         title: "Settings",
+        concept,
         width: 1_280,
         consoleErrorCount: 1,
         networkFailureCount: 1,
