@@ -16,6 +16,11 @@ import type {
   ThreadId,
   UserInputQuestion,
 } from "@croki/contracts";
+import type {
+  ThreadEvidenceProvenance,
+  TurnResultProjection,
+  CurrentRealityProjection,
+} from "@croki/client-runtime/state/thread-evidence";
 import * as Haptics from "expo-haptics";
 import {
   memo,
@@ -53,6 +58,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ControlPill } from "../../components/ControlPill";
+import { AppText as Text } from "../../components/AppText";
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
 import type { StatusTone } from "../../components/StatusPill";
 import type { DraftComposerImageAttachment } from "../../lib/composerImages";
@@ -79,6 +85,8 @@ import {
 import { ThreadFeed } from "./ThreadFeed";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { CrokiInlineThoughtView } from "../croki/CrokiInlineThoughtView";
+import { CurrentRealityCard, TurnResultCard } from "./ThreadEvidenceCards";
+import { useThreadPresenceController, useThreadTypingLabel } from "./ThreadPresence";
 
 export interface ThreadDetailScreenProps {
   readonly selectedThread: OrchestrationThreadShell;
@@ -106,6 +114,11 @@ export interface ThreadDetailScreenProps {
   readonly projectWorkspaceRoot: string | null;
   readonly threadCwd: string | null;
   readonly selectedThreadQueueCount: number;
+  /** Shared source-grounded projections; mobile only chooses their placement. */
+  readonly currentReality?: CurrentRealityProjection | null;
+  readonly turnResult?: TurnResultProjection | null;
+  readonly onOpenEvidenceSource?: (source: ThreadEvidenceProvenance) => void;
+  readonly onDismissCurrentReality?: () => void;
   readonly serverConfig: T3ServerConfig | null;
   readonly layoutVariant?: LayoutVariant;
   readonly usesAutomaticContentInsets?: boolean;
@@ -229,6 +242,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   // lifts it. A healthy resume sees no visual difference (the translation is
   // already zero while the keyboard is closed).
   const [keyboardStateSuspect, setKeyboardStateSuspect] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
   useEffect(() => {
     if (Platform.OS !== "android") {
       return;
@@ -246,6 +260,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     setKeyboardStateSuspect(false);
   }, [isKeyboardVisible, liveKeyboardHeight]);
   const handleOwnedInputFocusChange = useCallback((focused: boolean) => {
+    setComposerFocused(focused);
     if (focused) {
       setKeyboardStateSuspect(false);
     }
@@ -254,6 +269,17 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const navigationHeaderHeight = useContext(HeaderHeightContext) || insets.top + 44;
   const agentLabel = `${props.selectedThread.modelSelection.instanceId} agent`;
   const selectedThreadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
+  useThreadPresenceController({
+    environmentId: props.environmentId,
+    threadId: props.selectedThread.id,
+    enabled: true,
+    typing: composerFocused && props.draftMessage.trim().length > 0,
+  });
+  const typingLabel = useThreadTypingLabel({
+    environmentId: props.environmentId,
+    threadId: props.selectedThread.id,
+    enabled: true,
+  });
   const composerEditorRef = useRef<ComposerEditorHandle>(null);
   const composerOverlayRef = useRef<View>(null);
   const listRef = useRef<LegendListRef>(null);
@@ -388,6 +414,32 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     [userInputCoverageApplies],
   );
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
+  const handleOpenEvidenceSource = useCallback(
+    (source: ThreadEvidenceProvenance) => {
+      if (source.target.surface === "thread" && source.target.workerThreadId === undefined) {
+        void scrollMessageToEnd({ animated: true, closeKeyboard: false });
+        return;
+      }
+      props.onOpenEvidenceSource?.(source);
+    },
+    [props.onOpenEvidenceSource, scrollMessageToEnd],
+  );
+  const realityCard = props.currentReality ? (
+    <CurrentRealityCard
+      reality={props.currentReality}
+      onOpenSource={handleOpenEvidenceSource}
+      onDismiss={props.onDismissCurrentReality ?? null}
+    />
+  ) : null;
+  const turnResultCard = props.turnResult ? (
+    <TurnResultCard result={props.turnResult} onOpenSource={handleOpenEvidenceSource} />
+  ) : null;
+  const evidenceFooter = (
+    <>
+      {turnResultCard}
+      {thoughtViewFooter}
+    </>
+  );
   const endFollowEnabledRef = useRef(true);
   endFollowEnabledRef.current = endFollowEnabled;
   const userInputRepinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -590,6 +642,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
 
   return (
     <View className="flex-1">
+      {realityCard}
       {showContent ? (
         <View
           className="flex-1"
@@ -621,7 +674,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             onEndFollowEnabledChange={setEndFollowEnabled}
             skills={selectedProviderSkills}
             loadEarlier={props.loadEarlier ?? null}
-            footer={thoughtViewFooter}
+            footer={evidenceFooter}
           />
         </View>
       ) : (
@@ -642,6 +695,11 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               list's bottom inset, so any padding above the pill/composer
               pushes the resting content floor up by the same amount. */}
           <View ref={composerOverlayRef} onLayout={onComposerLayout} className="w-full">
+            {typingLabel ? (
+              <View className="px-4 pb-1">
+                <Text className="text-xs text-foreground-muted">{typingLabel}</Text>
+              </View>
+            ) : null}
             {showScrollToEndButton ? (
               <Animated.View
                 pointerEvents="box-none"

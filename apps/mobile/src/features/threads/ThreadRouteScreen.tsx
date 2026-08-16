@@ -8,6 +8,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as Option from "effect/Option";
 import { EnvironmentId, ThreadId, type ProjectScript, type WorkerView } from "@croki/contracts";
+import { deriveCurrentReality } from "@croki/client-runtime/state/current-reality";
+import { deriveTurnResult } from "@croki/client-runtime/state/turn-result";
+import type { ThreadEvidenceProvenance } from "@croki/client-runtime/state/thread-evidence";
 import { requestOlderThreadTurns, threadHasOlderTurns } from "@croki/client-runtime/state/threads";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@croki/shared/projectScripts";
 import { Platform, ScrollView, View } from "react-native";
@@ -74,6 +77,7 @@ import {
   type ThreadInspectorMode,
 } from "./thread-inspector-content-stack";
 import { WorkerViewControl } from "./WorkerViewControl";
+import { useThreadPresenceSummaryLabel } from "./ThreadPresence";
 
 interface ThreadInspectorSelection {
   readonly routeThreadIdentity: string | null;
@@ -241,6 +245,63 @@ function ThreadRouteContent(
         : [],
     [selectedThread, threadShells],
   );
+  const [realityVisitedAtByThread, setRealityVisitedAtByThread] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  const realityLastVisitedAt =
+    routeThreadIdentity === null ? null : (realityVisitedAtByThread[routeThreadIdentity] ?? null);
+  const currentReality = useMemo(() => {
+    if (selectedThreadDetail === null) return null;
+    if (
+      selectedThreadDetail.messages.length === 0 &&
+      selectedThreadDetail.latestTurn === null &&
+      selectedThreadDetail.activities.length === 0 &&
+      selectedThreadDetail.checkpoints.length === 0
+    ) {
+      return null;
+    }
+    return deriveCurrentReality({
+      thread: selectedThreadDetail,
+      lastVisitedAt: realityLastVisitedAt,
+      workers: childThreads.map((worker) => ({
+        threadId: worker.id,
+        title: worker.title,
+        state: worker.session?.status ?? worker.latestTurn?.state ?? "idle",
+        updatedAt: worker.updatedAt,
+      })),
+    });
+  }, [childThreads, realityLastVisitedAt, selectedThreadDetail]);
+  const currentRealityKey = currentReality
+    ? `${currentReality.threadId}:${currentReality.changedAt ?? "unknown"}`
+    : null;
+  const visibleCurrentReality =
+    currentReality !== null &&
+    currentReality.showOnEntry &&
+    currentRealityKey !== null &&
+    realityLastVisitedAt !== currentReality.changedAt;
+  const dismissCurrentReality = useCallback(() => {
+    const changedAt = currentReality?.changedAt;
+    if (routeThreadIdentity === null || typeof changedAt !== "string") return;
+    setRealityVisitedAtByThread((current) => ({
+      ...current,
+      [routeThreadIdentity]: changedAt,
+    }));
+  }, [currentReality?.changedAt, routeThreadIdentity]);
+  const turnResult = useMemo(
+    () =>
+      selectedThreadDetail === null
+        ? null
+        : deriveTurnResult({
+            thread: selectedThreadDetail,
+            turnId: selectedThreadDetail.latestTurn?.turnId ?? null,
+          }),
+    [selectedThreadDetail],
+  );
+  const presenceSummary = useThreadPresenceSummaryLabel({
+    environmentId,
+    threadId: selectedThread?.id ?? null,
+    enabled: selectedThread !== null,
+  });
   const workerView = selectedThread?.workerView ?? "threads";
   const showWorkerViewControl =
     childThreads.length > 0 &&
@@ -381,6 +442,7 @@ function ThreadRouteContent(
   const headerSubtitle = [
     selectedThreadProject?.title ?? null,
     selectedEnvironmentConnection?.environmentLabel ?? null,
+    presenceSummary?.label ?? null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -498,6 +560,59 @@ function ThreadRouteContent(
       navigation.navigate("ThreadFile", params);
     },
     [fileInspector.supported, navigation, selectedThread],
+  );
+  const handleOpenEvidenceSource = useCallback(
+    (source: ThreadEvidenceProvenance) => {
+      const target = source.target;
+      const destinationThreadId = target.workerThreadId ?? target.threadId;
+      if (selectedThread === null || destinationThreadId !== selectedThread.id) {
+        if (environmentId === null) return;
+        navigation.dispatch(
+          StackActions.replace("Thread", {
+            environmentId: String(environmentId),
+            threadId: String(destinationThreadId),
+          }),
+        );
+        return;
+      }
+
+      const threadParams = {
+        environmentId: String(selectedThread.environmentId),
+        threadId: String(selectedThread.id),
+      };
+      switch (target.surface) {
+        case "thread":
+          return;
+        case "files":
+          if (target.filePath) {
+            navigation.navigate("ThreadFile", {
+              ...threadParams,
+              path: target.filePath.split("/").filter((segment) => segment.length > 0),
+            });
+          } else {
+            navigation.navigate("ThreadFiles", threadParams);
+          }
+          return;
+        case "terminal":
+          navigation.navigate("ThreadTerminal", threadParams);
+          return;
+        case "review":
+        case "diff":
+          navigation.navigate("ThreadReview", {
+            environmentId: EnvironmentId.make(threadParams.environmentId),
+            threadId: ThreadId.make(threadParams.threadId),
+          });
+          return;
+        case "git":
+          navigation.navigate("GitOverview", threadParams);
+          return;
+        case "preview":
+          // Mobile has no registered Preview destination yet. Keep the
+          // source card truthful rather than inventing a second evidence view.
+          return;
+      }
+    },
+    [environmentId, navigation, selectedThread],
   );
   // The workspace inspector column spans the full window height. On iOS the
   // panes bring their own nested native headers (which underlap the status
@@ -871,6 +986,10 @@ function ThreadRouteContent(
           projectWorkspaceRoot={selectedThreadProject?.workspaceRoot ?? null}
           threadCwd={selectedThreadCwd}
           selectedThreadQueueCount={composer.selectedThreadQueueCount}
+          currentReality={visibleCurrentReality ? currentReality : null}
+          turnResult={turnResult}
+          onOpenEvidenceSource={handleOpenEvidenceSource}
+          onDismissCurrentReality={dismissCurrentReality}
           layoutVariant={layout.variant}
           usesAutomaticContentInsets={usesNativeHeaderGlass}
           onOpenConnectionEditor={handleOpenConnectionEditor}
