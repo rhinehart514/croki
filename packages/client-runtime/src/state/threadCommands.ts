@@ -5,6 +5,7 @@ import { createAtomCommandScheduler, createEnvironmentCommand } from "./runtime.
 import {
   type ArchiveThreadInput,
   type CreateThreadInput,
+  type ForkThreadInput,
   type DeleteThreadInput,
   type InterruptThreadTurnInput,
   type RespondToThreadApprovalInput,
@@ -17,6 +18,7 @@ import {
   type SettleThreadInput,
   type SnoozeThreadInput,
   type StartThreadTurnInput,
+  type SteerThreadTurnInput,
   type StopThreadSessionInput,
   type UnarchiveThreadInput,
   type UnpinThreadInput,
@@ -25,6 +27,7 @@ import {
   type UpdateThreadMetadataInput,
   archiveThread,
   createThread,
+  forkThread,
   deleteThread,
   interruptThreadTurn,
   respondToThreadApproval,
@@ -37,6 +40,7 @@ import {
   settleThread,
   snoozeThread,
   startThreadTurn,
+  steerThreadTurn,
   stopThreadSession,
   unarchiveThread,
   unpinThread,
@@ -49,6 +53,7 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 export type {
   ArchiveThreadInput,
   CreateThreadInput,
+  ForkThreadInput,
   DeleteThreadInput,
   InterruptThreadTurnInput,
   RespondToThreadApprovalInput,
@@ -61,6 +66,7 @@ export type {
   SettleThreadInput,
   SnoozeThreadInput,
   StartThreadTurnInput,
+  SteerThreadTurnInput,
   StopThreadSessionInput,
   UnarchiveThreadInput,
   UnpinThreadInput,
@@ -82,6 +88,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     create: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:create",
       execute: (input: CreateThreadInput) => createThread(input),
+      scheduler,
+      concurrency,
+    }),
+    fork: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:fork",
+      execute: (input: ForkThreadInput) => forkThread(input),
       scheduler,
       concurrency,
     }),
@@ -166,6 +178,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     startTurn: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:start-turn",
       execute: (input: StartThreadTurnInput) => startThreadTurn(input),
+      scheduler,
+      concurrency,
+    }),
+    steerTurn: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:steer-turn",
+      execute: (input: SteerThreadTurnInput) => steerThreadTurn(input),
       scheduler,
       concurrency,
     }),

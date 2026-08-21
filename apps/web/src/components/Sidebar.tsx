@@ -23,15 +23,15 @@ import {
   effectiveSettled,
   effectiveSnoozed,
   threadWokeAt,
-} from "@t3tools/client-runtime/state/thread-settled";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+} from "@croki/client-runtime/state/thread-settled";
+import type { EnvironmentThreadShell } from "@croki/client-runtime/state/models";
 import {
   scopeProjectRef,
   scopeThreadRef,
   scopedThreadKey,
-} from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef, ThreadId } from "@t3tools/contracts";
-import type { TimestampFormat } from "@t3tools/contracts/settings";
+} from "@croki/client-runtime/environment";
+import type { ScopedThreadRef, ThreadId } from "@croki/contracts";
+import type { TimestampFormat } from "@croki/contracts/settings";
 import {
   AlarmClockIcon,
   AlarmClockOffIcon,
@@ -72,7 +72,7 @@ import {
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@croki/client-runtime/state/runtime";
 import { isElectron } from "../env";
 import {
   resolveShortcutCommand,
@@ -192,8 +192,8 @@ import {
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 // Keep the v2 key so existing preferences survive the v2-to-default rename.
-const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:settled-expanded";
-const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:snoozed-expanded";
+const SETTLED_SHELF_EXPANDED_KEY = "croki:sidebar-v2:settled-expanded";
+const SNOOZED_SHELF_EXPANDED_KEY = "croki:sidebar-v2:snoozed-expanded";
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";

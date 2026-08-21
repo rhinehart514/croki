@@ -15,6 +15,7 @@ build/
 release/
 release-mock/
 .t3
+userdata/
 .idea/
 apps/web/.playwright
 apps/web/playwright-report
@@ -35,6 +36,7 @@ artifacts/app-store/screenshots/
 native/**/target/
 node_modules/
 .alchemy/
+.gtm-expansion/
 *.log
 .env*
 !.env.example

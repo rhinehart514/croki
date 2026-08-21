@@ -11,7 +11,7 @@ import {
   type ToolLifecycleItemType,
   TurnId,
   type UserInputQuestion,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -24,7 +24,7 @@ import * as Ref from "effect/Ref";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import type { OpencodeClient, Part, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { getModelSelectionStringOptionValue } from "@croki/shared/model";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
@@ -1235,7 +1235,7 @@ export function makeOpenCodeAdapter(
               if (mcpSession && !server.external) {
                 yield* runOpenCodeSdk("mcp.add", () =>
                   client.mcp.add({
-                    name: "t3-code",
+                    name: "croki",
                     config: {
                       type: "remote",
                       url: mcpSession.endpoint,
@@ -1700,6 +1700,15 @@ export function makeOpenCodeAdapter(
       },
     );
 
+    const forkThread: OpenCodeAdapterShape["forkThread"] = (_sourceThreadId, _targetThreadId) =>
+      Effect.fail(
+        new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "OpenCode sessions do not support native conversation forks.",
+        }),
+      );
+
     const stopAll: OpenCodeAdapterShape["stopAll"] = () =>
       Effect.gen(function* () {
         const contexts = [...sessions.values()];
@@ -1719,6 +1728,7 @@ export function makeOpenCodeAdapter(
       provider: PROVIDER,
       capabilities: {
         sessionModelSwitch: "in-session",
+        conversationFork: "unsupported",
       },
       startSession,
       sendTurn,
@@ -1730,6 +1740,7 @@ export function makeOpenCodeAdapter(
       hasSession,
       readThread,
       rollbackThread,
+      forkThread,
       stopAll,
       get streamEvents() {
         return Stream.fromQueue(runtimeEvents);

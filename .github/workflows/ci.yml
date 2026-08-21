@@ -5,15 +5,69 @@ on:
   push:
     branches:
       - main
+      - croki/main
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  croki:
+    name: Croki Overlay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Resolve overlay base
+        id: base
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          base="$PR_BASE_SHA"
+          if [[ -z "$base" ]]; then
+            base="$PUSH_BEFORE_SHA"
+          fi
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          git cat-file -e "$base^{commit}"
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Check Croki overlay policy
+        run: npm run check:croki -- --base "${{ steps.base.outputs.sha }}"
+
+      - name: Test Croki seams
+        run: |
+          set -euo pipefail
+          (cd packages/contracts && vp test run src/project.test.ts src/keybindings.test.ts)
+          (cd packages/shared && vp test run src/crokiContext.test.ts)
+          (cd apps/server && vp test run src/orchestration/Layers/CrokiApplication.test.ts src/orchestration/Layers/CrokiContext.runtime.test.ts src/orchestration/Layers/ProviderCommandReactor.test.ts src/workspace/WorkspaceFileSystem.test.ts)
+          (cd apps/web && vp test run --project unit src/branding.test.ts src/components/croki src/components/chat/CrokiContextPresentation.test.tsx src/components/chat/CrokiProposalPrompts.logic.test.ts)
+          (cd scripts && vp test run lib/brand-policy.test.ts lib/brand-assets.test.ts check-croki-overlay.test.ts report-croki-overlay.test.ts croki-release-plan.test.ts)
+          npm run release:smoke
+
+      - name: Record Croki check summary
+        if: always()
+        run: |
+          echo "Croki overlay base: \`${{ steps.base.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "CI summaries and artifacts must contain receipt metadata only, never raw Canvas context." >> "$GITHUB_STEP_SUMMARY"
+
   check:
     name: Check
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -40,7 +94,7 @@ jobs:
           run-install: true
 
       - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
+        run: vp run --filter @croki/desktop ensure:electron
 
       - name: Check
         run: vp check
@@ -64,8 +118,8 @@ jobs:
   # limit stays at the default 4 so peak load per runner is unchanged.
   test:
     name: Test
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -83,7 +137,7 @@ jobs:
           run-install: true
 
       - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
+        run: vp run --filter @croki/desktop ensure:electron
 
       - name: Test
         run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' test
@@ -155,7 +209,7 @@ jobs:
           name: thread-transfer-results
           path: ${{ runner.temp }}/thread-transfer-result.json
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 1
 
   # Split out of Check and Test: both paid ~7-9s to install a Rust toolchain
   # for checks that take under 3s, on the critical path of every PR.
@@ -285,7 +339,7 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/scripts...
+              - --filter=@croki/scripts...
 
       - name: Install mobile native static analysis tools
         run: brew bundle install --file apps/mobile/Brewfile
@@ -293,9 +347,20 @@ jobs:
       - name: Lint mobile native sources
         run: vp run lint:mobile
 
+  swift_ios:
+    name: Swift iOS
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Test native iOS client
+        run: apps/swift-ios/Scripts/ci-test.sh
+
   release_smoke:
     name: Release Smoke
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -313,7 +378,7 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/scripts...
+              - --filter=@croki/scripts...
 
       - name: Exercise release-only workflow steps
         run: node scripts/release-smoke.ts

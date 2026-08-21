@@ -2,8 +2,9 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
   ProjectListEntriesResult,
+  ProjectListComponentsResult,
   ProjectReadFileResult,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
@@ -11,8 +12,8 @@ import { useCallback } from "react";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { projectEnvironment } from "~/state/projects";
+import { executeAtomQuery } from "@croki/client-runtime/state/runtime";
 import { useProjectPathSearch } from "~/state/queries";
-import { executeAtomQuery } from "@t3tools/client-runtime/state/runtime";
 
 const EMPTY_PROJECT_FILE_PATH = "";
 const EMPTY_PROJECT_FILE_QUERY_ATOM = Atom.make(
@@ -25,12 +26,17 @@ function optimisticFileAtom(environmentId: EnvironmentId, cwd: string, relativeP
 interface ProjectQueryState<A> {
   readonly data: A | null;
   readonly error: string | null;
+  readonly failure: unknown | null;
   readonly isPending: boolean;
   readonly refresh: () => void;
 }
 
 export function getProjectEntriesQueryAtom(environmentId: EnvironmentId, cwd: string) {
   return projectEnvironment.listEntries({ environmentId, input: { cwd } });
+}
+
+export function getProjectComponentsQueryAtom(environmentId: EnvironmentId, cwd: string) {
+  return projectEnvironment.listComponents({ environmentId, input: { cwd } });
 }
 
 export function getProjectFileQueryAtom(
@@ -121,6 +127,10 @@ function errorMessage<A>(result: AsyncResult.AsyncResult<A, unknown>): string | 
   return cause instanceof Error ? cause.message : "Workspace query failed.";
 }
 
+function queryFailure<A>(result: AsyncResult.AsyncResult<A, unknown>): unknown | null {
+  return result._tag === "Failure" ? Cause.squash(result.cause) : null;
+}
+
 export function useProjectEntriesQuery(
   environmentId: EnvironmentId,
   cwd: string,
@@ -132,6 +142,24 @@ export function useProjectEntriesQuery(
   return {
     data: Option.getOrNull(AsyncResult.value(result)),
     error: errorMessage(result),
+    failure: queryFailure(result),
+    isPending: result.waiting,
+    refresh,
+  };
+}
+
+export function useProjectComponentsQuery(
+  environmentId: EnvironmentId,
+  cwd: string,
+): ProjectQueryState<ProjectListComponentsResult> {
+  const atom = getProjectComponentsQueryAtom(environmentId, cwd);
+  const result = useAtomValue(atom);
+  const refreshAtom = useAtomRefresh(atom);
+  const refresh = useCallback(() => refreshAtom(), [refreshAtom]);
+  return {
+    data: Option.getOrNull(AsyncResult.value(result)),
+    error: errorMessage(result),
+    failure: queryFailure(result),
     isPending: result.waiting,
     refresh,
   };
@@ -193,6 +221,7 @@ export function useProjectFileQuery(
   return {
     data: optimisticFile?.data ?? data,
     error: errorMessage(result),
+    failure: queryFailure(result),
     isPending: result.waiting,
     refresh,
   };

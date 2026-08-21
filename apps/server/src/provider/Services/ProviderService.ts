@@ -12,18 +12,22 @@
  * @module ProviderService
  */
 import type {
+  CodexVoiceEvent,
+  CodexVoiceStartInput,
   ProviderInterruptTurnInput,
   ProviderInstanceId,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   ProviderRuntimeEvent,
   ProviderSendTurnInput,
+  ProviderSteerTurnInput,
   ProviderSession,
   ProviderSessionStartInput,
   ProviderStopSessionInput,
   ThreadId,
   ProviderTurnStartResult,
-} from "@t3tools/contracts";
+  ProviderTurnSteerResult,
+} from "@croki/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
@@ -36,6 +40,11 @@ import type { ProviderInstanceRoutingInfo } from "./ProviderAdapterRegistry.ts";
  * ProviderServiceShape - Service API for provider session and turn orchestration.
  */
 export interface ProviderServiceShape {
+  readonly voice?: {
+    readonly start: (input: CodexVoiceStartInput) => Effect.Effect<void, ProviderServiceError>;
+    readonly stop: (threadId: ThreadId) => Effect.Effect<void, ProviderServiceError>;
+    readonly events: (threadId: ThreadId) => Stream.Stream<CodexVoiceEvent, ProviderServiceError>;
+  };
   /**
    * Start a provider session.
    */
@@ -50,6 +59,11 @@ export interface ProviderServiceShape {
   readonly sendTurn: (
     input: ProviderSendTurnInput,
   ) => Effect.Effect<ProviderTurnStartResult, ProviderServiceError>;
+
+  /** Send guidance to a provider turn that is already running. */
+  readonly steerTurn: (
+    input: ProviderSteerTurnInput,
+  ) => Effect.Effect<ProviderTurnSteerResult, ProviderServiceError>;
 
   /**
    * Interrupt a running provider turn.
@@ -106,6 +120,23 @@ export interface ProviderServiceShape {
   }) => Effect.Effect<void, ProviderServiceError>;
 
   /**
+   * Fork an active provider conversation and persist resumable state for the
+   * target Croki thread without starting a target provider session.
+   */
+  readonly forkConversation: (input: {
+    readonly sourceThreadId: ThreadId;
+    readonly targetThreadId: ThreadId;
+  }) => Effect.Effect<void, ProviderServiceError>;
+
+  /**
+   * Remove resumable provider state for a fork target that must never run.
+   * Used when provider-native preparation fails after the target was bound.
+   */
+  readonly discardConversation: (input: {
+    readonly threadId: ThreadId;
+  }) => Effect.Effect<void, ProviderServiceError>;
+
+  /**
    * Canonical provider runtime event stream.
    *
    * Fan-out is owned by ProviderService (not by a standalone event-bus service).
@@ -117,5 +148,5 @@ export interface ProviderServiceShape {
  * ProviderService - Service tag for provider orchestration.
  */
 export class ProviderService extends Context.Service<ProviderService, ProviderServiceShape>()(
-  "t3/provider/Services/ProviderService",
+  "croki-server/provider/Services/ProviderService",
 ) {}

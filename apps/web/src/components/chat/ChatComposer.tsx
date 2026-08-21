@@ -11,17 +11,17 @@ import type {
   ServerProvider,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   isProviderSendTurnSupportedImageMimeType,
   ProviderDriverKind,
   ProviderInstanceId,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-} from "@t3tools/contracts";
-import type { EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
-import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
-import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
+} from "@croki/contracts";
+import type { EnvironmentConnectionPresentation } from "@croki/client-runtime/connection";
+import { serializeComposerFileLink } from "@croki/shared/composerTrigger";
+import { createModelSelection, normalizeModelSlug } from "@croki/shared/model";
 import {
   memo,
   type ReactNode,
@@ -75,6 +75,7 @@ import {
 import { compressImageForStash, compressImageToByteLimit } from "../../lib/imageCompression";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { getTerminalFocusOwner } from "../../lib/terminalFocus";
+import { replaceTrailingConceptSelection } from "../../lib/conceptSelection";
 import { resolveShortcutCommand } from "../../keybindings";
 import {
   type TerminalContextDraft,
@@ -246,12 +247,12 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
-import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import type { UnifiedSettings } from "@croki/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
 import { deriveLatestContextWindowSnapshot } from "../../lib/contextWindow";
-import { formatProviderSkillDisplayName } from "@t3tools/client-runtime/providerSkills";
+import { formatProviderSkillDisplayName } from "@croki/client-runtime/providerSkills";
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
@@ -602,6 +603,7 @@ export interface ChatComposerProps {
   composerTerminalContextsRef: React.RefObject<TerminalContextDraft[]>;
   composerElementContextsRef: React.RefObject<ElementContextDraft[]>;
   composerRef: React.RefObject<ChatComposerHandle | null>;
+  conceptSelectionDraft: { readonly id: string; readonly text: string } | null;
 
   // Callbacks
   onSend: (e?: { preventDefault: () => void }) => void;
@@ -688,6 +690,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerImagesRef,
     composerTerminalContextsRef,
     composerElementContextsRef,
+    conceptSelectionDraft,
     onSend,
     onInterrupt,
     onImplementPlanInNewThread,
@@ -2070,7 +2073,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         // unique image into the overflow list for nothing.
         const existingDedupKeys = new Set(
           composerImagesRef.current.map(
-            (image) => `${image.mimeType} ${image.sizeBytes} ${image.name}`,
+            (image) => `${image.mimeType}\u0000${image.sizeBytes}\u0000${image.name}`,
           ),
         );
         const capacity = Math.max(
@@ -2081,7 +2084,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           (attachment) =>
             !existingIds.has(attachment.id) &&
             !existingDedupKeys.has(
-              `${attachment.mimeType} ${attachment.sizeBytes} ${attachment.name}`,
+              `${attachment.mimeType}\u0000${attachment.sizeBytes}\u0000${attachment.name}`,
             ),
         );
         // Anything past the attachment limit cannot be restored. The entry is
@@ -2173,7 +2176,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     // the composer has been cleared the user can type something genuinely
     // new (or switch threads) while encoding continues, and that deserves its
     // own entry.
-    const snapshotKey = `${String(composerDraftTarget)} ${prompt} ${images
+    const snapshotKey = `${String(composerDraftTarget)}\u0000${prompt}\u0000${images
       .map((image) => image.id)
       .join(",")}`;
     if (stashInFlightRef.current.has(snapshotKey)) return;
@@ -2585,6 +2588,32 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       needsLeadingSpace ? ` ${text}` : text,
     );
   };
+
+  const handledConceptSelectionDraftIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      conceptSelectionDraft === null ||
+      handledConceptSelectionDraftIdRef.current === conceptSelectionDraft.id ||
+      isConnecting ||
+      isComposerApprovalState ||
+      pendingUserInputs.length > 0 ||
+      projectSelectionRequired
+    ) {
+      return;
+    }
+    const prompt = promptRef.current;
+    const nextPrompt = replaceTrailingConceptSelection(prompt, conceptSelectionDraft.text);
+    const inserted = applyPromptReplacement(0, prompt.length, nextPrompt);
+    if (inserted) handledConceptSelectionDraftIdRef.current = conceptSelectionDraft.id;
+  }, [
+    applyPromptReplacement,
+    conceptSelectionDraft,
+    isComposerApprovalState,
+    isConnecting,
+    pendingUserInputs.length,
+    projectSelectionRequired,
+    promptRef,
+  ]);
 
   // File-tree drags land as mentions. Handled in the capture phase so the
   // editor never sees the drop; the load-bearing rules (native stop, "move"

@@ -36,7 +36,7 @@ export function pinnedRuntimePaths(
   const versionDir = path.join(baseDir, PINNED_RUNTIME_DIR, "versions", version);
   return {
     versionDir,
-    entryPath: path.join(versionDir, "node_modules", "t3", "dist", "bin.mjs"),
+    entryPath: path.join(versionDir, "node_modules", "croki-server", "dist", "bin.mjs"),
     sentinelPath: path.join(versionDir, ".install-complete"),
   };
 }
@@ -71,7 +71,7 @@ export class PinnedRuntimePreflightBlockedError extends Schema.TaggedErrorClass<
 }
 
 /**
- * Installs `t3@<version>` into the pinned runtime directory unless a complete
+ * Installs `croki-server@<version>` into the pinned runtime directory unless a complete
  * install is already there, and returns its paths. The sentinel is written
  * only after npm exits 0; checking the entry file alone is not enough. npm
  * extracts files before running native builds (node-pty), so a killed
@@ -146,16 +146,23 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
     );
   const stagingPaths: PinnedRuntimePaths = {
     versionDir: stagingDir,
-    entryPath: input.path.join(stagingDir, "node_modules", "t3", "dist", "bin.mjs"),
+    entryPath: input.path.join(stagingDir, "node_modules", "croki-server", "dist", "bin.mjs"),
     sentinelPath: input.path.join(stagingDir, ".install-complete"),
   };
 
   return yield* Effect.gen(function* () {
-    const installStep = "installing the pinned t3 runtime (this can take a few minutes)";
+    const installStep = "installing the pinned Croki runtime (this can take a few minutes)";
     yield* runner
       .run({
         command: "npm",
-        args: ["install", "--prefix", stagingDir, "--no-fund", "--no-audit", `t3@${input.version}`],
+        args: [
+          "install",
+          "--prefix",
+          stagingDir,
+          "--no-fund",
+          "--no-audit",
+          `croki-server@${input.version}`,
+        ],
         // Native dependencies may compile from source on slower machines.
         timeout: PINNED_RUNTIME_INSTALL_TIMEOUT,
       })

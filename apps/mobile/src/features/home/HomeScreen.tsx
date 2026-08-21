@@ -6,18 +6,18 @@ import {
 import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+} from "@croki/client-runtime/state/shell";
 import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
-} from "@t3tools/client-runtime/state/thread-search";
-import { sortPinnedThreadsByOrderKey } from "@t3tools/client-runtime/state/thread-sort";
-import type { ChangeRequestSettleSource } from "@t3tools/client-runtime/state/thread-settled";
+} from "@croki/client-runtime/state/thread-search";
+import { sortPinnedThreadsByOrderKey } from "@croki/client-runtime/state/thread-sort";
+import type { ChangeRequestSettleSource } from "@croki/client-runtime/state/thread-settled";
 import type {
   EnvironmentId,
   SidebarProjectGroupingMode,
   SidebarThreadSortOrder,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

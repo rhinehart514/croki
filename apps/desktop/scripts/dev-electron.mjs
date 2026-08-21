@@ -1,4 +1,5 @@
 import * as NodeChildProcess from "node:child_process";
+import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -8,6 +9,7 @@ import {
   resolveDevProtocolClient,
   resolveElectronLaunchCommand,
 } from "./electron-launcher.mjs";
+import { acquireDevProcessLock } from "./dev-process-lock.mjs";
 import { waitForResources } from "./wait-for-resources.mjs";
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL?.trim();
@@ -33,9 +35,22 @@ const watchedDirectories = [
 const forcedShutdownTimeoutMs = 1_500;
 const restartDebounceMs = 120;
 const childTreeGracePeriodMs = 1_200;
-const remoteDebuggingPort = process.env.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT?.trim();
-// oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone dev script has no Effect runtime.
+const remoteDebuggingPort = process.env.CROKI_DESKTOP_REMOTE_DEBUGGING_PORT?.trim();
+// oxlint-disable-next-line croki/no-global-process-runtime -- Standalone dev script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
+const lockKey = NodeCrypto.createHash("sha256").update(desktopDir).digest("hex").slice(0, 16);
+const processLock = await acquireDevProcessLock({
+  lockPath: NodePath.join(NodeOS.tmpdir(), "croki", `desktop-dev-${lockKey}.lock`),
+});
+
+if (!processLock.acquired) {
+  console.warn(
+    `[desktop-dev] Croki Dev is already supervised for this checkout by PID ${String(processLock.owner.pid)}; leaving that process in control.`,
+  );
+  process.exit(0);
+}
+
+process.once("exit", processLock.releaseSync);
 
 await waitForResources({
   baseDir: desktopDir,
@@ -48,8 +63,8 @@ const childEnv = { ...process.env };
 delete childEnv.ELECTRON_RUN_AS_NODE;
 const devProtocolClient = resolveDevProtocolClient();
 if (devProtocolClient) {
-  childEnv.T3CODE_DESKTOP_APP_USER_MODEL_ID = devProtocolClient.appBundleId;
-  childEnv.T3CODE_DESKTOP_PROTOCOL_REGISTRATION_MANAGED = "1";
+  childEnv.CROKI_DESKTOP_APP_USER_MODEL_ID = devProtocolClient.appBundleId;
+  childEnv.CROKI_DESKTOP_PROTOCOL_REGISTRATION_MANAGED = "1";
 }
 
 let shuttingDown = false;
@@ -67,16 +82,6 @@ function killChildTreeByPid(pid, signal) {
   NodeChildProcess.spawnSync("pkill", [`-${signal}`, "-P", String(pid)], { stdio: "ignore" });
 }
 
-function cleanupStaleDevApps() {
-  if (hostPlatform === "win32") {
-    return;
-  }
-
-  NodeChildProcess.spawnSync("pkill", ["-f", "--", `--t3code-dev-root=${desktopDir}`], {
-    stdio: "ignore",
-  });
-}
-
 function startApp() {
   if (shuttingDown || currentApp !== null) {
     return;
@@ -87,7 +92,7 @@ function startApp() {
     : [];
   const launchArgs = devProtocolClient
     ? electronArgs
-    : [...electronArgs, `--t3code-dev-root=${desktopDir}`, "dist-electron/main.cjs"];
+    : [...electronArgs, `--croki-dev-root=${desktopDir}`, "dist-electron/main.cjs"];
   const electronCommand = resolveElectronLaunchCommand(launchArgs);
   const app = NodeChildProcess.spawn(electronCommand.electronPath, electronCommand.args, {
     cwd: desktopDir,
@@ -143,7 +148,6 @@ async function stopApp() {
     app.once("exit", finish);
     app.kill("SIGTERM");
     killChildTreeByPid(app.pid, "TERM");
-    cleanupStaleDevApps();
 
     setTimeout(() => {
       if (settled) {
@@ -152,7 +156,6 @@ async function stopApp() {
 
       app.kill("SIGKILL");
       killChildTreeByPid(app.pid, "KILL");
-      cleanupStaleDevApps();
       finish();
     }, forcedShutdownTimeoutMs).unref();
   });
@@ -233,7 +236,6 @@ async function shutdown(exitCode) {
 }
 
 startWatchers();
-cleanupStaleDevApps();
 startApp();
 
 process.once("SIGINT", () => {

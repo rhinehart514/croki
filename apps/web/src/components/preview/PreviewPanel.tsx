@@ -1,6 +1,10 @@
 "use client";
 
-import type { PreviewAnnotationPayload, ScopedThreadRef } from "@t3tools/contracts";
+import type {
+  OrchestrationThreadActivity,
+  PreviewAnnotationPayload,
+  ScopedThreadRef,
+} from "@croki/contracts";
 
 import type { ComposerImageAttachment } from "~/composerDraftStore";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
@@ -14,6 +18,8 @@ interface Props {
   tabId?: string | null;
   configuredUrls?: ReadonlyArray<string> | undefined;
   visible: boolean;
+  activities?: ReadonlyArray<OrchestrationThreadActivity> | undefined;
+  onAddCanvasEvidence?: ((url: string) => void) | undefined;
   onSendAnnotation?: (
     annotation: PreviewAnnotationPayload,
     image: ComposerImageAttachment | null,
@@ -26,6 +32,8 @@ export function PreviewPanel({
   tabId,
   configuredUrls,
   visible,
+  activities,
+  onAddCanvasEvidence,
   onSendAnnotation,
 }: Props) {
   if (!isPreviewSupportedInRuntime()) {
@@ -33,7 +41,7 @@ export function PreviewPanel({
       <PreviewPanelShell mode={mode}>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
           <p className="max-w-sm text-sm text-muted-foreground">
-            Preview is only available in the T3 Code desktop app.
+            Preview is only available in the Croki desktop app.
           </p>
         </div>
       </PreviewPanelShell>
@@ -47,6 +55,8 @@ export function PreviewPanel({
         {...(tabId !== undefined ? { tabId } : {})}
         configuredUrls={configuredUrls}
         visible={visible}
+        activities={activities}
+        onAddCanvasEvidence={onAddCanvasEvidence}
         {...(onSendAnnotation ? { onSendAnnotation } : {})}
       />
     </PreviewPanelShell>

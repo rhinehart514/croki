@@ -1606,7 +1606,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
   --terminal-selection-background: var(--app-theme-terminal-selection-background);
 }
 
-/* T3 Chat's composer is a translucent lift over --chat-background. Route its
+/* Croki's composer is a translucent lift over --chat-background. Route its
    measured flattened color through the raised-surface role instead of deriving
    another tint from the canvas, which made the dark composer too red. */
 html[data-theme-id] .chat-composer-glass-shell {
@@ -1797,7 +1797,7 @@ html[data-theme-id] .chat-markdown .chat-markdown-chrome-action {
   color: color-mix(in srgb, var(--code-foreground) 72%, transparent);
 }
 
-/* T3 Chat renders inline code and compact chat artifacts with its translucent
+/* Croki renders inline code and compact chat artifacts with its translucent
    secondary surface flattened over the light chat canvas. The raw muted and
    secondary tokens are substantially darker than those visible pixels. */
 html[data-theme-id="t3-chat"] {
@@ -1851,7 +1851,7 @@ html[data-theme-id] [data-app-sidebar] {
   }
 }
 
-/* T3 Chat's panel divider is deliberately pink, and its resize affordance
+/* Croki's panel divider is deliberately pink, and its resize affordance
    keeps that color while hovered. Do not neutralize this branded edge. */
 html[data-theme-id="t3-chat"] [data-app-sidebar] {
   @variant dark {
@@ -1906,7 +1906,7 @@ body {
   --surface-grain-size: 256px 256px;
 }
 
-/* The live T3 Chat texture is a 128px grayscale tile with a constant 7/255
+/* The live Croki texture is a 128px grayscale tile with a constant 7/255
    alpha. Keep our procedural texture cheap while matching that scale and
    strength for the branded preset. */
 html[data-theme-id="t3-chat"] {
@@ -2312,6 +2312,79 @@ code {
   }
   100% {
     filter: hue-rotate(360deg) saturate(1.2);
+  }
+}
+
+/* Croki Canvas moves like a diagram resolving into place. Every animation is
+   finite and structural so the field stays quiet after the change lands. */
+@keyframes croki-canvas-object-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(-6px, 4px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes croki-canvas-register {
+  from {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes croki-canvas-edge-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes croki-canvas-panel-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(10px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.croki-canvas-object-enter {
+  animation: croki-canvas-object-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.croki-canvas-registration-enter {
+  animation: croki-canvas-register 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.croki-canvas-edge {
+  animation: croki-canvas-edge-enter 180ms ease-out both;
+}
+
+.croki-canvas-panel-enter,
+.croki-canvas-edge-rail-enter,
+.croki-canvas-scene-enter {
+  animation: croki-canvas-panel-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .croki-canvas-object-enter,
+  .croki-canvas-registration-enter,
+  .croki-canvas-edge,
+  .croki-canvas-panel-enter,
+  .croki-canvas-edge-rail-enter,
+  .croki-canvas-scene-enter {
+    animation: none;
   }
 }
 

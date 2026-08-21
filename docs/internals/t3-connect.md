@@ -1,6 +1,12 @@
-# T3 Connect
+# Connect compatibility architecture
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using Croki? See [docs/user](../user/).
+
+> This document describes inherited T3 Connect identifiers and architecture for
+> compatibility and upstream integration. Croki Connect, hosted web, relay,
+> Clerk, and CLI OAuth release paths are disabled until their destinations and
+> credentials are Croki-owned. Never deploy or publish using the inherited
+> `t3.codes`, `pingdotgg/t3code`, T3 Clerk, or T3 relay configuration.
 
 T3 Connect uses one Clerk application for web, desktop, and mobile authentication. The relay verifies
 two kinds of bearer credential: template JWTs generated from the `t3-relay` template with the shared

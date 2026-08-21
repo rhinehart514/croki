@@ -238,6 +238,8 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
     assert.strictEqual(parsed.modelSelection, undefined);
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    assert.strictEqual(parsed.canvasEnabled, undefined);
+    assert.strictEqual(parsed.harnessId, undefined);
   }),
 );
 
@@ -258,11 +260,15 @@ it.effect("preserves explicit provider and runtime mode in thread.turn.start", (
         model: "gpt-5.4",
       },
       runtimeMode: "full-access",
+      canvasEnabled: true,
+      harnessId: "gtm-v1",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.modelSelection?.instanceId, "codex");
     assert.strictEqual(parsed.runtimeMode, "full-access");
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    assert.strictEqual(parsed.canvasEnabled, true);
+    assert.strictEqual(parsed.harnessId, "gtm-v1");
   }),
 );
 
@@ -295,7 +301,7 @@ it.effect("accepts bootstrap metadata in thread.turn.start", () =>
         prepareWorktree: {
           projectCwd: "/tmp/workspace",
           baseBranch: "main",
-          branch: "t3code/example",
+          branch: "croki/example",
           startFromOrigin: true,
         },
         runSetupScript: true,
@@ -331,7 +337,7 @@ it.effect("decodes thread.created runtime mode for historical events", () =>
   }),
 );
 
-it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
+it.effect("decodes thread.meta-updated payloads with explicit provider and worker view", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeThreadMetaUpdatedPayload({
       threadId: "thread-1",
@@ -345,11 +351,13 @@ it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
         provider: "claudeAgent",
         model: "claude-opus-4-6",
       },
+      workerView: "activity",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.previousTitle, "Previous title");
     assert.strictEqual(parsed.titleRegeneration?.requestId, "cmd-title-regenerate");
     assert.strictEqual(parsed.modelSelection?.instanceId, "claudeAgent");
+    assert.strictEqual(parsed.workerView, "activity");
   }),
 );
 
@@ -437,6 +445,53 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
     assert.strictEqual(thread.settledAt, null);
     assert.strictEqual(shell.settledOverride, null);
     assert.strictEqual(shell.settledAt, null);
+  }),
+);
+
+it.effect("decodes thread fork commands and requested events", () =>
+  Effect.gen(function* () {
+    const createdAt = "2026-01-02T03:04:05.000Z";
+    const command = yield* decodeOrchestrationCommand({
+      type: "thread.fork",
+      commandId: "command-fork",
+      threadId: "thread-fork",
+      sourceThreadId: "thread-source",
+      sourceMessageId: "message-edit",
+      createdAt,
+    });
+    assert.strictEqual(command.type, "thread.fork");
+    if (command.type !== "thread.fork") return;
+    assert.strictEqual(command.threadId, "thread-fork");
+    assert.strictEqual(command.sourceThreadId, "thread-source");
+    assert.strictEqual(command.sourceMessageId, "message-edit");
+
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 1,
+      eventId: "event-fork",
+      aggregateKind: "thread",
+      aggregateId: "thread-fork",
+      type: "thread.fork-requested",
+      occurredAt: createdAt,
+      commandId: "command-fork",
+      causationEventId: null,
+      correlationId: "command-fork",
+      metadata: {},
+      payload: {
+        threadId: "thread-fork",
+        sourceThreadId: "thread-source",
+        forkPoint: {
+          messageId: "message-edit",
+          turnId: "turn-edit",
+          createdAt,
+          rollbackTurns: 2,
+        },
+        createdAt,
+      },
+    });
+    assert.strictEqual(event.type, "thread.fork-requested");
+    if (event.type !== "thread.fork-requested") return;
+    assert.strictEqual(event.payload.sourceThreadId, "thread-source");
+    assert.strictEqual(event.payload.forkPoint?.rollbackTurns, 2);
   }),
 );
 
@@ -723,20 +778,49 @@ it.effect("accepts a source proposed plan reference in thread.turn.start", () =>
   }),
 );
 
-it.effect(
-  "decodes thread.turn-start-requested defaults for provider, runtime mode, and interaction mode",
-  () =>
-    Effect.gen(function* () {
-      const parsed = yield* decodeThreadTurnStartRequestedPayload({
-        threadId: "thread-1",
-        messageId: "msg-1",
-        createdAt: "2026-01-01T00:00:00.000Z",
-      });
-      assert.strictEqual(parsed.modelSelection, undefined);
-      assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
-      assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
-      assert.strictEqual(parsed.sourceProposedPlan, undefined);
-    }),
+it.effect("decodes legacy thread.turn-start-requested payloads without Canvas state", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartRequestedPayload({
+      threadId: "thread-1",
+      messageId: "msg-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.modelSelection, undefined);
+    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
+    assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    assert.isUndefined(parsed.canvasEnabled);
+    assert.isUndefined(parsed.harnessId);
+    assert.strictEqual(parsed.sourceProposedPlan, undefined);
+  }),
+);
+
+it.effect("preserves enabled Canvas state in thread.turn-start-requested", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartRequestedPayload({
+      threadId: "thread-1",
+      messageId: "msg-1",
+      canvasEnabled: true,
+      harnessId: "gtm-v1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    assert.isTrue(parsed.canvasEnabled);
+    assert.strictEqual(parsed.harnessId, "gtm-v1");
+  }),
+);
+
+it.effect("accepts the Product harness alongside native and GTM", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartRequestedPayload({
+      threadId: "thread-product",
+      messageId: "msg-product",
+      canvasEnabled: true,
+      harnessId: "product-v1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    assert.strictEqual(parsed.harnessId, "product-v1");
+  }),
 );
 
 it.effect("decodes thread.turn-start-requested source proposed plan metadata when present", () =>

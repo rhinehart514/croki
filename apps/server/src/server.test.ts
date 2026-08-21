@@ -2,7 +2,7 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeCrypto from "node:crypto";
-import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessEnvironment, HostProcessPlatform } from "@croki/shared/hostProcess";
 
 import {
   AuthAccessTokenType,
@@ -32,14 +32,14 @@ import {
   WS_METHODS,
   WsRpcGroup,
   EditorId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   computeDpopAccessTokenHash,
   computeDpopJwkThumbprint,
   type DpopPublicJwk,
-} from "@t3tools/shared/dpop";
-import { RELAY_HEALTH_REQUEST_TYP, RELAY_MINT_REQUEST_TYP } from "@t3tools/shared/relayJwt";
-import * as RelayClient from "@t3tools/shared/relayClient";
+} from "@croki/shared/dpop";
+import { RELAY_HEALTH_REQUEST_TYP, RELAY_MINT_REQUEST_TYP } from "@croki/shared/relayJwt";
+import * as RelayClient from "@croki/shared/relayClient";
 import { assert, it } from "@effect/vitest";
 import { assertFailure, assertInclude, assertTrue } from "@effect/vitest/utils";
 import * as Clock from "effect/Clock";
@@ -124,7 +124,7 @@ import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as BrowserTraceCollector from "./observability/BrowserTraceCollector.ts";
 import * as ProjectFaviconResolver from "./project/ProjectFaviconResolver.ts";
-import * as T3ProjectFileLoader from "./project/T3ProjectFileLoader.ts";
+import * as CrokiProjectFileLoader from "./project/CrokiProjectFileLoader.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
@@ -572,7 +572,7 @@ const buildAppUnderTest = (options?: {
       ),
       ProjectFaviconResolver.layer.pipe(
         Layer.provide(WorkspacePaths.layer),
-        Layer.provide(T3ProjectFileLoader.layer),
+        Layer.provide(CrokiProjectFileLoader.layer),
       ),
     );
     const gitWorkflowLayer = GitWorkflowService.layer.pipe(
@@ -945,7 +945,7 @@ const buildAppUnderTest = (options?: {
       ),
       Layer.provide(
         Layer.mock(CloudCliTokenManager.CloudCliTokenManager)({
-          get: Effect.die(new Error("Unexpected T3 Connect CLI authorization request.")),
+          get: Effect.die(new Error("Unexpected Croki Connect CLI authorization request.")),
           getExisting: Effect.succeed(Option.none()),
           hasCredential: Effect.succeed(false),
           clear: Effect.void,
@@ -1662,7 +1662,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
         scope: "orchestration:read orchestration:operate terminal:operate review:write",
         clientMetadata: {
-          label: "T3 Code Mobile",
+          label: "Croki Mobile",
           deviceType: "mobile",
           os: "iOS",
         },
@@ -1689,7 +1689,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(response.status, 200);
       assert.equal(clientsResponse.status, 200);
       assert.deepInclude(mobileClient?.client, {
-        label: "T3 Code Mobile",
+        label: "Croki Mobile",
         deviceType: "mobile",
         os: "iOS",
         ipAddress: "127.0.0.1",
@@ -1727,7 +1727,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           body: new URLSearchParams({
             grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
             subject_token: credential.credential,
-            subject_token_type: "urn:t3:params:oauth:token-type:environment-bootstrap",
+            subject_token_type: "urn:croki:params:oauth:token-type:environment-bootstrap",
             requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
             scope: "orchestration:read orchestration:operate terminal:operate review:write",
           }).toString(),
@@ -2643,7 +2643,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("serves the documented T3 Connect mint credential endpoint", () =>
+  it.effect("serves the documented Croki Connect mint credential endpoint", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
 
@@ -2702,7 +2702,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("serves signed T3 Connect environment health checks", () =>
+  it.effect("serves signed Croki Connect environment health checks", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
 
@@ -3531,7 +3531,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  for (const desktopOrigin of ["t3code://app", "t3code-dev://app"]) {
+  for (const desktopOrigin of ["croki://app", "croki-dev://app"]) {
     it.effect(`allows credentialed preflights from ${desktopOrigin} in development`, () =>
       Effect.gen(function* () {
         yield* buildAppUnderTest({
@@ -5069,6 +5069,44 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("routes typed websocket rpc projects.writeFile conflicts", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const workspaceDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-ws-project-write-" });
+      yield* fs.writeFileString(path.join(workspaceDir, "context.json"), "changed\n");
+
+      yield* buildAppUnderTest();
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.projectsWriteFile]({
+            cwd: workspaceDir,
+            relativePath: "context.json",
+            contents: "replacement\n",
+            expectedContentsSha256:
+              "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+          }),
+        ).pipe(Effect.result),
+      );
+
+      if (result._tag !== "Failure" || result.failure._tag !== "ProjectWriteFileError") {
+        assert.fail("Expected a ProjectWriteFileError");
+      }
+      assert.equal(result.failure.failure, "stale_write");
+      assert.equal(
+        result.failure.expectedContentsSha256,
+        "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+      );
+      assert.equal(
+        result.failure.actualContentsSha256,
+        "7f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
+      );
+      assert.equal(yield* fs.readFileString(path.join(workspaceDir, "context.json")), "changed\n");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("routes websocket rpc shell.openInEditor", () =>
     Effect.gen(function* () {
       let openedInput: { cwd: string; editor: EditorId } | null = null;
@@ -5874,6 +5912,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   {
                     threadId: ThreadId.make("thread-1"),
                     projectId: ProjectId.make("project-a"),
+                    parentThreadId: null,
                     source: "assistant",
                     snippet: "Search reached the final response.",
                     messageCreatedAt: now,
@@ -5949,6 +5988,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         {
           threadId: ThreadId.make("thread-1"),
           projectId: ProjectId.make("project-a"),
+          parentThreadId: null,
           source: "assistant",
           snippet: "Search reached the final response.",
           messageCreatedAt: now,
@@ -7307,7 +7347,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             isRepo: true,
             hasPrimaryRemote: true,
             isDefaultRef: false,
-            refName: "t3code/bootstrap-refName",
+            refName: "croki/bootstrap-refName",
             hasWorkingTreeChanges: false,
             workingTree: {
               files: [],
@@ -7350,7 +7390,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               bootstrapGitOperations.push("create-worktree");
               return {
                 worktree: {
-                  refName: "t3code/bootstrap-refName",
+                  refName: "croki/bootstrap-refName",
                   path: "/tmp/bootstrap-worktree",
                 },
               };
@@ -7427,7 +7467,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 prepareWorktree: {
                   projectCwd: "/tmp/project",
                   baseBranch: "main",
-                  branch: "t3code/bootstrap-refName",
+                  branch: "croki/bootstrap-refName",
                   startFromOrigin: true,
                 },
                 runSetupScript: true,
@@ -7451,7 +7491,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.deepEqual(createWorktree.mock.calls[0]?.[0], {
           cwd: "/tmp/project",
           refName: fetchedOriginCommit,
-          newRefName: "t3code/bootstrap-refName",
+          newRefName: "croki/bootstrap-refName",
           baseRefName: "main",
           path: null,
         });
@@ -7605,7 +7645,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
           Effect.succeed({
             worktree: {
-              refName: "t3code/bootstrap-refName",
+              refName: "croki/bootstrap-refName",
               path: "/tmp/bootstrap-worktree",
             },
           }),
@@ -7676,7 +7716,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               prepareWorktree: {
                 projectCwd: "/tmp/project",
                 baseBranch: "main",
-                branch: "t3code/bootstrap-refName",
+                branch: "croki/bootstrap-refName",
               },
               runSetupScript: true,
             },
@@ -7710,7 +7750,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
           Effect.succeed({
             worktree: {
-              refName: "t3code/bootstrap-refName",
+              refName: "croki/bootstrap-refName",
               path: "/tmp/bootstrap-worktree",
             },
           }),
@@ -7797,7 +7837,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               prepareWorktree: {
                 projectCwd: "/tmp/project",
                 baseBranch: "main",
-                branch: "t3code/bootstrap-refName",
+                branch: "croki/bootstrap-refName",
               },
               runSetupScript: true,
             },
@@ -7881,7 +7921,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               prepareWorktree: {
                 projectCwd: "/tmp/project",
                 baseBranch: "main",
-                branch: "t3code/bootstrap-refName",
+                branch: "croki/bootstrap-refName",
               },
               runSetupScript: false,
             },

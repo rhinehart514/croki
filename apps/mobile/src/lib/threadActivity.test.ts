@@ -9,7 +9,7 @@ import {
   TurnId,
   type OrchestrationThread,
   type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 
 import {
   buildPendingUserInputAnswers,
@@ -634,6 +634,7 @@ describe("quiet timeline: nested agents", () => {
       id: ThreadId.make("thread-nested"),
       projectId: ProjectId.make("project-1"),
       title: "Nested agents",
+      workerView: "activity",
       activities: [
         // A subagent's own shell: internal, covered by the owner's liveness.
         makeActivity({
@@ -661,5 +662,79 @@ describe("quiet timeline: nested agents", () => {
     );
     expect(ids).toContain("nested-done");
     expect(ids).not.toContain("shell-done");
+  });
+
+  it("keeps task lifecycle out of the parent feed in separate-chats view", () => {
+    const thread = makeThread({
+      id: ThreadId.make("thread-workers"),
+      projectId: ProjectId.make("project-1"),
+      title: "Separate worker chats",
+      workerView: "threads",
+      activities: [
+        makeActivity({
+          id: EventId.make("worker-start"),
+          kind: "task.started",
+          summary: "Worker started",
+          createdAt: "2026-04-01T00:00:02.000Z",
+          payload: { taskId: "worker-1" },
+        }),
+        makeActivity({
+          id: EventId.make("worker-done"),
+          kind: "task.completed",
+          summary: "Worker completed",
+          createdAt: "2026-04-01T00:00:03.000Z",
+          payload: { taskId: "worker-1", status: "completed" },
+        }),
+      ],
+    });
+
+    expect(buildThreadFeed(thread)).toEqual([]);
+  });
+
+  it("collapses active worker lifecycle into one In Thread row", () => {
+    const thread = makeThread({
+      id: ThreadId.make("thread-inline-workers"),
+      projectId: ProjectId.make("project-1"),
+      title: "Inline worker activity",
+      workerView: "activity",
+      activities: [
+        makeActivity({
+          id: EventId.make("worker-start"),
+          kind: "task.started",
+          summary: "Task started",
+          createdAt: "2026-04-01T00:00:01.000Z",
+          payload: {
+            taskId: "worker-1",
+            description: "Inspect persistence",
+            agentKind: "agent",
+            timelineBypass: true,
+          },
+        }),
+        makeActivity({
+          id: EventId.make("worker-progress"),
+          kind: "task.progress",
+          summary: "Task progress",
+          createdAt: "2026-04-01T00:00:02.000Z",
+          payload: {
+            taskId: "worker-1",
+            description: "Inspect persistence",
+            summary: "Reading migrations",
+            agentKind: "agent",
+            timelineBypass: true,
+          },
+        }),
+      ],
+    });
+
+    const rows = buildThreadFeed(thread).flatMap((entry) =>
+      entry.type === "activity-group" ? entry.activities : [],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: "worker-progress",
+      createdAt: "2026-04-01T00:00:01.000Z",
+      summary: "Reading migrations",
+      status: "neutral",
+    });
   });
 });

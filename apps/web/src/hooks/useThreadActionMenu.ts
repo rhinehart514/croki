@@ -1,17 +1,17 @@
-import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef, scopedThreadKey } from "@croki/client-runtime/environment";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@croki/client-runtime/state/runtime";
 import {
   canSnooze,
   effectiveSettled,
   effectiveSnoozed,
   type ChangeRequestSettleSource,
-} from "@t3tools/client-runtime/state/thread-settled";
-import type { ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+} from "@croki/client-runtime/state/thread-settled";
+import type { ScopedThreadRef, ThreadId } from "@croki/contracts";
 import { useCallback } from "react";
 
 import { resolveSnoozePresets, snoozeWakeDescription } from "../components/Sidebar.snooze";

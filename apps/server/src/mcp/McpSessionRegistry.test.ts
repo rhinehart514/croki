@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProviderInstanceId, ThreadId } from "@croki/contracts";
 import * as Effect from "effect/Effect";
 import { HttpServer } from "effect/unstable/http";
 
@@ -107,6 +107,22 @@ it.effect("keeps a credential alive across turns that never touch an MCP tool", 
     }
 
     expect((yield* registry.resolve(token))?.threadId).toBe(threadId);
+  }),
+);
+
+it.effect("never derives Canvas capability from persistent presentation state", () =>
+  Effect.gen(function* () {
+    const registry = yield* makeRegistry(() => 1_000);
+    const threadId = ThreadId.make("thread-canvas");
+    const issued = yield* registry.issue({
+      threadId,
+      providerInstanceId: ProviderInstanceId.make("codex"),
+    });
+    const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
+
+    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
+    yield* registry.touch(threadId);
+    expect((yield* registry.resolve(token))?.capabilities.has("canvas")).toBe(false);
   }),
 );
 

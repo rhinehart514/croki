@@ -1,4 +1,4 @@
-import type { EnvironmentId, ProjectId, PullRequestListEntry } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, PullRequestListEntry } from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -603,12 +603,12 @@ describe("the list snapshot across a reload", () => {
   it("rejects a snapshot whose rows do not decode as entries", () => {
     const storage = makeStorage();
     storage.setItem(
-      "t3.pullRequests.list:env-1",
+      "croki.pullRequests.list:env-1",
       JSON.stringify({ scope: "s", data: { entries: [null] } }),
     );
     expect(readPullRequestListSnapshot(storage, "env-1")).toBeNull();
     storage.setItem(
-      "t3.pullRequests.list:env-1",
+      "croki.pullRequests.list:env-1",
       JSON.stringify({ scope: "s", data: { entries: [{ host: "github.com" }] } }),
     );
     expect(readPullRequestListSnapshot(storage, "env-1")).toBeNull();
@@ -616,7 +616,7 @@ describe("the list snapshot across a reload", () => {
 
   it("shrugs off corrupt storage and no storage at all", () => {
     const storage = makeStorage();
-    storage.setItem("t3.pullRequests.list:env-1", "{not json");
+    storage.setItem("croki.pullRequests.list:env-1", "{not json");
     expect(readPullRequestListSnapshot(storage, "env-1")).toBeNull();
     expect(readPullRequestListSnapshot(undefined, "env-1")).toBeNull();
   });

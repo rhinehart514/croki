@@ -1,6 +1,6 @@
-import { EnvironmentId, type DesktopSshEnvironmentTarget } from "@t3tools/contracts";
-import { RelayEnvironmentConnectScope } from "@t3tools/contracts/relay";
-import { RelayClientTracer } from "@t3tools/shared/relayTracing";
+import { EnvironmentId, type DesktopSshEnvironmentTarget } from "@croki/contracts";
+import { RelayEnvironmentConnectScope } from "@croki/contracts/relay";
+import { RelayClientTracer } from "@croki/shared/relayTracing";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

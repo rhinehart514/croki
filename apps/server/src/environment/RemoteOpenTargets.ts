@@ -8,10 +8,10 @@
  * Targets are ordered most-reachable first (tailnet name works from anywhere
  * on the tailnet; `<hostname>.local` only on the same LAN).
  */
-import { type RemoteOpenTarget } from "@t3tools/contracts";
-import { HostProcessHostname } from "@t3tools/shared/hostProcess";
-import * as NetService from "@t3tools/shared/Net";
-import { readTailscaleStatus } from "@t3tools/tailscale";
+import { type RemoteOpenTarget } from "@croki/contracts";
+import { HostProcessHostname } from "@croki/shared/hostProcess";
+import * as NetService from "@croki/shared/Net";
+import { readTailscaleStatus } from "@croki/tailscale";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -24,7 +24,7 @@ export class RemoteOpenTargets extends Context.Service<
   {
     readonly resolveTargets: () => Effect.Effect<ReadonlyArray<RemoteOpenTarget>>;
   }
->()("t3/environment/RemoteOpenTargets") {}
+>()("croki-server/environment/RemoteOpenTargets") {}
 
 export const make = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;

@@ -1,4 +1,4 @@
-import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { ProviderInstanceId, ThreadId } from "@croki/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -39,7 +39,7 @@ export interface McpSessionRegistryShape {
 export class McpSessionRegistry extends Context.Service<
   McpSessionRegistry,
   McpSessionRegistryShape
->()("t3/mcp/McpSessionRegistry") {}
+>()("croki-server/mcp/McpSessionRegistry") {}
 
 interface CredentialRecord {
   readonly tokenHash: string;
@@ -173,7 +173,16 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         const next = new Map(current);
         for (const [tokenHash, record] of current) {
           if (record.scope.threadId === threadId) {
-            next.set(tokenHash, { ...record, lastAliveAt: timestamp });
+            next.set(tokenHash, {
+              ...record,
+              scope: {
+                ...record.scope,
+                // Canvas is a presentation preference until Croki exposes a
+                // visible, removable per-turn capability selection.
+                capabilities: new Set(["preview"]),
+              },
+              lastAliveAt: timestamp,
+            });
           }
         }
         return { records: next };

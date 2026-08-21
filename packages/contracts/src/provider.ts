@@ -4,6 +4,7 @@ import {
   ApprovalRequestId,
   EventId,
   IsoDateTime,
+  MessageId,
   ProviderItemId,
   ThreadId,
   TurnId,
@@ -75,8 +76,29 @@ export const ProviderSendTurnInput = Schema.Struct({
   ),
   modelSelection: Schema.optional(ModelSelection),
   interactionMode: Schema.optional(ProviderInteractionMode),
+  /** @deprecated Compatibility-only Canvas presentation state; providers must ignore it. */
+  canvasEnabled: Schema.optional(Schema.Boolean),
 });
 export type ProviderSendTurnInput = typeof ProviderSendTurnInput.Type;
+
+export const ProviderSteerTurnInput = Schema.Struct({
+  threadId: ThreadId,
+  expectedTurnId: TurnId,
+  messageId: MessageId,
+  input: Schema.optional(
+    TrimmedNonEmptyString.check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_INPUT_CHARS)),
+  ),
+  attachments: Schema.optional(
+    Schema.Array(ChatAttachment).check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_ATTACHMENTS)),
+  ),
+});
+export type ProviderSteerTurnInput = typeof ProviderSteerTurnInput.Type;
+
+export const ProviderTurnSteerResult = Schema.Struct({
+  threadId: ThreadId,
+  turnId: TurnId,
+});
+export type ProviderTurnSteerResult = typeof ProviderTurnSteerResult.Type;
 
 export const ProviderTurnStartResult = Schema.Struct({
   threadId: ThreadId,
@@ -119,6 +141,8 @@ export const ProviderEvent = Schema.Struct({
   // See ProviderSession for the migration story.
   providerInstanceId: Schema.optional(ProviderInstanceId),
   threadId: ThreadId,
+  parentThreadId: Schema.optional(ThreadId),
+  childPrompt: Schema.optional(Schema.String),
   createdAt: IsoDateTime,
   method: TrimmedNonEmptyString,
   message: Schema.optional(TrimmedNonEmptyString),

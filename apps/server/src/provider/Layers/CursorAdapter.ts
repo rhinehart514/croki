@@ -20,7 +20,7 @@ import {
   type RuntimeMode,
   type ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
@@ -54,6 +54,7 @@ import type * as AcpSessionRuntime from "../acp/AcpSessionRuntime.ts";
 import {
   makeAcpAssistantItemEvent,
   makeAcpContentDeltaEvent,
+  makeAcpContentImageEvent,
   makeAcpPlanUpdatedEvent,
   makeAcpRequestOpenedEvent,
   makeAcpRequestResolvedEvent,
@@ -538,13 +539,13 @@ export function makeCursorAdapter(
             childProcessSpawner,
             cwd,
             ...(resumeSessionId ? { resumeSessionId } : {}),
-            clientInfo: { name: "t3-code", version: "0.0.0" },
+            clientInfo: { name: "croki", version: "0.0.0" },
             ...(mcpSession
               ? {
                   mcpServers: [
                     {
                       type: "http" as const,
-                      name: "t3-code",
+                      name: "croki",
                       url: mcpSession.endpoint,
                       headers: [
                         {
@@ -867,6 +868,27 @@ export function makeCursorAdapter(
                       }),
                     );
                     return;
+                  case "ContentImage":
+                    yield* logNative(
+                      ctx.threadId,
+                      "session/update",
+                      event.rawPayload,
+                      "acp.jsonrpc",
+                    );
+                    yield* offerRuntimeEvent(
+                      makeAcpContentImageEvent({
+                        stamp: yield* makeEventStamp(),
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: ctx.activeTurnId,
+                        ...(event.itemId ? { itemId: event.itemId } : {}),
+                        data: event.data,
+                        mimeType: event.mimeType,
+                        ...(event.uri !== undefined ? { uri: event.uri } : {}),
+                        rawPayload: event.rawPayload,
+                      }),
+                    );
+                    return;
                 }
               }),
             ),
@@ -1135,6 +1157,15 @@ export function makeCursorAdapter(
         return { threadId, turns: ctx.turns };
       });
 
+    const forkThread: CursorAdapterShape["forkThread"] = (_sourceThreadId, _targetThreadId) =>
+      Effect.fail(
+        new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Cursor ACP sessions do not support native conversation forks.",
+        }),
+      );
+
     const stopSession: CursorAdapterShape["stopSession"] = (threadId) =>
       withThreadLock(
         threadId,
@@ -1170,12 +1201,13 @@ export function makeCursorAdapter(
 
     return {
       provider: PROVIDER,
-      capabilities: { sessionModelSwitch: "in-session" },
+      capabilities: { sessionModelSwitch: "in-session", conversationFork: "unsupported" },
       startSession,
       sendTurn,
       interruptTurn,
       readThread,
       rollbackThread,
+      forkThread,
       respondToRequest,
       respondToUserInput,
       stopSession,

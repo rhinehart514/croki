@@ -6,6 +6,7 @@ import {
   TerminalIcon,
 } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
+import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, memo, useCallback, useId, useMemo, useState } from "react";
 import {
   AuthAccessReadScope,
@@ -27,16 +28,17 @@ import {
   type DesktopServerExposureState,
   type DesktopWslState,
   type EnvironmentId,
-} from "@t3tools/contracts";
-import { connectionStatusText } from "@t3tools/client-runtime/connection";
+} from "@croki/contracts";
+import { connectionStatusText } from "@croki/client-runtime/connection";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@croki/client-runtime/state/runtime";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { isElectron } from "../../env";
 import { cn } from "../../lib/utils";
 import { formatElapsedDurationLabel, formatExpiresInLabel } from "../../timestampFormat";
 import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
@@ -103,6 +105,7 @@ import { useUiStateStore } from "~/uiStateStore";
 import {
   resolveServerConfigVersionMismatch,
   resolveServerSelfUpdateCapability,
+  serverUpdatePathAvailable,
 } from "~/versionSkew";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
@@ -1361,6 +1364,7 @@ function SavedBackendListRow({
   onConnect,
   onRemove,
 }: SavedBackendListRowProps) {
+  const navigate = useNavigate();
   const environmentId = environment.environmentId;
   const connectionState = environment.connection.phase;
   const isConnected = connectionState === "connected";
@@ -1401,6 +1405,8 @@ function SavedBackendListRow({
     [copyTraceIdToClipboard],
   );
   const versionMismatch = resolveServerConfigVersionMismatch(environment.serverConfig);
+  const serverSelfUpdate = resolveServerSelfUpdateCapability(environment.serverConfig);
+  const serverUpdateAvailable = serverUpdatePathAvailable(serverSelfUpdate);
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
@@ -1412,7 +1418,7 @@ function SavedBackendListRow({
       : null;
   const metadataBits = [
     sshTarget ? `SSH ${formatDesktopSshTarget(sshTarget)}` : null,
-    environment.relayManaged ? "T3 Connect" : null,
+    environment.relayManaged ? "Croki Connect" : null,
   ].filter((value): value is string => value !== null);
 
   // The WSL backend is a desktop-managed local backend (it surfaces as a bearer
@@ -1452,13 +1458,24 @@ function SavedBackendListRow({
                     type="button"
                     className="w-fit cursor-help rounded-sm text-left text-muted-foreground text-xs"
                   >
-                    Server update available
+                    {versionMismatch.updateTarget === "client"
+                      ? "Update Croki on this device"
+                      : versionMismatch.updateTarget === "server"
+                        ? serverUpdateAvailable
+                          ? "Server update available"
+                          : "Server is older"
+                        : "Croki versions differ"}
                   </button>
                 }
               />
               <TooltipPopup side="top">
-                {versionMismatch.serverVersion} <span aria-hidden="true">→</span>{" "}
-                {versionMismatch.clientVersion}
+                {versionMismatch.updateTarget === "client"
+                  ? `${versionMismatch.clientVersion} → ${versionMismatch.serverVersion}`
+                  : versionMismatch.updateTarget === "server"
+                    ? serverUpdateAvailable
+                      ? `${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}`
+                      : `This server is older (${versionMismatch.serverVersion} → ${versionMismatch.clientVersion}), but remote updates aren’t available in this Croki release.`
+                    : `${versionMismatch.clientVersion} ≠ ${versionMismatch.serverVersion}`}
               </TooltipPopup>
             </Tooltip>
           ) : null}
@@ -1478,12 +1495,17 @@ function SavedBackendListRow({
           ) : null}
         </div>
         <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
-          {versionMismatch &&
-          (serverUpdateState.status === "idle" || serverUpdateState.status === "failed") ? (
+          {versionMismatch?.updateTarget === "client" && isElectron ? (
+            <Button size="xs" onClick={() => void navigate({ to: "/settings" })}>
+              Update Croki
+            </Button>
+          ) : versionMismatch?.updateTarget === "server" &&
+            serverUpdateAvailable &&
+            (serverUpdateState.status === "idle" || serverUpdateState.status === "failed") ? (
             <ServerUpdateAction
               environmentId={environmentId}
               serverLabel={`${environment.label} server`}
-              selfUpdate={resolveServerSelfUpdateCapability(environment.serverConfig)}
+              selfUpdate={serverSelfUpdate}
               targetVersion={versionMismatch.clientVersion}
               label={serverUpdateState.status === "failed" ? "Retry" : "Update"}
             />
@@ -1582,7 +1604,7 @@ function CloudLinkSwitch({
   disabled,
   disabledReason,
   onCheckedChange,
-  ariaLabel = "Enable T3 Connect",
+  ariaLabel = "Enable Croki Connect",
 }: {
   readonly checked: boolean;
   readonly disabled: boolean;
@@ -1621,9 +1643,9 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
   const [isUpdatingPreference, setIsUpdatingPreference] = useState(false);
 
   const disabledReason = !isSignedIn
-    ? "Sign in to T3 Connect to manage this environment."
+    ? "Sign in to Croki Connect to manage this environment."
     : !canManageRelay
-      ? "Your session does not have permission to manage T3 Connect access."
+      ? "Your session does not have permission to manage Croki Connect access."
       : null;
   const isBusy = isUpdating || isUpdatingPreference;
 
@@ -1636,15 +1658,15 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
       toastManager.add({
         type: "success",
         title: enabled
-          ? "T3 Connect linked"
+          ? "Croki Connect linked"
           : publishAgentActivity
-            ? "T3 Connect tunnel disabled"
-            : "T3 Connect unlinked",
+            ? "Croki Connect tunnel disabled"
+            : "Croki Connect unlinked",
         description: enabled
-          ? "This environment is available through T3 Connect."
+          ? "This environment is available through Croki Connect."
           : publishAgentActivity
             ? "The managed tunnel was removed. Agent activity publishing stays on."
-            : "This environment is no longer available through T3 Connect.",
+            : "This environment is no longer available through Croki Connect.",
       });
     }
     setIsUpdating(false);
@@ -1688,7 +1710,7 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
       ) : null}
       <SettingsRow
         title="Publish agent activity"
-        description="Send activity from this environment to your mobile clients for push notifications and Live Activities. Works without a T3 Connect tunnel."
+        description="Send activity from this environment to your mobile clients for push notifications and Live Activities. Works without a Croki Connect tunnel."
         control={
           <CloudLinkSwitch
             ariaLabel="Publish agent activity to mobile clients"
@@ -1717,7 +1739,7 @@ function EmptyRemoteEnvironments({ cloudEnabled = true }: { readonly cloudEnable
         <EmptyTitle>No saved remote environments</EmptyTitle>
         <EmptyDescription>
           {cloudEnabled
-            ? "Click “Add environment” to pair another environment, or connect one from T3 Connect."
+            ? "Click “Add environment” to pair another environment, or connect one from Croki Connect."
             : "Click “Add environment” to pair another environment."}
         </EmptyDescription>
       </EmptyHeader>
@@ -1744,6 +1766,7 @@ function CloudRemoteEnvironmentRows({
 }
 
 export function ConnectionsSettings() {
+  const navigate = useNavigate();
   const desktopBridge = window.desktopBridge;
   const { environments } = useEnvironments();
   const primaryEnvironment = usePrimaryEnvironment();
@@ -1868,6 +1891,8 @@ export function ConnectionsSettings() {
   >(null);
   const primaryServerConfig = primaryEnvironment?.serverConfig ?? null;
   const primaryVersionMismatch = resolveServerConfigVersionMismatch(primaryServerConfig);
+  const primaryServerSelfUpdate = resolveServerSelfUpdateCapability(primaryServerConfig);
+  const primaryServerUpdateAvailable = serverUpdatePathAvailable(primaryServerSelfUpdate);
   const primaryServerUpdateState = useAtomValue(
     serverEnvironment.updateStateAtom(primaryEnvironmentId),
   );
@@ -2884,7 +2909,7 @@ export function ConnectionsSettings() {
         {desktopWslState.enabled ? (
           <SettingsRow
             title="WSL only"
-            description="Stop the Windows backend and run only the WSL backend. Useful if you develop entirely inside WSL and don't want a second backend process. T3 Code restarts when you change this."
+            description="Stop the Windows backend and run only the WSL backend. Useful if you develop entirely inside WSL and don't want a second backend process. Croki restarts when you change this."
             className="bg-muted/20 pl-7 sm:pl-8"
             control={
               <Switch
@@ -3024,35 +3049,44 @@ export function ConnectionsSettings() {
                     ? "Update failed"
                     : primaryServerUpdateState.status === "running"
                       ? "Updating server"
-                      : "Server update available"
+                      : primaryVersionMismatch?.updateTarget === "client"
+                        ? "Update Croki on this device"
+                        : primaryVersionMismatch?.updateTarget === "server"
+                          ? primaryServerUpdateAvailable
+                            ? "Server update available"
+                            : "Server is older"
+                          : "Croki versions differ"
                 }
                 description={
                   primaryServerUpdateState.status !== "idle" ? (
                     <ServerUpdateProgress state={primaryServerUpdateState} />
                   ) : primaryVersionMismatch ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button type="button" className="w-fit cursor-help rounded-sm text-left">
-                            Update to match this client.
-                          </button>
-                        }
-                      />
-                      <TooltipPopup side="top">
-                        {primaryVersionMismatch.serverVersion} <span aria-hidden="true">→</span>{" "}
-                        {primaryVersionMismatch.clientVersion}
-                      </TooltipPopup>
-                    </Tooltip>
+                    primaryVersionMismatch.updateTarget === "client" ? (
+                      "Update Croki on this device to match this server."
+                    ) : primaryVersionMismatch.updateTarget === "server" ? (
+                      primaryServerUpdateAvailable ? (
+                        "Update this server to match this Croki client."
+                      ) : (
+                        "This server is older, but remote updates aren’t available in this Croki release."
+                      )
+                    ) : (
+                      "Use the same Croki version for this client and server."
+                    )
                   ) : null
                 }
                 control={
-                  primaryVersionMismatch &&
-                  primaryEnvironmentId !== null &&
-                  primaryServerUpdateState.status !== "running" ? (
+                  primaryVersionMismatch?.updateTarget === "client" && isElectron ? (
+                    <Button size="xs" onClick={() => void navigate({ to: "/settings" })}>
+                      Update Croki
+                    </Button>
+                  ) : primaryVersionMismatch?.updateTarget === "server" &&
+                    primaryServerUpdateAvailable &&
+                    primaryEnvironmentId !== null &&
+                    primaryServerUpdateState.status !== "running" ? (
                     <ServerUpdateAction
                       environmentId={primaryEnvironmentId}
                       serverLabel={primaryEnvironment?.label ?? "this server"}
-                      selfUpdate={resolveServerSelfUpdateCapability(primaryServerConfig)}
+                      selfUpdate={primaryServerSelfUpdate}
                       targetVersion={primaryVersionMismatch.clientVersion}
                       label={primaryServerUpdateState.status === "failed" ? "Retry" : "Update"}
                     />
@@ -3115,8 +3149,8 @@ export function ConnectionsSettings() {
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {pendingDesktopServerExposureMode === "network-accessible"
-                    ? "T3 Code will restart to expose this environment over the network."
-                    : "T3 Code will restart and limit this environment back to this machine."}
+                    ? "Croki will restart to expose this environment over the network."
+                    : "Croki will restart and limit this environment back to this machine."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -3174,15 +3208,15 @@ export function ConnectionsSettings() {
                 <AlertDialogDescription>
                   {pendingWslChange?.kind === "disable"
                     ? pendingWslChange.wasWslOnly
-                      ? "T3 Code will restart on the Windows backend. Threads and projects opened against WSL stay safe inside the distro and become available again when you re-enable WSL."
-                      : "The WSL backend will stop. Threads and projects opened against WSL stay safe inside the distro, but they'll be unavailable in T3 Code until you re-enable WSL."
+                      ? "Croki will restart on the Windows backend. Threads and projects opened against WSL stay safe inside the distro and become available again when you re-enable WSL."
+                      : "The WSL backend will stop. Threads and projects opened against WSL stay safe inside the distro, but they'll be unavailable in Croki until you re-enable WSL."
                     : pendingWslChange?.kind === "distro"
-                      ? "T3 Code will restart the WSL backend on the new distro. Sessions still running on the current distro will be interrupted."
+                      ? "Croki will restart the WSL backend on the new distro. Sessions still running on the current distro will be interrupted."
                       : pendingWslChange?.kind === "enable"
                         ? "Run the WSL backend alongside the Windows one, or stop the Windows backend and use only WSL? You can change this later from Settings."
                         : pendingWslChange?.nextValue
-                          ? "T3 Code will restart and start only the WSL backend. Your Windows-side projects won't be accessible until you turn this off again."
-                          : "T3 Code will restart and bring the Windows backend back up alongside WSL."}
+                          ? "Croki will restart and start only the WSL backend. Your Windows-side projects won't be accessible until you turn this off again."
+                          : "Croki will restart and bring the Windows backend back up alongside WSL."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -3268,7 +3302,7 @@ export function ConnectionsSettings() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Disable Tailscale HTTPS?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  T3 Code will restart the local backend without Tailscale Serve.
+                  Croki will restart the local backend without Tailscale Serve.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -3306,7 +3340,7 @@ export function ConnectionsSettings() {
               <DialogHeader>
                 <DialogTitle>Set up Tailscale HTTPS?</DialogTitle>
                 <DialogDescription>
-                  T3 Code will restart the local backend with Tailscale Serve enabled and ask
+                  Croki will restart the local backend with Tailscale Serve enabled and ask
                   Tailscale to proxy HTTPS traffic to this backend.
                 </DialogDescription>
               </DialogHeader>

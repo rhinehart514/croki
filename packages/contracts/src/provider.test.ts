@@ -151,6 +151,18 @@ describe("ProviderSendTurnInput", () => {
     expect(getOptionValue(parsed.modelSelection?.options, "effort")).toBe("ultrathink");
     expect(getOptionValue(parsed.modelSelection?.options, "fastMode")).toBe(true);
   });
+
+  it("does not carry legacy Croki behavior metadata into provider requests", () => {
+    const parsed = decodeProviderSendTurnInput({
+      threadId: "thread-1",
+      input: "Reconsider Canvas",
+      canvasEnabled: true,
+      harnessId: "product-v1",
+    });
+
+    expect("harnessId" in parsed).toBe(false);
+    expect(parsed.canvasEnabled).toBe(true);
+  });
 });
 
 describe("providerInstanceId routing key (slice-2 invariant)", () => {

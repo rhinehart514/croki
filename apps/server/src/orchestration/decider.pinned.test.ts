@@ -4,7 +4,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -17,6 +17,7 @@ const PINNED_AT = "1969-12-30T00:00:00.000Z";
 function makeReadModel(input: {
   readonly pinnedAt?: string | null;
   readonly pinOrderKey?: string | null;
+  readonly parentThreadId?: string | null;
   readonly archivedAt?: string | null;
   readonly settledOverride?: "settled" | "active" | null;
   readonly settledAt?: string | null;
@@ -36,6 +37,7 @@ function makeReadModel(input: {
         interactionMode: "default",
         branch: null,
         worktreePath: null,
+        parentThreadId: input.parentThreadId == null ? null : ThreadId.make(input.parentThreadId),
         latestTurn: null,
         createdAt: NOW,
         updatedAt: NOW,

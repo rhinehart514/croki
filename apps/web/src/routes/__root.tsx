@@ -1,6 +1,6 @@
-import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
-import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { type ServerLifecycleWelcomePayload } from "@croki/contracts";
+import { scopedProjectKey, scopeProjectRef } from "@croki/client-runtime/environment";
+import { squashAtomCommandFailure } from "@croki/client-runtime/state/runtime";
 import {
   Outlet,
   createRootRoute,
@@ -19,7 +19,9 @@ import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDi
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
+import { CompletionSoundCoordinator } from "../components/CompletionSoundCoordinator";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
+import { RendererRecoveryReceiptCoordinator } from "../components/RendererRecoveryReceiptCoordinator";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { Button } from "../components/ui/button";
 import {
@@ -139,6 +141,8 @@ function RootRouteView() {
         <SshPasswordPromptDialog />
         <ConfirmDialogHost />
         <SlowRpcRequestToastCoordinator />
+        {primaryEnvironmentAuthenticated ? <RendererRecoveryReceiptCoordinator /> : null}
+        <CompletionSoundCoordinator />
         <HostedStaticEnvironmentBootstrap />
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
         {primaryEnvironmentAuthenticated ? <PlanAgentSelectionHeal /> : null}

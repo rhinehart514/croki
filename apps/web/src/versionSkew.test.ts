@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { APP_VERSION } from "./branding";
@@ -8,21 +8,46 @@ import {
   dismissVersionMismatch,
   isVersionMismatchDismissed,
   resolveServerConfigVersionMismatch,
+  resolveServerPackageUpdatesAvailable,
   resolveServerSelfUpdateCapability,
   resolveVersionMismatch,
   serverUpdateGuidance,
+  serverUpdatePathAvailable,
 } from "./versionSkew";
 
 describe("versionSkew", () => {
   it("does not warn when versions match", () => {
     expect(resolveVersionMismatch(APP_VERSION)).toBeNull();
+    expect(resolveVersionMismatch(`v${APP_VERSION}`)).toBeNull();
   });
 
-  it("returns a mismatch when the server version differs from the client", () => {
+  it("directs newer clients to update an older server", () => {
+    expect(resolveVersionMismatch("0.0.0-alpha.1")).toEqual({
+      clientVersion: APP_VERSION,
+      serverVersion: "0.0.0-alpha.1",
+      updateTarget: "server",
+      hint: "This server is older than this Croki client. Update the server to match it.",
+    });
+  });
+
+  it("directs older clients to update themselves instead of rolling back a newer server", () => {
     expect(resolveVersionMismatch("9.9.9")).toEqual({
       clientVersion: APP_VERSION,
       serverVersion: "9.9.9",
-      hint: "Version mismatch. Try syncing the client and server to the same T3 Code version.",
+      updateTarget: "client",
+      hint: "This server is newer than this Croki client. Update Croki on this device to match it.",
+    });
+  });
+
+  it("does not choose an update target for versions it cannot compare safely", () => {
+    expect(resolveVersionMismatch("development")).toEqual({
+      clientVersion: APP_VERSION,
+      serverVersion: "development",
+      updateTarget: null,
+      hint: "Version mismatch. Sync this Croki client and server to the same version.",
+    });
+    expect(resolveVersionMismatch(`${APP_VERSION}+server-build`)).toMatchObject({
+      updateTarget: null,
     });
   });
 
@@ -74,7 +99,7 @@ describe("versionSkew", () => {
     const mismatch = resolveVersionMismatch("9.9.9");
 
     expect(appendVersionMismatchHint("Socket closed.", mismatch)).toBe(
-      "Socket closed. Hint: Version mismatch. Try syncing the client and server to the same T3 Code version.",
+      "Socket closed. Hint: This server is newer than this Croki client. Update Croki on this device to match it.",
     );
   });
 
@@ -94,6 +119,18 @@ describe("versionSkew", () => {
       }),
     ).toBe("desktop-managed");
     expect(resolveServerSelfUpdateCapability(null)).toBeNull();
+  });
+
+  it("only offers package-backed server updates when that release destination exists", () => {
+    expect(resolveServerPackageUpdatesAvailable(undefined, true)).toBe(true);
+    expect(resolveServerPackageUpdatesAvailable("false", true)).toBe(false);
+    expect(resolveServerPackageUpdatesAvailable("true", false)).toBe(true);
+    expect(resolveServerPackageUpdatesAvailable(undefined, false)).toBe(false);
+    expect(serverUpdatePathAvailable("boot-service", false)).toBe(false);
+    expect(serverUpdatePathAvailable("respawn", false)).toBe(false);
+    expect(serverUpdatePathAvailable(null, false)).toBe(false);
+    expect(serverUpdatePathAvailable("boot-service", true)).toBe(true);
+    expect(serverUpdatePathAvailable("desktop-managed", false)).toBe(true);
   });
 
   it("matches version-drift guidance to the advertised update path", () => {

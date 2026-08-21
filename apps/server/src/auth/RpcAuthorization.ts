@@ -10,7 +10,7 @@ import {
   type AuthEnvironmentScope,
   WS_METHODS,
   WsRpcGroup,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
 type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
@@ -25,6 +25,7 @@ export const RPC_REQUIRED_SCOPES = {
   [ORCHESTRATION_WS_METHODS.getWorkflowScript]: AuthOrchestrationReadScope,
   [ORCHESTRATION_WS_METHODS.getTurnDiff]: AuthOrchestrationReadScope,
   [ORCHESTRATION_WS_METHODS.getFullThreadDiff]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_WS_METHODS.getProjectPerception]: AuthOrchestrationReadScope,
   [ORCHESTRATION_WS_METHODS.searchThreads]: AuthOrchestrationReadScope,
   [ORCHESTRATION_WS_METHODS.subscribeShell]: AuthOrchestrationReadScope,
   [ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot]: AuthOrchestrationReadScope,
@@ -77,6 +78,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.sourceControlCloneRepository]: AuthOrchestrationOperateScope,
   [WS_METHODS.sourceControlPublishRepository]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsListEntries]: AuthOrchestrationReadScope,
+  [WS_METHODS.projectsListComponents]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsReadFile]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsSearchContents]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsSearchEntries]: AuthOrchestrationReadScope,
@@ -84,6 +86,9 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.shellOpenInEditor]: AuthOrchestrationOperateScope,
   [WS_METHODS.filesystemBrowse]: AuthOrchestrationReadScope,
   [WS_METHODS.assetsCreateUrl]: AuthOrchestrationReadScope,
+  [WS_METHODS.codexVoiceStart]: AuthOrchestrationOperateScope,
+  [WS_METHODS.codexVoiceStop]: AuthOrchestrationOperateScope,
+  [WS_METHODS.codexVoiceSubscribe]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeVcsStatus]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeResourceTelemetry]: AuthOrchestrationReadScope,
   [WS_METHODS.vcsRefreshStatus]: AuthOrchestrationReadScope,

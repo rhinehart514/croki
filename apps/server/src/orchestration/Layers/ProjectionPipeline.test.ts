@@ -8,7 +8,7 @@ import {
   ThreadId,
   TurnId,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -147,6 +147,9 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       assert.deepEqual(projectRows, [
         { projectId: "project-1", title: "Project 1", scriptsJson: "[]" },
       ]);
+
+      const perceptionRows = yield* sql`SELECT project_id FROM projection_project_perception`;
+      assert.deepEqual(perceptionRows, []);
 
       const messageRows = yield* sql<{
         readonly messageId: string;
@@ -384,6 +387,395 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-atta
             sizeBytes: 5,
           },
         ]);
+      }),
+    );
+  },
+);
+
+it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-fork-")))(
+  "OrchestrationProjectionPipeline thread forks",
+  (it) => {
+    it.effect("clones stable history, lineage, and independently owned attachments", () =>
+      Effect.gen(function* () {
+        const projectionPipeline = yield* OrchestrationProjectionPipeline;
+        const eventStore = yield* OrchestrationEventStore;
+        const sql = yield* SqlClient.SqlClient;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const serverConfig = yield* ServerConfig;
+        const sourceThreadId = ThreadId.make("fork-source");
+        const targetThreadId = ThreadId.make("fork-target");
+        const editTargetThreadId = ThreadId.make("fork-edit-target");
+        const now = "2026-07-31T12:00:00.000Z";
+        const attachmentUuid = "12345678-1234-1234-1234-123456789abc";
+        const sourceAttachmentId = `fork-source-${attachmentUuid}`;
+        const targetAttachmentId = `fork-target-${attachmentUuid}`;
+        const historyAttachmentUuid = "87654321-4321-4321-4321-cba987654321";
+        const sourceHistoryAttachmentId = `fork-source-${historyAttachmentUuid}`;
+        const targetHistoryAttachmentId = `fork-target-${historyAttachmentUuid}`;
+
+        yield* fileSystem.makeDirectory(serverConfig.attachmentsDir, { recursive: true });
+        yield* fileSystem.writeFile(
+          path.join(serverConfig.attachmentsDir, `${sourceAttachmentId}.png`),
+          new Uint8Array([1, 2, 3]),
+        );
+        yield* fileSystem.writeFile(
+          path.join(serverConfig.attachmentsDir, `${sourceHistoryAttachmentId}.png`),
+          new Uint8Array([4, 5, 6]),
+        );
+
+        yield* eventStore.append({
+          type: "thread.created",
+          eventId: EventId.make("evt-fork-source"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-source"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-source"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            projectId: ProjectId.make("project-fork"),
+            title: "Original",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5.4",
+            },
+            runtimeMode: "full-access",
+            branch: "main",
+            worktreePath: "/tmp/project-fork",
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.message-sent",
+          eventId: EventId.make("evt-fork-message"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-message"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-message"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            messageId: MessageId.make("fork-message"),
+            role: "user",
+            text: "Inspect this",
+            attachments: [
+              {
+                type: "image",
+                id: sourceAttachmentId,
+                name: "example.png",
+                mimeType: "image/png",
+                sizeBytes: 3,
+              },
+            ],
+            turnId: null,
+            streaming: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.activity-appended",
+          eventId: EventId.make("evt-fork-open-request"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-open-request"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-open-request"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            activity: {
+              id: EventId.make("activity-fork-open-request"),
+              turnId: null,
+              tone: "approval",
+              kind: "user-input.requested",
+              summary: "Needs input",
+              payload: { requestId: "request-open" },
+              createdAt: now,
+            },
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.activity-appended",
+          eventId: EventId.make("evt-fork-history"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-history"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-history"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            activity: {
+              id: EventId.make("activity-fork-history"),
+              turnId: null,
+              tone: "info",
+              kind: "tool.completed",
+              summary: "Finished",
+              payload: {},
+              createdAt: now,
+            },
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.activity-appended",
+          eventId: EventId.make("evt-fork-ui-history"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: now,
+          commandId: CommandId.make("cmd-fork-ui-history"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-ui-history"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            activity: {
+              id: EventId.make("activity-fork-ui-history"),
+              turnId: null,
+              tone: "info",
+              kind: "preview.snapshot",
+              summary: "Checked Settings",
+              payload: {
+                version: 1,
+                entry: {
+                  id: "screen-fork",
+                  attachmentId: sourceHistoryAttachmentId,
+                  url: "http://localhost:5173/settings",
+                  title: "Settings",
+                  observedAt: now,
+                  width: 1_280,
+                  height: 800,
+                  interactiveElementCount: 4,
+                  consoleErrorCount: 0,
+                  networkFailureCount: 0,
+                  actionCount: 1,
+                },
+                frame: {
+                  kind: "attachment",
+                  ref: sourceHistoryAttachmentId,
+                  mimeType: "image/png",
+                  width: 1_280,
+                  height: 800,
+                },
+              },
+              createdAt: now,
+            },
+          },
+        });
+        const pinnedAt = "2026-07-31T12:00:30.000Z";
+        const titleRegenerationRequestId = CommandId.make("cmd-fork-title-regeneration");
+        yield* eventStore.append({
+          type: "thread.pinned",
+          eventId: EventId.make("evt-fork-pinned"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: pinnedAt,
+          commandId: CommandId.make("cmd-fork-pinned"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-pinned"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            pinnedAt,
+            updatedAt: pinnedAt,
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.meta-updated",
+          eventId: EventId.make("evt-fork-title-regeneration"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: pinnedAt,
+          commandId: titleRegenerationRequestId,
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-title-regeneration"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            regenerateTitle: true,
+            previousTitle: "Original",
+            titleRegeneration: {
+              requestId: titleRegenerationRequestId,
+              startedAt: pinnedAt,
+            },
+            updatedAt: pinnedAt,
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.fork-requested",
+          eventId: EventId.make("evt-fork-target"),
+          aggregateKind: "thread",
+          aggregateId: targetThreadId,
+          occurredAt: "2026-07-31T12:01:00.000Z",
+          commandId: CommandId.make("cmd-fork-target"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-target"),
+          metadata: {},
+          payload: {
+            threadId: targetThreadId,
+            sourceThreadId,
+            createdAt: "2026-07-31T12:01:00.000Z",
+          },
+        });
+        yield* eventStore.append({
+          type: "thread.fork-requested",
+          eventId: EventId.make("evt-fork-edit-target"),
+          aggregateKind: "thread",
+          aggregateId: editTargetThreadId,
+          occurredAt: "2026-07-31T12:02:00.000Z",
+          commandId: CommandId.make("cmd-fork-edit-target"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-fork-edit-target"),
+          metadata: {},
+          payload: {
+            threadId: editTargetThreadId,
+            sourceThreadId,
+            forkPoint: {
+              messageId: MessageId.make("fork-message"),
+              turnId: TurnId.make("fork-turn"),
+              createdAt: now,
+              rollbackTurns: 1,
+            },
+            createdAt: "2026-07-31T12:02:00.000Z",
+          },
+        });
+
+        yield* projectionPipeline.bootstrap;
+
+        const threadRows = yield* sql<{
+          readonly threadId: string;
+          readonly forkedFromThreadId: string | null;
+          readonly title: string;
+          readonly pinnedAt: string | null;
+          readonly titleRegenerationRequestId: string | null;
+          readonly titleRegenerationStartedAt: string | null;
+        }>`
+          SELECT
+            thread_id AS "threadId",
+            forked_from_thread_id AS "forkedFromThreadId",
+            title,
+            pinned_at AS "pinnedAt",
+            title_regeneration_request_id AS "titleRegenerationRequestId",
+            title_regeneration_started_at AS "titleRegenerationStartedAt"
+          FROM projection_threads
+          WHERE thread_id IN (${sourceThreadId}, ${targetThreadId}, ${editTargetThreadId})
+          ORDER BY thread_id
+        `;
+        assert.deepEqual(threadRows, [
+          {
+            threadId: editTargetThreadId,
+            forkedFromThreadId: sourceThreadId,
+            title: "Original (edit)",
+            pinnedAt: null,
+            titleRegenerationRequestId: null,
+            titleRegenerationStartedAt: null,
+          },
+          {
+            threadId: sourceThreadId,
+            forkedFromThreadId: null,
+            title: "Original",
+            pinnedAt,
+            titleRegenerationRequestId,
+            titleRegenerationStartedAt: pinnedAt,
+          },
+          {
+            threadId: targetThreadId,
+            forkedFromThreadId: sourceThreadId,
+            title: "Original (fork)",
+            pinnedAt: null,
+            titleRegenerationRequestId: null,
+            titleRegenerationStartedAt: null,
+          },
+        ]);
+        const sessionRows = yield* sql<{ readonly status: string }>`
+          SELECT status
+          FROM projection_thread_sessions
+          WHERE thread_id = ${targetThreadId}
+        `;
+        assert.deepEqual(sessionRows, [{ status: "starting" }]);
+        const messageRows = yield* sql<{
+          readonly messageId: string;
+          readonly attachmentId: string | null;
+        }>`
+          SELECT
+            message_id AS "messageId",
+            json_extract(attachments_json, '$[0].id') AS "attachmentId"
+          FROM projection_thread_messages
+          WHERE thread_id = ${targetThreadId}
+        `;
+        assert.equal(messageRows[0]?.messageId, "fork:fork-target:fork-message");
+        assert.equal(messageRows[0]?.attachmentId, targetAttachmentId);
+        const editMessageRows = yield* sql<{ readonly count: number }>`
+          SELECT count(*) AS count
+          FROM projection_thread_messages
+          WHERE thread_id = ${editTargetThreadId}
+        `;
+        assert.deepEqual(editMessageRows, [{ count: 0 }]);
+        const activityRows = yield* sql<{
+          readonly attachmentId: string | null;
+          readonly kind: string;
+        }>`
+          SELECT
+            kind,
+            json_extract(payload_json, '$.entry.attachmentId') AS "attachmentId"
+          FROM projection_thread_activities
+          WHERE thread_id = ${targetThreadId}
+          ORDER BY created_at, activity_id
+        `;
+        assert.deepEqual(activityRows, [
+          { attachmentId: null, kind: "tool.completed" },
+          { attachmentId: targetHistoryAttachmentId, kind: "preview.snapshot" },
+        ]);
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${targetAttachmentId}.png`)),
+          true,
+        );
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${targetHistoryAttachmentId}.png`)),
+          true,
+        );
+
+        yield* eventStore.append({
+          type: "thread.deleted",
+          eventId: EventId.make("evt-delete-fork-source"),
+          aggregateKind: "thread",
+          aggregateId: sourceThreadId,
+          occurredAt: "2026-07-31T12:02:00.000Z",
+          commandId: CommandId.make("cmd-delete-fork-source"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-delete-fork-source"),
+          metadata: {},
+          payload: {
+            threadId: sourceThreadId,
+            deletedAt: "2026-07-31T12:02:00.000Z",
+          },
+        });
+        yield* projectionPipeline.bootstrap;
+
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${sourceAttachmentId}.png`)),
+          false,
+        );
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${sourceHistoryAttachmentId}.png`)),
+          false,
+        );
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${targetAttachmentId}.png`)),
+          true,
+        );
+        assert.equal(
+          yield* exists(path.join(serverConfig.attachmentsDir, `${targetHistoryAttachmentId}.png`)),
+          true,
+        );
       }),
     );
   },
@@ -799,6 +1191,8 @@ it.layer(
       const threadId = ThreadId.make("Thread Revert.Files");
       const keepAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000001";
       const removeAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000002";
+      const keepHistoryAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000004";
+      const removeHistoryAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000005";
       const otherThreadAttachmentId =
         "thread-revert-files-extra-00000000-0000-4000-8000-000000000003";
 
@@ -908,6 +1302,52 @@ it.layer(
       });
 
       yield* appendAndProject({
+        type: "thread.activity-appended",
+        eventId: EventId.make("evt-revert-files-4-history"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        occurredAt: now,
+        commandId: CommandId.make("cmd-revert-files-4-history"),
+        causationEventId: null,
+        correlationId: CorrelationId.make("cmd-revert-files-4-history"),
+        metadata: {},
+        payload: {
+          threadId,
+          activity: {
+            id: EventId.make("activity-revert-files-keep"),
+            turnId: TurnId.make("turn-keep"),
+            tone: "info",
+            kind: "preview.snapshot",
+            summary: "Checked kept screen",
+            payload: {
+              version: 1,
+              entry: {
+                id: "screen-keep",
+                attachmentId: keepHistoryAttachmentId,
+                url: "http://localhost:5173/keep",
+                title: "Keep",
+                observedAt: now,
+                width: 1_280,
+                height: 800,
+                interactiveElementCount: 1,
+                consoleErrorCount: 0,
+                networkFailureCount: 0,
+                actionCount: 1,
+              },
+              frame: {
+                kind: "attachment",
+                ref: keepHistoryAttachmentId,
+                mimeType: "image/png",
+                width: 1_280,
+                height: 800,
+              },
+            },
+            createdAt: now,
+          },
+        },
+      });
+
+      yield* appendAndProject({
         type: "thread.turn-diff-completed",
         eventId: EventId.make("evt-revert-files-5"),
         aggregateKind: "thread",
@@ -960,15 +1400,67 @@ it.layer(
         },
       });
 
+      yield* appendAndProject({
+        type: "thread.activity-appended",
+        eventId: EventId.make("evt-revert-files-6-history"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        occurredAt: now,
+        commandId: CommandId.make("cmd-revert-files-6-history"),
+        causationEventId: null,
+        correlationId: CorrelationId.make("cmd-revert-files-6-history"),
+        metadata: {},
+        payload: {
+          threadId,
+          activity: {
+            id: EventId.make("activity-revert-files-remove"),
+            turnId: TurnId.make("turn-remove"),
+            tone: "info",
+            kind: "preview.snapshot",
+            summary: "Checked removed screen",
+            payload: {
+              version: 1,
+              entry: {
+                id: "screen-remove",
+                attachmentId: removeHistoryAttachmentId,
+                url: "http://localhost:5173/remove",
+                title: "Remove",
+                observedAt: now,
+                width: 1_280,
+                height: 800,
+                interactiveElementCount: 1,
+                consoleErrorCount: 0,
+                networkFailureCount: 0,
+                actionCount: 1,
+              },
+              frame: {
+                kind: "attachment",
+                ref: removeHistoryAttachmentId,
+                mimeType: "image/png",
+                width: 1_280,
+                height: 800,
+              },
+            },
+            createdAt: now,
+          },
+        },
+      });
+
       const keepPath = path.join(attachmentsDir, `${keepAttachmentId}.png`);
       const removePath = path.join(attachmentsDir, `${removeAttachmentId}.png`);
+      const keepHistoryPath = path.join(attachmentsDir, `${keepHistoryAttachmentId}.png`);
+      const removeHistoryPath = path.join(attachmentsDir, `${removeHistoryAttachmentId}.png`);
       yield* fileSystem.makeDirectory(attachmentsDir, { recursive: true });
       yield* fileSystem.writeFileString(keepPath, "keep");
       yield* fileSystem.writeFileString(removePath, "remove");
+      yield* fileSystem.writeFileString(keepHistoryPath, "keep history");
+      yield* fileSystem.writeFileString(removeHistoryPath, "remove history");
       const otherThreadPath = path.join(attachmentsDir, `${otherThreadAttachmentId}.png`);
       yield* fileSystem.writeFileString(otherThreadPath, "other");
       assert.isTrue(yield* exists(keepPath));
       assert.isTrue(yield* exists(removePath));
+      assert.isTrue(yield* exists(keepHistoryPath));
+      assert.isTrue(yield* exists(removeHistoryPath));
       assert.isTrue(yield* exists(otherThreadPath));
 
       yield* appendAndProject({
@@ -989,6 +1481,8 @@ it.layer(
 
       assert.isTrue(yield* exists(keepPath));
       assert.isFalse(yield* exists(removePath));
+      assert.isTrue(yield* exists(keepHistoryPath));
+      assert.isFalse(yield* exists(removeHistoryPath));
       assert.isTrue(yield* exists(otherThreadPath));
     }),
   );

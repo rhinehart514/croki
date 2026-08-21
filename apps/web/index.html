@@ -14,10 +14,10 @@
       (() => {
         const LIGHT_BACKGROUND = "#ffffff";
         const DARK_BACKGROUND = "#0a0a0a";
-        const CUSTOM_THEMES_STORAGE_KEY = "t3code:themes:v1";
-        const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "t3code:theme-follow-system";
-        const THEME_APPEARANCE_MODE_STORAGE_KEY = "t3code:theme-appearance-mode";
-        const THEME_HALVES_STORAGE_KEY = "t3code:theme-halves:v1";
+        const CUSTOM_THEMES_STORAGE_KEY = "croki:themes:v1";
+        const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "croki:theme-follow-system";
+        const THEME_APPEARANCE_MODE_STORAGE_KEY = "croki:theme-appearance-mode";
+        const THEME_HALVES_STORAGE_KEY = "croki:theme-halves:v1";
         const SPLASH_COLORS = {
           light: {
             background: "#ffffff",
@@ -123,7 +123,7 @@
           },
         };
         // Keep the built-in mode list in sync with the runtime so the selected
-        // T3 Chat palette is visible before React has mounted.
+        // Croki palette is visible before React has mounted.
         const BUILT_IN_THEME_MODES = Object.fromEntries(
           Object.entries(BUILT_IN_THEME_PALETTES).map(([id, palettes]) => [
             id,
@@ -217,9 +217,9 @@
         };
 
         try {
-          const storedTheme = window.localStorage.getItem("t3code:theme");
+          const storedTheme = window.localStorage.getItem("croki:theme");
           const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          // Older builds stored the dark T3 Chat palette as its own theme id
+          // Older builds stored the dark Croki palette as its own theme id
           // and every maintainer theme under a t3- prefix; keep those
           // preferences readable. Mirrors the runtime's legacy alias table.
           const LEGACY_THEME_IDS = {
@@ -453,13 +453,13 @@
         object-fit: contain;
       }
     </style>
-    <title>T3 Code (Alpha)</title>
+    <title>Croki</title>
   </head>
   <body>
     <div id="root">
       <div id="boot-shell">
-        <div id="boot-shell-card" aria-label="T3 Code splash screen">
-          <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="T3 Code" />
+        <div id="boot-shell-card" aria-label="Croki splash screen">
+          <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="Croki" />
         </div>
       </div>
     </div>

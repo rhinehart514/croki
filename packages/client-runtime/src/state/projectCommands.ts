@@ -1,4 +1,4 @@
-import { type EnvironmentId, type ProjectReadFileResult, WS_METHODS } from "@t3tools/contracts";
+import { type EnvironmentId, type ProjectReadFileResult, WS_METHODS } from "@croki/contracts";
 import * as Crypto from "effect/Crypto";
 import { Atom } from "effect/unstable/reactivity";
 
@@ -64,6 +64,12 @@ export function createProjectEnvironmentAtoms<R, E>(
       label: "environment-data:projects:list-entries",
       tag: WS_METHODS.projectsListEntries,
       staleTimeMs: 30_000,
+      idleTtlMs: 5 * 60_000,
+    }),
+    listComponents: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:list-components",
+      tag: WS_METHODS.projectsListComponents,
+      staleTimeMs: 15_000,
       idleTtlMs: 5 * 60_000,
     }),
     readFile: createEnvironmentRpcQueryAtomFamily(runtime, {

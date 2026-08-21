@@ -1,7 +1,20 @@
-# Keeping T3 Code in Sync
+# Keeping Croki in Sync
 
-The T3 Code web or desktop app and the server it connects to work best when they use the same
-version. If they do not match, T3 Code shows a warning with the right update option for that server.
+The Croki web or desktop app and the server it connects to work best when they use the same
+version. If they do not match, Croki shows a warning with the right update option for that server.
+
+## Updating the Desktop App
+
+In the desktop app, open **Settings** → **About** and choose an **Update track**:
+
+- **Stable** follows full Croki releases.
+- **Nightly** follows the newest macOS nightly release.
+
+Changing tracks immediately checks that track. When a release is available,
+use **Download** in Settings or the update button in the sidebar. Croki shows
+download progress, then changes the action to **Install** so you can restart
+into the downloaded version. Switching back to Stable uses the stable feed;
+you do not need to download a release manually from GitHub.
 
 ## Where to Find the Update
 
@@ -22,39 +35,44 @@ The update does not remove saved threads, settings, or project files.
 
 ## Choose the Action You See
 
-| Action                     | What to do                                                                                                                                                                  |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Update server**          | Available for the T3 Code Linux background service. Select the button and leave T3 Code open while it prepares, tests, restarts, and reconnects.                            |
-| **Update the desktop app** | Open the T3 Code desktop app on the machine that runs the server and install the app update there. Reopen it if needed.                                                     |
-| **Copy update command**    | Copy the command, open a terminal on the server machine, stop the current T3 Code server, and relaunch it with the copied command and any startup options you normally use. |
+| Action                     | What to do                                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Update server**          | Available for a Croki-owned Linux background-service package. Select the button and leave Croki open while it prepares, tests, restarts, and reconnects.                 |
+| **Update the desktop app** | Open the Croki desktop app on the machine that runs the server and install the Croki app update there. Reopen it if needed.                                              |
+| **Copy update command**    | Available only when the server advertises a Croki-owned package command. Stop the current Croki server and relaunch it with the exact copied command and normal options. |
 
-The available action depends on how that server was started. T3 Code does not update connected
+The available action depends on how that server was started. Croki does not update connected
 servers silently in the background.
 
-An older background-service launcher may ask you to run the exact
-`npx t3@<version> service update` command on the server machine. That one local update installs the
-rollback support needed for later remote updates, including versions that change the database.
+Croki never offers inherited T3 Code package, server, desktop, hosted web, or
+release destinations as Croki update paths. Package-backed server updates stay
+unavailable until the exact `croki-server` version is published to a
+Croki-owned registry. GitHub-only desktop releases update their bundled server
+with the Croki app and do not imply that a remote package exists.
+
+An older launcher may require a one-time local update on the server machine to
+gain rollback support. Use only the Croki-owned command shown by the installed
+Croki client; do not substitute an inherited `npx t3@...` command.
 
 After selecting **Update**, the notice becomes a live status line: **Downloading…** while the new
 version is fetched and verified, then **Restarting…** while the server restarts into it. The same
 status appears in the conversation and in Connections, so navigating between them does not lose the
 update. A failure remains visible with its error and an option to retry.
 
-**Copy update command** gives you `npx t3@<client-version>`, which relaunches the server directly
-at the matching version. Add whatever startup options you normally use.
+**Copy update command** is shown only when Croki has an exact owned package for
+the client version. Add whatever startup options you normally use.
 
-If the server instead runs as the T3 Code background service, update the service on the host and
-pin the same version:
+If the server runs as a Croki background service, use the exact Croki-owned
+command shown by the client. Conceptually it pins the same version:
 
 ```sh
-npx t3@<client-version> service update
+croki-server@<client-version> service update
 ```
 
-`service update` installs the version of the CLI that invoked it, so `npx t3@latest service update`
-only resolves the skew when your client happens to be on the latest release. The exact version from
-the warning always works.
+The UI must not show this path unless that exact package was published and the
+server advertises support for it.
 
-See [Running T3 Code in the Background](./background-service.md) for install, status, and removal
+See [Running Croki in the Background](./background-service.md) for install, status, and removal
 commands.
 
 ## After the Update
@@ -67,8 +85,9 @@ If a step fails:
 
 1. Retry the offered action once.
 2. Make sure you updated the machine named in the warning, not only the device you are using.
-3. For a command-line server, relaunch it with `npx t3@<client-version>`, replacing
-   `<client-version>` with the client version shown in the warning.
+3. For a source-built server, check out the matching Croki version on the server
+   machine and relaunch it with the same startup options. Use a copied package
+   command only when Croki actually offers one.
 
 ## The Mobile App
 

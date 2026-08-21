@@ -22,7 +22,7 @@ import {
   type ProviderDriverKind,
   type ServerProvider,
   type ServerProviderModel,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 
 import { cn } from "../../lib/utils";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
@@ -768,6 +768,7 @@ export function ProviderInstanceCard({
                 value={instance.config}
                 idPrefix={`provider-instance-${instanceId}`}
                 variant="card"
+                liveProvider={liveProvider}
                 onChange={updateConfig}
               />
             ) : null}

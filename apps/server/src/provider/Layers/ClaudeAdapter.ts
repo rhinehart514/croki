@@ -8,6 +8,7 @@
  */
 import {
   type CanUseTool,
+  forkSession as forkClaudeSession,
   query,
   type Options as ClaudeQueryOptions,
   type PermissionMode,
@@ -20,7 +21,7 @@ import {
   type SDKUserMessage,
   type ModelUsage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { parseCliArgs } from "@t3tools/shared/cliArgs";
+import { parseCliArgs } from "@croki/shared/cliArgs";
 import {
   ApprovalRequestId,
   type CanonicalItemType,
@@ -49,14 +50,14 @@ import {
   ThreadId,
   TurnId,
   type UserInputQuestion,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   applyClaudePromptEffortPrefix,
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
   resolvePromptInjectedEffort,
-} from "@t3tools/shared/model";
+} from "@croki/shared/model";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -299,6 +300,13 @@ export interface ClaudeAdapterLiveOptions {
     readonly prompt: AsyncIterable<SDKUserMessage>;
     readonly options: ClaudeQueryOptions;
   }) => ClaudeQueryRuntime;
+  readonly forkSession?: (
+    sessionId: string,
+    options?: {
+      readonly dir?: string;
+      readonly title?: string;
+    },
+  ) => Promise<{ readonly sessionId: string }>;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
 }
@@ -1687,6 +1695,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         prompt: input.prompt,
         options: input.options,
       }) as ClaudeQueryRuntime);
+  const forkSession = options?.forkSession ?? forkClaudeSession;
 
   const sessions = new Map<ThreadId, ClaudeSessionContext>();
   const runtimeEventQueue = yield* Queue.unbounded<ProviderRuntimeEvent>();
@@ -3826,7 +3835,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         // `id` MUST equal the full question text — Claude SDK >= 2.1.121 looks
         // up answers by question text in `mapToolResultToToolResultBlockParam`,
         // so the key the UI uses to keep its draft answer must match the SDK's
-        // expected lookup key. See https://github.com/pingdotgg/t3code/issues/2388
+        // expected lookup key. See https://github.com/rhinehart514/croki/issues/2388
         const rawQuestions = Array.isArray(toolInput.questions) ? toolInput.questions : [];
         const questions: Array<UserInputQuestion> = rawQuestions.map(
           (q: Record<string, unknown>, idx: number) => ({
@@ -4179,7 +4188,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(mcpSession
           ? {
               mcpServers: {
-                "t3-code": {
+                croki: {
                   type: "http",
                   url: mcpSession.endpoint,
                   headers: {
@@ -4542,6 +4551,68 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     },
   );
 
+  const forkThread: ClaudeAdapterShape["forkThread"] = Effect.fn("forkThread")(
+    function* (sourceThreadId, targetThreadId) {
+      if (sourceThreadId === targetThreadId) {
+        return yield* new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Source and target thread ids must be different.",
+        });
+      }
+
+      const source = yield* requireSession(sourceThreadId);
+      if (source.turnState || source.session.status === "running") {
+        return yield* new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Cannot fork a Claude thread while a turn is running.",
+        });
+      }
+
+      const sourceResumeState = readClaudeResumeState(source.session.resumeCursor);
+      const sourceSessionId = source.resumeSessionId ?? sourceResumeState?.resume;
+      if (!sourceSessionId) {
+        return yield* new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Claude session does not have a durable resume id to fork.",
+        });
+      }
+
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          forkSession(
+            sourceSessionId,
+            source.session.cwd ? { dir: source.session.cwd } : undefined,
+          ),
+        catch: (cause) =>
+          new ProviderAdapterRequestError({
+            provider: PROVIDER,
+            method: "thread/fork",
+            detail: "Failed to fork Claude session.",
+            cause,
+          }),
+      });
+
+      if (!isUuid(result.sessionId)) {
+        return yield* new ProviderAdapterRequestError({
+          provider: PROVIDER,
+          method: "thread/fork",
+          detail: "Claude returned an invalid forked session id.",
+        });
+      }
+
+      return {
+        resumeCursor: {
+          threadId: targetThreadId,
+          resume: result.sessionId,
+          turnCount: sourceResumeState?.turnCount ?? source.turns.length,
+        },
+      };
+    },
+  );
+
   const respondToRequest: ClaudeAdapterShape["respondToRequest"] = Effect.fn("respondToRequest")(
     function* (threadId, requestId, decision) {
       const context = yield* requireSession(threadId);
@@ -4625,12 +4696,14 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     provider: PROVIDER,
     capabilities: {
       sessionModelSwitch: "in-session",
+      conversationFork: "native",
     },
     startSession,
     sendTurn,
     interruptTurn,
     readThread,
     rollbackThread,
+    forkThread,
     respondToRequest,
     respondToUserInput,
     stopSession,

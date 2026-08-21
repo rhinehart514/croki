@@ -18,6 +18,7 @@ import {
   createStagePatchedDependencies,
   createBuildConfig,
   DESKTOP_ELECTRON_LANGUAGES,
+  DESKTOP_MACOS_MICROPHONE_USAGE_DESCRIPTION,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
   InvalidMacPasskeyRpDomainError,
@@ -47,6 +48,7 @@ import {
   resolvePackageManagerUserAgent,
   stageLinuxIconSize,
   stageDesktopDmgBackground,
+  STAGED_DESKTOP_PACKAGE_IDENTITY,
   STAGE_INSTALL_ARGS,
   ancestorNodeModulesPaths,
   copyDirectoryPreservingSymlinks,
@@ -61,7 +63,7 @@ import {
   WINDOWS_SERVER_RESOURCE_SOURCE_DIR,
 } from "./build-desktop-artifact.ts";
 import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessArchitecture, HostProcessPlatform } from "@croki/shared/hostProcess";
 
 function mockProcess(exitCode: number) {
   return ChildProcessSpawner.makeHandle({
@@ -155,21 +157,29 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Alpha)");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.17"), "Croki");
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Croki (Nightly)");
   });
 
-  it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
+  it("keeps staged package identity internal while exposing Croki metadata", () => {
+    assert.deepStrictEqual(STAGED_DESKTOP_PACKAGE_IDENTITY, {
+      name: "croki",
+      description: "Croki desktop build",
+      author: "Croki",
+    });
+  });
+
+  it("keeps Croki desktop packaging icons across release channels", () => {
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17"), {
-      macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+      macIconPng: BRAND_ASSET_PATHS.crokiIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.crokiIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.crokiWindowsIconIco,
     });
 
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17-nightly.20260413.42"), {
-      macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
+      macIconPng: BRAND_ASSET_PATHS.crokiIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.crokiIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.crokiWindowsIconIco,
     });
   });
 
@@ -185,7 +195,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
-                T3CODE_DESKTOP_UPDATE_REPOSITORY: "pingdotgg/t3code",
+                CROKI_DESKTOP_UPDATE_REPOSITORY: "rhinehart514/croki",
               },
             }),
           ),
@@ -196,7 +206,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
-                GITHUB_REPOSITORY: "pingdotgg/t3code",
+                GITHUB_REPOSITORY: "rhinehart514/croki",
               },
             }),
           ),
@@ -205,14 +215,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       assert.deepStrictEqual(latestConfig, {
         provider: "github",
-        owner: "pingdotgg",
-        repo: "t3code",
+        owner: "rhinehart514",
+        repo: "croki",
         releaseType: "release",
       });
       assert.deepStrictEqual(nightlyConfig, {
         provider: "github",
-        owner: "pingdotgg",
-        repo: "t3code",
+        owner: "rhinehart514",
+        repo: "croki",
         releaseType: "prerelease",
         channel: "nightly",
       });
@@ -224,10 +234,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       resolveDesktopRuntimeDependencies(
         {
           "@effect/platform-node": "catalog:",
-          "@t3tools/contracts": "workspace:*",
-          "@t3tools/shared": "workspace:*",
-          "@t3tools/ssh": "workspace:*",
-          "@t3tools/tailscale": "workspace:*",
+          "@croki/contracts": "workspace:*",
+          "@croki/shared": "workspace:*",
+          "@croki/ssh": "workspace:*",
+          "@croki/tailscale": "workspace:*",
           effect: "catalog:",
           electron: "41.5.0",
         },
@@ -477,14 +487,43 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         iconTextSize: 12,
       });
       // Linux must register the renderer schemes so the generated .desktop
-      // entry advertises MimeType=x-scheme-handler/t3code; for OAuth deep links.
+      // entry advertises Croki's schemes for OAuth deep links.
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
-        { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
+        { name: "Croki", schemes: ["croki", "croki-dev"] },
       ]);
       for (const config of [mac, linux, win]) {
+        assert.equal(config.appId, "com.croki.desktop");
+        assert.equal(config.productName, "Croki");
+        assert.equal(config.artifactName, "Croki-${version}-${arch}.${ext}");
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
       }
+
+      assert.deepStrictEqual((mac.mac as Record<string, unknown>).extendInfo, {
+        NSMicrophoneUsageDescription: DESKTOP_MACOS_MICROPHONE_USAGE_DESCRIPTION,
+      });
+
+      assert.deepStrictEqual((mac.mac as Record<string, unknown>).protocols, [
+        { name: "Croki", schemes: ["croki"] },
+      ]);
+      assert.equal((linux.linux as Record<string, unknown>).executableName, "croki");
+      assert.equal(
+        (
+          (linux.linux as Record<string, unknown>).desktop as {
+            readonly entry: Record<string, unknown>;
+          }
+        ).entry.StartupWMClass,
+        "croki",
+      );
+      assert.equal((win.win as Record<string, unknown>).icon, "icon.ico");
+      assert.equal((win.win as Record<string, unknown>).executableName, "Croki");
+      assert.deepStrictEqual(win.nsis, {
+        shortcutName: "Croki",
+        uninstallDisplayName: "Croki",
+        installerIcon: "icon.ico",
+        uninstallerIcon: "icon.ico",
+        installerHeaderIcon: "icon.ico",
+      });
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
@@ -870,24 +909,24 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it("derives macOS passkey signing configuration from the Clerk publishable key", () => {
     const configuration = resolveMacPasskeySigningConfiguration({
-      T3CODE_APPLE_TEAM_ID: "abc1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+      CROKI_APPLE_TEAM_ID: "abc1234567",
+      CROKI_MACOS_PROVISIONING_PROFILE: "/tmp/croki.provisionprofile",
+      CROKI_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "com.croki.desktop",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
-      provisioningProfilePath: "/tmp/t3code.provisionprofile",
+      provisioningProfilePath: "/tmp/croki.provisionprofile",
     });
   });
 
   it("normalizes explicit macOS passkey RP domains and renders required entitlements", () => {
     const configuration = resolveMacPasskeySigningConfiguration({
-      T3CODE_APPLE_TEAM_ID: "ABC1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PASSKEY_RP_DOMAINS:
+      CROKI_APPLE_TEAM_ID: "ABC1234567",
+      CROKI_MACOS_PROVISIONING_PROFILE: "/tmp/croki.provisionprofile",
+      CROKI_CLERK_PASSKEY_RP_DOMAINS:
         " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
     });
     const entitlements = renderMacPasskeyEntitlements(configuration);
@@ -896,7 +935,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.croki.desktop</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -913,21 +952,21 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     };
 
     const missingProfileError = captureError({
-      T3CODE_APPLE_TEAM_ID: "ABC1234567",
-      T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev",
+      CROKI_APPLE_TEAM_ID: "ABC1234567",
+      CROKI_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev",
     });
     assert.instanceOf(missingProfileError, MissingMacPasskeyProvisioningProfileError);
     assert.equal(
       missingProfileError.message,
-      "T3CODE_MACOS_PROVISIONING_PROFILE must point to an Associated Domains provisioning profile.",
+      "CROKI_MACOS_PROVISIONING_PROFILE must point to an Associated Domains provisioning profile.",
     );
 
     const unsafeDomain =
       "https://domain-user:domain-secret@example.clerk.accounts.dev/path?token=query-secret";
     const invalidDomainError = captureError({
-      T3CODE_APPLE_TEAM_ID: "ABC1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PASSKEY_RP_DOMAINS: unsafeDomain,
+      CROKI_APPLE_TEAM_ID: "ABC1234567",
+      CROKI_MACOS_PROVISIONING_PROFILE: "/tmp/croki.provisionprofile",
+      CROKI_CLERK_PASSKEY_RP_DOMAINS: unsafeDomain,
     });
     assert.instanceOf(invalidDomainError, InvalidMacPasskeyRpDomainError);
     assert.equal(invalidDomainError.reason, "scheme-not-allowed");
@@ -943,20 +982,20 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.throws(
       () =>
         resolveMacPasskeySigningConfiguration({
-          T3CODE_APPLE_TEAM_ID: "ABC1234567",
-          T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-          T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
+          CROKI_APPLE_TEAM_ID: "ABC1234567",
+          CROKI_MACOS_PROVISIONING_PROFILE: "/tmp/croki.provisionprofile",
+          CROKI_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
         }),
       /Invalid passkey RP domain/u,
     );
     const invalidPublishableKeyError = captureError({
-      T3CODE_APPLE_TEAM_ID: "ABC1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PUBLISHABLE_KEY: "pk_test_%",
+      CROKI_APPLE_TEAM_ID: "ABC1234567",
+      CROKI_MACOS_PROVISIONING_PROFILE: "/tmp/croki.provisionprofile",
+      CROKI_CLERK_PUBLISHABLE_KEY: "pk_test_%",
     });
     assert.instanceOf(invalidPublishableKeyError, InvalidMacPasskeyPublishableKeyError);
     assert.ok(invalidPublishableKeyError.cause);
-    assert.equal(invalidPublishableKeyError.message, "T3CODE_CLERK_PUBLISHABLE_KEY is invalid.");
+    assert.equal(invalidPublishableKeyError.message, "CROKI_CLERK_PUBLISHABLE_KEY is invalid.");
     assert.notProperty(invalidPublishableKeyError, "publishableKey");
     assert.notInclude(invalidPublishableKeyError.message, "pk_test_%");
   });
@@ -983,20 +1022,39 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.notInclude(error.message, secret);
   });
 
-  it.effect("adds passkey entitlements and both renderer protocols to signed macOS builds", () =>
+  it.effect(
+    "adds passkey entitlements and the Croki renderer protocol to signed macOS builds",
+    () =>
+      Effect.gen(function* () {
+        const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
+          entitlementsPath: "/tmp/entitlements.mac.plist",
+          provisioningProfilePath: "/tmp/croki.provisionprofile",
+        });
+
+        const mac = config.mac as Record<string, unknown>;
+        assert.equal(config.appId, "com.croki.desktop");
+        assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
+        assert.equal(mac.provisioningProfile, "/tmp/croki.provisionprofile");
+        assert.notProperty(mac, "identity");
+        assert.deepStrictEqual(mac.protocols, [{ name: "Croki", schemes: ["croki"] }]);
+      }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect("ad-hoc signs macOS builds when Developer ID signing is disabled", () =>
     Effect.gen(function* () {
-      const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
-        entitlementsPath: "/tmp/entitlements.mac.plist",
-        provisioningProfilePath: "/tmp/t3code.provisionprofile",
-      });
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "1.2.3",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
 
       const mac = config.mac as Record<string, unknown>;
-      assert.equal(config.appId, "com.t3tools.t3code");
-      assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
-      assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
-      assert.deepStrictEqual(mac.protocols, [
-        { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
-      ]);
+      assert.equal(mac.identity, "-");
+      assert.equal(mac.hardenedRuntime, false);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
@@ -1055,8 +1113,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.deepStrictEqual(resolveResourceMonitorRustTargets("win", "arm64"), [
       "aarch64-pc-windows-msvc",
     ]);
-    assert.equal(resourceMonitorExecutableName("mac"), "t3-resource-monitor");
-    assert.equal(resourceMonitorExecutableName("win"), "t3-resource-monitor.exe");
+    assert.equal(resourceMonitorExecutableName("mac"), "croki-resource-monitor");
+    assert.equal(resourceMonitorExecutableName("win"), "croki-resource-monitor.exe");
   });
   it("promotes target fff binaries to direct staged dependencies", () => {
     assert.deepStrictEqual(resolveFffNativeDependencies("mac", "arm64", "0.9.4"), {
@@ -1234,11 +1292,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
-                T3CODE_DESKTOP_SKIP_BUILD: "true",
-                T3CODE_DESKTOP_KEEP_STAGE: "true",
-                T3CODE_DESKTOP_SIGNED: "true",
-                T3CODE_DESKTOP_VERBOSE: "true",
-                T3CODE_DESKTOP_MOCK_UPDATES: "true",
+                CROKI_DESKTOP_SKIP_BUILD: "true",
+                CROKI_DESKTOP_KEEP_STAGE: "true",
+                CROKI_DESKTOP_SIGNED: "true",
+                CROKI_DESKTOP_VERBOSE: "true",
+                CROKI_DESKTOP_MOCK_UPDATES: "true",
               },
             }),
           ),

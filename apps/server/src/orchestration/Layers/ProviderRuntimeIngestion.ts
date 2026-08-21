@@ -1,6 +1,7 @@
 import {
   ApprovalRequestId,
   type AssistantDeliveryMode,
+  type ChatImageAttachment,
   CommandId,
   MessageId,
   type OrchestrationEvent,
@@ -18,16 +19,22 @@ import {
   type OrchestrationThread,
   type OrchestrationThreadActivity,
   type ProviderRuntimeEvent,
-} from "@t3tools/contracts";
+  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
+  PROVIDER_RUNTIME_MAX_IMAGE_DATA_CHARS,
+  mergeChatAttachments,
+} from "@croki/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Stream from "effect/Stream";
-import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+import { makeDrainableWorker } from "@croki/shared/DrainableWorker";
 
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
@@ -44,6 +51,9 @@ import {
 import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
 import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { ServerConfig } from "../../config.ts";
+import { createAttachmentId, resolveAttachmentPath } from "../../attachmentStore.ts";
+import { inferImageExtension, parseBase64DataUrl } from "../../imageMime.ts";
 import { canReplaceThreadTitle } from "../threadTitles.ts";
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
@@ -94,12 +104,14 @@ const TURN_MESSAGE_IDS_BY_TURN_CACHE_CAPACITY = 10_000;
 const TURN_MESSAGE_IDS_BY_TURN_TTL = Duration.minutes(120);
 const BUFFERED_MESSAGE_TEXT_BY_MESSAGE_ID_CACHE_CAPACITY = 20_000;
 const BUFFERED_MESSAGE_TEXT_BY_MESSAGE_ID_TTL = Duration.minutes(120);
+const ASSISTANT_ATTACHMENTS_BY_MESSAGE_ID_CACHE_CAPACITY = 20_000;
+const ASSISTANT_ATTACHMENTS_BY_MESSAGE_ID_TTL = Duration.minutes(120);
 const BUFFERED_PROPOSED_PLAN_BY_ID_CACHE_CAPACITY = 10_000;
 const BUFFERED_PROPOSED_PLAN_BY_ID_TTL = Duration.minutes(120);
 const TASK_DESCRIPTION_BY_TASK_CACHE_CAPACITY = 10_000;
 const TASK_DESCRIPTION_BY_TASK_TTL = Duration.minutes(120);
 const MAX_BUFFERED_ASSISTANT_CHARS = 24_000;
-const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.T3CODE_STRICT_PROVIDER_LIFECYCLE_GUARD !== "0";
+const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.CROKI_STRICT_PROVIDER_LIFECYCLE_GUARD !== "0";
 
 type TurnStartRequestedDomainEvent = Extract<
   OrchestrationEvent,
@@ -247,6 +259,30 @@ function assistantSegmentMessageId(baseKey: string, segmentIndex: number): Messa
     segmentIndex === 0 ? `assistant:${baseKey}` : `assistant:${baseKey}:segment:${segmentIndex}`,
   );
 }
+
+function assistantImageName(uri: string | null | undefined, mimeType: string): string {
+  const uriText = uri?.trim() ?? "";
+  let candidate = "";
+  if (uriText.length > 0 && !uriText.toLowerCase().startsWith("data:")) {
+    try {
+      candidate = decodeURIComponent(new URL(uriText).pathname.split(/[\\/]/).at(-1) ?? "");
+    } catch {
+      const basename = uriText.split(/[\\/]/).at(-1) ?? "";
+      try {
+        candidate = decodeURIComponent(basename);
+      } catch {
+        candidate = basename;
+      }
+    }
+  }
+  const stem = candidate
+    .replace(/\.[a-z0-9]{1,8}$/i, "")
+    .replace(/[^a-z0-9._-]+/gi, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-_.]+|[-_.]+$/g, "")
+    .slice(0, 220);
+  return `${stem || "assistant-image"}${inferImageExtension({ mimeType })}`;
+}
 function buildContextWindowActivityPayload(
   event: ProviderRuntimeEvent,
 ): ThreadTokenUsageSnapshot | undefined {
@@ -351,6 +387,10 @@ function taskLinkageActivityFields(payload: Record<string, unknown>): Record<str
     "typedUsage",
     "status",
     "error",
+    "parentTaskId",
+    "actor",
+    "ownership",
+    "evidence",
   ] as const) {
     if (payload[key] !== undefined) {
       fields[key] = payload[key];
@@ -555,7 +595,10 @@ export function runtimeEventToActivities(
             taskId: event.payload.taskId,
             ...(event.payload.taskType ? { taskType: event.payload.taskType } : {}),
             ...(event.payload.description
-              ? { detail: truncateDetail(event.payload.description) }
+              ? {
+                  description: truncateDetail(event.payload.description),
+                  detail: truncateDetail(event.payload.description),
+                }
               : {}),
             ...taskLinkageActivityFields(event.payload as Record<string, unknown>),
           },
@@ -646,7 +689,16 @@ export function runtimeEventToActivities(
     case "task.updated": {
       return [
         {
-          id: event.eventId,
+          // Stable per-task id: progress is "latest state", not history, so
+          // each tick REPLACES the last via the activity upsert (PK + the
+          // replace-by-id apply in projector and client reducer). Keeps one
+          // progress row per task instead of thousands, so a large fleet's
+          // ticks can no longer evict its own start/terminal rows out of
+          // the 500-row retention window. Thread-scoped: activity_id is a
+          // GLOBAL primary key and Claude task ids are session-local, so a
+          // bare taskId could collide across threads and steal another
+          // thread's row (review finding).
+          id: EventId.make(`task-progress:${event.threadId}:${event.payload.taskId}`),
           createdAt: event.createdAt,
           tone: event.payload.status === "failed" ? "error" : "info",
           kind: "task.updated",
@@ -700,6 +752,11 @@ export function runtimeEventToActivities(
             ...(event.payload.parentToolUseId
               ? { parentToolUseId: event.payload.parentToolUseId }
               : {}),
+            detail: truncateDetail(
+              event.payload.summary ?? event.payload.toolName ?? "Tool progress",
+            ),
+            ...(event.payload.summary ? { summary: truncateDetail(event.payload.summary) } : {}),
+            ...taskLinkageActivityFields(event.payload as Record<string, unknown>),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -890,6 +947,9 @@ const make = Effect.gen(function* () {
   const providerService = yield* ProviderService;
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const serverSettingsService = yield* ServerSettingsService;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const serverConfig = yield* ServerConfig;
   const providerCommandId = (event: ProviderRuntimeEvent, tag: string) =>
     crypto.randomUUIDv4.pipe(
       Effect.map((uuid) => CommandId.make(`provider:${event.eventId}:${tag}:${uuid}`)),
@@ -905,6 +965,15 @@ const make = Effect.gen(function* () {
     capacity: BUFFERED_MESSAGE_TEXT_BY_MESSAGE_ID_CACHE_CAPACITY,
     timeToLive: BUFFERED_MESSAGE_TEXT_BY_MESSAGE_ID_TTL,
     lookup: () => Effect.succeed(""),
+  });
+
+  const assistantAttachmentsByMessageId = yield* Cache.make<
+    MessageId,
+    ReadonlyArray<ChatImageAttachment>
+  >({
+    capacity: ASSISTANT_ATTACHMENTS_BY_MESSAGE_ID_CACHE_CAPACITY,
+    timeToLive: ASSISTANT_ATTACHMENTS_BY_MESSAGE_ID_TTL,
+    lookup: () => Effect.succeed([]),
   });
 
   const assistantSegmentStateByTurnKey = yield* Cache.make<string, AssistantSegmentState>({
@@ -1051,6 +1120,85 @@ const make = Effect.gen(function* () {
       ),
     );
 
+  const materializeAssistantImage = Effect.fn("materializeAssistantImage")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly data: string;
+    readonly mimeType: string;
+    readonly uri?: string | null;
+    readonly eventId: string;
+  }) {
+    const mimeType = input.mimeType.trim().toLowerCase();
+    if (input.data.length > PROVIDER_RUNTIME_MAX_IMAGE_DATA_CHARS) {
+      yield* Effect.logWarning("Dropping ACP image above encoded data limits", {
+        eventId: input.eventId,
+      });
+      return null;
+    }
+    if (!/^image\/[a-z0-9.+-]+$/.test(mimeType)) {
+      yield* Effect.logWarning("Dropping ACP image with unsupported MIME type", {
+        eventId: input.eventId,
+        mimeType,
+      });
+      return null;
+    }
+
+    const name = assistantImageName(input.uri, mimeType);
+    if (inferImageExtension({ mimeType, fileName: name }) === ".bin") {
+      yield* Effect.logWarning("Dropping ACP image with unsupported image MIME type", {
+        eventId: input.eventId,
+        mimeType,
+      });
+      return null;
+    }
+
+    const parsed = parseBase64DataUrl(`data:${mimeType};base64,${input.data}`);
+    if (!parsed) {
+      yield* Effect.logWarning("Dropping ACP image with malformed base64 data", {
+        eventId: input.eventId,
+      });
+      return null;
+    }
+    const bytes = Buffer.from(parsed.base64, "base64");
+    if (bytes.byteLength === 0 || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
+      yield* Effect.logWarning("Dropping ACP image outside attachment size limits", {
+        eventId: input.eventId,
+        sizeBytes: bytes.byteLength,
+      });
+      return null;
+    }
+
+    const attachmentId = createAttachmentId(input.threadId);
+    if (!attachmentId) {
+      yield* Effect.logWarning("Dropping ACP image without a safe attachment id", {
+        eventId: input.eventId,
+      });
+      return null;
+    }
+    const attachment = {
+      type: "image" as const,
+      id: attachmentId,
+      name,
+      mimeType: parsed.mimeType,
+      sizeBytes: bytes.byteLength,
+    } satisfies ChatImageAttachment;
+    const attachmentPath = resolveAttachmentPath({
+      attachmentsDir: serverConfig.attachmentsDir,
+      attachment,
+    });
+    if (!attachmentPath) {
+      yield* Effect.logWarning("Dropping ACP image with an unsafe attachment path", {
+        eventId: input.eventId,
+      });
+      return null;
+    }
+
+    yield* fileSystem
+      .makeDirectory(path.dirname(attachmentPath), { recursive: true })
+      .pipe(Effect.asVoid);
+    yield* fileSystem.writeFile(attachmentPath, bytes);
+    return attachment;
+  });
+
   const getOrCreateAssistantMessageId = (input: {
     threadId: ThreadId;
     event: ProviderRuntimeEvent;
@@ -1065,6 +1213,7 @@ const make = Effect.gen(function* () {
         input.threadId,
         input.turnId,
       );
+
       if (Option.isSome(activeMessageId)) {
         return activeMessageId.value;
       }
@@ -1108,6 +1257,20 @@ const make = Effect.gen(function* () {
   const clearBufferedAssistantText = (messageId: MessageId) =>
     Cache.invalidate(bufferedAssistantTextByMessageId, messageId);
 
+  const appendAssistantAttachment = (messageId: MessageId, attachment: ChatImageAttachment) =>
+    Cache.getOption(assistantAttachmentsByMessageId, messageId).pipe(
+      Effect.flatMap((existing) => {
+        const merged: ReadonlyArray<ChatImageAttachment> =
+          mergeChatAttachments(
+            Option.getOrElse(existing, () => []),
+            [attachment],
+          ) ?? [];
+        return Cache.set(assistantAttachmentsByMessageId, messageId, merged).pipe(
+          Effect.as(merged),
+        );
+      }),
+    );
+
   const appendBufferedProposedPlan = (planId: string, delta: string, createdAt: string) =>
     Cache.getOption(bufferedProposedPlanById, planId).pipe(
       Effect.flatMap((existingEntry) => {
@@ -1133,7 +1296,10 @@ const make = Effect.gen(function* () {
     Cache.invalidate(bufferedProposedPlanById, planId);
 
   const clearAssistantMessageState = (messageId: MessageId) =>
-    clearBufferedAssistantText(messageId);
+    Effect.all([
+      clearBufferedAssistantText(messageId),
+      Cache.invalidate(assistantAttachmentsByMessageId, messageId),
+    ]).pipe(Effect.asVoid);
 
   const flushBufferedAssistantMessage = (input: {
     event: ProviderRuntimeEvent;
@@ -1489,7 +1655,41 @@ const make = Effect.gen(function* () {
 
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
-      const thread = yield* resolveThreadShell(event.threadId);
+      let thread = yield* resolveThreadShell(event.threadId);
+      if (!thread && event.parentThreadId) {
+        const parent = yield* resolveThreadShell(event.parentThreadId);
+        if (!parent) return;
+        const commandUuid = yield* crypto.randomUUIDv4;
+        const childTitle = event.childPrompt?.trim().split("\n", 1)[0]?.slice(0, 80);
+        yield* orchestrationEngine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make(`provider:child-thread:${event.threadId}:${commandUuid}`),
+          threadId: event.threadId,
+          projectId: parent.projectId,
+          title: childTitle || "Parallel worker",
+          modelSelection: parent.modelSelection,
+          runtimeMode: parent.runtimeMode,
+          interactionMode: parent.interactionMode,
+          branch: parent.branch,
+          worktreePath: parent.worktreePath,
+          parentThreadId: parent.id,
+          createdAt: event.createdAt,
+        });
+        if (event.childPrompt?.trim()) {
+          const promptCreatedAt = DateTime.formatIso(
+            DateTime.add(DateTime.makeUnsafe(event.createdAt), { milliseconds: -1 }),
+          );
+          yield* orchestrationEngine.dispatch({
+            type: "thread.message.user.append",
+            commandId: CommandId.make(`provider:child-prompt:${event.threadId}:${commandUuid}`),
+            threadId: event.threadId,
+            messageId: MessageId.make(`worker-prompt:${event.threadId}`),
+            text: event.childPrompt.trim(),
+            createdAt: promptCreatedAt,
+          });
+        }
+        thread = yield* resolveThreadShell(event.threadId);
+      }
       if (!thread) return;
 
       let loadedThreadDetail: OrchestrationThread | null | undefined;
@@ -1698,6 +1898,44 @@ const make = Effect.gen(function* () {
             threadId: thread.id,
             messageId: assistantMessageId,
             delta: assistantDelta,
+            ...(turnId ? { turnId } : {}),
+            createdAt: now,
+          });
+        }
+      }
+
+      if (event.type === "content.image") {
+        const turnId = toTurnId(event.turnId);
+        const assistantMessageId = yield* getOrCreateAssistantMessageId({
+          threadId: thread.id,
+          event,
+          ...(turnId ? { turnId } : {}),
+        });
+        if (turnId) {
+          yield* rememberAssistantMessageId(thread.id, turnId, assistantMessageId);
+        }
+        const attachment = yield* materializeAssistantImage({
+          threadId: thread.id,
+          data: event.payload.data,
+          mimeType: event.payload.mimeType,
+          ...(event.payload.uri !== undefined ? { uri: event.payload.uri } : {}),
+          eventId: event.eventId,
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("Failed to materialize ACP image attachment", { cause }).pipe(
+              Effect.as(null),
+            ),
+          ),
+        );
+        if (attachment) {
+          const attachments = yield* appendAssistantAttachment(assistantMessageId, attachment);
+          yield* orchestrationEngine.dispatch({
+            type: "thread.message.assistant.delta",
+            commandId: yield* providerCommandId(event, "assistant-image"),
+            threadId: thread.id,
+            messageId: assistantMessageId,
+            delta: "",
+            attachments,
             ...(turnId ? { turnId } : {}),
             createdAt: now,
           });

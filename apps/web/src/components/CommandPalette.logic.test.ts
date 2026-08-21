@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@croki/contracts";
 import type { Thread } from "../types";
 import {
   browseInputEndPaddingClass,
   buildBrowseGroups,
+  buildOpenCanvasAction,
   buildThreadActionItems,
   enumerateCommandPaletteItems,
   filterPinnedBrowseEntries,
   filterCommandPaletteGroups,
+  threadContentSpeaker,
   reduceCommandPaletteUiState,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
@@ -275,13 +277,14 @@ describe("buildThreadActionItems", () => {
   it("keeps message excerpts searchable without replacing thread metadata", () => {
     const [item] = buildThreadActionItems({
       threads: [makeThread({ branch: "feat/search" })],
-      projectTitleById: new Map([[PROJECT_ID, "T3 Code"]]),
+      projectTitleById: new Map([[PROJECT_ID, "Croki"]]),
       sortOrder: "updated_at",
       icon: null,
       getContentMatch: () => ({
         source: "assistant",
         snippet: "The relay reconnect is now bounded.",
         query: "reconnect",
+        isWorker: false,
       }),
       runThread: async (_thread) => undefined,
     });
@@ -291,8 +294,37 @@ describe("buildThreadActionItems", () => {
       source: "assistant",
       snippet: "The relay reconnect is now bounded.",
       query: "reconnect",
+      isWorker: false,
     });
-    expect(item?.description).toBe("T3 Code · #feat/search");
+    expect(item?.description).toBe("Croki · #feat/search");
+  });
+
+  it("preserves authoritative Unicode content matches from the server", () => {
+    const threadItems = buildThreadActionItems({
+      threads: [makeThread({ title: "Unrelated title" })],
+      projectTitleById: new Map([[PROJECT_ID, "Unrelated project"]]),
+      sortOrder: "updated_at",
+      icon: null,
+      getContentMatch: () => ({
+        source: "assistant",
+        snippet: "Die Straße ist jetzt offen.",
+        query: "STRASSE",
+        isWorker: false,
+      }),
+      runThread: async (_thread) => undefined,
+    });
+
+    const groups = filterCommandPaletteGroups({
+      activeGroups: [],
+      query: "STRASSE",
+      isInSubmenu: false,
+      projectSearchItems: [],
+      threadSearchItems: threadItems,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items.map((item) => item.value)).toEqual(["thread:thread-1"]);
+    expect(groups[0]?.items[0]?.threadContentMatch?.snippet).toBe("Die Straße ist jetzt offen.");
   });
 
   it("prefers renderDescription when provided", () => {
@@ -332,6 +364,15 @@ describe("buildThreadActionItems", () => {
     });
 
     expect(items.map((item) => item.value)).toEqual(["thread:thread-active"]);
+  });
+});
+
+describe("threadContentSpeaker", () => {
+  it("distinguishes canonical conversation and worker evidence", () => {
+    expect(threadContentSpeaker({ source: "user", isWorker: false })).toBe("You");
+    expect(threadContentSpeaker({ source: "assistant", isWorker: false })).toBe("Agent");
+    expect(threadContentSpeaker({ source: "user", isWorker: true })).toBe("Assignment");
+    expect(threadContentSpeaker({ source: "assistant", isWorker: true })).toBe("Worker");
   });
 });
 

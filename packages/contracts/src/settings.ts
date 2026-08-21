@@ -467,6 +467,51 @@ export const GrokSettings = makeProviderSettingsSchema(
 );
 export type GrokSettings = typeof GrokSettings.Type;
 
+export const OpenClawSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    binaryPath: makeBinaryPathSetting("openclaw").pipe(
+      Schema.annotateKey({
+        title: "Binary path",
+        description: "Path to the OpenClaw CLI binary.",
+        providerSettingsForm: { placeholder: "openclaw", clearWhenEmpty: "omit" },
+      }),
+    ),
+    launchArgs: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "ACP arguments",
+        description: "Optional arguments added after `openclaw acp`.",
+        providerSettingsForm: {
+          placeholder: "--url wss://gateway:18789",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    agentId: TrimmedString.pipe(
+      // An empty value means use OpenClaw's own default agent. The server
+      // discovers that agent from `openclaw agents list --json` when it can,
+      // while ACP itself remains the final source of truth at runtime.
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Agent",
+        description: "OpenClaw agent used for this provider instance.",
+        providerSettingsForm: {
+          placeholder: "Native default",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+  },
+  {
+    order: ["binaryPath", "agentId", "launchArgs"],
+  },
+);
+export type OpenClawSettings = typeof OpenClawSettings.Type;
+
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
     // Off by default (like Cursor and Grok): the binding is not yet stable
@@ -489,7 +534,7 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Server URL",
-        description: "Leave blank to let T3 Code spawn the server when needed.",
+        description: "Leave blank to let Croki spawn the server when needed.",
         providerSettingsForm: {
           placeholder: "http://127.0.0.1:4096",
           clearWhenEmpty: "omit",

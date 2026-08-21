@@ -1,6 +1,6 @@
-import { type KnownTerminalSession } from "@t3tools/client-runtime/state/terminal";
-import { DEFAULT_TERMINAL_ID, type ProjectScript } from "@t3tools/contracts";
-import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
+import { type KnownTerminalSession } from "@croki/client-runtime/state/terminal";
+import { DEFAULT_TERMINAL_ID, type ProjectScript } from "@croki/contracts";
+import { nextTerminalId, resolveTerminalSessionLabel } from "@croki/shared/terminalLabels";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 
@@ -8,7 +8,7 @@ export {
   getTerminalLabel,
   nextTerminalId,
   resolveTerminalSessionLabel,
-} from "@t3tools/shared/terminalLabels";
+} from "@croki/shared/terminalLabels";
 
 export interface TerminalMenuSession {
   readonly terminalId: string;

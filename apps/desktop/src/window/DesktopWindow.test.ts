@@ -18,7 +18,7 @@ vi.mock("electron", async (importOriginal) => ({
   ...(await importOriginal<typeof import("electron")>()),
   session: {
     fromPartition: vi.fn(() => ({
-      getUserAgent: vi.fn(() => "Mozilla/5.0 Electron/41.5.0 t3code/1.2.3"),
+      getUserAgent: vi.fn(() => "Mozilla/5.0 Electron/41.5.0 croki/1.2.3"),
       setPermissionRequestHandler: vi.fn(),
       setUserAgent: vi.fn(),
     })),
@@ -66,7 +66,7 @@ function makeFakeBrowserWindow() {
   let zoomLevel = 0;
   const webContents = {
     copyImageAt: vi.fn(),
-    getURL: vi.fn(() => "t3code-dev://app/"),
+    getURL: vi.fn(() => "croki-dev://app/"),
     getZoomLevel: vi.fn(() => zoomLevel),
     setZoomLevel: vi.fn((level: number) => {
       zoomLevel = level;
@@ -94,7 +94,7 @@ function makeFakeBrowserWindow() {
     isMaximized: vi.fn(() => false),
     isMinimized: vi.fn(() => false),
     isVisible: vi.fn(() => true),
-    loadURL: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn((_url: string) => Promise.resolve()),
     maximize: vi.fn(),
     on: vi.fn((eventName: string, listener: (...args: readonly unknown[]) => void) => {
       windowListeners.set(eventName, listener);
@@ -181,7 +181,7 @@ const desktopEnvironmentLayer = DesktopEnvironment.layer(environmentInput).pipe(
     Layer.mergeAll(
       NodeServices.layer,
       DesktopConfig.layerTest({
-        T3CODE_PORT: "3773",
+        CROKI_PORT: "3773",
         VITE_DEV_SERVER_URL: "http://127.0.0.1:5733",
       }),
     ),
@@ -383,8 +383,8 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
           Layer.mock(PreviewManager.PreviewManager)({
             getBrowserSession: () => Effect.succeed({} as Electron.Session),
             setMainWindow: () => Effect.void,
-            isBrowserPartition: (partition) => partition.startsWith("persist:t3code-preview-"),
-            getBrowserPartition: () => Effect.succeed("persist:t3code-preview-test"),
+            isBrowserPartition: (partition) => partition.startsWith("persist:croki-preview-"),
+            getBrowserPartition: () => Effect.succeed("persist:croki-preview-test"),
           }),
         ),
       ),
@@ -414,19 +414,19 @@ describe("DesktopWindow", () => {
   it("recognizes only same-origin renderer navigations", () => {
     assert.isTrue(
       DesktopWindow.isSameOriginRendererNavigation({
-        applicationUrl: "t3code://app/",
-        navigationUrl: "t3code://app/settings/connections",
+        applicationUrl: "croki://app/",
+        navigationUrl: "croki://app/settings/connections",
       }),
     );
     assert.isFalse(
       DesktopWindow.isSameOriginRendererNavigation({
-        applicationUrl: "t3code://app/",
+        applicationUrl: "croki://app/",
         navigationUrl: "https://accounts.microsoft.com/oauth",
       }),
     );
     assert.isFalse(
       DesktopWindow.isSameOriginRendererNavigation({
-        applicationUrl: "t3code://app/",
+        applicationUrl: "croki://app/",
         navigationUrl: "not a url",
       }),
     );
@@ -459,7 +459,7 @@ describe("DesktopWindow", () => {
         assert.isTrue(createdWindowOptions[0]?.disableAutoHideCursor);
         assert.isFalse(createdWindowOptions[0]?.webPreferences?.backgroundThrottling);
         assert.deepEqual(fakeWindow.setAutoHideCursor.mock.calls, [[false]]);
-        assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["t3code-dev://app/"]);
+        assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["croki-dev://app/"]);
         assert.equal(fakeWindow.openDevTools.mock.calls.length, 1);
       }).pipe(Effect.provide(layer));
     }),
@@ -1048,17 +1048,17 @@ describe("DesktopWindow", () => {
           return yield* Effect.die("renderer load listeners were not registered");
         }
 
-        didFailLoad({}, -9, "ERR_UNEXPECTED", "t3code-dev://app/", true);
+        didFailLoad({}, -9, "ERR_UNEXPECTED", "croki-dev://app/", true);
         assert.equal(fakeWindow.loadURL.mock.calls.length, 1);
 
         yield* TestClock.adjust(100);
         assert.deepEqual(fakeWindow.loadURL.mock.calls, [
-          ["t3code-dev://app/"],
-          ["t3code-dev://app/"],
+          ["croki-dev://app/"],
+          ["croki-dev://app/"],
         ]);
         assert.equal(fakeWindow.reload.mock.calls.length, 0);
 
-        didFailLoad({}, -9, "ERR_UNEXPECTED", "t3code-dev://app/", true);
+        didFailLoad({}, -9, "ERR_UNEXPECTED", "croki-dev://app/", true);
         didFinishLoad();
         yield* TestClock.adjust(250);
         assert.equal(fakeWindow.loadURL.mock.calls.length, 2);
@@ -1067,26 +1067,84 @@ describe("DesktopWindow", () => {
     }),
   );
 
+  it.effect("reopens the exact application screen after a recoverable renderer crash", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const layer = makeTestLayer({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+
+        const didNavigateInPage = fakeWindow.webContentsListeners.get("did-navigate-in-page");
+        const renderProcessGone = fakeWindow.webContentsListeners.get("render-process-gone");
+        if (!didNavigateInPage || !renderProcessGone) {
+          return yield* Effect.die("renderer recovery listeners were not registered");
+        }
+
+        didNavigateInPage({}, "croki-dev://app/local/thread-1?panel=preview#checked-screen");
+        renderProcessGone({}, { reason: "oom", exitCode: 137 });
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(500);
+        yield* Effect.promise(() => Promise.resolve());
+
+        assert.equal(fakeWindow.loadURL.mock.calls.length, 2);
+        const recoveryUrl = new URL(String(fakeWindow.loadURL.mock.calls[1]?.[0]));
+        assert.equal(recoveryUrl.pathname, "/local/thread-1");
+        assert.equal(recoveryUrl.searchParams.get("panel"), "preview");
+        assert.equal(recoveryUrl.hash, "#checked-screen");
+        assert.equal(recoveryUrl.searchParams.get("croki-recovery"), "renderer");
+        assert.equal(recoveryUrl.searchParams.get("croki-recovery-reason"), "oom");
+        assert.equal(recoveryUrl.searchParams.get("croki-recovery-location"), "restored");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it("marks the location reset when the last renderer URL is not Croki", () => {
+    const recoveryUrl = new URL(
+      DesktopWindow.buildRendererRecoveryUrl({
+        applicationUrl: "croki-dev://app/",
+        lastApplicationUrl: "croki-dev://other/thread-1",
+        reason: "crashed",
+      }),
+    );
+
+    assert.equal(recoveryUrl.pathname, "/");
+    assert.equal(recoveryUrl.searchParams.get("croki-recovery-location"), "reset");
+    assert.isFalse(
+      DesktopWindow.isSameOriginRendererNavigation({
+        applicationUrl: "croki-dev://app/",
+        navigationUrl: "croki-dev://other/thread-1",
+      }),
+    );
+  });
+
   it("retries only transient failures for the development renderer", () => {
     assert.isTrue(
       DesktopWindow.isRetryableDevelopmentRendererLoadFailure({
-        applicationUrl: "t3code-dev://app/",
+        applicationUrl: "croki-dev://app/",
         errorCode: -102,
         isMainFrame: true,
-        validatedUrl: "t3code-dev://app/",
+        validatedUrl: "croki-dev://app/",
       }),
     );
     assert.isFalse(
       DesktopWindow.isRetryableDevelopmentRendererLoadFailure({
-        applicationUrl: "t3code-dev://app/",
+        applicationUrl: "croki-dev://app/",
         errorCode: -3,
         isMainFrame: true,
-        validatedUrl: "t3code-dev://app/",
+        validatedUrl: "croki-dev://app/",
       }),
     );
     assert.isFalse(
       DesktopWindow.isRetryableDevelopmentRendererLoadFailure({
-        applicationUrl: "t3code-dev://app/",
+        applicationUrl: "croki-dev://app/",
         errorCode: -102,
         isMainFrame: true,
         validatedUrl: "https://example.com/",

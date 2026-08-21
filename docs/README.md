@@ -1,6 +1,6 @@
-# T3 Code docs
+# Croki docs
 
-## Using T3 Code
+## Using Croki
 
 - [Install and first run](./user/install.md)
 - [Permission modes](./user/permission-modes.md)
@@ -19,7 +19,7 @@ Mobile app: [apps/mobile/README.md](../apps/mobile/README.md)
 
 ---
 
-## Working on T3 Code
+## Working on Croki
 
 Everything below is for maintainers. Setup lives in the [root README](../README.md);
 policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../AGENTS.md).
@@ -34,9 +34,21 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 - [Server updates](./internals/server-updates.md)
 - [Resource telemetry](./internals/resource-telemetry.md)
 - [Environment auth](./internals/environment-auth.md)
-- [T3 Connect](./internals/t3-connect.md)
+- [Connect compatibility architecture](./internals/t3-connect.md)
 - [CI gates](./internals/ci.md)
 - [Engineering work artifacts](./internals/work-artifacts.md)
+
+### Croki product direction
+
+- [Current project state](./project/current-state.md)
+- [Current-state audit (2026-08-05)](./project/current-state-audit-2026-08-05.md)
+- [ADE-native product adjustments](./project/ade-native-adjustments.md)
+- [Croki product and overlay contract](./croki.md)
+- [Release notes and historical specifications](./project/)
+
+Historical Product, GTM, Venture, and harness documents describe earlier Croki
+releases. Their behavior identifiers remain readable for compatibility but are
+not active choices for new turns.
 
 ### Runbooks
 

@@ -11,7 +11,7 @@ import {
   EnvironmentHttpConflictError,
   EnvironmentHttpInternalServerError,
   EnvironmentHttpUnauthorizedError,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   RelayCloudEnvironmentHealthProofPayload,
   RelayCloudEnvironmentHealthRequest,
@@ -29,8 +29,8 @@ import {
   RelayLinkProofRequest,
   RelayManagedEndpointOrigin,
   RelayOkResponse,
-} from "@t3tools/contracts/relay";
-import { withRelayClientTracing } from "@t3tools/shared/relayTracing";
+} from "@croki/contracts/relay";
+import { withRelayClientTracing } from "@croki/shared/relayTracing";
 import {
   normalizeRelayIssuer,
   RELAY_HEALTH_REQUEST_TYP,
@@ -40,8 +40,8 @@ import {
   RELAY_MINT_RESPONSE_TYP,
   signRelayJwt,
   verifyRelayJwt,
-} from "@t3tools/shared/relayJwt";
-import { isSecureRelayUrl } from "@t3tools/shared/relayUrl";
+} from "@croki/shared/relayJwt";
+import { isSecureRelayUrl } from "@croki/shared/relayUrl";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
@@ -117,7 +117,7 @@ const requireRelayUrl = relayUrlConfig.pipe(
   Effect.mapError(
     () =>
       new EnvironmentHttpInternalServerError({
-        message: "T3CODE_RELAY_URL must be configured as a secure absolute HTTPS origin.",
+        message: "CROKI_RELAY_URL must be configured as a secure absolute HTTPS origin.",
       }),
   ),
 );
@@ -531,7 +531,7 @@ const relayClientRequest = <A>(
     Effect.mapError(
       (cause) =>
         new EnvironmentHttpInternalServerError({
-          message: `T3 Connect relay request failed: ${String(cause)}`,
+          message: `Croki Connect relay request failed: ${String(cause)}`,
         }),
     ),
     withRelayClientTracing,
@@ -618,7 +618,7 @@ const reconcileDesiredCloudLinkWith = Effect.fn("environment.cloud.reconcileDesi
   },
   Effect.catchIf(
     ServerSecretStore.isSecretStoreError,
-    failEnvironmentCloudInternalError("Could not persist desired T3 Connect link state."),
+    failEnvironmentCloudInternalError("Could not persist desired Croki Connect link state."),
   ),
   Effect.catchTags({
     CloudCliCredentialRemovalError: failCloudCliTokenManagerError,
@@ -707,7 +707,7 @@ export const releaseManagedTunnelOnShutdown = Effect.fn(
     return false;
   }
   // The link belongs to the relay it was installed against, so target the
-  // persisted URL: T3CODE_RELAY_URL may have changed since the link was made.
+  // persisted URL: CROKI_RELAY_URL may have changed since the link was made.
   const relayUrl = yield* dependencies.secrets.get(RELAY_URL_SECRET);
   if (Option.isNone(relayUrl)) {
     return false;
@@ -1018,7 +1018,7 @@ const cloudMintCredentialHandler = Effect.fn("environment.cloud.mintCredential")
       scopes: AuthStandardClientScopes,
       subject: "cloud-connect",
       ttl: Duration.minutes(2),
-      label: "T3 Connect connect",
+      label: "Croki Connect connect",
       proofKeyThumbprint: proof.clientProofKeyThumbprint,
     });
     const responsePayload = {

@@ -1,0 +1,10 @@
+{"event_id":"alpha-01","occurred_at":"2026-08-03T12:00:00.000Z","source":"fixture","account_id":"acct-alpha","event_name":"mobile.device.registered","object_id":"device-a","properties":{"fixture":true}}
+{"event_id":"alpha-02","occurred_at":"2026-08-04T12:00:00.000Z","source":"fixture","account_id":"acct-alpha","event_name":"environment.linked","object_id":"env-a","properties":{"fixture":true}}
+{"event_id":"alpha-03","occurred_at":"2026-08-05T12:00:00.000Z","source":"fixture","account_id":"acct-alpha","event_name":"environment.connected","object_id":"env-a","properties":{"fixture":true}}
+{"event_id":"alpha-04","occurred_at":"2026-08-06T12:00:00.000Z","source":"fixture","account_id":"acct-alpha","event_name":"environment.linked","object_id":"env-b","properties":{"fixture":true}}
+{"event_id":"alpha-05","occurred_at":"2026-08-07T12:00:00.000Z","source":"fixture","account_id":"acct-alpha","event_name":"environment.connected","object_id":"env-b","properties":{"fixture":true}}
+{"event_id":"alpha-06","occurred_at":"2026-08-08T12:00:00.000Z","source":"fixture","account_id":"acct-alpha","event_name":"mobile.agent_activity.read","object_id":"device-a","properties":{"fixture":true}}
+{"event_id":"alpha-07","occurred_at":"2026-08-09T12:00:00.000Z","source":"fixture","account_id":"acct-alpha","event_name":"mobile.agent_activity.read","object_id":"device-a","properties":{"fixture":true}}
+{"event_id":"alpha-08","occurred_at":"2026-08-10T12:00:00.000Z","source":"fixture","account_id":"acct-alpha","event_name":"mobile.agent_activity.read","object_id":"device-a","properties":{"fixture":true}}
+{"event_id":"beta-01","occurred_at":"2026-08-11T12:00:00.000Z","source":"fixture","account_id":"acct-beta","event_name":"managed_tunnel.limit_reached","object_id":"env-four","properties":{"active_tunnels":3,"max_tunnels":3,"fixture":true}}
+{"event_id":"noise-01","occurred_at":"2026-08-11T12:00:00.000Z","source":"fixture","account_id":"acct-noise","event_name":"environment.listed","object_id":null,"properties":{"fixture":true}}

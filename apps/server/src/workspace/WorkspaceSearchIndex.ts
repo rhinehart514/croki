@@ -4,6 +4,7 @@ import {
   type FileItem,
   FileFinder,
   type GrepCursor,
+  type GrepResult,
   type MixedItem,
   type MixedSearchResult,
   type Result,
@@ -22,8 +23,8 @@ import type {
   ProjectSearchContentsInput,
   ProjectSearchContentsResult,
   ProjectSearchEntriesResult,
-} from "@t3tools/contracts";
-import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
+} from "@croki/contracts";
+import { isWorkspaceImagePreviewPath } from "@croki/shared/filePreview";
 
 const WORKSPACE_INDEX_MAX_ENTRIES = 25_000;
 const WORKSPACE_INDEX_PAGE_SIZE = WORKSPACE_INDEX_MAX_ENTRIES + 2;
@@ -31,6 +32,7 @@ const WORKSPACE_INDEX_SCAN_TIMEOUT = "15 seconds";
 const WORKSPACE_INDEX_SCAN_TIMEOUT_MS = 15_000;
 const WORKSPACE_INDEX_IDLE_TTL = "15 minutes";
 const CONTENT_SEARCH_TIME_BUDGET_MS = 250;
+const CONTENT_SEARCH_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const CONTENT_SEARCH_MAX_MATCHES_PER_FILE = 100;
 
 export class WorkspaceSearchIndexCreateFailed extends Schema.TaggedErrorClass<WorkspaceSearchIndexCreateFailed>()(
@@ -122,7 +124,7 @@ export class WorkspaceSearchIndex extends Context.Service<
       WorkspaceSearchIndexRefreshFailed | WorkspaceSearchIndexScanTimedOut
     >;
   }
->()("t3/workspace/WorkspaceSearchIndex") {}
+>()("croki-server/workspace/WorkspaceSearchIndex") {}
 
 function toPosixPath(input: string): string {
   return input.replaceAll("\\", "/");
@@ -216,6 +218,8 @@ function mapMixedSearchResult(
 }
 
 const WORD_CHARACTER = /[\p{Letter}\p{Mark}\p{Number}_]/u;
+const ASCII_WORD_CHARACTER = /[A-Za-z0-9_]/;
+const REGEX_SPECIAL_CHARACTER = /[.*+?^${}()|[\]\\]/g;
 
 function codePointAt(line: string, index: number): string | undefined {
   const codePoint = line.codePointAt(index);
@@ -234,6 +238,22 @@ function buildContentSearchQuery(input: Omit<ProjectSearchContentsInput, "cwd">)
   readonly searchQuery: string;
   readonly regexMode: boolean;
 } {
+  if (!input.useRegex && input.wholeWord) {
+    const escapedQuery = input.query.replace(REGEX_SPECIAL_CHARACTER, "\\$&");
+    const firstCharacter = codePointAt(input.query, 0);
+    const lastCharacter = codePointBefore(input.query, input.query.length);
+    const boundaryQuery = `${firstCharacter !== undefined && ASCII_WORD_CHARACTER.test(firstCharacter) ? "\\b" : ""}${escapedQuery}${lastCharacter !== undefined && ASCII_WORD_CHARACTER.test(lastCharacter) ? "\\b" : ""}`;
+
+    // Finder's regex engine has zero-width ASCII word boundaries, but does not
+    // support lookaround or Unicode character classes. This is still a safe
+    // native prefilter: it removes ordinary substring matches before Finder's
+    // per-file cursor advances, while isWholeWordRange below rejects the
+    // remaining Unicode-adjacent matches with Croki's exact boundary rules.
+    return {
+      searchQuery: input.caseSensitive ? boundaryQuery : `(?i)${boundaryQuery}`,
+      regexMode: true,
+    };
+  }
   if (input.caseSensitive) {
     return { searchQuery: input.query, regexMode: input.useRegex };
   }
@@ -257,13 +277,13 @@ function mapContentMatchRanges(
 }
 
 /**
- * Whole-word filtering happens after the grep rather than by wrapping the
- * pattern in boundary regex: consuming boundaries such as `(?:^|\W)` swallow
- * the separator between adjacent matches and widen the reported ranges, and
- * `\b` cannot match punctuation-edged queries at all. Matching VS Code, a
- * match edge is a word boundary when it touches the line edge, the
- * neighbouring character is not a word character, or the match's own edge
- * character is not a word character.
+ * Native boundaries keep ordinary plain-text substrings out of Finder's
+ * pagination, but exact whole-word filtering still happens here. Consuming
+ * boundaries such as `(?:^|\W)` swallow separators and widen ranges, while
+ * Finder's `\b` is ASCII-only and cannot constrain punctuation-edged queries.
+ * Matching VS Code, a match edge is a word boundary when it touches the line
+ * edge, the neighbouring character is not a word character, or the match's
+ * own edge character is not a word character.
  */
 function isWholeWordRange(
   line: string,
@@ -475,48 +495,79 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
   )(function* (input) {
     const { searchQuery, regexMode } = buildContentSearchQuery(input);
     const deadline = performance.now() + CONTENT_SEARCH_TIME_BUDGET_MS;
-    // Grep cursors advance by file, so whole-word post-filtering needs enough
-    // raw candidates from the current file before moving to the next one.
-    const rawPageSize = input.wholeWord
-      ? Math.max(input.limit, CONTENT_SEARCH_MAX_MATCHES_PER_FILE)
-      : input.limit;
+    // Finder cursors advance by file. Whole-word searches request one extra
+    // exact result, then retry a saturated page from the same cursor with a
+    // geometrically larger per-file allowance. The file-size-derived ceiling
+    // is exhaustive: a searchable file cannot contain more matching lines
+    // than bytes plus one. This avoids both finite overscan and unbounded work.
+    const initialRawPageSize = input.wholeWord ? input.limit + 1 : input.limit;
+    const maxWholeWordPageSize = CONTENT_SEARCH_MAX_FILE_SIZE_BYTES + 1;
     const matches: Array<ProjectSearchContentsResult["matches"][number]> = [];
     let nextCursor: GrepCursor | null = null;
     let regexFallbackError: string | undefined;
+    let boundarySearchIncomplete = false;
 
     do {
-      const remainingTimeBudgetMs = Math.max(1, Math.ceil(deadline - performance.now()));
-      const result = yield* runSearch(input.query, input.limit, "grep", () =>
-        finder.grep(searchQuery, {
-          mode: regexMode ? "regex" : "plain",
-          smartCase: !input.caseSensitive && !regexMode,
-          // A single dense file must not consume the whole result page.
-          maxMatchesPerFile: Math.min(CONTENT_SEARCH_MAX_MATCHES_PER_FILE, rawPageSize),
-          pageSize: rawPageSize,
-          cursor: nextCursor,
-          timeBudgetMs: remainingTimeBudgetMs,
-        }),
-      );
+      const pageCursor = nextCursor;
+      let rawPageSize = initialRawPageSize;
+      let result: GrepResult;
+      let pageMatches: Array<ProjectSearchContentsResult["matches"][number]>;
 
-      for (const match of result.items) {
-        const matchRanges = mapContentMatchRanges(match.lineContent, match.matchRanges).filter(
-          (range) => !input.wholeWord || isWholeWordRange(match.lineContent, range),
+      while (true) {
+        const remainingTimeBudgetMs = Math.max(1, Math.ceil(deadline - performance.now()));
+        result = yield* runSearch(input.query, rawPageSize, "grep", () =>
+          finder.grep(searchQuery, {
+            mode: regexMode ? "regex" : "plain",
+            maxFileSize: CONTENT_SEARCH_MAX_FILE_SIZE_BYTES,
+            smartCase: !input.caseSensitive && !regexMode,
+            maxMatchesPerFile: input.wholeWord
+              ? rawPageSize
+              : Math.min(CONTENT_SEARCH_MAX_MATCHES_PER_FILE, rawPageSize),
+            pageSize: rawPageSize,
+            cursor: pageCursor,
+            timeBudgetMs: remainingTimeBudgetMs,
+          }),
         );
-        if (matchRanges.length === 0) continue;
-        matches.push({
-          path: toPosixPath(match.relativePath),
-          lineNumber: match.lineNumber,
-          lineContent: match.lineContent,
-          matchRanges,
+        regexFallbackError ??= result.regexFallbackError;
+        pageMatches = result.items.flatMap((match) => {
+          const matchRanges = mapContentMatchRanges(match.lineContent, match.matchRanges).filter(
+            (range) => !input.wholeWord || isWholeWordRange(match.lineContent, range),
+          );
+          return matchRanges.length === 0
+            ? []
+            : [
+                {
+                  path: toPosixPath(match.relativePath),
+                  lineNumber: match.lineNumber,
+                  lineContent: match.lineContent,
+                  matchRanges,
+                },
+              ];
         });
+
+        const exactResultsNeeded = input.limit + 1 - matches.length;
+        const pageIsSaturated = input.wholeWord && result.items.length >= rawPageSize;
+        if (
+          !pageIsSaturated ||
+          pageMatches.length >= exactResultsNeeded ||
+          rawPageSize >= maxWholeWordPageSize
+        ) {
+          break;
+        }
+        if (performance.now() >= deadline) {
+          boundarySearchIncomplete = true;
+          break;
+        }
+        rawPageSize = Math.min(maxWholeWordPageSize, rawPageSize * 2);
       }
+
+      matches.push(...pageMatches);
       nextCursor = result.nextCursor;
-      regexFallbackError ??= result.regexFallbackError;
     } while (matches.length < input.limit && nextCursor !== null && performance.now() < deadline);
 
     return {
       matches: matches.slice(0, input.limit),
-      truncated: matches.length > input.limit || nextCursor !== null,
+      truncated: boundarySearchIncomplete || matches.length > input.limit || nextCursor !== null,
       ...(regexFallbackError !== undefined ? { regexFallbackError } : {}),
     };
   });
@@ -558,7 +609,7 @@ export const layer = (key: string) => {
 };
 
 export class WorkspaceSearchIndexMap extends LayerMap.Service<WorkspaceSearchIndexMap>()(
-  "t3/workspace/WorkspaceSearchIndexMap",
+  "croki-server/workspace/WorkspaceSearchIndexMap",
   {
     lookup: layer,
     idleTimeToLive: WORKSPACE_INDEX_IDLE_TTL,

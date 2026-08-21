@@ -20,7 +20,7 @@ import { useFontFamily } from "../../lib/useFontFamily";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@croki/client-runtime/state/runtime";
 
 import { ComposerEditor, type ComposerEditorHandle } from "../../components/ComposerEditor";
 import {

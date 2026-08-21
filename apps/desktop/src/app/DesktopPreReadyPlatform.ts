@@ -7,10 +7,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as Electron from "electron";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@croki/shared/hostProcess";
 
 import * as DesktopEarlyElectronStartup from "./DesktopEarlyElectronStartup.ts";
-import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 
 export interface DesktopPreReadyCommandLineReader {
   readonly hasSwitch: (switchName: string) => boolean;
@@ -44,7 +43,7 @@ export class DesktopPreReadyElectronOptions extends Context.Service<
     readonly linux: DesktopEarlyElectronStartup.EarlyLinuxElectronOptions | null;
     readonly linuxPasswordStoreCommandLine: string | null;
   }
->()("@t3tools/desktop/app/DesktopPreReadyPlatform/DesktopPreReadyElectronOptions") {}
+>()("@croki/desktop/app/DesktopPreReadyPlatform/DesktopPreReadyElectronOptions") {}
 
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcessPlatform;
@@ -66,9 +65,6 @@ export const make = Effect.gen(function* () {
   });
 }).pipe(Effect.withSpan("desktop.electron.configureBeforeReady"));
 
-// Keep Electron's strict pre-ready setup isolated so later runtime layers cannot
-// observe app readiness before scheme privileges and command-line switches exist.
-export const layer = Layer.mergeAll(
-  ElectronProtocol.layerSchemePrivileges,
-  Layer.effect(DesktopPreReadyElectronOptions, make),
-);
+// Scheme privileges are registered synchronously by main.ts before any runtime
+// layers are constructed. This layer owns only the remaining pre-ready options.
+export const layer = Layer.effect(DesktopPreReadyElectronOptions, make);

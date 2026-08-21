@@ -1,6 +1,11 @@
 # Relay observability
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using Croki? See [docs/user](../user/).
+
+> The resource names below are inherited compatibility references. Croki relay
+> deployment and telemetry export remain disabled until their destinations,
+> datasets, and credentials are Croki-owned. Do not run the deploy command
+> against inherited production resources.
 
 The relay Alchemy stack owns a shared Axiom trace setup:
 

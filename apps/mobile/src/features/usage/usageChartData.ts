@@ -4,8 +4,8 @@
  *
  * @module usageChartData
  */
-import type { UsageProviderKind } from "@t3tools/contracts";
-import type { DailyTotals } from "@t3tools/shared/usageMerge";
+import type { UsageProviderKind } from "@croki/contracts";
+import type { DailyTotals } from "@croki/shared/usageMerge";
 
 import { PROVIDER_ORDER } from "./usageProviders";
 

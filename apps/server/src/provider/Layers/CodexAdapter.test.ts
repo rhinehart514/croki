@@ -7,18 +7,20 @@ import {
   ApprovalRequestId,
   CodexSettings,
   EventId,
+  MessageId,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderItemId,
   type ProviderApprovalDecision,
   type ProviderEvent,
   type ProviderSession,
+  type ProviderTurnSteerResult,
   type ProviderTurnStartResult,
   type ProviderUserInputAnswers,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
+} from "@croki/contracts";
+import { createModelSelection } from "@croki/shared/model";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, vi } from "@effect/vitest";
 
@@ -43,6 +45,7 @@ import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.t
 import {
   type CodexSessionRuntimeOptions,
   type CodexSessionRuntimeSendTurnInput,
+  type CodexSessionRuntimeSteerTurnInput,
   type CodexSessionRuntimeShape,
   type CodexThreadSnapshot,
 } from "./CodexSessionRuntime.ts";
@@ -51,7 +54,7 @@ const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 // Test-local service tag so the rest of the file can keep using `yield* CodexAdapter`.
 class CodexAdapter extends Context.Service<CodexAdapter, CodexAdapterShape>()(
-  "t3/provider/Layers/CodexAdapter.test/CodexAdapter",
+  "croki-server/provider/Layers/CodexAdapter.test/CodexAdapter",
 ) {}
 
 const asThreadId = (value: string): ThreadId => ThreadId.make(value);
@@ -60,10 +63,12 @@ const asEventId = (value: string): EventId => EventId.make(value);
 const asItemId = (value: string): ProviderItemId => ProviderItemId.make(value);
 
 class FakeCodexRuntime implements CodexSessionRuntimeShape {
+  readonly startVoice = vi.fn(() => Effect.void);
+  readonly stopVoice = Effect.void;
   private readonly eventQueue = Effect.runSync(Queue.unbounded<ProviderEvent>());
   private readonly now = "2026-01-01T00:00:00.000Z";
 
-  public readonly startImpl = vi.fn(() =>
+  public readonly startImpl = vi.fn<() => Promise<ProviderSession>>(() =>
     Promise.resolve({
       provider: ProviderDriverKind.make("codex"),
       status: "ready" as const,
@@ -81,6 +86,14 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
       Promise.resolve({
         threadId: this.options.threadId,
         turnId: asTurnId("turn-1"),
+      }),
+  );
+
+  public readonly steerTurnImpl = vi.fn(
+    (input: CodexSessionRuntimeSteerTurnInput): Promise<ProviderTurnSteerResult> =>
+      Promise.resolve({
+        threadId: this.options.threadId,
+        turnId: input.expectedTurnId,
       }),
   );
 
@@ -102,6 +115,10 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
         threadId: "provider-thread-1",
         turns: [],
       }),
+  );
+
+  public readonly forkThreadImpl = vi.fn(() =>
+    Promise.resolve({ threadId: "provider-thread-forked" }),
   );
 
   public readonly respondToRequestImpl = vi.fn(
@@ -132,6 +149,10 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
     return Effect.promise(() => this.sendTurnImpl(input));
   }
 
+  steerTurn(input: CodexSessionRuntimeSteerTurnInput) {
+    return Effect.promise(() => this.steerTurnImpl(input));
+  }
+
   interruptTurn(turnId?: TurnId) {
     return Effect.promise(() => this.interruptTurnImpl(turnId));
   }
@@ -141,6 +162,8 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
   rollbackThread(numTurns: number) {
     return Effect.promise(() => this.rollbackThreadImpl(numTurns));
   }
+
+  forkThread = Effect.promise(() => this.forkThreadImpl());
 
   respondToRequest(requestId: ApprovalRequestId, decision: ProviderApprovalDecision) {
     return Effect.promise(() => this.respondToRequestImpl(requestId, decision));
@@ -217,6 +240,7 @@ const providerSessionDirectoryTestLayer = Layer.succeed(ProviderSessionDirectory
   getProvider: () =>
     Effect.die(new Error("ProviderSessionDirectory.getProvider is not used in test")),
   getBinding: () => Effect.succeed(Option.none()),
+  remove: () => Effect.void,
   listThreadIds: () => Effect.succeed([]),
   listBindings: () => Effect.succeed([]),
 });
@@ -287,6 +311,23 @@ validationLayer("CodexAdapterLive validation", (it) => {
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
       });
+    }),
+  );
+  it.effect("routes native voice start to the active Codex runtime", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      const threadId = asThreadId("voice-thread");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        runtimeMode: "approval-required",
+      });
+
+      yield* adapter.voice!.start({ threadId, sdp: "v=0\r\nvoice-offer" });
+
+      NodeAssert.deepStrictEqual(validationRuntimeFactory.lastRuntime?.startVoice.mock.calls, [
+        [{ sdp: "v=0\r\nvoice-offer" }],
+      ]);
     }),
   );
 });
@@ -361,6 +402,37 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
     }),
   );
 
+  it.effect("routes guidance through Codex native turn steering", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      const threadId = asThreadId("sess-steer");
+      const turnId = asTurnId("turn-running");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const runtime = sessionRuntimeFactory.lastRuntime;
+      NodeAssert.ok(runtime);
+      runtime.steerTurnImpl.mockClear();
+
+      const result = yield* adapter.steerTurn!({
+        threadId,
+        expectedTurnId: turnId,
+        messageId: MessageId.make("message-guidance"),
+        input: "Use SQLite, not Postgres.",
+        attachments: [],
+      });
+
+      NodeAssert.deepStrictEqual(runtime.steerTurnImpl.mock.calls[0]?.[0], {
+        expectedTurnId: turnId,
+        clientUserMessageId: "message-guidance",
+        input: "Use SQLite, not Postgres.",
+      });
+      NodeAssert.deepStrictEqual(result, { threadId, turnId });
+    }),
+  );
+
   it.effect("passes configured launch args into the session runtime", () => {
     const runtimeFactory = makeRuntimeFactory();
     const layer = Layer.effect(
@@ -392,14 +464,14 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
     }).pipe(Effect.provide(layer));
   });
 
-  it.effect("uses T3CODE_CODEX_LAUNCH_ARGS for the session runtime", () => {
+  it.effect("uses CROKI_CODEX_LAUNCH_ARGS for the session runtime", () => {
     const runtimeFactory = makeRuntimeFactory();
     const layer = Layer.effect(
       CodexAdapter,
       Effect.gen(function* () {
         const codexConfig = decodeCodexSettings({ launchArgs: "--enable settings-feature" });
         return yield* makeCodexAdapter(codexConfig, {
-          environment: { T3CODE_CODEX_LAUNCH_ARGS: " --strict-config --enable env-feature " },
+          environment: { CROKI_CODEX_LAUNCH_ARGS: " --strict-config --enable env-feature " },
           makeRuntime: runtimeFactory.factory,
         });
       }),
@@ -513,6 +585,44 @@ function startLifecycleRuntime() {
 }
 
 lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
+  it.effect("returns the native Codex resume cursor when forking a thread", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+
+      const result = yield* adapter.forkThread(asThreadId("thread-1"), asThreadId("thread-forked"));
+
+      NodeAssert.deepStrictEqual(result, {
+        resumeCursor: { threadId: "provider-thread-forked" },
+      });
+      NodeAssert.equal(runtime.forkThreadImpl.mock.calls.length, 1);
+    }),
+  );
+
+  it.effect("rejects a native fork while the source turn is running", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      runtime.startImpl.mockResolvedValue({
+        provider: ProviderDriverKind.make("codex"),
+        status: "running",
+        runtimeMode: "full-access",
+        threadId: asThreadId("thread-1"),
+        activeTurnId: asTurnId("turn-running"),
+        cwd: process.cwd(),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      });
+      runtime.forkThreadImpl.mockClear();
+
+      const failure = yield* adapter
+        .forkThread(asThreadId("thread-1"), asThreadId("thread-forked"))
+        .pipe(Effect.flip);
+
+      NodeAssert.equal(failure._tag, "ProviderAdapterValidationError");
+      NodeAssert.equal(failure.operation, "forkThread");
+      NodeAssert.equal(runtime.forkThreadImpl.mock.calls.length, 0);
+    }),
+  );
+
   it.effect("maps completed agent message items to canonical item.completed events", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
@@ -577,7 +687,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           item: {
             type: "mcpToolCall",
             id: "mcp_1",
-            server: "t3-code",
+            server: "croki",
             tool: "preview_status",
             arguments: {},
             durationMs: 12,
@@ -594,7 +704,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         return;
       }
       NodeAssert.equal(firstEvent.value.payload.itemType, "mcp_tool_call");
-      NodeAssert.equal(firstEvent.value.payload.title, "t3-code · preview_status");
+      NodeAssert.equal(firstEvent.value.payload.title, "croki · preview_status");
       NodeAssert.deepStrictEqual(firstEvent.value.payload.data, {
         completedAtMs: 1_778_000_000_000,
         threadId: "thread-1",
@@ -602,7 +712,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         item: {
           type: "mcpToolCall",
           id: "mcp_1",
-          server: "t3-code",
+          server: "croki",
           tool: "preview_status",
           arguments: {},
           durationMs: 12,
@@ -1299,7 +1409,7 @@ scopedFailureLayer("CodexAdapterLive scoped startup failure", (it) => {
 it.effect("flushes managed native logs when the adapter layer shuts down", () =>
   Effect.gen(function* () {
     const tempDir = NodeFS.mkdtempSync(
-      NodePath.join(NodeOS.tmpdir(), "t3-codex-adapter-native-log-"),
+      NodePath.join(NodeOS.tmpdir(), "crokix-adapter-native-log-"),
     );
     const basePath = NodePath.join(tempDir, "provider-native.ndjson");
     const runtimeFactory = makeRuntimeFactory();

@@ -14,8 +14,8 @@ import * as Schema from "effect/Schema";
 import {
   DesktopBackendBootstrap,
   type DesktopBackendBootstrap as DesktopBackendBootstrapValue,
-} from "@t3tools/contracts";
-import * as NetService from "@t3tools/shared/Net";
+} from "@croki/contracts";
+import * as NetService from "@croki/shared/Net";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { deriveServerPaths } from "../config.ts";
 import { resolveServerConfig } from "./config.ts";
@@ -94,17 +94,17 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_LOG_LEVEL: "Warn",
-                  T3CODE_MODE: "desktop",
-                  T3CODE_PORT: "4001",
-                  T3CODE_HOST: "0.0.0.0",
-                  T3CODE_HOME: baseDir,
+                  CROKI_LOG_LEVEL: "Warn",
+                  CROKI_MODE: "desktop",
+                  CROKI_PORT: "4001",
+                  CROKI_HOST: "0.0.0.0",
+                  CROKI_HOME: baseDir,
                   VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
-                  T3CODE_DEV_ALLOWED_ORIGINS:
+                  CROKI_DEV_ALLOWED_ORIGINS:
                     "https://host.example.ts.net, https://phone.example.ts.net ",
-                  T3CODE_NO_BROWSER: "true",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
-                  T3CODE_LOG_WS_EVENTS: "true",
+                  CROKI_NO_BROWSER: "true",
+                  CROKI_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
+                  CROKI_LOG_WS_EVENTS: "true",
                 },
               }),
             ),
@@ -167,15 +167,15 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_LOG_LEVEL: "Warn",
-                  T3CODE_MODE: "desktop",
-                  T3CODE_PORT: "4001",
-                  T3CODE_HOST: "0.0.0.0",
-                  T3CODE_HOME: join(NodeOS.tmpdir(), "ignored-base"),
+                  CROKI_LOG_LEVEL: "Warn",
+                  CROKI_MODE: "desktop",
+                  CROKI_PORT: "4001",
+                  CROKI_HOST: "0.0.0.0",
+                  CROKI_HOME: join(NodeOS.tmpdir(), "ignored-base"),
                   VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
-                  T3CODE_NO_BROWSER: "false",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
-                  T3CODE_LOG_WS_EVENTS: "false",
+                  CROKI_NO_BROWSER: "false",
+                  CROKI_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
+                  CROKI_LOG_WS_EVENTS: "false",
                 },
               }),
             ),
@@ -245,10 +245,10 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_BOOTSTRAP_FD: String(fd),
-                  T3CODE_NO_BROWSER: "true",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
-                  T3CODE_LOG_WS_EVENTS: "true",
+                  CROKI_BOOTSTRAP_FD: String(fd),
+                  CROKI_NO_BROWSER: "true",
+                  CROKI_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  CROKI_LOG_WS_EVENTS: "true",
                 },
               }),
             ),
@@ -322,7 +322,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_BOOTSTRAP_FD: String(fd),
+                  CROKI_BOOTSTRAP_FD: String(fd),
                 },
               }),
             ),
@@ -452,12 +452,12 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_MODE: "web",
-                  T3CODE_BOOTSTRAP_FD: String(fd),
-                  T3CODE_HOME: baseDir,
-                  T3CODE_NO_BROWSER: "true",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
-                  T3CODE_LOG_WS_EVENTS: "true",
+                  CROKI_MODE: "web",
+                  CROKI_BOOTSTRAP_FD: String(fd),
+                  CROKI_HOME: baseDir,
+                  CROKI_NO_BROWSER: "true",
+                  CROKI_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  CROKI_LOG_WS_EVENTS: "true",
                 },
               }),
             ),
@@ -588,8 +588,8 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_NO_BROWSER: "false",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  CROKI_NO_BROWSER: "false",
+                  CROKI_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
                 },
               }),
             ),

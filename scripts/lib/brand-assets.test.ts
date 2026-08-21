@@ -8,24 +8,29 @@ import {
   resolveWebAssetBrandForPackageVersion,
   resolveWebIconOverrides,
 } from "./brand-assets.ts";
+import { CROKI_BRAND_ASSET_PATHS } from "./brand-policy.ts";
 
 describe("brand-assets", () => {
+  it("sources the active product asset family from the Croki brand policy", () => {
+    expect(BRAND_ASSET_PATHS).toMatchObject(CROKI_BRAND_ASSET_PATHS);
+  });
+
   it("maps production web assets into the server package", () => {
     expect(resolveWebIconOverrides("production", "dist/client")).toEqual([
       {
-        sourceRelativePath: BRAND_ASSET_PATHS.productionWebFaviconIco,
+        sourceRelativePath: BRAND_ASSET_PATHS.crokiWindowsIconIco,
         targetRelativePath: "dist/client/favicon.ico",
       },
       {
-        sourceRelativePath: BRAND_ASSET_PATHS.productionWebFavicon16Png,
+        sourceRelativePath: BRAND_ASSET_PATHS.crokiWebFavicon16Png,
         targetRelativePath: "dist/client/favicon-16x16.png",
       },
       {
-        sourceRelativePath: BRAND_ASSET_PATHS.productionWebFavicon32Png,
+        sourceRelativePath: BRAND_ASSET_PATHS.crokiWebFavicon32Png,
         targetRelativePath: "dist/client/favicon-32x32.png",
       },
       {
-        sourceRelativePath: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
+        sourceRelativePath: BRAND_ASSET_PATHS.crokiWebAppleTouchIconPng,
         targetRelativePath: "dist/client/apple-touch-icon.png",
       },
     ]);
@@ -61,14 +66,14 @@ describe("brand-assets", () => {
 
   it("can target hosted web dist directly", () => {
     expect(resolveWebIconOverrides("production", "apps/web/dist")).toContainEqual({
-      sourceRelativePath: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
+      sourceRelativePath: BRAND_ASSET_PATHS.crokiWebAppleTouchIconPng,
       targetRelativePath: "apps/web/dist/apple-touch-icon.png",
     });
   });
 
   it("maps hosted nightly web assets to nightly icons", () => {
     expect(resolveWebIconOverrides("nightly", "apps/web/dist")).toContainEqual({
-      sourceRelativePath: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
+      sourceRelativePath: BRAND_ASSET_PATHS.crokiWindowsIconIco,
       targetRelativePath: "apps/web/dist/favicon.ico",
     });
   });

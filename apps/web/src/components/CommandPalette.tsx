@@ -1,6 +1,6 @@
 "use client";
 
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef, scopeThreadRef } from "@croki/client-runtime/environment";
 import {
   canCreateProjectInEnvironment,
   getCloneDestinationBrowsePath,
@@ -8,20 +8,20 @@ import {
   getCloneDirectoryName,
   getDefaultCloneUrl,
   normalizePastedCloneUrl,
-} from "@t3tools/client-runtime/operations/projects";
-import { connectionStatusText } from "@t3tools/client-runtime/connection";
-import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
+} from "@croki/client-runtime/operations/projects";
+import { connectionStatusText } from "@croki/client-runtime/connection";
+import { threadSearchMatchKey } from "@croki/client-runtime/state/thread-search";
 import {
   canPreloadBrowsePath,
   createBrowseNavigationCoordinator,
   filterFilesystemBrowseEntries,
   getFilesystemBrowsePath,
-} from "@t3tools/client-runtime/state/filesystem";
+} from "@croki/client-runtime/state/filesystem";
 import {
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@croki/client-runtime/state/runtime";
 import {
   type DesktopWslState,
   type EnvironmentId,
@@ -31,7 +31,7 @@ import {
   type SourceControlProviderKind,
   type SourceControlRepositoryInfo,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
@@ -49,11 +49,13 @@ import {
   TextSearchIcon,
 } from "lucide-react";
 import {
+  createContext,
   useCallback,
   useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
+  useContext,
   useReducer,
   useRef,
   useState,
@@ -394,6 +396,28 @@ function overlayModeForCommand(command: string | null): SearchOverlayMode | null
     : null;
 }
 
+export interface CanvasCommandRegistration {
+  readonly onOpenCanvas?: (() => void) | undefined;
+  readonly unavailableReason?: string | undefined;
+}
+
+interface CanvasCommandRegistrationContextValue {
+  readonly register: (owner: symbol, registration: CanvasCommandRegistration) => () => void;
+}
+
+const CanvasCommandRegistrationContext =
+  createContext<CanvasCommandRegistrationContextValue | null>(null);
+
+export function useRegisterCanvasCommand(registration: CanvasCommandRegistration | null): void {
+  const context = useContext(CanvasCommandRegistrationContext);
+  const ownerRef = useRef(Symbol("canvas-command-registration"));
+
+  useEffect(() => {
+    if (!context || !registration) return;
+    return context.register(ownerRef.current, registration);
+  }, [context, registration?.onOpenCanvas, registration?.unavailableReason]);
+}
+
 export function CommandPalette({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reduceCommandPaletteUiState, {
     open: false,
@@ -408,6 +432,24 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   const openAddProject = useCallback(() => dispatch({ _tag: "OpenAddProject" }), []);
   const openNewThreadIn = useCallback(() => dispatch({ _tag: "OpenNewThreadIn" }), []);
   const clearOpenIntent = useCallback(() => dispatch({ _tag: "ClearOpenIntent" }), []);
+  const [canvasCommands, setCanvasCommands] = useState<
+    ReadonlyArray<{ readonly owner: symbol; readonly registration: CanvasCommandRegistration }>
+  >([]);
+  const registerCanvasCommand = useCallback(
+    (owner: symbol, registration: CanvasCommandRegistration) => {
+      setCanvasCommands((current) => [
+        ...current.filter((entry) => entry.owner !== owner),
+        { owner, registration },
+      ]);
+      return () => setCanvasCommands((current) => current.filter((entry) => entry.owner !== owner));
+    },
+    [],
+  );
+  const canvasRegistrationContext = useMemo(
+    () => ({ register: registerCanvasCommand }),
+    [registerCanvasCommand],
+  );
+  const onOpenCanvas = canvasCommands.at(-1)?.registration.onOpenCanvas;
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { theme, themeHalves, resolvedTheme } = useTheme();
   const composerHandleRef = useRef<ChatComposerHandle | null>(null);
@@ -462,6 +504,14 @@ export function CommandPalette({ children }: { children: ReactNode }) {
         });
         return;
       }
+      if (command === "canvas.open") {
+        if (!onOpenCanvas) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        onOpenCanvas();
+        return;
+      }
       const mode = overlayModeForCommand(command);
       if (mode === null) {
         return;
@@ -472,7 +522,17 @@ export function CommandPalette({ children }: { children: ReactNode }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keybindings, previewOpen, resolvedTheme, terminalOpen, theme, themeHalves, toggleMode]);
+  }, [
+    keybindings,
+    onOpenCanvas,
+    previewOpen,
+    resolvedTheme,
+    setOpen,
+    terminalOpen,
+    theme,
+    themeHalves,
+    toggleMode,
+  ]);
 
   useEffect(
     () =>
@@ -1130,6 +1190,7 @@ function OpenCommandPaletteDialog(props: {
                 source: match.source,
                 snippet: match.snippet,
                 query: threadSearchQuery,
+                isWorker: thread.parentThreadId !== null,
               }
             : undefined;
         },

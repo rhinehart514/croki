@@ -1,4 +1,7 @@
+import { CROKI_BRAND_ASSET_PATHS } from "./brand-policy.ts";
+
 export const BRAND_ASSET_PATHS = {
+  ...CROKI_BRAND_ASSET_PATHS,
   developmentIconComposerProject: "assets/dev/app-icon.icon",
   developmentIosIconPng: "assets/dev/blueprint-ios-1024.png",
   developmentUniversalIconPng: "assets/dev/blueprint-universal-1024.png",
@@ -65,16 +68,16 @@ const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
     appleTouchIconPng: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
   },
   nightly: {
-    faviconIco: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.nightlyWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.nightlyWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
+    faviconIco: BRAND_ASSET_PATHS.crokiWindowsIconIco,
+    favicon16Png: BRAND_ASSET_PATHS.crokiWebFavicon16Png,
+    favicon32Png: BRAND_ASSET_PATHS.crokiWebFavicon32Png,
+    appleTouchIconPng: BRAND_ASSET_PATHS.crokiWebAppleTouchIconPng,
   },
   production: {
-    faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.productionWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.productionWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
+    faviconIco: BRAND_ASSET_PATHS.crokiWindowsIconIco,
+    favicon16Png: BRAND_ASSET_PATHS.crokiWebFavicon16Png,
+    favicon32Png: BRAND_ASSET_PATHS.crokiWebFavicon32Png,
+    appleTouchIconPng: BRAND_ASSET_PATHS.crokiWebAppleTouchIconPng,
   },
 } as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
 

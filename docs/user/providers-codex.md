@@ -1,7 +1,7 @@
 # Codex
 
-This guide is for people who want to use more than one Codex account in T3 Code. For Claude, see
-[Claude](./providers-claude.md). For first-time setup, see [Install T3 Code](./install.md).
+This guide is for people who want to use more than one Codex account in Croki. For Claude, see
+[Claude](./providers-claude.md). For first-time setup, see [Install Croki](./install.md).
 
 Common reasons:
 
@@ -28,6 +28,17 @@ Log in with Codex normally:
 codex login
 ```
 
+## What Croki Adds To A Codex Session
+
+Croki keeps T3 Code's small host contract so Codex can operate reliably inside
+the app. It tells Codex whether Default or Plan collaboration mode is active,
+which structured input is actually available, how to use the shared Preview
+browser, and which Croki/Codex runtime is active.
+
+This does not add an application brief, product strategy, workflow, persona,
+or delegation policy. Repository instructions, selected files, skills, and
+other task context still use their normal visible or Codex-native paths.
+
 ## I Want Work And Personal Codex Accounts
 
 Use one real Codex home and one shadow home.
@@ -41,7 +52,7 @@ Recommended setup:
 
 The idea is:
 
-- both accounts can see the same T3/Codex sessions
+- both accounts can see the same Croki/Codex sessions
 - each account keeps its own login
 - existing threads can continue with either account
 
@@ -55,7 +66,7 @@ codex login
 
 This is the account used by `~/.codex`.
 
-In T3 Code Settings, name it something obvious:
+In Croki Settings, name it something obvious:
 
 ```text
 Display name: Codex Work
@@ -72,7 +83,7 @@ mkdir -p ~/.codex_p
 CODEX_HOME=~/.codex_p codex login
 ```
 
-In T3 Code Settings, add another Codex provider:
+In Croki Settings, add another Codex provider:
 
 ```text
 Display name: Codex Personal
@@ -87,7 +98,7 @@ has a `Shadow home path`.
 
 Open Settings and look at the provider row.
 
-T3 Code shows the authenticated email for providers that report one. Emails are blurred by default;
+Croki shows the authenticated email for providers that report one. Emails are blurred by default;
 click the blurred email to reveal it.
 
 Use display names and accent colors to make accounts easy to tell apart in the model picker.
@@ -114,8 +125,8 @@ Codex Personal  CODEX_HOME path: ~/.codex, Shadow home path: ~/.codex_p
 Those two providers are considered compatible for continuation, so the locked model picker can show
 both.
 
-If you add a third Codex provider with a completely different `CODEX_HOME path`, T3 Code treats it
-as a different workspace. It will not be offered for existing threads created under `~/.codex`.
+If you add a third Codex provider with a completely different `CODEX_HOME path`, Croki treats it
+as a different workspace. It will not be offered for existing Threads created under `~/.codex`.
 
 ## If Both Accounts Look The Same
 

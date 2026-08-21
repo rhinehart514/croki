@@ -7,13 +7,15 @@ import type {
   ProviderSettingsFormAnnotation,
   ProviderSettingsFormControl,
   ProviderSettingsFormSchemaAnnotation,
-} from "@t3tools/contracts";
+  ServerProvider,
+} from "@croki/contracts";
 
 import { cn } from "../../lib/utils";
 import { DraftInput } from "../ui/draft-input";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
+import { OpenClawAgentPicker } from "./OpenClawAgentPicker";
 import type { ProviderClientDefinition } from "./providerDriverMeta";
 
 export interface ProviderSettingsFieldModel {
@@ -159,6 +161,7 @@ interface ProviderSettingsFormProps {
   readonly value: unknown;
   readonly idPrefix: string;
   readonly variant: "card" | "dialog";
+  readonly liveProvider?: ServerProvider | undefined;
   readonly onChange: (nextConfig: Record<string, unknown> | undefined) => void;
 }
 
@@ -279,6 +282,7 @@ export function ProviderSettingsForm({
   value,
   idPrefix,
   variant,
+  liveProvider,
   onChange,
 }: ProviderSettingsFormProps) {
   const fields = useMemo(() => deriveProviderSettingsFields(definition), [definition]);
@@ -287,18 +291,31 @@ export function ProviderSettingsForm({
     return null;
   }
 
+  const isOpenClaw = String(definition.value) === "openclaw";
+
   return (
     <>
-      {fields.map((field) => (
-        <ProviderSettingsFieldRow
-          key={field.key}
-          field={field}
-          value={value}
-          idPrefix={idPrefix}
-          variant={variant}
-          onChange={onChange}
-        />
-      ))}
+      {fields.map((field) =>
+        isOpenClaw && field.key === "agentId" ? (
+          <OpenClawAgentPicker
+            key={field.key}
+            value={value}
+            liveProvider={liveProvider}
+            idPrefix={idPrefix}
+            variant={variant}
+            onChange={onChange}
+          />
+        ) : (
+          <ProviderSettingsFieldRow
+            key={field.key}
+            field={field}
+            value={value}
+            idPrefix={idPrefix}
+            variant={variant}
+            onChange={onChange}
+          />
+        ),
+      )}
     </>
   );
 }

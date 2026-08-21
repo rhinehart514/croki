@@ -1,13 +1,13 @@
 import {
   resolveProviderSkillSourceKind,
   type ProviderSkillSourceKind,
-} from "@t3tools/client-runtime/providerSkills";
+} from "@croki/client-runtime/providerSkills";
 import {
   type ProjectEntry,
   type ProviderDriverKind,
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   BlocksIcon,
   FolderGit2Icon,

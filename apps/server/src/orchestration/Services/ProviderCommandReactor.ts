@@ -8,12 +8,34 @@
  */
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
+import type * as PlatformError from "effect/PlatformError";
 import type * as Scope from "effect/Scope";
+import type { ThreadId } from "@croki/contracts";
+
+import type { ProjectionRepositoryError } from "../../persistence/Errors.ts";
+import type { ProviderServiceError } from "../../provider/Errors.ts";
+import type { OrchestrationDispatchError } from "../Errors.ts";
+
+export type ProviderSessionPreparationError =
+  | OrchestrationDispatchError
+  | PlatformError.PlatformError
+  | ProjectionRepositoryError
+  | ProviderServiceError;
 
 /**
  * ProviderCommandReactorShape - Service API for provider command reactors.
  */
 export interface ProviderCommandReactorShape {
+  /**
+   * Make the Thread's selected provider session active and synchronize its
+   * durable orchestration state. Direct provider features such as native voice
+   * use this before they address a session outside the normal turn-start path.
+   */
+  readonly prepareSession: (
+    threadId: ThreadId,
+    createdAt: string,
+  ) => Effect.Effect<ThreadId, ProviderSessionPreparationError>;
+
   /**
    * Start reacting to provider-intent orchestration domain events.
    *
@@ -38,4 +60,4 @@ export interface ProviderCommandReactorShape {
 export class ProviderCommandReactor extends Context.Service<
   ProviderCommandReactor,
   ProviderCommandReactorShape
->()("t3/orchestration/Services/ProviderCommandReactor") {}
+>()("croki-server/orchestration/Services/ProviderCommandReactor") {}

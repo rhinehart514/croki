@@ -49,9 +49,11 @@ describe("buildDayColumns", () => {
         day: "2026-08-01",
         costUsd: 30,
         totalTokens: 300,
+        records: 2,
+        unpricedRecords: 0,
         byProvider: new Map([
-          ["codex" as const, { costUsd: 10, totalTokens: 100 }],
-          ["claude" as const, { costUsd: 20, totalTokens: 200 }],
+          ["codex" as const, { costUsd: 10, totalTokens: 100, records: 1, unpricedRecords: 0 }],
+          ["claude" as const, { costUsd: 20, totalTokens: 200, records: 1, unpricedRecords: 0 }],
         ]),
       },
     ],
@@ -62,7 +64,11 @@ describe("buildDayColumns", () => {
         day: "2026-08-03",
         costUsd: 5,
         totalTokens: 50,
-        byProvider: new Map([["claude" as const, { costUsd: 5, totalTokens: 50 }]]),
+        records: 1,
+        unpricedRecords: 0,
+        byProvider: new Map([
+          ["claude" as const, { costUsd: 5, totalTokens: 50, records: 1, unpricedRecords: 0 }],
+        ]),
       },
     ],
   ]);

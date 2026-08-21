@@ -1,9 +1,17 @@
-name: Deploy T3 Connect relay
+name: Deploy Croki Connect relay
 
 on:
   push:
     branches:
       - main
+      - croki/main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build the Croki destination plan without deploying"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -17,23 +25,36 @@ concurrency:
 jobs:
   deploy_relay:
     name: Deploy production relay
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) ||
+      (
+        vars.CROKI_RELAY_DEPLOY_ENABLED == 'true' &&
+        vars.CROKI_RELEASE_REPOSITORY != '' &&
+        github.repository == vars.CROKI_RELEASE_REPOSITORY &&
+        vars.CROKI_RELEASE_BRANCH != '' &&
+        github.ref_name == vars.CROKI_RELEASE_BRANCH
+      )
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
       name: production
     env:
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
-      AXIOM_ORG_ID: ${{ vars.AXIOM_ORG_ID }}
-      RELAY_DOMAIN: ${{ vars.RELAY_DOMAIN }}
-      RELAY_API_ZONE_NAME: ${{ vars.RELAY_API_ZONE_NAME }}
-      RELAY_TUNNEL_ZONE_NAME: ${{ vars.RELAY_TUNNEL_ZONE_NAME }}
-      CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
-      CLERK_JWT_AUDIENCE: ${{ vars.CLERK_JWT_AUDIENCE }}
-      APNS_ENVIRONMENT: ${{ vars.APNS_ENVIRONMENT }}
-      APNS_TEAM_ID: ${{ vars.APNS_TEAM_ID }}
-      APNS_KEY_ID: ${{ vars.APNS_KEY_ID }}
-      APNS_BUNDLE_ID: ${{ vars.APNS_BUNDLE_ID }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CROKI_CLOUDFLARE_ACCOUNT_ID }}
+      PLANETSCALE_ORGANIZATION: ${{ vars.CROKI_PLANETSCALE_ORGANIZATION }}
+      AXIOM_ORG_ID: ${{ vars.CROKI_AXIOM_ORG_ID }}
+      RELAY_DOMAIN: ${{ vars.CROKI_RELAY_DOMAIN }}
+      RELAY_API_ZONE_NAME: ${{ vars.CROKI_RELAY_API_ZONE_NAME }}
+      RELAY_TUNNEL_ZONE_NAME: ${{ vars.CROKI_RELAY_TUNNEL_ZONE_NAME }}
+      CLERK_PUBLISHABLE_KEY: ${{ vars.CROKI_CLERK_PUBLISHABLE_KEY }}
+      CLERK_JWT_AUDIENCE: ${{ vars.CROKI_CLERK_JWT_AUDIENCE }}
+      APNS_ENVIRONMENT: ${{ vars.CROKI_APNS_ENVIRONMENT }}
+      APNS_TEAM_ID: ${{ vars.CROKI_APNS_TEAM_ID }}
+      APNS_KEY_ID: ${{ vars.CROKI_APNS_KEY_ID }}
+      APNS_BUNDLE_ID: ${{ vars.CROKI_APNS_BUNDLE_ID }}
+      CROKI_RELAY_DEPLOY_ENABLED: ${{ vars.CROKI_RELAY_DEPLOY_ENABLED }}
+      CROKI_RELEASE_REPOSITORY: ${{ vars.CROKI_RELEASE_REPOSITORY }}
+      CROKI_RELEASE_BRANCH: ${{ vars.CROKI_RELEASE_BRANCH }}
+      CROKI_RELAY_DOMAIN: ${{ vars.CROKI_RELAY_DOMAIN }}
       ALCHEMY_TELEMETRY_DISABLED: "1"
     steps:
       - name: Checkout
@@ -44,27 +65,56 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
+      - name: Build Croki release destination plan
+        shell: bash
+        env:
+          CROKI_RELEASE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "$CROKI_RELEASE_DRY_RUN" == "true" ]]; then
+            npm run --silent release:croki:plan
+          else
+            node scripts/croki-release-plan.ts --production
+          fi
+
+      - name: Verify Croki relay destination
+        if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${RELAY_DOMAIN:-}" ]]; then
+            echo "CROKI_RELAY_DOMAIN must identify the Croki-owned production relay." >&2
+            exit 1
+          fi
+          if [[ "$RELAY_DOMAIN" == *"t3.codes"* ]]; then
+            echo "Refusing inherited T3 relay destination: $RELAY_DOMAIN" >&2
+            exit 1
+          fi
+
       - name: Setup Vite+
+        if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
         uses: voidzero-dev/setup-vp@v1
         with:
           node-version-file: package.json
           cache: true
           run-install: |
             args:
-              - --filter=t3code-relay...
+              - --filter=croki-relay...
 
       - name: Deploy production relay stage
+        if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
         id: deploy
-        run: vp run --filter t3code-relay deploy --stage prod --yes --github-output
+        run: vp run --filter croki-relay deploy --stage prod --yes --github-output
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          PLANETSCALE_API_TOKEN_ID: ${{ secrets.PLANETSCALE_API_TOKEN_ID }}
-          PLANETSCALE_API_TOKEN: ${{ secrets.PLANETSCALE_API_TOKEN }}
-          AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CROKI_CLOUDFLARE_API_TOKEN }}
+          PLANETSCALE_API_TOKEN_ID: ${{ secrets.CROKI_PLANETSCALE_API_TOKEN_ID }}
+          PLANETSCALE_API_TOKEN: ${{ secrets.CROKI_PLANETSCALE_API_TOKEN }}
+          AXIOM_TOKEN: ${{ secrets.CROKI_AXIOM_TOKEN }}
+          CLERK_SECRET_KEY: ${{ secrets.CROKI_CLERK_SECRET_KEY }}
+          APNS_PRIVATE_KEY: ${{ secrets.CROKI_APNS_PRIVATE_KEY }}
 
       - name: Publish relay deploy commit status
+        if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
         uses: actions/github-script@v8
         with:
           script: |

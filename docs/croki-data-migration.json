@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "migratedAt": "2026-07-29T20:10:00.000Z",
+  "sourceArchive": "/Users/jacobrhinehart/Projects/ide/croki-transition-archive/2026-07-29/gtm-ide-state.tar.gz",
+  "sourceVenture": {
+    "id": "venture-20260727182916-2ae514b6",
+    "name": "croki",
+    "repository": "/Users/jacobrhinehart/Projects/ide/croki"
+  },
+  "reviewedSource": {
+    "atlas": {
+      "revision": 66,
+      "updatedAt": "2026-07-29T20:30:08.084Z",
+      "objectCount": 8,
+      "insightCount": 19,
+      "threadCount": 11,
+      "runCount": 10,
+      "sha256": "591832a40869b3fa9e87acffebbb13836fcb5854d447382f14b8aad6b25e2bcb"
+    },
+    "workJournalProjection": {
+      "throughSequence": 310,
+      "threadCount": 10,
+      "runCount": 10,
+      "sha256": "4869d3c1f5b8047d22e4c46b4a1174f236c770b38022ecf275a097f1c0d463f0"
+    },
+    "firmConfiguration": {
+      "sha256": "d0624ff048eb839a335490f231ff693f177c54e7e8c3e325523c84417535e962"
+    },
+    "conversationMessageCount": 23,
+    "workflowReceiptCount": 9
+  },
+  "operationalMigration": [
+    {
+      "source": "architecture/atlas.json and staged project maps",
+      "destination": ".croki/context.json",
+      "result": "Distilled current product intent, T3-native fork decision, thread/Canvas product model, archive evidence, and upstream-compatibility constraint."
+    },
+    {
+      "source": "venture repository identity",
+      "destination": "T3 native project and environment state",
+      "result": "The existing T3 project remains authoritative; no duplicate project was created."
+    },
+    {
+      "source": "standalone runtime, work journal, conversations, receipts, bets, and firm configuration",
+      "destination": "dated cold archive",
+      "result": "Retained losslessly for historical recovery. Not imported as live T3 threads because they describe the superseded standalone coordination runtime and would create duplicate or misleading operational state."
+    },
+    {
+      "source": "standalone Git worktrees, checkpoints, WIP, refs, and unreachable history",
+      "destination": "verified Git archive and restore-check mirror",
+      "result": "Retained losslessly outside the product checkout; T3 native worktrees and checkpoints are authoritative going forward."
+    }
+  ]
+}

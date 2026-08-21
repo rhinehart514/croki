@@ -5,6 +5,9 @@ import {
   archiveSelectedThreadEntries,
   buildBulkTitleRegenerationContextMenuItem,
   buildMultiSelectThreadContextMenuItems,
+  buildForkThreadContextMenuItem,
+  canForkSidebarThread,
+  isSidebarThreadForkBlocked,
   createThreadJumpHintVisibilityController,
   getSidebarThreadIdsToPrewarm,
   getVisibleSidebarThreadIds,
@@ -17,10 +20,12 @@ import {
   isSidebarNestedLinkClick,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
+  orderThreadsWithChildren,
   resolveProjectStatusIndicator,
   resolveSidebarStageBadgeLabel,
   resolveThreadRowClassName,
   resolveSidebarThreadStatus,
+  resolveThreadAttention,
   resolveThreadStatusPill,
   resolveWorkingStartedAt,
   searchSidebarThreadsByTitle,
@@ -42,14 +47,17 @@ import {
   EnvironmentId,
   OrchestrationLatestTurn,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
+  TurnId,
+} from "@croki/contracts";
 
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   type Project,
+  type SidebarThreadSummary,
   type Thread,
 } from "../types";
 
@@ -128,6 +136,59 @@ describe("shouldNavigateAfterProjectRemoval", () => {
         projectDraftId: null,
       }),
     ).toBe(false);
+  });
+});
+
+describe("orderThreadsWithChildren", () => {
+  it("places workers beneath their parent and preserves orphan visibility", () => {
+    const parent = { environmentId: "env", id: "parent", parentThreadId: null };
+    const other = { environmentId: "env", id: "other", parentThreadId: null };
+    const child = {
+      environmentId: "env",
+      id: "child",
+      parentThreadId: "parent",
+    };
+    const orphan = {
+      environmentId: "env",
+      id: "orphan",
+      parentThreadId: "missing",
+    };
+
+    expect(
+      orderThreadsWithChildren([child, other, orphan, parent]).map((thread) => thread.id),
+    ).toEqual(["other", "parent", "child", "orphan"]);
+  });
+
+  it("shows worker rows only in the parent's separate-chats view", () => {
+    const child = {
+      environmentId: "env",
+      id: "child",
+      parentThreadId: "parent",
+    };
+
+    expect(
+      orderThreadsWithChildren([
+        child,
+        {
+          environmentId: "env",
+          id: "parent",
+          parentThreadId: null,
+          workerView: "activity" as const,
+        },
+      ]).map((thread) => thread.id),
+    ).toEqual(["parent"]);
+
+    expect(
+      orderThreadsWithChildren([
+        child,
+        {
+          environmentId: "env",
+          id: "parent",
+          parentThreadId: null,
+          workerView: "threads" as const,
+        },
+      ]).map((thread) => thread.id),
+    ).toEqual(["parent", "child"]);
   });
 });
 
@@ -223,14 +284,72 @@ describe("buildBulkTitleRegenerationContextMenuItem", () => {
 describe("buildMultiSelectThreadContextMenuItems", () => {
   it("offers bulk archive with the selected count", () => {
     expect(
-      buildMultiSelectThreadContextMenuItems({ count: 3, hasRunningThread: false }),
+      buildMultiSelectThreadContextMenuItems({
+        count: 3,
+        hasRunningThread: false,
+      }),
     ).toContainEqual({ id: "archive", label: "Archive (3)", disabled: false });
   });
 
   it("disables bulk archive when a selected thread is running", () => {
     expect(
-      buildMultiSelectThreadContextMenuItems({ count: 2, hasRunningThread: true }),
+      buildMultiSelectThreadContextMenuItems({
+        count: 2,
+        hasRunningThread: true,
+      }),
     ).toContainEqual({ id: "archive", label: "Archive (2)", disabled: true });
+  });
+});
+
+describe("thread fork context menu", () => {
+  it("disables forking while the source session is running", () => {
+    expect(buildForkThreadContextMenuItem({ isRunning: true })).toEqual({
+      id: "fork",
+      label: "Fork thread",
+      disabled: true,
+    });
+  });
+
+  it("blocks forking when the projected turn is running before a session appears", () => {
+    expect(
+      isSidebarThreadForkBlocked({
+        session: null,
+        latestTurn: {
+          turnId: TurnId.make("turn-running-before-session"),
+          state: "running",
+          requestedAt: "2026-07-31T00:00:00.000Z",
+          startedAt: null,
+          completedAt: null,
+          assistantMessageId: null,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("only supports provider instances backed by native fork drivers", () => {
+    const thread = {
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("codex_personal"),
+        model: "gpt-5",
+      },
+      session: null,
+    } as SidebarThreadSummary;
+    expect(
+      canForkSidebarThread(thread, [
+        {
+          instanceId: ProviderInstanceId.make("codex_personal"),
+          driver: ProviderDriverKind.make("codex"),
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      canForkSidebarThread(thread, [
+        {
+          instanceId: ProviderInstanceId.make("codex_personal"),
+          driver: ProviderDriverKind.make("cursor"),
+        },
+      ]),
+    ).toBe(false);
   });
 });
 
@@ -742,18 +861,37 @@ describe("resolveSidebarThreadStatus", () => {
       resolveSidebarThreadStatus({
         ...idle,
         session: { ...session, status: "error" as const, lastError: "boom" },
+        lastVisitedAt: "2026-03-09T09:59:00.000Z",
       }),
     ).toBe("failed");
     expect(
       resolveSidebarThreadStatus({
         ...idle,
-        session: { ...session, status: "stopped" as const, lastError: "persisted" },
+        session: {
+          ...session,
+          status: "stopped" as const,
+          lastError: "persisted",
+        },
       }),
     ).toBe("ready");
     expect(
       resolveSidebarThreadStatus({
         ...idle,
-        session: { ...session, status: "ready" as const, lastError: "persisted" },
+        session: {
+          ...session,
+          status: "ready" as const,
+          lastError: "persisted",
+        },
+      }),
+    ).toBe("ready");
+  });
+
+  it("returns a seen failure to ready instead of preserving error noise", () => {
+    expect(
+      resolveSidebarThreadStatus({
+        ...idle,
+        session: { ...session, status: "error" as const, lastError: "boom" },
+        lastVisitedAt: session.updatedAt,
       }),
     ).toBe("ready");
   });
@@ -976,7 +1114,10 @@ describe("sortSettledThreadsForSidebar", () => {
     const sorted = sortSettledThreadsForSidebar([
       settled({ id: "auto-old", latestUserMessageAt: "2026-03-09T08:00:00.000Z" }),
       settled({ id: "explicit", settledAt: "2026-03-09T10:00:00.000Z" }),
-      settled({ id: "auto-recent", latestUserMessageAt: "2026-03-09T11:00:00.000Z" }),
+      settled({
+        id: "auto-recent",
+        latestUserMessageAt: "2026-03-09T11:00:00.000Z",
+      }),
     ]);
 
     expect(sorted.map((thread) => thread.id)).toEqual(["auto-recent", "explicit", "auto-old"]);
@@ -1049,7 +1190,10 @@ describe("resolveWorkingStartedAt", () => {
   it("skips a malformed startedAt instead of returning it", () => {
     expect(
       resolveWorkingStartedAt({
-        latestTurn: makeLatestTurn({ startedAt: "not-a-date", completedAt: null }),
+        latestTurn: makeLatestTurn({
+          startedAt: "not-a-date",
+          completedAt: null,
+        }),
         session,
       }),
     ).toBe("2026-03-09T10:00:00.000Z");
@@ -1103,7 +1247,7 @@ describe("resolveThreadStatusPill", () => {
           hasPendingUserInput: true,
         },
       }),
-    ).toMatchObject({ label: "Pending Approval", pulse: false });
+    ).toMatchObject({ label: "Needs Approval", pulse: false });
   });
 
   it("shows awaiting input when plan mode is blocked on user answers", () => {
@@ -1114,7 +1258,7 @@ describe("resolveThreadStatusPill", () => {
           hasPendingUserInput: true,
         },
       }),
-    ).toMatchObject({ label: "Awaiting Input", pulse: false });
+    ).toMatchObject({ label: "Needs Input", pulse: false });
   });
 
   it("falls back to working when the thread is actively running without blockers", () => {
@@ -1177,23 +1321,113 @@ describe("resolveThreadStatusPill", () => {
   });
 });
 
+describe("resolveThreadAttention", () => {
+  const idle = {
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    session: null,
+  };
+
+  it("keeps approvals and questions actionable until they resolve", () => {
+    expect(resolveThreadAttention({ ...idle, hasPendingApprovals: true })).toEqual({
+      kind: "approval",
+      label: "Needs Approval",
+    });
+    expect(resolveThreadAttention({ ...idle, hasPendingUserInput: true })).toEqual({
+      kind: "input",
+      label: "Needs Input",
+    });
+  });
+
+  it("raises only failures newer than the user's last visit", () => {
+    const session = {
+      threadId: ThreadId.make("thread-1"),
+      status: "error" as const,
+      providerName: "Codex",
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      runtimeMode: DEFAULT_RUNTIME_MODE,
+      activeTurnId: null,
+      lastError: "Command failed",
+      updatedAt: "2026-03-09T10:05:00.000Z",
+    };
+    expect(
+      resolveThreadAttention({
+        ...idle,
+        session,
+        lastVisitedAt: "2026-03-09T10:04:00.000Z",
+      }),
+    ).toEqual({ kind: "failure", label: "Failed" });
+    expect(
+      resolveThreadAttention({
+        ...idle,
+        session,
+        lastVisitedAt: "2026-03-09T10:05:00.000Z",
+      }),
+    ).toBeNull();
+    expect(resolveThreadAttention({ ...idle, session })).toBeNull();
+  });
+
+  it("does not invent typed terminal reasons from free-form provider errors", () => {
+    const session = {
+      threadId: ThreadId.make("thread-1"),
+      status: "error" as const,
+      providerName: "Codex",
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      runtimeMode: DEFAULT_RUNTIME_MODE,
+      activeTurnId: null,
+      lastError: "Workspace usage limit reached",
+      updatedAt: "2026-03-09T10:05:00.000Z",
+    };
+    expect(
+      resolveThreadAttention({
+        ...idle,
+        session,
+        lastVisitedAt: "2026-03-09T10:04:00.000Z",
+      }),
+    ).toEqual({ kind: "failure", label: "Failed" });
+    expect(
+      resolveThreadAttention({
+        ...idle,
+        session: { ...session, lastError: "Goal stopped: budget limited" },
+        lastVisitedAt: "2026-03-09T10:04:00.000Z",
+      }),
+    ).toEqual({ kind: "failure", label: "Failed" });
+    expect(
+      resolveThreadAttention({
+        ...idle,
+        session: { ...session, lastError: "usageLimitExceeded" },
+        lastVisitedAt: "2026-03-09T10:04:00.000Z",
+      }),
+    ).toEqual({ kind: "failure", label: "Failed" });
+  });
+});
+
 describe("resolveThreadRowClassName", () => {
   it("uses the active sidebar surface when a thread is both selected and active", () => {
-    const className = resolveThreadRowClassName({ isActive: true, isSelected: true });
+    const className = resolveThreadRowClassName({
+      isActive: true,
+      isSelected: true,
+    });
     expect(className).toContain("bg-sidebar-row-active");
     expect(className).toContain("text-sidebar-foreground");
     expect(className).not.toContain("bg-primary");
   });
 
   it("uses selected hover colors for selected threads", () => {
-    const className = resolveThreadRowClassName({ isActive: false, isSelected: true });
+    const className = resolveThreadRowClassName({
+      isActive: false,
+      isSelected: true,
+    });
     expect(className).toContain("bg-sidebar-row-selected");
     expect(className).toContain("hover:bg-sidebar-row-active");
     expect(className).not.toContain("bg-primary");
   });
 
   it("uses the active sidebar surface for active-only threads", () => {
-    const className = resolveThreadRowClassName({ isActive: true, isSelected: false });
+    const className = resolveThreadRowClassName({
+      isActive: true,
+      isSelected: false,
+    });
     expect(className).toContain("bg-sidebar-row-active");
     expect(className).toContain("hover:bg-sidebar-row-active");
   });
@@ -1214,7 +1448,7 @@ describe("resolveProjectStatusIndicator", () => {
           pulse: false,
         },
         {
-          label: "Pending Approval",
+          label: "Needs Approval",
           colorClass: "text-amber-600",
           dotClass: "bg-amber-500",
           pulse: false,
@@ -1226,7 +1460,7 @@ describe("resolveProjectStatusIndicator", () => {
           pulse: true,
         },
       ]),
-    ).toMatchObject({ label: "Pending Approval", dotClass: "bg-amber-500" });
+    ).toMatchObject({ label: "Needs Approval", dotClass: "bg-amber-500" });
   });
 
   it("prefers plan-ready over completed when no stronger action is needed", () => {

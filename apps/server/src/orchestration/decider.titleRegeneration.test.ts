@@ -1,10 +1,11 @@
 import {
   CommandId,
+  MessageId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -45,6 +46,14 @@ const readModel: OrchestrationReadModel = {
   updatedAt: UPDATED_AT,
 };
 
+const workerReadModel: OrchestrationReadModel = {
+  ...readModel,
+  threads: readModel.threads.map((thread) => ({
+    ...thread,
+    parentThreadId: ThreadId.make("thread-parent"),
+  })),
+};
+
 it.layer(NodeServices.layer)("title regeneration decider", (it) => {
   it.effect("preserves updatedAt for a stale completion", () =>
     Effect.gen(function* () {
@@ -67,6 +76,50 @@ it.layer(NodeServices.layer)("title regeneration decider", (it) => {
           updatedAt: UPDATED_AT,
         });
       }
+    }),
+  );
+
+  it.effect("rejects title regeneration for worker threads", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.meta.update",
+          commandId: CommandId.make("cmd-regenerate-worker-title"),
+          threadId: ThreadId.make("thread-1"),
+          regenerateTitle: true,
+        },
+        readModel: workerReadModel,
+      }).pipe(Effect.flip);
+
+      expect(error._tag).toBe("OrchestrationCommandInvariantError");
+    }),
+  );
+
+  it.effect("rejects turn starts for worker threads", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-start-worker-turn"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: MessageId.make("message-worker-turn"),
+            role: "user",
+            text: "Continue independently",
+            attachments: [],
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          createdAt: UPDATED_AT,
+        },
+        readModel: workerReadModel,
+      }).pipe(Effect.flip);
+
+      expect(error).toMatchObject({
+        _tag: "OrchestrationCommandInvariantError",
+        commandType: "thread.turn.start",
+        detail: "worker thread thread-1 follows its parent lifecycle",
+      });
     }),
   );
 });

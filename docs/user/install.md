@@ -1,32 +1,35 @@
-# Install T3 Code
+# Install Croki
 
-T3 Code is a web and desktop GUI for running coding agents on your machine.
+Croki is a web, desktop, and mobile environment for running coding agents on your machine.
 
 ## Requirements
 
-Node.js `^22.16 || ^23.11 || >=24.10` on the machine that runs the T3 Code server.
+Node.js `^24.13.1` on the machine that runs the Croki server from source.
 
 At least one provider CLI, installed and authenticated. See [Providers](#providers) below.
-
-## Run Without Installing
-
-```bash
-npx t3@latest
-```
-
-This starts the T3 Code server on your machine and opens the local web app. Use
-`npx t3@latest --help` for the full CLI reference.
 
 ## Desktop App
 
 Download the latest release from
-[GitHub Releases](https://github.com/pingdotgg/t3code/releases), or install from a package
-registry.
+[Croki GitHub Releases](https://github.com/rhinehart514/croki/releases/latest).
 
-Windows:
+The macOS release is an Apple Silicon DMG. Open it and drag Croki into
+Applications. The current build is unsigned, so macOS may require approval in
+**System Settings → Privacy & Security** the first time it opens.
 
-```bash
-winget install T3Tools.T3Code
+Pushes to `croki/main` also produce an unsigned Windows x64 installer artifact
+in the repository's Actions run. Windows may show a SmartScreen warning.
+
+Croki's package-registry, hosted web, signing, and production mobile release
+destinations remain disabled until each has Croki-owned credentials. Do not use
+the inherited T3 Code Homebrew, winget, AUR, npm, web, relay, or update channels
+to install or publish Croki.
+
+## Run From Source
+
+```sh
+vp i
+vp run dev
 ```
 
 macOS:
@@ -51,7 +54,7 @@ yay -S t3code-nightly-bin
 
 ## Providers
 
-T3 Code drives provider CLIs; it does not ship them. Install the CLI for each provider you want
+Croki drives provider CLIs; it does not ship them. Install the CLI for each provider you want
 to use, then authenticate it.
 
 | Provider   | CLI                                                   | Default binary | Log in with           |
@@ -66,9 +69,9 @@ Codex and Claude are on by default. Cursor, Grok Build, and OpenCode are off by 
 them on in **Settings** → the provider's card when you want to use them.
 
 Cursor is the one to watch: install Cursor CLI, which provides the `cursor-agent` binary that
-T3 Code looks for, but authenticate with `agent login`, not `cursor-agent login`.
+Croki looks for, but authenticate with `agent login`, not `cursor-agent login`.
 
-Run the login command on the machine running the T3 Code server, not on the device you browse
+Run the login command on the machine running the Croki server, not on the device you browse
 from.
 
 ### Binary Discovery
@@ -76,12 +79,12 @@ from.
 Each provider CLI must be on the server's `PATH`, or have an explicit binary path set in
 **Settings** → the provider instance → **Binary path**. Use the explicit path when a version
 manager or a non-standard install location keeps the CLI off the `PATH` of the shell that
-started T3 Code.
+started Croki.
 
 ### When Auth Is Needed
 
 Provider auth is required before you start a session with that provider, not before you start
-T3 Code. You can install T3 Code, open it, and add providers afterwards. A provider that is not
+Croki. You can install Croki, open it, and add providers afterwards. A provider that is not
 authenticated shows its status in **Settings** and fails at session start with the login command
 to run.
 
@@ -89,7 +92,7 @@ For multi-account setups, see [Codex](./providers-codex.md) and [Claude](./provi
 
 ## Next Steps
 
-- [Permission modes](./permission-modes.md): how much T3 Code asks before acting
+- [Permission modes](./permission-modes.md): how much Croki asks before acting
 - [Remote access](./remote-access.md): connect from a phone, tablet, or another desktop
-- [Keeping T3 Code in sync](./updating.md): client and server version skew
+- [Keeping Croki in sync](./updating.md): client and server version skew
 - [Running in the background](./background-service.md): Linux background service

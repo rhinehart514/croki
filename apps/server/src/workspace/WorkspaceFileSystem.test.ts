@@ -33,7 +33,7 @@ const TestLayer = Layer.empty.pipe(
 const makeTempDir = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   return yield* fileSystem.makeTempDirectoryScoped({
-    prefix: "t3code-workspace-files-",
+    prefix: "croki-workspace-files-",
   });
 });
 
@@ -235,6 +235,162 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
           expect.arrayContaining([expect.objectContaining({ path: "plans/effect-rpc.md" })]),
         );
         expect(afterWrite.truncated).toBe(false);
+      }),
+    );
+
+    it.effect("creates a file only when an expected-absence precondition holds", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+
+        yield* workspaceFileSystem.writeFile({
+          cwd,
+          relativePath: "context.json",
+          contents: "original\n",
+          expectedContentsSha256: null,
+        });
+        const error = yield* workspaceFileSystem
+          .writeFile({
+            cwd,
+            relativePath: "context.json",
+            contents: "replacement\n",
+            expectedContentsSha256: null,
+          })
+          .pipe(Effect.flip);
+
+        expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspaceFileWriteConflictError);
+        expect(error).toMatchObject({
+          expectedContentsSha256: null,
+          actualContentsSha256: "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+        });
+        expect(yield* fileSystem.readFileString(path.join(cwd, "context.json"))).toBe("original\n");
+      }),
+    );
+
+    it.effect("updates a file only when its expected SHA-256 matches", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* writeTextFile(cwd, "context.json", "v1\n");
+
+        yield* workspaceFileSystem.writeFile({
+          cwd,
+          relativePath: "context.json",
+          contents: "v2\n",
+          expectedContentsSha256:
+            "2d27fbdf4e8ca207afbfa388ca9172fbcc6c70e534af2476b3b704f87debadcf",
+        });
+
+        expect(yield* fileSystem.readFileString(path.join(cwd, "context.json"))).toBe("v2\n");
+      }),
+    );
+
+    it.effect("rejects a stale SHA-256 without mutating the file", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* writeTextFile(cwd, "context.json", "changed\n");
+
+        const error = yield* workspaceFileSystem
+          .writeFile({
+            cwd,
+            relativePath: "context.json",
+            contents: "replacement\n",
+            expectedContentsSha256:
+              "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+          })
+          .pipe(Effect.flip);
+
+        expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspaceFileWriteConflictError);
+        expect(error).toMatchObject({
+          expectedContentsSha256:
+            "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+          actualContentsSha256: "7f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
+        });
+        expect(yield* fileSystem.readFileString(path.join(cwd, "context.json"))).toBe("changed\n");
+      }),
+    );
+
+    it.effect("rejects writes through a parent symlink that escapes the workspace", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        const outside = yield* makeTempDir;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* fileSystem.symlink(outside, path.join(cwd, "linked"));
+
+        const error = yield* workspaceFileSystem
+          .writeFile({
+            cwd,
+            relativePath: "linked/escape.md",
+            contents: "# nope\n",
+          })
+          .pipe(Effect.flip);
+
+        expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspaceFilePathEscapeError);
+        expect(
+          yield* fileSystem.stat(path.join(outside, "escape.md")).pipe(
+            Effect.as(true),
+            Effect.orElseSucceed(() => false),
+          ),
+        ).toBe(false);
+      }),
+    );
+
+    it.effect("rejects writes through a target symlink that escapes the workspace", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        const outside = yield* makeTempDir;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* writeTextFile(outside, "context.json", "outside\n");
+        yield* fileSystem.symlink(
+          path.join(outside, "context.json"),
+          path.join(cwd, "context.json"),
+        );
+
+        const error = yield* workspaceFileSystem
+          .writeFile({
+            cwd,
+            relativePath: "context.json",
+            contents: "replacement\n",
+          })
+          .pipe(Effect.flip);
+
+        expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspaceFilePathEscapeError);
+        expect(yield* fileSystem.readFileString(path.join(outside, "context.json"))).toBe(
+          "outside\n",
+        );
+      }),
+    );
+
+    it.effect("allows writes through a parent symlink that remains inside the workspace", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* fileSystem.makeDirectory(path.join(cwd, "actual"));
+        yield* fileSystem.symlink(path.join(cwd, "actual"), path.join(cwd, "linked"));
+
+        yield* workspaceFileSystem.writeFile({
+          cwd,
+          relativePath: "linked/context.json",
+          contents: "{}\n",
+          expectedContentsSha256: null,
+        });
+
+        expect(yield* fileSystem.readFileString(path.join(cwd, "actual", "context.json"))).toBe(
+          "{}\n",
+        );
       }),
     );
 

@@ -5,7 +5,7 @@ import {
   type DesktopUpdateChannel,
   type DesktopUpdateCheckResult,
   type DesktopUpdateState,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -28,7 +28,10 @@ import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
-import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
+import {
+  resolveDefaultDesktopUpdateChannel,
+  resolveDesktopGitHubUpdateFeed,
+} from "./updateChannels.ts";
 import {
   createInitialDesktopUpdateState,
   reduceDesktopUpdateStateOnCheckFailure,
@@ -162,7 +165,7 @@ export class DesktopUpdates extends Context.Service<
     readonly download: Effect.Effect<DesktopUpdateActionResult>;
     readonly install: Effect.Effect<DesktopUpdateActionResult>;
   }
->()("@t3tools/desktop/updates/DesktopUpdates") {}
+>()("@croki/desktop/updates/DesktopUpdates") {}
 
 const {
   logInfo: logUpdaterInfo,
@@ -234,7 +237,7 @@ function getAutoUpdateDisabledReason(args: {
     return "Automatic updates are only available in packaged production builds.";
   }
   if (args.disabledByEnv) {
-    return "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.";
+    return "Automatic updates are disabled by the CROKI_DISABLE_AUTO_UPDATE setting.";
   }
   if (args.platform === "linux" && !args.appImage) {
     return "Automatic updates on Linux require running the AppImage build.";
@@ -336,6 +339,20 @@ export const make = Effect.gen(function* () {
   ) {
     yield* Effect.annotateCurrentSpan({ channel });
     const allowsPrerelease = channel === "nightly";
+    if (config.mockUpdates) {
+      yield* electronUpdater.setFeedURL({
+        provider: "generic",
+        url: `http://localhost:${config.mockUpdateServerPort}`,
+      } as ElectronUpdater.ElectronUpdaterFeedUrl);
+    } else {
+      const appUpdateYmlConfig = yield* Ref.get(appUpdateYmlConfigRef);
+      if (Option.isSome(appUpdateYmlConfig)) {
+        const feed = resolveDesktopGitHubUpdateFeed(appUpdateYmlConfig.value, channel);
+        if (feed) {
+          yield* electronUpdater.setFeedURL(feed as ElectronUpdater.ElectronUpdaterFeedUrl);
+        }
+      }
+    }
     yield* electronUpdater.setChannel(channel);
     yield* electronUpdater.setAllowPrerelease(allowsPrerelease);
     yield* electronUpdater.setAllowDowngrade(allowsPrerelease);
@@ -733,13 +750,6 @@ export const make = Effect.gen(function* () {
 
       const appUpdateYmlConfig = yield* readAppUpdateYml;
       yield* Ref.set(appUpdateYmlConfigRef, appUpdateYmlConfig);
-
-      if (config.mockUpdates) {
-        yield* electronUpdater.setFeedURL({
-          provider: "generic",
-          url: `http://localhost:${config.mockUpdateServerPort}`,
-        } as ElectronUpdater.ElectronUpdaterFeedUrl);
-      }
 
       const settings = yield* desktopSettings.get;
       const enabled = yield* shouldEnableAutoUpdates;

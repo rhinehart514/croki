@@ -1,4 +1,5 @@
-import type { EnvironmentId, ServerConfig, ServerSelfUpdateCapability } from "@t3tools/contracts";
+import type { EnvironmentId, ServerConfig, ServerSelfUpdateCapability } from "@croki/contracts";
+import { compareSemverVersions, parseSemver } from "@croki/shared/semver";
 import * as Schema from "effect/Schema";
 
 import { APP_VERSION } from "./branding";
@@ -7,10 +8,26 @@ import { getLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorag
 export interface VersionMismatch {
   readonly clientVersion: string;
   readonly serverVersion: string;
+  readonly updateTarget: "client" | "server" | null;
   readonly hint: string;
 }
 
-export const VERSION_MISMATCH_DISMISSALS_STORAGE_KEY = "t3code:version-mismatch-dismissals:v1";
+export const VERSION_MISMATCH_DISMISSALS_STORAGE_KEY = "croki:version-mismatch-dismissals:v1";
+
+export function resolveServerPackageUpdatesAvailable(
+  configured: string | undefined,
+  development: boolean,
+): boolean {
+  const normalized = configured?.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return development;
+}
+
+export const SERVER_PACKAGE_UPDATES_AVAILABLE = resolveServerPackageUpdatesAvailable(
+  import.meta.env.VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE,
+  import.meta.env.DEV,
+);
 
 const VersionMismatchDismissalsSchema = Schema.Struct({
   keys: Schema.Array(Schema.String),
@@ -36,10 +53,25 @@ export function resolveVersionMismatch(
     return null;
   }
 
+  const versionsAreComparable =
+    parseSemver(normalizedClientVersion) !== null && parseSemver(normalizedServerVersion) !== null;
+  const comparison = versionsAreComparable
+    ? compareSemverVersions(normalizedServerVersion, normalizedClientVersion)
+    : 0;
+  if (versionsAreComparable && comparison === 0) return null;
+  const updateTarget = !versionsAreComparable ? null : comparison > 0 ? "client" : "server";
+  const hint =
+    updateTarget === "client"
+      ? "This server is newer than this Croki client. Update Croki on this device to match it."
+      : updateTarget === "server"
+        ? "This server is older than this Croki client. Update the server to match it."
+        : "Version mismatch. Sync this Croki client and server to the same version.";
+
   return {
     clientVersion: normalizedClientVersion,
     serverVersion: normalizedServerVersion,
-    hint: "Version mismatch. Try syncing the client and server to the same T3 Code version.",
+    updateTarget,
+    hint,
   };
 }
 
@@ -57,9 +89,19 @@ export function resolveServerSelfUpdateCapability(
   return serverConfig?.environment.capabilities.serverSelfUpdate ?? null;
 }
 
+/** Desktop-managed servers update with their owning app. Every other server
+    path installs the exact croki-server package and must only be offered when
+    that release destination was enabled for this client build. */
+export function serverUpdatePathAvailable(
+  capability: ServerSelfUpdateCapability | null,
+  serverPackageUpdatesAvailable = SERVER_PACKAGE_UPDATES_AVAILABLE,
+): boolean {
+  return capability === "desktop-managed" || serverPackageUpdatesAvailable;
+}
+
 /** The command to hand users whose server cannot update itself. */
 export function manualServerUpdateCommand(targetVersion: string): string {
-  return `npx t3@${targetVersion}`;
+  return `npx croki-server@${targetVersion}`;
 }
 
 /** One sentence telling the user how to resolve version skew for a server,

@@ -1,8 +1,5 @@
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

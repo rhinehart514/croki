@@ -1,4 +1,4 @@
-import { ORCHESTRATION_WS_METHODS, WS_METHODS } from "@t3tools/contracts";
+import { ORCHESTRATION_WS_METHODS, WS_METHODS } from "@croki/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import type * as Duration from "effect/Duration";
@@ -30,7 +30,7 @@ export class EnvironmentRpcRequestObserver extends Context.Reference<{
   readonly observe: (
     request: EnvironmentRpcRequestObservation,
   ) => Effect.Effect<Effect.Effect<void>>;
-}>("@t3tools/client-runtime/rpc/EnvironmentRpcRequestObserver", {
+}>("@croki/client-runtime/rpc/EnvironmentRpcRequestObserver", {
   defaultValue: () => ({
     observe: () => Effect.succeed(Effect.void),
   }),
@@ -50,6 +50,7 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof WS_METHODS.subscribePreviewEvents
   | typeof WS_METHODS.subscribeDiscoveredLocalServers
   | typeof WS_METHODS.subscribeResourceTelemetry
+  | typeof WS_METHODS.codexVoiceSubscribe
   | typeof WS_METHODS.previewAutomationConnect
   | typeof WS_METHODS.subscribeVcsStatus
   | typeof WS_METHODS.terminalAttach;
@@ -75,7 +76,7 @@ export class EnvironmentRpcSubscriptionObserver extends Context.Reference<{
   readonly observe: (
     subscription: EnvironmentRpcSubscriptionObservation,
   ) => Effect.Effect<Effect.Effect<void>>;
-}>("@t3tools/client-runtime/rpc/EnvironmentRpcSubscriptionObserver", {
+}>("@croki/client-runtime/rpc/EnvironmentRpcSubscriptionObserver", {
   defaultValue: () => ({
     observe: () => Effect.succeed(Effect.void),
   }),

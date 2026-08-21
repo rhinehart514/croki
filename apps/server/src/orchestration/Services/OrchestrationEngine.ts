@@ -10,9 +10,11 @@
  *
  * @module OrchestrationEngineService
  */
-import type { OrchestrationCommand, OrchestrationEvent } from "@t3tools/contracts";
+import type { OrchestrationCommand, OrchestrationEvent } from "@croki/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
+import type * as PubSub from "effect/PubSub";
+import type * as Scope from "effect/Scope";
 import type * as Stream from "effect/Stream";
 
 import type { OrchestrationDispatchError } from "../Errors.ts";
@@ -58,6 +60,17 @@ export interface OrchestrationEngineShape {
   readonly streamDomainEvents: Stream.Stream<OrchestrationEvent>;
 
   /**
+   * Acquire the hot event subscription before a consumer fiber is forked.
+   * Consumers whose startup must not lose an immediately published event
+   * should prefer this over forking `streamDomainEvents` directly.
+   */
+  readonly subscribeDomainEvents?: Effect.Effect<
+    PubSub.Subscription<OrchestrationEvent>,
+    never,
+    Scope.Scope
+  >;
+
+  /**
    * The latest sequence reflected in the engine's authoritative command read
    * model (0 if none). Used to gauge how far behind a resuming client is before
    * choosing between an incremental replay and a fresh projected snapshot.
@@ -79,4 +92,4 @@ export interface OrchestrationEngineShape {
 export class OrchestrationEngineService extends Context.Service<
   OrchestrationEngineService,
   OrchestrationEngineShape
->()("t3/orchestration/Services/OrchestrationEngine/OrchestrationEngineService") {}
+>()("croki-server/orchestration/Services/OrchestrationEngine/OrchestrationEngineService") {}

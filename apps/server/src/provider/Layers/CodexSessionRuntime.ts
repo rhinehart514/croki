@@ -10,14 +10,15 @@ import {
   type ProviderInteractionMode,
   type ProviderRequestKind,
   type ProviderSession,
+  type ProviderTurnSteerResult,
   type ProviderTurnStartResult,
   type ProviderUserInputAnswers,
   RuntimeMode,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+} from "@croki/contracts";
+import { resolveSpawnCommand } from "@croki/shared/shell";
+import { normalizeModelSlug } from "@croki/shared/model";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -121,6 +122,21 @@ export interface CodexSessionRuntimeSendTurnInput {
   readonly interactionMode?: ProviderInteractionMode;
 }
 
+export interface CodexSessionRuntimeSteerTurnInput {
+  readonly expectedTurnId: TurnId;
+  readonly clientUserMessageId: string;
+  readonly input?: string;
+  readonly attachments?: ReadonlyArray<{
+    readonly type: "image";
+    readonly url: string;
+  }>;
+}
+
+export interface CodexSessionRuntimeVoiceStartInput {
+  readonly sdp: string;
+  readonly voice?: string;
+}
+
 export interface CodexThreadTurnSnapshot {
   readonly id: TurnId;
   readonly items: ReadonlyArray<CodexThreadItem>;
@@ -137,11 +153,20 @@ export interface CodexSessionRuntimeShape {
   readonly sendTurn: (
     input: CodexSessionRuntimeSendTurnInput,
   ) => Effect.Effect<ProviderTurnStartResult, CodexSessionRuntimeError>;
+  readonly steerTurn: (
+    input: CodexSessionRuntimeSteerTurnInput,
+  ) => Effect.Effect<ProviderTurnSteerResult, CodexSessionRuntimeError>;
   readonly interruptTurn: (turnId?: TurnId) => Effect.Effect<void, CodexSessionRuntimeError>;
+  readonly startVoice: (
+    input: CodexSessionRuntimeVoiceStartInput,
+  ) => Effect.Effect<void, CodexSessionRuntimeError>;
+  readonly stopVoice: Effect.Effect<void, CodexSessionRuntimeError>;
   readonly readThread: Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
   readonly rollbackThread: (
     numTurns: number,
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
+  /** Fork the current Codex thread and return resumable state for the clone. */
+  readonly forkThread: Effect.Effect<CodexResumeCursor, CodexSessionRuntimeError>;
   readonly respondToRequest: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -347,6 +372,10 @@ function buildCodexCollaborationMode(input: {
   }
   const model = normalizeCodexModelSlug(input.model) ?? DEFAULT_MODEL;
   const reasoningEffort = input.effort ?? "medium";
+  const developerInstructions = buildCodexDeveloperInstructions(input.interactionMode, {
+    model,
+    reasoningEffort,
+  });
   return {
     mode: input.interactionMode,
     settings: {
@@ -379,16 +408,7 @@ export function buildTurnStartParams(input: {
   CodexTurnStartParamsWithCollaborationMode,
   CodexErrors.CodexAppServerProtocolParseError
 > {
-  const turnInput: Array<EffectCodexSchema.V2TurnStartParams__UserInput> = [];
-  if (input.prompt) {
-    turnInput.push({
-      type: "text",
-      text: input.prompt,
-    });
-  }
-  for (const attachment of input.attachments ?? []) {
-    turnInput.push(attachment);
-  }
+  const turnInput = buildCodexUserInput(input.prompt, input.attachments);
 
   const config = runtimeModeToThreadConfig(input.runtimeMode);
   const collaborationMode = buildCodexCollaborationMode({
@@ -417,6 +437,23 @@ export function buildTurnStartParams(input: {
       ),
     ),
   );
+}
+
+function buildCodexUserInput(
+  prompt: string | undefined,
+  attachments:
+    | ReadonlyArray<{
+        readonly type: "image";
+        readonly url: string;
+      }>
+    | undefined,
+): Array<EffectCodexSchema.V2TurnStartParams__UserInput> {
+  const turnInput: Array<EffectCodexSchema.V2TurnStartParams__UserInput> = [];
+  if (prompt) {
+    turnInput.push({ type: "text", text: prompt });
+  }
+  turnInput.push(...(attachments ?? []));
+  return turnInput;
 }
 
 function classifyCodexStderrLine(rawLine: string): { readonly message: string } | null {
@@ -918,7 +955,10 @@ export const makeCodexSessionRuntime = (
       ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
     };
     const extendEnv = options.environment === undefined;
-    const appServerArgs = codexSessionAppServerArgs(options.appServerArgs, options.launchArgs);
+    const appServerArgs = codexSessionAppServerArgs(
+      ["--enable", "realtime_conversation", ...(options.appServerArgs ?? [])],
+      options.launchArgs,
+    );
     const spawnCommand = yield* resolveSpawnCommand(options.binaryPath, appServerArgs, {
       env,
       extendEnv,
@@ -1860,6 +1900,20 @@ export const makeCodexSessionRuntime = (
               : {}),
           } satisfies ProviderTurnStartResult;
         }),
+      steerTurn: (input) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          const response = yield* client.request("turn/steer", {
+            threadId: providerThreadId,
+            expectedTurnId: input.expectedTurnId,
+            clientUserMessageId: input.clientUserMessageId,
+            input: buildCodexUserInput(input.input, input.attachments),
+          });
+          return {
+            threadId: options.threadId,
+            turnId: TurnId.make(response.turnId),
+          } satisfies ProviderTurnSteerResult;
+        }),
       interruptTurn: (turnId) =>
         Effect.gen(function* () {
           const providerThreadId = yield* readProviderThreadId;
@@ -1893,6 +1947,21 @@ export const makeCodexSessionRuntime = (
             turnId: effectiveTurnId,
           });
         }),
+      startVoice: (input) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          yield* client.raw.request("thread/realtime/start", {
+            threadId: providerThreadId,
+            outputModality: "audio",
+            version: "v3",
+            transport: { type: "webrtc", sdp: input.sdp },
+            ...(input.voice ? { voice: input.voice } : {}),
+          });
+        }),
+      stopVoice: Effect.gen(function* () {
+        const providerThreadId = yield* readProviderThreadId;
+        yield* client.raw.request("thread/realtime/stop", { threadId: providerThreadId });
+      }),
       readThread: Effect.gen(function* () {
         const providerThreadId = yield* readProviderThreadId;
         const response = yield* client.request("thread/read", {
@@ -1914,6 +1983,13 @@ export const makeCodexSessionRuntime = (
           });
           return parseThreadSnapshot(response);
         }),
+      forkThread: Effect.gen(function* () {
+        const providerThreadId = yield* readProviderThreadId;
+        const response = yield* client.request("thread/fork", {
+          threadId: providerThreadId,
+        });
+        return { threadId: response.thread.id } satisfies CodexResumeCursor;
+      }),
       respondToRequest: (requestId, decision) =>
         Effect.gen(function* () {
           const pending = (yield* Ref.get(pendingApprovalsRef)).get(requestId);

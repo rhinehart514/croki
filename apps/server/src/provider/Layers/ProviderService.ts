@@ -17,14 +17,15 @@ import {
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   ProviderSendTurnInput,
+  ProviderSteerTurnInput,
   ProviderSessionStartInput,
   ProviderStopSessionInput,
   type ProviderInstanceId,
   type ProviderDriverKind,
   type ProviderRuntimeEvent,
   type ProviderSession,
-} from "@t3tools/contracts";
-import { causeErrorTag } from "@t3tools/shared/observability";
+} from "@croki/contracts";
+import { causeErrorTag } from "@croki/shared/observability";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -47,7 +48,11 @@ import {
   providerTurnMetricAttributes,
   withMetrics,
 } from "../../observability/Metrics.ts";
-import { type ProviderAdapterError, ProviderValidationError } from "../Errors.ts";
+import {
+  type ProviderAdapterError,
+  ProviderAdapterValidationError,
+  ProviderValidationError,
+} from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
@@ -84,6 +89,11 @@ type ProviderServiceMethod<Name extends keyof ProviderService.ProviderService["S
 const ProviderRollbackConversationInput = Schema.Struct({
   threadId: ThreadId,
   numTurns: NonNegativeInt,
+});
+
+const ProviderForkConversationInput = Schema.Struct({
+  sourceThreadId: ThreadId,
+  targetThreadId: ThreadId,
 });
 
 function toValidationError(
@@ -614,7 +624,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         if (!instanceInfo.enabled) {
           return yield* toValidationError(
             "ProviderService.startSession",
-            `Provider instance '${resolvedInstanceId}' is disabled in T3 Code settings.`,
+            `Provider instance '${resolvedInstanceId}' is disabled in Croki settings.`,
           );
         }
         const persistedBinding = Option.getOrUndefined(yield* directory.getBinding(threadId));
@@ -784,7 +794,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       // rather than issuing a new one: sessions that go a long time between
       // browser tool calls used to lose the toolkit outright.
       yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
-      const turn = yield* routed.adapter.sendTurn(input);
+      // Canvas is Croki presentation state, not provider prompt state. Keep it
+      // available to orchestration while sending only the provider contract.
+      const { canvasEnabled: _canvasEnabled, ...providerInput } = input;
+      const turn = yield* routed.adapter.sendTurn(providerInput);
       yield* directory.upsert({
         threadId: input.threadId,
         provider: routed.adapter.provider,
@@ -825,6 +838,61 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       }),
     );
   });
+
+  const steerTurn: ProviderServiceMethod<"steerTurn"> = Effect.fn("steerTurn")(
+    function* (rawInput) {
+      const parsed = yield* decodeInputOrValidationError({
+        operation: "ProviderService.steerTurn",
+        schema: ProviderSteerTurnInput,
+        payload: rawInput,
+      });
+      const input = { ...parsed, attachments: parsed.attachments ?? [] };
+      if (!input.input && input.attachments.length === 0) {
+        return yield* toValidationError(
+          "ProviderService.steerTurn",
+          "Either input text or at least one attachment is required",
+        );
+      }
+
+      let metricProvider = "unknown";
+      return yield* Effect.gen(function* () {
+        const routed = yield* resolveRoutableSession({
+          threadId: input.threadId,
+          operation: "ProviderService.steerTurn",
+          allowRecovery: false,
+        });
+        metricProvider = routed.adapter.provider;
+        if (!routed.adapter.steerTurn) {
+          return yield* toValidationError(
+            "ProviderService.steerTurn",
+            `Provider '${routed.adapter.provider}' does not support guidance during a running turn.`,
+          );
+        }
+        yield* Effect.annotateCurrentSpan({
+          "provider.operation": "steer-turn",
+          "provider.kind": routed.adapter.provider,
+          "provider.thread_id": input.threadId,
+          "provider.turn_id": input.expectedTurnId,
+          "provider.attachment_count": input.attachments.length,
+        });
+        const result = yield* routed.adapter.steerTurn(input);
+        yield* analytics.record("provider.turn.steered", {
+          provider: routed.adapter.provider,
+          attachmentCount: input.attachments.length,
+          hasInput: typeof input.input === "string" && input.input.trim().length > 0,
+        });
+        return result;
+      }).pipe(
+        withMetrics({
+          counter: providerTurnsTotal,
+          outcomeAttributes: () =>
+            providerMetricAttributes(metricProvider, {
+              operation: "steer",
+            }),
+        }),
+      );
+    },
+  );
 
   const interruptTurn: ProviderServiceMethod<"interruptTurn"> = Effect.fn("interruptTurn")(
     function* (rawInput) {
@@ -1117,6 +1185,96 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     );
   });
 
+  const forkConversation: ProviderServiceMethod<"forkConversation"> = Effect.fn("forkConversation")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.forkConversation",
+        schema: ProviderForkConversationInput,
+        payload: rawInput,
+      });
+      if (input.sourceThreadId === input.targetThreadId) {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          "Source and target thread ids must be different.",
+        );
+      }
+
+      const sourceBinding = Option.getOrUndefined(
+        yield* directory.getBinding(input.sourceThreadId),
+      );
+      if (!sourceBinding) {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          `Cannot fork thread '${input.sourceThreadId}' because no persisted provider binding exists.`,
+        );
+      }
+      if (Option.isSome(yield* directory.getBinding(input.targetThreadId))) {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          `Cannot fork into thread '${input.targetThreadId}' because it already has a provider binding.`,
+        );
+      }
+
+      const routed = yield* resolveRoutableSession({
+        threadId: input.sourceThreadId,
+        operation: "ProviderService.forkConversation",
+        allowRecovery: false,
+      });
+      if (!routed.isActive) {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          `Cannot fork thread '${input.sourceThreadId}' because its provider session is not active.`,
+        );
+      }
+      if (routed.adapter.capabilities.conversationFork !== "native") {
+        return yield* toValidationError(
+          "ProviderService.forkConversation",
+          `Provider '${routed.adapter.provider}' does not support native conversation forks.`,
+        );
+      }
+
+      yield* Effect.annotateCurrentSpan({
+        "provider.operation": "fork-conversation",
+        "provider.kind": routed.adapter.provider,
+        "provider.instance_id": routed.instanceId,
+        "provider.thread_id": input.sourceThreadId,
+        "provider.target_thread_id": input.targetThreadId,
+      });
+      const result = yield* routed.adapter.forkThread(input.sourceThreadId, input.targetThreadId);
+      const sourceRuntimePayload =
+        sourceBinding.runtimePayload &&
+        typeof sourceBinding.runtimePayload === "object" &&
+        !Array.isArray(sourceBinding.runtimePayload)
+          ? sourceBinding.runtimePayload
+          : {};
+      yield* directory.upsert({
+        threadId: input.targetThreadId,
+        provider: sourceBinding.provider,
+        providerInstanceId: routed.instanceId,
+        ...(sourceBinding.adapterKey !== undefined ? { adapterKey: sourceBinding.adapterKey } : {}),
+        runtimeMode: sourceBinding.runtimeMode ?? "full-access",
+        status: "stopped",
+        resumeCursor: result.resumeCursor,
+        runtimePayload: {
+          ...sourceRuntimePayload,
+          activeTurnId: null,
+          lastRuntimeEvent: "provider.forkConversation",
+          lastRuntimeEventAt: yield* nowIso,
+        },
+      });
+      yield* analytics.record("provider.conversation.forked", {
+        provider: routed.adapter.provider,
+      });
+    },
+  );
+
+  const discardConversation: ProviderServiceMethod<"discardConversation"> = Effect.fn(
+    "discardConversation",
+  )(function* (input) {
+    yield* stopSession({ threadId: input.threadId }).pipe(Effect.ignore);
+    yield* directory.remove(input.threadId);
+  });
+
   const runStopAll = Effect.fn("runStopAll")(function* () {
     const threadIds = yield* directory.listThreadIds();
     const currentAdapters = yield* getAdapterEntries;
@@ -1167,6 +1325,67 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     yield* analytics.flush;
   });
 
+  const voice: NonNullable<ProviderService.ProviderService["Service"]["voice"]> = {
+    start: (input) =>
+      resolveRoutableSession({
+        threadId: input.threadId,
+        operation: "ProviderService.voice.start",
+        allowRecovery: true,
+      }).pipe(
+        Effect.flatMap(({ adapter }) =>
+          adapter.voice
+            ? adapter.voice.start(input)
+            : Effect.fail(
+                new ProviderAdapterValidationError({
+                  provider: adapter.provider,
+                  operation: "voice.start",
+                  issue: "The selected provider does not support native voice.",
+                }),
+              ),
+        ),
+      ),
+    stop: (threadId) =>
+      resolveRoutableSession({
+        threadId,
+        operation: "ProviderService.voice.stop",
+        allowRecovery: false,
+      }).pipe(
+        Effect.flatMap(({ adapter, isActive }) =>
+          !isActive
+            ? Effect.void
+            : adapter.voice
+              ? adapter.voice.stop(threadId)
+              : Effect.fail(
+                  new ProviderAdapterValidationError({
+                    provider: adapter.provider,
+                    operation: "voice.stop",
+                    issue: "The selected provider does not support native voice.",
+                  }),
+                ),
+        ),
+      ),
+    events: (threadId) =>
+      Stream.unwrap(
+        resolveRoutableSession({
+          threadId,
+          operation: "ProviderService.voice.events",
+          allowRecovery: true,
+        }).pipe(
+          Effect.flatMap(({ adapter }) =>
+            adapter.voice
+              ? Effect.succeed(adapter.voice.events(threadId))
+              : Effect.fail(
+                  new ProviderAdapterValidationError({
+                    provider: adapter.provider,
+                    operation: "voice.events",
+                    issue: "The selected provider does not support native voice.",
+                  }),
+                ),
+          ),
+        ),
+      ),
+  };
+
   yield* Effect.addFinalizer(() =>
     runStopAll().pipe(
       Effect.catchCause((cause) =>
@@ -1178,8 +1397,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   );
 
   return {
+    voice,
     startSession,
     sendTurn,
+    steerTurn,
     interruptTurn,
     respondToRequest,
     respondToUserInput,
@@ -1188,6 +1409,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     getCapabilities,
     getInstanceInfo,
     rollbackConversation,
+    forkConversation,
+    discardConversation,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
     // independently receive all runtime events.

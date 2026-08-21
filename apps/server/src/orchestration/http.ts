@@ -2,12 +2,15 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
-import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
+import {
+  projectReadModelSnapshot,
+  projectThreadDetailSnapshot,
+} from "./ActivityPayloadProjection.ts";
 import { normalizeDispatchCommand } from "./Normalizer.ts";
 import {
   annotateEnvironmentRequest,

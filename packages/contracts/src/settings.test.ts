@@ -18,6 +18,17 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 
+describe("legacy Parallel Threads setting", () => {
+  it("is not carried into current settings", () => {
+    expect("parallelThreadsEnabled" in decodeClientSettings({ parallelThreadsEnabled: true })).toBe(
+      false,
+    );
+    expect(
+      "parallelThreadsEnabled" in decodeClientSettingsPatch({ parallelThreadsEnabled: true }),
+    ).toBe(false);
+  });
+});
+
 describe("ClientSettings word wrap", () => {
   it("defaults word wrap on", () => {
     expect(decodeClientSettings({}).wordWrap).toBe(true);

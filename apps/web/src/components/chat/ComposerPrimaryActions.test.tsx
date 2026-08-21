@@ -214,7 +214,8 @@ describe("ComposerPrimaryActions", () => {
 
   it("matches the small pending action size without changing the standalone size", () => {
     expect(renderPendingActions(true)).toContain("size-8 sm:size-7");
-    expect(renderStandaloneStop()).toContain("size-8 sm:h-8 sm:w-8");
+    expect(renderStandaloneStop()).toContain("size-8");
+    expect(renderStandaloneStop()).toContain("sm:h-8 sm:w-8");
     expect(renderStandaloneStop()).not.toContain("sm:size-7");
   });
 

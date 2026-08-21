@@ -4,8 +4,8 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ProviderInstanceConfig,
-} from "@t3tools/contracts";
-import { getBackgroundActivityPresetSettings } from "@t3tools/shared/backgroundActivitySettings";
+} from "@croki/contracts";
+import { getBackgroundActivityPresetSettings } from "@croki/shared/backgroundActivitySettings";
 import * as Duration from "effect/Duration";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -19,6 +19,7 @@ import {
   isProjectGroupingEnabled,
   projectGroupingModeFromToggle,
   resolveBackgroundActivityProfileOption,
+  resolveDefaultProviderInstance,
 } from "./SettingsPanels.logic";
 
 describe("typography settings restore", () => {

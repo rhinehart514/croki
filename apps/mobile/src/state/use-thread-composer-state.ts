@@ -9,9 +9,9 @@ import {
   type ProviderInteractionMode,
   type RuntimeMode,
   type ThreadId,
-} from "@t3tools/contracts";
-import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
-import { deriveActiveWorkStartedAt } from "@t3tools/shared/orchestrationTiming";
+} from "@croki/contracts";
+import { safeErrorLogAttributes } from "@croki/client-runtime/errors";
+import { deriveActiveWorkStartedAt } from "@croki/shared/orchestrationTiming";
 
 import { makeQueuedMessageMetadata } from "../lib/commandMetadata";
 import {
@@ -42,7 +42,7 @@ import { useThreadSelection } from "../state/use-thread-selection";
 import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { useThreadOutboxMessages } from "./use-thread-outbox";
 
-export function appendReviewCommentToDraft(input: {
+export function appendTextToThreadDraft(input: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
   readonly text: string;
@@ -56,6 +56,8 @@ export function appendReviewCommentToDraft(input: {
     appendComposerDraftAttachments(threadKey, input.attachments);
   }
 }
+
+export const appendReviewCommentToDraft = appendTextToThreadDraft;
 
 export function useThreadDraftForThread(input: {
   readonly environmentId?: EnvironmentId;

@@ -1,6 +1,6 @@
-import { effectiveSettled } from "@t3tools/client-runtime/state/thread-settled";
-import type { OrchestrationThreadShell } from "@t3tools/contracts";
-import { ProjectId, ProviderInstanceId, ThreadId, type VcsStatusResult } from "@t3tools/contracts";
+import { effectiveSettled } from "@croki/client-runtime/state/thread-settled";
+import type { OrchestrationThreadShell } from "@croki/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId, type VcsStatusResult } from "@croki/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { AtomRegistry } from "effect/unstable/reactivity";
@@ -30,7 +30,7 @@ function status(overrides: Partial<VcsStatusResult> = {}): VcsStatusResult {
     pr: {
       number: 42,
       title: "PR branch",
-      url: "https://github.com/pingdotgg/t3code/pull/42",
+      url: "https://github.com/rhinehart514/croki/pull/42",
       baseRef: "main",
       headRef: "feature/current",
       state: "open",

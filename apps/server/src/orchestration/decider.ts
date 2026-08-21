@@ -3,7 +3,7 @@ import {
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -28,6 +28,21 @@ const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 // window is a failed/stale start, not pending work. Mirrors the client's
 // QUEUED_TURN_START_GRACE_MS in client-runtime threadSettled.ts.
 const QUEUED_TURN_START_GRACE_MS = 2 * 60 * 1_000;
+
+function requireCanonicalThreadLifecycle(input: {
+  readonly commandType: string;
+  readonly threadId: string;
+  readonly parentThreadId: string | null | undefined;
+}) {
+  return input.parentThreadId == null
+    ? Effect.void
+    : Effect.fail(
+        new OrchestrationCommandInvariantError({
+          commandType: input.commandType,
+          detail: `worker thread ${input.threadId} follows its parent lifecycle`,
+        }),
+      );
+}
 
 /**
  * Blocked-on-you work derived from the thread's retained activities: an
@@ -377,8 +392,114 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           interactionMode: command.interactionMode,
           branch: command.branch,
           worktreePath: command.worktreePath,
+          parentThreadId: command.parentThreadId ?? null,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
+        },
+      };
+    }
+
+    case "thread.fork": {
+      const sourceThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.sourceThreadId,
+      });
+      yield* requireThreadAbsent({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+
+      if (sourceThread.deletedAt !== null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Source thread '${command.sourceThreadId}' has been deleted and cannot be forked.`,
+        });
+      }
+
+      const sourceIsRunning =
+        sourceThread.session?.status === "starting" ||
+        sourceThread.session?.status === "running" ||
+        sourceThread.latestTurn?.state === "running" ||
+        threadHasQueuedTurnStart(sourceThread, command.createdAt);
+      if (sourceIsRunning) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Source thread '${command.sourceThreadId}' is running and cannot be forked.`,
+        });
+      }
+
+      const forkPoint = yield* Effect.gen(function* () {
+        if (command.sourceMessageId === undefined) {
+          return undefined;
+        }
+        const sourceMessageIndex = sourceThread.messages.findIndex(
+          (message) => message.id === command.sourceMessageId,
+        );
+        const sourceMessage = sourceThread.messages[sourceMessageIndex];
+        if (
+          sourceMessageIndex < 0 ||
+          sourceMessage === undefined ||
+          sourceMessage.role !== "user"
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Message '${command.sourceMessageId}' is not a user message in source thread '${command.sourceThreadId}'.`,
+          });
+        }
+        const resolveUserMessageTurnId = (messageIndex: number) => {
+          const message = sourceThread.messages[messageIndex];
+          if (message?.turnId !== null && message?.turnId !== undefined) return message.turnId;
+          for (let index = messageIndex + 1; index < sourceThread.messages.length; index += 1) {
+            const candidate = sourceThread.messages[index];
+            if (candidate?.role === "user") break;
+            if (candidate?.turnId !== null && candidate?.turnId !== undefined) {
+              return candidate.turnId;
+            }
+          }
+          return null;
+        };
+        const sourceTurnId = resolveUserMessageTurnId(sourceMessageIndex);
+        if (sourceTurnId === null) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Message '${command.sourceMessageId}' has not completed a provider turn and cannot be used as a fork point.`,
+          });
+        }
+
+        const removedTurnIds = new Set(
+          sourceThread.messages.flatMap((message, messageIndex) => {
+            if (messageIndex < sourceMessageIndex || message.role !== "user") return [];
+            const turnId = resolveUserMessageTurnId(messageIndex);
+            // A failed or interrupted turn can end before any assistant message
+            // carries its turn id. Its persisted user message still represents
+            // one native provider turn that must be removed. Guidance already
+            // carries the active turn id, so the Set continues to deduplicate it.
+            return [turnId ?? message.id];
+          }),
+        );
+        return {
+          messageId: sourceMessage.id,
+          turnId: sourceTurnId,
+          createdAt: sourceMessage.createdAt,
+          rollbackTurns: removedTurnIds.size,
+        };
+      });
+
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.fork-requested",
+        payload: {
+          threadId: command.threadId,
+          sourceThreadId: command.sourceThreadId,
+          ...(forkPoint === undefined ? {} : { forkPoint }),
+          createdAt: command.createdAt,
         },
       };
     }
@@ -455,6 +576,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         readModel,
         command,
         threadId: command.threadId,
+      });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
       });
       // Server-side twin of the client's canSettle session check: a stale
       // or raced client must not settle a thread whose session is coming
@@ -552,6 +678,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
+      });
       // Idempotent by re-emission (see thread.settle): reducing the event a
       // second time lands on the same override state. A re-emission keeps
       // the existing updatedAt so duplicates do not churn ordering.
@@ -578,6 +709,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         readModel,
         command,
         threadId: command.threadId,
+      });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
       });
       const occurredAt = yield* nowIso;
       // A wake time in the past would create a thread that is snoozed and
@@ -649,6 +785,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
+      });
       // Idempotent by re-emission (see thread.settle): waking a thread that
       // is not snoozed lands on the same null state without churning
       // updatedAt.
@@ -675,6 +816,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         readModel,
         command,
         threadId: command.threadId,
+      });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
       });
       const occurredAt = yield* nowIso;
       // Re-pinning an already-pinned thread is a duplicate (double-click,
@@ -748,6 +894,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: thread.parentThreadId,
+      });
       // Idempotent by re-emission (see thread.settle): unpinning a thread
       // that is not pinned lands on the same null state without churning
       // updatedAt.
@@ -811,6 +962,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      if (command.regenerateTitle === true) {
+        yield* requireCanonicalThreadLifecycle({
+          commandType: command.type,
+          threadId: command.threadId,
+          parentThreadId: thread.parentThreadId,
+        });
+      }
       const branch =
         command.branch !== undefined &&
         command.expectedBranch !== undefined &&
@@ -847,6 +1005,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             : {}),
           ...(branch !== undefined ? { branch } : {}),
           ...(command.worktreePath !== undefined ? { worktreePath: command.worktreePath } : {}),
+          ...(command.workerView !== undefined ? { workerView: command.workerView } : {}),
           updatedAt: occurredAt,
         },
       };
@@ -924,10 +1083,22 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.turn.start": {
+      if (command.harnessId !== undefined || command.parallelThreadsEnabled !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail:
+            "Croki behavior fields are no longer supported. Update this client and apply instructions or delegation through provider-native configuration.",
+        });
+      }
       const targetThread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
+      });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: targetThread.parentThreadId,
       });
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
@@ -991,6 +1162,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.titleSeed !== undefined ? { titleSeed: command.titleSeed } : {}),
           runtimeMode: targetThread.runtimeMode,
           interactionMode: targetThread.interactionMode,
+          canvasEnabled: command.canvasEnabled ?? false,
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
           createdAt: command.createdAt,
         },
@@ -1034,6 +1206,66 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         });
       }
       return [...lifecycleResetEvents, userMessageEvent, turnStartRequestedEvent];
+    }
+
+    case "thread.turn.steer": {
+      const targetThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      yield* requireCanonicalThreadLifecycle({
+        commandType: command.type,
+        threadId: command.threadId,
+        parentThreadId: targetThread.parentThreadId,
+      });
+      if (
+        targetThread.session?.status !== "running" ||
+        targetThread.session.activeTurnId !== command.expectedTurnId
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} is not running expected turn ${command.expectedTurnId}`,
+        });
+      }
+
+      const userMessageEvent: Omit<OrchestrationEvent, "sequence"> = {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-sent",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.message.messageId,
+          role: "user",
+          text: command.message.text,
+          attachments: command.message.attachments,
+          turnId: command.expectedTurnId,
+          streaming: false,
+          createdAt: command.createdAt,
+          updatedAt: command.createdAt,
+        },
+      };
+      const steerRequestedEvent: Omit<OrchestrationEvent, "sequence"> = {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        causationEventId: userMessageEvent.eventId,
+        type: "thread.turn-steer-requested",
+        payload: {
+          threadId: command.threadId,
+          messageId: command.message.messageId,
+          expectedTurnId: command.expectedTurnId,
+          createdAt: command.createdAt,
+        },
+      };
+      return [userMessageEvent, steerRequestedEvent];
     }
 
     case "thread.turn.interrupt": {
@@ -1225,6 +1457,30 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       return [unsettledEvent, sessionSetEvent];
     }
 
+    case "thread.message.user.append": {
+      yield* requireThread({ readModel, command, threadId: command.threadId });
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.message-sent" as const,
+        payload: {
+          threadId: command.threadId,
+          messageId: command.messageId,
+          role: "user" as const,
+          text: command.text,
+          attachments: [],
+          turnId: null,
+          streaming: false,
+          createdAt: command.createdAt,
+          updatedAt: command.createdAt,
+        },
+      };
+    }
+
     case "thread.message.assistant.delta": {
       yield* requireThread({
         readModel,
@@ -1244,6 +1500,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           messageId: command.messageId,
           role: "assistant",
           text: command.delta,
+          ...(command.attachments !== undefined ? { attachments: command.attachments } : {}),
           turnId: command.turnId ?? null,
           streaming: true,
           createdAt: command.createdAt,

@@ -14,17 +14,20 @@ import type {
   FilesystemBrowseResult,
   ProjectListEntriesInput,
   ProjectListEntriesResult,
+  ProjectListComponentsInput,
+  ProjectListComponentsResult,
   ProjectSearchContentsInput,
   ProjectSearchContentsResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
-} from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { isExplicitRelativePath, isWindowsAbsolutePath } from "@t3tools/shared/path";
-import { normalizeSearchQuery } from "@t3tools/shared/searchRanking";
+} from "@croki/contracts";
+import { HostProcessPlatform } from "@croki/shared/hostProcess";
+import { isExplicitRelativePath, isWindowsAbsolutePath } from "@croki/shared/path";
+import { normalizeSearchQuery } from "@croki/shared/searchRanking";
 
 import * as WorkspacePaths from "./WorkspacePaths.ts";
 import * as WorkspaceSearchIndex from "./WorkspaceSearchIndex.ts";
+import { buildComponentCatalog } from "./WorkspaceComponentCatalog.ts";
 
 export class WorkspaceEntriesWindowsPathUnsupportedError extends Schema.TaggedErrorClass<WorkspaceEntriesWindowsPathUnsupportedError>()(
   "WorkspaceEntriesWindowsPathUnsupportedError",
@@ -93,6 +96,9 @@ export class WorkspaceEntries extends Context.Service<
     readonly list: (
       input: ProjectListEntriesInput,
     ) => Effect.Effect<ProjectListEntriesResult, WorkspaceEntriesError>;
+    readonly listComponents: (
+      input: ProjectListComponentsInput,
+    ) => Effect.Effect<ProjectListComponentsResult, WorkspaceEntriesError>;
     readonly search: (
       input: ProjectSearchEntriesInput,
     ) => Effect.Effect<ProjectSearchEntriesResult, WorkspaceEntriesError>;
@@ -101,7 +107,7 @@ export class WorkspaceEntries extends Context.Service<
     ) => Effect.Effect<ProjectSearchContentsResult, WorkspaceEntriesError>;
     readonly refresh: (cwd: string) => Effect.Effect<void>;
   }
->()("t3/workspace/WorkspaceEntries") {}
+>()("croki-server/workspace/WorkspaceEntries") {}
 
 function expandHomePath(input: string, path: Path.Path): string {
   if (input === "~") {
@@ -288,7 +294,28 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  return WorkspaceEntries.of({ browse, list, refresh, search, searchContents });
+  const listComponents: WorkspaceEntries["Service"]["listComponents"] = Effect.fn(
+    "WorkspaceEntries.listComponents",
+  )(function* (input) {
+    const normalizedCwd = yield* normalizeWorkspaceRoot(input.cwd);
+    const listing = yield* Effect.gen(function* () {
+      const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
+      return yield* searchIndex.list();
+    }).pipe(
+      Effect.provide(
+        workspaceSearchIndexes.get(
+          WorkspaceSearchIndex.workspaceSearchIndexKey(normalizedCwd, "paths"),
+        ),
+      ),
+    );
+    return yield* Effect.promise(() =>
+      buildComponentCatalog(listing.entries, (relativePath) =>
+        NodeFSP.readFile(path.join(normalizedCwd, relativePath), "utf8"),
+      ),
+    );
+  });
+
+  return WorkspaceEntries.of({ browse, list, listComponents, refresh, search, searchContents });
 });
 
 export const layer = Layer.effect(WorkspaceEntries, make).pipe(

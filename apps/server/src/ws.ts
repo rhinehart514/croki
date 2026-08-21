@@ -16,6 +16,7 @@ import {
   type AuthEnvironmentScope,
   AuthSessionId,
   CommandId,
+  CodexVoiceError,
   type DiscoveredLocalServerList,
   EventId,
   type OrchestrationCommand,
@@ -36,6 +37,7 @@ import {
   type ProjectFileFailure,
   type ProjectFileOperation,
   ProjectListEntriesError,
+  ProjectListComponentsError,
   ProjectReadFileError,
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
@@ -57,8 +59,8 @@ import {
   type TerminalMetadataStreamEvent,
   WS_METHODS,
   WsRpcGroup,
-} from "@t3tools/contracts";
-import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
+} from "@croki/contracts";
+import { resolveServerBackgroundActivitySettings } from "@croki/shared/backgroundActivitySettings";
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
@@ -71,6 +73,7 @@ import {
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
 import { normalizeDispatchCommand } from "./orchestration/Normalizer.ts";
+import * as ProviderCommandReactor from "./orchestration/Services/ProviderCommandReactor.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
@@ -79,6 +82,7 @@ import {
   observeRpcStreamEffect as instrumentRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
+import * as ProviderService from "./provider/Services/ProviderService.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -123,7 +127,7 @@ import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
-import * as RelayClient from "@t3tools/shared/relayClient";
+import * as RelayClient from "@croki/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -232,6 +236,8 @@ function projectFileFailureContext(
   readonly resolvedWorkspaceRoot?: string;
   readonly operation?: ProjectFileOperation;
   readonly operationPath?: string;
+  readonly expectedContentsSha256?: string | null;
+  readonly actualContentsSha256?: string | null;
 } {
   switch (error._tag) {
     case "WorkspacePathOutsideRootError":
@@ -253,6 +259,13 @@ function projectFileFailureContext(
       return { failure: "path_not_file", resolvedPath: error.resolvedPath };
     case "WorkspaceBinaryFileError":
       return { failure: "binary_file", resolvedPath: error.resolvedPath };
+    case "WorkspaceFileWriteConflictError":
+      return {
+        failure: "stale_write",
+        resolvedPath: error.resolvedPath,
+        expectedContentsSha256: error.expectedContentsSha256,
+        actualContentsSha256: error.actualContentsSha256,
+      };
     default:
       return unexpectedCompatibilityError(error);
   }
@@ -371,6 +384,14 @@ const makeWsRpcLayer = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      // Some router seam tests intentionally omit provider execution. Voice is
+      // unavailable there, while production supplies ProviderService.
+      const providerService = Option.getOrUndefined(
+        yield* Effect.serviceOption(ProviderService.ProviderService),
+      );
+      const providerCommandReactor = Option.getOrUndefined(
+        yield* Effect.serviceOption(ProviderCommandReactor.ProviderCommandReactor),
+      );
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
@@ -1060,6 +1081,70 @@ const makeWsRpcLayer = (
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
       return WsRpcGroup.of({
+        [WS_METHODS.codexVoiceStart]: (input) =>
+          providerService?.voice && providerCommandReactor
+            ? nowIso.pipe(
+                Effect.flatMap((createdAt) =>
+                  providerCommandReactor.prepareSession(input.threadId, createdAt),
+                ),
+                Effect.andThen(providerService.voice.start(input)),
+                Effect.mapError(
+                  (error) =>
+                    new CodexVoiceError({
+                      kind:
+                        error._tag === "ProviderValidationError" ? "unsupported" : "provider-error",
+                      message: error.message,
+                      fallback: "dictation",
+                    }),
+                ),
+              )
+            : Effect.fail(
+                new CodexVoiceError({
+                  kind: "unsupported",
+                  message: "Codex voice is unavailable in this environment.",
+                  fallback: "dictation",
+                }),
+              ),
+        [WS_METHODS.codexVoiceStop]: ({ threadId }) =>
+          providerService?.voice
+            ? providerService.voice.stop(threadId).pipe(
+                Effect.mapError(
+                  (error) =>
+                    new CodexVoiceError({
+                      kind:
+                        error._tag === "ProviderValidationError" ? "unsupported" : "provider-error",
+                      message: error.message,
+                      fallback: "dictation",
+                    }),
+                ),
+              )
+            : Effect.fail(
+                new CodexVoiceError({
+                  kind: "unsupported",
+                  message: "Codex voice is unavailable in this environment.",
+                  fallback: "dictation",
+                }),
+              ),
+        [WS_METHODS.codexVoiceSubscribe]: ({ threadId }) =>
+          providerService?.voice
+            ? providerService.voice.events(threadId).pipe(
+                Stream.mapError(
+                  (error) =>
+                    new CodexVoiceError({
+                      kind:
+                        error._tag === "ProviderValidationError" ? "unsupported" : "provider-error",
+                      message: error.message,
+                      fallback: "dictation",
+                    }),
+                ),
+              )
+            : Stream.fail(
+                new CodexVoiceError({
+                  kind: "unsupported",
+                  message: "Codex voice is unavailable in this environment.",
+                  fallback: "dictation",
+                }),
+              ),
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.dispatchCommand,
@@ -1159,7 +1244,11 @@ const makeWsRpcLayer = (
         [ORCHESTRATION_WS_METHODS.getWorkflowScript]: (input) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.getWorkflowScript,
-            readWorkflowScript({ scriptPath: input.scriptPath }),
+            readWorkflowScript(input, {
+              getThread: projectionSnapshotQuery.getThreadShellById,
+              getProject: projectionSnapshotQuery.getProjectShellById,
+              getSettings: serverSettings.getSettings,
+            }),
             { "rpc.aggregate": "orchestration" },
           ),
         [ORCHESTRATION_WS_METHODS.getTurnDiff]: (input) =>
@@ -1184,6 +1273,23 @@ const makeWsRpcLayer = (
                 (cause) =>
                   new OrchestrationGetFullThreadDiffError({
                     message: "Failed to load full thread diff",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.getProjectPerception]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.getProjectPerception,
+            (
+              projectionSnapshotQuery.getProjectPerception?.(input) ?? Effect.succeed(Option.none())
+            ).pipe(
+              Effect.map(Option.getOrNull),
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationGetSnapshotError({
+                    message: "Failed to load project perception",
                     cause,
                   }),
               ),
@@ -1816,6 +1922,21 @@ const makeWsRpcLayer = (
               Effect.mapError(
                 (cause) =>
                   new ProjectListEntriesError({
+                    ...input,
+                    ...projectEntriesFailureContext(cause),
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.projectsListComponents]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsListComponents,
+            workspaceEntries.listComponents(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ProjectListComponentsError({
                     ...input,
                     ...projectEntriesFailureContext(cause),
                     cause,

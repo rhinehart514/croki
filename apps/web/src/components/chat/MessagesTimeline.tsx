@@ -4,17 +4,17 @@ import {
   type ScopedThreadRef,
   type ServerProviderSkill,
   type TurnId,
-} from "@t3tools/contracts";
-import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
+} from "@croki/contracts";
+import { parseScopedThreadKey } from "@croki/client-runtime/environment";
+import type { AgentPanelModel } from "@croki/client-runtime/state/subagentRuntime";
 import {
   emptyAgentPanelModel,
   formatSubagentTokenCount,
-} from "@t3tools/client-runtime/state/subagentRuntime";
+} from "@croki/client-runtime/state/subagentRuntime";
 
 const EMPTY_AGENT_PANEL_MODEL = emptyAgentPanelModel();
 const NOOP_OPEN_AGENTS = () => {};
-import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
+import { resolveChatListAnchoredEndSpace } from "@croki/shared/chatList";
 import {
   createContext,
   Fragment,
@@ -90,6 +90,8 @@ import {
   type TimelineLatestTurn,
 } from "./MessagesTimeline.logic";
 import { TerminalContextInlineChip } from "./TerminalContextInlineChip";
+import { UiCheckReceiptRow } from "./UiCheckReceiptRow";
+import type { ConceptSetAction } from "./conceptSetLogic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   deriveDisplayedUserMessageState,
@@ -105,7 +107,7 @@ import {
 } from "~/lib/previewAnnotation";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
-import { type TimestampFormat } from "@t3tools/contracts/settings";
+import { type TimestampFormat } from "@croki/contracts/settings";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 
 import {
@@ -140,6 +142,8 @@ interface TimelineRowSharedState {
   activeThreadEnvironmentId: EnvironmentId;
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
+  onContinueWithConcept: ConceptSetAction;
+  onRemixConcepts: ConceptSetAction;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
@@ -188,6 +192,7 @@ function TimelineLoadEarlierHeader({
 }
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
+const NOOP_CONCEPT_ACTION: ConceptSetAction = () => {};
 const TIMELINE_MAINTAIN_SCROLL_AT_END = {
   animated: false,
   on: {
@@ -218,6 +223,8 @@ interface MessagesTimelineProps {
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
+  onContinueWithConcept?: ConceptSetAction;
+  onRemixConcepts?: ConceptSetAction;
   activeThreadEnvironmentId: EnvironmentId;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
@@ -263,6 +270,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onRevertUserMessage,
   isRevertingCheckpoint,
   onImageExpand,
+  onContinueWithConcept = NOOP_CONCEPT_ACTION,
+  onRemixConcepts = NOOP_CONCEPT_ACTION,
   activeThreadEnvironmentId,
   markdownCwd,
   resolvedTheme,
@@ -510,6 +519,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onImageExpand,
+      onContinueWithConcept,
+      onRemixConcepts,
       onOpenTurnDiff,
       onToggleTurnFold,
       onToggleWorkGroup,
@@ -526,6 +537,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onImageExpand,
+      onContinueWithConcept,
+      onRemixConcepts,
       onOpenTurnDiff,
       onToggleTurnFold,
       onToggleWorkGroup,
@@ -1366,13 +1379,20 @@ const WorkGroupSection = memo(function WorkGroupSection({
   groupedEntries: Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"];
   isExpandedToolGroupEntry: boolean;
 }) {
-  const { workspaceRoot } = use(TimelineRowCtx);
+  const {
+    activeThreadEnvironmentId,
+    onContinueWithConcept,
+    onImageExpand,
+    onRemixConcepts,
+    workspaceRoot,
+  } = use(TimelineRowCtx);
   const nonEmptyEntries = useMemo(
     () =>
       groupedEntries.filter((entry) => workEntryIsVisibleInGroup(entry, isExpandedToolGroupEntry)),
     [groupedEntries, isExpandedToolGroupEntry],
   );
   const onlyToolEntries = nonEmptyEntries.every((entry) => workLogEntryIsToolLike(entry));
+  const onlyUiCheckEntries = nonEmptyEntries.every((entry) => entry.uiCheck !== undefined);
   const groupLabel = onlyToolEntries
     ? nonEmptyEntries.length === 1
       ? "1 tool call"

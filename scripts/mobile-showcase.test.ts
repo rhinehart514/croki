@@ -123,7 +123,7 @@ it("parses validation-only mode", () => {
 it("selects an explicit CI Android ABI without changing the local default", () => {
   assert.equal(resolveShowcaseAndroidAbi(undefined), "arm64-v8a");
   assert.equal(resolveShowcaseAndroidAbi("x86_64"), "x86_64");
-  assert.throws(() => resolveShowcaseAndroidAbi("mips"), /Unsupported T3_SHOWCASE_ANDROID_ABI/u);
+  assert.throws(() => resolveShowcaseAndroidAbi("mips"), /Unsupported CROKI_SHOWCASE_ANDROID_ABI/u);
 });
 
 it("uses platform-correct default Android SDK roots", () => {
@@ -302,7 +302,7 @@ it("selects a reachable LAN IPv4 address", () => {
 it("seeds a playful multi-environment project spectrum", () => {
   assert.deepStrictEqual(
     SHOWCASE_PROJECTS.map((project) => project.title),
-    ["T3 Code", "React", "Linux"],
+    ["Croki", "React", "Linux"],
   );
   assert.deepStrictEqual(
     SHOWCASE_ENVIRONMENTS.map((environment) => environment.label),

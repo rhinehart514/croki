@@ -4,7 +4,7 @@ import type {
   PullRequestComment,
   PullRequestDetail,
   PullRequestViewerPermissions,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

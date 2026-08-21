@@ -8,13 +8,13 @@ import * as PlatformError from "effect/PlatformError";
 
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ProjectFaviconResolver from "./ProjectFaviconResolver.ts";
-import * as T3ProjectFileLoader from "./T3ProjectFileLoader.ts";
+import * as CrokiProjectFileLoader from "./CrokiProjectFileLoader.ts";
 
 const TestLayer = Layer.empty.pipe(
   Layer.provideMerge(
     ProjectFaviconResolver.layer.pipe(
       Layer.provide(WorkspacePaths.layer),
-      Layer.provide(T3ProjectFileLoader.layer),
+      Layer.provide(CrokiProjectFileLoader.layer),
     ),
   ),
   Layer.provideMerge(NodeServices.layer),
@@ -23,7 +23,7 @@ const TestLayer = Layer.empty.pipe(
 const makeTempDir = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   return yield* fileSystem.makeTempDirectoryScoped({
-    prefix: "t3code-project-favicon-",
+    prefix: "croki-project-favicon-",
   });
 });
 
@@ -43,7 +43,7 @@ const writeTextFile = Effect.fn("writeTextFile")(function* (
 
 const makeResolverWithFileSystem = (fileSystem: FileSystem.FileSystem) =>
   ProjectFaviconResolver.make.pipe(
-    Effect.provide([WorkspacePaths.layer, T3ProjectFileLoader.layer]),
+    Effect.provide([WorkspacePaths.layer, CrokiProjectFileLoader.layer]),
     Effect.provideService(FileSystem.FileSystem, fileSystem),
   );
 
@@ -62,11 +62,11 @@ it.layer(TestLayer)("ProjectFaviconResolverLive", (it) => {
       }),
     );
 
-    it.effect("prefers a t3.json iconPath over well-known files", () =>
+    it.effect("prefers a croki.json iconPath over well-known files", () =>
       Effect.gen(function* () {
         const resolver = yield* ProjectFaviconResolver.ProjectFaviconResolver;
         const cwd = yield* makeTempDir;
-        yield* writeTextFile(cwd, "t3.json", '{ "iconPath": "brand/mark.svg" }');
+        yield* writeTextFile(cwd, "croki.json", '{ "iconPath": "brand/mark.svg" }');
         yield* writeTextFile(cwd, "brand/mark.svg", "<svg>mark</svg>");
         yield* writeTextFile(cwd, "favicon.svg", "<svg>favicon</svg>");
 
@@ -104,11 +104,11 @@ it.layer(TestLayer)("ProjectFaviconResolverLive", (it) => {
       }),
     );
 
-    it.effect("falls back to well-known files when the t3.json iconPath does not exist", () =>
+    it.effect("falls back to well-known files when the croki.json iconPath does not exist", () =>
       Effect.gen(function* () {
         const resolver = yield* ProjectFaviconResolver.ProjectFaviconResolver;
         const cwd = yield* makeTempDir;
-        yield* writeTextFile(cwd, "t3.json", '{ "iconPath": "brand/missing.svg" }');
+        yield* writeTextFile(cwd, "croki.json", '{ "iconPath": "brand/missing.svg" }');
         yield* writeTextFile(cwd, "favicon.svg", "<svg>favicon</svg>");
 
         const resolved = yield* resolver.resolvePath(cwd);
@@ -118,11 +118,11 @@ it.layer(TestLayer)("ProjectFaviconResolverLive", (it) => {
       }),
     );
 
-    it.effect("ignores invalid t3.json files", () =>
+    it.effect("ignores invalid croki.json files", () =>
       Effect.gen(function* () {
         const resolver = yield* ProjectFaviconResolver.ProjectFaviconResolver;
         const cwd = yield* makeTempDir;
-        yield* writeTextFile(cwd, "t3.json", "{ not json");
+        yield* writeTextFile(cwd, "croki.json", "{ not json");
         yield* writeTextFile(cwd, "favicon.svg", "<svg>favicon</svg>");
 
         const resolved = yield* resolver.resolvePath(cwd);
@@ -132,13 +132,13 @@ it.layer(TestLayer)("ProjectFaviconResolverLive", (it) => {
       }),
     );
 
-    it.effect("does not resolve a t3.json iconPath outside the workspace root", () =>
+    it.effect("does not resolve a croki.json iconPath outside the workspace root", () =>
       Effect.gen(function* () {
         const resolver = yield* ProjectFaviconResolver.ProjectFaviconResolver;
         const parent = yield* makeTempDir;
         const cwd = `${parent}/app`;
         yield* writeTextFile(parent, "secret.svg", "<svg>secret</svg>");
-        yield* writeTextFile(cwd, "t3.json", '{ "iconPath": "../secret.svg" }');
+        yield* writeTextFile(cwd, "croki.json", '{ "iconPath": "../secret.svg" }');
 
         const resolved = yield* resolver.resolvePath(cwd);
 

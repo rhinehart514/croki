@@ -14,7 +14,7 @@ import {
   HttpClientResponse,
 } from "effect/unstable/http";
 
-import { GitCommandError } from "@t3tools/contracts";
+import { GitCommandError } from "@croki/contracts";
 import * as BitbucketApi from "./BitbucketApi.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
@@ -27,32 +27,32 @@ const bitbucketPullRequest = {
   updated_on: "2026-01-02T00:00:00.000Z",
   links: {
     html: {
-      href: "https://bitbucket.org/pingdotgg/t3code/pull-requests/42",
+      href: "https://bitbucket.org/rhinehart514/croki/pull-requests/42",
     },
   },
   source: {
     branch: { name: "feature/source-control" },
     repository: {
-      full_name: "octocat/t3code",
+      full_name: "octocat/croki",
       workspace: { slug: "octocat" },
     },
   },
   destination: {
     branch: { name: "main" },
     repository: {
-      full_name: "pingdotgg/t3code",
-      workspace: { slug: "pingdotgg" },
+      full_name: "rhinehart514/croki",
+      workspace: { slug: "rhinehart514" },
     },
   },
 };
 
 const repositoryJson = {
-  full_name: "pingdotgg/t3code",
+  full_name: "rhinehart514/croki",
   links: {
-    html: { href: "https://bitbucket.org/pingdotgg/t3code" },
+    html: { href: "https://bitbucket.org/rhinehart514/croki" },
     clone: [
-      { name: "https", href: "https://bitbucket.org/pingdotgg/t3code.git" },
-      { name: "ssh", href: "git@bitbucket.org:pingdotgg/t3code.git" },
+      { name: "https", href: "https://bitbucket.org/rhinehart514/croki.git" },
+      { name: "ssh", href: "git@bitbucket.org:rhinehart514/croki.git" },
     ],
   },
   mainbranch: { name: "main" },
@@ -72,7 +72,7 @@ function makeLayer(input: {
   );
   const gitMock = {
     readConfigValue: vi.fn<GitVcsDriver.GitVcsDriver["Service"]["readConfigValue"]>(() =>
-      Effect.succeed<string | null>("git@bitbucket.org:pingdotgg/t3code.git"),
+      Effect.succeed<string | null>("git@bitbucket.org:rhinehart514/croki.git"),
     ),
     resolvePrimaryRemoteName: vi.fn<
       GitVcsDriver.GitVcsDriver["Service"]["resolvePrimaryRemoteName"]
@@ -107,7 +107,7 @@ function makeLayer(input: {
         remotes: [
           {
             name: "origin",
-            url: "git@bitbucket.org:pingdotgg/t3code.git",
+            url: "git@bitbucket.org:rhinehart514/croki.git",
             pushUrl: Option.none(),
             isPrimary: true,
           },
@@ -151,9 +151,9 @@ function makeLayer(input: {
       ConfigProvider.layer(
         ConfigProvider.fromEnv({
           env: {
-            T3CODE_BITBUCKET_API_BASE_URL: "https://api.test.local/2.0",
-            T3CODE_BITBUCKET_EMAIL: "user@example.com",
-            T3CODE_BITBUCKET_API_TOKEN: "token",
+            CROKI_BITBUCKET_API_BASE_URL: "https://api.test.local/2.0",
+            CROKI_BITBUCKET_EMAIL: "user@example.com",
+            CROKI_BITBUCKET_API_TOKEN: "token",
           },
         }),
       ),
@@ -182,18 +182,18 @@ it.effect("parses pull request responses from the Bitbucket REST API", () => {
     assert.deepStrictEqual(result, {
       number: 42,
       title: "Add Bitbucket provider",
-      url: "https://bitbucket.org/pingdotgg/t3code/pull-requests/42",
+      url: "https://bitbucket.org/rhinehart514/croki/pull-requests/42",
       baseRefName: "main",
       headRefName: "feature/source-control",
       state: "open",
       updatedAt: Option.some(DateTime.makeUnsafe("2026-01-02T00:00:00.000Z")),
       isCrossRepository: true,
-      headRepositoryNameWithOwner: "octocat/t3code",
+      headRepositoryNameWithOwner: "octocat/croki",
       headRepositoryOwnerLogin: "octocat",
     });
     assert.strictEqual(
       execute.mock.calls[0]?.[0].url,
-      "https://api.test.local/2.0/repositories/pingdotgg/t3code/pullrequests/42",
+      "https://api.test.local/2.0/repositories/rhinehart514/croki/pullrequests/42",
     );
   }).pipe(Effect.provide(layer));
 });
@@ -209,7 +209,7 @@ it.effect("lists pull requests with Bitbucket state and source branch query para
             state: "MERGED",
             source: {
               branch: { name: "feature/merged" },
-              repository: { full_name: "pingdotgg/t3code" },
+              repository: { full_name: "rhinehart514/croki" },
             },
           },
         ],
@@ -229,7 +229,7 @@ it.effect("lists pull requests with Bitbucket state and source branch query para
     const request = execute.mock.calls[0]?.[0];
     assert.strictEqual(
       request?.url,
-      "https://api.test.local/2.0/repositories/pingdotgg/t3code/pullrequests",
+      "https://api.test.local/2.0/repositories/rhinehart514/croki/pullrequests",
     );
     assert.deepStrictEqual(request?.urlParams.params, [
       ["pagelen", "10"],
@@ -322,14 +322,14 @@ it.effect("reads repository clone URLs and default branch", () => {
     const bitbucket = yield* BitbucketApi.BitbucketApi;
     const cloneUrls = yield* bitbucket.getRepositoryCloneUrls({
       cwd: "/repo",
-      repository: "pingdotgg/t3code",
+      repository: "rhinehart514/croki",
     });
     const defaultBranch = yield* bitbucket.getDefaultBranch({ cwd: "/repo" });
 
     assert.deepStrictEqual(cloneUrls, {
-      nameWithOwner: "pingdotgg/t3code",
-      url: "https://bitbucket.org/pingdotgg/t3code.git",
-      sshUrl: "git@bitbucket.org:pingdotgg/t3code.git",
+      nameWithOwner: "rhinehart514/croki",
+      url: "https://bitbucket.org/rhinehart514/croki.git",
+      sshUrl: "git@bitbucket.org:rhinehart514/croki.git",
     });
     assert.strictEqual(defaultBranch, "main");
   }).pipe(Effect.provide(layer));
@@ -361,8 +361,8 @@ it.effect(
       assert.deepStrictEqual(
         execute.mock.calls.map((call) => call[0].url).toSorted(),
         [
-          "https://api.test.local/2.0/repositories/pingdotgg/t3code",
-          "https://api.test.local/2.0/repositories/pingdotgg/t3code/branching-model",
+          "https://api.test.local/2.0/repositories/rhinehart514/croki",
+          "https://api.test.local/2.0/repositories/rhinehart514/croki/branching-model",
         ].toSorted(),
       );
     }).pipe(Effect.provide(layer));
@@ -424,18 +424,18 @@ it.effect("creates repositories through the Bitbucket REST API", () => {
     const bitbucket = yield* BitbucketApi.BitbucketApi;
     const cloneUrls = yield* bitbucket.createRepository({
       cwd: "/repo",
-      repository: "pingdotgg/t3code",
+      repository: "rhinehart514/croki",
       visibility: "private",
     });
 
     assert.deepStrictEqual(cloneUrls, {
-      nameWithOwner: "pingdotgg/t3code",
-      url: "https://bitbucket.org/pingdotgg/t3code.git",
-      sshUrl: "git@bitbucket.org:pingdotgg/t3code.git",
+      nameWithOwner: "rhinehart514/croki",
+      url: "https://bitbucket.org/rhinehart514/croki.git",
+      sshUrl: "git@bitbucket.org:rhinehart514/croki.git",
     });
 
     const request = execute.mock.calls[0]?.[0];
-    assert.strictEqual(request?.url, "https://api.test.local/2.0/repositories/pingdotgg/t3code");
+    assert.strictEqual(request?.url, "https://api.test.local/2.0/repositories/rhinehart514/croki");
     assert.strictEqual(request?.method, "POST");
     assert.ok(request);
     const rawBody = (request.body as { readonly body?: Uint8Array }).body;
@@ -470,7 +470,7 @@ it.effect("creates pull requests using the official REST payload shape", () => {
     const request = execute.mock.calls[0]?.[0];
     assert.strictEqual(
       request?.url,
-      "https://api.test.local/2.0/repositories/pingdotgg/t3code/pullrequests",
+      "https://api.test.local/2.0/repositories/rhinehart514/croki/pullrequests",
     );
     assert.strictEqual(request?.method, "POST");
     assert.ok(request);
@@ -482,7 +482,7 @@ it.effect("creates pull requests using the official REST payload shape", () => {
       description: "PR body",
       source: {
         branch: { name: "feature/provider" },
-        repository: { full_name: "owner/t3code" },
+        repository: { full_name: "owner/croki" },
       },
       destination: {
         branch: { name: "main" },
@@ -626,8 +626,8 @@ it.effect("checks out same-repository pull requests with the existing Bitbucket 
         source: {
           branch: { name: "feature/source-control" },
           repository: {
-            full_name: "pingdotgg/t3code",
-            workspace: { slug: "pingdotgg" },
+            full_name: "rhinehart514/croki",
+            workspace: { slug: "rhinehart514" },
           },
         },
       }),
@@ -644,7 +644,7 @@ it.effect("checks out same-repository pull requests with the existing Bitbucket 
           baseUrl: "https://bitbucket.org",
         },
         remoteName: "origin",
-        remoteUrl: "git@bitbucket.org:pingdotgg/t3code.git",
+        remoteUrl: "git@bitbucket.org:rhinehart514/croki.git",
       },
       reference: "42",
       force: true,
@@ -684,8 +684,8 @@ it.effect("preserves Git checkout failures without deriving the domain message f
         source: {
           branch: { name: "feature/source-control" },
           repository: {
-            full_name: "pingdotgg/t3code",
-            workspace: { slug: "pingdotgg" },
+            full_name: "rhinehart514/croki",
+            workspace: { slug: "rhinehart514" },
           },
         },
       }),
@@ -718,15 +718,15 @@ it.effect("preserves Git checkout failures without deriving the domain message f
 it.effect("checks out fork pull requests through an ensured fork remote", () => {
   const { git, layer } = makeLayer({
     response: (request) => {
-      if (request.url.endsWith("/repositories/octocat/t3code")) {
+      if (request.url.endsWith("/repositories/octocat/croki")) {
         return Response.json({
           ...repositoryJson,
-          full_name: "octocat/t3code",
+          full_name: "octocat/croki",
           links: {
-            html: { href: "https://bitbucket.org/octocat/t3code" },
+            html: { href: "https://bitbucket.org/octocat/croki" },
             clone: [
-              { name: "https", href: "https://bitbucket.org/octocat/t3code.git" },
-              { name: "ssh", href: "git@bitbucket.org:octocat/t3code.git" },
+              { name: "https", href: "https://bitbucket.org/octocat/croki.git" },
+              { name: "ssh", href: "git@bitbucket.org:octocat/croki.git" },
             ],
           },
         });
@@ -736,7 +736,7 @@ it.effect("checks out fork pull requests through an ensured fork remote", () => 
         source: {
           branch: { name: "main" },
           repository: {
-            full_name: "octocat/t3code",
+            full_name: "octocat/croki",
             workspace: { slug: "octocat" },
           },
         },
@@ -755,23 +755,23 @@ it.effect("checks out fork pull requests through an ensured fork remote", () => 
     assert.deepStrictEqual(git.ensureRemote.mock.calls[0]?.[0], {
       cwd: "/repo",
       preferredName: "octocat",
-      url: "git@bitbucket.org:octocat/t3code.git",
+      url: "git@bitbucket.org:octocat/croki.git",
     });
     assert.deepStrictEqual(git.fetchRemoteBranch.mock.calls[0]?.[0], {
       cwd: "/repo",
       remoteName: "octocat",
       remoteBranch: "main",
-      localBranch: "t3code/pr-42/main",
+      localBranch: "croki/pr-42/main",
     });
     assert.deepStrictEqual(git.setBranchUpstream.mock.calls[0]?.[0], {
       cwd: "/repo",
-      branch: "t3code/pr-42/main",
+      branch: "croki/pr-42/main",
       remoteName: "octocat",
       remoteBranch: "main",
     });
     assert.deepStrictEqual(git.switchRef.mock.calls[0]?.[0], {
       cwd: "/repo",
-      refName: "t3code/pr-42/main",
+      refName: "croki/pr-42/main",
     });
   }).pipe(Effect.provide(layer));
 });

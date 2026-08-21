@@ -1,8 +1,5 @@
-import {
-  BearerConnectionTarget,
-  PrimaryConnectionTarget,
-} from "@t3tools/client-runtime/connection";
-import { EnvironmentId, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
+import { BearerConnectionTarget, PrimaryConnectionTarget } from "@croki/client-runtime/connection";
+import { EnvironmentId, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

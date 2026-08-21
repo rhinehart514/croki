@@ -8,7 +8,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { assert, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -108,6 +108,7 @@ const startupDependencies = Layer.mergeAll(
   Layer.succeed(ProviderService.ProviderService, {
     startSession: () => Effect.die("unused"),
     sendTurn: () => Effect.die("unused"),
+    steerTurn: () => Effect.die("unused"),
     interruptTurn: () => Effect.die("unused"),
     respondToRequest: () => Effect.die("unused"),
     respondToUserInput: () => Effect.die("unused"),
@@ -116,6 +117,8 @@ const startupDependencies = Layer.mergeAll(
     getCapabilities: () => Effect.die("unused"),
     getInstanceInfo: () => Effect.die("unused"),
     rollbackConversation: () => Effect.die("unused"),
+    forkConversation: () => Effect.die("unused"),
+    discardConversation: () => Effect.die("unused"),
     streamEvents: Stream.empty,
   }),
 );

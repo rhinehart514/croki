@@ -46,7 +46,7 @@ function makeRow(overrides: Partial<AgentActivityRowProps>): AgentActivityRowPro
 }
 
 const props = {
-  title: "T3 Code",
+  title: "Croki",
   subtitle: "Agent work in progress",
   activeCount: 1,
   updatedAt: "2026-05-25T13:07:00.000Z",
@@ -64,6 +64,14 @@ const lightEnvironment = {
 } as const;
 
 describe("AgentActivity widget layout", () => {
+  it("uses the Croki mark in every branded presentation", () => {
+    const layout = AgentActivity(props, environment as never);
+    const serializedLayout = JSON.stringify(layout);
+
+    expect(serializedLayout).toContain('"assetName":"CrokiMark"');
+    expect(serializedLayout).not.toContain('"assetName":"T3Mark"');
+  });
+
   it("tints each row by its own phase using the web sidebar's dark palette", () => {
     const layout = AgentActivity(
       {
@@ -175,16 +183,12 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
-    expect(JSON.stringify(layout.banner)).toContain(
-      '"widgetURL":"t3code://threads/env-1/thread-2"',
-    );
+    expect(JSON.stringify(layout.banner)).toContain('"widgetURL":"croki://threads/env-1/thread-2"');
   });
 
   it("deep links the banner to the first row when nothing needs attention", () => {
     const layout = AgentActivity({ ...props, activities: [makeRow({})] }, environment as never);
-    expect(JSON.stringify(layout.banner)).toContain(
-      '"widgetURL":"t3code://threads/env-1/thread-1"',
-    );
+    expect(JSON.stringify(layout.banner)).toContain('"widgetURL":"croki://threads/env-1/thread-1"');
   });
 
   it("omits the deep link for unsafe paths and empty aggregates", () => {

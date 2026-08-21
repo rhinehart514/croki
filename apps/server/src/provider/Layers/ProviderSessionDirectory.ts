@@ -1,4 +1,4 @@
-import { defaultInstanceIdForDriver, ProviderDriverKind, type ThreadId } from "@t3tools/contracts";
+import { defaultInstanceIdForDriver, ProviderDriverKind, type ThreadId } from "@croki/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -170,6 +170,13 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
       Effect.map((rows) => rows.map((row) => row.threadId)),
     );
 
+  const remove: ProviderSessionDirectoryShape["remove"] = (threadId) =>
+    repository
+      .deleteByThreadId({ threadId })
+      .pipe(
+        Effect.mapError(toPersistenceError("ProviderSessionDirectory.remove:deleteByThreadId")),
+      );
+
   const listBindings: ProviderSessionDirectoryShape["listBindings"] = () =>
     repository.list().pipe(
       Effect.mapError(toPersistenceError("ProviderSessionDirectory.listBindings:list")),
@@ -186,6 +193,7 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
     upsert,
     getProvider,
     getBinding,
+    remove,
     listThreadIds,
     listBindings,
   } satisfies ProviderSessionDirectoryShape;

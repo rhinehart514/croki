@@ -4,7 +4,7 @@ import type {
   PullRequestCapabilities,
   PullRequestReaction,
   PullRequestViewerPermissions,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 
 import * as GitHubPullRequestCli from "./GitHubPullRequestCli.ts";
 import {

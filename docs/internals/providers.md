@@ -1,9 +1,15 @@
 # Provider architecture
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using Croki? See [docs/user](../user/).
 
-A provider is the agent runtime that does the actual work. T3 Code supports several, and the
+A provider is the agent runtime that does the actual work. Croki supports several, and the
 orchestration layer does not know which one is behind a thread.
+
+Croki preserves each provider's native behavior by default. An adapter may
+translate transport, runtime events, approvals, and tool calls, but it must not
+add a Croki persona, planning loop, delegation policy, tool policy, application
+brief, or project summary. User-applied instructions and context retain visible
+source and scope; historical Croki behavior IDs are decode-only.
 
 ## Built-in drivers
 

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "policy_version": "croki-provisional-2026-08-12",
+  "offer_status": "open",
+  "offer_decision": "Jacob has not yet chosen whether expansion means team rollout, managed capacity, paid support, adoption help, or another Croki outcome.",
+  "outbound_mode": "disabled",
+  "rules": [
+    {
+      "id": "managed-tunnel-capacity-pressure",
+      "status": "active",
+      "hypothesis": "This user attempted to operate more managed Croki environments than the current relay allowance supports.",
+      "provisional_offer": "Open: managed capacity, team rollout, or direct product help.",
+      "event_names": ["managed_tunnel.limit_reached"],
+      "required_event_names": ["managed_tunnel.limit_reached"],
+      "window_days": 30,
+      "min_occurrences": 1,
+      "min_distinct_objects": 1,
+      "score": 100,
+      "evidence_standard": "One direct capacity-limit event."
+    },
+    {
+      "id": "multi-environment-remote-workflow",
+      "status": "active",
+      "hypothesis": "This user has made Croki part of a recurring remote workflow across multiple development environments.",
+      "provisional_offer": "Open: team rollout interview or hands-on expansion support.",
+      "event_names": ["environment.linked", "environment.connected", "mobile.agent_activity.read"],
+      "required_event_names": ["environment.linked", "environment.connected"],
+      "window_days": 30,
+      "min_occurrences": 5,
+      "min_distinct_objects": 2,
+      "score": 75,
+      "evidence_standard": "At least five matching events across two environments, including a link and a connection."
+    },
+    {
+      "id": "mobile-operating-loop",
+      "status": "active",
+      "hypothesis": "This user repeatedly monitors or directs Croki work away from the desktop.",
+      "provisional_offer": "Open: deepen mobile adoption or learn what broader rollout would require.",
+      "event_names": [
+        "mobile.device.registered",
+        "mobile.live_activity.registered",
+        "mobile.agent_activity.read",
+        "environment.connected"
+      ],
+      "required_event_names": ["mobile.device.registered", "mobile.agent_activity.read"],
+      "window_days": 21,
+      "min_occurrences": 6,
+      "min_distinct_objects": 1,
+      "score": 65,
+      "evidence_standard": "At least six events including device registration and repeated activity reads."
+    }
+  ]
+}

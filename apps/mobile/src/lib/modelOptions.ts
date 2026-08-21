@@ -2,11 +2,11 @@ import type {
   ModelCapabilities,
   ModelSelection,
   ServerConfig as T3ServerConfig,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionDescriptors,
-} from "@t3tools/shared/model";
+} from "@croki/shared/model";
 
 export type ModelOption = {
   readonly key: string;
@@ -35,6 +35,7 @@ function providerDisplayLabel(provider: {
   if (provider.displayName) return provider.displayName;
   if (provider.driver === "codex") return "Codex";
   if (provider.driver === "claudeAgent") return "Claude";
+  if (provider.driver === "openclaw") return "OpenClaw";
   return provider.instanceId;
 }
 
@@ -103,7 +104,6 @@ export function resolveDefaultableModelSelection(
   const model = provider?.models.find((candidate) => candidate.slug === usable.model);
   return model?.isLegacy === true ? null : usable;
 }
-
 export function buildModelOptions(
   config: T3ServerConfig | null | undefined,
   fallbackModelSelection: ModelSelection | null,

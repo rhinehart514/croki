@@ -1,0 +1,17 @@
+{
+  "name": "@croki/mobile-terminal-native",
+  "version": "0.0.0",
+  "private": true,
+  "expo-module": {
+    "ios": {
+      "modules": [
+        "CrokiTerminalModule"
+      ]
+    },
+    "android": {
+      "modules": [
+        "expo.modules.crokiterminal.CrokiTerminalModule"
+      ]
+    }
+  }
+}

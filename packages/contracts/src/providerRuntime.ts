@@ -89,6 +89,13 @@ const RuntimeContentStreamKind = Schema.Literals([
 ]);
 export type RuntimeContentStreamKind = typeof RuntimeContentStreamKind.Type;
 
+/**
+ * ACP image blocks carry base64 data before the provider runtime materializes
+ * them into the attachment store. Keep the wire bound finite even though the
+ * decoded byte limit is enforced by the ingestion layer.
+ */
+export const PROVIDER_RUNTIME_MAX_IMAGE_DATA_CHARS = 14_000_000;
+
 const RuntimeSessionExitKind = Schema.Literals(["graceful", "error"]);
 export type RuntimeSessionExitKind = typeof RuntimeSessionExitKind.Type;
 
@@ -170,6 +177,7 @@ const ProviderRuntimeEventType = Schema.Literals([
   "item.updated",
   "item.completed",
   "content.delta",
+  "content.image",
   "request.opened",
   "request.resolved",
   "user-input.requested",
@@ -221,6 +229,7 @@ const ItemStartedType = Schema.Literal("item.started");
 const ItemUpdatedType = Schema.Literal("item.updated");
 const ItemCompletedType = Schema.Literal("item.completed");
 const ContentDeltaType = Schema.Literal("content.delta");
+const ContentImageType = Schema.Literal("content.image");
 const RequestOpenedType = Schema.Literal("request.opened");
 const RequestResolvedType = Schema.Literal("request.resolved");
 const UserInputRequestedType = Schema.Literal("user-input.requested");
@@ -255,6 +264,8 @@ const ProviderRuntimeEventBase = Schema.Struct({
   // populates it (post-slice-4), routing flips to instance-id-only.
   providerInstanceId: Schema.optional(ProviderInstanceId),
   threadId: ThreadId,
+  parentThreadId: Schema.optional(ThreadId),
+  childPrompt: Schema.optional(Schema.String),
   createdAt: IsoDateTime,
   turnId: Schema.optional(TurnId),
   itemId: Schema.optional(RuntimeItemId),
@@ -427,6 +438,14 @@ const ContentDeltaPayload = Schema.Struct({
 });
 export type ContentDeltaPayload = typeof ContentDeltaPayload.Type;
 
+const ContentImagePayload = Schema.Struct({
+  /** Base64 payload from ACP. It is never copied into assistant message text. */
+  data: Schema.String.check(Schema.isMaxLength(PROVIDER_RUNTIME_MAX_IMAGE_DATA_CHARS)),
+  mimeType: TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(100)),
+  uri: Schema.optional(Schema.NullOr(TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(2_048)))),
+});
+export type ContentImagePayload = typeof ContentImagePayload.Type;
+
 const RequestOpenedPayload = Schema.Struct({
   requestType: CanonicalRequestType,
   detail: Schema.optional(TrimmedNonEmptyStringSchema),
@@ -467,6 +486,42 @@ const UserInputResolvedPayload = Schema.Struct({
   answers: UnknownRecordSchema,
 });
 export type UserInputResolvedPayload = typeof UserInputResolvedPayload.Type;
+
+const RuntimeTaskActorId = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(128));
+const RuntimeTaskActorLabel = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+const RuntimeTaskActorModel = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+const RuntimeTaskActorReasoning = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(120));
+
+/** Native worker identity carried on task lifecycle events when available. */
+export const RuntimeTaskActor = Schema.Struct({
+  id: RuntimeTaskActorId,
+  label: Schema.optional(RuntimeTaskActorLabel),
+  model: Schema.optional(RuntimeTaskActorModel),
+  reasoning: Schema.optional(RuntimeTaskActorReasoning),
+});
+export type RuntimeTaskActor = typeof RuntimeTaskActor.Type;
+
+const RuntimeTaskOwnershipPath = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(500));
+const RuntimeTaskOwnershipArea = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+
+/** File or conceptual ownership reported by a native coordinator. */
+export const RuntimeTaskOwnership = Schema.Struct({
+  files: Schema.optional(Schema.Array(RuntimeTaskOwnershipPath).check(Schema.isMaxLength(64))),
+  areas: Schema.optional(Schema.Array(RuntimeTaskOwnershipArea).check(Schema.isMaxLength(32))),
+});
+export type RuntimeTaskOwnership = typeof RuntimeTaskOwnership.Type;
+
+const RuntimeTaskEvidenceLabel = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+const RuntimeTaskEvidenceReferenceId = TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(240));
+
+/** Bounded verification signal that can be attributed to one workstream. */
+export const RuntimeTaskEvidence = Schema.Struct({
+  kind: Schema.Literals(["command", "test", "build", "review", "artifact"]),
+  label: RuntimeTaskEvidenceLabel,
+  status: Schema.Literals(["passed", "failed", "unknown"]),
+  referenceId: Schema.optional(RuntimeTaskEvidenceReferenceId),
+});
+export type RuntimeTaskEvidence = typeof RuntimeTaskEvidence.Type;
 
 /**
  * Typed per-task usage rollup. Field names match the orchestration-v2 subagent
@@ -578,9 +633,15 @@ const taskAgentLinkageFields = {
   agentPath: Schema.optional(TrimmedNonEmptyStringSchema),
   /**
    * Set on provider-synthesized child-agent events (Codex) whose activity
-   * belongs in the Agents surface, never the parent timeline.
+   * stays out of ordinary chronological work rows. The bounded Workstreams
+   * projection may still consume it when the parent uses In Thread.
    */
   timelineBypass: Schema.optional(Schema.Boolean),
+  // Croki-native coordination metadata stays provider-neutral and bounded.
+  parentTaskId: Schema.optional(RuntimeTaskId),
+  actor: Schema.optional(RuntimeTaskActor),
+  ownership: Schema.optional(RuntimeTaskOwnership),
+  evidence: Schema.optional(Schema.Array(RuntimeTaskEvidence).check(Schema.isMaxLength(16))),
 } as const;
 
 export const TaskAgentLinkage = Schema.Struct(taskAgentLinkageFields);
@@ -956,6 +1017,13 @@ const ProviderRuntimeContentDeltaEvent = Schema.Struct({
 });
 export type ProviderRuntimeContentDeltaEvent = typeof ProviderRuntimeContentDeltaEvent.Type;
 
+const ProviderRuntimeContentImageEvent = Schema.Struct({
+  ...ProviderRuntimeEventBase.fields,
+  type: ContentImageType,
+  payload: ContentImagePayload,
+});
+export type ProviderRuntimeContentImageEvent = typeof ProviderRuntimeContentImageEvent.Type;
+
 const ProviderRuntimeRequestOpenedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: RequestOpenedType,
@@ -1161,6 +1229,7 @@ export const ProviderRuntimeEventV2 = Schema.Union([
   ProviderRuntimeItemUpdatedEvent,
   ProviderRuntimeItemCompletedEvent,
   ProviderRuntimeContentDeltaEvent,
+  ProviderRuntimeContentImageEvent,
   ProviderRuntimeRequestOpenedEvent,
   ProviderRuntimeRequestResolvedEvent,
   ProviderRuntimeUserInputRequestedEvent,

@@ -9,7 +9,7 @@ import {
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -18,7 +18,7 @@ import {
   ProjectId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -107,12 +107,16 @@ function createProviderServiceHarness(
   const service: ProviderServiceShape = {
     startSession: () => unsupported(),
     sendTurn: () => unsupported(),
+    steerTurn: () => unsupported(),
     interruptTurn: () => unsupported(),
     respondToRequest: () => unsupported(),
     respondToUserInput: () => unsupported(),
+    forkConversation: () => unsupported(),
+    discardConversation: () => unsupported(),
     stopSession: () => unsupported(),
     listSessions,
-    getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
+    getCapabilities: () =>
+      Effect.succeed({ sessionModelSwitch: "in-session", conversationFork: "unsupported" }),
     getInstanceInfo: (instanceId) =>
       Effect.succeed({
         instanceId,
@@ -611,7 +615,7 @@ describe("CheckpointReactor", () => {
     const harness = await createHarness({
       seedFilesystemCheckpoints: false,
       threadBranch: "t3code/original-branch",
-      localStatusRefName: "t3code/0a1b2c3d",
+      localStatusRefName: "croki/0a1b2c3d",
     });
 
     harness.provider.emit({

@@ -1,8 +1,5 @@
-import {
-  mapAtomCommandResult,
-  type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { mapAtomCommandResult, type AtomCommandResult } from "@croki/client-runtime/state/runtime";
+import type { ScopedThreadRef } from "@croki/contracts";
 
 import type { OpenPreviewMutation } from "~/browser/openFileInPreview";
 import { useRightPanelStore } from "~/rightPanelStore";
@@ -13,10 +10,12 @@ import { openPreviewSession } from "./openPreviewSession";
 export async function addBrowserSurface<E>(input: {
   readonly threadRef: ScopedThreadRef;
   readonly openPreview: OpenPreviewMutation<E>;
+  readonly url?: string;
 }): Promise<AtomCommandResult<void, E>> {
   const result = await openPreviewSession({
     openPreview: input.openPreview,
     threadRef: input.threadRef,
+    ...(input.url === undefined ? {} : { url: input.url }),
   });
   return mapAtomCommandResult(result, (snapshot) => {
     useRightPanelStore.getState().openBrowser(input.threadRef, snapshot.tabId);

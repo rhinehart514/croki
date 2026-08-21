@@ -1,7 +1,7 @@
 import * as React from "react";
 import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
-import type { ContextMenuItem } from "@t3tools/contracts";
-import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
+import type { ContextMenuItem, ServerProvider } from "@croki/contracts";
+import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@croki/contracts/settings";
 import {
   getThreadSortTimestamp,
   sortThreads,
@@ -106,6 +106,35 @@ export function buildMultiSelectThreadContextMenuItems(input: {
   ];
 }
 
+export function canForkSidebarThread(
+  thread: SidebarThreadSummary,
+  providers: ReadonlyArray<Pick<ServerProvider, "driver" | "instanceId">>,
+): boolean {
+  const instanceId = thread.session?.providerInstanceId ?? thread.modelSelection.instanceId;
+  const driver = providers.find((provider) => provider.instanceId === instanceId)?.driver;
+  return driver === "codex" || driver === "claudeAgent";
+}
+
+export function buildForkThreadContextMenuItem(input: {
+  isRunning: boolean;
+}): ContextMenuItem<"fork"> {
+  return {
+    id: "fork",
+    label: "Fork thread",
+    disabled: input.isRunning,
+  };
+}
+
+export function isSidebarThreadForkBlocked(
+  thread: Pick<SidebarThreadSummary, "latestTurn" | "session">,
+): boolean {
+  return (
+    thread.session?.status === "starting" ||
+    thread.session?.status === "running" ||
+    thread.latestTurn?.state === "running"
+  );
+}
+
 export function buildBulkTitleRegenerationContextMenuItem(input: {
   supportedCount: number;
   actionableCount: number;
@@ -130,8 +159,9 @@ export interface ThreadStatusPill {
     | "Monitoring"
     | "Connecting"
     | "Completed"
-    | "Pending Approval"
-    | "Awaiting Input"
+    | "Needs Approval"
+    | "Needs Input"
+    | "Failed"
     | "Plan Ready";
   colorClass: string;
   dotClass: string;
@@ -142,8 +172,9 @@ export interface ThreadStatusPill {
 // then active work, then the actionable plan prompt, then passive
 // monitoring. A Monitoring sibling must never hide a Plan Ready thread.
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
-  "Pending Approval": 6,
-  "Awaiting Input": 5,
+  "Needs Approval": 7,
+  "Needs Input": 6,
+  Failed: 5,
   Working: 4,
   Connecting: 4,
   "Plan Ready": 3,
@@ -163,6 +194,47 @@ type ThreadStatusInput = Pick<
 > & {
   lastVisitedAt?: string | undefined;
 };
+
+export const THREAD_ATTENTION_HASH = "needs-attention";
+
+export function isThreadAttentionHash(hash: string): boolean {
+  return hash.replace(/^#/, "") === THREAD_ATTENTION_HASH;
+}
+
+export type ThreadAttentionKind = "approval" | "input" | "failure";
+
+export interface ThreadAttention {
+  kind: ThreadAttentionKind;
+  label: "Needs Approval" | "Needs Input" | "Failed";
+}
+
+type ThreadAttentionInput = Pick<
+  SidebarThreadSummary,
+  "hasPendingApprovals" | "hasPendingUserInput" | "session"
+> & { lastVisitedAt?: string | undefined };
+
+/**
+ * Returns only states that need a human decision or recovery action. A failure
+ * stops raising its hand after the user has visited the resulting state;
+ * approvals and questions remain actionable until the provider resolves them.
+ * A missing visit marker intentionally does not make historical failures new.
+ */
+export function resolveThreadAttention(thread: ThreadAttentionInput): ThreadAttention | null {
+  if (thread.hasPendingApprovals) {
+    return { kind: "approval", label: "Needs Approval" };
+  }
+  if (thread.hasPendingUserInput) {
+    return { kind: "input", label: "Needs Input" };
+  }
+  if (thread.session?.status !== "error" || !thread.lastVisitedAt) {
+    return null;
+  }
+  const failedAt = Date.parse(thread.session.updatedAt);
+  const lastVisitedAt = Date.parse(thread.lastVisitedAt);
+  if (Number.isNaN(failedAt)) return null;
+  if (!Number.isNaN(lastVisitedAt) && failedAt <= lastVisitedAt) return null;
+  return { kind: "failure", label: "Failed" };
+}
 
 export interface ThreadJumpHintVisibilityController {
   sync: (shouldShow: boolean) => void;
@@ -477,21 +549,22 @@ export type SidebarThreadStatus =
 type SidebarThreadStatusInput = Pick<
   SidebarThreadSummary,
   "hasPendingApprovals" | "hasPendingUserInput" | "session" | "backgroundLiveness"
->;
+> & { lastVisitedAt?: string | undefined };
 
 export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): SidebarThreadStatus {
-  if (thread.hasPendingApprovals) {
+  const attention = resolveThreadAttention(thread);
+  if (attention?.kind === "approval") {
     return "approval";
   }
-  if (thread.hasPendingUserInput) {
+  if (attention?.kind === "input") {
     return "input";
   }
   if (thread.session?.status === "running" || thread.session?.status === "starting") {
     return "working";
   }
-  // A failed session outranks lingering background liveness: the user must
-  // see the failure, not a stale Working (review finding).
-  if (thread.session?.status === "error") {
+  // A fresh failure outranks lingering background liveness. Once the user
+  // visits it, the row returns to rest instead of preserving error noise.
+  if (attention !== null) {
     return "failed";
   }
   // Background work outlives the turn: fleets read as working; monitoring
@@ -558,8 +631,8 @@ export {
   generateSpreadPinOrderKeys,
   pinOrderKeyBetween,
   planPinnedReorder,
-} from "@t3tools/client-runtime/state/thread-sort";
-export { sortPinnedThreadsByOrderKey as sortPinnedThreadsForSidebar } from "@t3tools/client-runtime/state/thread-sort";
+} from "@croki/client-runtime/state/thread-sort";
+export { sortPinnedThreadsByOrderKey as sortPinnedThreadsForSidebar } from "@croki/client-runtime/state/thread-sort";
 
 /**
  * Search the already-ordered sidebar thread collection by title only.
@@ -646,21 +719,31 @@ export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
 }): ThreadStatusPill | null {
   const { thread } = input;
+  const attention = resolveThreadAttention(thread);
 
-  if (thread.hasPendingApprovals) {
+  if (attention?.kind === "approval") {
     return {
-      label: "Pending Approval",
+      label: attention.label,
       colorClass: "text-amber-600 dark:text-amber-300/90",
       dotClass: "bg-amber-500 dark:bg-amber-300/90",
       pulse: false,
     };
   }
 
-  if (thread.hasPendingUserInput) {
+  if (attention?.kind === "input") {
     return {
-      label: "Awaiting Input",
+      label: attention.label,
       colorClass: "text-indigo-600 dark:text-indigo-300/90",
       dotClass: "bg-indigo-500 dark:bg-indigo-300/90",
+      pulse: false,
+    };
+  }
+
+  if (attention !== null) {
+    return {
+      label: attention.label,
+      colorClass: "text-red-600 dark:text-red-300/90",
+      dotClass: "bg-red-500 dark:bg-red-300/90",
       pulse: false,
     };
   }
@@ -958,4 +1041,54 @@ export function sortScopedProjectsForSidebar<
       left.environmentId.localeCompare(right.environmentId) ||
       left.id.localeCompare(right.id),
   );
+}
+
+/** Keeps durable worker Threads adjacent to their canonical parent. */
+export function orderThreadsWithChildren<
+  TThread extends {
+    readonly environmentId: string;
+    readonly id: string;
+    readonly parentThreadId?: string | null | undefined;
+    readonly workerView?: "threads" | "activity" | undefined;
+  },
+>(threads: readonly TThread[]): TThread[] {
+  const childKeys = new Set(
+    threads
+      .filter((thread) => thread.parentThreadId != null)
+      .map((thread) => `${thread.environmentId}\0${thread.id}`),
+  );
+  const suppressedChildKeys = new Set<string>();
+  const childrenByParent = new Map<string, TThread[]>();
+  const threadByKey = new Map(
+    threads.map((thread) => [`${thread.environmentId}\0${thread.id}`, thread]),
+  );
+  for (const thread of threads) {
+    if (!thread.parentThreadId) continue;
+    const parentKey = `${thread.environmentId}\0${thread.parentThreadId}`;
+    if ((threadByKey.get(parentKey)?.workerView ?? "threads") !== "threads") {
+      suppressedChildKeys.add(`${thread.environmentId}\0${thread.id}`);
+      continue;
+    }
+    const children = childrenByParent.get(parentKey) ?? [];
+    children.push(thread);
+    childrenByParent.set(parentKey, children);
+  }
+
+  const ordered: TThread[] = [];
+  for (const thread of threads) {
+    const threadKey = `${thread.environmentId}\0${thread.id}`;
+    if (childKeys.has(threadKey)) continue;
+    ordered.push(thread, ...(childrenByParent.get(threadKey) ?? []));
+  }
+  for (const thread of threads) {
+    const threadKey = `${thread.environmentId}\0${thread.id}`;
+    if (
+      childKeys.has(threadKey) &&
+      !suppressedChildKeys.has(threadKey) &&
+      !ordered.includes(thread)
+    ) {
+      ordered.push(thread);
+    }
+  }
+  return ordered;
 }

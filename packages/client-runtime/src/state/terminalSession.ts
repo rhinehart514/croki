@@ -5,7 +5,7 @@ import type {
   TerminalSessionSnapshot,
   TerminalSummary,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 
 export interface TerminalSessionState {
   readonly summary: TerminalSummary | null;

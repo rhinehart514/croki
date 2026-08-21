@@ -1,14 +1,14 @@
-import type { EnvironmentId, ServerSelfUpdateCapability } from "@t3tools/contracts";
-import type { ServerUpdateStage, ServerUpdateState } from "@t3tools/client-runtime/state/server";
+import type { EnvironmentId, ServerSelfUpdateCapability } from "@croki/contracts";
+import type { ServerUpdateStage, ServerUpdateState } from "@croki/client-runtime/state/server";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@croki/client-runtime/state/runtime";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { serverEnvironment } from "~/state/server";
 import { useAtomCommand } from "~/state/use-atom-command";
-import { manualServerUpdateCommand } from "~/versionSkew";
+import { manualServerUpdateCommand, serverUpdatePathAvailable } from "~/versionSkew";
 import { Button } from "./ui/button";
 import { toastManager } from "./ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -129,7 +129,7 @@ export function ServerUpdateAction({
       toastManager.add({
         type: "success",
         title: `${serverLabel} updated`,
-        description: `Reconnected on t3@${result.value.targetVersion}.`,
+        description: `Reconnected on croki-server@${result.value.targetVersion}.`,
       });
     } finally {
       pendingUpdateEnvironmentIds.delete(environmentId);
@@ -140,6 +140,14 @@ export function ServerUpdateAction({
     return (
       <span className="text-muted-foreground text-xs">
         Update the desktop app on that machine to update this server.
+      </span>
+    );
+  }
+
+  if (!serverUpdatePathAvailable(selfUpdate)) {
+    return (
+      <span className="text-muted-foreground text-xs">
+        This server is older, but remote updates aren’t available in this Croki release.
       </span>
     );
   }

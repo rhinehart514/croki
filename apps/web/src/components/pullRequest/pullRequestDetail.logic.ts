@@ -12,7 +12,7 @@ import type {
   PullRequestState,
   PullRequestUpdateMethod,
   VcsRef,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 
 import { inferReviewCommentFenceLanguage, type ReviewCommentContext } from "~/reviewCommentContext";
 

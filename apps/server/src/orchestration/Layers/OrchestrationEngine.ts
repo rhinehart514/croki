@@ -3,8 +3,8 @@ import type {
   OrchestrationReadModel,
   ProjectId,
   ThreadId,
-} from "@t3tools/contracts";
-import { OrchestrationCommand } from "@t3tools/contracts";
+} from "@croki/contracts";
+import { OrchestrationCommand } from "@croki/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
@@ -349,6 +349,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
     get streamDomainEvents(): OrchestrationEngineShape["streamDomainEvents"] {
       return Stream.fromPubSub(eventPubSub);
     },
+    subscribeDomainEvents: PubSub.subscribe(eventPubSub),
     // The command read model's snapshotSequence tracks the latest committed
     // event sequence (updated on the worker fiber). A plain property read is a
     // consistent, committed value — reassignment of `commandReadModel` is

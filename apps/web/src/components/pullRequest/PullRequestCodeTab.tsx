@@ -9,7 +9,7 @@ import type {
   PullRequestReviewPosition,
   PullRequestReviewThread,
   PullRequestThreadCommentsResult,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   ChevronDownIcon,
   ChevronRightIcon,

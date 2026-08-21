@@ -1,4 +1,4 @@
-import { type TurnId } from "@t3tools/contracts";
+import { type TurnId } from "@croki/contracts";
 import { memo, useCallback, useMemo, useState } from "react";
 import { type TurnDiffFileChange } from "../../types";
 import {
@@ -10,6 +10,7 @@ import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   ChevronRightIcon,
+  CircleDotIcon,
   FileDiffIcon,
   FolderIcon,
   FolderClosedIcon,
@@ -37,6 +38,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   onExpandedChange: (expanded: boolean) => void;
   onToggleAllDirectories: () => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onUpdateCanvas?: (() => void) | undefined;
 }) {
   const {
     turnId,
@@ -48,6 +50,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
     onExpandedChange,
     onToggleAllDirectories,
     onOpenTurnDiff,
+    onUpdateCanvas,
   } = props;
   const summaryStat = useMemo(() => summarizeTurnDiffStats(files), [files]);
   const scopeSummary = useMemo(() => summarizeChangedFileScopes(files), [files]);

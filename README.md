@@ -1,39 +1,59 @@
-# T3 Code
+# Croki
 
-T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
+Croki is an agentic development environment (ADE) for founders building real
+products with coding agents. It is a working daily development environment, not
+a standalone agent runtime or a replacement for the provider behind the work.
 
-Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and OpenCode. If they're set up on your computer, T3 Code can control them.
+Croki is a narrow product overlay on the underlying development environment. It
+preserves native threads, providers, worktrees, checkpoints, recovery, Git,
+terminal, preview, files, plans, project scripts, desktop, web, and mobile
+clients.
 
-## "Wait, what are you selling me?"
+Croki is a harness host, not a harness. A default turn adds no Croki-authored
+behavioral instruction or hidden application, sibling-Thread, or project
+context. Anything that can affect the selected model is applied by the user,
+visible before send, scoped, recorded with the turn, removable, and reversible.
+Croki makes provider-native project instructions, skills, plugins, tools, and
+explicit context attachments easy to discover and apply without translating
+them into a hidden Croki prompt layer. See
+[current project state](./docs/project/current-state.md) for the remaining
+provider and release gaps.
 
-Nothing. We built T3 Code because we wanted the best possible development experience with agents. We were inspired by existing solutions like the Codex desktop app, Conductor, Claude Desktop and Cursor Glass, but none met our bar.
-
-We wanted something performant, remote-ready, and truly open. If we ever go the wrong direction, we want you to have everything you need to fork and build the editor that you want.
+See [Croki architecture](./docs/croki.md) for the product model, branch contract,
+application brief, and recovery record.
 
 ## Installation
 
 > [!WARNING]
-> T3 Code currently supports Codex, Claude, Cursor, Grok Build and OpenCode. Install and authenticate at least one provider before use:
+> Croki currently supports Codex, Claude, Cursor, Grok Build, OpenCode, and
+> OpenClaw. Runtime readiness still depends on the corresponding local CLI,
+> account, and, for OpenClaw, Gateway and agent configuration.
+> Install and authenticate at least one provider before use:
 >
 > - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
 > - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
 > - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `agent login`
 > - Grok Build: install [Grok Build CLI](https://x.ai/cli) and run `grok login`
 > - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
+> - OpenClaw: install OpenClaw, start its Gateway, and configure the selected agent
 
-### Try it out (install-free)
+### macOS
 
-The easiest way to test T3 Code is to run the server in your terminal (requires Node.js 22.16+, 23.11+, or 24.10+):
+Download the Apple Silicon DMG from the
+[latest release](https://github.com/rhinehart514/croki/releases/latest), open it,
+and drag Croki into Applications.
 
-```bash
-npx t3@latest
-```
+The current macOS build is unsigned, so macOS may require approval in
+**System Settings → Privacy & Security** on first launch.
 
-This will launch T3 Code's backend on your machine as well as the local web app to control your agents.
+### Windows
 
-Tip: Use `npx t3@latest --help` for the full CLI reference.
+Every push to `croki/main` produces a Windows x64 installer:
 
-### Desktop app
+1. Open **Actions → Build Croki for Windows** in this repository.
+2. Open the latest successful run.
+3. Download the `croki-windows-x64-<version>` artifact.
+4. Extract it and run the `Croki-<version>-x64.exe` installer.
 
 Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
 
@@ -73,8 +93,6 @@ We are (mostly) not accepting contributions yet. Small fixes may be considered. 
 
 ## Documentation
 
-Full docs live in [docs/](./docs). There's no docs site yet.
-
 - [Install and first run](./docs/user/install.md)
 - [Permission modes](./docs/user/permission-modes.md)
 - [Keyboard shortcuts](./docs/user/keybindings.md)
@@ -83,15 +101,17 @@ Full docs live in [docs/](./docs). There's no docs site yet.
 - [Keeping app and server in sync](./docs/user/updating.md)
 - [Source control integrations](./docs/user/source-control.md)
 - Multiple accounts: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md)
-- Linux: [run T3 Code as a background service](./docs/user/background-service.md)
+- Linux: [run Croki as a background service](./docs/user/background-service.md)
+- [Current project state](./docs/project/current-state.md)
 
-Building from source? Start at [docs/internals/overview.md](./docs/internals/overview.md).
+Building from source? Start at
+[docs/internals/overview.md](./docs/internals/overview.md).
 
-## If you REALLY want to contribute still.... read this first
+## Development
 
 ### Install `vp`
 
-T3 Code uses Vite+ so you'll need to install the global `vp` command-line tool.
+Croki uses Vite+, so install the global `vp` command-line tool.
 
 #### macOS / Linux
 
@@ -105,8 +125,6 @@ curl -fsSL https://vite.plus | bash
 irm https://vite.plus/ps1 | iex
 ```
 
-Checkout their getting started guide for more information: https://viteplus.dev/guide/
-
 ### Install dependencies
 
 ```bash
@@ -117,4 +135,16 @@ Read [CONTRIBUTING.md](./CONTRIBUTING.md) before reporting a bug or opening a PR
 
 Have a feature request? Start an [Ideas discussion](https://github.com/pingdotgg/t3code/discussions/categories/ideas).
 
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+```bash
+# Web development
+vp run dev
+
+# Desktop development
+vp run dev:desktop
+```
+
+Croki requires Node.js `^24.13.1` at the repository root and pins
+`pnpm@11.10.0`. Use the one-time pairing URL printed by the development server;
+do not share it.
+
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.

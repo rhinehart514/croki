@@ -1,70 +1,82 @@
-# T3 Code
+# Croki project instructions
 
-T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs (Codex, Claude Code, Cursor, Grok, OpenCode) and serves web, desktop, and mobile clients.
+Croki is Jacob's daily development environment for building real products with coding agents.
 
-You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
+The user request chooses the work. These instructions govern how that work improves Croki.
 
-## What makes T3 Code special?
+Read `docs/project/current-state.md` before changing product direction. Read
+`docs/internals/overview.md` before changing execution, state, or data flow.
 
 We have over 200,000 users who love T3 Code. It's important we maintain the things they love as we continue to iterate on the product. Here's a brief list of the things we can never compromise on.
 
-### 1. Open at the core
+Every task in this repository has two responsibilities:
 
-T3 Code is truly open. We share our roadmap, we share how we think about things, and of course we share all our code. A large number of our users run forks. We work in the open, and should strive to stay that way.
+1. Complete the requested outcome.
+2. Leave the exact part of Croki it touches better for daily product building.
 
-### 2. Performance without compromise
+Do not treat requests as isolated tickets. While completing the requested work, remove directly related friction, unclear state, repeated steps, weak wording, brittle behavior, and unnecessary product concepts when they can be fixed and proven in the same change.
 
-Lots of apps have gotten bogged down with bad tech decisions and "slop". We have not, and we're proud of the performance of T3 Code. We regularly audit for performance regressions, often caused by sending too much data over websockets, css animations causing gpu spikes, lists being hard to render, and more. Make sure all changes are considerate of performance impact.
+The request still sets the boundary. Do not invent unrelated roadmap work or turn a focused fix into a product rewrite. Improve the real user path being touched, not the entire repository around it.
 
-### 3. Remote ready
+Croki is not finished. Current code, screens, docs, tests, names, workflows, and production behavior are evidence of what exists, not authority over what must continue to exist. Change them when a better complete result requires it. Preserve explicit safety, data, release, compatibility, and founder-authority boundaries.
 
-The architecture of T3 Code's websocket layer (npx t3) enables a lot of awesome remote features. These have become core to the product. Whether users are connecting directly over their local network, using Tailscale, or leaning in fully with T3 Connect (our tunnel solution, also in this repo), we need to make sure new features are properly supported.
+Do not preserve a weak workflow because it already shipped. Do not bolt a feature onto a journey that should instead be shortened, combined, automated, reordered, or removed.
 
-### 4. Multi-surface
+When the request is broad, inspect the current product, choose the strongest coherent improvement that can be completed now, and implement it. Do not stop at analysis or create a strategy document unless the user asked for one.
 
-T3 Code has 3 key app surfaces: **web**, **desktop**, and **mobile**.
+## What Croki must let the founder do
 
-**Web** is kind of two surfaces, as we have the public facing "app.t3.codes" as well as locally hosting the web app through the `npx t3` command. Both need to be supported by all new features where reasonable.
+A founder should be able to:
 
-**Desktop** is the main surface most users install first. It's a full Electron app that bundles the server runner as well. The desktop app can also be used as the host server, allowing remote connections from app.t3.codes or the mobile app.
+1. Open a real repository.
+2. Start or resume a Thread with the provider they choose.
+3. Let that provider work through files, terminal, preview, tools, worktrees, and Git.
+4. Understand the meaningful state of the work without reading every runtime event.
+5. Intervene at the exact blocker, tradeoff, or product consequence that requires judgment.
+6. Verify the result, review the change, recover when needed, and ship.
 
-**Mobile** is a React Native app for both iOS and Android, available on the App Store and Google Play. The mobile app allows for connecting to any T3 Code server to control work remotely.
+Croki wins when this loop becomes faster, clearer, safer, and more capable through daily use.
 
-## A note from Theo
+**Mobile** is a React Native app for iOS and Android. It connects to Croki
+servers so the founder can direct and inspect the same work remotely.
 
-I like ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising.
+Thread carries the founder's direction. The selected provider performs the work. Canvas keeps the current outcome, important conclusions, evidence, and required judgment in view. Preview, checkpoints, review, and Git prove what actually changed.
 
-Channel both "measure twice, cut once" and "yagni". Fight scope creep. Try to honor the dev's intent in both a minimal and realistic fashion.
+Improve this loop before expanding into adjacent surfaces.
 
-The rest of this document is meant to help you navigate the codebase and make changes effectively. Think of these instructions less as "hard rules", more as "good defaults". The developer's preferences should be able to override anything here.
+## Handle every product task this way
 
-Of note: Most T3 Code contributions will come from T3 Code itself, often controlled remotely. This means you should be careful about accessing data, killing dev servers, and other things that may damage the T3 Code instance that the contributor is using.
+Before changing code:
 
-## A small glossary
+- Inspect the relevant journey in the running product when possible. Otherwise trace the real path through UI, client state, server, provider, persistence, recovery, and Git.
+- Read recent changes in the touched area so you do not revive a direction that was just removed.
+- Find the exact moment where the founder waits, rereads, guesses, repeats work, loses work, leaves Croki, or cannot tell what happened.
+- Define the concrete before and after in terms of what the founder sees, does, and can finish.
+- Consider at least one approach that changes or removes the workflow instead of adding another control.
+- Choose the smallest set of product concepts needed for the complete result, not the smallest code diff.
 
-We need to be on the same page with terminology. When communicating, use this language:
+While changing the product:
 
-- **you** means the agent reading this file and changing T3 Code.
-- **we, us, and maintainers** mean Theo, Julius and the people building T3 Code. These are who you are talking to now.
-- **user** means the person using T3 Code to direct coding agents.
-- **agent** means the coding agent a user runs inside T3 Code. Depending on context, that may also include you.
-- **provider** means the agent runtime or harness T3 Code talks to, such as Codex, Claude, Cursor, or OpenCode.
-- **client** means the web, desktop, or mobile UI.
-- **environment** means one running T3 server and the machine, filesystem, provider credentials, and state it owns.
-- **project** means an environment-local workspace record rooted at a directory.
-- **thread** means the durable conversation and work history for a project.
-- **turn** means one user-to-agent cycle, including follow-up work such as checkpointing.
-- **T3 home** means the base data directory. Runtime state normally lives below its userdata directory.
+- Prefer one complete path over several partial surfaces.
+- Remove or merge concepts before adding modes, panels, settings, cards, nodes, schemas, agents, or dashboards.
+- Reuse native behavior where it serves the result. Replace inherited behavior where it does not.
+- Keep ordinary work in the dominant product loop. Do not force the founder through settings, files, logs, or another tool merely because the machinery already exists.
+- Make intermediate state, completion, failure, recovery, persisted state, and the way back out clear.
+- Never show success before the underlying action is complete.
+- Preserve user work across refreshes, reconnects, provider failures, and app restarts wherever Croki promises durability.
+- Fix directly adjacent breakage in the same user path when it can be safely completed and proven. Do not silently expand into unrelated work.
 
-## The three ways to hurt yourself
+A backend primitive, schema, card, toggle, placeholder, hidden command, or demo route is not a finished product change. Ship the real entry point and the full usable path.
 
-1. **Killing by pattern.** Never `pkill -f`, `pgrep | kill`, or `kill` a PID you found by matching a name, path, or worktree string. Your own agent process has this worktree's path in its argv, and this machine runs several other dev servers at once. Kill only a PID you captured at spawn, or the owner of your port from `ss -H -ltnp` after confirming `/proc/<pid>/cwd` is your worktree.
-2. **Writing to the live install.** `~/.t3/userdata` is the developer's real T3 Code database, in use while you work. Reading it and copying from it are fine, and a good way to get real test data (see Test data). Never start a server against it, never open it read-write, never clean it up.
-3. **Baking in origins.** Never set `VITE_HTTP_URL` or `VITE_WS_URL` for dev. Dev is single-origin and Vite proxies `/api`, `/ws`, `/oauth`, and `/.well-known`. Setting them bakes localhost into the bundle and silently breaks every remote browser.
+Do not ask Jacob to provide product wording, screen inventories, or implementation choices that can be inferred from the repository and the request. Make a strong reversible decision and show it in the product.
 
-## Hit every surface
+Product thinking must appear as actual users, screens, actions, system responses, decisions, and outcomes. Do not substitute words such as `intent`, `capability`, `context`, `visibility`, `coordination`, `orchestration`, or `agentic` for showing what changes in the product.
 
-The most common defect in this repo is a change that works on the path you tested and is missing everywhere else. Before calling frontend work done, walk this list and say which entries applied:
+When behavior can affect web, desktop, mobile, providers, worktrees, remote connections, or wire contracts, inspect those exact surfaces and make unsupported cases explicit.
+
+When the product contract changes, update the copy, tests, docs, migrations, and old paths that would otherwise preserve the previous behavior. Do not leave two competing products in the repository without a real compatibility reason.
+
+## Keep these Croki boundaries
 
 - **Entry points.** A behavior reachable from the chat view is usually also reachable from Settings, the command palette, and a keybinding. Fixing one is not fixing the feature.
 - **Clients.** Web, desktop (wraps web, adds Electron shell/IPC), and mobile (React Native, separate navigation). Shared logic lives in `packages/client-runtime`
@@ -74,42 +86,90 @@ The most common defect in this repo is a change that works on the path you teste
 - **Connection modes.** Local, remote/relay, and tunnel behave differently. Multi-device and multi-environment cases are real.
 - **Docs.** `docs/` splits by audience. Behavior changes that a user would notice belong in `docs/user/` (shipped-product voice, no repo tooling or source paths); architecture and contributor changes in `docs/internals/`; runbooks in `docs/operations/`; new vocabulary in `docs/internals/glossary.md`.
 
-## Dev servers
+- Croki is a harness host, not a harness. A default turn uses the selected
+  provider's native behavior and adds no Croki-authored persona, task strategy,
+  planning loop, delegation policy, workflow, application brief, sibling
+  activity, project summary, or hidden context. Codex keeps the T3-derived host
+  contract that explains collaboration modes, product-native Preview routing,
+  tool availability, and runtime identity. Keep that contract operational and
+  product-neutral; it cannot become a Croki workflow or policy for the task.
+- Anything task-specific that Croki applies must be chosen by the user, visible
+  before send, scoped to the turn or a provider-native persistence mechanism,
+  recorded with the turn, removable, and reversible. The absence of applied
+  task configuration is the default; do not create a selectable `Native` mode
+  or silently emulate persistence by repeating prompts.
+- Instructions, context attachments, provider runtime, tools, and senses are
+  distinct. The fixed Codex host contract may route browser work to the shared
+  Preview tools, but enabling another tool does not authorize task-specific
+  instructions about when or how to use it. Opening, closing, selecting, or
+  arranging Canvas must not change provider behavior, context, tool access, or
+  authority.
+- Prefer provider- and repository-native configuration such as `AGENTS.md`,
+  skills, plugins, MCP configuration, and provider-owned project instructions.
+  Croki may discover, explain, open, install, enable, or attach them, but must
+  not translate them into an invisible proprietary prompt layer.
+- Product, GTM, Venture, Parallel Threads, and other historical Croki behavior
+  IDs are legacy compatibility data only. Existing turns remain readable; the
+  IDs are never offered for a new turn and cannot reactivate model behavior.
+- Canvas is a zero-maintenance projection of real project and Thread activity. It should help the founder understand the work, not become a second runtime, conversation, task board, context editor, memory database, or manually maintained scene.
+- Sense calls are read-only. Consequential actions still go through native Threads, tools, approvals, and authority checks.
+- `.croki/application.croki` is a repository-owned application brief for the
+  founder and Croki UI. Its existence never sends it to a provider. A user may
+  attach it visibly for one turn or reference it from provider-native project
+  instructions. Create or edit it only when the founder explicitly asks for or
+  confirms that product delta, through normal files, Git, and Review rather
+  than dedicated setup UI. `.croki/application.json` and historical Concept,
+  Release, and Venture schemas remain compatibility input, not active product
+  surfaces or automatic model context.
+- `.croki/context.json` is a legacy Canvas compatibility format. Do not revive its node, release-board, or provider-injection model.
+- Keep raw Canvas bodies, rendered prompts, private memory, and sensitive context out of receipts, logs, CI summaries, and artifacts.
+- Do not import or revive the archived standalone `brain`, `relay`, runtime, or workflow machinery unless an explicit migration requires it.
+- `main` mirrors `upstream/main`. Croki product work belongs on `croki/main`.
+- Visible branding is Croki. Preserve compatibility identifiers allowed by `scripts/lib/brand-policy.ts` unless a deliberate migration is in scope.
+- Release destinations stay independently gated. Never point publishing, signing, relay, web, Discord, mobile, or updates at inherited T3 destinations.
 
-- `vp i` installs. Worktrees get this from the t3.json setup script; if module resolution looks broken, it probably did not run.
+These are current product boundaries, not permission to freeze Croki. When a task deliberately changes one, update the implementation, migration path, current-state document, and proof together.
+
+- `vp i` installs. Worktrees get this from the croki.json setup script; if module resolution looks broken, it probably did not run.
 - `vp run dev` starts server and web. In a worktree, state defaults to that worktree's gitignored `.t3`, which deliberately outranks an ambient `T3CODE_HOME` so you cannot land on shared state by accident. An explicit `--home-dir` still wins.
 - Ports derive from the worktree path and are stable across restarts, but read the real ones from the `[dev-runner]` line since occupied ports shift.
 - Sharing over the tailnet is three steps: run `vp run dev --share` in the background, wait for the `pairingUrl:` line in its output, paste that full URL (token included) in your reply. Do not wire up `tailscale serve` by hand for this, and do not open the URL yourself.
 - The web app requires pairing. Hand over the pairing URL, not the bare origin. A URL without its token is useless to whoever you gave it to. If the token got consumed, mint a fresh one with `node apps/server/src/bin.ts pair` — note it carries standard scopes, while the startup URL carries admin scopes (needed for Settings → Connections management).
 - Stop what you started, by the PID you tracked. See rule 1.
 
-## Test data
+## Keep the implementation direct
 
-An empty database is a bad test. Seed your worktree's `.t3` with a copy of real data instead of pointing at live state:
+- Keep state transitions deterministic and typed. Put provider, platform, and transport differences at adapter boundaries.
+- Prefer direct ownership and simple code over new layers, registries, factories, generic frameworks, or speculative extension points.
+- Use types to make invalid states difficult to represent.
+- Comment why a non-obvious boundary exists, not what every line does. Keep comments accurate when behavior changes.
+- Do not carry dead compatibility paths, dual writes, flags, or migrations without a real installed-state reason.
+- Do not rewrite unrelated code while completing a focused product change.
+- Tests should prove user-visible behavior, important state transitions, and failure paths rather than freeze implementation details.
+- Async tests wait for typed receipts and worker drains, never arbitrary sleeps or polling.
+- Keep Croki TSX files under 300 lines and model or service files under 500 lines unless splitting would make the behavior harder to follow.
 
-- Copy from `~/.t3/userdata` (the developer's real data, the most realistic test set) or `~/.t3/dev`. Worktree state lives at `<worktree>/.t3/userdata`.
-- Snapshot the database with `VACUUM INTO`, which is safe even while a server has the source open and yields one consistent file:
+`apps/server` owns local execution, providers, persistence, terminals, preview, Git, checkpoints, and runtime signals. `apps/web` is the primary product surface. `apps/desktop` owns Electron behavior and packaging. `apps/mobile` owns the mobile client. `packages/contracts` owns wire schemas. `packages/shared` and `packages/client-runtime` hold genuinely shared behavior.
 
-  ```bash
-  mkdir -p .t3/userdata
-  rm -f .t3/userdata/state.sqlite*  # VACUUM INTO refuses to overwrite
-  bun -e "new (require('bun:sqlite').Database)(process.env.HOME + '/.t3/userdata/state.sqlite', { readonly: true }).run(\"VACUUM INTO '.t3/userdata/state.sqlite'\")"
-  ```
+Never use `pkill -f`, `pgrep | kill`, or kill a process selected by a name, path, or worktree match. Kill only a PID captured at spawn or a confirmed port owner running from this worktree.
 
-  A plain `cp` is only safe when no server has the source open, and must bring the `-wal` and `-shm` siblings along. A live file copy is a corrupt copy.
+`~/.t3/userdata` is the live install. Read-only inspection is allowed. Never run development against it, open it read-write, seed it, migrate it, or clean it.
 
-- Bring `secrets` and `settings.json` only if the flow under test needs them.
-- Copy in, never symlink. Data flows one way: into your sandbox, never back out.
+Do not set `VITE_HTTP_URL` or `VITE_WS_URL` for development. Use isolated, gitignored state and the pairing URL printed by the dev runner. Never share that one-time URL.
 
-## Verifying
+Do not perform destructive Git, data, release, or production actions unless the task explicitly requires them.
 
-- Smallest proof that the change works. `vp test run <files>` for the tests you touched, targeted lint and typecheck for the scope you changed.
-- **Do not run repo-wide checks.** No `vp check`, no `vp run -r test`, no `vp run -r typecheck` unless I ask. CI owns the full suite.
-- Backend behavior changes ship with focused tests for that behavior.
-- The server is event-sourced and its async flows emit typed receipts. Wait on receipts and worker drains, never on sleeps or polling. A test that needs a timeout to pass is wrong.
-- Upon request, user-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers. Ask permission before doing computer use or spinning up browsers.
+## Prove the improvement
 
-## Pull requests
+- Run the smallest focused tests, lint, and typecheck that prove the touched behavior.
+- Run `npm run check:croki` for Croki product changes.
+- Before an upstream sync, run `npm run report:croki-overlay -- --base <known-upstream-sha>`.
+- Do not run the full repository test or typecheck matrix unless the task requires it. CI owns broad coverage.
+- For UI work, exercise the real path at the relevant viewport and inspect the final pixels, interaction, empty state, loading state, failure state, and recovery.
+- For provider or cross-surface work, verify each affected provider or client, or state the exact unsupported case.
+- Do not call the task complete because it compiles. Confirm that the founder can perform the intended action and understand what happened.
+
+Report completion in product terms: what the founder could do before, what they can do now, the evidence that it works, and any remaining risk. Do not lead with file counts or architecture summaries.
 
 - Never make a PR unless the developer explicitly asks you to do so.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.

@@ -14,10 +14,10 @@ import * as Option from "effect/Option";
 
 import * as Electron from "electron";
 
-import * as NetService from "@t3tools/shared/Net";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { resolveRemoteT3CliPackageSpec } from "@t3tools/ssh/command";
-import type { RemoteT3RunnerOptions } from "@t3tools/ssh/tunnel";
+import * as NetService from "@croki/shared/Net";
+import { HostProcessArchitecture, HostProcessPlatform } from "@croki/shared/hostProcess";
+import { resolveRemoteT3CliPackageSpec } from "@croki/ssh/command";
+import type { RemoteT3RunnerOptions } from "@croki/ssh/tunnel";
 import serverPackageJson from "../../server/package.json" with { type: "json" };
 
 import * as DesktopIpc from "./ipc/DesktopIpc.ts";
@@ -25,6 +25,7 @@ import * as ElectronApp from "./electron/ElectronApp.ts";
 import * as ElectronDialog from "./electron/ElectronDialog.ts";
 import * as ElectronMenu from "./electron/ElectronMenu.ts";
 import * as ElectronPowerMonitor from "./electron/ElectronPowerMonitor.ts";
+import * as ElectronPermissions from "./electron/ElectronPermissions.ts";
 import * as ElectronProtocol from "./electron/ElectronProtocol.ts";
 import * as ElectronSafeStorage from "./electron/ElectronSafeStorage.ts";
 import * as ElectronShell from "./electron/ElectronShell.ts";
@@ -63,6 +64,10 @@ import * as DesktopWindow from "./window/DesktopWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "./wsl/DesktopWslServerTree.ts";
+
+// Keep this synchronous and at module initialization: constructing the Effect
+// runtime can otherwise allow Electron to emit `ready` first in development.
+ElectronProtocol.registerDesktopSchemesAsPrivileged();
 
 const desktopEnvironmentLayer = Layer.unwrap(
   Effect.gen(function* () {
@@ -119,6 +124,7 @@ const electronLayer = Layer.mergeAll(
   ElectronDialog.layer,
   ElectronMenu.layer,
   ElectronPowerMonitor.layer,
+  ElectronPermissions.layer,
   ElectronProtocol.layer,
   ElectronSafeStorage.layer,
   ElectronShell.layer,

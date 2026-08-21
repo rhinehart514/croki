@@ -8,7 +8,7 @@ import {
   type OrchestrationCommand,
   OrchestrationDispatchCommandError,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 
 import { createAttachmentId, resolveAttachmentPath } from "../attachmentStore.ts";
 import { ServerConfig } from "../config.ts";
@@ -100,7 +100,10 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
       } satisfies OrchestrationCommand;
     }
 
-    if (canonicalCommand.type !== "thread.turn.start") {
+    if (
+      canonicalCommand.type !== "thread.turn.start" &&
+      canonicalCommand.type !== "thread.turn.steer"
+    ) {
       return canonicalCommand as OrchestrationCommand;
     }
 

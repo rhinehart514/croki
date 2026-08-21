@@ -9,7 +9,7 @@ import {
   ProviderRuntimeEvent,
   ProviderSession,
   ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   ApprovalRequestId,
   CommandId,
@@ -22,7 +22,7 @@ import {
   type ServerSettings,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -105,12 +105,16 @@ function createProviderServiceHarness() {
   const service: ProviderServiceShape = {
     startSession: () => unsupported(),
     sendTurn: () => unsupported(),
+    steerTurn: () => unsupported(),
     interruptTurn: () => unsupported(),
     respondToRequest: () => unsupported(),
     respondToUserInput: () => unsupported(),
+    forkConversation: () => unsupported(),
+    discardConversation: () => unsupported(),
     stopSession: () => unsupported(),
     listSessions: () => Effect.succeed([...runtimeSessions]),
-    getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
+    getCapabilities: () =>
+      Effect.succeed({ sessionModelSwitch: "in-session", conversationFork: "unsupported" }),
     getInstanceInfo: (instanceId) => {
       const driverKind = ProviderDriverKind.make(String(instanceId));
       return Effect.succeed({
@@ -1027,6 +1031,168 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(message?.text).toBe("hello world");
     expect(message?.streaming).toBe(false);
+  });
+
+  it("creates a durable child thread with its assignment and separate transcript", async () => {
+    const harness = await createHarness();
+    const childThreadId = asThreadId("codex-worker-1");
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "thread.started",
+      eventId: asEventId("evt-child-started"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: childThreadId,
+      parentThreadId: asThreadId("thread-1"),
+      childPrompt: "Investigate the startup regression",
+      payload: {},
+    });
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-child-delta"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: childThreadId,
+      parentThreadId: asThreadId("thread-1"),
+      childPrompt: "Investigate the startup regression",
+      turnId: asTurnId("child-turn-1"),
+      itemId: asItemId("child-item-1"),
+      payload: { streamKind: "assistant_text", delta: "The regression starts in bootstrap." },
+    });
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-child-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: childThreadId,
+      parentThreadId: asThreadId("thread-1"),
+      turnId: asTurnId("child-turn-1"),
+      itemId: asItemId("child-item-1"),
+      payload: { itemType: "assistant_message", status: "completed" },
+    });
+
+    const child = await waitForThread(
+      harness.readModel,
+      (thread) => thread.messages.some((message) => message.role === "assistant"),
+      2000,
+      childThreadId,
+    );
+    expect(child.parentThreadId).toBe("thread-1");
+    expect(child.title).toBe("Investigate the startup regression");
+    expect(child.messages.map(({ role, text }) => ({ role, text }))).toEqual([
+      { role: "user", text: "Investigate the startup regression" },
+      { role: "assistant", text: "The regression starts in bootstrap." },
+    ]);
+
+    const parent = (await harness.readModel()).threads.find((thread) => thread.id === "thread-1");
+    expect(parent?.messages).toEqual([]);
+  });
+
+  it("materializes ACP image blocks onto the same assistant message as text", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-image-text"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-image"),
+      itemId: asItemId("item-image"),
+      payload: { streamKind: "assistant_text", delta: "before image" },
+    });
+    harness.emit({
+      type: "content.image",
+      eventId: asEventId("evt-image-block"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-image"),
+      itemId: asItemId("item-image"),
+      payload: {
+        data: "aGVsbG8=",
+        mimeType: "image/png",
+        uri: "file:///tmp/output.png",
+      },
+    });
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-image-text-after"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-image"),
+      itemId: asItemId("item-image"),
+      payload: { streamKind: "assistant_text", delta: " after image" },
+    });
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-image-completed"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-image"),
+      itemId: asItemId("item-image"),
+      payload: { itemType: "assistant_message", status: "completed" },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.messages.some(
+        (message: ProviderRuntimeTestMessage) =>
+          message.id === "assistant:item-image" && !message.streaming,
+      ),
+    );
+    const message = thread.messages.find(
+      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-image",
+    );
+    expect(message?.text).toBe("before image after image");
+    expect(message?.attachments).toHaveLength(1);
+    expect(message?.attachments?.[0]).toMatchObject({
+      type: "image",
+      name: "output.png",
+      mimeType: "image/png",
+      sizeBytes: 5,
+    });
+  });
+
+  it("drops malformed and unsupported ACP image blocks without putting data URLs in text", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const emitImage = (eventId: string, mimeType: string, data: string) =>
+      harness.emit({
+        type: "content.image",
+        eventId: asEventId(eventId),
+        provider: ProviderDriverKind.make("openclaw"),
+        createdAt: now,
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-invalid-image"),
+        itemId: asItemId("item-invalid-image"),
+        payload: { data, mimeType },
+      });
+
+    emitImage("evt-image-malformed", "image/png", "not-base64");
+    emitImage("evt-image-unsupported", "image/x-unknown", "aGVsbG8=");
+    emitImage("evt-image-too-large", "image/png", "A".repeat(14_000_001));
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-invalid-image-completed"),
+      provider: ProviderDriverKind.make("openclaw"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-invalid-image"),
+      itemId: asItemId("item-invalid-image"),
+      payload: { itemType: "assistant_message", status: "completed" },
+    });
+
+    await harness.drain();
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === asThreadId("thread-1"),
+    );
+    expect(thread?.messages.some((message) => message.id === "assistant:item-invalid-image")).toBe(
+      false,
+    );
   });
 
   it("uses assistant item completion detail when no assistant deltas were streamed", async () => {
@@ -3333,6 +3499,13 @@ describe("ProviderRuntimeIngestion", () => {
         taskId: "named-task-1",
         description: "Typecheck mobile app",
         taskType: "local_bash",
+        actor: {
+          id: "worker-1",
+          label: "Luna Max worker",
+          model: "openai/gpt-5.6-luna",
+          reasoning: "max",
+        },
+        ownership: { areas: ["mobile"] },
       },
     });
 
@@ -3382,12 +3555,27 @@ describe("ProviderRuntimeIngestion", () => {
       progress?.payload && typeof progress.payload === "object"
         ? (progress.payload as Record<string, unknown>)
         : undefined;
+    const started = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) => activity.id === "evt-named-task-started",
+    );
+    const startedPayload =
+      started?.payload && typeof started.payload === "object"
+        ? (started.payload as Record<string, unknown>)
+        : undefined;
     const completedPayload =
       completed?.payload && typeof completed.payload === "object"
         ? (completed.payload as Record<string, unknown>)
         : undefined;
 
     expect(progress?.summary).toBe("Typecheck mobile app");
+    expect(startedPayload?.description).toBe("Typecheck mobile app");
+    expect(startedPayload?.actor).toEqual({
+      id: "worker-1",
+      label: "Luna Max worker",
+      model: "openai/gpt-5.6-luna",
+      reasoning: "max",
+    });
+    expect(startedPayload?.ownership).toEqual({ areas: ["mobile"] });
     expect(progressPayload?.title).toBe("Typecheck mobile app");
     expect(completed?.summary).toBe("Task completed");
     expect(completedPayload?.title).toBe("Typecheck mobile app");

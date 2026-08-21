@@ -4,10 +4,11 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
-import * as NetService from "@t3tools/shared/Net";
+import * as NetService from "@croki/shared/Net";
 import * as Crypto from "effect/Crypto";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
+import * as ElectronPermissions from "../electron/ElectronPermissions.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import * as ElectronSafeStorage from "../electron/ElectronSafeStorage.ts";
 import { installDesktopIpcHandlers } from "../ipc/DesktopIpcHandlers.ts";
@@ -56,7 +57,7 @@ export class DesktopDevelopmentBackendPortRequiredError extends Schema.TaggedErr
   {},
 ) {
   override get message(): string {
-    return "T3CODE_PORT is required in desktop development.";
+    return "CROKI_PORT is required in desktop development.";
   }
 }
 
@@ -128,7 +129,7 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
   const wasQuitting = yield* Ref.getAndSet(state.quitting, true);
   if (!wasQuitting) {
     yield* electronDialog.showErrorBox(
-      "T3 Code failed to start",
+      "Croki failed to start",
       `Stage: ${stage}\n${message}${detail}`,
     );
   }
@@ -222,7 +223,9 @@ const startup = Effect.gen(function* () {
   const appIdentity = yield* DesktopAppIdentity.DesktopAppIdentity;
   const applicationMenu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
   const electronApp = yield* ElectronApp.ElectronApp;
+  const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
   const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
+  const electronPermissions = yield* ElectronPermissions.ElectronPermissions;
   const linuxUrlHandler = yield* DesktopLinuxUrlHandler.DesktopLinuxUrlHandler;
   const clerk = yield* DesktopClerk.DesktopClerk;
   const shellEnvironment = yield* DesktopShellEnvironment.DesktopShellEnvironment;
@@ -269,6 +272,9 @@ const startup = Effect.gen(function* () {
   }
 
   yield* appIdentity.configure;
+  // Custom schemes must be privileged before Electron emits `ready`; without
+  // the secure flag the Croki renderer cannot access mediaDevices.
+  yield* electronProtocol.registerPrivilegedSchemes;
   yield* lifecycle.register;
   yield* clerk.configure;
 
@@ -277,6 +283,9 @@ const startup = Effect.gen(function* () {
     Effect.catchCause((cause) => fatalStartupCause("whenReady", cause)),
   );
   yield* logStartupInfo("app ready");
+  yield* electronPermissions.configure(
+    ElectronProtocol.getDesktopOrigin(environment.isDevelopment),
+  );
   if (environment.platform === "linux") {
     const selectedBackend = yield* safeStorage.selectedStorageBackend;
     yield* logStartupInfo("safe storage ready", {

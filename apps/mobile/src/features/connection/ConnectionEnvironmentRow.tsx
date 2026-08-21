@@ -1,7 +1,7 @@
 import { SymbolView } from "../../components/AppSymbol";
-import { connectionStatusText } from "@t3tools/client-runtime/connection";
-import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { connectionStatusText } from "@croki/client-runtime/connection";
+import type { AtomCommandResult } from "@croki/client-runtime/state/runtime";
+import type { EnvironmentId } from "@croki/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useState } from "react";
@@ -133,7 +133,7 @@ export function ConnectionEnvironmentRow(props: {
         >
           {props.environment.isRelayManaged ? (
             <Text className="text-sm text-foreground-muted">
-              Managed by T3 Connect. Tunnel details update automatically.
+              Managed by Croki Connect. Tunnel details update automatically.
             </Text>
           ) : (
             <>

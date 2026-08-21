@@ -1,4 +1,4 @@
-import type { EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state/thread-search";
+import type { EnvironmentThreadSearchMatch } from "@croki/client-runtime/state/thread-search";
 
 import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
@@ -50,6 +50,13 @@ export function ThreadSearchMatchExcerpt(props: {
   readonly compact?: boolean;
 }) {
   const isUser = props.match.source === "user";
+  const speaker = props.match.parentThreadId
+    ? isUser
+      ? "Assignment"
+      : "Worker"
+    : isUser
+      ? "You"
+      : "Agent";
   const parts = splitHighlightParts(props.match.snippet, props.query);
   return (
     <Text
@@ -69,7 +76,7 @@ export function ThreadSearchMatchExcerpt(props: {
               : "text-emerald-600 dark:text-emerald-400",
         )}
       >
-        {isUser ? "You:" : "Agent:"}{" "}
+        {speaker}:{" "}
       </Text>
       {parts.map((part) => (
         <Text

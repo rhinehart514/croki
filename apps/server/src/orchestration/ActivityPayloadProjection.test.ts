@@ -1,17 +1,27 @@
+import {
+  EventId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+  type OrchestrationReadModel,
+  type OrchestrationThreadActivity,
+} from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import type { OrchestrationThreadActivity } from "@t3tools/contracts";
-import { projectActivityPayload } from "./ActivityPayloadProjection.ts";
+
+import { projectActivityPayload, projectReadModelSnapshot } from "./ActivityPayloadProjection.ts";
+
+const now = "2026-07-30T00:00:00.000Z";
 
 function activity(payload: Record<string, unknown>): OrchestrationThreadActivity {
   return {
-    id: "activity-1",
+    id: EventId.make("activity-1"),
     tone: "tool",
     kind: "tool.completed",
     summary: "Tool",
     payload,
     turnId: null,
-    createdAt: "2026-08-01T10:00:00.000Z",
-  } as unknown as OrchestrationThreadActivity;
+    createdAt: now,
+  } as OrchestrationThreadActivity;
 }
 
 /**
@@ -164,7 +174,7 @@ describe("projectActivityPayload", () => {
     expect(item.server).toBe("github");
     expect(item.arguments).toEqual({ pr: 42 });
     expect(item._meta).toBeUndefined();
-    expect(item.result).toEqual({ content: "PR body line one" });
+    expect(item.result).toEqual({ summary: "PR body line one", truncated: true });
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 
@@ -186,7 +196,7 @@ describe("projectActivityPayload", () => {
     const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
     expect(data.toolName).toBe("mcp__github__fetch_pr");
     expect(data.input).toEqual({ pr: 42 });
-    expect(data.result).toEqual({ content: "first line of output" });
+    expect(data.result).toEqual({ summary: "first line of output", truncated: true });
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 

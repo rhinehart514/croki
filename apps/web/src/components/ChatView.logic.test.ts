@@ -5,7 +5,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { Thread, ThreadShell } from "../types";
@@ -23,6 +23,7 @@ import {
   getStartedThreadModelChangeBlockReason,
   hasEnvironmentReconnectWarningGraceElapsed,
   hasServerAcknowledgedLocalDispatch,
+  isEditFromHerePreparationFailure,
   isBranchMismatchDismissedForSession,
   reconcileMountedTerminalThreadIds,
   reconcileRetainedMountedThreadIds,
@@ -33,6 +34,18 @@ import {
   shouldShowBranchMismatchBanner,
   shouldWriteThreadErrorToCurrentServerThread,
 } from "./ChatView.logic";
+
+describe("isEditFromHerePreparationFailure", () => {
+  it("blocks sends only for incomplete exact-boundary preparation", () => {
+    expect(
+      isEditFromHerePreparationFailure(
+        "Edit from here could not prepare the selected conversation boundary. Return to the source Thread and try again.",
+      ),
+    ).toBe(true);
+    expect(isEditFromHerePreparationFailure("A provider failed.")).toBe(false);
+    expect(isEditFromHerePreparationFailure(null)).toBe(false);
+  });
+});
 
 const environmentId = EnvironmentId.make("environment-local");
 const projectId = ProjectId.make("project-1");

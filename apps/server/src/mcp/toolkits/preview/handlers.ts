@@ -7,9 +7,11 @@ import type {
   PreviewAutomationResizeResult,
   PreviewAutomationSetColorSchemeResult,
   PreviewAutomationSnapshot,
+  PreviewAutomationSnapshotInput,
   PreviewAutomationStatus,
+  PreviewAutomationTabTargetInput,
   PreviewTabId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as PreviewAutomationBroker from "../../PreviewAutomationBroker.ts";
@@ -34,6 +36,13 @@ export function normalizePreviewOpenInput(
   };
 }
 
+export function stripPreviewSnapshotConcept(
+  input: PreviewAutomationSnapshotInput,
+): PreviewAutomationTabTargetInput {
+  const { concept: _concept, ...operationInput } = input;
+  return operationInput;
+}
+
 const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
   operation: PreviewAutomationOperation,
   input: unknown,
@@ -41,7 +50,7 @@ const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
   tabId?: PreviewTabId,
 ): Effect.fn.Return<
   A,
-  import("@t3tools/contracts").PreviewAutomationError,
+  import("@croki/contracts").PreviewAutomationError,
   McpInvocationContext.McpInvocationContext | PreviewAutomationBroker.PreviewAutomationBroker
 > {
   const scope = yield* McpInvocationContext.requireMcpCapability("preview");
@@ -77,7 +86,8 @@ const handlers = {
     invokeTargeted<PreviewAutomationResizeResult>("resize", input, input.timeoutMs),
   preview_set_appearance: (input) =>
     invokeTargeted<PreviewAutomationSetColorSchemeResult>("setColorScheme", input),
-  preview_snapshot: (input) => invokeTargeted<PreviewAutomationSnapshot>("snapshot", input ?? {}),
+  preview_snapshot: (input) =>
+    invokeTargeted<PreviewAutomationSnapshot>("snapshot", stripPreviewSnapshotConcept(input ?? {})),
   preview_click: (input) =>
     invokeTargeted<void>("click", input, input.timeoutMs).pipe(Effect.as({})),
   preview_type: (input) => invokeTargeted<void>("type", input, input.timeoutMs).pipe(Effect.as({})),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderDriverKind, ProviderInstanceId, type ModelCapabilities } from "@t3tools/contracts";
+import { ProviderDriverKind, ProviderInstanceId, type ModelCapabilities } from "@croki/contracts";
 
 import {
   buildProviderOptionSelectionsFromDescriptors,
@@ -150,8 +150,10 @@ describe("descriptor helpers", () => {
 describe("model slug normalization", () => {
   it("preserves exact custom slugs instead of expanding provider aliases", () => {
     const claude = ProviderDriverKind.make("claudeAgent");
+    const openClaw = ProviderDriverKind.make("openclaw");
 
     expect(normalizeModelSlug("opus", claude)).toBe("claude-opus-5");
+    expect(normalizeModelSlug("sol-medium-luna-max", openClaw)).toBe("agent-default");
     expect(normalizeCustomModelSlug(" opus ")).toBe("opus");
   });
 });

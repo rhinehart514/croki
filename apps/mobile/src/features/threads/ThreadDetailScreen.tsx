@@ -1,5 +1,5 @@
-import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
+import { type EnvironmentConnectionPhase } from "@croki/client-runtime/connection";
+import type { EnvironmentThreadStatus } from "@croki/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import type { LegendListRef } from "@legendapp/list/react-native";
 import { HeaderHeightContext } from "@react-navigation/elements";
@@ -15,7 +15,7 @@ import type {
   ServerConfig as T3ServerConfig,
   ThreadId,
   UserInputQuestion,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Haptics from "expo-haptics";
 import {
   memo,
@@ -79,6 +79,7 @@ import {
 } from "./ThreadComposer";
 import { ThreadFeed } from "./ThreadFeed";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
+import { CrokiInlineThoughtView } from "../croki/CrokiInlineThoughtView";
 
 export interface ThreadDetailScreenProps {
   readonly selectedThread: OrchestrationThreadShell;
@@ -136,6 +137,7 @@ export interface ThreadDetailScreenProps {
   ) => void;
   readonly onSubmitUserInput: () => Promise<unknown>;
   readonly showContent?: boolean;
+  readonly readOnlyWorker: { readonly onContinue: () => void } | null;
 }
 
 function latestStreamingAssistantMessage(
@@ -289,6 +291,21 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     }
   })();
   const selectedThreadFeed = props.selectedThreadFeed;
+  const latestUserQuestion = selectedThreadFeed.findLast(
+    (entry) => entry.type === "message" && entry.message.role === "user",
+  );
+  const thoughtViewFooter =
+    latestUserQuestion?.type === "message" && latestUserQuestion.message.text.trim() ? (
+      <CrokiInlineThoughtView
+        environmentId={props.environmentId}
+        projectId={props.selectedThread.projectId}
+        question={latestUserQuestion.message.text}
+        onUse={(text) => {
+          const current = props.draftMessage.trim();
+          props.onChangeDraftMessage(current ? `${current}\n\n${text}` : text);
+        }}
+      />
+    ) : null;
   const composerChrome = composerExpanded ? COMPOSER_EXPANDED_CHROME : COMPOSER_COLLAPSED_CHROME;
   const composerOverlapHeight = composerChrome + composerBottomInset;
   // While a user-input request is pending, the questionnaire owns the
@@ -605,6 +622,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             onEndFollowEnabledChange={setEndFollowEnabled}
             skills={selectedProviderSkills}
             loadEarlier={props.loadEarlier ?? null}
+            footer={thoughtViewFooter}
           />
         </View>
       ) : (

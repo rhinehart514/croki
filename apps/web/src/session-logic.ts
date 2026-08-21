@@ -1,9 +1,11 @@
 import * as Option from "effect/Option";
 import * as Arr from "effect/Array";
-import { isBackgroundTaskActivity } from "@t3tools/client-runtime/state/subagentRuntime";
+import { isBackgroundTaskActivity } from "@croki/client-runtime/state/subagentRuntime";
 import {
   ApprovalRequestId,
   isToolLifecycleItemType,
+  UI_HISTORY_ACTIVITY_KIND,
+  type OrchestrationCheckpointSummary,
   type OrchestrationLatestTurn,
   type OrchestrationThreadActivity,
   type OrchestrationProposedPlanId,
@@ -12,7 +14,13 @@ import {
   type UserInputQuestion,
   type ThreadId,
   type TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
+
+import {
+  deriveUiCheckReceipts,
+  UI_CHECK_RECEIPT_KIND,
+  type UiCheckReceipt,
+} from "./uiCheckReceipt";
 
 import type {
   ChatMessage,
@@ -52,6 +60,12 @@ export const PROVIDER_OPTIONS: Array<{
     available: true,
     pickerSidebarBadge: "new",
   },
+  {
+    value: ProviderDriverKind.make("openclaw"),
+    label: "OpenClaw",
+    available: true,
+    pickerSidebarBadge: "new",
+  },
 ];
 
 export type WorkLogToolLifecycleStatus =
@@ -81,6 +95,8 @@ export interface WorkLogEntry {
   toolLifecycleStatus?: WorkLogToolLifecycleStatus;
   /** Originating orchestration activity kind (e.g. `user-input.requested`) for row chrome. */
   sourceActivityKind?: OrchestrationThreadActivity["kind"];
+  /** One host-derived checked/not-checked result for user-visible work in this turn. */
+  uiCheck?: UiCheckReceipt;
   /** Grouping key for subagent lifecycle rows (one row per agent). */
   taskId?: string;
   /** Agent role (subagent_type) for labeled timeline rows. */
@@ -836,6 +852,7 @@ function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean
 
 export function deriveWorkLogEntries(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
+  checkpoints: ReadonlyArray<OrchestrationCheckpointSummary> = [],
 ): WorkLogEntry[] {
   const ordered = [...activities].toSorted(compareActivitiesByOrder);
   const entries: DerivedWorkLogEntry[] = [];
@@ -849,15 +866,77 @@ export function deriveWorkLogEntries(
     if (activity.kind === "task.updated") continue;
     if (activity.kind === "tool.progress") continue;
     if (activity.kind === "context-window.updated") continue;
+    if (activity.kind === UI_HISTORY_ACTIVITY_KIND) continue;
+    if (
+      activity.kind === "provider.turn.steer.delivered" ||
+      activity.kind === "provider.turn.steer.failed"
+    )
+      continue;
     if (activity.summary === "Checkpoint captured") continue;
     if (isPlanBoundaryToolActivity(activity)) continue;
     if (isAgentInternalActivity(activity)) continue;
     entries.push(toDerivedWorkLogEntry(activity));
   }
-  return collapseDerivedWorkLogEntries(entries).map((entry) => {
+  const workEntries = collapseDerivedWorkLogEntries(entries).map((entry) => {
     const { activityKind, collapseKey: _collapseKey, ...rest } = entry;
     return Object.assign(rest, { sourceActivityKind: activityKind });
   });
+  const uiChecks: WorkLogEntry[] = deriveUiCheckReceipts(activities, checkpoints).map(
+    (receipt) => ({
+      id: `${UI_CHECK_RECEIPT_KIND}:${receipt.turnId}`,
+      createdAt: receipt.createdAt,
+      turnId: receipt.turnId,
+      label:
+        receipt.status === "checked"
+          ? `Checked ${receipt.screens.length} screen${receipt.screens.length === 1 ? "" : "s"}`
+          : receipt.status === "unavailable"
+            ? "Check unavailable"
+            : "Not checked",
+      tone: "info",
+      sourceActivityKind: UI_CHECK_RECEIPT_KIND,
+      uiCheck: receipt,
+    }),
+  );
+  return [...workEntries, ...uiChecks];
+}
+
+export type GuidanceDeliveryState =
+  | { readonly status: "delivered" }
+  | { readonly status: "failed"; readonly detail: string | null };
+
+/**
+ * Steering messages are durable user messages with a turn id. Provider
+ * activities confirm whether Codex accepted them; absence remains an honest
+ * pending state after a reconnect instead of being treated as success.
+ */
+export function deriveGuidanceDeliveryByMessageId(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+): ReadonlyMap<string, GuidanceDeliveryState> {
+  const deliveries = new Map<string, GuidanceDeliveryState>();
+  for (const activity of activities) {
+    if (
+      activity.kind !== "provider.turn.steer.delivered" &&
+      activity.kind !== "provider.turn.steer.failed"
+    ) {
+      continue;
+    }
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const messageId = typeof payload?.messageId === "string" ? payload.messageId : null;
+    if (!messageId) continue;
+    deliveries.set(
+      messageId,
+      activity.kind === "provider.turn.steer.delivered"
+        ? { status: "delivered" }
+        : {
+            status: "failed",
+            detail: typeof payload?.detail === "string" ? payload.detail : null,
+          },
+    );
+  }
+  return deliveries;
 }
 
 function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): boolean {
@@ -1205,7 +1284,7 @@ function deriveToolLifecycleCollapseKey(entry: DerivedWorkLogEntry): string | un
     entry.taskId &&
     (entry.activityKind === "task.progress" || entry.activityKind === "task.completed")
   ) {
-    return `task${entry.taskId}`;
+    return `task\u001f${entry.taskId}`;
   }
   if (entry.activityKind !== "tool.updated" && entry.activityKind !== "tool.completed") {
     return undefined;

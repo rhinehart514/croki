@@ -58,6 +58,7 @@ import {
   OrchestrationDispatchCommandError,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetFullThreadDiffInput,
+  OrchestrationGetProjectPerceptionInput,
   OrchestrationGetSnapshotError,
   OrchestrationSearchThreadsError,
   OrchestrationSearchThreadsInput,
@@ -102,6 +103,9 @@ import {
   ProjectListEntriesError,
   ProjectListEntriesInput,
   ProjectListEntriesResult,
+  ProjectListComponentsError,
+  ProjectListComponentsInput,
+  ProjectListComponentsResult,
   ProjectReadFileError,
   ProjectReadFileInput,
   ProjectReadFileResult,
@@ -192,6 +196,12 @@ import {
   SourceControlRepositoryLookupInput,
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
+import {
+  CodexVoiceError,
+  CodexVoiceEvent,
+  CodexVoiceStartInput,
+  CodexVoiceThreadInput,
+} from "./codexVoice.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -199,6 +209,7 @@ export const WS_METHODS = {
   projectsAdd: "projects.add",
   projectsRemove: "projects.remove",
   projectsListEntries: "projects.listEntries",
+  projectsListComponents: "projects.listComponents",
   projectsReadFile: "projects.readFile",
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
@@ -210,6 +221,10 @@ export const WS_METHODS = {
   // Filesystem methods
   filesystemBrowse: "filesystem.browse",
   assetsCreateUrl: "assets.createUrl",
+
+  // Codex native voice methods
+  codexVoiceStart: "codexVoice.start",
+  codexVoiceStop: "codexVoice.stop",
 
   // VCS methods
   vcsPull: "vcs.pull",
@@ -313,6 +328,7 @@ export const WS_METHODS = {
   subscribeAuthAccess: "subscribeAuthAccess",
   subscribeBackgroundPolicy: "subscribeBackgroundPolicy",
   subscribeResourceTelemetry: "subscribeResourceTelemetry",
+  codexVoiceSubscribe: "codexVoice.subscribe",
 } as const;
 
 export const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -636,6 +652,12 @@ export const WsProjectsListEntriesRpc = Rpc.make(WS_METHODS.projectsListEntries,
   error: Schema.Union([ProjectListEntriesError, EnvironmentAuthorizationError]),
 });
 
+export const WsProjectsListComponentsRpc = Rpc.make(WS_METHODS.projectsListComponents, {
+  payload: ProjectListComponentsInput,
+  success: ProjectListComponentsResult,
+  error: Schema.Union([ProjectListComponentsError, EnvironmentAuthorizationError]),
+});
+
 export const WsProjectsReadFileRpc = Rpc.make(WS_METHODS.projectsReadFile, {
   payload: ProjectReadFileInput,
   success: ProjectReadFileResult,
@@ -901,6 +923,15 @@ export const WsOrchestrationGetFullThreadDiffRpc = Rpc.make(
   },
 );
 
+export const WsOrchestrationGetProjectPerceptionRpc = Rpc.make(
+  ORCHESTRATION_WS_METHODS.getProjectPerception,
+  {
+    payload: OrchestrationGetProjectPerceptionInput,
+    success: OrchestrationRpcSchemas.getProjectPerception.output,
+    error: Schema.Union([OrchestrationGetSnapshotError, EnvironmentAuthorizationError]),
+  },
+);
+
 export const WsOrchestrationSearchThreadsRpc = Rpc.make(ORCHESTRATION_WS_METHODS.searchThreads, {
   payload: OrchestrationSearchThreadsInput,
   success: OrchestrationRpcSchemas.searchThreads.output,
@@ -982,7 +1013,29 @@ export const WsSubscribeResourceTelemetryRpc = Rpc.make(WS_METHODS.subscribeReso
   stream: true,
 });
 
+export const WsCodexVoiceStartRpc = Rpc.make(WS_METHODS.codexVoiceStart, {
+  payload: CodexVoiceStartInput,
+  success: Schema.Void,
+  error: CodexVoiceError,
+});
+
+export const WsCodexVoiceStopRpc = Rpc.make(WS_METHODS.codexVoiceStop, {
+  payload: CodexVoiceThreadInput,
+  success: Schema.Void,
+  error: CodexVoiceError,
+});
+
+export const WsCodexVoiceSubscribeRpc = Rpc.make(WS_METHODS.codexVoiceSubscribe, {
+  payload: CodexVoiceThreadInput,
+  success: CodexVoiceEvent,
+  error: CodexVoiceError,
+  stream: true,
+});
+
 export const WsRpcGroup = RpcGroup.make(
+  WsCodexVoiceStartRpc,
+  WsCodexVoiceStopRpc,
+  WsCodexVoiceSubscribeRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
@@ -1027,6 +1080,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
   WsProjectsListEntriesRpc,
+  WsProjectsListComponentsRpc,
   WsProjectsReadFileRpc,
   WsProjectsSearchContentsRpc,
   WsProjectsSearchEntriesRpc,
@@ -1078,6 +1132,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationGetWorkflowScriptRpc,
   WsOrchestrationGetTurnDiffRpc,
   WsOrchestrationGetFullThreadDiffRpc,
+  WsOrchestrationGetProjectPerceptionRpc,
   WsOrchestrationSearchThreadsRpc,
   WsOrchestrationGetArchivedShellSnapshotRpc,
   WsOrchestrationSubscribeShellRpc,

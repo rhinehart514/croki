@@ -39,6 +39,7 @@ describe("OrchestrationReactor", () => {
         ),
         Layer.provideMerge(
           Layer.succeed(ProviderCommandReactor, {
+            prepareSession: () => Effect.die("prepareSession should not be called in this test"),
             start: () => {
               started.push("provider-command-reactor");
               return Effect.void;

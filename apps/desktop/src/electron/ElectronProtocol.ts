@@ -8,9 +8,48 @@ import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
 
+import { CROKI_PRODUCT_IDENTIFIERS } from "../../../../scripts/lib/brand-policy.ts";
+
 export const DESKTOP_HOST = "app";
-export const DESKTOP_PRODUCTION_SCHEME = "t3code";
-export const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
+export const DESKTOP_PRODUCTION_SCHEME = CROKI_PRODUCT_IDENTIFIERS.productionScheme;
+export const DESKTOP_DEVELOPMENT_SCHEME = CROKI_PRODUCT_IDENTIFIERS.developmentScheme;
+
+// These schemes are registered before Electron emits `ready`. Marking them as
+// standard + secure gives the renderer a real secure context, which is required
+// for `navigator.mediaDevices` on the main Croki page. Keep this list aligned
+// with the two origins that can ever host the desktop renderer; preview pages
+// use a separate partition and never use either scheme.
+export const DESKTOP_PRIVILEGED_SCHEMES: readonly Electron.CustomScheme[] = [
+  {
+    scheme: DESKTOP_PRODUCTION_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+  {
+    scheme: DESKTOP_DEVELOPMENT_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+];
+
+let desktopSchemesArePrivileged = false;
+
+/** Electron requires this synchronous registration before its ready event. */
+export function registerDesktopSchemesAsPrivileged(): void {
+  if (desktopSchemesArePrivileged) return;
+  Electron.protocol.registerSchemesAsPrivileged([...DESKTOP_PRIVILEGED_SCHEMES]);
+  desktopSchemesArePrivileged = true;
+}
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
@@ -48,6 +87,17 @@ export class ElectronProtocolUnregistrationError extends Schema.TaggedErrorClass
   }
 }
 
+export class ElectronPrivilegedSchemeRegistrationError extends Schema.TaggedErrorClass<ElectronPrivilegedSchemeRegistrationError>()(
+  "ElectronPrivilegedSchemeRegistrationError",
+  {
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return "Failed to register Croki's privileged renderer schemes.";
+  }
+}
+
 export interface DesktopProtocolRegistrationInput {
   readonly scheme: string;
   readonly targetOrigin: URL;
@@ -58,11 +108,16 @@ export interface DesktopProtocolRegistrationInput {
 export class ElectronProtocol extends Context.Service<
   ElectronProtocol,
   {
+    /** Must run before Electron's `ready` event. */
+    readonly registerPrivilegedSchemes: Effect.Effect<
+      void,
+      ElectronPrivilegedSchemeRegistrationError
+    >;
     readonly registerDesktopProtocol: (
       input: DesktopProtocolRegistrationInput,
     ) => Effect.Effect<void, ElectronProtocolRegistrationError, Scope.Scope>;
   }
->()("@t3tools/desktop/electron/ElectronProtocol") {}
+>()("@croki/desktop/electron/ElectronProtocol") {}
 
 export function makeDesktopContentSecurityPolicy(input: DesktopProtocolRegistrationInput): string {
   const clerkOrigin = input.clerkFrontendApiHostname
@@ -104,38 +159,6 @@ function withContentSecurityPolicy(response: Response, policy: string): Response
     headers,
   });
 }
-
-/**
- * Must run synchronously during process bootstrap, before Electron emits `ready`.
- */
-export function registerDesktopSchemePrivilegesSync(): void {
-  Electron.protocol.registerSchemesAsPrivileged([
-    {
-      scheme: DESKTOP_PRODUCTION_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-      },
-    },
-    {
-      scheme: DESKTOP_DEVELOPMENT_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-      },
-    },
-  ]);
-}
-
-const registerDesktopSchemePrivileges = Effect.sync(registerDesktopSchemePrivilegesSync).pipe(
-  Effect.withSpan("desktop.electron.protocol.registerSchemePrivileges"),
-);
-
-export const layerSchemePrivileges = Layer.effectDiscard(registerDesktopSchemePrivileges);
 
 async function proxyRequest(
   request: Request,
@@ -205,6 +228,11 @@ async function fetchWithTransientRetry(url: string, init: RequestInit): Promise<
 export const make = Effect.gen(function* () {
   const registered = yield* Ref.make(false);
 
+  const registerPrivilegedSchemes = Effect.try({
+    try: registerDesktopSchemesAsPrivileged,
+    catch: (cause) => new ElectronPrivilegedSchemeRegistrationError({ cause }),
+  }).pipe(Effect.withSpan("desktop.electron.protocol.registerPrivilegedSchemes"));
+
   const registerDesktopProtocol = Effect.fn("desktop.electron.protocol.registerDesktopProtocol")(
     function* (input: DesktopProtocolRegistrationInput) {
       if (yield* Ref.get(registered)) return;
@@ -233,7 +261,7 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  return ElectronProtocol.of({ registerDesktopProtocol });
+  return ElectronProtocol.of({ registerPrivilegedSchemes, registerDesktopProtocol });
 });
 
 export const layer = Layer.effect(ElectronProtocol, make);

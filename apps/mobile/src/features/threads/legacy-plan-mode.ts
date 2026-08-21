@@ -1,7 +1,4 @@
-import {
-  DEFAULT_PROVIDER_INTERACTION_MODE,
-  type ProviderInteractionMode,
-} from "@t3tools/contracts";
+import { DEFAULT_PROVIDER_INTERACTION_MODE, type ProviderInteractionMode } from "@croki/contracts";
 
 export function resolveLegacyPlanModeEnabled(input: {
   readonly loaded: boolean;

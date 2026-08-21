@@ -7,6 +7,7 @@ import {
   resolveAssistantMessageCopyState,
   shouldPreserveAssistantLineBreaks,
 } from "./MessagesTimeline.logic";
+import type { CanvasPresentationTimelineActivity } from "./canvasThreadIntegration";
 
 describe("shouldPreserveAssistantLineBreaks", () => {
   it("preserves Claude insight formatting without changing regular markdown", () => {
@@ -273,6 +274,184 @@ describe("resolveAssistantMessageCopyState", () => {
 });
 
 describe("deriveMessagesTimelineRows", () => {
+  it("places an automatic thought View directly after its user message", () => {
+    const messageId = "user-view" as never;
+    const thoughtView = { id: "view-1" } as never;
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "user-view-entry",
+          kind: "message",
+          createdAt: "2026-08-08T12:00:00Z",
+          message: {
+            id: messageId,
+            role: "user",
+            text: "Compare the two product directions",
+            turnId: null,
+            createdAt: "2026-08-08T12:00:00Z",
+            updatedAt: "2026-08-08T12:00:00Z",
+            streaming: false,
+          },
+        },
+      ],
+      thoughtView,
+      thoughtViewAnchorMessageId: messageId,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows.map((row) => row.kind)).toEqual(["message", "thought-view"]);
+    expect(rows[1]).toMatchObject({ kind: "thought-view", view: thoughtView });
+  });
+
+  it("keeps a Canvas presentation as a dedicated timeline row", () => {
+    const presentation = {
+      activityId: "canvas-activity",
+      createdAt: "2026-01-01T00:00:01Z",
+      summary: "Canvas visual ready · 2 items",
+      artifact: {
+        id: "canvas-artifact",
+        revision: 1,
+        threadId: "thread-1",
+        turnId: null,
+        harnessId: "product-v1",
+        presentation: "compare",
+        question: "Which route?",
+        nodes: [{ id: "question", role: "question", title: "Which route?" }],
+        edges: [],
+        createdAt: "2026-01-01T00:00:01Z",
+      },
+    } as const;
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "canvas-entry",
+          kind: "work",
+          createdAt: presentation.createdAt,
+          entry: {
+            id: "canvas-activity",
+            createdAt: presentation.createdAt,
+            label: "Canvas visual ready",
+            tone: "info",
+            sourceActivityKind: "croki.canvas.presented",
+          },
+        },
+      ],
+      canvasPresentationsByActivityId: new Map([
+        [presentation.activityId, presentation as unknown as CanvasPresentationTimelineActivity],
+      ]),
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.kind).toBe("canvas");
+  });
+
+  it("consolidates native task lifecycle entries into one Workstreams row", () => {
+    const turnId = "turn-workstreams" as never;
+    const started = {
+      id: "task-started" as never,
+      kind: "task.started" as const,
+      tone: "info" as const,
+      summary: "run task started",
+      payload: {
+        taskId: "openclaw:turn-workstreams:spawn-1",
+        description: "Inspect the provider boundary",
+        actor: { id: "worker-1", label: "Luna Max worker" },
+      },
+      turnId,
+      createdAt: "2026-01-01T00:00:01Z",
+    };
+    const progress = {
+      ...started,
+      id: "task-progress" as never,
+      kind: "task.progress" as const,
+      summary: "Inspecting provider events",
+      createdAt: "2026-01-01T00:00:02Z",
+    };
+    const updated = {
+      ...started,
+      id: "task-updated" as never,
+      kind: "task.updated" as const,
+      summary: "Inspection complete",
+      payload: { ...started.payload, status: "idle" },
+      createdAt: "2026-01-01T00:00:03Z",
+    };
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "task-progress",
+          kind: "work",
+          createdAt: progress.createdAt,
+          entry: {
+            id: "task-progress",
+            createdAt: progress.createdAt,
+            turnId,
+            label: progress.summary,
+            tone: "thinking",
+            sourceActivityKind: "task.progress",
+          },
+        },
+        {
+          id: "task-updated",
+          kind: "work",
+          createdAt: updated.createdAt,
+          entry: {
+            id: "task-updated",
+            createdAt: updated.createdAt,
+            turnId,
+            label: updated.summary,
+            tone: "info",
+            sourceActivityKind: "task.updated",
+          },
+        },
+      ],
+      coordinationActivities: [started, progress, updated] as never,
+      runningTurnId: turnId,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.kind).toBe("coordination");
+    if (rows[0]?.kind === "coordination") {
+      expect(rows[0].activities).toHaveLength(3);
+    }
+  });
+
+  it("keeps native task lifecycle out of the transcript without Workstreams", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "task-updated",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:03Z",
+          entry: {
+            id: "task-updated",
+            createdAt: "2026-01-01T00:00:03Z",
+            turnId: "turn-workstreams" as never,
+            label: "Inspection complete",
+            tone: "info",
+            sourceActivityKind: "task.updated",
+          },
+        },
+      ],
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows).toEqual([]);
+  });
+
   it("only enables assistant copy for the terminal assistant message in a turn", () => {
     const rows = deriveMessagesTimelineRows({
       timelineEntries: [
@@ -551,6 +730,90 @@ describe("deriveMessagesTimelineRows", () => {
     expect(
       expandedRows.find((row) => row.kind === "turn-fold" && row.expanded === true),
     ).toBeDefined();
+  });
+
+  it("keeps the UI check receipt visible when the finished turn folds", () => {
+    const turnId = "turn-ui" as never;
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "user-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:00Z",
+          message: {
+            id: "user-1" as never,
+            role: "user",
+            text: "Update Settings",
+            turnId: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-01T00:00:00Z",
+            streaming: false,
+          },
+        },
+        {
+          id: "work-entry",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:05Z",
+          entry: {
+            id: "work-1",
+            createdAt: "2026-01-01T00:00:05Z",
+            turnId,
+            label: "Changed files",
+            tone: "tool",
+          },
+        },
+        {
+          id: "assistant-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:10Z",
+          message: {
+            id: "assistant-1" as never,
+            role: "assistant",
+            text: "Settings is updated.",
+            turnId,
+            createdAt: "2026-01-01T00:00:10Z",
+            updatedAt: "2026-01-01T00:00:10Z",
+            streaming: false,
+          },
+        },
+        {
+          id: "croki.ui.check:turn-ui",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:11Z",
+          entry: {
+            id: "croki.ui.check:turn-ui",
+            createdAt: "2026-01-01T00:00:11Z",
+            turnId,
+            label: "Not checked",
+            tone: "info",
+            sourceActivityKind: "croki.ui.check",
+            uiCheck: {
+              status: "not-checked",
+              turnId,
+              createdAt: "2026-01-01T00:00:11Z",
+              screens: [],
+              visibleFiles: ["apps/web/src/Settings.tsx"],
+              issueCount: 0,
+            },
+          },
+        },
+      ],
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "user-entry",
+      "turn-fold:turn-ui",
+      "assistant-entry",
+      "croki.ui.check:turn-ui",
+    ]);
+    expect(rows.at(-1)).toMatchObject({
+      kind: "work",
+      groupedEntries: [{ label: "Not checked" }],
+    });
   });
 
   it("derives a sane duration for a steer-superseded turn with one instant commentary message", () => {

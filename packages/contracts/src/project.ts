@@ -10,6 +10,8 @@ const PROJECT_SEARCH_ENTRIES_MAX_LIMIT = 200;
 const PROJECT_SEARCH_CONTENTS_MAX_LIMIT = 500;
 const PROJECT_WRITE_FILE_PATH_MAX_LENGTH = 512;
 const PROJECT_READ_FILE_PATH_MAX_LENGTH = 512;
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
+const Sha256Hex = Schema.String.check(Schema.isPattern(SHA256_HEX_PATTERN));
 
 export const ProjectEntryKind = Schema.Literals(["file", "directory"]);
 export type ProjectEntryKind = typeof ProjectEntryKind.Type;
@@ -80,6 +82,30 @@ export const ProjectListEntriesResult = Schema.Struct({
   truncated: Schema.Boolean,
 });
 export type ProjectListEntriesResult = typeof ProjectListEntriesResult.Type;
+
+export const ProjectComponentFramework = Schema.Literals(["react", "vue", "svelte"]);
+export type ProjectComponentFramework = typeof ProjectComponentFramework.Type;
+
+export const ProjectComponentEntry = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  path: TrimmedNonEmptyString,
+  exportName: TrimmedNonEmptyString,
+  displayName: TrimmedNonEmptyString,
+  framework: ProjectComponentFramework,
+  isDefaultExport: Schema.Boolean,
+});
+export type ProjectComponentEntry = typeof ProjectComponentEntry.Type;
+
+export const ProjectListComponentsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+});
+export type ProjectListComponentsInput = typeof ProjectListComponentsInput.Type;
+
+export const ProjectListComponentsResult = Schema.Struct({
+  components: Schema.Array(ProjectComponentEntry),
+  truncated: Schema.Boolean,
+});
+export type ProjectListComponentsResult = typeof ProjectListComponentsResult.Type;
 
 export const ProjectEntriesFailure = Schema.Literals([
   "workspace_root_not_found",
@@ -191,6 +217,29 @@ export class ProjectListEntriesError extends Schema.TaggedErrorClass<ProjectList
   }
 }
 
+export class ProjectListComponentsError extends Schema.TaggedErrorClass<ProjectListComponentsError>()(
+  "ProjectListComponentsError",
+  {
+    cwd: Schema.optional(TrimmedNonEmptyString),
+    failure: Schema.optional(ProjectEntriesFailure),
+    normalizedCwd: Schema.optional(TrimmedNonEmptyString),
+    timeout: Schema.optional(TrimmedNonEmptyString),
+    detail: Schema.optional(TrimmedNonEmptyString),
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
+  constructor(props: ProjectEntriesFailureContext & { readonly cwd: string }) {
+    super({
+      ...props,
+      message:
+        decodedProjectErrorMessage(props) ??
+        `Failed to find workspace components in '${props.cwd}'.`,
+    } as any);
+  }
+}
+
 export const ProjectReadFileInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   relativePath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_READ_FILE_PATH_MAX_LENGTH)),
@@ -210,6 +259,7 @@ export const ProjectFileFailure = Schema.Literals([
   "resolved_path_outside_root",
   "path_not_file",
   "binary_file",
+  "stale_write",
   "operation_failed",
 ]);
 export type ProjectFileFailure = typeof ProjectFileFailure.Type;
@@ -234,6 +284,8 @@ type ProjectFileFailureContext = {
   readonly resolvedWorkspaceRoot?: string;
   readonly operation?: ProjectFileOperation;
   readonly operationPath?: string;
+  readonly expectedContentsSha256?: string | null;
+  readonly actualContentsSha256?: string | null;
   readonly cause?: unknown;
 };
 
@@ -266,6 +318,13 @@ export const ProjectWriteFileInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   relativePath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_WRITE_FILE_PATH_MAX_LENGTH)),
   contents: Schema.String,
+  /**
+   * Optional compare-and-write precondition.
+   *
+   * Omit for an unconditional legacy write, pass null to require that the file
+   * is absent, or pass the SHA-256 of its current raw contents.
+   */
+  expectedContentsSha256: Schema.optional(Schema.NullOr(Sha256Hex)),
 });
 export type ProjectWriteFileInput = typeof ProjectWriteFileInput.Type;
 
@@ -284,6 +343,8 @@ export class ProjectWriteFileError extends Schema.TaggedErrorClass<ProjectWriteF
     resolvedWorkspaceRoot: Schema.optional(TrimmedNonEmptyString),
     operation: Schema.optional(ProjectFileOperation),
     operationPath: Schema.optional(TrimmedNonEmptyString),
+    expectedContentsSha256: Schema.optional(Schema.NullOr(Sha256Hex)),
+    actualContentsSha256: Schema.optional(Schema.NullOr(Sha256Hex)),
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
   },

@@ -17,6 +17,7 @@ import {
   PreviewAutomationOpenInput,
   PreviewAutomationResizeInput,
   PreviewAutomationResizeResult,
+  PreviewAutomationSnapshotInput,
   PreviewAutomationStatus,
 } from "./previewAutomation.ts";
 
@@ -29,6 +30,7 @@ const decodeViewport = Schema.decodeUnknownSync(PreviewViewportSetting);
 const decodeResizeInput = Schema.decodeUnknownSync(PreviewAutomationResizeInput);
 const decodeOpenInput = Schema.decodeUnknownSync(PreviewAutomationOpenInput);
 const decodeResizeResult = Schema.decodeUnknownSync(PreviewAutomationResizeResult);
+const decodeSnapshotInput = Schema.decodeUnknownSync(PreviewAutomationSnapshotInput);
 const decodeAutomationHost = Schema.decodeUnknownSync(PreviewAutomationHost);
 const decodeAutomationError = Schema.decodeUnknownSync(PreviewAutomationError);
 const decodeAutomationStatus = Schema.decodeUnknownSync(PreviewAutomationStatus);
@@ -40,6 +42,48 @@ describe("PreviewAutomationOpenInput", () => {
 
   it("retains the legacy show visibility alias", () => {
     expect(decodeOpenInput({ show: false })).toEqual({ show: false });
+  });
+});
+
+describe("PreviewAutomationSnapshotInput", () => {
+  it("accepts labeled and ordinary snapshots", () => {
+    expect(
+      decodeSnapshotInput({
+        tabId: "tab-concept",
+        concept: {
+          id: "direction-a",
+          title: "Focused workflow",
+          summary: "Keep the founder in the checked result while work continues.",
+          tradeoff: "Requires a smaller first release.",
+          initialRank: 80,
+        },
+      }),
+    ).toEqual({
+      tabId: "tab-concept",
+      concept: {
+        id: "direction-a",
+        title: "Focused workflow",
+        summary: "Keep the founder in the checked result while work continues.",
+        tradeoff: "Requires a smaller first release.",
+        initialRank: 80,
+      },
+    });
+    expect(decodeSnapshotInput({})).toEqual({});
+  });
+
+  it("bounds concept text and ranking", () => {
+    const concept = {
+      id: "direction-a",
+      title: "Focused workflow",
+      summary: "Keep the founder in the checked result while work continues.",
+      initialRank: 80,
+    };
+    expect(() => decodeSnapshotInput({ concept: { ...concept, id: "x".repeat(129) } })).toThrow();
+    expect(() =>
+      decodeSnapshotInput({ concept: { ...concept, summary: "x".repeat(1_025) } }),
+    ).toThrow();
+    expect(() => decodeSnapshotInput({ concept: { ...concept, initialRank: 0 } })).toThrow();
+    expect(() => decodeSnapshotInput({ concept: { ...concept, initialRank: 101 } })).toThrow();
   });
 });
 

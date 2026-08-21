@@ -4,7 +4,7 @@ import type {
   ProviderSessionRuntimeStatus,
   RuntimeMode,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Option from "effect/Option";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
@@ -53,6 +53,10 @@ export interface ProviderSessionDirectoryShape {
     threadId: ThreadId,
   ) => Effect.Effect<Option.Option<ProviderRuntimeBinding>, ProviderSessionDirectoryReadError>;
 
+  readonly remove: (
+    threadId: ThreadId,
+  ) => Effect.Effect<void, ProviderSessionDirectoryPersistenceError>;
+
   readonly listThreadIds: () => Effect.Effect<
     ReadonlyArray<ThreadId>,
     ProviderSessionDirectoryPersistenceError
@@ -67,4 +71,4 @@ export interface ProviderSessionDirectoryShape {
 export class ProviderSessionDirectory extends Context.Service<
   ProviderSessionDirectory,
   ProviderSessionDirectoryShape
->()("t3/provider/Services/ProviderSessionDirectory") {}
+>()("croki-server/provider/Services/ProviderSessionDirectory") {}

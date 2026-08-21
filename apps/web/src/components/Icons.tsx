@@ -666,6 +666,28 @@ export const OpenCodeIcon: Icon = (props) => (
   </svg>
 );
 
+/** Static form of OpenClaw's lobster mark for compact provider surfaces. */
+export const OpenClawIcon: Icon = (props) => (
+  <svg {...props} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M60 10C30 10 15 35 15 55s15 40 30 45v10h10v-10c3 1 7 2 10 0v10h10v-10c15-5 30-25 30-45s-15-45-45-45Z"
+      fill="#E5484D"
+    />
+    <path d="M20 45C5 40 0 50 5 60c5 10 15 5 20-5 3-7 0-10-5-10Z" fill="#E5484D" />
+    <path d="M100 45c15-5 20 5 15 15s-15 5-20-5c-3-7 0-10 5-10Z" fill="#E5484D" />
+    <path
+      d="M45 15Q35 5 30 8M75 15Q85 5 90 8"
+      stroke="#E5484D"
+      strokeWidth="3"
+      strokeLinecap="round"
+    />
+    <circle cx="45" cy="35" r="6" fill="#050810" />
+    <circle cx="75" cy="35" r="6" fill="#050810" />
+    <circle cx="46" cy="34" r="2.5" fill="#00E5CC" />
+    <circle cx="76" cy="34" r="2.5" fill="#00E5CC" />
+  </svg>
+);
+
 export const GithubCopilotIcon: Icon = ({ className, ...props }) => (
   <svg
     {...props}

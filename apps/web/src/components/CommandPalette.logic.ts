@@ -2,9 +2,9 @@ import {
   type FilesystemBrowseEntry,
   type KeybindingCommand,
   THREAD_JUMP_KEYBINDING_COMMANDS,
-} from "@t3tools/contracts";
-import { filterFilesystemBrowseEntries } from "@t3tools/client-runtime/state/filesystem";
-import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
+} from "@croki/contracts";
+import { filterFilesystemBrowseEntries } from "@croki/client-runtime/state/filesystem";
+import type { SidebarThreadSortOrder } from "@croki/contracts/settings";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { type ReactNode } from "react";
@@ -75,11 +75,20 @@ export function reduceCommandPaletteUiState(
       return state.openIntent ? { ...state, openIntent: null } : state;
   }
 }
-
 export interface CommandPaletteThreadContentMatch {
   readonly source: "user" | "assistant";
   readonly snippet: string;
   readonly query: string;
+  readonly isWorker: boolean;
+}
+
+export function threadContentSpeaker(
+  match: Pick<CommandPaletteThreadContentMatch, "isWorker" | "source">,
+): "Agent" | "Assignment" | "Worker" | "You" {
+  if (match.isWorker) {
+    return match.source === "user" ? "Assignment" : "Worker";
+  }
+  return match.source === "user" ? "You" : "Agent";
 }
 
 export interface CommandPaletteItem {
@@ -122,6 +131,28 @@ export interface CommandPaletteView {
   readonly addonIcon: ReactNode;
   readonly groups: ReadonlyArray<CommandPaletteGroup>;
   readonly initialQuery?: string;
+}
+
+export function buildOpenCanvasAction(input: {
+  readonly icon: ReactNode;
+  readonly onOpenCanvas?: (() => void) | undefined;
+  readonly unavailableReason?: string | undefined;
+}): CommandPaletteActionItem {
+  const unavailableReason =
+    input.unavailableReason ?? "Open a project workspace to make Canvas available.";
+  return {
+    kind: "action",
+    value: "action:open-canvas",
+    searchTerms: ["open canvas", "canvas", "product context", "product canon"],
+    title: "Open Canvas",
+    description: input.onOpenCanvas ? "View product context" : unavailableReason,
+    icon: input.icon,
+    disabled: input.onOpenCanvas === undefined,
+    shortcutCommand: "canvas.open",
+    run: async () => {
+      input.onOpenCanvas?.();
+    },
+  };
 }
 
 export function enumerateCommandPaletteItems(
@@ -334,7 +365,13 @@ export function filterCommandPaletteGroups(input: {
   return searchableGroups.flatMap((group) => {
     const items = Arr.filterMap(group.items, (item, index) => {
       const haystack = normalizeSearchText(item.searchTerms.join(" "));
-      if (!haystack.includes(normalizedQuery)) {
+      // Content matches have already been accepted by the server's richer
+      // Unicode-aware search. Preserve that authoritative result instead of
+      // requiring this lightweight client fold to reproduce it.
+      const hasAuthoritativeContentMatch =
+        item.threadContentMatch !== undefined &&
+        normalizeSearchText(item.threadContentMatch.query) === normalizedQuery;
+      if (!hasAuthoritativeContentMatch && !haystack.includes(normalizedQuery)) {
         return Result.failVoid;
       }
 

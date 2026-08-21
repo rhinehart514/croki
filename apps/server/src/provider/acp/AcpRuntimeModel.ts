@@ -4,11 +4,30 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import type * as EffectAcpSchema from "effect-acp/schema";
-import { deriveToolActivityPresentation } from "@t3tools/shared/toolActivity";
-import type { ToolLifecycleItemType } from "@t3tools/contracts";
+import { deriveToolActivityPresentation } from "@croki/shared/toolActivity";
+import type { ToolLifecycleItemType } from "@croki/contracts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// Image bytes are needed for materialization, but retaining them in raw event
+// logs would duplicate a potentially multi-megabyte payload. Keep only the
+// ACP envelope and redact the data field before it reaches adapter logging.
+function redactImageDataFromRawPayload(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.update) || !isRecord(value.update.content)) {
+    return value;
+  }
+  return {
+    ...value,
+    update: {
+      ...value.update,
+      content: {
+        ...value.update.content,
+        data: "[redacted]",
+      },
+    },
+  };
 }
 
 function isSessionModelState(value: unknown): value is EffectAcpSchema.SessionModelState {
@@ -107,6 +126,14 @@ export type AcpParsedSessionEvent =
       readonly _tag: "ContentDelta";
       readonly itemId?: string;
       readonly text: string;
+      readonly rawPayload: unknown;
+    }
+  | {
+      readonly _tag: "ContentImage";
+      readonly itemId?: string;
+      readonly data: string;
+      readonly mimeType: string;
+      readonly uri?: string | null;
       readonly rawPayload: unknown;
     };
 
@@ -570,6 +597,14 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
           _tag: "ContentDelta",
           text: upd.content.text,
           rawPayload: params,
+        });
+      } else if (upd.content.type === "image") {
+        events.push({
+          _tag: "ContentImage",
+          data: upd.content.data,
+          mimeType: upd.content.mimeType,
+          ...(upd.content.uri !== undefined ? { uri: upd.content.uri } : {}),
+          rawPayload: redactImageDataFromRawPayload(params),
         });
       }
       break;

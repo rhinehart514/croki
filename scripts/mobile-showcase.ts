@@ -33,14 +33,14 @@ import {
 
 const REPO_ROOT = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
 const MOBILE_ROOT = NodePath.join(REPO_ROOT, "apps/mobile");
-const ANDROID_PACKAGE = "com.t3tools.t3code";
-const APP_SCHEME = "t3code";
+const ANDROID_PACKAGE = "com.croki.croki.dev";
+const APP_SCHEME = "croki-dev";
 const IOS_READY_FILENAME = "T3ShowcaseReadyScene";
 const SERVER_HOST = "0.0.0.0";
 const IOS_SIMULATOR_ARCH = NodeProcess.arch === "arm64" ? "arm64" : "x86_64";
 const IOS_APP_PATH = NodePath.join(
   MOBILE_ROOT,
-  ".showcase/ios-derived-data/Build/Products/Debug-iphonesimulator/T3Code.app",
+  ".showcase/ios-derived-data/Build/Products/Debug-iphonesimulator/CrokiDev.app",
 );
 const ANDROID_APK_PATH = NodePath.join(
   MOBILE_ROOT,
@@ -414,7 +414,7 @@ function printUsage(config: ShowcaseConfig): void {
   NodeProcess.stdout.write(`App screenshot showcase
 
 Usage:
-  pnpm --filter @t3tools/mobile screenshots [options]
+  pnpm --filter @croki/mobile screenshots [options]
 
 Options:
   --platform ios|android|all  Capture one platform (repeatable)
@@ -715,9 +715,9 @@ async function buildIos(): Promise<string> {
     "xcodebuild",
     [
       "-workspace",
-      NodePath.join(MOBILE_ROOT, "ios/T3Code.xcworkspace"),
+      NodePath.join(MOBILE_ROOT, "ios/CrokiDev.xcworkspace"),
       "-scheme",
-      "T3Code",
+      "CrokiDev",
       "-configuration",
       "Debug",
       "-sdk",

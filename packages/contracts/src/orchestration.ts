@@ -22,12 +22,14 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
+import { CrokiProjectPerceptionSnapshot } from "./perception.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
   getWorkflowScript: "orchestration.getWorkflowScript",
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
+  getProjectPerception: "orchestration.getProjectPerception",
   searchThreads: "orchestration.searchThreads",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   subscribeShell: "orchestration.subscribeShell",
@@ -47,6 +49,10 @@ export const ProviderSandboxMode = Schema.Literals([
   "danger-full-access",
 ]);
 export type ProviderSandboxMode = typeof ProviderSandboxMode.Type;
+
+/** Legacy behavior ids retained only to decode historical events and reject old clients clearly. */
+export const CrokiHarnessId = Schema.Literals(["native", "venture-v1", "product-v1", "gtm-v1"]);
+export type CrokiHarnessId = typeof CrokiHarnessId.Type;
 
 /**
  * `ModelSelection` — selection of a model on a configured provider instance.
@@ -195,6 +201,28 @@ export type ChatAttachment = typeof ChatAttachment.Type;
 const UploadChatAttachment = Schema.Union([UploadChatImageAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
+/** Preserve attachment order while preventing duplicate IDs during streaming. */
+export function mergeChatAttachments(
+  current: ReadonlyArray<ChatAttachment> | undefined,
+  incoming: ReadonlyArray<ChatAttachment> | undefined,
+): ReadonlyArray<ChatAttachment> | undefined {
+  if (incoming === undefined) {
+    return current;
+  }
+  if (incoming.length === 0) {
+    return current ?? [];
+  }
+  const merged = [...(current ?? [])];
+  const seen = new Set(merged.map((attachment) => attachment.id));
+  for (const attachment of incoming) {
+    if (!seen.has(attachment.id)) {
+      seen.add(attachment.id);
+      merged.push(attachment);
+    }
+  }
+  return merged;
+}
+
 export const ProjectScriptIcon = Schema.Literals([
   "play",
   "test",
@@ -238,7 +266,7 @@ export const OrchestrationProject = Schema.Struct({
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
   // Per-project override for where new threads start. Null/absent means
-  // "no override": clients fall back to t3.json, then the global setting.
+  // "no override": clients fall back to croki.json, then the global setting.
   defaultThreadEnvMode: Schema.optional(Schema.NullOr(ThreadEnvMode)),
   // Optional on the wire so cached snapshots from older servers still decode.
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
@@ -375,9 +403,21 @@ export const ThreadTitleRegeneration = Schema.Struct({
 });
 export type ThreadTitleRegeneration = typeof ThreadTitleRegeneration.Type;
 
+export const WorkerView = Schema.Literals(["threads", "activity"]);
+export type WorkerView = typeof WorkerView.Type;
+export const DEFAULT_WORKER_VIEW: WorkerView = "threads";
+
+export const ThreadBackgroundLiveness = Schema.Literals(["working", "monitoring"]);
+export type ThreadBackgroundLiveness = typeof ThreadBackgroundLiveness.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
+  // Optional while historical snapshots without lineage remain readable.
+  forkedFromThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  // Native provider workers are durable read-only child conversations.
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  workerView: Schema.optional(WorkerView),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -430,6 +470,9 @@ export const OrchestrationReadModel = Schema.Struct({
 });
 export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
 
+export const EDIT_FROM_HERE_PREPARATION_FAILED_PREFIX =
+  "Edit from here could not prepare the selected conversation boundary.";
+
 export const OrchestrationProjectShell = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
@@ -448,6 +491,10 @@ export type OrchestrationProjectShell = typeof OrchestrationProjectShell.Type;
 export const OrchestrationThreadShell = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
+  // Optional while historical shell snapshots without lineage remain readable.
+  forkedFromThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  workerView: Schema.optional(WorkerView),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -677,6 +724,18 @@ const ThreadCreateCommand = Schema.Struct({
   ),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  createdAt: IsoDateTime,
+});
+
+const ThreadForkCommand = Schema.Struct({
+  type: Schema.Literal("thread.fork"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  sourceThreadId: ThreadId,
+  // When present, fork immediately before this completed user message. The
+  // selected prompt belongs in the target composer, not its transcript.
+  sourceMessageId: Schema.optional(MessageId),
   createdAt: IsoDateTime,
 });
 
@@ -772,6 +831,7 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   expectedBranch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  workerView: Schema.optional(WorkerView),
 }).check(
   Schema.makeFilter(
     (input) =>
@@ -838,6 +898,11 @@ export const ThreadTurnStartCommand = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  canvasEnabled: Schema.optional(Schema.Boolean),
+  /** @deprecated Rejected by current servers. Retained only for version-skew diagnostics. */
+  parallelThreadsEnabled: Schema.optional(Schema.Boolean),
+  /** @deprecated Rejected by current servers. Retained only for version-skew diagnostics. */
+  harnessId: Schema.optional(CrokiHarnessId),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
   createdAt: IsoDateTime,
@@ -857,8 +922,41 @@ const ClientThreadTurnStartCommand = Schema.Struct({
   titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
+  canvasEnabled: Schema.optional(Schema.Boolean),
+  /** @deprecated Rejected by current servers. Retained only for version-skew diagnostics. */
+  parallelThreadsEnabled: Schema.optional(Schema.Boolean),
+  /** @deprecated Rejected by current servers. Retained only for version-skew diagnostics. */
+  harnessId: Schema.optional(CrokiHarnessId),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  createdAt: IsoDateTime,
+});
+
+export const ThreadTurnSteerCommand = Schema.Struct({
+  type: Schema.Literal("thread.turn.steer"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  expectedTurnId: TurnId,
+  message: Schema.Struct({
+    messageId: MessageId,
+    role: Schema.Literal("user"),
+    text: Schema.String,
+    attachments: Schema.Array(ChatAttachment),
+  }),
+  createdAt: IsoDateTime,
+});
+
+const ClientThreadTurnSteerCommand = Schema.Struct({
+  type: Schema.Literal("thread.turn.steer"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  expectedTurnId: TurnId,
+  message: Schema.Struct({
+    messageId: MessageId,
+    role: Schema.Literal("user"),
+    text: Schema.String,
+    attachments: Schema.Array(UploadChatAttachment),
+  }),
   createdAt: IsoDateTime,
 });
 
@@ -914,6 +1012,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
+  ThreadForkCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
   ThreadUnarchiveCommand,
@@ -928,6 +1027,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
+  ThreadTurnSteerCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
   ThreadUserInputRespondCommand,
@@ -942,6 +1042,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
+  ThreadForkCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
   ThreadUnarchiveCommand,
@@ -956,6 +1057,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
+  ClientThreadTurnSteerCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
   ThreadUserInputRespondCommand,
@@ -978,7 +1080,17 @@ const ThreadMessageAssistantDeltaCommand = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   delta: Schema.String,
+  attachments: Schema.optional(Schema.Array(ChatAttachment)),
   turnId: Schema.optional(TurnId),
+  createdAt: IsoDateTime,
+});
+
+const ThreadMessageUserAppendCommand = Schema.Struct({
+  type: Schema.Literal("thread.message.user.append"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  text: TrimmedNonEmptyString,
   createdAt: IsoDateTime,
 });
 
@@ -1039,6 +1151,7 @@ const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
 
 const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
+  ThreadMessageUserAppendCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
   ThreadProposedPlanUpsertCommand,
@@ -1060,6 +1173,7 @@ export const OrchestrationEventType = Schema.Literals([
   "project.meta-updated",
   "project.deleted",
   "thread.created",
+  "thread.fork-requested",
   "thread.deleted",
   "thread.archived",
   "thread.unarchived",
@@ -1075,6 +1189,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.interaction-mode-set",
   "thread.message-sent",
   "thread.turn-start-requested",
+  "thread.turn-steer-requested",
   "thread.turn-interrupt-requested",
   "thread.approval-response-requested",
   "thread.user-input-response-requested",
@@ -1133,8 +1248,23 @@ export const ThreadCreatedPayload = Schema.Struct({
   ),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
+});
+
+export const ThreadForkRequestedPayload = Schema.Struct({
+  threadId: ThreadId,
+  sourceThreadId: ThreadId,
+  forkPoint: Schema.optional(
+    Schema.Struct({
+      messageId: MessageId,
+      turnId: TurnId,
+      createdAt: IsoDateTime,
+      rollbackTurns: NonNegativeInt,
+    }),
+  ),
+  createdAt: IsoDateTime,
 });
 
 export const ThreadDeletedPayload = Schema.Struct({
@@ -1215,6 +1345,7 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   modelSelection: Schema.optional(ModelSelection),
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  workerView: Schema.optional(WorkerView),
   updatedAt: IsoDateTime,
 });
 
@@ -1253,7 +1384,19 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  canvasEnabled: Schema.optional(Schema.Boolean),
+  /** Historical event metadata. New events never write this field. */
+  parallelThreadsEnabled: Schema.optional(Schema.Boolean),
+  /** Historical event metadata. New events never write this field. */
+  harnessId: Schema.optional(CrokiHarnessId),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  createdAt: IsoDateTime,
+});
+
+export const ThreadTurnSteerRequestedPayload = Schema.Struct({
+  threadId: ThreadId,
+  messageId: MessageId,
+  expectedTurnId: TurnId,
   createdAt: IsoDateTime,
 });
 
@@ -1363,6 +1506,11 @@ export const OrchestrationEvent = Schema.Union([
   }),
   Schema.Struct({
     ...EventBaseFields,
+    type: Schema.Literal("thread.fork-requested"),
+    payload: ThreadForkRequestedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
     type: Schema.Literal("thread.deleted"),
     payload: ThreadDeletedPayload,
   }),
@@ -1435,6 +1583,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.turn-start-requested"),
     payload: ThreadTurnStartRequestedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.turn-steer-requested"),
+    payload: ThreadTurnSteerRequestedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
@@ -1590,6 +1743,14 @@ export type OrchestrationGetFullThreadDiffInput = typeof OrchestrationGetFullThr
 export const OrchestrationGetFullThreadDiffResult = ThreadTurnDiff;
 export type OrchestrationGetFullThreadDiffResult = typeof OrchestrationGetFullThreadDiffResult.Type;
 
+export const OrchestrationGetProjectPerceptionInput = Schema.Struct({
+  projectId: ProjectId,
+  sinceRevision: Schema.optionalKey(NonNegativeInt),
+  limit: Schema.optionalKey(PositiveInt.check(Schema.isLessThanOrEqualTo(200))),
+});
+export type OrchestrationGetProjectPerceptionInput =
+  typeof OrchestrationGetProjectPerceptionInput.Type;
+
 export const OrchestrationThreadSearchSource = Schema.Literals(["user", "assistant"]);
 export type OrchestrationThreadSearchSource = typeof OrchestrationThreadSearchSource.Type;
 
@@ -1604,6 +1765,7 @@ export type OrchestrationSearchThreadsInput = typeof OrchestrationSearchThreadsI
 export const OrchestrationThreadSearchMatch = Schema.Struct({
   threadId: ThreadId,
   projectId: ProjectId,
+  parentThreadId: Schema.NullOr(ThreadId),
   source: OrchestrationThreadSearchSource,
   snippet: Schema.String.check(Schema.isMaxLength(240)),
   messageCreatedAt: Schema.NullOr(IsoDateTime),
@@ -1679,6 +1841,10 @@ export const OrchestrationRpcSchemas = {
   getFullThreadDiff: {
     input: OrchestrationGetFullThreadDiffInput,
     output: OrchestrationGetFullThreadDiffResult,
+  },
+  getProjectPerception: {
+    input: OrchestrationGetProjectPerceptionInput,
+    output: Schema.NullOr(CrokiProjectPerceptionSnapshot),
   },
   searchThreads: {
     input: OrchestrationSearchThreadsInput,

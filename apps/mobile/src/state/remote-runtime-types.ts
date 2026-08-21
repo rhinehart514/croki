@@ -1,5 +1,5 @@
-import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import { EnvironmentId, ThreadId, type ServerConfig } from "@t3tools/contracts";
+import { type EnvironmentConnectionPhase } from "@croki/client-runtime/connection";
+import { EnvironmentId, ThreadId, type ServerConfig } from "@croki/contracts";
 
 export interface EnvironmentRuntimeState {
   readonly connectionState: EnvironmentConnectionPhase;

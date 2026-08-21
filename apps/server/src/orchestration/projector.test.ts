@@ -5,7 +5,7 @@ import {
   ProviderDriverKind,
   ThreadId,
   type OrchestrationEvent,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -76,6 +76,8 @@ describe("orchestration projector", () => {
       {
         id: "thread-1",
         projectId: "project-1",
+        parentThreadId: null,
+        workerView: "threads",
         title: "demo",
         modelSelection: {
           instanceId: "codex",

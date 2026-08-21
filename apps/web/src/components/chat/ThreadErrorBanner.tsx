@@ -42,7 +42,11 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
 }) {
   if (!error) return null;
   return (
-    <div className="mx-auto w-fit max-w-[min(48rem,calc(100%-2rem))] pt-3">
+    <div
+      className="mx-auto w-fit max-w-[min(48rem,calc(100%-2rem))] pt-3 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-red-400/60"
+      data-thread-attention-target="failure"
+      tabIndex={-1}
+    >
       <Alert variant="error" controlAlignment="first-line">
         <CircleAlertIcon />
         <AlertDescription>

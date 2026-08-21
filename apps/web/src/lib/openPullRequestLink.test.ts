@@ -30,7 +30,7 @@ describe("changeRequestRepositoryUrl", () => {
 describe("openPullRequestLink", () => {
   it("opens the requested pull request URL", async () => {
     const openExternal = vi.fn(async () => undefined);
-    const targetUrl = "https://github.com/pingdotgg/t3code/pull/123";
+    const targetUrl = "https://github.com/rhinehart514/croki/pull/123";
 
     await openPullRequestLink({ openExternal }, targetUrl);
 
@@ -39,7 +39,7 @@ describe("openPullRequestLink", () => {
 
   it("reports bridge failures with a safe target origin", async () => {
     const cause = new Error("desktop shell unavailable");
-    const targetUrl = "https://github.com/pingdotgg/t3code/pull/123?token=secret";
+    const targetUrl = "https://github.com/rhinehart514/croki/pull/123?token=secret";
     const openExternal = vi.fn(async () => Promise.reject(cause));
 
     const result = openPullRequestLink({ openExternal }, targetUrl);

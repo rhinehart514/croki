@@ -1,17 +1,21 @@
-# Running T3 Code in the Background
+# Running Croki in the Background
 
 On Linux and macOS, T3 Code can run as a background service for your user, so it is ready without
 keeping a terminal open.
 
-## Manage the Service
+Do not install or update Croki with inherited `npx t3@...` commands. They target
+T3 Code's package and release destinations, not Croki.
 
-Install it with the latest T3 Code release:
+When Croki-owned packaging is enabled, the service will:
 
-```sh
-npx t3@latest service install
-```
+- run for the current Linux user and survive logout;
+- keep the launcher stable while exact server versions are staged separately;
+- snapshot the database before a candidate with migrations starts;
+- return to the previous server and database when the candidate cannot prepare;
+- expose install, status, update, and uninstall through the Croki-owned CLI.
 
-Check whether it is installed:
+Updating restarts Croki briefly. Active agent work and terminal commands must
+finish before a service update begins.
 
 ```sh
 npx t3@latest service status

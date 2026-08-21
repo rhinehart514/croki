@@ -8,6 +8,7 @@ import {
   ProjectSearchEntriesError,
   ProjectSearchEntriesInput,
   ProjectWriteFileError,
+  ProjectWriteFileInput,
 } from "./project.ts";
 
 const decodeSearchEntriesInput = Schema.decodeUnknownSync(ProjectSearchEntriesInput);
@@ -105,5 +106,32 @@ describe("project RPC errors", () => {
     expect(writeError.message).toBe("Legacy project write failure.");
     expect(writeError.relativePath).toBeUndefined();
     expect(writeError.failure).toBeUndefined();
+  });
+
+  it("decodes optional write preconditions while preserving legacy callers", () => {
+    const decode = Schema.decodeUnknownSync(ProjectWriteFileInput);
+    const legacy = decode({
+      cwd: "/workspace",
+      relativePath: "context.json",
+      contents: "{}\n",
+    });
+    const expectedAbsent = decode({
+      ...legacy,
+      expectedContentsSha256: null,
+    });
+    const expectedDigest = decode({
+      ...legacy,
+      expectedContentsSha256: "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+    });
+
+    expect(legacy.expectedContentsSha256).toBeUndefined();
+    expect(expectedAbsent.expectedContentsSha256).toBeNull();
+    expect(expectedDigest.expectedContentsSha256).toHaveLength(64);
+    expect(() =>
+      decode({
+        ...legacy,
+        expectedContentsSha256: "not-a-sha256",
+      }),
+    ).toThrow();
   });
 });

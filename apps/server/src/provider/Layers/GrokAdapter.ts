@@ -11,7 +11,7 @@ import {
   RuntimeRequestId,
   type ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -576,13 +576,13 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             childProcessSpawner,
             cwd,
             ...(resumeSessionId ? { resumeSessionId } : {}),
-            clientInfo: { name: "t3-code", version: "0.0.0" },
+            clientInfo: { name: "croki", version: "0.0.0" },
             ...(mcpSession
               ? {
                   mcpServers: [
                     {
                       type: "http" as const,
-                      name: "t3-code",
+                      name: "croki",
                       url: mcpSession.endpoint,
                       headers: [
                         {
@@ -1420,6 +1420,15 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
         });
       });
 
+    const forkThread: GrokAdapterShape["forkThread"] = (_sourceThreadId, _targetThreadId) =>
+      Effect.fail(
+        new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Grok ACP sessions do not support native conversation forks.",
+        }),
+      );
+
     const stopSession: GrokAdapterShape["stopSession"] = (threadId) =>
       withThreadLock(
         threadId,
@@ -1452,12 +1461,13 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
 
     return {
       provider: PROVIDER,
-      capabilities: { sessionModelSwitch: "in-session" },
+      capabilities: { sessionModelSwitch: "in-session", conversationFork: "unsupported" },
       startSession,
       sendTurn,
       interruptTurn,
       readThread,
       rollbackThread,
+      forkThread,
       respondToRequest,
       respondToUserInput,
       stopSession,

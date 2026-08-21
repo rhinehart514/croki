@@ -1,0 +1,482 @@
+import ImageIO
+import PhotosUI
+import SwiftUI
+import UniformTypeIdentifiers
+import UIKit
+
+struct FeatureAttachmentPreparationState: Equatable {
+    struct Operation: Hashable {
+        fileprivate let id: UUID
+    }
+
+    private var pendingItemsByOperation: [Operation: Int] = [:]
+
+    var isPreparing: Bool {
+        !pendingItemsByOperation.isEmpty
+    }
+
+    var pendingItemCount: Int {
+        pendingItemsByOperation.values.reduce(0, +)
+    }
+
+    var statusLabel: String {
+        pendingItemCount == 1 ? "Preparing image…" : "Preparing \(pendingItemCount) images…"
+    }
+
+    @discardableResult
+    mutating func begin(itemCount: Int, id: UUID = UUID()) -> Operation {
+        let operation = Operation(id: id)
+        pendingItemsByOperation[operation] = max(1, itemCount)
+        return operation
+    }
+
+    mutating func finish(_ operation: Operation) {
+        pendingItemsByOperation.removeValue(forKey: operation)
+    }
+}
+
+struct FeatureImageAttachmentPicker: View {
+    @Binding var attachments: [FeatureDraftAttachment]
+    @Binding var preparationState: FeatureAttachmentPreparationState
+    let maximumCount: Int
+    let isEnabled: Bool
+
+    @State private var isAttachmentSourcePresented = false
+    @State private var isCameraPresented = false
+    @State private var isFileImporterPresented = false
+    @State private var errorMessage: String?
+
+    init(
+        attachments: Binding<[FeatureDraftAttachment]>,
+        preparationState: Binding<FeatureAttachmentPreparationState>,
+        maximumCount: Int = 8,
+        isEnabled: Bool = true
+    ) {
+        _attachments = attachments
+        _preparationState = preparationState
+        self.maximumCount = maximumCount
+        self.isEnabled = isEnabled
+    }
+
+    var body: some View {
+        Button {
+            isAttachmentSourcePresented = true
+        } label: {
+            Image(systemName: preparationState.isPreparing ? "hourglass" : "paperclip")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(T3Colors.textSecondary)
+                .frame(width: T3Metrics.minimumTapTarget, height: T3Metrics.minimumTapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canAdd)
+        .opacity(canAdd ? 1 : 0.3)
+        .accessibilityLabel(attachmentAccessibilityLabel)
+        .accessibilityIdentifier("image-attachment-picker")
+        .accessibilityHint(attachmentAccessibilityHint)
+        .confirmationDialog("Add image", isPresented: $isAttachmentSourcePresented) {
+            Button("Photo Library") { presentPhotoLibrary() }
+            Button("Camera") { isCameraPresented = true }
+                .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+            Button("Files") { isFileImporterPresented = true }
+            Button("Cancel", role: .cancel) {}
+        }
+        .fullScreenCover(isPresented: $isCameraPresented) {
+            FeatureCameraPicker(
+                onCapture: loadCapturedImage,
+                onCancel: { isCameraPresented = false }
+            )
+            .ignoresSafeArea()
+        }
+        .fileImporter(
+            isPresented: $isFileImporterPresented,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: true,
+            onCompletion: loadFiles
+        )
+        .alert(
+            "Couldn’t add image",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private var remainingCount: Int {
+        max(0, maximumCount - attachments.count)
+    }
+
+    private var canAdd: Bool {
+        isEnabled && !preparationState.isPreparing && remainingCount > 0
+    }
+
+    private var attachmentAccessibilityLabel: String {
+        if preparationState.isPreparing { return preparationState.statusLabel }
+        if remainingCount == 0 { return "Attachment limit reached" }
+        return "Add attachment"
+    }
+
+    private var attachmentAccessibilityHint: String {
+        if !isEnabled { return "The selected model does not accept images" }
+        if remainingCount == 0 { return "Remove an attachment before adding another" }
+        return "Choose a photo, take a photo, or browse image files"
+    }
+
+    private func presentPhotoLibrary() {
+        // A confirmation dialog remains the active presenter during its action. Dispatch
+        // independently of the dialog's view task so dismissal cannot cancel presentation.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            FeaturePhotoLibraryPresenter.present(maximumCount: max(1, remainingCount)) { image in
+                loadPhotoSelection(image)
+            }
+        }
+    }
+
+    private func loadPhotoSelection(_ image: Data) {
+        guard remainingCount > 0 else { return }
+        let ordinal = attachments.count + preparationState.pendingItemCount + 1
+        let operation = preparationState.begin(itemCount: 1)
+
+        Task {
+            defer { preparationState.finish(operation) }
+            do {
+                try await appendImage(image, ordinal: ordinal)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func loadCapturedImage(_ image: UIImage) {
+        isCameraPresented = false
+        guard canAdd else { return }
+        let operation = preparationState.begin(itemCount: 1)
+
+        Task {
+            defer { preparationState.finish(operation) }
+            do {
+                let data = try await Task.detached(priority: .userInitiated) {
+                    guard let data = image.jpegData(compressionQuality: 0.94) else {
+                        throw FeatureImageAttachmentError.encodingFailed
+                    }
+                    return data
+                }.value
+                try await appendImage(data)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func loadFiles(_ result: Result<[URL], Error>) {
+        switch result {
+        case .failure(let error):
+            errorMessage = error.localizedDescription
+        case .success(let urls):
+            guard !urls.isEmpty, canAdd else { return }
+            let operation = preparationState.begin(itemCount: min(urls.count, remainingCount))
+
+            Task {
+                defer { preparationState.finish(operation) }
+                for url in urls.prefix(remainingCount) {
+                    do {
+                        let data = try await Task.detached(priority: .userInitiated) {
+                            let hasAccess = url.startAccessingSecurityScopedResource()
+                            defer {
+                                if hasAccess { url.stopAccessingSecurityScopedResource() }
+                            }
+                            return try Data(contentsOf: url, options: .mappedIfSafe)
+                        }.value
+                        try await appendImage(data)
+                    } catch {
+                        errorMessage = error.localizedDescription
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    private func appendImage(_ data: Data, ordinal: Int? = nil) async throws {
+        let ordinal = ordinal ?? attachments.count + 1
+        let attachment = try await Task.detached(priority: .userInitiated) {
+            try FeatureImageProcessor.attachment(from: data, ordinal: ordinal)
+        }.value
+        attachments.append(attachment)
+    }
+}
+
+@MainActor
+private enum FeaturePhotoLibraryPresenter {
+    private static var delegates: [ObjectIdentifier: Delegate] = [:]
+
+    static func present(maximumCount: Int, onSelect: @escaping (Data) -> Void) {
+        var configuration = PHPickerConfiguration(photoLibrary: .shared())
+        configuration.filter = .images
+        configuration.selectionLimit = maximumCount
+        configuration.preferredAssetRepresentationMode = .current
+
+        let picker = PHPickerViewController(configuration: configuration)
+        let delegate = Delegate(onSelect: onSelect)
+        picker.delegate = delegate
+        delegates[ObjectIdentifier(picker)] = delegate
+
+        guard let presenter = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .rootViewController?
+            .topPresentedViewController
+        else {
+            delegates.removeValue(forKey: ObjectIdentifier(picker))
+            return
+        }
+        presenter.present(picker, animated: true)
+    }
+
+    private static func finish(_ picker: PHPickerViewController) {
+        delegates.removeValue(forKey: ObjectIdentifier(picker))
+    }
+
+    final class Delegate: NSObject, PHPickerViewControllerDelegate {
+        private struct Provider: @unchecked Sendable {
+            let value: NSItemProvider
+        }
+
+        private let onSelect: (Data) -> Void
+
+        init(onSelect: @escaping (Data) -> Void) {
+            self.onSelect = onSelect
+        }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            guard !results.isEmpty else { return FeaturePhotoLibraryPresenter.finish(picker) }
+
+            let providers = results.map { Provider(value: $0.itemProvider) }
+            Task { @MainActor in
+                await withTaskGroup(of: Data?.self) { group in
+                    for provider in providers {
+                        group.addTask {
+                            try? await provider.value.imageData()
+                        }
+                    }
+                    for await data in group {
+                        guard let data else { continue }
+                        onSelect(data)
+                    }
+                }
+                FeaturePhotoLibraryPresenter.finish(picker)
+            }
+        }
+    }
+}
+
+private extension UIViewController {
+    var topPresentedViewController: UIViewController {
+        presentedViewController?.topPresentedViewController ?? self
+    }
+}
+
+private extension NSItemProvider {
+    func imageData() async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, error in
+                if let data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(throwing: error ?? FeatureImageAttachmentError.encodingFailed)
+                }
+            }
+        }
+    }
+}
+
+struct FeatureAttachmentStrip: View {
+    @Binding var attachments: [FeatureDraftAttachment]
+
+    var body: some View {
+        if !attachments.isEmpty {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(attachments) { attachment in
+                        FeatureAttachmentThumbnail(attachment: attachment) {
+                            attachments.removeAll { $0.id == attachment.id }
+                        }
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
+            .scrollIndicators(.hidden)
+            .accessibilityLabel("\(attachments.count) image attachments")
+        }
+    }
+}
+
+private struct FeatureAttachmentThumbnail: View {
+    let attachment: FeatureDraftAttachment
+    let onRemove: () -> Void
+    @State private var image: UIImage?
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: "photo")
+                        .foregroundStyle(T3Colors.textSecondary)
+                }
+            }
+            .frame(width: 58, height: 58)
+            .background(T3Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, height: 22)
+                    .background(.black.opacity(0.78), in: Circle())
+                    .frame(
+                        width: T3Metrics.minimumTapTarget,
+                        height: T3Metrics.minimumTapTarget
+                    )
+                    .contentShape(Rectangle())
+            }
+            .offset(x: 11, y: -11)
+            .accessibilityLabel("Remove \(attachment.filename)")
+        }
+        .padding(.top, 11)
+        .padding(.trailing, 11)
+        .task(id: attachment.id) {
+            let data = attachment.thumbnailData ?? attachment.data
+            image = await Task.detached(priority: .utility) {
+                UIImage(data: data)
+            }.value
+        }
+    }
+}
+
+private struct FeatureCameraPicker: UIViewControllerRepresentable {
+    let onCapture: (UIImage) -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCapture: onCapture, onCancel: onCancel)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let controller = UIImagePickerController()
+        controller.sourceType = .camera
+        controller.cameraCaptureMode = .photo
+        controller.delegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        private let onCapture: (UIImage) -> Void
+        private let onCancel: () -> Void
+
+        init(onCapture: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
+            self.onCapture = onCapture
+            self.onCancel = onCancel
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            guard let image = info[.originalImage] as? UIImage else {
+                onCancel()
+                return
+            }
+            onCapture(image)
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onCancel()
+        }
+    }
+}
+
+enum FeatureImageProcessor {
+    private static let maximumDimension: CGFloat = 2_048
+    private static let maximumEncodedBytes = 10 * 1_024 * 1_024
+
+    static func attachment(
+        from sourceData: Data,
+        ordinal: Int
+    ) throws -> FeatureDraftAttachment {
+        guard let source = CGImageSourceCreateWithData(sourceData as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(
+                  source,
+                  0,
+                  [
+                      kCGImageSourceCreateThumbnailFromImageAlways: true,
+                      kCGImageSourceCreateThumbnailWithTransform: true,
+                      kCGImageSourceThumbnailMaxPixelSize: maximumDimension,
+                      kCGImageSourceShouldCacheImmediately: true,
+                  ] as CFDictionary
+              ) else {
+            throw FeatureImageAttachmentError.invalidImage
+        }
+
+        let preparedImage = UIImage(cgImage: image)
+        guard let data = preparedImage.jpegData(compressionQuality: 0.82),
+              let thumbnailData = thumbnail(from: preparedImage) else {
+            throw FeatureImageAttachmentError.encodingFailed
+        }
+        guard data.count <= maximumEncodedBytes else {
+            throw FeatureImageAttachmentError.tooLarge
+        }
+
+        return FeatureDraftAttachment(
+            data: data,
+            thumbnailData: thumbnailData,
+            filename: "Image \(ordinal).jpg",
+            mimeType: "image/jpeg"
+        )
+    }
+
+    private static func thumbnail(from image: UIImage) -> Data? {
+        let longestSide = max(image.size.width, image.size.height)
+        let scale = min(1, 160 / longestSide)
+        let size = CGSize(
+            width: max(1, image.size.width * scale),
+            height: max(1, image.size.height * scale)
+        )
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }.jpegData(compressionQuality: 0.72)
+    }
+}
+
+enum FeatureImageAttachmentError: LocalizedError {
+    case invalidImage
+    case encodingFailed
+    case tooLarge
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidImage:
+            "That photo could not be read."
+        case .encodingFailed:
+            "That photo could not be prepared."
+        case .tooLarge:
+            "Images must be smaller than 10 MB."
+        }
+    }
+}

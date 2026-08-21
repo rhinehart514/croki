@@ -21,37 +21,37 @@ import {
   ProviderDriverKind,
   RuntimeMode,
   TerminalOpenInput,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   connectionStatusTitle,
   type EnvironmentConnectionPresentation,
-} from "@t3tools/client-runtime/connection";
-import { wasBootstrapThreadDeleted } from "@t3tools/client-runtime/errors";
+} from "@croki/client-runtime/connection";
+import { wasBootstrapThreadDeleted } from "@croki/client-runtime/errors";
 import {
   changeRequestAutoSettles,
   effectiveSettled,
   effectiveSnoozed,
   threadWokeAt,
-} from "@t3tools/client-runtime/state/thread-settled";
+} from "@croki/client-runtime/state/thread-settled";
 import {
   parseScopedThreadKey,
   scopedThreadKey,
   scopeProjectRef,
   scopeThreadRef,
-} from "@t3tools/client-runtime/environment";
+} from "@croki/client-runtime/environment";
 import {
   applyClaudePromptEffortPrefix,
   createModelSelection,
   resolvePromptInjectedEffort,
-} from "@t3tools/shared/model";
-import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
-import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
-import { truncate } from "@t3tools/shared/String";
+} from "@croki/shared/model";
+import { CHAT_LIST_ANCHOR_OFFSET } from "@croki/shared/chatList";
+import { projectScriptCwd, projectScriptRuntimeEnv } from "@croki/shared/projectScripts";
+import { truncate } from "@croki/shared/String";
 import {
   getTerminalLabel,
   nextTerminalId,
   resolveTerminalSessionLabel,
-} from "@t3tools/shared/terminalLabels";
+} from "@croki/shared/terminalLabels";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -74,7 +74,7 @@ import {
   settlePromise,
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@croki/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
@@ -125,7 +125,7 @@ import {
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
-import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
+import { buildTemporaryWorktreeBranchName } from "@croki/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import {
@@ -161,7 +161,7 @@ import { AgentsPanel } from "./AgentsPanel";
 import {
   deriveAgentPanelModel,
   foldSubagentActivities,
-} from "@t3tools/client-runtime/state/subagentRuntime";
+} from "@croki/client-runtime/state/subagentRuntime";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -243,10 +243,7 @@ import {
 } from "../state/server";
 import { terminalEnvironment } from "../state/terminal";
 import { threadEnvironment, useEnvironmentThread } from "../state/threads";
-import {
-  requestOlderThreadTurns,
-  threadHasOlderTurns,
-} from "@t3tools/client-runtime/state/threads";
+import { requestOlderThreadTurns, threadHasOlderTurns } from "@croki/client-runtime/state/threads";
 import { vcsEnvironment } from "../state/vcs";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import {
@@ -262,6 +259,8 @@ import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
+import type { RankedConceptChoice } from "./chat/conceptSetLogic";
+import { formatConceptSelection } from "../lib/conceptSelection";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
@@ -1377,6 +1376,11 @@ function ChatViewContent(props: ChatViewProps) {
   const [localDraftErrorsByDraftId, setLocalDraftErrorsByDraftId] = useState<
     Record<string, LocalThreadErrorEntry>
   >({});
+  const [conceptSelectionDraft, setConceptSelectionDraft] = useState<{
+    readonly id: string;
+    readonly text: string;
+  } | null>(null);
+  const conceptSelectionDraftSequenceRef = useRef(0);
   const [localServerErrorsByThreadKey, setLocalServerErrorsByThreadKey] = useState<
     Record<string, LocalThreadErrorEntry>
   >({});
@@ -2250,7 +2254,10 @@ function ChatViewContent(props: ChatViewProps) {
   const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
   const phase = derivePhase(activeThread?.session ?? null);
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
-  const workLogEntries = useMemo(() => deriveWorkLogEntries(threadActivities), [threadActivities]);
+  const workLogEntries = useMemo(
+    () => deriveWorkLogEntries(threadActivities, activeThread?.checkpoints ?? []),
+    [activeThread?.checkpoints, threadActivities],
+  );
   const turnPlans = useMemo(() => deriveTurnPlans(threadActivities), [threadActivities]);
   // Native subagent fold: memoized by activity-list identity, shared by the
   // Agents surface, live strip, and workflow cards. v2Projection is null
@@ -2845,6 +2852,20 @@ function ChatViewContent(props: ChatViewProps) {
   const focusComposer = useCallback(() => {
     composerRef.current?.focusAtEnd();
   }, [composerRef]);
+  const addConceptSelectionToDraft = useCallback(
+    (action: "continue" | "remix", concepts: ReadonlyArray<RankedConceptChoice>) => {
+      if (concepts.length === 0) return false;
+      const selection = formatConceptSelection({ action, concepts });
+      if (selection.length === 0) return false;
+      conceptSelectionDraftSequenceRef.current += 1;
+      setConceptSelectionDraft({
+        id: `${routeThreadKey}:${conceptSelectionDraftSequenceRef.current}`,
+        text: selection,
+      });
+      return true;
+    },
+    [routeThreadKey],
+  );
   const scheduleComposerFocus = useCallback(() => {
     window.requestAnimationFrame(() => {
       focusComposer();
@@ -6219,6 +6240,7 @@ function ChatViewContent(props: ChatViewProps) {
           tabId={activeRightPanelSurface.resourceId}
           configuredUrls={configuredPreviewUrls}
           visible
+          activities={threadActivities}
           onSendAnnotation={(annotation, image) => {
             void onSend(undefined, { annotation, image });
           }}
@@ -6256,7 +6278,7 @@ function ChatViewContent(props: ChatViewProps) {
     ) : activeRightPanelSurface?.kind === "pull-request" && !supportsPullRequests ? (
       <PullRequestsUnavailableState
         title="Pull requests unavailable"
-        error="Update this environment's T3 Code server to browse pull requests."
+        error="Update this environment's Croki server to browse pull requests."
       />
     ) : activeRightPanelSurface?.kind === "pull-request" ? (
       // No onClose: the surface tab's own X owns closing here, and a second X in the header
@@ -6443,6 +6465,10 @@ function ChatViewContent(props: ChatViewProps) {
                 onRevertUserMessage={onRevertUserMessage}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
+                onContinueWithConcept={(concepts) =>
+                  addConceptSelectionToDraft("continue", concepts)
+                }
+                onRemixConcepts={(concepts) => addConceptSelectionToDraft("remix", concepts)}
                 markdownCwd={gitCwd ?? undefined}
                 resolvedTheme={resolvedTheme}
                 timestampFormat={timestampFormat}
@@ -6588,6 +6614,7 @@ function ChatViewContent(props: ChatViewProps) {
                             composerImagesRef={composerImagesRef}
                             composerTerminalContextsRef={composerTerminalContextsRef}
                             composerElementContextsRef={composerElementContextsRef}
+                            conceptSelectionDraft={conceptSelectionDraft}
                             onSend={onSend}
                             onInterrupt={onInterrupt}
                             onImplementPlanInNewThread={onImplementPlanInNewThread}

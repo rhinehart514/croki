@@ -16,7 +16,8 @@ import {
   RuntimeMode,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+  WorkerView,
+} from "@croki/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
@@ -33,6 +34,9 @@ export const ProjectionThread = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
+  forkedFromThreadId: Schema.NullOr(ThreadId),
+  parentThreadId: Schema.NullOr(ThreadId),
+  workerView: WorkerView,
   latestTurnId: Schema.NullOr(TurnId),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -109,4 +113,4 @@ export interface ProjectionThreadRepositoryShape {
 export class ProjectionThreadRepository extends Context.Service<
   ProjectionThreadRepository,
   ProjectionThreadRepositoryShape
->()("t3/persistence/Services/ProjectionThreads/ProjectionThreadRepository") {}
+>()("croki-server/persistence/Services/ProjectionThreads/ProjectionThreadRepository") {}

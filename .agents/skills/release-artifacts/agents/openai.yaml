@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Artifacts"
+  short_description: "Turn shipped product work into truthful launch media"
+  default_prompt: "Use $release-artifacts to produce and review a code-native release artifact from the current Croki Thread and repository state."

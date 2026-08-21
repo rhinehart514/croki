@@ -2,7 +2,7 @@ import {
   DesktopBackendBootstrap,
   type DesktopBackendBootstrap as DesktopBackendBootstrapValue,
   DesktopTelemetryControlMessage,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -304,6 +304,77 @@ describe("DesktopBackendManager", () => {
         );
       }).pipe(Effect.provide(layer));
     }),
+  );
+
+  it.effect("keeps probing when a running backend becomes ready after the timeout", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const firstRequest = yield* Deferred.make<void>();
+        const readinessTimedOut = yield* Deferred.make<void>();
+        const backendReady = yield* Deferred.make<void>();
+        const allowExit = yield* Deferred.make<void>();
+        const statuses = [503, 200];
+        const requestUrls: Array<string> = [];
+        let timeoutCount = 0;
+        let readyCount = 0;
+
+        const spawnerLayer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() =>
+            Effect.succeed(
+              makeProcess({
+                exitCode: Deferred.await(allowExit).pipe(
+                  Effect.as(ChildProcessSpawner.ExitCode(0)),
+                ),
+              }),
+            ),
+          ),
+        );
+        const clientLayer = httpClientLayer((request) =>
+          Effect.gen(function* () {
+            const status = statuses.shift();
+            assert.isDefined(status);
+            requestUrls.push(request.url);
+            yield* Deferred.succeed(firstRequest, void 0);
+            return responseForRequest(request, status);
+          }),
+        );
+
+        yield* Effect.gen(function* () {
+          const run = yield* DesktopBackendManager.runBackendProcess({
+            ...baseConfig,
+            desktopTelemetryStream: Stream.empty,
+            readinessTimeout: Duration.millis(50),
+            onReadinessFailure: () =>
+              Effect.sync(() => {
+                timeoutCount += 1;
+              }).pipe(Effect.andThen(Deferred.succeed(readinessTimedOut, void 0)), Effect.asVoid),
+            onReady: () =>
+              Effect.sync(() => {
+                readyCount += 1;
+              }).pipe(Effect.andThen(Deferred.succeed(backendReady, void 0)), Effect.asVoid),
+          }).pipe(Effect.forkChild);
+
+          yield* Deferred.await(firstRequest);
+          yield* TestClock.adjust(Duration.millis(50));
+          yield* Deferred.await(readinessTimedOut);
+          yield* Deferred.await(backendReady);
+
+          assert.equal(timeoutCount, 1);
+          assert.equal(readyCount, 1);
+          assert.deepEqual(requestUrls, [
+            "http://127.0.0.1:3773/.well-known/t3/environment",
+            "http://127.0.0.1:3773/.well-known/t3/environment",
+          ]);
+
+          yield* Deferred.succeed(allowExit, void 0);
+          assert.deepEqual(yield* Fiber.join(run), {
+            code: Option.some(ChildProcessSpawner.ExitCode(0)),
+            reason: "code=0",
+          });
+        }).pipe(Effect.provide(Layer.mergeAll(spawnerLayer, clientLayer, TestClock.layer())));
+      }),
+    ),
   );
 
   it.effect("reports bootstrap encoding failures with stable process context", () =>

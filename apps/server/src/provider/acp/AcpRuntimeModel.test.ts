@@ -255,6 +255,42 @@ describe("AcpRuntimeModel", () => {
     }
   });
 
+  it("preserves ACP image blocks as typed events while redacting raw bytes", () => {
+    const parsed = parseSessionUpdateEvent({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: {
+          type: "image",
+          data: "aGVsbG8=",
+          mimeType: "image/png",
+          uri: "file:///tmp/output.png",
+        },
+      },
+    } satisfies EffectAcpSchema.SessionNotification);
+
+    expect(parsed.events).toEqual([
+      {
+        _tag: "ContentImage",
+        data: "aGVsbG8=",
+        mimeType: "image/png",
+        uri: "file:///tmp/output.png",
+        rawPayload: {
+          sessionId: "session-1",
+          update: {
+            sessionUpdate: "agent_message_chunk",
+            content: {
+              type: "image",
+              data: "[redacted]",
+              mimeType: "image/png",
+              uri: "file:///tmp/output.png",
+            },
+          },
+        },
+      },
+    ]);
+  });
+
   it("trims padded current mode updates before emitting a mode change", () => {
     const result = parseSessionUpdateEvent({
       sessionId: "session-1",

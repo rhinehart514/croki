@@ -1,9 +1,9 @@
 import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { type LegendListRef } from "@legendapp/list/react-native";
-import type { EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contracts";
-import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
-import { formatElapsed } from "@t3tools/shared/orchestrationTiming";
+import type { EnvironmentId, MessageId, ThreadId, TurnId } from "@croki/contracts";
+import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@croki/shared/chatList";
+import { formatElapsed } from "@croki/shared/orchestrationTiming";
 import { SymbolView } from "../../components/AppSymbol";
 import { HeaderHeightContext } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -16,6 +16,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactElement,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -82,8 +83,8 @@ import {
 import { MOBILE_TYPOGRAPHY } from "../../lib/typography";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { useAppearanceCodeSurface } from "../settings/appearance/useAppearanceCodeSurface";
-import { markdownFileIconSource } from "@t3tools/mobile-markdown-text/file-icons";
-import { resolveMarkdownLinkPresentation } from "@t3tools/mobile-markdown-text/links";
+import { markdownFileIconSource } from "@croki/mobile-markdown-text/file-icons";
+import { resolveMarkdownLinkPresentation } from "@croki/mobile-markdown-text/links";
 import {
   deriveThreadFeedPresentation,
   type ThreadFeedEntry,
@@ -160,6 +161,7 @@ export interface ThreadFeedProps {
   readonly onHeaderMaterialVisibilityChange?: (visible: boolean) => void;
   readonly onEndFollowEnabledChange?: (enabled: boolean) => void;
   readonly skills?: ReadonlyArray<SelectableMarkdownSkill>;
+  readonly footer?: ReactElement | null;
   /** Non-null when older turns exist beyond the loaded window. */
   readonly loadEarlier?: {
     readonly loading: boolean;
@@ -1977,6 +1979,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               paddingTop: 12,
               paddingHorizontal: contentHorizontalPadding,
             }}
+            ListFooterComponent={props.footer ?? null}
           />
         </View>
         {props.feed.length === 0 &&

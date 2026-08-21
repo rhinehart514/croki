@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import type { ResolvedKeybindingsConfig } from "@croki/contracts";
 
 import {
   buildKeybindingRows,
@@ -122,6 +122,7 @@ describe("KeybindingsSettings.logic", () => {
 
   it("formats static and project script command labels", () => {
     expect(commandLabel("commandPalette.toggle")).toBe("Command Palette: Toggle");
+    expect(commandLabel("canvas.open")).toBe("Canvas: Open");
     expect(commandLabel("themeEditor.toggle")).toBe("Theme Editor: Toggle");
     expect(commandLabel("script.setup-db.run")).toBe("Run Script: Setup Db");
   });

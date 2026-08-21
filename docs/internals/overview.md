@@ -1,11 +1,30 @@
 # Architecture
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using Croki? See [docs/user](../user/).
 
-T3 Code is a server runtime that owns agent sessions, workspaces, and version control, plus clients
+Croki is a server runtime that owns agent sessions, workspaces, and version control, plus clients
 (web, desktop, mobile) that talk to it over one authenticated Effect RPC WebSocket. The server is the
 execution boundary: every provider process, terminal, git operation, and filesystem read happens
 there, never in the client.
+
+## Native-provider boundary
+
+Croki is a harness host, not a harness. The default provider request contains
+the user's message, ordinary user-selected attachments, and provider-required
+protocol data. Codex session setup also preserves T3 Code's host-level contract
+for collaboration modes, actual tool availability, Preview routing, and
+runtime identity. `ProviderCommandReactor` must not prepend Croki task strategy,
+application briefs, sibling activity, progress summaries, or other hidden
+project context.
+
+The host contract is fixed infrastructure and must remain product-neutral.
+Anything task-specific that Croki applies must originate in an explicit user
+action, remain visible and removable before send, retain its source and scope
+on the resulting turn, and be reversible. Persistent configuration uses
+provider- or repository-native instructions, skills, plugins, and MCP settings.
+Provider runtime, instructions, context attachments, tool availability, and
+read-only senses are separate contracts. Historical Product, GTM, Venture,
+Parallel Threads, and Native behavior IDs are decode-only compatibility data.
 
 ```
 ┌────────────────────────────────────────────────┐
@@ -18,13 +37,13 @@ there, never in the client.
 ┌──────────────────▼─────────────────────────────┐
 │ apps/server                                    │
 │  orchestration engine (event-sourced)          │
-│  provider driver registry (5 built-in drivers) │
+│  provider driver registry (built-in drivers)   │
 │  checkpointing, VCS, terminals, filesystem     │
 └──────────────────┬─────────────────────────────┘
                    │ per-driver transport
 ┌──────────────────▼─────────────────────────────┐
 │ Agent CLIs: Codex, Claude, Cursor, Grok,       │
-│ OpenCode                                       │
+│ OpenCode, OpenClaw                             │
 └────────────────────────────────────────────────┘
 ```
 
@@ -106,8 +125,8 @@ build production behavior on receipts.
 
 ## Provider drivers
 
-Five drivers ship built in, registered in [`builtInDrivers.ts`][drivers] as `BUILT_IN_DRIVERS`:
-Codex, Claude, Cursor, Grok, and OpenCode. A driver declares its kind and config schema and creates a
+Built-in drivers are registered in [`builtInDrivers.ts`][drivers] as `BUILT_IN_DRIVERS`.
+A driver declares its kind and config schema and creates a
 scoped adapter; `ProviderInstanceRegistry` owns live instances and `ProviderAdapterRegistry` resolves
 an instance to its adapter, so `ProviderService` routes session and turn operations without knowing
 which agent is behind them. See [providers.md](./providers.md).

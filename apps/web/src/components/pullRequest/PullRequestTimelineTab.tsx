@@ -4,7 +4,7 @@ import type {
   PullRequestComment,
   PullRequestDetailView,
   PullRequestRef,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   ChevronDownIcon,
   ExternalLinkIcon,

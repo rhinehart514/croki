@@ -8,20 +8,20 @@ import type {
   ProviderOptionSelection,
   RuntimeMode,
   ServerProviderSkill,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   MessageId,
-  T3_PROJECT_FILE_NAME,
+  CROKI_PROJECT_FILE_NAME,
   ThreadId,
-} from "@t3tools/contracts";
-import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
+} from "@croki/contracts";
+import { parseCrokiProjectFile } from "@croki/shared/crokiProjectFile";
 import {
   isDefaultThreadEnvModeSettled,
   resolveDefaultThreadEnvMode,
-} from "@t3tools/shared/threadEnvMode";
+} from "@croki/shared/threadEnvMode";
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 
@@ -68,8 +68,8 @@ import {
   setPendingConnectionError,
   useSavedRemoteConnections,
 } from "../../state/use-remote-environment-registry";
-import { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { type VcsRef } from "@t3tools/client-runtime/state/vcs";
+import { EnvironmentProject } from "@croki/client-runtime/state/shell";
+import { type VcsRef } from "@croki/client-runtime/state/vcs";
 import {
   buildHomeProjectScopes,
   sortHomeProjectScopes,
@@ -362,32 +362,32 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const attachments = selectedProjectDraft.attachments;
   // Default mode until the user picks one explicitly — same resolution web
   // uses for new draft threads: per-project setting, then the repo's
-  // checked-in t3.json, then the server's configured default.
-  const t3ProjectFileQuery = useEnvironmentQuery(
+  // checked-in croki.json, then the server's configured default.
+  const crokiProjectFileQuery = useEnvironmentQuery(
     selectedProject !== null && selectedProject.workspaceRoot !== ""
       ? projectEnvironment.readFile({
           environmentId: selectedProject.environmentId,
-          input: { cwd: selectedProject.workspaceRoot, relativePath: T3_PROJECT_FILE_NAME },
+          input: { cwd: selectedProject.workspaceRoot, relativePath: CROKI_PROJECT_FILE_NAME },
         })
       : null,
   );
-  const t3ProjectFileData = t3ProjectFileQuery.data as ProjectReadFileResult | null;
-  const t3ProjectFileDefaultMode = useMemo(() => {
-    if (t3ProjectFileData === null || t3ProjectFileData.truncated) return null;
-    return parseT3ProjectFile(t3ProjectFileData.contents)?.defaultThreadEnvMode ?? null;
-  }, [t3ProjectFileData]);
+  const crokiProjectFileData = crokiProjectFileQuery.data as ProjectReadFileResult | null;
+  const crokiProjectFileDefaultMode = useMemo(() => {
+    if (crokiProjectFileData === null || crokiProjectFileData.truncated) return null;
+    return parseCrokiProjectFile(crokiProjectFileData.contents)?.defaultThreadEnvMode ?? null;
+  }, [crokiProjectFileData]);
   const defaultWorkspaceMode: WorkspaceMode = resolveDefaultThreadEnvMode({
     projectSetting: selectedProject?.defaultThreadEnvMode,
-    projectFile: t3ProjectFileDefaultMode,
+    projectFile: crokiProjectFileDefaultMode,
     globalDefault: selectedEnvironmentServerConfig?.settings.defaultThreadEnvMode ?? "local",
   });
   // While unsettled the resolved default is provisional. Nothing may write
   // it into the draft during that window (the auto-branch effect does), or
-  // the frozen interim value beats the t3.json default once it loads.
+  // the frozen interim value beats the croki.json default once it loads.
   const defaultWorkspaceModeSettled = isDefaultThreadEnvModeSettled({
     explicitMode: selectedProjectDraft.workspaceSelection?.mode,
     projectSetting: selectedProject?.defaultThreadEnvMode,
-    projectFilePending: t3ProjectFileQuery.isPending,
+    projectFilePending: crokiProjectFileQuery.isPending,
   });
   const workspaceMode = selectedProjectDraft.workspaceSelection?.mode ?? defaultWorkspaceMode;
   const selectedBranchName = selectedProjectDraft.workspaceSelection?.branch ?? null;

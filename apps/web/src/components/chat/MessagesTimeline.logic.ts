@@ -9,7 +9,15 @@ import {
   type WorkLogEntry,
 } from "../../session-logic";
 import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
-import { type MessageId, type OrchestrationLatestTurn, type TurnId } from "@t3tools/contracts";
+import {
+  type CrokiThoughtView,
+  type MessageId,
+  type OrchestrationLatestTurn,
+  type OrchestrationThreadActivity,
+  type TurnId,
+} from "@croki/contracts";
+import type { CanvasPresentationTimelineActivity } from "./canvasThreadIntegration";
+import { isCoordinationTaskActivity } from "./CoordinationWorkstreams.logic";
 
 export const MAX_VISIBLE_WORK_LOG_ENTRIES = 1;
 export const TIMELINE_MINIMAP_ITEM_SPACING = 8;
@@ -244,11 +252,33 @@ export type MessagesTimelineRow =
       id: string;
       createdAt: string | null;
       showThinking: boolean;
+    }
+  | {
+      kind: "canvas";
+      id: string;
+      createdAt: string;
+      presentation: CanvasPresentationTimelineActivity;
+    }
+  | {
+      kind: "thought-view";
+      id: string;
+      createdAt: string;
+      view: CrokiThoughtView;
+    }
+  | {
+      kind: "coordination";
+      id: string;
+      createdAt: string;
+      activities: ReadonlyArray<OrchestrationThreadActivity>;
     };
 
 export interface StableMessagesTimelineRowsState {
   byId: Map<string, MessagesTimelineRow>;
   result: MessagesTimelineRow[];
+}
+
+function isTaskWorkEntry(entry: WorkLogEntry): boolean {
+  return entry.sourceActivityKind?.startsWith("task.") === true;
 }
 
 export function computeMessageDurationStart(
@@ -595,6 +625,10 @@ function deriveTurnFolds(input: {
     }
     const hiddenEntryIds = new Set<string>();
     for (const entry of group.entries) {
+      const isPersistentEvidence =
+        entry.kind === "work" &&
+        (entry.entry.sourceActivityKind === "croki.canvas.presented" ||
+          entry.entry.uiCheck !== undefined);
       if (entry.id === group.terminalEntry?.id) {
         continue;
       }
@@ -602,6 +636,9 @@ function deriveTurnFolds(input: {
       // turn (dynamic spawns, background execution), and folding the CTA
       // when the turn settles makes a still-running fleet invisible.
       if (entry.kind === "work" && entry.entry.agentSpawn !== undefined) {
+        continue;
+      }
+      if (isPersistentEvidence) {
         continue;
       }
       hiddenEntryIds.add(entry.id);
@@ -654,6 +691,8 @@ function deriveTurnFolds(input: {
 
 export function deriveMessagesTimelineRows(input: {
   timelineEntries: ReadonlyArray<TimelineEntry>;
+  canvasPresentationsByActivityId?: ReadonlyMap<string, CanvasPresentationTimelineActivity>;
+  coordinationActivities?: ReadonlyArray<OrchestrationThreadActivity>;
   latestTurn?: TimelineLatestTurn | null;
   runningTurnId?: TurnId | null;
   expandedTurnIds?: ReadonlySet<TurnId>;
@@ -662,18 +701,26 @@ export function deriveMessagesTimelineRows(input: {
   activeTurnStartedAt: string | null;
   turnDiffSummaryByAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>;
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
+  thoughtView?: CrokiThoughtView | null | undefined;
+  thoughtViewAnchorMessageId?: MessageId | null | undefined;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
-  const durationStartByMessageId = computeMessageDurationStart(
-    input.timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
+  // Native task lifecycle has exactly one product home: Workstreams when
+  // supplied by the parent view. Filtering before turn folding prevents
+  // hidden worker rows from leaving behind a duplicate "Worked" fold.
+  const timelineEntries = input.timelineEntries.filter(
+    (entry) => entry.kind !== "work" || !isTaskWorkEntry(entry.entry),
   );
-  const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(input.timelineEntries);
+  const durationStartByMessageId = computeMessageDurationStart(
+    timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
+  );
+  const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(timelineEntries);
   const unsettledTurnId = deriveUnsettledTurnId(
     input.latestTurn ?? null,
     input.runningTurnId ?? null,
   );
   const foldsByAnchorEntryId = deriveTurnFolds({
-    timelineEntries: input.timelineEntries,
+    timelineEntries,
     terminalAssistantMessageIds,
     latestTurn: input.latestTurn ?? null,
     unsettledTurnId,
@@ -687,13 +734,25 @@ export function deriveMessagesTimelineRows(input: {
     }
   }
 
-  let activeTurnHeaderIndex = input.timelineEntries.length;
+  const coordinationGroups = new Map<
+    string,
+    { turnId: TurnId | null; activities: OrchestrationThreadActivity[] }
+  >();
+  for (const activity of input.coordinationActivities ?? []) {
+    if (!isCoordinationTaskActivity(activity)) continue;
+    const scope = activity.turnId === null ? "thread" : String(activity.turnId);
+    const group = coordinationGroups.get(scope) ?? { turnId: activity.turnId, activities: [] };
+    group.activities.push(activity);
+    coordinationGroups.set(scope, group);
+  }
+
+  let activeTurnHeaderIndex = timelineEntries.length;
   if (input.isWorking) {
-    const latestUserMessageIndex = lastUserMessageIndex(input.timelineEntries);
+    const latestUserMessageIndex = lastUserMessageIndex(timelineEntries);
     const firstOwnedAfterUser =
       unsettledTurnId === null
         ? -1
-        : input.timelineEntries.findIndex(
+        : timelineEntries.findIndex(
             (entry, index) =>
               index > latestUserMessageIndex && timelineEntryTurnId(entry) === unsettledTurnId,
           );
@@ -712,7 +771,7 @@ export function deriveMessagesTimelineRows(input: {
   const isVisibleActiveToolEntry = (entry: WorkLogEntry) =>
     workLogEntryIsToolLike(entry) && workEntryIsVisibleInGroup(entry, true);
   const activeEntries = input.isWorking
-    ? input.timelineEntries.filter((entry, index) => entryBelongsToActiveTurn(entry, index))
+    ? timelineEntries.filter((entry, index) => entryBelongsToActiveTurn(entry, index))
     : [];
   const activeTurnHasVisibleContent = activeEntries.some((entry) => {
     if (entry.kind === "message") {
@@ -730,8 +789,8 @@ export function deriveMessagesTimelineRows(input: {
   });
 
   const activeToolEntries: Array<Extract<TimelineEntry, { kind: "work" }>> = [];
-  for (let index = input.timelineEntries.length - 1; index >= activeTurnHeaderIndex; index -= 1) {
-    const entry = input.timelineEntries[index]!;
+  for (let index = timelineEntries.length - 1; index >= activeTurnHeaderIndex; index -= 1) {
+    const entry = timelineEntries[index]!;
     if (
       !entryBelongsToActiveTurn(entry, index) ||
       entry.kind !== "work" ||
@@ -790,8 +849,8 @@ export function deriveMessagesTimelineRows(input: {
     }
   };
 
-  for (let index = 0; index < input.timelineEntries.length; index += 1) {
-    const timelineEntry = input.timelineEntries[index];
+  for (let index = 0; index < timelineEntries.length; index += 1) {
+    const timelineEntry = timelineEntries[index];
     if (!timelineEntry) {
       continue;
     }
@@ -825,10 +884,23 @@ export function deriveMessagesTimelineRows(input: {
     }
 
     if (timelineEntry.kind === "work") {
+      const presentation = input.canvasPresentationsByActivityId?.get(timelineEntry.entry.id);
+      if (presentation) {
+        nextRows.push({
+          kind: "canvas",
+          id: `canvas:${presentation.activityId}`,
+          createdAt: presentation.createdAt,
+          presentation,
+        });
+        continue;
+      }
+    }
+
+    if (timelineEntry.kind === "work") {
       const groupedEntries = [timelineEntry.entry];
       let cursor = index + 1;
-      while (cursor < input.timelineEntries.length) {
-        const nextEntry = input.timelineEntries[cursor];
+      while (cursor < timelineEntries.length) {
+        const nextEntry = timelineEntries[cursor];
         if (
           !nextEntry ||
           nextEntry.kind !== "work" ||
@@ -1025,9 +1097,47 @@ export function deriveMessagesTimelineRows(input: {
           ? input.revertTurnCountByUserMessageId.get(timelineEntry.message.id)
           : undefined,
     });
+
+    if (
+      input.thoughtView &&
+      timelineEntry.message.role === "user" &&
+      timelineEntry.message.id === input.thoughtViewAnchorMessageId
+    ) {
+      nextRows.push({
+        kind: "thought-view",
+        id: `thought-view:${input.thoughtView.id}`,
+        createdAt: timelineEntry.createdAt,
+        view: input.thoughtView,
+      });
+    }
   }
 
-  if (input.isWorking && activeTurnHeaderIndex === input.timelineEntries.length) {
+  for (const [scope, group] of coordinationGroups) {
+    const visible =
+      group.turnId === null ||
+      unsettledTurnId === group.turnId ||
+      input.expandedTurnIds?.has(group.turnId) === true;
+    if (!visible) continue;
+    const activities = group.activities.toSorted(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+    );
+    const createdAt = activities[0]?.createdAt;
+    if (!createdAt) continue;
+    const row: MessagesTimelineRow = {
+      kind: "coordination",
+      id: `coordination:${scope}`,
+      createdAt,
+      activities,
+    };
+    const insertionIndex = nextRows.findIndex(
+      (candidate) => candidate.createdAt !== null && candidate.createdAt > createdAt,
+    );
+    if (insertionIndex === -1) nextRows.push(row);
+    else nextRows.splice(insertionIndex, 0, row);
+  }
+
+  if (input.isWorking && activeTurnHeaderIndex === timelineEntries.length) {
     appendWorkingRow();
   }
 
@@ -1063,6 +1173,15 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       return (
         a.createdAt === (b as typeof a).createdAt && a.showThinking === (b as typeof a).showThinking
       );
+
+    case "canvas":
+      return a.presentation === (b as typeof a).presentation;
+
+    case "thought-view":
+      return a.view === (b as typeof a).view;
+
+    case "coordination":
+      return Equal.equals(a.activities, (b as typeof a).activities);
 
     case "turn-fold": {
       const bf = b as typeof a;

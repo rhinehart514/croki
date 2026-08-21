@@ -18,12 +18,12 @@ const workspaceFiles = [
   "apps/web/package.json",
   "apps/mobile/package.json",
   "apps/mobile/deps/react-native-nitro-markdown-0.5.0.tgz",
-  "apps/mobile/modules/t3-markdown-text/package.json",
-  "apps/mobile/modules/t3-review-diff/package.json",
-  "apps/mobile/modules/t3-terminal/package.json",
+  "apps/mobile/modules/croki-markdown-text/package.json",
+  "apps/mobile/modules/croki-review-diff/package.json",
+  "apps/mobile/modules/croki-terminal/package.json",
   "apps/marketing/package.json",
   "infra/relay/package.json",
-  "oxlint-plugin-t3code/package.json",
+  "oxlint-plugin-croki/package.json",
   "packages/client-runtime/package.json",
   "packages/contracts/package.json",
   "packages/shared/package.json",
@@ -59,13 +59,13 @@ function writeMacManifestFixtures(targetRoot: string): { arm64Path: string; x64P
     arm64Path,
     `version: 9.9.9-smoke.0
 files:
-  - url: T3-Code-9.9.9-smoke.0-arm64.zip
+  - url: Croki-9.9.9-smoke.0-arm64.zip
     sha512: arm64zip
     size: 125621344
-  - url: T3-Code-9.9.9-smoke.0-arm64.dmg
+  - url: Croki-9.9.9-smoke.0-arm64.dmg
     sha512: arm64dmg
     size: 131754935
-path: T3-Code-9.9.9-smoke.0-arm64.zip
+path: Croki-9.9.9-smoke.0-arm64.zip
 sha512: arm64zip
 releaseDate: '2026-03-08T10:32:14.587Z'
 `,
@@ -75,13 +75,13 @@ releaseDate: '2026-03-08T10:32:14.587Z'
     x64Path,
     `version: 9.9.9-smoke.0
 files:
-  - url: T3-Code-9.9.9-smoke.0-x64.zip
+  - url: Croki-9.9.9-smoke.0-x64.zip
     sha512: x64zip
     size: 132000112
-  - url: T3-Code-9.9.9-smoke.0-x64.dmg
+  - url: Croki-9.9.9-smoke.0-x64.dmg
     sha512: x64dmg
     size: 138148807
-path: T3-Code-9.9.9-smoke.0-x64.zip
+path: Croki-9.9.9-smoke.0-x64.zip
 sha512: x64zip
 releaseDate: '2026-03-08T10:36:07.540Z'
 `,
@@ -104,13 +104,13 @@ function writeWindowsManifestFixtures(
     arm64Path,
     `version: 9.9.9-smoke.0
 files:
-  - url: T3-Code-9.9.9-smoke.0-arm64.exe
+  - url: Croki-9.9.9-smoke.0-arm64.exe
     sha512: arm64exe
     size: 126621344
-  - url: T3-Code-9.9.9-smoke.0-arm64.exe.blockmap
+  - url: Croki-9.9.9-smoke.0-arm64.exe.blockmap
     sha512: arm64blockmap
     size: 152344
-path: T3-Code-9.9.9-smoke.0-arm64.exe
+path: Croki-9.9.9-smoke.0-arm64.exe
 sha512: arm64exe
 releaseDate: '2026-03-08T10:32:14.587Z'
 `,
@@ -120,13 +120,13 @@ releaseDate: '2026-03-08T10:32:14.587Z'
     x64Path,
     `version: 9.9.9-smoke.0
 files:
-  - url: T3-Code-9.9.9-smoke.0-x64.exe
+  - url: Croki-9.9.9-smoke.0-x64.exe
     sha512: x64exe
     size: 132000112
-  - url: T3-Code-9.9.9-smoke.0-x64.exe.blockmap
+  - url: Croki-9.9.9-smoke.0-x64.exe.blockmap
     sha512: x64blockmap
     size: 160112
-path: T3-Code-9.9.9-smoke.0-x64.exe
+path: Croki-9.9.9-smoke.0-x64.exe
 sha512: x64exe
 releaseDate: '2026-03-08T10:36:07.540Z'
 `,
@@ -163,6 +163,327 @@ function assertContains(haystack: string, needle: string, message: string): void
   }
 }
 
+function assertNotContains(haystack: string, needle: string, message: string): void {
+  if (haystack.includes(needle)) {
+    throw new Error(message);
+  }
+}
+
+function assertCrokiReleaseGuards(): void {
+  const releaseWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/release.yml"),
+    "utf8",
+  );
+  const localNightlyPublisher = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, "scripts/run-local-nightly-release.sh"),
+    "utf8",
+  );
+  const localNightlyInstaller = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, "scripts/install-local-nightly-launch-agent.sh"),
+    "utf8",
+  );
+  const relayWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/deploy-relay.yml"),
+    "utf8",
+  );
+  const mobileProductionWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/mobile-eas-production.yml"),
+    "utf8",
+  );
+  const mobilePreviewWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/mobile-eas-preview.yml"),
+    "utf8",
+  );
+  const mobileShowcaseWorkflow = NodeFS.readFileSync(
+    NodePath.resolve(repoRoot, ".github/workflows/mobile-showcase-screenshots.yml"),
+    "utf8",
+  );
+
+  for (const guard of [
+    "CROKI_RELEASE_ENABLED",
+    "CROKI_RELEASE_REPOSITORY",
+    "CROKI_RELEASE_BRANCH",
+    "CROKI_CLI_PACKAGE",
+    "CROKI_CLI_PUBLISH_ENABLED",
+    "CROKI_RELAY_DOMAIN",
+    "CROKI_WEB_DEPLOY_ENABLED",
+    "CROKI_SIGNING_ENABLED",
+    "CROKI_DISCORD_RELEASE_ENABLED",
+    "CROKI_VERCEL_PROJECT_ID",
+    "dry_run",
+    "node scripts/croki-release-plan.ts",
+    "inputs.dry_run != true",
+    "needs: [release_guard]",
+    "vars.CROKI_CLI_PUBLISH_ENABLED != 'true' && needs.publish_cli.result == 'skipped'",
+    "VITE_CROKI_SERVER_PACKAGE_UPDATES_AVAILABLE",
+    "croki-release-plan.ts --production",
+    "name=Croki v",
+    'git push origin "HEAD:$RELEASE_BRANCH"',
+  ]) {
+    assertContains(releaseWorkflow, guard, `Release workflow is missing guard: ${guard}`);
+  }
+  for (const inheritedReleaseTarget of [
+    "git push origin HEAD:main",
+    "secrets.RELEASE_APP_ID",
+    "secrets.VERCEL_TOKEN",
+    "latest.app.t3.codes",
+    "nightly.app.t3.codes",
+    "--filter=t3...",
+  ]) {
+    assertNotContains(
+      releaseWorkflow,
+      inheritedReleaseTarget,
+      `Release workflow still targets inherited T3 release state: ${inheritedReleaseTarget}`,
+    );
+  }
+  assertNotContains(
+    releaseWorkflow,
+    "schedule:",
+    "Release workflow must not schedule billable GitHub-hosted nightlies.",
+  );
+  assertNotContains(
+    localNightlyPublisher,
+    "run dist:desktop:artifact -- \\\\",
+    "Local nightly publisher must forward build flags without a positional delimiter.",
+  );
+  for (const guard of [
+    'source_repository="${CROKI_NIGHTLY_SOURCE_REPOSITORY:-rhinehart514/croki}"',
+    'update_repository="${CROKI_NIGHTLY_UPDATE_REPOSITORY:-rhinehart514/croki-releases}"',
+    "repository_root/node_modules/.bin/vp",
+    "$HOME/Library/pnpm/vp",
+    "/opt/homebrew/opt/node@24/bin/node",
+    "Local nightlies require Node ^24.13.1",
+    'api "repos/$source_repository/git/ref/heads/$branch"',
+    "--mirror --filter=blob:none",
+    "Removing an incomplete release mirror.",
+    'release_workspace_filters=(\n  --filter "@croki/desktop..."\n  --filter "croki-server..."\n  --filter "@croki/scripts..."',
+    'install_workspace_filters=(\n  "${release_workspace_filters[@]}"\n  --filter "@croki/oxlint-plugin-croki..."',
+    'install --frozen-lockfile "${install_workspace_filters[@]}"',
+    'checkout_vp_bin="$PWD/node_modules/.bin/vp"',
+    '"$checkout_vp_bin" run "${release_workspace_filters[@]}" typecheck',
+    "release_test_files=(\n  apps/desktop/src/electron/ElectronUpdater.test.ts\n  apps/desktop/src/updates/DesktopUpdates.test.ts\n  apps/desktop/src/updates/updateChannels.test.ts",
+    'test run "${release_test_files[@]}"',
+    '"$node_bin" scripts/release-smoke.ts',
+    "refs/heads/$branch",
+    "No changes on $branch since $latest_source_sha",
+    'rm -f "$lock_dir/pid"',
+    'checkout_vp_bin" check',
+    "--platform mac",
+    "--arch arm64",
+    'CROKI_DESKTOP_UPDATE_REPOSITORY="$update_repository"',
+    "Croki source commit: $target_sha",
+    '--repo "$update_repository"',
+    "--prerelease",
+    "--latest=false",
+    'release view "$tag"',
+  ]) {
+    assertContains(
+      localNightlyPublisher,
+      guard,
+      `Local nightly publisher is missing guard: ${guard}`,
+    );
+  }
+  assertNotContains(
+    localNightlyPublisher,
+    '--target "$target_sha"',
+    "Public binary releases must not target an unreachable private source commit.",
+  );
+  for (const guard of [
+    "com.croki.nightly-release",
+    "StartCalendarInterval",
+    "<integer>2</integer>",
+    "<integer>15</integer>",
+    "launchctl bootstrap",
+  ]) {
+    assertContains(
+      localNightlyInstaller,
+      guard,
+      `Local nightly installer is missing guard: ${guard}`,
+    );
+  }
+
+  for (const guard of [
+    "workflow_dispatch:",
+    "dry_run:",
+    "release:croki:plan",
+    "inputs.dry_run != true",
+    "vars.CROKI_RELAY_DEPLOY_ENABLED == 'true'",
+    "github.repository == vars.CROKI_RELEASE_REPOSITORY",
+    "github.ref_name == vars.CROKI_RELEASE_BRANCH",
+    "Refusing inherited T3 relay destination",
+    "secrets.CROKI_CLOUDFLARE_API_TOKEN",
+  ]) {
+    assertContains(relayWorkflow, guard, `Relay workflow is missing guard: ${guard}`);
+  }
+  assertNotContains(
+    relayWorkflow,
+    "secrets.CLOUDFLARE_API_TOKEN",
+    "Relay workflow still uses the inherited Cloudflare credential.",
+  );
+  assertContains(
+    relayWorkflow,
+    "--filter=croki-relay...",
+    "Relay workflow does not install the Croki relay workspace.",
+  );
+  assertNotContains(
+    relayWorkflow,
+    "--filter=t3code-relay...",
+    "Relay workflow still installs the inherited T3 relay workspace.",
+  );
+
+  assertContains(
+    releaseWorkflow,
+    "--filter=croki-server...",
+    "Release workflow does not install the Croki server workspace.",
+  );
+  assertContains(
+    mobileShowcaseWorkflow,
+    "--filter=croki-server...",
+    "Mobile showcase workflow does not install the Croki server workspace.",
+  );
+  assertNotContains(
+    mobileShowcaseWorkflow,
+    "--filter=t3...",
+    "Mobile showcase workflow still installs the inherited T3 workspace.",
+  );
+
+  for (const guard of ["dry-run", "release:croki:plan", "inputs.mode != 'dry-run'"]) {
+    assertContains(
+      mobileProductionWorkflow,
+      guard,
+      `Mobile production workflow is missing dry-run guard: ${guard}`,
+    );
+  }
+
+  for (const [name, workflow, enableVariable] of [
+    ["production", mobileProductionWorkflow, "CROKI_MOBILE_DEPLOY_ENABLED"],
+    ["preview", mobilePreviewWorkflow, "CROKI_MOBILE_PREVIEW_ENABLED"],
+  ] as const) {
+    for (const guard of [
+      enableVariable,
+      "CROKI_RELEASE_REPOSITORY",
+      "CROKI_RELEASE_BRANCH",
+      "CROKI_EAS_PROJECT_ID",
+      "secrets.CROKI_EXPO_TOKEN",
+      "croki-release-plan.ts",
+      "Verify configured EAS project",
+      "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    ]) {
+      assertContains(workflow, guard, `Mobile ${name} workflow is missing guard: ${guard}`);
+    }
+    assertNotContains(
+      workflow,
+      "secrets.EXPO_TOKEN",
+      `Mobile ${name} workflow still uses the inherited Expo credential.`,
+    );
+  }
+
+  for (const guard of ["Verify exact Croki server package exists", "npm view"]) {
+    assertContains(
+      mobilePreviewWorkflow,
+      guard,
+      `Mobile preview workflow is missing exact-package guard: ${guard}`,
+    );
+  }
+}
+
+function assertCrokiReleasePlan(): void {
+  const scriptPath = NodePath.resolve(repoRoot, "scripts/croki-release-plan.ts");
+  const localResult = NodeChildProcess.spawnSync(process.execPath, [scriptPath], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: {},
+  });
+  if (localResult.status !== 0) {
+    throw new Error(`Croki local release plan failed:\n${localResult.stderr}`);
+  }
+  const localPlan = JSON.parse(localResult.stdout) as {
+    readonly status?: unknown;
+    readonly enabled?: unknown;
+    readonly destinations?: Record<string, { readonly status?: unknown }>;
+  };
+  if (localPlan.status !== "disabled" || localPlan.enabled !== false) {
+    throw new Error("Croki local release plan must be safely disabled without configuration.");
+  }
+  for (const category of ["github", "cli", "relay", "web", "signing", "discord", "mobile"]) {
+    if (localPlan.destinations?.[category]?.status !== "disabled") {
+      throw new Error(`Croki local release plan is missing disabled category: ${category}.`);
+    }
+  }
+
+  const githubOnlyResult = NodeChildProcess.spawnSync(
+    process.execPath,
+    [scriptPath, "--production"],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        CROKI_RELEASE_ENABLED: "true",
+        CROKI_RELEASE_REPOSITORY: "rhinehart514/croki",
+        CROKI_RELEASE_BRANCH: "croki/main",
+      },
+    },
+  );
+  if (githubOnlyResult.status !== 0) {
+    throw new Error(`Croki GitHub-only release plan failed:\n${githubOnlyResult.stderr}`);
+  }
+  const githubOnlyPlan = JSON.parse(githubOnlyResult.stdout) as {
+    readonly status?: unknown;
+    readonly enabled?: unknown;
+    readonly destinations?: Record<string, { readonly status?: unknown }>;
+  };
+  if (githubOnlyPlan.status !== "enabled" || githubOnlyPlan.enabled !== true) {
+    throw new Error("Croki GitHub-only release plan must allow desktop asset publication.");
+  }
+  if (githubOnlyPlan.destinations?.github?.status !== "enabled") {
+    throw new Error("Croki GitHub-only release plan did not enable GitHub publication.");
+  }
+  for (const category of ["cli", "relay", "web", "signing", "discord", "mobile"]) {
+    if (githubOnlyPlan.destinations?.[category]?.status !== "disabled") {
+      throw new Error(`Croki GitHub-only plan unexpectedly enabled category: ${category}.`);
+    }
+  }
+
+  const secretMarker = "CROKI_RELEASE_SMOKE_SECRET_MUST_NOT_RENDER";
+  const productionResult = NodeChildProcess.spawnSync(
+    process.execPath,
+    [scriptPath, "--production"],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        CROKI_RELEASE_ENABLED: "true",
+        CROKI_RELEASE_REPOSITORY: "pingdotgg/t3code",
+        CROKI_RELEASE_BRANCH: "main",
+        CROKI_CLI_PACKAGE: "t3",
+        CROKI_RELAY_DOMAIN: "relay.t3.codes",
+        CROKI_WEB_ROUTER_URL: "https://app.t3.codes",
+        CROKI_WEB_LATEST_DOMAIN: "latest.app.t3.codes",
+        CROKI_WEB_NIGHTLY_DOMAIN: "nightly.app.t3.codes",
+        CROKI_VERCEL_ORG_ID: "inherited-org",
+        CROKI_VERCEL_PROJECT_ID: "inherited-project",
+        CROKI_RELEASE_APP_PRIVATE_KEY: secretMarker,
+        CROKI_DISCORD_RELEASE_WEBHOOK_URL: secretMarker,
+      },
+    },
+  );
+  if (productionResult.status === 0) {
+    throw new Error("Croki production release plan unexpectedly accepted inherited destinations.");
+  }
+  assertNotContains(
+    productionResult.stdout,
+    secretMarker,
+    "Croki release plan rendered a secret value.",
+  );
+  const productionPlan = JSON.parse(productionResult.stdout) as {
+    readonly status?: unknown;
+    readonly enabled?: unknown;
+  };
+  if (productionPlan.status !== "invalid" || productionPlan.enabled !== false) {
+    throw new Error("Croki production release plan did not fail closed.");
+  }
+}
+
 function assertExists(path: string, message: string): void {
   if (!NodeFS.existsSync(path)) {
     throw new Error(message);
@@ -188,6 +509,8 @@ function assertMissing(path: string, message: string): void {
 const tempRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-release-smoke-"));
 
 try {
+  assertCrokiReleaseGuards();
+  assertCrokiReleasePlan();
   copyWorkspaceManifestFixture(tempRoot);
 
   NodeChildProcess.execFileSync(
@@ -253,7 +576,7 @@ try {
   );
   assertContains(
     nightlyReleaseMetadata,
-    "name=T3 Code Nightly 9.9.10-nightly.20260413.321 (abcdef123456)",
+    "name=Croki Nightly 9.9.10-nightly.20260413.321 (abcdef123456)",
     "Expected nightly metadata to include the short commit SHA in the release name.",
   );
 
@@ -276,12 +599,12 @@ try {
   const mergedManifest = NodeFS.readFileSync(arm64Path, "utf8");
   assertContains(
     mergedManifest,
-    "T3-Code-9.9.9-smoke.0-arm64.zip",
+    "Croki-9.9.9-smoke.0-arm64.zip",
     "Merged manifest is missing the arm64 asset.",
   );
   assertContains(
     mergedManifest,
-    "T3-Code-9.9.9-smoke.0-x64.zip",
+    "Croki-9.9.9-smoke.0-x64.zip",
     "Merged manifest is missing the x64 asset.",
   );
 
@@ -341,12 +664,12 @@ try {
   const mergedWindowsManifest = NodeFS.readFileSync(mergedWindowsManifestPath, "utf8");
   assertContains(
     mergedWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-arm64.exe",
+    "Croki-9.9.9-smoke.0-arm64.exe",
     "Merged Windows manifest is missing the arm64 asset.",
   );
   assertContains(
     mergedWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-x64.exe",
+    "Croki-9.9.9-smoke.0-x64.exe",
     "Merged Windows manifest is missing the x64 asset.",
   );
   const mergedNightlyWindowsManifest = NodeFS.readFileSync(
@@ -355,12 +678,12 @@ try {
   );
   assertContains(
     mergedNightlyWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-arm64.exe",
+    "Croki-9.9.9-smoke.0-arm64.exe",
     "Merged nightly Windows manifest is missing the arm64 asset.",
   );
   assertContains(
     mergedNightlyWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-x64.exe",
+    "Croki-9.9.9-smoke.0-x64.exe",
     "Merged nightly Windows manifest is missing the x64 asset.",
   );
   const mergedPreviewWindowsManifest = NodeFS.readFileSync(
@@ -369,12 +692,12 @@ try {
   );
   assertContains(
     mergedPreviewWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-arm64.exe",
+    "Croki-9.9.9-smoke.0-arm64.exe",
     "Merged preview Windows manifest is missing the arm64 asset.",
   );
   assertContains(
     mergedPreviewWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-x64.exe",
+    "Croki-9.9.9-smoke.0-x64.exe",
     "Merged preview Windows manifest is missing the x64 asset.",
   );
   assertMissing(

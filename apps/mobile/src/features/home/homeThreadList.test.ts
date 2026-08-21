@@ -1,9 +1,6 @@
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
-import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@croki/contracts";
+import { threadSearchMatchKey } from "@croki/client-runtime/state/thread-search";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -76,24 +73,24 @@ describe("buildHomeThreadGroups", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
     const repositoryIdentity = {
-      canonicalKey: "github.com/pingdotgg/t3code",
+      canonicalKey: "github.com/rhinehart514/croki",
       locator: {
         source: "git-remote" as const,
         remoteName: "origin",
-        remoteUrl: "git@github.com:pingdotgg/t3code.git",
+        remoteUrl: "git@github.com:rhinehart514/croki.git",
       },
     };
     const projects = [
       makeProject({
         environmentId: localEnvironmentId,
         id: ProjectId.make("project-local"),
-        title: "t3code",
+        title: "croki",
         repositoryIdentity,
       }),
       makeProject({
         environmentId: remoteEnvironmentId,
         id: ProjectId.make("project-remote"),
-        title: "t3code",
+        title: "croki",
         repositoryIdentity,
       }),
     ];
@@ -105,7 +102,7 @@ describe("buildHomeThreadGroups", () => {
     });
 
     expect(scopes).toHaveLength(1);
-    expect(scopes[0]?.title).toBe("t3code");
+    expect(scopes[0]?.title).toBe("croki");
     expect(scopes[0]?.projects).toEqual(projects);
     expect(scopes[0]?.projectRefs).toEqual(
       projects.map((project) => ({
@@ -119,32 +116,32 @@ describe("buildHomeThreadGroups", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
     const repositoryIdentity = {
-      canonicalKey: "github.com/pingdotgg/t3code",
+      canonicalKey: "github.com/rhinehart514/croki",
       locator: {
         source: "git-remote" as const,
         remoteName: "origin",
-        remoteUrl: "git@github.com:pingdotgg/t3code.git",
+        remoteUrl: "git@github.com:rhinehart514/croki.git",
       },
     };
     const local = makeProject({
       id: ProjectId.make("project-local"),
       environmentId: localEnvironmentId,
-      title: "t3code",
-      workspaceRoot: "/workspaces/t3code",
+      title: "croki",
+      workspaceRoot: "/workspaces/croki",
       repositoryIdentity,
     });
     const stale = makeProject({
       environmentId: remoteEnvironmentId,
       id: ProjectId.make("project-stale"),
-      title: "t3code",
-      workspaceRoot: "/remote/t3code",
+      title: "croki",
+      workspaceRoot: "/remote/croki",
       updatedAt: "2026-06-01T00:00:00.000Z",
     });
     const canonicalRemote = makeProject({
       environmentId: remoteEnvironmentId,
       id: ProjectId.make("project-canonical-remote"),
-      title: "t3code",
-      workspaceRoot: "/remote/t3code/",
+      title: "croki",
+      workspaceRoot: "/remote/croki/",
       repositoryIdentity,
       updatedAt: "2026-06-02T00:00:00.000Z",
     });
@@ -183,33 +180,33 @@ describe("buildHomeThreadGroups", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
     const repositoryIdentity = {
-      canonicalKey: "github.com/pingdotgg/t3code",
+      canonicalKey: "github.com/rhinehart514/croki",
       locator: {
         source: "git-remote" as const,
         remoteName: "origin",
-        remoteUrl: "git@github.com:pingdotgg/t3code.git",
+        remoteUrl: "git@github.com:rhinehart514/croki.git",
       },
     };
     const projects = [
       makeProject({
         environmentId: localEnvironmentId,
         id: ProjectId.make("project-local"),
-        title: "t3code",
+        title: "croki",
         repositoryIdentity,
       }),
       makeProject({
         environmentId: remoteEnvironmentId,
         id: ProjectId.make("project-remote-with-identity"),
-        title: "t3code",
-        workspaceRoot: "/remote/t3code",
+        title: "croki",
+        workspaceRoot: "/remote/croki",
         repositoryIdentity,
         updatedAt: "2026-06-01T00:00:00.000Z",
       }),
       makeProject({
         environmentId: remoteEnvironmentId,
         id: ProjectId.make("project-remote-fresh"),
-        title: "t3code",
-        workspaceRoot: "/remote/t3code/",
+        title: "croki",
+        workspaceRoot: "/remote/croki/",
         updatedAt: "2026-06-02T00:00:00.000Z",
       }),
     ];
@@ -305,24 +302,24 @@ describe("buildHomeThreadGroups", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
     const repositoryIdentity = {
-      canonicalKey: "github.com/pingdotgg/t3code",
+      canonicalKey: "github.com/rhinehart514/croki",
       locator: {
         source: "git-remote" as const,
         remoteName: "origin",
-        remoteUrl: "git@github.com:pingdotgg/t3code.git",
+        remoteUrl: "git@github.com:rhinehart514/croki.git",
       },
     };
     const olderMember = makeProject({
       environmentId: localEnvironmentId,
       id: ProjectId.make("project-older-member"),
-      title: "t3code",
+      title: "croki",
       updatedAt: "2026-06-01T00:00:00.000Z",
       repositoryIdentity,
     });
     const newerMember = makeProject({
       environmentId: remoteEnvironmentId,
       id: ProjectId.make("project-newer-member"),
-      title: "t3code",
+      title: "croki",
       updatedAt: "2026-06-03T00:00:00.000Z",
       repositoryIdentity,
     });
@@ -381,12 +378,12 @@ describe("buildHomeThreadGroups", () => {
       id: ProjectId.make("project-1"),
       title: "local-worktree-name",
       repositoryIdentity: {
-        canonicalKey: "github.com/pingdotgg/t3code",
+        canonicalKey: "github.com/rhinehart514/croki",
         displayName: "codething-mvp",
         locator: {
           source: "git-remote" as const,
           remoteName: "origin",
-          remoteUrl: "git@github.com:pingdotgg/t3code.git",
+          remoteUrl: "git@github.com:rhinehart514/croki.git",
         },
       },
     });
@@ -417,7 +414,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Croki",
     });
     const threads = [
       makeThread({
@@ -527,31 +524,31 @@ describe("buildHomeThreadGroups", () => {
   it("matches web repository, repository-path, and separate grouping modes", () => {
     const environmentId = EnvironmentId.make("environment-1");
     const repositoryIdentity = {
-      canonicalKey: "github.com/t3tools/t3code",
+      canonicalKey: "github.com/croki/croki",
       locator: {
         source: "git-remote" as const,
         remoteName: "origin",
-        remoteUrl: "git@github.com:t3tools/t3code.git",
+        remoteUrl: "git@github.com:croki/croki.git",
       },
       provider: "github",
-      owner: "t3tools",
-      name: "t3code",
-      displayName: "T3 Code",
-      rootPath: "/workspaces/t3code",
+      owner: "croki",
+      name: "croki",
+      displayName: "Croki",
+      rootPath: "/workspaces/croki",
     };
     const projects = [
       makeProject({
         environmentId,
         id: ProjectId.make("project-web"),
         title: "Web",
-        workspaceRoot: "/workspaces/t3code/apps/web",
+        workspaceRoot: "/workspaces/croki/apps/web",
         repositoryIdentity,
       }),
       makeProject({
         environmentId,
         id: ProjectId.make("project-mobile"),
         title: "Mobile",
-        workspaceRoot: "/workspaces/t3code/apps/mobile",
+        workspaceRoot: "/workspaces/croki/apps/mobile",
         repositoryIdentity,
       }),
     ];
@@ -582,7 +579,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Croki",
     });
     const threads = [
       makeThread({
@@ -620,7 +617,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Croki",
     });
     const threads = ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05"].map(
       (day, index) =>
@@ -647,7 +644,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Croki",
     });
     const threads = ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05"].map(
       (day, index) =>
@@ -660,7 +657,7 @@ describe("buildHomeThreadGroups", () => {
         }),
     );
 
-    const group = buildGroups([project], threads, { searchQuery: "T3 Code" })[0];
+    const group = buildGroups([project], threads, { searchQuery: "Croki" })[0];
     // Search reaches the full history rather than the 3-thread fallback.
     expect(group?.recentThreads).toHaveLength(5);
     expect(group?.recentThreads.map((thread) => thread.id)).toEqual(
@@ -673,7 +670,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Croki",
     });
     const thread = makeThread({
       environmentId,
@@ -695,27 +692,27 @@ describe("buildHomeThreadGroups", () => {
     expect(groups[0]?.threads.map((candidate) => candidate.id)).toEqual(["thread-content"]);
   });
 
-  it("targets quick new threads at the group member with the newest thread", () => {
+  it("targets quick new threads at the last-active member independently of display sorting", () => {
     const laptopEnv = EnvironmentId.make("environment-laptop");
     const desktopEnv = EnvironmentId.make("environment-desktop");
     const repositoryIdentity = {
-      canonicalKey: "github.com/pingdotgg/t3code",
+      canonicalKey: "github.com/rhinehart514/croki",
       locator: {
         source: "git-remote" as const,
         remoteName: "origin",
-        remoteUrl: "git@github.com:pingdotgg/t3code.git",
+        remoteUrl: "git@github.com:rhinehart514/croki.git",
       },
     };
     const laptopProject = makeProject({
       environmentId: laptopEnv,
       id: ProjectId.make("project-laptop"),
-      title: "t3code",
+      title: "croki",
       repositoryIdentity,
     });
     const desktopProject = makeProject({
       environmentId: desktopEnv,
       id: ProjectId.make("project-desktop"),
-      title: "t3code",
+      title: "croki",
       repositoryIdentity,
     });
     const threads = [
@@ -723,15 +720,18 @@ describe("buildHomeThreadGroups", () => {
         environmentId: laptopEnv,
         id: ThreadId.make("thread-laptop"),
         projectId: laptopProject.id,
-        title: "Older laptop thread",
+        title: "Newer-created laptop thread",
+        createdAt: "2026-06-28T00:00:00.000Z",
         updatedAt: "2026-06-27T00:00:00.000Z",
       }),
       makeThread({
         environmentId: desktopEnv,
         id: ThreadId.make("thread-desktop"),
         projectId: desktopProject.id,
-        title: "Newest desktop thread",
-        updatedAt: "2026-06-28T00:00:00.000Z",
+        title: "Last-active desktop thread",
+        createdAt: "2026-06-25T00:00:00.000Z",
+        latestUserMessageAt: "2026-06-29T00:00:00.000Z",
+        updatedAt: "2026-06-29T00:00:00.000Z",
       }),
     ];
 
@@ -742,5 +742,22 @@ describe("buildHomeThreadGroups", () => {
     expect(groups[0]?.projects).toHaveLength(2);
     expect(groups[0]?.newThreadTarget?.environmentId).toBe(desktopEnv);
     expect(groups[0]?.newThreadTarget?.id).toBe(desktopProject.id);
+
+    const createdAtGroups = buildGroups([laptopProject, desktopProject], threads, {
+      threadSortOrder: "created_at",
+    });
+    expect(createdAtGroups[0]?.threads.map((thread) => thread.id)).toEqual([
+      "thread-laptop",
+      "thread-desktop",
+    ]);
+    expect(createdAtGroups[0]?.newThreadTarget?.environmentId).toBe(desktopEnv);
+    expect(createdAtGroups[0]?.newThreadTarget?.id).toBe(desktopProject.id);
+
+    const searchedGroups = buildGroups([laptopProject, desktopProject], threads, {
+      searchQuery: "newer-created laptop",
+    });
+    expect(searchedGroups[0]?.threads.map((thread) => thread.id)).toEqual(["thread-laptop"]);
+    expect(searchedGroups[0]?.newThreadTarget?.environmentId).toBe(desktopEnv);
+    expect(searchedGroups[0]?.newThreadTarget?.id).toBe(desktopProject.id);
   });
 });

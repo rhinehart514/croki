@@ -1,4 +1,4 @@
-import { ApprovalRequestId } from "@t3tools/contracts";
+import { ApprovalRequestId } from "@croki/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -20,6 +20,7 @@ describe("ComposerPendingApprovalPanel", () => {
     );
 
     expect(markup).toContain('data-approval-detail="complete"');
+    expect(markup).toContain('data-thread-attention-target="approval"');
     expect(markup).toContain('aria-label="Command"');
     expect(markup).toContain('role="group"');
     expect(markup).toContain('tabindex="0"');

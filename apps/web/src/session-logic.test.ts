@@ -1,11 +1,12 @@
 import {
+  CheckpointRef,
   classifyTaskAgentKind,
   EventId,
   MessageId,
   ThreadId,
   TurnId,
   type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -15,6 +16,7 @@ import {
   derivePendingApprovals,
   derivePendingUserInputs,
   deriveTimelineEntries,
+  deriveGuidanceDeliveryByMessageId,
   deriveWorkLogEntries,
   findLatestProposedPlan,
   hasActionableProposedPlan,
@@ -60,6 +62,32 @@ function makeActivity(overrides: {
     ...(overrides.sequence !== undefined ? { sequence: overrides.sequence } : {}),
   };
 }
+
+describe("deriveGuidanceDeliveryByMessageId", () => {
+  it("keeps provider steering receipts out of the work log and maps delivery by message", () => {
+    const delivered = makeActivity({
+      kind: "provider.turn.steer.delivered",
+      summary: "Guidance delivered",
+      payload: { messageId: "message-delivered" },
+      turnId: "turn-1",
+    });
+    const failed = makeActivity({
+      kind: "provider.turn.steer.failed",
+      summary: "Guidance was not delivered",
+      tone: "error",
+      payload: { messageId: "message-failed", detail: "Turn already completed." },
+      turnId: "turn-1",
+    });
+
+    expect(deriveGuidanceDeliveryByMessageId([delivered, failed])).toEqual(
+      new Map([
+        ["message-delivered", { status: "delivered" }],
+        ["message-failed", { status: "failed", detail: "Turn already completed." }],
+      ]),
+    );
+    expect(deriveWorkLogEntries([delivered, failed])).toEqual([]);
+  });
+});
 
 describe("derivePendingApprovals", () => {
   it("tracks open approvals and removes resolved ones", () => {
@@ -882,6 +910,102 @@ describe("workEntryIndicatesToolFailure", () => {
 });
 
 describe("deriveWorkLogEntries", () => {
+  it("replaces raw checked-screen activity with one compact turn receipt", () => {
+    const entries = deriveWorkLogEntries(
+      [
+        makeActivity({
+          id: "screen-1",
+          createdAt: "2026-08-05T12:00:02.000Z",
+          turnId: "turn-ui",
+          kind: "preview.snapshot",
+          summary: "Checked Settings",
+          tone: "info",
+          payload: {
+            version: 1,
+            entry: {
+              id: "screen-1",
+              attachmentId: "thread-ui-00000000-0000-4000-8000-000000000001",
+              url: "http://localhost:5173/settings",
+              title: "Settings",
+              observedAt: "2026-08-05T12:00:02.000Z",
+              width: 1_280,
+              height: 800,
+              interactiveElementCount: 4,
+              consoleErrorCount: 0,
+              networkFailureCount: 0,
+              actionCount: 1,
+            },
+            frame: {
+              kind: "attachment",
+              ref: "thread-ui-00000000-0000-4000-8000-000000000001",
+              mimeType: "image/png",
+              width: 1_280,
+              height: 800,
+            },
+          },
+        }),
+      ],
+      [
+        {
+          turnId: TurnId.make("turn-ui"),
+          checkpointTurnCount: 1,
+          checkpointRef: CheckpointRef.make("checkpoint-ui"),
+          status: "ready",
+          files: [
+            {
+              path: "apps/web/src/Settings.tsx",
+              kind: "modified",
+              additions: 4,
+              deletions: 1,
+            },
+          ],
+          assistantMessageId: null,
+          completedAt: "2026-08-05T12:00:03.000Z",
+        },
+      ],
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      id: "croki.ui.check:turn-ui",
+      label: "Checked 1 screen",
+      sourceActivityKind: "croki.ui.check",
+      uiCheck: { status: "checked", issueCount: 0 },
+    });
+  });
+
+  it("adds one honest receipt when visible work was not checked", () => {
+    const entries = deriveWorkLogEntries(
+      [],
+      [
+        {
+          turnId: TurnId.make("turn-ui"),
+          checkpointTurnCount: 1,
+          checkpointRef: CheckpointRef.make("checkpoint-ui"),
+          status: "ready",
+          files: [
+            {
+              path: "apps/web/src/Settings.tsx",
+              kind: "modified",
+              additions: 4,
+              deletions: 1,
+            },
+          ],
+          assistantMessageId: null,
+          completedAt: "2026-08-05T12:00:03.000Z",
+        },
+      ],
+    );
+
+    expect(entries).toMatchObject([
+      {
+        label: "Not checked",
+        sourceActivityKind: "croki.ui.check",
+        uiCheck: { status: "not-checked", screens: [] },
+      },
+    ]);
+  });
+
   it("omits tool started entries and keeps completed entries", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
@@ -1128,7 +1252,7 @@ describe("deriveWorkLogEntries", () => {
   it("preserves MCP server, tool, arguments, and results for expanded display", () => {
     const item = {
       type: "mcpToolCall",
-      server: "t3-code",
+      server: "croki",
       tool: "preview_status",
       arguments: {},
       status: "completed",
@@ -1138,24 +1262,24 @@ describe("deriveWorkLogEntries", () => {
       makeActivity({
         id: "mcp-tool-done",
         kind: "tool.completed",
-        summary: "t3-code · preview_status",
+        summary: "croki · preview_status",
         payload: {
           itemType: "mcp_tool_call",
-          title: "t3-code · preview_status",
+          title: "croki · preview_status",
           data: { item },
         },
       }),
     ];
 
     const [entry] = deriveWorkLogEntries(activities);
-    expect(entry?.toolTitle).toBe("t3-code · preview_status");
+    expect(entry?.toolTitle).toBe("croki · preview_status");
     expect(entry?.toolData).toEqual(item);
   });
 
   it("keeps MCP payloads while collapsing lifecycle updates", () => {
     const item = {
       type: "mcpToolCall",
-      server: "t3-code",
+      server: "croki",
       tool: "preview_snapshot",
       arguments: { interactiveOnly: true },
       status: "completed",
@@ -1164,7 +1288,7 @@ describe("deriveWorkLogEntries", () => {
       makeActivity({
         id: "mcp-tool-progress",
         kind: "tool.updated",
-        summary: "t3-code · preview_snapshot",
+        summary: "croki · preview_snapshot",
         payload: {
           itemType: "mcp_tool_call",
           toolCallId: "call-1",
@@ -1174,7 +1298,7 @@ describe("deriveWorkLogEntries", () => {
       makeActivity({
         id: "mcp-tool-complete",
         kind: "tool.completed",
-        summary: "t3-code · preview_snapshot",
+        summary: "croki · preview_snapshot",
         payload: {
           itemType: "mcp_tool_call",
           toolCallId: "call-1",

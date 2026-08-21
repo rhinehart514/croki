@@ -5,12 +5,62 @@ on:
     types: [opened, reopened, synchronize, labeled]
 
 jobs:
+  preview_guard:
+    name: Verify Croki mobile preview ownership
+    if: contains(github.event.pull_request.labels.*.name, '🚀 Mobile Continuous Deployment')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment:
+      name: preview
+    env:
+      CROKI_MOBILE_PREVIEW_ENABLED: ${{ vars.CROKI_MOBILE_PREVIEW_ENABLED }}
+      CROKI_RELEASE_REPOSITORY: ${{ vars.CROKI_RELEASE_REPOSITORY }}
+      CROKI_RELEASE_BRANCH: ${{ vars.CROKI_RELEASE_BRANCH }}
+      CROKI_EAS_PROJECT_ID: ${{ vars.CROKI_EAS_PROJECT_ID }}
+      CROKI_EXPO_TOKEN: ${{ secrets.CROKI_EXPO_TOKEN }}
+      CROKI_CLI_PUBLISH_ENABLED: ${{ vars.CROKI_CLI_PUBLISH_ENABLED }}
+      CROKI_CLI_PACKAGE: ${{ vars.CROKI_CLI_PACKAGE }}
+      CROKI_PR_BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate Croki release destination plan
+        run: node scripts/croki-release-plan.ts --production
+
+      - name: Fail closed until Croki EAS preview is configured
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$CROKI_MOBILE_PREVIEW_ENABLED" != "true" ]]; then
+            echo "Croki mobile preview deploys are disabled." >&2
+            exit 1
+          fi
+          if [[ -z "$CROKI_RELEASE_REPOSITORY" || "$GITHUB_REPOSITORY" != "$CROKI_RELEASE_REPOSITORY" ]]; then
+            echo "This repository is not configured as the Croki release repository." >&2
+            exit 1
+          fi
+          if [[ -z "$CROKI_RELEASE_BRANCH" || "$CROKI_PR_BASE_BRANCH" != "$CROKI_RELEASE_BRANCH" ]]; then
+            echo "Mobile previews must target the configured Croki release branch." >&2
+            exit 1
+          fi
+          if [[ -z "$CROKI_EAS_PROJECT_ID" || "$CROKI_EAS_PROJECT_ID" == "d763fcb8-d37c-41ea-a773-b54a0ab4a454" ]]; then
+            echo "CROKI_EAS_PROJECT_ID must identify a Croki-owned EAS project, not the inherited T3 project." >&2
+            exit 1
+          fi
+          if [[ -z "$CROKI_EXPO_TOKEN" ]]; then
+            echo "Missing CROKI_EXPO_TOKEN." >&2
+            exit 1
+          fi
+
   preview:
     name: EAS Preview
+    needs: preview_guard
     if: |
       contains(github.event.pull_request.labels.*.name, '🚀 Mobile Continuous Deployment') &&
-      (github.event.action != 'labeled' || github.event.label.name == '🚀 Mobile Continuous Deployment')
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+      needs.preview_guard.result == 'success'
+    runs-on: ubuntu-24.04
     concurrency:
       group: mobile-eas-preview-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -19,13 +69,14 @@ jobs:
       pull-requests: write
     env:
       APP_VARIANT: preview
+      CROKI_EAS_PROJECT_ID: ${{ vars.CROKI_EAS_PROJECT_ID }}
       NODE_OPTIONS: --max-old-space-size=8192
       MOBILE_VERSION_POLICY: fingerprint
     steps:
       - id: expo-token
         name: Check for EXPO_TOKEN
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_TOKEN: ${{ secrets.CROKI_EXPO_TOKEN }}
         run: |
           if [ -n "$EXPO_TOKEN" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
@@ -52,7 +103,7 @@ jobs:
           cache: true
           run-install: |
             args:
-              - --filter=@t3tools/mobile...
+              - --filter=@croki/mobile...
 
       - name: Expose pnpm
         if: steps.expo-token.outputs.present == 'true'
@@ -67,24 +118,54 @@ jobs:
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          token: ${{ secrets.CROKI_EXPO_TOKEN }}
           # npm, not pnpm: this only installs eas-cli into the action's own
           # tool dir, and pnpm 11 hard-fails that install on dtrace-provider's
           # ignored build script (no allowBuilds config outside the repo).
           packager: npm
 
+      - name: Verify configured EAS project
+        if: steps.expo-token.outputs.present == 'true'
+        working-directory: apps/mobile
+        env:
+          EXPECTED_EAS_PROJECT_ID: ${{ vars.CROKI_EAS_PROJECT_ID }}
+        run: |
+          config_path="$RUNNER_TEMP/croki-expo-config.json"
+          pnpm exec expo config --json > "$config_path"
+          actual_project_id="$(
+            node -e 'const fs = require("node:fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(config.extra?.eas?.projectId ?? "");' "$config_path"
+          )"
+          if [[ "$actual_project_id" != "$EXPECTED_EAS_PROJECT_ID" ]]; then
+            echo "EAS project mismatch: expected $EXPECTED_EAS_PROJECT_ID, got ${actual_project_id:-<missing>}." >&2
+            exit 1
+          fi
+
+      - name: Verify exact Croki server package exists
+        if: steps.expo-token.outputs.present == 'true'
+        working-directory: apps/mobile
+        env:
+          CROKI_CLI_PACKAGE: ${{ vars.CROKI_CLI_PACKAGE }}
+        run: |
+          set -euo pipefail
+          client_version="$(pnpm exec expo config --json | node -e 'let body=""; process.stdin.on("data", chunk => body += chunk); process.stdin.on("end", () => process.stdout.write(JSON.parse(body).version ?? ""));')"
+          published_version="$(npm view "${CROKI_CLI_PACKAGE:?Missing CROKI_CLI_PACKAGE}@${client_version:?Missing client version}" version)"
+          if [[ "$published_version" != "$client_version" ]]; then
+            echo "Croki mobile preview requires ${CROKI_CLI_PACKAGE}@${client_version} before it can update connected servers." >&2
+            exit 1
+          fi
+
       - name: Pull preview environment variables
         if: steps.expo-token.outputs.present == 'true'
         working-directory: apps/mobile
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_TOKEN: ${{ secrets.CROKI_EXPO_TOKEN }}
         run: eas env:pull preview --non-interactive
 
       - name: Deploy with fingerprint check
         if: steps.expo-token.outputs.present == 'true'
         uses: expo/expo-github-action/continuous-deploy-fingerprint@main
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_TOKEN: ${{ secrets.CROKI_EXPO_TOKEN }}
         with:
           profile: preview:dev
           branch: pr-${{ github.event.pull_request.number }}

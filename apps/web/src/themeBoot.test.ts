@@ -18,7 +18,7 @@ import {
   toCanonicalThemeColor,
 } from "./themePalette";
 
-const THEME_STORAGE_KEY = "t3code:theme";
+const THEME_STORAGE_KEY = "croki:theme";
 // A custom theme that omits chrome falls back to the runtime default, so the
 // boot copy of that default stays derived from the real palette.
 const DEFAULT_DARK_CHROME = getDefaultThemeColors("dark").chrome;
@@ -156,12 +156,12 @@ describe("index.html boot script", () => {
   }> = [
     { name: "no stored preference on a dark OS", storage: {}, prefersDark: true },
     {
-      name: "T3 Chat follows a dark OS",
+      name: "Croki follows a dark OS",
       storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
       prefersDark: true,
     },
     {
-      name: "an explicit global dark mode applies to T3 Chat",
+      name: "an explicit global dark mode applies to Croki",
       storage: {
         [THEME_STORAGE_KEY]: "t3-chat",
         [THEME_APPEARANCE_MODE_STORAGE_KEY]: "dark",
@@ -195,7 +195,7 @@ describe("index.html boot script", () => {
       prefersDark: true,
     },
     {
-      name: "legacy t3-chat-dark resolves to dark T3 Chat",
+      name: "legacy t3-chat-dark resolves to dark Croki",
       storage: { [THEME_STORAGE_KEY]: "t3-chat-dark" },
       prefersDark: true,
     },
@@ -370,7 +370,7 @@ describe("index.html boot script", () => {
     const storage = {
       [THEME_STORAGE_KEY]: "t3-chat",
       [THEME_APPEARANCE_MODE_STORAGE_KEY]: "system",
-      "t3code:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
+      "croki:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
     };
 
     const dark = runBootScript({ storage, prefersDark: true });
@@ -401,7 +401,7 @@ describe("index.html boot script", () => {
             colors: { canvas: "#f8fbff", text: "#10243d", accent: "#5b6cff" },
           },
         ]),
-        "t3code:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
+        "croki:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
       },
       prefersDark: true,
     });
@@ -414,7 +414,7 @@ describe("index.html boot script", () => {
       storage: {
         [THEME_STORAGE_KEY]: "gone-theme",
         [THEME_APPEARANCE_MODE_STORAGE_KEY]: "system",
-        "t3code:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
+        "croki:theme-halves:v1": JSON.stringify({ dark: GROVE_THEME.id }),
       },
       prefersDark: true,
     });
@@ -431,7 +431,7 @@ describe("index.html boot script", () => {
       storage: {
         [THEME_STORAGE_KEY]: "t3-chat",
         [THEME_APPEARANCE_MODE_STORAGE_KEY]: "system",
-        "t3code:theme-halves:v1": JSON.stringify({ dark: "t3-grove" }),
+        "croki:theme-halves:v1": JSON.stringify({ dark: "t3-grove" }),
       },
       prefersDark: true,
     });
@@ -447,7 +447,7 @@ describe("index.html boot script", () => {
       storage: {
         [THEME_STORAGE_KEY]: "t3-chat",
         [THEME_APPEARANCE_MODE_STORAGE_KEY]: "system",
-        "t3code:theme-halves:v1": JSON.stringify({ dark: "gone-theme" }),
+        "croki:theme-halves:v1": JSON.stringify({ dark: "gone-theme" }),
       },
       prefersDark: true,
     });

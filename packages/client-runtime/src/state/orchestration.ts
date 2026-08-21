@@ -1,4 +1,4 @@
-import { ORCHESTRATION_WS_METHODS } from "@t3tools/contracts";
+import { ORCHESTRATION_WS_METHODS } from "@croki/contracts";
 import { Atom } from "effect/unstable/reactivity";
 
 import { createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
@@ -22,6 +22,12 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
     fullThreadDiff: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:full-thread-diff",
       tag: ORCHESTRATION_WS_METHODS.getFullThreadDiff,
+    }),
+    projectPerception: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:project-perception",
+      tag: ORCHESTRATION_WS_METHODS.getProjectPerception,
+      staleTimeMs: 0,
+      refreshIntervalMs: 1_000,
     }),
     threadSearch: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:thread-search",

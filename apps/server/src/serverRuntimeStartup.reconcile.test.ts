@@ -5,7 +5,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -47,6 +47,7 @@ const makeProviderService = (liveThreadIds: ReadonlyArray<ThreadId> = []) =>
   ({
     startSession: () => Effect.die("unused"),
     sendTurn: () => Effect.die("unused"),
+    steerTurn: () => Effect.die("unused"),
     interruptTurn: () => Effect.die("unused"),
     respondToRequest: () => Effect.die("unused"),
     respondToUserInput: () => Effect.die("unused"),
@@ -55,6 +56,8 @@ const makeProviderService = (liveThreadIds: ReadonlyArray<ThreadId> = []) =>
     getCapabilities: () => Effect.die("unused"),
     getInstanceInfo: () => Effect.die("unused"),
     rollbackConversation: () => Effect.die("unused"),
+    forkConversation: () => Effect.die("unused"),
+    discardConversation: () => Effect.die("unused"),
     streamEvents: Stream.empty,
   }) satisfies ProviderService.ProviderService["Service"];
 
@@ -126,6 +129,7 @@ it.effect("reconciles multiple active and archived orphans but skips live sessio
           ),
         ),
       upsert: (binding) => Effect.sync(() => upserts.push(binding)),
+      remove: () => Effect.die("unused"),
       getProvider: () => Effect.die("unused"),
       listThreadIds: () => Effect.die("unused"),
       listBindings: () => Effect.die("unused"),
@@ -195,6 +199,7 @@ it.effect(
                   }),
                 ),
         upsert: () => Effect.fail(writeFailure),
+        remove: () => Effect.die("unused"),
         getProvider: () => Effect.die("unused"),
         listThreadIds: () => Effect.die("unused"),
         listBindings: () => Effect.die("unused"),
@@ -232,6 +237,7 @@ it.effect("retries failed projections and continues after a persistent failure",
     directory: {
       getBinding: () => Effect.succeed(Option.none()),
       upsert: () => Effect.void,
+      remove: () => Effect.die("unused"),
       getProvider: () => Effect.die("unused"),
       listThreadIds: () => Effect.die("unused"),
       listBindings: () => Effect.die("unused"),
@@ -280,6 +286,7 @@ it.effect("does not fail startup when the live provider session inventory cannot
     Effect.provideService(ProviderSessionDirectory.ProviderSessionDirectory, {
       getBinding: () => Effect.die("unused"),
       upsert: () => Effect.die("unused"),
+      remove: () => Effect.die("unused"),
       getProvider: () => Effect.die("unused"),
       listThreadIds: () => Effect.die("unused"),
       listBindings: () => Effect.die("unused"),

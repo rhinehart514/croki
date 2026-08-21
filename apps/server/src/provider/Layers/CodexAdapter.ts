@@ -8,6 +8,7 @@
  * @module CodexAdapterLive
  */
 import {
+  type CodexVoiceEvent,
   type CanonicalItemType,
   type CanonicalRequestType,
   type CodexSettings,
@@ -25,13 +26,15 @@ import {
   ProviderApprovalDecision,
   ThreadId,
   ProviderSendTurnInput,
-} from "@t3tools/contracts";
+  ProviderSteerTurnInput,
+} from "@croki/contracts";
 import * as Effect from "effect/Effect";
 import * as Crypto from "effect/Crypto";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Queue from "effect/Queue";
+import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -39,7 +42,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as EffectCodexSchema from "effect-codex-app-server/schema";
 
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { getModelSelectionStringOptionValue } from "@croki/shared/model";
 import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 
@@ -445,6 +448,8 @@ function runtimeEventBase(
     eventId: event.id,
     provider: event.provider,
     threadId: canonicalThreadId,
+    ...(event.parentThreadId ? { parentThreadId: event.parentThreadId } : {}),
+    ...(event.childPrompt ? { childPrompt: event.childPrompt } : {}),
     createdAt: event.createdAt,
     ...(event.turnId ? { turnId: event.turnId } : {}),
     ...(event.itemId ? { itemId: asRuntimeItemId(event.itemId) } : {}),
@@ -1640,6 +1645,10 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   const managedNativeEventLogger =
     options?.nativeEventLogger === undefined ? nativeEventLogger : undefined;
   const runtimeEventQueue = yield* Queue.unbounded<ProviderRuntimeEvent>();
+  const voiceEventPubSub = yield* PubSub.unbounded<{
+    readonly threadId: ThreadId;
+    readonly event: CodexVoiceEvent;
+  }>();
   const sessions = new Map<ThreadId, CodexAdapterSessionContext>();
 
   const startSession: CodexAdapterShape["startSession"] = (input) =>
@@ -1683,13 +1692,13 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
             ? {
                 environment: {
                   ...(options?.environment ?? process.env),
-                  T3_MCP_BEARER_TOKEN: mcpSession.authorizationHeader.replace(/^Bearer\s+/, ""),
+                  CROKI_MCP_BEARER_TOKEN: mcpSession.authorizationHeader.replace(/^Bearer\s+/, ""),
                 },
                 appServerArgs: [
                   "-c",
-                  `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
+                  `mcp_servers.croki.url=${mcpSession.endpoint}`,
                   "-c",
-                  'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
+                  'mcp_servers.croki.bearer_token_env_var="CROKI_MCP_BEARER_TOKEN"',
                 ],
               }
             : {}),
@@ -1721,6 +1730,66 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         // runtime event the session emitted afterwards was dropped.
         const eventFiber = yield* Stream.runForEach(runtime.events, (event) =>
           Effect.gen(function* () {
+            if (event.method.startsWith("thread/realtime/")) {
+              const payload =
+                typeof event.payload === "object" && event.payload !== null
+                  ? (event.payload as Record<string, unknown>)
+                  : {};
+              const voiceEvent: CodexVoiceEvent | undefined =
+                event.method === "thread/realtime/sdp" && typeof payload.sdp === "string"
+                  ? { type: "sdp", sdp: payload.sdp }
+                  : event.method === "thread/realtime/started"
+                    ? {
+                        type: "started",
+                        ...(typeof payload.realtimeSessionId === "string"
+                          ? { realtimeSessionId: payload.realtimeSessionId }
+                          : {}),
+                      }
+                    : event.method === "thread/realtime/transcript/delta" &&
+                        typeof payload.delta === "string"
+                      ? {
+                          type: "transcript.delta",
+                          role: typeof payload.role === "string" ? payload.role : "assistant",
+                          delta: payload.delta,
+                        }
+                      : event.method === "thread/realtime/transcript/done" &&
+                          typeof (payload.text ?? payload.transcript) === "string"
+                        ? {
+                            type: "transcript.done",
+                            role: typeof payload.role === "string" ? payload.role : "assistant",
+                            text: String(payload.text ?? payload.transcript),
+                          }
+                        : event.method === "thread/realtime/error"
+                          ? {
+                              type: "error",
+                              message:
+                                typeof payload.message === "string"
+                                  ? payload.message
+                                  : (event.message ?? "Codex voice failed."),
+                            }
+                          : event.method === "thread/realtime/closed"
+                            ? {
+                                type: "closed",
+                                ...(typeof payload.reason === "string"
+                                  ? { reason: payload.reason }
+                                  : {}),
+                              }
+                            : undefined;
+              if (voiceEvent) {
+                yield* PubSub.publish(voiceEventPubSub, {
+                  threadId: event.threadId,
+                  event: voiceEvent,
+                });
+              }
+              if (
+                event.method === "thread/realtime/sdp" ||
+                event.method === "thread/realtime/transcript/delta" ||
+                event.method === "thread/realtime/transcript/done" ||
+                event.method === "thread/realtime/outputAudio/delta"
+              ) {
+                return;
+              }
+            }
             yield* writeNativeEvent(event);
             const runtimeEvents = mapToRuntimeEvents(event, event.threadId);
             if (runtimeEvents.length === 0) {
@@ -1769,7 +1838,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     );
 
   const resolveAttachment = Effect.fn("resolveAttachment")(function* (
-    input: ProviderSendTurnInput,
+    input: ProviderSendTurnInput | ProviderSteerTurnInput,
     attachment: NonNullable<ProviderSendTurnInput["attachments"]>[number],
   ) {
     const attachmentPath = resolveAttachmentPath({
@@ -1779,7 +1848,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     if (!attachmentPath) {
       return yield* new ProviderAdapterRequestError({
         provider: PROVIDER,
-        method: "turn/start",
+        method: "attachments/read",
         detail: `Invalid attachment id '${attachment.id}'.`,
       });
     }
@@ -1788,7 +1857,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         (cause) =>
           new ProviderAdapterRequestError({
             provider: PROVIDER,
-            method: "turn/start",
+            method: "attachments/read",
             detail: `Failed to read attachment file: ${cause.message}.`,
             cause,
           }),
@@ -1833,6 +1902,27 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
       })
       .pipe(Effect.mapError((cause) => mapCodexRuntimeError(input.threadId, "turn/start", cause)));
   });
+
+  const steerTurn: NonNullable<CodexAdapterShape["steerTurn"]> = Effect.fn("steerTurn")(
+    function* (input) {
+      const codexAttachments = yield* Effect.forEach(
+        input.attachments ?? [],
+        (attachment) => resolveAttachment(input, attachment),
+        { concurrency: 1 },
+      );
+      const session = yield* requireSession(input.threadId);
+      return yield* session.runtime
+        .steerTurn({
+          expectedTurnId: input.expectedTurnId,
+          clientUserMessageId: input.messageId,
+          ...(input.input !== undefined ? { input: input.input } : {}),
+          ...(codexAttachments.length > 0 ? { attachments: codexAttachments } : {}),
+        })
+        .pipe(
+          Effect.mapError((cause) => mapCodexRuntimeError(input.threadId, "turn/steer", cause)),
+        );
+    },
+  );
 
   const requireSession = Effect.fn("requireSession")(function* (threadId: ThreadId) {
     const session = sessions.get(threadId);
@@ -1893,6 +1983,24 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
       })),
     );
   };
+
+  const forkThread: CodexAdapterShape["forkThread"] = Effect.fn("forkThread")(
+    function* (sourceThreadId, _targetThreadId) {
+      const session = yield* requireSession(sourceThreadId);
+      const providerSession = yield* session.runtime.getSession;
+      if (providerSession.activeTurnId !== undefined || providerSession.status === "running") {
+        return yield* new ProviderAdapterValidationError({
+          provider: PROVIDER,
+          operation: "forkThread",
+          issue: "Cannot fork a Codex conversation while a turn is running.",
+        });
+      }
+      const resumeCursor = yield* session.runtime.forkThread.pipe(
+        Effect.mapError((cause) => mapCodexRuntimeError(sourceThreadId, "thread/fork", cause)),
+      );
+      return { resumeCursor };
+    },
+  );
 
   const respondToRequest: CodexAdapterShape["respondToRequest"] = (threadId, requestId, decision) =>
     requireSession(threadId).pipe(
@@ -1966,6 +2074,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   yield* Effect.acquireRelease(Effect.void, () =>
     stopAll().pipe(
       Effect.andThen(Queue.shutdown(runtimeEventQueue)),
+      Effect.andThen(PubSub.shutdown(voiceEventPubSub)),
       Effect.andThen(managedNativeEventLogger?.close() ?? Effect.void),
       Effect.ignore,
     ),
@@ -1975,18 +2084,51 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     provider: PROVIDER,
     capabilities: {
       sessionModelSwitch: "in-session",
+      conversationFork: "native",
     },
     startSession,
     sendTurn,
+    steerTurn,
     interruptTurn,
     readThread,
     rollbackThread,
+    forkThread,
     respondToRequest,
     respondToUserInput,
     stopSession,
     listSessions,
     hasSession,
     stopAll,
+    voice: {
+      start: (input) =>
+        requireSession(input.threadId).pipe(
+          Effect.flatMap((session) =>
+            session.runtime.startVoice({
+              sdp: input.sdp,
+              ...(input.voice ? { voice: input.voice } : {}),
+            }),
+          ),
+          Effect.mapError((cause) =>
+            cause._tag === "ProviderAdapterSessionNotFoundError"
+              ? cause
+              : mapCodexRuntimeError(input.threadId, "thread/realtime/start", cause),
+          ),
+        ),
+      stop: (threadId) =>
+        requireSession(threadId).pipe(
+          Effect.flatMap((session) => session.runtime.stopVoice),
+          Effect.mapError((cause) =>
+            cause._tag === "ProviderAdapterSessionNotFoundError"
+              ? cause
+              : mapCodexRuntimeError(threadId, "thread/realtime/stop", cause),
+          ),
+        ),
+      events: (threadId) =>
+        Stream.fromPubSub(voiceEventPubSub).pipe(
+          Stream.filter(({ threadId: eventThreadId }) => eventThreadId === threadId),
+          Stream.map(({ event }) => event),
+        ),
+    },
     get streamEvents() {
       return Stream.fromQueue(runtimeEventQueue);
     },

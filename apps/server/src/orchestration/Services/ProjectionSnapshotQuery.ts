@@ -8,6 +8,7 @@
  */
 import type {
   CheckpointRef,
+  CrokiProjectPerceptionSnapshot,
   OrchestrationCheckpointSummary,
   OrchestrationProject,
   OrchestrationProjectShell,
@@ -21,7 +22,8 @@ import type {
   OrchestrationThreadShell,
   ProjectId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
+import type { OrchestrationGetProjectPerceptionInput } from "@croki/contracts";
 import * as Context from "effect/Context";
 import type * as Option from "effect/Option";
 import type * as Effect from "effect/Effect";
@@ -96,6 +98,11 @@ export interface ProjectionSnapshotQueryShape {
     OrchestrationShellSnapshot,
     ProjectionRepositoryError
   >;
+
+  /** Read the durable project-scoped Canvas working model. */
+  readonly getProjectPerception?: (
+    input: OrchestrationGetProjectPerceptionInput,
+  ) => Effect.Effect<Option.Option<CrokiProjectPerceptionSnapshot>, ProjectionRepositoryError>;
 
   /**
    * Search active thread navigation metadata, user messages, and canonical
@@ -194,4 +201,4 @@ export interface ProjectionSnapshotQueryShape {
 export class ProjectionSnapshotQuery extends Context.Service<
   ProjectionSnapshotQuery,
   ProjectionSnapshotQueryShape
->()("t3/orchestration/Services/ProjectionSnapshotQuery") {}
+>()("croki-server/orchestration/Services/ProjectionSnapshotQuery") {}

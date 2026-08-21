@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["CrokiComposerEditorModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.crokicomposereditor.CrokiComposerEditorModule"]
+  }
+}

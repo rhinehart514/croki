@@ -1,8 +1,22 @@
 import type {
   OrchestrationEvent,
+  OrchestrationReadModel,
   OrchestrationThreadActivity,
   OrchestrationThreadDetailSnapshot,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
+import {
+  inspectPerceptionObject,
+  projectThreadPerception,
+  type ProjectPerceptionOptions,
+  type ProjectedPerceptionFrame,
+} from "../mcp/toolkits/canvas/perception.ts";
+
+// Keep the projection discoverable at the orchestration seam. The sense
+// protocol is source-oriented: these aliases derive a frame from activities
+// and checkpoints, while Canvas presentation remains a legacy history format.
+export { inspectPerceptionObject, projectThreadPerception };
+export type { ProjectPerceptionOptions, ProjectedPerceptionFrame };
+export const deriveThreadPerception = projectThreadPerception;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -214,7 +228,9 @@ function summarizeMcpResult(result: unknown): Record<string, unknown> | undefine
   }
   const text = extractMcpResultText(result);
   const summary = text ? summarizeToolTextOutput(text) : null;
-  return summary ? { content: summary } : undefined;
+  // This read-model projection intentionally omits the persisted tool result.
+  // Label the visible value so clients cannot mistake it for complete evidence.
+  return summary ? { summary, truncated: true } : undefined;
 }
 
 /**
@@ -337,6 +353,15 @@ export function projectActivityPayload(
   activity: OrchestrationThreadActivity,
 ): OrchestrationThreadActivity {
   const payload = asRecord(activity.payload);
+  if (activity.kind === "croki.context.applied" && payload) {
+    return {
+      ...activity,
+      payload: {
+        ...("messageId" in payload ? { messageId: payload.messageId } : {}),
+        ...("receipt" in payload ? { receipt: payload.receipt } : {}),
+      },
+    };
+  }
   const data = asRecord(payload?.data);
   if (!payload || !data) {
     return activity;
@@ -464,7 +489,7 @@ function toolLifecycleIdentity(activity: OrchestrationThreadActivity): string | 
   if (itemType.length === 0 && label.length === 0 && detail.length === 0) {
     return null;
   }
-  return [itemType, label, detail].join("");
+  return [itemType, label, detail].join("\u001f");
 }
 
 /**
@@ -511,7 +536,7 @@ function dropSupersededToolUpdatedActivities(
     if (!identity) {
       continue;
     }
-    const key = `${activity.turnId ?? ""} ${identity}`;
+    const key = `${activity.turnId ?? ""}\u0000${identity}`;
     const indices = completionIndicesByKey.get(key);
     if (indices) {
       indices.push(index);
@@ -531,7 +556,7 @@ function dropSupersededToolUpdatedActivities(
     if (!identity) {
       return true;
     }
-    const indices = completionIndicesByKey.get(`${activity.turnId ?? ""} ${identity}`);
+    const indices = completionIndicesByKey.get(`${activity.turnId ?? ""}\u0000${identity}`);
     return !indices?.some((completionIndex) => completionIndex > index);
   });
 }
@@ -547,6 +572,16 @@ export function projectThreadDetailSnapshot(
         dropStaleContextWindowActivities(snapshot.thread.activities),
       ).map(projectActivityPayload),
     },
+  };
+}
+
+export function projectReadModelSnapshot(snapshot: OrchestrationReadModel): OrchestrationReadModel {
+  return {
+    ...snapshot,
+    threads: snapshot.threads.map((thread) => ({
+      ...thread,
+      activities: dropStaleContextWindowActivities(thread.activities).map(projectActivityPayload),
+    })),
   };
 }
 

@@ -1,19 +1,20 @@
 import type {
   ProviderDriverKind,
   ModelCapabilities,
+  OpenClawAgent,
   ServerProvider,
   ServerProviderAuth,
   ServerProviderSkill,
   ServerProviderSlashCommand,
   ServerProviderModel,
   ServerProviderState,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Effect from "effect/Effect";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { normalizeCustomModelSlug } from "@t3tools/shared/model";
+import { normalizeCustomModelSlug } from "@croki/shared/model";
 import { isWindowsCommandNotFound } from "../processRunner.ts";
 import { createProviderVersionAdvisory } from "./providerMaintenance.ts";
 import { collectUint8StreamText } from "../stream/collectUint8StreamText.ts";
@@ -219,6 +220,7 @@ export function buildServerProvider(input: {
   enabled: boolean;
   checkedAt: string;
   models: ReadonlyArray<ServerProviderModel>;
+  openClawAgents?: ReadonlyArray<OpenClawAgent>;
   slashCommands?: ReadonlyArray<ServerProviderSlashCommand>;
   skills?: ReadonlyArray<ServerProviderSkill>;
   probe: ProviderProbeResult;
@@ -250,6 +252,7 @@ export function buildServerProvider(input: {
     slashCommands: [...(input.slashCommands ?? [])],
     skills: [...(input.skills ?? [])],
     ...(versionAdvisory ? { versionAdvisory } : {}),
+    ...(input.openClawAgents ? { openClawAgents: [...input.openClawAgents] } : {}),
   };
 }
 

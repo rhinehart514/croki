@@ -1,6 +1,8 @@
-import { fromLenientJson } from "@t3tools/shared/schemaJson";
+import { fromLenientJson } from "@croki/shared/schemaJson";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+
+import { CROKI_PRODUCT_IDENTIFIERS } from "../../../../scripts/lib/brand-policy.ts";
 
 import {
   DEFAULT_LINUX_PASSWORD_STORE,
@@ -49,17 +51,18 @@ function resolveEarlyDesktopSettingsPath(input: {
   readonly homeDirectory: string;
   readonly joinPath: JoinPath;
 }): string {
-  const t3Home = Option.fromUndefinedOr(input.env.T3CODE_HOME);
+  const crokiHome = Option.fromUndefinedOr(input.env.CROKI_HOME);
   const baseDir = resolveDesktopBaseDir({
     homeDirectory: input.homeDirectory,
     joinPath: input.joinPath,
-    t3Home,
+    configuredHome: crokiHome,
+    defaultStateRoot: CROKI_PRODUCT_IDENTIFIERS.stateRoot,
   });
   const stateDir = resolveDesktopStateDir({
     baseDir,
     isDevelopment: isDevelopmentEnvironment(input.env),
     joinPath: input.joinPath,
-    t3Home,
+    configuredHome: crokiHome,
   });
   return input.joinPath(stateDir, "desktop-settings.json");
 }
@@ -81,7 +84,7 @@ export function resolveEarlyLinuxElectronOptions(
 ): EarlyLinuxElectronOptions {
   const preference = resolveEarlyLinuxPasswordStorePreference(input);
   return {
-    linuxWmClass: isDevelopmentEnvironment(input.env) ? "t3code-dev" : "t3code",
+    linuxWmClass: isDevelopmentEnvironment(input.env) ? "croki-dev" : "croki",
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,
       env: input.env,

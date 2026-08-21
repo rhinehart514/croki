@@ -1,10 +1,11 @@
-import { type ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import { type ResolvedKeybindingsConfig } from "@croki/contracts";
 import { ChevronRightIcon } from "lucide-react";
 import { shortcutLabelForCommand } from "../keybindings";
 import {
   type CommandPaletteActionItem,
   type CommandPaletteGroup,
   type CommandPaletteSubmenuItem,
+  threadContentSpeaker,
 } from "./CommandPalette.logic";
 import {
   CommandCollection,
@@ -69,11 +70,10 @@ function ThreadContentMatch(props: {
   match: NonNullable<CommandPaletteActionItem["threadContentMatch"]>;
 }) {
   const isUser = props.match.source === "user";
+  const speaker = threadContentSpeaker(props.match);
   return (
     <span className="truncate text-xs text-muted-foreground/85">
-      <span className={isUser ? "text-blue-400" : "text-emerald-400"}>
-        {isUser ? "You:" : "Agent:"}
-      </span>{" "}
+      <span className={isUser ? "text-blue-400" : "text-emerald-400"}>{speaker}:</span>{" "}
       <HighlightedSearchText text={props.match.snippet} query={props.match.query} />
     </span>
   );

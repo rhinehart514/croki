@@ -51,7 +51,7 @@ describe("theme failure handling", () => {
       expect(error).toBeInstanceOf(ThemeStorageError);
       expect(error).toMatchObject({
         operation: "read",
-        storageKey: "t3code:theme",
+        storageKey: "croki:theme",
         cause: readCause,
       });
     }
@@ -63,14 +63,14 @@ describe("theme failure handling", () => {
       expect(error).toBeInstanceOf(ThemeStorageError);
       expect(error).toMatchObject({
         operation: "write",
-        storageKey: "t3code:theme",
+        storageKey: "croki:theme",
         theme: "dark",
         cause: writeCause,
       });
     }
   });
 
-  it("reads the persisted T3 Chat theme preference", async () => {
+  it("reads the persisted Croki theme preference", async () => {
     vi.stubGlobal("window", {
       localStorage: createStorage({
         getItem: () => "t3-chat",
@@ -102,10 +102,10 @@ describe("theme failure handling", () => {
     await expect(import("./useTheme")).resolves.toBeDefined();
 
     expect(errorLog).toHaveBeenCalledWith(
-      "Failed to read theme preference for t3code:theme.",
+      "Failed to read theme preference for croki:theme.",
       expect.objectContaining({
         operation: "read",
-        storageKey: "t3code:theme",
+        storageKey: "croki:theme",
         errorTag: "ThemeStorageError",
       }),
     );
@@ -119,7 +119,7 @@ describe("theme failure handling", () => {
     const themeGetItem = vi.fn((): string | null => {
       throw cause;
     });
-    const getItem = vi.fn((key: string) => (key === "t3code:theme" ? themeGetItem() : null));
+    const getItem = vi.fn((key: string) => (key === "croki:theme" ? themeGetItem() : null));
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     let readSnapshot: (() => unknown) | undefined;
     let subscribeToTheme: ((listener: () => void) => () => void) | undefined;
@@ -158,7 +158,7 @@ describe("theme failure handling", () => {
     expect(errorLog).toHaveBeenCalledTimes(1);
 
     const unsubscribe = subscribeToTheme?.(() => undefined);
-    storageHandler?.({ key: "t3code:theme" } as StorageEvent);
+    storageHandler?.({ key: "croki:theme" } as StorageEvent);
     readSnapshot?.();
 
     expect(themeGetItem).toHaveBeenCalledTimes(2);

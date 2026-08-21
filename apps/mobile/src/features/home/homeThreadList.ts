@@ -2,24 +2,21 @@ import {
   buildProjectGroups,
   derivePhysicalProjectKey,
   deriveProjectGroupLabel,
-} from "@t3tools/client-runtime/state/project-grouping";
-import type {
-  EnvironmentProject,
-  EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+} from "@croki/client-runtime/state/project-grouping";
+import type { EnvironmentProject, EnvironmentThreadShell } from "@croki/client-runtime/state/shell";
 import {
   getThreadSortTimestamp,
   sortThreads,
   toSortableTimestamp,
-} from "@t3tools/client-runtime/state/thread-sort";
-import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
+} from "@croki/client-runtime/state/thread-sort";
+import { threadSearchMatchKey } from "@croki/client-runtime/state/thread-search";
 import type {
   EnvironmentId,
   ScopedProjectRef,
   SidebarProjectGroupingMode,
   SidebarProjectSortOrder,
   SidebarThreadSortOrder,
-} from "@t3tools/contracts";
+} from "@croki/contracts";
 import * as Arr from "effect/Array";
 import * as Option from "effect/Option";
 import * as Order from "effect/Order";
@@ -337,7 +334,7 @@ export function buildHomeThreadGroups(input: {
 
     // A stale project id still resolves to the canonical member with the same
     // environment/path, so quick creation follows the machine with the newest activity.
-    const lastActiveProject = Arr.head(sortedThreads).pipe(
+    const lastActiveProject = Arr.head(sortThreads(group.threads, "updated_at")).pipe(
       Option.flatMap((thread) =>
         Arr.findFirst(
           input.projects,

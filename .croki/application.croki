@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "kind": "application",
+  "application": {
+    "id": "croki",
+    "name": "Croki",
+    "promise": "Direct native coding agents through real software work without losing the state, evidence, or control needed to ship.",
+    "users": [
+      "Founders building real software with coding agents"
+    ]
+  },
+  "released": {
+    "version": "0.4.10",
+    "summary": "Croki integrates the current T3 Code foundation as a durable development environment while leaving model behavior native unless the founder explicitly applies context, skills, modes, permissions, or tools.",
+    "product": [
+      "Default turns send only the founder's visible message and attachments, with no Croki persona, planning, delegation, application, progress, or sibling-work prompt.",
+      "The application brief reaches a model only through Add to message, which inserts a visible and removable .croki/application.croki file chip.",
+      "Provider-native skills, files, models, interaction modes, permissions, tools, and delegation remain explicit user choices.",
+      "Current T3 sidebar, pagination, agents, usage, provider settings, browser history, mobile, desktop, and reliability work is integrated.",
+      "Historical harness and Canvas data remain readable, while new turns and artifacts use only explicit user-applied semantics."
+    ],
+    "gtm": [
+      "Describe Croki as the ADE around native coding agents, not an agent runtime, orchestration system, or product-management system.",
+      "The promise is native agent speed with a durable environment for direction, evidence, recovery, and shipping."
+    ],
+    "learnings": [
+      "Native must describe the actual provider input boundary, not merely the absence of a named persona.",
+      "Application direction is most trustworthy when founders inspect and attach the exact worktree source themselves.",
+      "Provider-native delegation becomes more useful when Croki makes it legible without taking ownership of its strategy."
+    ],
+    "sources": [
+      {
+        "kind": "file",
+        "path": "docs/project/release-notes-0.4.10.md"
+      }
+    ]
+  },
+  "building": {
+    "version": "0.4.11",
+    "intent": "Make Croki automatically visualize the structure of product, GTM, design, and implementation questions inside the native ADE without adding a harness or a second workflow.",
+    "product": [
+      "Threads, files, terminal, Preview, Review, Git, and pull requests remain the primary development environment.",
+      "Croki automatically places a source-grounded View directly after the relevant user message when bounded perception contains structure that linear text hides.",
+      "Every View statement exposes epistemic state, source identity, coverage, revision, framing, and omissions.",
+      "Reframe changes the organizing logic over the same sources; local exploration never sends a message or changes provider behavior.",
+      "Use in next message returns only a visible founder-selected View reference and stable source IDs to the native composer.",
+      "Sparse, unavailable, invalid, or unsupported inputs add nothing to the Thread.",
+      "Canvas is absent from navigation, Settings, commands, and new-turn behavior; historical identifiers remain readable for compatibility only."
+    ],
+    "successSignals": [
+      "The founder can see a complex question as a useful visual structure and inspect the provenance behind every consequential statement.",
+      "The same semantic View remains legible across web, React Native, and native SwiftUI clients.",
+      "Ordinary development never requires Product mode, a strategy folder, object browser, progress model, or Canvas workspace."
+    ]
+  }
+}
