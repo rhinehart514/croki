@@ -44,15 +44,15 @@ The update does not remove saved threads, settings, or project files.
 The available action depends on how that server was started. Croki does not update connected
 servers silently in the background.
 
-Croki never offers inherited T3 Code package, server, desktop, hosted web, or
-release destinations as Croki update paths. Package-backed server updates stay
+Croki never offers unowned package, server, desktop, hosted web, or release
+destinations as update paths. Package-backed server updates stay
 unavailable until the exact `croki-server` version is published to a
 Croki-owned registry. GitHub-only desktop releases update their bundled server
 with the Croki app and do not imply that a remote package exists.
 
 An older launcher may require a one-time local update on the server machine to
 gain rollback support. Use only the Croki-owned command shown by the installed
-Croki client; do not substitute an inherited `npx t3@...` command.
+Croki client.
 
 After selecting **Update**, the notice becomes a live status line: **Downloading…** while the new
 version is fetched and verified, then **Restarting…** while the server restarts into it. The same

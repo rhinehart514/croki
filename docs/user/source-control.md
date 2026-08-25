@@ -42,7 +42,7 @@ Croki works with the platforms your team already uses:
 - While working in a thread, open linked reviews in the same compact right-panel tabs without
   leaving the conversation
 - Open the review directly in your browser with one click
-- Command-click (Control-click on Windows and Linux) a pull request number in the sidebar to open it in your browser instead of in T3 Code
+- Command-click (Control-click on Windows and Linux) a pull request number in the sidebar to open it in your browser instead of in Croki
 - Check out a teammate's branch to review code locally
 
 **Fix what you wrote, in place**
@@ -67,7 +67,7 @@ Run a quick **Rescan** after setting up a new machine or changing credentials.
 
 ### For GitHub (Recommended for most users)
 
-1. Install the GitHub CLI (version 2.81.0 or newer) on the machine running T3 Code:
+1. Install the GitHub CLI (version 2.81.0 or newer) on the machine running Croki:
    ```bash
    brew install gh
    ```
@@ -99,7 +99,7 @@ machine running Croki.
 Recommended, a Bitbucket access token:
 
 ```bash
-export T3CODE_BITBUCKET_ACCESS_TOKEN="your-access-token"
+export CROKI_BITBUCKET_ACCESS_TOKEN="your-access-token"
 ```
 
 Or an Atlassian account email plus API token, with read/write access to pull requests and
@@ -107,8 +107,8 @@ repositories, plus read access to your user account (`read:user:bitbucket`, used
 connection):
 
 ```bash
-export T3CODE_BITBUCKET_EMAIL="you@example.com"
-export T3CODE_BITBUCKET_API_TOKEN="your-token"
+export CROKI_BITBUCKET_EMAIL="you@example.com"
+export CROKI_BITBUCKET_API_TOKEN="your-token"
 ```
 
 If both are set, the access token wins. Restart Croki and verify the connection in **Source
@@ -140,7 +140,7 @@ Control settings**.
 **Common issues:**
 
 - **Provider shows "Not authenticated"** – Run the login command for that provider (e.g., `gh auth login`) in a terminal on the server, then rescan in Settings
-- **GitHub says it could not verify sign-in status** – T3 Code needs GitHub CLI 2.81.0 or newer to check sign-in status. Update `gh` (e.g., `brew upgrade gh`), then rescan
+- **GitHub says it could not verify sign-in status** – Croki needs GitHub CLI 2.81.0 or newer to check sign-in status. Update `gh` (e.g., `brew upgrade gh`), then rescan
 - **Bitbucket not connecting** – Double-check your environment variables are set in the correct shell profile and the server was restarted
 - **Can't push to a remote** – Verify your Git remote URL matches the provider you've authenticated with (SSH vs HTTPS remotes may need different credentials)
 

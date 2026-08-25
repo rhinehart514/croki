@@ -21,35 +21,14 @@ Pushes to `croki/main` also produce an unsigned Windows x64 installer artifact
 in the repository's Actions run. Windows may show a SmartScreen warning.
 
 Croki's package-registry, hosted web, signing, and production mobile release
-destinations remain disabled until each has Croki-owned credentials. Do not use
-the inherited T3 Code Homebrew, winget, AUR, npm, web, relay, or update channels
-to install or publish Croki.
+destinations remain disabled until each has Croki-owned credentials. Use the
+Croki GitHub release or run Croki from source.
 
 ## Run From Source
 
 ```sh
 vp i
 vp run dev
-```
-
-macOS:
-
-```bash
-brew install --cask t3-code
-```
-
-Arch Linux:
-
-Stable:
-
-```bash
-yay -S t3code-bin
-```
-
-Nightly:
-
-```bash
-yay -S t3code-nightly-bin
 ```
 
 ## Providers

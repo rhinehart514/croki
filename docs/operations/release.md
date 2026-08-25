@@ -7,13 +7,14 @@ exact-version `croki-server` publication in the same release. A GitHub-only
 desktop release instead updates its bundled, desktop-managed server and compiles
 package-backed remote server updates out of the client.
 
-## 0.4.14 source candidate
+## 0.4.15 source candidate
 
-The 0.4.14 source candidate aligns the four manifests updated by the release
+The 0.4.15 source candidate aligns the four manifests updated by the release
 workflow (`apps/server`, `apps/desktop`, `apps/web`, and `packages/contracts`).
-It rebuilds Croki on T3 Code `be7d35aa` while preserving Croki's provider
-boundary, installed-state history, branding, and destination ownership. See the
-[0.4.14 release notes](../project/release-notes-0.4.14.md) for the product summary.
+It advances the daily workspace through upstream `5d7665396` while preserving
+Croki's provider boundary, installed-state history, branding, and destination
+ownership. See the [0.4.15 release notes](../project/release-notes-0.4.15.md)
+for the product summary.
 
 ## Current behavior
 

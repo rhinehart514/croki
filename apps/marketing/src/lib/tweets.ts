@@ -38,14 +38,6 @@ export const tweets = [
     link: "https://x.com/aronprins/status/2045102518196183109",
   },
   {
-    handle: "BennettBuhner",
-    content:
-      "Croki is literally Codex but better; all your favorite models and harnesses, accessible anywhere! The app is great but the website is even greater, so instead of needing to SSH into a machine, T3 IS my SSH!",
-    excerpt:
-      "Croki is literally Codex but better; all your favorite models and harnesses, accessible anywhere.",
-    link: "https://x.com/BennettBuhner/status/2054667115697754387",
-  },
-  {
     handle: "ex0t1clol",
     content: "Croki is proof electron apps don't have to suck",
     link: "https://x.com/ex0t1clol/status/2054666870008021197",
@@ -95,14 +87,6 @@ export const tweets = [
     content:
       "Croki is probably the first coding gui that didn't suck performance wise and had a smart team behind it.",
     link: "https://x.com/leodev/status/2054679746353537042",
-  },
-  {
-    handle: "pocarles",
-    content:
-      "Only using Codex and T3 now.\n\nI thought all AI coding harnesses had roughly the same impact. Using Croki taught me how wrong I was. The interface between you and the model changes everything.",
-    excerpt:
-      "Using Croki taught me how wrong I was. The interface between you and the model changes everything.",
-    link: "https://x.com/pocarles/status/2054673964274758046",
   },
   {
     handle: "DavidKPiano",

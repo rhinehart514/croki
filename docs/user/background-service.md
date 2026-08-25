@@ -1,10 +1,7 @@
 # Running Croki in the Background
 
-On Linux and macOS, T3 Code can run as a background service for your user, so it is ready without
+On Linux and macOS, Croki can run as a background service for your user, so it is ready without
 keeping a terminal open.
-
-Do not install or update Croki with inherited `npx t3@...` commands. They target
-T3 Code's package and release destinations, not Croki.
 
 When Croki-owned packaging is enabled, the service will:
 
@@ -18,25 +15,25 @@ Updating restarts Croki briefly. Active agent work and terminal commands must
 finish before a service update begins.
 
 ```sh
-npx t3@latest service status
+croki service status
 ```
 
 Update or repair it:
 
 ```sh
-npx t3@latest service update
+croki service update
 ```
 
 Stop it and remove it from startup:
 
 ```sh
-npx t3@latest service uninstall
+croki service uninstall
 ```
 
-Updating restarts T3 Code briefly. Let active agent work and terminal commands finish first.
+Updating restarts Croki briefly. Let active agent work and terminal commands finish first.
 If a remote update is already in progress, wait for it to finish before retrying a local update.
 
-The service runs a small stable launcher. Exact T3 Code versions are installed separately, so a
+The service runs a small stable launcher. Exact Croki versions are installed separately, so a
 failed remote candidate can return to the previous version without rewriting the service
 definition. The launcher snapshots the database before a remote candidate starts, so database
 updates roll back with the server version. An older launcher may require one local
@@ -68,10 +65,10 @@ A few more macOS notes:
 
 **Windows** is not supported yet.
 
-## Using It with T3 Connect
+## Using It with Croki Connect
 
-T3 Connect may offer to install the service during setup so the host stays reachable in the
-background. This is only an onboarding shortcut: the service and T3 Connect are managed separately.
+Croki Connect may offer to install the service during setup so the host stays reachable in the
+background. This is only an onboarding shortcut: the service and Croki Connect are managed separately.
 
-Signing out of T3 Connect does not remove the service. Use `t3 service uninstall` when you no longer
-want T3 Code to start in the background.
+Signing out of Croki Connect does not remove the service. Use `croki service uninstall` when you no longer
+want Croki to start in the background.

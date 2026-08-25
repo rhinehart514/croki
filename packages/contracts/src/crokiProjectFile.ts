@@ -4,7 +4,7 @@ import * as SchemaTransformation from "effect/SchemaTransformation";
 import { ThreadEnvMode } from "./environment.ts";
 import { ProjectScriptIcon } from "./orchestration.ts";
 
-/** File name of the checked-in T3 project file, resolved at the workspace root. */
+/** File name of the checked-in Croki project file, resolved at the workspace root. */
 export const CROKI_PROJECT_FILE_NAME = "croki.json";
 
 /** Public URL of the published JSON Schema for {@link CrokiProjectFile}. */
@@ -88,8 +88,7 @@ export const CrokiProjectFile = Schema.Struct({
       .check(Schema.isMaxLength(CROKI_PROJECT_FILE_MAX_SCRIPTS)),
   ),
 }).annotate({
-  title: "T3 project file",
-  description:
-    "Checked-in project configuration for Croki (croki.json at the repository root). See https://t3.codes for documentation.",
+  title: "Croki project file",
+  description: "Checked-in project configuration for Croki (croki.json at the repository root).",
 });
 export type CrokiProjectFile = typeof CrokiProjectFile.Type;

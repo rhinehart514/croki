@@ -149,4 +149,12 @@ describe("check-croki-overlay", () => {
       expect.arrayContaining([expect.objectContaining({ code: "required-brand-surface", path })]),
     );
   });
+
+  it("rejects inherited copy on a required Croki surface", () => {
+    const path = "apps/web/src/components/settings/SettingsFontPreviews.tsx";
+    expect(findRequiredBrandSurfaceViolations(path, 'const prompt = "t3code";')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "required-brand-surface", path })]),
+    );
+    expect(findRequiredBrandSurfaceViolations(path, 'const prompt = "croki";')).toEqual([]);
+  });
 });

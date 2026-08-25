@@ -1,24 +1,29 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { isLegalDocumentUrl } from "./legal-document-url";
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.resetModules();
+});
 
 describe("isLegalDocumentUrl", () => {
-  it.each([
-    "https://t3.codes/legal",
-    "https://t3.codes/legal/",
-    "https://t3.codes/privacy-policy?source=app",
-    "https://t3.codes/terms-of-service#updates",
-    "https://t3.codes/security-policy",
-  ])("allows a configured legal document: %s", (url) => {
-    expect(isLegalDocumentUrl(url)).toBe(true);
+  it("has no inherited legal destination in an unconfigured build", async () => {
+    const { ALLOWED_LEGAL_DOCUMENT_URLS, LEGAL_URL, isLegalDocumentUrl } =
+      await import("./legal-document-url");
+
+    expect(LEGAL_URL).toBeNull();
+    expect(ALLOWED_LEGAL_DOCUMENT_URLS).toEqual([]);
+    expect(isLegalDocumentUrl("https://t3.codes/legal")).toBe(false);
   });
 
-  it.each([
-    "https://t3.codes/download",
-    "https://example.com/legal",
-    "javascript:alert(1)",
-    "not-a-url",
-  ])("rejects a URL outside the legal-document allowlist: %s", (url) => {
-    expect(isLegalDocumentUrl(url)).toBe(false);
+  it("allows only legal routes from the configured Croki site", async () => {
+    vi.stubEnv("EXPO_PUBLIC_MARKETING_SITE_URL", "https://croki.example/product");
+    const { isLegalDocumentUrl } = await import("./legal-document-url");
+
+    expect(isLegalDocumentUrl("https://croki.example/product/legal/")).toBe(true);
+    expect(isLegalDocumentUrl("https://croki.example/product/privacy-policy?source=app")).toBe(
+      true,
+    );
+    expect(isLegalDocumentUrl("https://croki.example/legal")).toBe(false);
+    expect(isLegalDocumentUrl("javascript:alert(1)")).toBe(false);
   });
 });

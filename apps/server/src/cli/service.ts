@@ -49,10 +49,10 @@ export function formatServiceStatus(
   cliVersion: string,
 ): string {
   if (!status.supported) {
-    return "T3 Code service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
+    return "Croki service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
   }
   if (!status.installed) {
-    return "Croki service\n  Status: not installed\n  Next: Run `t3 service install`.";
+    return "Croki service\n  Status: not installed\n  Next: Run `croki service install`.";
   }
   return [
     "Croki service",
@@ -159,12 +159,12 @@ export const offerServiceDuringOnboarding = Effect.gen(function* () {
   const wanted = yield* Prompt.run(
     Prompt.confirm({
       message: installed
-        ? "The installed T3 Code service needs an update or repair. Update it now?"
+        ? "The installed Croki service needs an update or repair. Update it now?"
         : platform === "darwin"
-          ? "Run T3 Code in the background whenever you log in to this Mac? " +
-            "It stays reachable through T3 Connect while you are logged in."
-          : "Run T3 Code in the background whenever this machine boots? " +
-            "It stays reachable through T3 Connect even after you log out.",
+          ? "Run Croki in the background whenever you log in to this Mac? " +
+            "It stays reachable through Croki Connect while you are logged in."
+          : "Run Croki in the background whenever this machine boots? " +
+            "It stays reachable through Croki Connect even after you log out.",
       initial: true,
     }),
   );

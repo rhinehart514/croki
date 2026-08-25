@@ -1,19 +1,19 @@
 # Current project state
 
 Last audited: 2026-08-25
-Code baseline: Croki 0.4.14 source candidate, synced through T3 Code `5d7665396`
+Code baseline: Croki 0.4.15 source candidate, synced through upstream `5d7665396`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow application-aware overlay on the development environment rather than
 a second agent runtime.
 
-Croki 0.4.14 is the current repository source candidate; 0.4.13 remains the
+Croki 0.4.15 is the current repository source candidate; 0.4.14 remains the
 stable release until the candidate is published. See the [0.4.6 release
 notes](./release-notes-0.4.6.md), [0.4.7 UI history
 notes](./release-notes-0.4.7.md), [0.4.8 quality-of-life
 notes](./release-notes-0.4.8.md), [0.4.9 control without interruption
 notes](./release-notes-0.4.9.md), [0.4.10 native-provider integration
-notes](./release-notes-0.4.10.md), [0.4.11 Thought Views candidate](./release-notes-0.4.11.md), [0.4.12 T3 sync notes](./release-notes-0.4.12.md), [0.4.13 branding correction](./release-notes-0.4.13.md), [0.4.14 foundation refresh](./release-notes-0.4.14.md), and [release ownership contract](../operations/release.md)
+notes](./release-notes-0.4.10.md), [0.4.11 Thought Views candidate](./release-notes-0.4.11.md), [0.4.12 T3 sync notes](./release-notes-0.4.12.md), [0.4.13 branding correction](./release-notes-0.4.13.md), [0.4.14 foundation refresh](./release-notes-0.4.14.md), [0.4.15 daily-work release](./release-notes-0.4.15.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
 ## Working product
@@ -49,6 +49,18 @@ Croki currently provides:
 - one repository-owned application brief at `.croki/application.croki`, visible
   to the founder and attached to a model only through an explicit user action;
 - source-grounded Croki Senses perception, now rendered as automatic inline Views when it materially improves a Thread question.
+
+## 0.4.15 boundary
+
+0.4.15 carries the current Croki workspace through upstream `5d7665396`. It
+adds safer image handling, linked pull requests, stronger reconnect and
+interrupt recovery, current provider behavior, and the intervening desktop,
+mobile, server, and performance fixes.
+
+The release keeps Croki's name and commands consistent across the workspace,
+uses `CROKI_HOME` for local pairing and triage discovery, and refuses inherited
+mobile legal destinations when no Croki-owned site is configured. Installed
+state, wire, migration, and release-guard identifiers remain compatible.
 
 ## 0.4.14 boundary
 
@@ -347,7 +359,7 @@ rewriting its workspace, memory, skills, model, tools, or delegation settings.
   signing, Discord, and mobile destinations remain skipped until their specific
   flags and Croki-owned configuration are enabled.
 - Pushes to `croki/main` build unsigned macOS arm64 and Windows x64 installer
-  artifacts. A tagged GitHub release is the enabled 0.4.14 publication path.
+  artifacts. A tagged GitHub release is the enabled 0.4.15 publication path.
 
 ## Verification
 

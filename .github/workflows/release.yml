@@ -934,6 +934,22 @@ jobs:
             fi
           done
 
+      - id: release_body
+        name: Select stable release notes
+        shell: bash
+        env:
+          RELEASE_CHANNEL: ${{ needs.preflight.outputs.release_channel }}
+          RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          notes_path="docs/project/release-notes-${RELEASE_VERSION}.md"
+          if [[ "$RELEASE_CHANNEL" == "stable" && -f "$notes_path" ]]; then
+            echo "body_path=$notes_path" >> "$GITHUB_OUTPUT"
+            echo "generate_release_notes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "body_path=" >> "$GITHUB_OUTPUT"
+            echo "generate_release_notes=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # - name: Merge Windows updater manifests
       #   run: |
       #     shopt -s nullglob
@@ -970,7 +986,8 @@ jobs:
           tag_name: ${{ needs.preflight.outputs.tag }}
           target_commitish: ${{ needs.preflight.outputs.ref }}
           name: ${{ needs.preflight.outputs.release_name }}
-          generate_release_notes: true
+          body_path: ${{ steps.release_body.outputs.body_path }}
+          generate_release_notes: ${{ steps.release_body.outputs.generate_release_notes }}
           previous_tag: ${{ needs.preflight.outputs.previous_tag }}
           prerelease: ${{ needs.preflight.outputs.is_prerelease }}
           make_latest: ${{ needs.preflight.outputs.make_latest }}

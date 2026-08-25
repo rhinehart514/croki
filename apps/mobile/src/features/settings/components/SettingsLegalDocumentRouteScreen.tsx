@@ -35,10 +35,13 @@ export function SettingsLegalDocumentCloseHeaderButton() {
 export function SettingsLegalDocumentExternalHeaderButton({
   externalUrl = LEGAL_URL,
 }: {
-  readonly externalUrl?: string;
+  readonly externalUrl?: string | null;
 }) {
   const iconColor = useThemeColor("--color-icon");
-  const safeExternalUrl = isLegalDocumentUrl(externalUrl) ? externalUrl : LEGAL_URL;
+  const safeExternalUrl =
+    externalUrl !== null && isLegalDocumentUrl(externalUrl) ? externalUrl : LEGAL_URL;
+
+  if (safeExternalUrl === null) return null;
 
   return (
     <Pressable

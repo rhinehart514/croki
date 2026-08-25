@@ -193,9 +193,9 @@ function formatCloudStatus(status: CloudCliStatus, options?: { readonly json?: b
       ? "pending server startup"
       : "not provisioned";
   const nextStep = !status.authenticated
-    ? "Run `t3 connect link` to authorize and enable Croki Connect."
+    ? "Run `croki connect link` to authorize and enable Croki Connect."
     : !status.desired
-      ? "Run `t3 connect link` to enable Croki Connect."
+      ? "Run `croki connect link` to enable Croki Connect."
       : !status.linked
         ? "Start Croki to provision the environment link and launch its managed tunnel."
         : undefined;
@@ -383,7 +383,7 @@ export const reportCloudDisconnectResults = Effect.fn("cloud.cli.report_disconne
       yield* Console.warn(
         input.clearAuthorization
           ? "Could not revoke the relay-side environment record before signing out.\nThe stored CLI authorization was still removed locally."
-          : "Could not revoke the relay-side environment record yet.\nRun `t3 connect unlink` again when the relay is reachable.",
+          : "Could not revoke the relay-side environment record yet.\nRun `croki connect unlink` again when the relay is reachable.",
       );
     } else if (input.relayResult.value.status === "revoked") {
       yield* Console.log("Revoked the relay-side environment record.");
@@ -412,7 +412,7 @@ const disconnectCloud = Effect.fn("cloud.cli.disconnect")(function* (options: {
 
   if (options.clearAuthorization) {
     yield* Console.log(
-      "Signed out of Croki Connect locally.\nThe background service is managed separately with `t3 service`.",
+      "Signed out of Croki Connect locally.\nThe background service is managed separately with `croki service`.",
     );
   }
 });
@@ -632,7 +632,7 @@ const connectPublishCommand = Command.make("publish", {
         // out of band without Croki Connect.
         if (!(yield* tokens.hasCredential)) {
           yield* Console.log(
-            "Run `t3 connect login` first so this environment can be authorized to publish.",
+            "Run `croki connect login` first so this environment can be authorized to publish.",
           );
           return;
         }
@@ -699,8 +699,8 @@ export const connectCommand = Command.make("connect", {
           const platform = yield* HostProcessPlatform;
           yield* Console.log(
             platform === "darwin"
-              ? "\n✓ Background service ready\n\nT3 Code will stay reachable while you are logged in to this Mac."
-              : "\n✓ Background service ready\n\nT3 Code will stay reachable after you log out.",
+              ? "\n✓ Background service ready\n\nCroki will stay reachable while you are logged in to this Mac."
+              : "\n✓ Background service ready\n\nCroki will stay reachable after you log out.",
           );
           return;
         }

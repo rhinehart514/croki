@@ -3,9 +3,8 @@
 Use this when you want to connect to a Croki server from another device such as a phone, tablet, or separate desktop app.
 
 > Croki's package-registry CLI, hosted web app, and managed Connect relay are
-> disabled until each destination is Croki-owned. Do not use inherited
-> `npx t3`, `app.t3.codes`, or T3 Connect endpoints as Croki release paths. The
-> desktop connection flow and source development server remain available.
+> disabled until each destination is Croki-owned. The desktop connection flow
+> and source development server remain available.
 
 ## Quick Pairing for a Running Server
 
@@ -95,15 +94,15 @@ Use this when you want the desktop app to start or reuse Croki on another machin
 2. Under **Remote Environments**, choose **Add environment**.
 3. Select the SSH launch flow.
 4. Enter the SSH target, such as `user@example.com`.
-5. Confirm the launch. The desktop app probes the host, starts or reuses a remote T3 server, opens a local port forward, and saves the environment.
+5. Confirm the launch. The desktop app probes the host, starts or reuses a remote Croki server, opens a local port forward, and saves the environment.
 
-After setup, the renderer connects to a local forwarded HTTP/WebSocket endpoint. The remote host still owns the actual T3 server, projects, files, git state, terminals, and provider sessions.
+After setup, the renderer connects to a local forwarded HTTP/WebSocket endpoint. The remote host still owns the actual Croki server, projects, files, git state, terminals, and provider sessions.
 
 SSH launch is a desktop feature because it needs local process and SSH access. Once the environment is paired and saved, it uses the same environment list and connection model as direct LAN, Tailscale, HTTPS, or future tunnel-backed environments.
 
 #### SSH Launch Troubleshooting
 
-The desktop SSH launcher connects with a non-interactive `sh` session, writes a small launcher script under `~/.t3/ssh-launch/<host-key>/`, starts or reuses a remote T3 server, and forwards the remote loopback port back to your desktop.
+The desktop SSH launcher connects with a non-interactive `sh` session, writes a small launcher script under `~/.t3/ssh-launch/<host-key>/`, starts or reuses a remote Croki server, and forwards the remote loopback port back to your desktop.
 
 The remote host must have a compatible Node.js runtime. Croki uses the server package's `engines.node` requirement:
 
@@ -173,11 +172,11 @@ Typical uses:
 
 Use the nested subcommand help pages for the full reference.
 
-### Deregister a T3 Connect Environment
+### Deregister a Croki Connect Environment
 
-Open your account menu and choose **T3 Connect** to see every environment registered to your
-account. On mobile, open **Settings** → **T3 Connect**. Choose **Deregister** to revoke an
-environment's T3 Connect access, remove any managed tunnel, and free its host space.
+Open your account menu and choose **Croki Connect** to see every environment registered to your
+account. On mobile, open **Settings** → **Croki Connect**. Choose **Deregister** to revoke an
+environment's Croki Connect access, remove any managed tunnel, and free its host space.
 
 Deregistration is an account action and does not need a connection to the environment, so it also
 works for a server that was wiped or is no longer reachable. Device-local connect and disconnect

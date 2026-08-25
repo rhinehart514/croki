@@ -30,7 +30,7 @@ codex login
 
 ## What Croki Adds To A Codex Session
 
-Croki keeps T3 Code's small host contract so Codex can operate reliably inside
+Croki keeps a small host contract so Codex can operate reliably inside
 the app. It tells Codex whether Default or Plan collaboration mode is active,
 which structured input is actually available, how to use the shared Preview
 browser, and which Croki/Codex runtime is active.

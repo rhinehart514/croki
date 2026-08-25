@@ -82,6 +82,51 @@ const REQUIRED_VISIBLE_BRAND_SURFACES = [
     required: ["CrokiMark", "APP_BASE_NAME"],
     forbidden: ["T3Wordmark", 'aria-label="T3"'],
   },
+  {
+    path: "apps/web/src/components/settings/SettingsFontPreviews.tsx",
+    required: ["croki"],
+    forbidden: ["t3code"],
+  },
+  {
+    path: "apps/web/src/components/cloud/ConnectCliAuthSurface.tsx",
+    required: ["croki connect"],
+    forbidden: ["t3 connect"],
+  },
+  {
+    path: "packages/client-runtime/src/relay/managedRelayState.ts",
+    required: ["Croki Connect"],
+    forbidden: ["T3 Connect"],
+  },
+  {
+    path: "packages/contracts/src/crokiProjectFile.ts",
+    required: ["Croki project file"],
+    forbidden: ["T3 project file"],
+  },
+  {
+    path: "packages/contracts/src/pullRequest.ts",
+    required: ["CROKI_BITBUCKET_API_TOKEN"],
+    forbidden: ["T3CODE_BITBUCKET"],
+  },
+  {
+    path: "packages/shared/src/themePalettes.ts",
+    required: ['label: "Rose"'],
+    forbidden: ['label: "T3 Chat"'],
+  },
+  {
+    path: "apps/mobile/src/features/settings/lib/legal-document-url.ts",
+    required: ["EXPO_PUBLIC_MARKETING_SITE_URL"],
+    forbidden: ["t3.codes"],
+  },
+  {
+    path: "apps/server/src/cli/service.ts",
+    required: ["Croki service"],
+    forbidden: ["T3 Code service", "Run T3 Code", "T3 Connect", "`t3 service"],
+  },
+  {
+    path: "apps/server/src/cli/triagePrompt.ts",
+    required: ["Croki triage playbook", "rhinehart514/croki"],
+    forbidden: ["T3 Code", "pingdotgg/t3code", "`t3 triage`"],
+  },
 ] as const;
 
 function toRepoPath(value: string): string {
