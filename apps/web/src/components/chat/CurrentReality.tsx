@@ -7,6 +7,8 @@ import type {
   ThreadEvidenceProvenance,
 } from "@croki/client-runtime/state/thread-evidence";
 
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+
 const SECTION_ORDER: ReadonlyArray<CurrentRealitySection> = [
   "outcome",
   "direction",
@@ -56,15 +58,21 @@ export function CurrentReality({ reality, onOpenSource, onDismiss }: CurrentReal
           </p>
         </div>
         {onDismiss ? (
-          <button
-            type="button"
-            aria-label="Dismiss current reality"
-            title="Dismiss current reality"
-            onClick={onDismiss}
-            className="rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <XIcon className="size-4" aria-hidden />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Dismiss current reality"
+                  onClick={onDismiss}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <XIcon className="size-4" aria-hidden />
+                </button>
+              }
+            />
+            <TooltipPopup>Dismiss current reality</TooltipPopup>
+          </Tooltip>
         ) : null}
       </div>
 

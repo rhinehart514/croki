@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef } from "react";
 
 import { threadPresence } from "../../state/presence";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export const PRESENCE_HEARTBEAT_MS = 8_000;
 
@@ -46,15 +47,21 @@ export function ThreadPresenceSummaryContent({
   const labels = participantLabels(participants);
   if (labels.length === 0) return null;
   return (
-    <span
-      aria-label={`People in this thread: ${labels.join(", ")}`}
-      className="inline-flex min-w-0 max-w-52 items-center gap-1 text-muted-foreground text-xs"
-      data-thread-presence="summary"
-      title={labels.join(", ")}
-    >
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-emerald-500/80" />
-      <span className="truncate">{formatNames(labels)}</span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            aria-label={`People in this thread: ${labels.join(", ")}`}
+            className="inline-flex min-w-0 max-w-52 items-center gap-1 text-muted-foreground text-xs"
+            data-thread-presence="summary"
+          >
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-emerald-500/80" />
+            <span className="truncate">{formatNames(labels)}</span>
+          </span>
+        }
+      />
+      <TooltipPopup>{labels.join(", ")}</TooltipPopup>
+    </Tooltip>
   );
 }
 

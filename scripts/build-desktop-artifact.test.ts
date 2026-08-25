@@ -826,7 +826,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it.effect("skips the primary native probe for cross-architecture Windows payloads", () => {
-    const targetArch = process.arch === "arm64" ? "x64" : "arm64";
+    const targetArch = "arm64";
     const commands: Array<{
       readonly command: string;
       readonly options: {
@@ -868,7 +868,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ).pipe(
       Effect.provide(spawnerLayer),
       Effect.provideService(HostProcessPlatform, "win32"),
-      Effect.provideService(HostProcessArchitecture, process.arch),
+      Effect.provideService(HostProcessArchitecture, "x64"),
     );
   });
 
