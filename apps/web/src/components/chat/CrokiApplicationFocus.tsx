@@ -38,8 +38,8 @@ export function CrokiApplicationFocus(props: {
     }
     return (
       <span
+        aria-label={`${problem}. Development continues without application direction.`}
         className="shrink-0 text-xs text-amber-500"
-        title={`${problem}. Development continues without application direction.`}
       >
         {problem}
       </span>

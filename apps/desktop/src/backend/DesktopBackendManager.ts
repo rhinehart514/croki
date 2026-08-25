@@ -563,7 +563,15 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
       ).pipe(Effect.forkScoped),
     );
   }
-  const waitUntilReady = (): Effect.Effect<void, never, HttpClient.HttpClient> =>
+  // Probe readiness in a loop while the backend process is still alive
+  // instead of giving up after the first budget. A slow cold boot (the
+  // WSL bundle loading across /mnt/c, or a first launch right after an
+  // update) can exceed the initial readiness budget while the backend is
+  // about to come up moments later; a one-shot probe left the app stuck
+  // on "Connecting to WSL…" forever even though the backend kept running
+  // and became healthy. Each round gets a fresh budget, and the forked
+  // loop is torn down with the run scope once the child exits.
+  const probeReadiness = Effect.fn("desktop.backendProcess.probeReadiness")(() =>
     waitForHttpReady({
       executablePath: options.executablePath,
       entryPath: options.entryPath,
@@ -571,16 +579,16 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
       httpBaseUrl: options.httpBaseUrl,
       timeout: options.readinessTimeout ?? DEFAULT_BACKEND_READINESS_TIMEOUT,
     }).pipe(
-      Effect.tap(() => options.onReady?.() ?? Effect.void),
-      Effect.catchTag("BackendReadinessTimeoutError", (error) =>
-        (options.onReadinessFailure?.(error) ?? Effect.void).pipe(
-          // The child can still become healthy after a slow cold start. Keep
-          // probing until it does or its run scope closes when the child exits.
-          Effect.andThen(Effect.suspend(waitUntilReady)),
-        ),
-      ),
-    );
-  yield* waitUntilReady().pipe(Effect.forkScoped);
+      Effect.flatMap(() => options.onReady?.() ?? Effect.void),
+      Effect.as(true),
+      Effect.catchTags({
+        BackendReadinessTimeoutError: (error) =>
+          (options.onReadinessFailure?.(error) ?? Effect.void).pipe(Effect.as(false)),
+      }),
+    ),
+  );
+
+  yield* probeReadiness().pipe(Effect.repeat({ while: (ready) => !ready }), Effect.forkScoped);
 
   const exit = yield* handle.exitCode.pipe(
     Effect.mapError(

@@ -1,6 +1,6 @@
 # Croki 0.4.11 — Generative Thought Views
 
-Status: built release candidate  
+Status: built release candidate
 Date: August 8, 2026
 
 Croki 0.4.11 adds automatic visual thinking directly to ordinary Threads while

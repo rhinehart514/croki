@@ -2,41 +2,44 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@croki/contracts";
 import type { Thread } from "../types";
 import {
+  browseInputEndPaddingClass,
   buildBrowseGroups,
   buildOpenCanvasAction,
   buildThreadActionItems,
   enumerateCommandPaletteItems,
+  filterPinnedBrowseEntries,
   filterCommandPaletteGroups,
   threadContentSpeaker,
   reduceCommandPaletteUiState,
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
 
-describe("buildOpenCanvasAction", () => {
-  it("runs the native Canvas command with its configurable shortcut", async () => {
-    const onOpenCanvas = vi.fn();
-    const action = buildOpenCanvasAction({ icon: null, onOpenCanvas });
-
-    expect(action).toMatchObject({
-      value: "action:open-canvas",
-      title: "Open Canvas",
-      shortcutCommand: "canvas.open",
-      disabled: false,
-    });
-    await action.run();
-    expect(onOpenCanvas).toHaveBeenCalledOnce();
+describe("browseInputEndPaddingClass", () => {
+  it("reserves the widest space for the create action", () => {
+    expect(
+      browseInputEndPaddingClass({
+        willCreateProjectPath: true,
+        hasHighlightedBrowseItem: false,
+      }),
+    ).toContain("pe-38");
   });
 
-  it("stays searchable but disabled with a clear reason when unavailable", async () => {
-    const action = buildOpenCanvasAction({
-      icon: null,
-      unavailableReason: "Select a project workspace first.",
-    });
+  it("reserves space for the wider highlighted-item shortcut", () => {
+    expect(
+      browseInputEndPaddingClass({
+        willCreateProjectPath: false,
+        hasHighlightedBrowseItem: true,
+      }),
+    ).toContain("pe-30");
+  });
 
-    expect(action.disabled).toBe(true);
-    expect(action.description).toBe("Select a project workspace first.");
-    expect(action.searchTerms).toContain("open canvas");
-    await action.run();
+  it("keeps the compact reserve for the normal add action", () => {
+    expect(
+      browseInputEndPaddingClass({
+        willCreateProjectPath: false,
+        hasHighlightedBrowseItem: false,
+      }),
+    ).toContain("pe-24");
   });
 });
 
@@ -58,7 +61,7 @@ describe("reduceCommandPaletteUiState", () => {
 
     expect(
       reduceCommandPaletteUiState(contentOpen, { _tag: "ToggleMode", mode: "content" }),
-    ).toEqual({ open: false, mode: "command", openIntent: null });
+    ).toEqual({ open: false, mode: "content", openIntent: null });
   });
 
   it("switches between open modes without closing", () => {
@@ -92,7 +95,7 @@ describe("reduceCommandPaletteUiState", () => {
     });
   });
 
-  it("resets to command mode for dialog-driven opens and closes", () => {
+  it("preserves the mode on close and resets it on open", () => {
     const filesOpen = reduceCommandPaletteUiState(closedState, {
       _tag: "ToggleMode",
       mode: "files",
@@ -100,7 +103,7 @@ describe("reduceCommandPaletteUiState", () => {
 
     expect(reduceCommandPaletteUiState(filesOpen, { _tag: "SetOpen", open: false })).toEqual({
       open: false,
-      mode: "command",
+      mode: "files",
       openIntent: null,
     });
     expect(reduceCommandPaletteUiState(filesOpen, { _tag: "SetOpen", open: true })).toEqual({
@@ -324,6 +327,20 @@ describe("buildThreadActionItems", () => {
     expect(groups[0]?.items[0]?.threadContentMatch?.snippet).toBe("Die Straße ist jetzt offen.");
   });
 
+  it("prefers renderDescription when provided", () => {
+    const [item] = buildThreadActionItems({
+      threads: [makeThread({ branch: "feat/search", worktreePath: "/tmp/wt" })],
+      projectTitleById: new Map([[PROJECT_ID, "T3 Code"]]),
+      sortOrder: "updated_at",
+      icon: null,
+      renderDescription: (thread, { projectTitle }) =>
+        `${projectTitle}:${thread.branch}:${thread.worktreePath ? "wt" : "local"}`,
+      runThread: async (_thread) => undefined,
+    });
+
+    expect(item?.description).toBe("T3 Code:feat/search:wt");
+  });
+
   it("filters archived threads out of thread search items", () => {
     const items = buildThreadActionItems({
       threads: [
@@ -394,5 +411,41 @@ describe("buildBrowseGroups", () => {
     finishNavigation?.();
     await action;
     expect(actionSettled).toBe(true);
+  });
+});
+
+describe("filterPinnedBrowseEntries", () => {
+  const entries = [
+    { name: "repo", fullPath: "/projects/repo" },
+    { name: "work", fullPath: "/projects/work" },
+  ];
+
+  it("shows sibling folders without losing an existing pinned destination", () => {
+    expect(
+      filterPinnedBrowseEntries({
+        browseEntries: entries,
+        filterQuery: "repo",
+        pinnedDirectoryName: "repo",
+        caseSensitive: true,
+      }),
+    ).toEqual({ visibleEntries: entries, exactEntry: entries[0] });
+  });
+
+  it("matches an existing pinned destination without Windows casing", () => {
+    const windowsEntries = [
+      { name: "Repo", fullPath: "C:\\projects\\Repo" },
+      { name: "work", fullPath: "C:\\projects\\work" },
+    ];
+    expect(
+      filterPinnedBrowseEntries({
+        browseEntries: windowsEntries,
+        filterQuery: "repo",
+        pinnedDirectoryName: "repo",
+        caseSensitive: false,
+      }),
+    ).toEqual({
+      visibleEntries: windowsEntries,
+      exactEntry: windowsEntries[0],
+    });
   });
 });

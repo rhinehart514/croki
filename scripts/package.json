@@ -11,6 +11,7 @@
     "@croki/shared": "workspace:*",
     "@croki/tailscale": "workspace:*",
     "@effect/platform-node": "catalog:",
+    "@electron/asar": "^3.4.1",
     "effect": "catalog:",
     "pngjs": "7.0.0",
     "yaml": "catalog:"

@@ -166,7 +166,7 @@ const config: ExpoConfig = {
   slug: "croki",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
-  version: repoEnv.APP_VERSION?.trim() || contractsPackageJson.version,
+  version: "1.0.4",
   runtimeVersion: {
     // Fingerprint (not appVersion) so an OTA only reaches binaries whose native
     // project — native deps, config plugins, AND patches/ — matches the update.

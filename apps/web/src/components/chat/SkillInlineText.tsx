@@ -1,7 +1,7 @@
 import { Children, cloneElement, isValidElement, type ReactNode } from "react";
 import type { ServerProviderSkill } from "@croki/contracts";
+import { formatProviderSkillDisplayName } from "@croki/client-runtime/providerSkills";
 
-import { formatProviderSkillDisplayName } from "../../providerSkillPresentation";
 import {
   CHAT_INLINE_CHIP_CLASS_NAME,
   CHAT_INLINE_CHIP_LABEL_CLASS_NAME,

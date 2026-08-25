@@ -55,8 +55,41 @@ Every push to `croki/main` produces a Windows x64 installer:
 3. Download the `croki-windows-x64-<version>` artifact.
 4. Extract it and run the `Croki-<version>-x64.exe` installer.
 
-Manual workflow builds are unsigned until Croki's Windows signing credentials
-are configured, so Windows may show a SmartScreen warning.
+Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
+
+#### Windows (`winget`)
+
+```bash
+winget install T3Tools.T3Code
+```
+
+#### macOS (Homebrew)
+
+```bash
+brew install --cask t3-code
+```
+
+#### Arch Linux (AUR)
+
+Stable:
+
+```bash
+yay -S t3code-bin
+```
+
+Nightly:
+
+```bash
+yay -S t3code-nightly-bin
+```
+
+The AUR packaging is maintained in this repository under [`packaging/aur`](./packaging/aur).
+
+## Some notes
+
+We are very very early in this project. Expect bugs.
+
+We are (mostly) not accepting contributions yet. Small fixes may be considered. Big features will not be.
 
 ## Documentation
 
@@ -98,7 +131,9 @@ irm https://vite.plus/ps1 | iex
 vp i
 ```
 
-### Run Croki
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) before reporting a bug or opening a PR.
+
+Have a feature request? Start an [Ideas discussion](https://github.com/pingdotgg/t3code/discussions/categories/ideas).
 
 ```bash
 # Web development

@@ -32,4 +32,3 @@ public struct CrokiPerceptionRelationship: Decodable, Sendable, Equatable, Ident
     public let kind: String
     public let label: String?
 }
-

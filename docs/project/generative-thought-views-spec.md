@@ -1,6 +1,6 @@
 # Generative Thought Views product specification
 
-Status: 0.4.11 implementation contract  
+Status: 0.4.11 implementation contract
 Date: August 8, 2026
 
 ## Product decision

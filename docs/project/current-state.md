@@ -1,18 +1,19 @@
 # Current project state
 
-Last audited: 2026-08-12
-Code baseline: Croki 0.4.13 on `croki/main`, synced through T3 Code `e321667b`
+Last audited: 2026-08-21
+Code baseline: Croki 0.4.14 source candidate, rebuilt on T3 Code `be7d35aa`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow application-aware overlay on the development environment rather than
 a second agent runtime.
 
-Croki 0.4.13 is the current repository implementation and stable release. See the [0.4.6 release
+Croki 0.4.14 is the current repository source candidate; 0.4.13 remains the
+stable release until the candidate is published. See the [0.4.6 release
 notes](./release-notes-0.4.6.md), [0.4.7 UI history
 notes](./release-notes-0.4.7.md), [0.4.8 quality-of-life
 notes](./release-notes-0.4.8.md), [0.4.9 control without interruption
 notes](./release-notes-0.4.9.md), [0.4.10 native-provider integration
-notes](./release-notes-0.4.10.md), [0.4.11 Thought Views candidate](./release-notes-0.4.11.md), [0.4.12 T3 sync notes](./release-notes-0.4.12.md), [0.4.13 branding correction](./release-notes-0.4.13.md), and [release ownership contract](../operations/release.md)
+notes](./release-notes-0.4.10.md), [0.4.11 Thought Views candidate](./release-notes-0.4.11.md), [0.4.12 T3 sync notes](./release-notes-0.4.12.md), [0.4.13 branding correction](./release-notes-0.4.13.md), [0.4.14 foundation refresh](./release-notes-0.4.14.md), and [release ownership contract](../operations/release.md)
 for independently gated publication destinations.
 
 ## Working product
@@ -48,6 +49,20 @@ Croki currently provides:
 - one repository-owned application brief at `.croki/application.croki`, visible
   to the founder and attached to a model only through an explicit user action;
 - source-grounded Croki Senses perception, now rendered as automatic inline Views when it materially improves a Thread question.
+
+## 0.4.14 boundary
+
+0.4.14 rebuilds the Croki overlay from T3 Code `be7d35aa`, rather than layering
+another long conflict-resolution merge onto the 0.4.13 tree. The archived
+pre-refresh commit remains available at
+`archive/pre-0.4.14-t3-refresh-2026-08-21` for audit and recovery.
+
+The refresh carries forward Croki's installed-state compatibility, branding,
+provider additions, application brief, Thread-native Views, release ownership,
+desktop updater, and mobile identity. It also adopts current T3 behavior for
+skill discovery, compact tool activity, attached composer drawers, unified
+workspace navigation, provider-session reconciliation, stream following,
+Preview rendering performance, and the intervening reliability fixes.
 
 ## 0.4.13 boundary
 
@@ -124,6 +139,16 @@ page evidence, and the read-only `ui_history` model tool can list or reopen it
 in a later turn. Preview projects recent checked screens under **UI history**;
 there is no separate authored history database or design workflow.
 
+An explicit concept label on two or more same-turn snapshots now turns that
+turn's receipt into a ranked concept set. The set preserves up to ten
+alternatives and the model's proposed order. The founder can inspect, drag or
+keyboard-sort, compare two, and mark each option Keep, Question, or Reject.
+Continue and Remix write the
+ranked choices into the native composer as visible editable text; they never
+send a turn or change provider behavior automatically. Unlabeled snapshots keep
+the ordinary checked-screen receipt, so Croki does not guess which screens are
+ideas.
+
 Likely user-visible turns now also receive one compact result after the answer.
 Same-turn snapshots collapse into **Checked _n_ screens** and open as a gallery;
 visible checkpoint files without a snapshot say **Not checked**; nonvisual turns
@@ -132,10 +157,11 @@ when turn internals fold. It proves only that those screens were captured during
 the turn, not complete design, flow, accessibility, breakpoint, or production
 coverage.
 
-UI history currently records individual screens. It does not yet compare
-checkpoints, connect action sequences into checked flows, discover missing
-states, sweep responsive widths, or import production behavior. Capture and the
-founder-facing history control currently share Preview's desktop-only boundary.
+Outside explicit same-turn concept sets, UI history records individual screens.
+It does not yet compare checkpoints, connect action sequences into checked
+flows, discover missing states, sweep responsive widths, or import production
+behavior. Capture and the founder-facing history control currently share
+Preview's desktop-only boundary.
 Images follow Thread attachment cleanup, but rolling retention and
 deduplication are not yet needed or implemented for explicit model checks.
 
@@ -316,7 +342,7 @@ rewriting its workspace, memory, skills, model, tools, or delegation settings.
   signing, Discord, and mobile destinations remain skipped until their specific
   flags and Croki-owned configuration are enabled.
 - Pushes to `croki/main` build unsigned macOS arm64 and Windows x64 installer
-  artifacts. A tagged GitHub release is the enabled 0.4.13 publication path.
+  artifacts. A tagged GitHub release is the enabled 0.4.14 publication path.
 
 ## Verification
 

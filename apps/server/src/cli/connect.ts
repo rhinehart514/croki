@@ -5,6 +5,7 @@ import {
   type RelayClientInstallProgressStage,
 } from "@croki/contracts";
 import { RelayOkResponse } from "@croki/contracts/relay";
+import { HostProcessPlatform } from "@croki/shared/hostProcess";
 import * as RelayClient from "@croki/shared/relayClient";
 import { withRelayClientTracing } from "@croki/shared/relayTracing";
 import * as Cause from "effect/Cause";
@@ -36,6 +37,7 @@ import * as CliState from "../cloud/CliState.ts";
 import * as CliTokenManager from "../cloud/CliTokenManager.ts";
 import {
   CLOUD_LINKED_USER_ID,
+  isAgentActivityPublishingEnabledValue,
   PUBLISH_AGENT_ACTIVITY_SECRET,
   RELAY_URL_SECRET,
 } from "../cloud/config.ts";
@@ -142,7 +144,7 @@ function stringToBytes(value: string): Uint8Array {
 }
 
 export function isPublishAgentActivityEnabledValue(value: string | null): boolean {
-  return value === "true";
+  return isAgentActivityPublishingEnabledValue(value);
 }
 
 interface CloudCliStatus {
@@ -447,7 +449,7 @@ const runCloudCommand = Effect.fn("cloud.cli.run_cloud_command")(function* <A, E
     ),
     RelayClient.layerCloudflared({ baseDir: config.baseDir }),
     EnvironmentAuth.runtimeLayer,
-    ServerEnvironment.layer,
+    ServerEnvironment.layer.pipe(Layer.provide(ServerSecretStore.layer)),
     bootServiceLayer(config),
     headlessRelayClientTracingLayer,
   ).pipe(
@@ -694,8 +696,11 @@ export const connectCommand = Command.make("connect", {
         // fail the command, just tell the user what happened and move on.
         const background = yield* recoverServiceOnboardingOffer(offerServiceDuringOnboarding);
         if (background) {
+          const platform = yield* HostProcessPlatform;
           yield* Console.log(
-            "\n✓ Background service ready\n\nCroki will stay reachable after you log out.",
+            platform === "darwin"
+              ? "\n✓ Background service ready\n\nT3 Code will stay reachable while you are logged in to this Mac."
+              : "\n✓ Background service ready\n\nT3 Code will stay reachable after you log out.",
           );
           return;
         }

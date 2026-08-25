@@ -24,116 +24,126 @@ function activity(payload: Record<string, unknown>): OrchestrationThreadActivity
   } as OrchestrationThreadActivity;
 }
 
-function makeReadModelWithActivity(
-  activity: OrchestrationReadModel["threads"][number]["activities"][number],
-): OrchestrationReadModel {
-  const projectId = ProjectId.make("project-croki");
-  const modelSelection = {
-    instanceId: ProviderInstanceId.make("codex"),
-    model: "gpt-5.6",
-  };
-  return {
-    snapshotSequence: 1,
-    updatedAt: now,
-    projects: [
-      {
-        id: projectId,
-        title: "Croki",
-        workspaceRoot: "/projects/croki",
-        defaultModelSelection: modelSelection,
-        scripts: [],
-        createdAt: now,
-        updatedAt: now,
-        deletedAt: null,
-      },
-    ],
-    threads: [
-      {
-        id: ThreadId.make("thread-croki"),
-        projectId,
-        title: "Canvas",
-        modelSelection,
-        interactionMode: "default",
-        runtimeMode: "full-access",
-        branch: null,
-        worktreePath: "/projects/croki-worktree",
-        latestTurn: null,
-        createdAt: now,
-        updatedAt: now,
-        archivedAt: null,
-        settledOverride: null,
-        settledAt: null,
-        deletedAt: null,
-        messages: [],
-        proposedPlans: [],
-        activities: [activity],
-        checkpoints: [],
-        session: null,
-      },
-    ],
-  };
-}
-
+/**
+ * Wire-survival regression: the slimming pass rewrites payload.data but must
+ * never strip the top-level per-agent fields the subagent fold depends on.
+ * If slimming ever moves to an allowlist over the whole payload, these
+ * assertions are the tripwire.
+ */
 describe("projectActivityPayload", () => {
-  it("keeps Canvas receipts while removing rendered context", () => {
-    const receipt = {
-      status: "loaded",
-      relativePath: ".croki/context.json",
-      version: 1,
-      sha256: "a".repeat(64),
-      updatedAt: "2026-07-30T00:00:00.000Z",
-      activeCount: 2,
-      currentCount: 1,
-      provisionalCount: 1,
-      renderedChars: 123,
-      truncated: false,
-      harnessId: "gtm-v1",
-    };
-    const projected = projectActivityPayload({
-      id: EventId.make("event-croki-context"),
-      tone: "info",
-      kind: "croki.context.applied",
-      summary: "Applied Canvas context",
-      payload: {
-        sourceEventId: "source-event",
-        messageId: "message-1",
-        prompt: "private product context",
-        receipt,
-      },
-      turnId: null,
-      createdAt: now,
-    });
-
-    expect(projected.payload).toEqual({
-      messageId: "message-1",
-      receipt,
-    });
-    expect(JSON.stringify(projected)).not.toContain("private product context");
-    expect(JSON.stringify(projected)).not.toContain("source-event");
+  it("preserves tool attribution (agentId/parentToolUseId) through data slimming", () => {
+    const projected = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        agentId: "task-123",
+        parentToolUseId: "toolu_abc",
+        data: {
+          toolName: "Bash",
+          input: { command: "ls" },
+          command: "ls",
+          rawOutput: { content: "x".repeat(10) },
+          somethingClientNeverReads: { big: "blob" },
+        },
+      }),
+    );
+    const payload = projected.payload as Record<string, unknown>;
+    expect(payload.agentId).toBe("task-123");
+    expect(payload.parentToolUseId).toBe("toolu_abc");
+    // Slimming itself still applies to data.
+    const data = payload.data as Record<string, unknown>;
+    expect(data.somethingClientNeverReads).toBeUndefined();
   });
 
-  it("redacts Canvas prompts from full read-model snapshots", () => {
-    const snapshot = makeReadModelWithActivity({
-      id: EventId.make("event-croki-context-snapshot"),
-      tone: "info",
-      kind: "croki.context.applied",
-      summary: "Applied Canvas context",
-      payload: {
-        messageId: "message-1",
-        prompt: "private product context",
-        receipt: { status: "loaded" },
-      },
-      turnId: null,
-      createdAt: now,
+  it("keeps a bounded Codex command output summary", () => {
+    const projected = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        data: {
+          item: {
+            command: "/bin/zsh -lc 'printf hello'",
+            aggregatedOutput: `hello from codex\n${"x".repeat(5000)}`,
+          },
+        },
+      }),
+    );
+    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+    expect(data.item).toEqual({
+      command: "/bin/zsh -lc 'printf hello'",
+      aggregatedOutput: "hello from codex",
     });
+    expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
+  });
 
-    const projected = projectReadModelSnapshot(snapshot);
+  it("keeps bounded Claude and ACP command output summaries", () => {
+    const claude = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        data: {
+          command: "printf hello",
+          rawOutput: { stdout: `hello from claude\n${"y".repeat(5000)}` },
+        },
+      }),
+    );
+    const acp = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        data: {
+          command: "printf hello",
+          content: [
+            {
+              type: "content",
+              content: { type: "text", text: `hello from acp\n${"z".repeat(5000)}` },
+            },
+          ],
+        },
+      }),
+    );
 
-    expect(projected.threads[0]?.activities[0]?.payload).toEqual({
-      messageId: "message-1",
-      receipt: { status: "loaded" },
+    const claudeData = (claude.payload as Record<string, unknown>).data as Record<string, unknown>;
+    const acpData = (acp.payload as Record<string, unknown>).data as Record<string, unknown>;
+    expect(claudeData.rawOutput).toEqual({ content: "hello from claude" });
+    expect(acpData.rawOutput).toEqual({ content: "hello from acp" });
+    expect(JSON.stringify(claude.payload).length).toBeLessThan(500);
+    expect(JSON.stringify(acp.payload).length).toBeLessThan(500);
+  });
+
+  it("normalizes Claude and OpenCode command inputs before slimming provider data", () => {
+    const claude = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        toolCallId: "claude-call-1",
+        data: {
+          toolName: "Bash",
+          input: { command: "vp test run" },
+          result: { content: "x".repeat(5_000) },
+        },
+      }),
+    );
+    const openCode = projectActivityPayload(
+      activity({
+        itemType: "command_execution",
+        toolCallId: "opencode-call-1",
+        data: {
+          tool: "bash",
+          state: {
+            status: "running",
+            input: { command: "vp lint" },
+            output: "x".repeat(5_000),
+          },
+        },
+      }),
+    );
+
+    expect(claude.payload).toMatchObject({
+      toolCallId: "claude-call-1",
+      data: { command: "vp test run" },
     });
-    expect(JSON.stringify(projected)).not.toContain("private product context");
+    expect(openCode.payload).toMatchObject({
+      toolCallId: "opencode-call-1",
+      data: { command: "vp lint" },
+    });
+    expect(JSON.stringify(claude.payload).length).toBeLessThan(200);
+    expect(JSON.stringify(openCode.payload).length).toBeLessThan(200);
   });
 
   it("slims Codex-shaped mcp_tool_call items to rendered fields plus a result summary", () => {

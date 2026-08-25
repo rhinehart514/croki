@@ -22,6 +22,39 @@ const OptionalTimeoutMs = Schema.optional(
     .annotate({ description: "Maximum wait in milliseconds. Defaults to 15000; maximum 60000." }),
 ).annotate({ description: "Maximum wait in milliseconds. Defaults to 15000; maximum 60000." });
 
+const PreviewAutomationSnapshotConceptId = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(128),
+).annotate({
+  description: "Stable identifier for this labeled concept.",
+});
+const PreviewAutomationSnapshotConceptTitle = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(256),
+).annotate({
+  description: "Short title for this labeled concept.",
+});
+const PreviewAutomationSnapshotConceptText = TrimmedNonEmptyString.check(Schema.isMaxLength(1_024));
+
+/** Optional metadata for preserving a proposed concept with its checked screen. */
+export const PreviewAutomationSnapshotConcept = Schema.Struct({
+  id: PreviewAutomationSnapshotConceptId,
+  title: PreviewAutomationSnapshotConceptTitle,
+  summary: PreviewAutomationSnapshotConceptText.annotate({
+    description: "Concise description of the concept shown in this snapshot.",
+  }),
+  tradeoff: Schema.optional(
+    PreviewAutomationSnapshotConceptText.annotate({
+      description: "Important tradeoff or cost of this concept, when one is known.",
+    }),
+  ),
+  initialRank: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })).annotate({
+    description: "Initial ranking for this concept from 1 through 100.",
+  }),
+}).annotate({
+  description:
+    "Optional concept label to preserve with this checked screen. It is metadata only and is not sent to the browser.",
+});
+export type PreviewAutomationSnapshotConcept = typeof PreviewAutomationSnapshotConcept.Type;
+
 /** Operations understood by desktop hosts predating viewport resizing. */
 export const PREVIEW_AUTOMATION_V1_OPERATIONS = [
   "status",
@@ -62,6 +95,15 @@ const PreviewAutomationTabTargetFields = {
 
 export const PreviewAutomationTabTargetInput = Schema.Struct(PreviewAutomationTabTargetFields);
 export type PreviewAutomationTabTargetInput = typeof PreviewAutomationTabTargetInput.Type;
+
+export const PreviewAutomationSnapshotInput = Schema.Struct({
+  ...PreviewAutomationTabTargetFields,
+  concept: Schema.optional(PreviewAutomationSnapshotConcept),
+}).annotate({
+  description:
+    "Optional concept metadata is preserved with the checked screen; omit it for an ordinary snapshot.",
+});
+export type PreviewAutomationSnapshotInput = typeof PreviewAutomationSnapshotInput.Type;
 
 export const PreviewAutomationStatus = Schema.Struct({
   available: Schema.Boolean,

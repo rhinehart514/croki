@@ -15,6 +15,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { squashAtomCommandFailure } from "@croki/client-runtime/state/runtime";
 
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
@@ -127,13 +128,13 @@ export function PullRequestReviewerPicker({
       />
       <MenuPopup align="start" side="bottom" className="w-72 p-0">
         <div className="border-b border-border/60 p-2">
-          <input
+          <Input
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
             placeholder="Search people with access"
             aria-label="Search people with access"
-            className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs outline-none placeholder:text-muted-foreground/72 focus-visible:border-ring"
+            size="compact"
           />
         </div>
         <div className="max-h-72 overflow-y-auto p-1">

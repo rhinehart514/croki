@@ -1,6 +1,6 @@
 # Croki current-state audit
 
-Audited: 2026-08-05  
+Audited: 2026-08-05
 Subject: the current `croki/main` working product and the in-progress 0.4.8
 simplification
 

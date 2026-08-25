@@ -1,6 +1,6 @@
 # ADE-native product adjustments
 
-Status: product direction for evaluation  
+Status: product direction for evaluation
 Depends on: [current-state audit](./current-state-audit-2026-08-05.md)
 
 ## Subject

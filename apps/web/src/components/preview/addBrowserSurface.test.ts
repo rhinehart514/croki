@@ -1,4 +1,9 @@
-import type { PreviewOpenInput, PreviewSessionSnapshot, ScopedThreadRef } from "@croki/contracts";
+import {
+  FILL_PREVIEW_VIEWPORT,
+  type PreviewOpenInput,
+  type PreviewSessionSnapshot,
+  type ScopedThreadRef,
+} from "@croki/contracts";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -40,7 +45,10 @@ describe("addBrowserSurface", () => {
 
     await addBrowserSurface({ threadRef, openPreview: ({ input }) => openPreview(input) });
 
-    expect(openPreview).toHaveBeenCalledWith({ threadId: "thread-1" });
+    expect(openPreview).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      viewport: FILL_PREVIEW_VIEWPORT,
+    });
     expect(Object.keys(readThreadPreviewState(threadRef).sessions)).toEqual(["tab-1", "tab-2"]);
     expect(
       selectThreadRightPanelState(
@@ -63,6 +71,7 @@ describe("addBrowserSurface", () => {
     expect(openPreview).toHaveBeenCalledWith({
       threadId: "thread-1",
       url: "https://example.com/evidence",
+      viewport: FILL_PREVIEW_VIEWPORT,
     });
   });
 });

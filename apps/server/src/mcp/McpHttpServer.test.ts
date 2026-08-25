@@ -65,8 +65,13 @@ const projectScreen = {
     height: historyEntry.height,
   },
 };
+const recordedConcepts: unknown[] = [];
 const UiHistoryTestLayer = UiHistoryStore.testingLayer({
-  record: () => Effect.succeed(historyEntry),
+  record: (_threadId, _snapshot, concept) =>
+    Effect.sync(() => {
+      recordedConcepts.push(concept);
+      return historyEntry;
+    }),
   list: () => Effect.succeed({ entries: [historyEntry], truncated: false }),
   read: (_threadId, id) =>
     Effect.succeed(
@@ -207,6 +212,7 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
 it.effect("registers annotated tools and preserves authenticated request context", () =>
   Effect.scoped(
     Effect.gen(function* () {
+      recordedConcepts.length = 0;
       const server = yield* McpServer.McpServer;
       const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
       const routedRequests: Array<{
@@ -282,6 +288,11 @@ it.effect("registers annotated tools and preserves authenticated request context
       expect(clickTool?.tool.annotations?.readOnlyHint).toBe(false);
       expect(clickTool?.tool.annotations?.destructiveHint).toBe(true);
       expect(clickTool?.tool.annotations?.openWorldHint).toBe(true);
+      expect(clickTool?.tool.outputSchema).toEqual({
+        type: "object",
+        additionalProperties: false,
+        description: "The preview action completed successfully.",
+      });
 
       const navigateTool = server.tools.find(({ tool }) => tool.name === "preview_navigate");
       expect(navigateTool?.tool.annotations?.destructiveHint).toBe(false);
@@ -308,75 +319,64 @@ it.effect("registers annotated tools and preserves authenticated request context
         );
       expect(malformed._tag).toBe("InvalidParams");
 
-      const snapshot = yield* server
-        .callTool({ name: "preview_snapshot", arguments: { tabId: alternateTabId } })
-        .pipe(
-          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-          Effect.provideService(McpSchema.McpServerClient, client),
-        );
-      expect(snapshot.isError).toBe(false);
-      expect(snapshot.content.some((content) => content.type === "image")).toBe(true);
-      expect(snapshot.structuredContent).toMatchObject({
-        screenshot: { mimeType: "image/png", width: 10, height: 5 },
-        uiHistory: { saved: true, id: historyEntry.id },
-      });
-      expect(routedRequests.find(({ operation }) => operation === "snapshot")?.tabId).toBe(
-        alternateTabId,
-      );
-
-      const history = yield* server
-        .callTool({ name: "ui_history", arguments: {} })
-        .pipe(
-          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-          Effect.provideService(McpSchema.McpServerClient, client),
-        );
-      expect(history.isError).toBe(false);
-      expect(history.structuredContent).toMatchObject({
-        entries: [{ id: historyEntry.id, title: "Settings" }],
-        truncated: false,
-      });
-
-      const checkedScreen = yield* server
-        .callTool({ name: "ui_history", arguments: { id: historyEntry.id } })
-        .pipe(
-          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-          Effect.provideService(McpSchema.McpServerClient, client),
-        );
-      expect(checkedScreen.isError).toBe(false);
-      expect(checkedScreen.content.some((content) => content.type === "image")).toBe(true);
-
-      const applicationScreen = yield* server
-        .callTool({ name: "application_screen", arguments: projectScreen.ref })
-        .pipe(
-          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-          Effect.provideService(McpSchema.McpServerClient, client),
-        );
-      expect(applicationScreen.isError).toBe(false);
-      expect(applicationScreen.structuredContent).toMatchObject({
-        screen: { ref: projectScreen.ref, entry: { title: "Settings" } },
-      });
-      expect(applicationScreen.content.some((content) => content.type === "image")).toBe(true);
-
-      const ambiguousScreenId = yield* server
+      const concept = {
+        id: "direction-a",
+        title: "Focused workflow",
+        summary: "Keep the founder in the checked result.",
+        tradeoff: "Requires a smaller first release.",
+        initialRank: 80,
+      };
+      const labeledSnapshot = yield* server
         .callTool({
-          name: "application_screen",
-          arguments: { sourceThreadId: "thread-from-another-project", id: historyEntry.id },
+          name: "preview_snapshot",
+          arguments: { tabId: alternateTabId, concept },
         })
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
-      expect(ambiguousScreenId.isError).toBe(true);
+      expect(labeledSnapshot.isError).toBe(false);
+      expect(labeledSnapshot.content.some((content) => content.type === "image")).toBe(true);
+      expect(labeledSnapshot.structuredContent).toMatchObject({
+        screenshot: { mimeType: "image/png", width: 10, height: 5 },
+        uiHistory: { saved: true, id: historyEntry.id },
+      });
+      expect(recordedConcepts.at(-1)).toEqual(concept);
+      const routedLabeledSnapshot = routedRequests.find(
+        ({ operation }) => operation === "snapshot",
+      );
+      expect(routedLabeledSnapshot?.tabId).toBe(alternateTabId);
 
-      const press = yield* server
-        .callTool({ name: "preview_press", arguments: { key: "Enter" } })
+      const snapshot = yield* server
+        .callTool({ name: "preview_snapshot", arguments: {} })
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
-      expect(press.isError).toBe(false);
-      expect(press.structuredContent).toBeNull();
-      expect(press.content).toEqual([{ type: "text", text: "null" }]);
+      expect(snapshot.isError).toBe(false);
+      expect(recordedConcepts.at(-1)).toBeUndefined();
+      expect(routedRequests.find(({ operation }) => operation === "snapshot")?.tabId).toBe(
+        alternateTabId,
+      );
+
+      const actionRequests = [
+        { name: "preview_click", arguments: { x: 10, y: 10 } },
+        { name: "preview_type", arguments: { text: "Hello" } },
+        { name: "preview_press", arguments: { key: "Enter" } },
+        { name: "preview_scroll", arguments: { deltaY: 100 } },
+        { name: "preview_wait_for", arguments: { text: "Example" } },
+      ];
+      for (const request of actionRequests) {
+        const result = yield* server
+          .callTool(request)
+          .pipe(
+            Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+            Effect.provideService(McpSchema.McpServerClient, client),
+          );
+        expect(result.isError).toBe(false);
+        expect(result.structuredContent).toEqual({});
+        expect(result.content).toEqual([{ type: "text", text: "{}" }]);
+      }
     }),
   ).pipe(Effect.provide(TestLayer)),
 );

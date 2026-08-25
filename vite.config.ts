@@ -28,7 +28,6 @@ export default defineConfig({
     ignorePatterns: [
       ".reference",
       ".repos/**",
-      ".plans",
       ".alchemy",
       "dist",
       "dist-electron",
@@ -121,6 +120,7 @@ export default defineConfig({
       "croki/no-global-process-runtime": "error",
       "croki/no-inline-schema-compile": "warn",
       "croki/no-manual-effect-runtime-in-tests": "error",
+      "croki/no-native-title-tooltip": "error",
       "croki/namespace-node-imports": "error",
     },
     options: {

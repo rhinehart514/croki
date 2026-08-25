@@ -63,6 +63,7 @@ import * as PreviewManager from "./preview/Manager.ts";
 import * as DesktopWindow from "./window/DesktopWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
+import * as DesktopWslServerTree from "./wsl/DesktopWslServerTree.ts";
 
 // Keep this synchronous and at module initialization: constructing the Effect
 // runtime can otherwise allow Electron to emit `ready` first in development.
@@ -171,6 +172,7 @@ const desktopBackendLayer = DesktopBackendPool.layer.pipe(
   Layer.provideMerge(DesktopAppIdentity.layer),
   Layer.provideMerge(DesktopBackendConfiguration.layer),
   Layer.provideMerge(DesktopWslEnvironment.layer),
+  Layer.provideMerge(DesktopWslServerTree.layer),
   Layer.provideMerge(DesktopTelemetryPublisher.layer),
   Layer.provideMerge(desktopWindowLayer),
 );

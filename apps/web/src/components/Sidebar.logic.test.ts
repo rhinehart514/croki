@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
 import {
+  animatePinnedLayoutChanges,
   archiveSelectedThreadEntries,
   buildBulkTitleRegenerationContextMenuItem,
   buildMultiSelectThreadContextMenuItems,
@@ -15,7 +17,7 @@ import {
   getProjectSortTimestamp,
   hasUnseenCompletion,
   isContextMenuPointerDown,
-  isThreadAttentionHash,
+  isSidebarNestedLinkClick,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   orderThreadsWithChildren,
@@ -61,11 +63,29 @@ import {
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
 
-describe("isThreadAttentionHash", () => {
-  it("accepts TanStack's parsed hash and a browser-style hash", () => {
-    expect(isThreadAttentionHash("needs-attention")).toBe(true);
-    expect(isThreadAttentionHash("#needs-attention")).toBe(true);
-    expect(isThreadAttentionHash("other")).toBe(false);
+describe("animatePinnedLayoutChanges", () => {
+  const baseArgs: Parameters<AnimateLayoutChanges>[0] = {
+    active: null,
+    containerId: "pinned-threads",
+    isDragging: false,
+    isSorting: false,
+    id: "thread-a",
+    index: 1,
+    items: ["thread-b", "thread-a"],
+    newIndex: 0,
+    previousItems: ["thread-a", "thread-b"],
+    previousContainerId: "pinned-threads",
+    transition: { duration: 200, easing: "ease" },
+    wasDragging: true,
+  };
+
+  it("does not replay layout movement after the pointer is released", () => {
+    expect(defaultAnimateLayoutChanges(baseArgs)).toBe(true);
+    expect(animatePinnedLayoutChanges(baseArgs)).toBe(false);
+  });
+
+  it("keeps layout movement while the user is sorting", () => {
+    expect(animatePinnedLayoutChanges({ ...baseArgs, isSorting: true })).toBe(true);
   });
 });
 
@@ -536,6 +556,27 @@ describe("isTrailingDoubleClick", () => {
 
   it("ignores further clicks of a triple-click", () => {
     expect(isTrailingDoubleClick(3)).toBe(true);
+  });
+});
+
+describe("isSidebarNestedLinkClick", () => {
+  const linkTarget = {
+    closest: (selector: string) => (selector === "a[href]" ? ({} as Element) : null),
+  } as unknown as EventTarget;
+
+  it("ignores row clicks that originated on a nested link", () => {
+    expect(isSidebarNestedLinkClick(linkTarget)).toBe(true);
+  });
+
+  it("walks up from a text node to the enclosing link", () => {
+    expect(isSidebarNestedLinkClick({ parentElement: linkTarget } as unknown as EventTarget)).toBe(
+      true,
+    );
+  });
+
+  it("leaves ordinary row clicks alone", () => {
+    expect(isSidebarNestedLinkClick({ closest: () => null } as unknown as EventTarget)).toBe(false);
+    expect(isSidebarNestedLinkClick(null)).toBe(false);
   });
 });
 

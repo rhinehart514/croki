@@ -4,6 +4,7 @@ import {
   UiHistoryEntry,
   UiHistoryInput,
   UiHistoryListResult,
+  PreviewAutomationSnapshotInput,
   type PreviewAutomationSnapshot,
 } from "@croki/contracts";
 import * as Cause from "effect/Cause";
@@ -114,6 +115,8 @@ const McpAuthMiddlewareLive = HttpRouter.middleware<{
   provides: McpInvocationContext.McpInvocationContext;
 }>()(makeMcpAuthMiddleware).layer;
 
+const decodePreviewSnapshotInput = Schema.decodeUnknownOption(PreviewAutomationSnapshotInput);
+
 const previewSnapshotFailure = <E>(cause: Cause.Cause<E>) => {
   if (Cause.hasInterrupts(cause) || cause.reasons.some(Cause.isDieReason)) {
     return Effect.failCause(cause).pipe(Effect.orDie);
@@ -212,7 +215,8 @@ const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot
             onFailure: previewSnapshotFailure,
             onSuccess: ({ encodedResult }) => {
               const snapshot = encodedResult as PreviewAutomationSnapshot;
-              return uiHistory.record(invocation.threadId, snapshot).pipe(
+              const concept = Option.getOrUndefined(decodePreviewSnapshotInput(payload))?.concept;
+              return uiHistory.record(invocation.threadId, snapshot, concept).pipe(
                 Effect.matchEffect({
                   onFailure: (error) =>
                     Effect.logWarning("failed to preserve preview snapshot in UI history", {

@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { normalizePreviewOpenInput } from "./handlers.ts";
+import { PreviewTabId } from "@croki/contracts";
+
+import { normalizePreviewOpenInput, stripPreviewSnapshotConcept } from "./handlers.ts";
 
 describe("normalizePreviewOpenInput", () => {
-  it("opens the inline preview and reuses the current tab by default", () => {
-    expect(normalizePreviewOpenInput({})).toEqual({
-      open: true,
-      reuseExistingTab: true,
-      show: true,
-    });
+  it("leaves an unstated visibility for the client preference to decide", () => {
+    // Filling `open` in here would outrank `browserAutoShowFloatingPreview`,
+    // which is desktop-local and cannot be read from the server.
+    expect(normalizePreviewOpenInput({})).toEqual({ reuseExistingTab: true });
   });
 
   it("preserves an explicit background-only opt-out", () => {
@@ -30,5 +30,25 @@ describe("normalizePreviewOpenInput", () => {
       reuseExistingTab: true,
       show: true,
     });
+  });
+});
+
+describe("stripPreviewSnapshotConcept", () => {
+  it("keeps tab targeting while removing concept metadata from broker input", () => {
+    expect(
+      stripPreviewSnapshotConcept({
+        tabId: PreviewTabId.make("tab-concept"),
+        concept: {
+          id: "direction-a",
+          title: "Focused workflow",
+          summary: "Keep the founder in the checked result.",
+          initialRank: 80,
+        },
+      }),
+    ).toEqual({ tabId: "tab-concept" });
+  });
+
+  it("keeps ordinary snapshots compatible", () => {
+    expect(stripPreviewSnapshotConcept({})).toEqual({});
   });
 });
