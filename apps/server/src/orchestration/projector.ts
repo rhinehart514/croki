@@ -666,6 +666,9 @@ export function projectEvent(
             ...(payload.branch !== undefined ? { branch: payload.branch } : {}),
             ...(payload.worktreePath !== undefined ? { worktreePath: payload.worktreePath } : {}),
             ...(payload.workerView !== undefined ? { workerView: payload.workerView } : {}),
+            ...(payload.linkedPullRequest !== undefined
+              ? { linkedPullRequest: payload.linkedPullRequest }
+              : {}),
             updatedAt: payload.updatedAt,
           }),
         })),

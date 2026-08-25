@@ -1,7 +1,7 @@
 # Current project state
 
-Last audited: 2026-08-21
-Code baseline: Croki 0.4.14 source candidate, rebuilt on T3 Code `be7d35aa`
+Last audited: 2026-08-25
+Code baseline: Croki 0.4.14 source candidate, synced through T3 Code `5d7665396`
 
 Croki is Jacob's current ADE and daily development environment. The product is
 a narrow application-aware overlay on the development environment rather than
@@ -63,6 +63,11 @@ desktop updater, and mobile identity. It also adopts current T3 behavior for
 skill discovery, compact tool activity, attached composer drawers, unified
 workspace navigation, provider-session reconciliation, stream following,
 Preview rendering performance, and the intervening reliability fixes.
+
+The 2026-08-25 sync advances that foundation through T3 Code `5d7665396`,
+including generic attachments, linked pull requests, provider feedback,
+interrupt recovery, context compaction, image rendering improvements, and the
+intervening desktop, mobile, server, and release fixes.
 
 ## 0.4.13 boundary
 

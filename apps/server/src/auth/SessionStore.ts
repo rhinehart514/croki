@@ -7,6 +7,7 @@ import {
   type AuthClientMetadata,
   type AuthClientSession,
   type AuthEnvironmentScope,
+  type ClientSurface,
   type ServerAuthSessionMethod,
 } from "@croki/contracts";
 import * as Context from "effect/Context";
@@ -404,6 +405,13 @@ export class SessionStore extends Context.Service<
     ) => Effect.Effect<number, SessionCredentialInternalError>;
     readonly markConnected: (sessionId: AuthSessionId) => Effect.Effect<void, never>;
     readonly markDisconnected: (sessionId: AuthSessionId) => Effect.Effect<void, never>;
+    readonly recordClientConnection: (
+      sessionId: AuthSessionId,
+      client: {
+        readonly surface?: ClientSurface | undefined;
+        readonly appVersion?: string | undefined;
+      },
+    ) => Effect.Effect<void, never>;
   }
 >()("croki-server/auth/SessionStore") {}
 
@@ -553,6 +561,28 @@ export const make = Effect.gen(function* () {
       ),
       Effect.withSpan("SessionStore.markConnected"),
     );
+
+  // Best-effort: connection metadata must never block or fail a connect.
+  const recordClientConnection: SessionStore["Service"]["recordClientConnection"] = (
+    sessionId,
+    client,
+  ) =>
+    client.surface === undefined && client.appVersion === undefined
+      ? Effect.void
+      : authSessions
+          .setClientConnection({
+            sessionId,
+            surface: client.surface ?? null,
+            appVersion: client.appVersion ?? null,
+          })
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("Failed to record session client connection metadata.").pipe(
+                Effect.annotateLogs({ sessionId, cause }),
+              ),
+            ),
+            Effect.withSpan("SessionStore.recordClientConnection"),
+          );
 
   const markDisconnected: SessionStore["Service"]["markDisconnected"] = (sessionId) =>
     Ref.update(connectedSessionsRef, (current) => {
@@ -934,6 +964,7 @@ export const make = Effect.gen(function* () {
     revokeAllExcept,
     markConnected,
     markDisconnected,
+    recordClientConnection,
   });
 });
 

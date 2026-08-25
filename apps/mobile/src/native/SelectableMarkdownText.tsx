@@ -3,6 +3,8 @@ import type { SelectableMarkdownTextProps } from "@croki/mobile-markdown-text/re
 type MobileSelectableMarkdownTextProps = Omit<SelectableMarkdownTextProps, "highlightCode">;
 
 export type {
+  MarkdownImageRenderer,
+  MarkdownImageRequest,
   NativeMarkdownTextStyle,
   SelectableMarkdownSkill,
 } from "@croki/mobile-markdown-text/types";

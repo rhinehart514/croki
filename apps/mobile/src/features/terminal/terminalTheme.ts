@@ -1,6 +1,7 @@
 import { BUILT_IN_THEMES, getThemeColorsForAppearance } from "@croki/shared/themePalettes";
 
 import {
+  DEFAULT_MOBILE_THEME_ID,
   getMobileThemeVariables,
   themeColorToNativeColor,
   type MobileThemeId,
@@ -83,7 +84,7 @@ export function getMobileTerminalTheme(
   scheme: TerminalAppearanceScheme,
 ): TerminalTheme {
   const base = getPierreTerminalTheme(scheme);
-  if (themeId === "t3-code") return base;
+  if (themeId === DEFAULT_MOBILE_THEME_ID) return base;
 
   const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? BUILT_IN_THEMES[0];
   const palette = getThemeColorsForAppearance(theme, scheme) ?? theme.colors;

@@ -58,6 +58,7 @@ const makeProviderService = (liveThreadIds: ReadonlyArray<ThreadId> = []) =>
     rollbackConversation: () => Effect.die("unused"),
     forkConversation: () => Effect.die("unused"),
     discardConversation: () => Effect.die("unused"),
+    uploadFeedback: () => Effect.die("unused"),
     streamEvents: Stream.empty,
   }) satisfies ProviderService.ProviderService["Service"];
 

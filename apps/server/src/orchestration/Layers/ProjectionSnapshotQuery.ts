@@ -26,6 +26,7 @@ import {
   type OrchestrationThreadShell,
   ModelSelection,
   ProjectId,
+  ThreadLinkedPullRequest,
   ThreadId,
 } from "@croki/contracts";
 import * as Arr from "effect/Array";
@@ -94,6 +95,7 @@ const ProjectionThreadProposedPlanDbRowSchema = ProjectionThreadProposedPlan;
 const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   Struct.assign({
     modelSelection: Schema.fromJsonString(ModelSelection),
+    linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
   }),
 );
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
@@ -442,6 +444,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           forked_from_thread_id AS "forkedFromThreadId",
           parent_thread_id AS "parentThreadId",
           worker_view AS "workerView",
+          linked_pull_request_json AS "linkedPullRequest",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -521,6 +524,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           forked_from_thread_id AS "forkedFromThreadId",
           parent_thread_id AS "parentThreadId",
           worker_view AS "workerView",
+          linked_pull_request_json AS "linkedPullRequest",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -562,6 +566,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           forked_from_thread_id AS "forkedFromThreadId",
           parent_thread_id AS "parentThreadId",
           worker_view AS "workerView",
+          linked_pull_request_json AS "linkedPullRequest",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -1125,6 +1130,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           forked_from_thread_id AS "forkedFromThreadId",
           parent_thread_id AS "parentThreadId",
           worker_view AS "workerView",
+          linked_pull_request_json AS "linkedPullRequest",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -1936,6 +1942,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 forkedFromThreadId: row.forkedFromThreadId,
                 parentThreadId: row.parentThreadId,
                 workerView: row.workerView,
+                ...(row.linkedPullRequest === null
+                  ? {}
+                  : { linkedPullRequest: row.linkedPullRequest }),
                 latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                 queuedTurnStarts: visibleQueuedTurnStarts(
                   pendingTurnStartsByThread.get(row.threadId) ?? [],
@@ -2220,6 +2229,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   forkedFromThreadId: row.forkedFromThreadId,
                   parentThreadId: row.parentThreadId,
                   workerView: row.workerView,
+                  ...(row.linkedPullRequest === null
+                    ? {}
+                    : { linkedPullRequest: row.linkedPullRequest }),
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                   queuedTurnStarts: visibleQueuedTurnStarts(
                     pendingTurnStartsByThread.get(row.threadId) ?? [],
@@ -2363,6 +2375,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                       forkedFromThreadId: row.forkedFromThreadId,
                       parentThreadId: row.parentThreadId,
                       workerView: row.workerView,
+                      ...(row.linkedPullRequest === null
+                        ? {}
+                        : { linkedPullRequest: row.linkedPullRequest }),
                       latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                       createdAt: row.createdAt,
                       updatedAt: row.updatedAt,
@@ -2511,6 +2526,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   forkedFromThreadId: row.forkedFromThreadId,
                   parentThreadId: row.parentThreadId,
                   workerView: row.workerView,
+                  ...(row.linkedPullRequest === null
+                    ? {}
+                    : { linkedPullRequest: row.linkedPullRequest }),
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
@@ -2913,6 +2931,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         forkedFromThreadId: threadRow.value.forkedFromThreadId,
         parentThreadId: threadRow.value.parentThreadId,
         workerView: threadRow.value.workerView,
+        ...(threadRow.value.linkedPullRequest === null
+          ? {}
+          : { linkedPullRequest: threadRow.value.linkedPullRequest }),
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,
@@ -3066,6 +3087,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         forkedFromThreadId: threadRow.value.forkedFromThreadId,
         parentThreadId: threadRow.value.parentThreadId,
         workerView: threadRow.value.workerView,
+        ...(threadRow.value.linkedPullRequest === null
+          ? {}
+          : { linkedPullRequest: threadRow.value.linkedPullRequest }),
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         queuedTurnStarts: visibleQueuedTurnStarts(
           pendingTurnStartRows.map((row) => ({

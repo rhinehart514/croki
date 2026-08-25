@@ -151,6 +151,8 @@ describe("ProviderCommandReactor", () => {
     readonly requiresNewThreadForModelChange?: boolean;
     readonly titleRegenerationCompletionDispatchFailures?: number;
     readonly titleRegenerationBeforeStart?: "one" | "two";
+    readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
+    readonly stopSessionEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly startSessionEffect?: (
       session: ProviderSession,
     ) => Effect.Effect<ProviderSession, ProviderAdapterRequestError>;
@@ -239,7 +241,7 @@ describe("ProviderCommandReactor", () => {
     const steerTurn = vi.fn<ProviderServiceShape["steerTurn"]>((input) =>
       Effect.succeed({ threadId: input.threadId, turnId: input.expectedTurnId }),
     );
-    const interruptTurn = vi.fn((_: unknown) => Effect.void);
+    const interruptTurn = vi.fn((_: unknown) => input?.interruptTurnEffect?.() ?? Effect.void);
     const respondToRequest = vi.fn<ProviderServiceShape["respondToRequest"]>(() => Effect.void);
     const respondToUserInput = vi.fn<ProviderServiceShape["respondToUserInput"]>(() => Effect.void);
     const forkConversation = vi.fn<ProviderServiceShape["forkConversation"]>(() => Effect.void);
@@ -249,20 +251,24 @@ describe("ProviderCommandReactor", () => {
     const discardConversation = vi.fn<ProviderServiceShape["discardConversation"]>(
       () => Effect.void,
     );
-    const stopSession = vi.fn((input: unknown) =>
-      Effect.sync(() => {
-        const threadId =
-          typeof input === "object" && input !== null && "threadId" in input
-            ? (input as { threadId?: ThreadId }).threadId
-            : undefined;
-        if (!threadId) {
-          return;
-        }
-        const index = runtimeSessions.findIndex((session) => session.threadId === threadId);
-        if (index >= 0) {
-          runtimeSessions.splice(index, 1);
-        }
-      }),
+    const stopSession = vi.fn((stopInput: unknown) =>
+      (input?.stopSessionEffect?.() ?? Effect.void).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            const threadId =
+              typeof stopInput === "object" && stopInput !== null && "threadId" in stopInput
+                ? (stopInput as { threadId?: ThreadId }).threadId
+                : undefined;
+            if (!threadId) {
+              return;
+            }
+            const index = runtimeSessions.findIndex((session) => session.threadId === threadId);
+            if (index >= 0) {
+              runtimeSessions.splice(index, 1);
+            }
+          }),
+        ),
+      ),
     );
     const renameBranch = vi.fn((input: unknown) =>
       Effect.succeed({
@@ -354,6 +360,7 @@ describe("ProviderCommandReactor", () => {
         });
       },
       rollbackConversation,
+      uploadFeedback: () => Effect.die(new Error("Unsupported provider call in test")) as never,
       get streamEvents() {
         return Stream.fromPubSub(runtimeEventPubSub);
       },
@@ -2886,6 +2893,77 @@ describe("ProviderCommandReactor", () => {
       threadId: "thread-1",
       turnId: "turn-1",
     });
+  });
+
+  it("stops the projected session and records the failure when provider interrupt fails", async () => {
+    const harness = await createHarness({
+      interruptTurnEffect: () =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: "codex",
+            method: "thread.interrupt",
+            detail: "provider session disappeared",
+          }),
+        ),
+      stopSessionEffect: () =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: "codex",
+            method: "session.stop",
+            detail: "provider process already exited",
+          }),
+        ),
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-interrupt-failure"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "running",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          runtimeMode: "approval-required",
+          activeTurnId: asTurnId("turn-1"),
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.interrupt",
+        commandId: CommandId.make("cmd-turn-interrupt-provider-failure"),
+        threadId: ThreadId.make("thread-1"),
+        turnId: asTurnId("turn-1"),
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(async () => {
+      const thread = (await harness.readModel()).threads.find(
+        (entry) => entry.id === ThreadId.make("thread-1"),
+      );
+      return thread?.session?.status === "stopped";
+    });
+
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+    expect(thread?.session).toMatchObject({
+      status: "stopped",
+      activeTurnId: null,
+      lastError: "provider session disappeared",
+    });
+    expect(
+      thread?.activities.find((activity) => activity.kind === "provider.turn.interrupt.failed"),
+    ).toMatchObject({ payload: { detail: "provider session disappeared" } });
+    expect(harness.stopSession).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
   });
 
   it("keeps ordinary sends FIFO and drains one after the active turn settles", async () => {

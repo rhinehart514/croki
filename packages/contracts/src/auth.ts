@@ -1,7 +1,13 @@
 import * as Schema from "effect/Schema";
 import * as HttpApiSchema from "effect/unstable/httpapi/HttpApiSchema";
 
-import { AuthSessionId, DeviceId, PersonId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  AuthSessionId,
+  ClientSurface,
+  DeviceId,
+  PersonId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 
 /**
  * Declares the server's overall authentication posture.
@@ -169,6 +175,10 @@ export const AuthClientPresentationMetadata = Schema.Struct({
   label: Schema.optionalKey(TrimmedNonEmptyString),
   deviceType: Schema.optionalKey(AuthClientMetadataDeviceType),
   os: Schema.optionalKey(TrimmedNonEmptyString),
+  osMajorVersion: Schema.optionalKey(Schema.Int),
+  deviceModel: Schema.optionalKey(TrimmedNonEmptyString),
+  surface: Schema.optionalKey(ClientSurface),
+  appVersion: Schema.optionalKey(TrimmedNonEmptyString),
 });
 export type AuthClientPresentationMetadata = typeof AuthClientPresentationMetadata.Type;
 

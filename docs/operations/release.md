@@ -154,6 +154,11 @@ Release App API limits cannot strand artifact upload. The Croki Release App
 credentials remain reserved for the stable finalize job that writes aligned
 versions back to `croki/main`.
 
+For a release smoke test, confirm `npm view croki-server@<version> version`
+returns the expected version, then connect the new client to a server on the
+previous version and verify that update, migration, reconnect, rollback, and
+manual or desktop-managed recovery follow the exact-version contract above.
+
 ## Desktop auto-update notes
 
 - Updater runtime: `apps/desktop/src/updates/DesktopUpdates.ts`.
@@ -326,6 +331,7 @@ Checklist:
 4. Push tag.
 5. Verify workflow steps:
    - preflight passes
+   - release quality checks pass
    - all matrix builds pass
    - `publish_cli` publishes the exact release version before the release job
    - release job uploads expected files

@@ -1691,11 +1691,11 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
     <>
       {window.desktopBridge ? (
         <SettingsRow
-          title="T3 Connect"
+          title="Croki Connect"
           description={
             managedTunnelActive
-              ? "This environment is available to your other devices through T3 Connect."
-              : "Make this environment available to your other devices through T3 Connect."
+              ? "This environment is available to your other devices through Croki Connect."
+              : "Make this environment available to your other devices through Croki Connect."
           }
           status={operationError ?? primaryCloudLinkState.error}
           control={

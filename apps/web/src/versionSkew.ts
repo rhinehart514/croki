@@ -40,23 +40,44 @@ function normalizeVersion(version: string | null | undefined): string | null {
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
+/** Core `major.minor.patch`, dropping any prerelease or build suffix. */
+function versionCore(version: string): string {
+  return version.replace(/[-+].*$/, "");
+}
+
+/**
+ * Resolve version skew direction so Croki points at the side that is behind.
+ *
+ * Two nightly builds compare their full versions, including the date and run.
+ * Other combinations compare their core `major.minor.patch` only, so a stable
+ * build and a nightly build with the same core do not cause an update warning.
+ * Versions that do not parse as semver remain a mismatch without guessing
+ * which side should change.
+ */
 export function resolveVersionMismatch(
   serverVersion: string | null | undefined,
 ): VersionMismatch | null {
   const normalizedClientVersion = normalizeVersion(APP_VERSION);
   const normalizedServerVersion = normalizeVersion(serverVersion);
-  if (
-    !normalizedClientVersion ||
-    !normalizedServerVersion ||
-    normalizedClientVersion === normalizedServerVersion
-  ) {
+  if (!normalizedClientVersion || !normalizedServerVersion) {
+    return null;
+  }
+  if (normalizedClientVersion === normalizedServerVersion) {
     return null;
   }
 
+  const clientCore = versionCore(normalizedClientVersion);
+  const serverCore = versionCore(normalizedServerVersion);
+  const compareNightlyBuilds =
+    parseSemver(normalizedClientVersion)?.prerelease[0] === "nightly" &&
+    parseSemver(normalizedServerVersion)?.prerelease[0] === "nightly";
   const versionsAreComparable =
-    parseSemver(normalizedClientVersion) !== null && parseSemver(normalizedServerVersion) !== null;
+    parseSemver(clientCore) !== null && parseSemver(serverCore) !== null;
   const comparison = versionsAreComparable
-    ? compareSemverVersions(normalizedServerVersion, normalizedClientVersion)
+    ? compareSemverVersions(
+        compareNightlyBuilds ? normalizedServerVersion : serverCore,
+        compareNightlyBuilds ? normalizedClientVersion : clientCore,
+      )
     : 0;
   if (versionsAreComparable && comparison === 0) return null;
   const updateTarget = !versionsAreComparable ? null : comparison > 0 ? "client" : "server";

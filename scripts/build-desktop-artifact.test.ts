@@ -21,6 +21,7 @@ import {
   DESKTOP_MACOS_MICROPHONE_USAGE_DESCRIPTION,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
+  MAC_FILE_EXCLUSIONS,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
   InvalidMockUpdateServerPortError,
@@ -34,6 +35,7 @@ import {
   resolveClerkPasskeyNativeArtifacts,
   resolveMacPasskeySigningConfiguration,
   resolveDesktopRuntimeDependencies,
+  resolveMacStageDependencies,
   resolveFffNativeDependencies,
   resolveBuildOptions,
   resolveDesktopBuildIconAssets,
@@ -41,6 +43,7 @@ import {
   resolveDesktopUpdateChannel,
   resolveDesktopWebAssetBrand,
   resolveResourceMonitorRustTargets,
+  resolveWindowsServerAsarIgnoreGlobs,
   resourceMonitorExecutableName,
   resolveGitHubPublishConfig,
   resolveMockUpdateServerPort,
@@ -49,6 +52,7 @@ import {
   stageLinuxIconSize,
   stageDesktopDmgBackground,
   STAGED_DESKTOP_PACKAGE_IDENTITY,
+  stageResourceMonitor,
   STAGE_INSTALL_ARGS,
   ancestorNodeModulesPaths,
   copyDirectoryPreservingSymlinks,
@@ -120,7 +124,7 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
   yield* fs.writeFileString(nativePath, "native-binary");
 
   const generatedAsarPath = path.join(tempDir, WINDOWS_SERVER_ASAR_RESOURCE);
-  yield* packWindowsServerAsar({ sourceDir, asarPath: generatedAsarPath });
+  yield* packWindowsServerAsar({ sourceDir, asarPath: generatedAsarPath, arch: "x64" });
 
   const stageDistDir = path.join(tempDir, "dist");
   const packagedAppDir = path.join(stageDistDir, "win-unpacked");
@@ -134,10 +138,10 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
     );
   }
   yield* fs.writeFileString(
-    path.join(resourcesDir, "resource-monitor/t3-resource-monitor.exe"),
+    path.join(resourcesDir, "resource-monitor", resourceMonitorExecutableName("win")),
     "monitor",
   );
-  const appExecutableName = "t3code.exe";
+  const appExecutableName = "Croki.exe";
   yield* fs.writeFileString(path.join(packagedAppDir, appExecutableName), "electron");
   yield* fs.writeFileString(path.join(packagedAppDir, "chrome_crashpad_handler.exe"), "crashpad");
 
@@ -227,6 +231,45 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         channel: "nightly",
       });
     }),
+  );
+
+  it.effect("omits update feeds for pull request preview builds", () =>
+    Effect.gen(function* () {
+      const preview = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.0.33-pr.8182.1",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      const release = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.0.33",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+
+      assert.notProperty(preview, "publish");
+      assert.deepStrictEqual(release.publish, [
+        {
+          provider: "github",
+          owner: "pingdotgg",
+          repo: "t3code",
+          releaseType: "release",
+        },
+      ]);
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({ env: { GITHUB_REPOSITORY: "pingdotgg/t3code" } }),
+        ),
+      ),
+    ),
   );
 
   it("omits bundled workspace packages from staged desktop dependencies", () => {
@@ -461,7 +504,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         },
         ...WINDOWS_SERVER_EXTRA_RESOURCES,
       ]);
-      assert.deepStrictEqual(win.nsis, { differentialPackage: true });
       // Native binaries and helper executables cannot load from inside an
       // asar; everything else stays packed. The Claude SDK platform packages
       // and .bin shims never ship.
@@ -476,7 +518,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "**/node_modules/.bin/**",
       ]);
       assert.deepStrictEqual(mac.dmg, {
-        title: "T3 Code (Alpha) 1.2.3 Installer",
+        title: "Croki 1.2.3 Installer",
         background: "dmg/dmg-background-latest.png",
         window: { width: 540, height: 412 },
         contents: [
@@ -496,6 +538,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.equal(config.productName, "Croki");
         assert.equal(config.artifactName, "Croki-${version}-${arch}.${ext}");
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
+      }
+
+      assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
+      for (const config of [linux, win]) {
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
       }
 
@@ -518,13 +564,171 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal((win.win as Record<string, unknown>).icon, "icon.ico");
       assert.equal((win.win as Record<string, unknown>).executableName, "Croki");
       assert.deepStrictEqual(win.nsis, {
+        differentialPackage: true,
         shortcutName: "Croki",
         uninstallDisplayName: "Croki",
         installerIcon: "icon.ico",
         uninstallerIcon: "icon.ico",
         installerHeaderIcon: "icon.ico",
       });
+      assert.notProperty(mac.mac as Record<string, unknown>, "sign");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it("excludes Windows terminal binaries only from macOS packages", () => {
+    assert.deepStrictEqual(MAC_FILE_EXCLUSIONS, [
+      "!**/node_modules/node-pty/prebuilds/win32-*/**/*",
+      "!**/node_modules/node-pty/third_party/conpty/**/*",
+    ]);
+  });
+
+  it("stages only server runtime externals in macOS packages", () => {
+    assert.deepStrictEqual(
+      resolveMacStageDependencies({
+        serverDependencies: {
+          "@anthropic-ai/claude-agent-sdk": "^0.3.170",
+          "@ff-labs/fff-node": "0.9.4",
+          "@opencode-ai/sdk": "^1.3.15",
+          "@pierre/diffs": "1.3.0",
+          "msgpackr-extract": "3.0.4",
+          "node-pty": "1.1.0",
+        },
+        desktopDependencies: {
+          "@clerk/electron": "0.0.34",
+          effect: "4.0.0-beta.103",
+        },
+        arch: "arm64",
+        fffNodeVersion: "0.9.4",
+      }),
+      {
+        "@ff-labs/fff-node": "0.9.4",
+        "msgpackr-extract": "3.0.4",
+        "node-pty": "1.1.0",
+        "@clerk/electron": "0.0.34",
+        effect: "4.0.0-beta.103",
+        "@ff-labs/fff-bin-darwin-arm64": "0.9.4",
+      },
+    );
+  });
+
+  it("excludes node-pty binaries for the other Windows architecture", () => {
+    assert.deepStrictEqual(resolveWindowsServerAsarIgnoreGlobs("x64"), [
+      ...WINDOWS_SERVER_ASAR_IGNORE_GLOBS,
+      "**/node_modules/node-pty/prebuilds/win32-arm64",
+      "**/node_modules/node-pty/prebuilds/win32-arm64/**",
+      "**/node_modules/node-pty/third_party/conpty/*/win10-arm64",
+      "**/node_modules/node-pty/third_party/conpty/*/win10-arm64/**",
+    ]);
+    assert.deepStrictEqual(resolveWindowsServerAsarIgnoreGlobs("arm64"), [
+      ...WINDOWS_SERVER_ASAR_IGNORE_GLOBS,
+      "**/node_modules/node-pty/prebuilds/win32-x64",
+      "**/node_modules/node-pty/prebuilds/win32-x64/**",
+      "**/node_modules/node-pty/third_party/conpty/*/win10-x64",
+      "**/node_modules/node-pty/third_party/conpty/*/win10-x64/**",
+    ]);
+  });
+
+  it.effect(
+    "keeps target and WSL native files while excluding the other Windows architecture",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const tempDir = yield* fs.makeTempDirectoryScoped({
+            prefix: "t3-windows-architecture-test-",
+          });
+          const sourceDir = path.join(tempDir, "server");
+          const nativeFiles = [
+            "node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe",
+            "node_modules/node-pty/prebuilds/win32-arm64/conpty/OpenConsole.exe",
+            "node_modules/node-pty/prebuilds/linux-x64/pty.node",
+            "node_modules/node-pty/third_party/conpty/1.0.0/win10-x64/OpenConsole.exe",
+            "node_modules/node-pty/third_party/conpty/1.0.0/win10-arm64/OpenConsole.exe",
+          ];
+
+          for (const nativeFile of nativeFiles) {
+            const nativePath = path.join(sourceDir, nativeFile);
+            yield* fs.makeDirectory(path.dirname(nativePath), { recursive: true });
+            yield* fs.writeFileString(nativePath, "native");
+          }
+
+          const asarPath = path.join(tempDir, "server.asar");
+          yield* packWindowsServerAsar({ sourceDir, asarPath, arch: "x64" });
+          const unpackedRoot = `${asarPath}.unpacked`;
+
+          assert.isTrue(
+            yield* fs.exists(
+              path.join(
+                unpackedRoot,
+                "node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe",
+              ),
+            ),
+          );
+          assert.isTrue(
+            yield* fs.exists(
+              path.join(unpackedRoot, "node_modules/node-pty/prebuilds/linux-x64/pty.node"),
+            ),
+          );
+          assert.isFalse(
+            yield* fs.exists(
+              path.join(unpackedRoot, "node_modules/node-pty/prebuilds/win32-arm64"),
+            ),
+          );
+          assert.isFalse(
+            yield* fs.exists(
+              path.join(unpackedRoot, "node_modules/node-pty/third_party/conpty/1.0.0/win10-arm64"),
+            ),
+          );
+        }),
+      ),
+  );
+
+  it.effect("stages a cached resource monitor without invoking Cargo", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const repoRoot = yield* fs.makeTempDirectoryScoped({
+          prefix: "croki-resource-monitor-cache-test-",
+        });
+        const binaryPath = path.join(
+          repoRoot,
+          "native/resource-monitor/target/x86_64-unknown-linux-gnu/release",
+          resourceMonitorExecutableName("linux"),
+        );
+        const stageResourcesDir = path.join(repoRoot, "stage");
+        yield* fs.makeDirectory(path.dirname(binaryPath), { recursive: true });
+        yield* fs.writeFileString(binaryPath, "cached monitor");
+
+        yield* stageResourceMonitor({
+          repoRoot,
+          stageResourcesDir,
+          platform: "linux",
+          arch: "x64",
+          verbose: false,
+        }).pipe(
+          Effect.provide(
+            ConfigProvider.layer(
+              ConfigProvider.fromEnv({
+                env: { CROKI_DESKTOP_REUSE_RESOURCE_MONITOR: "true" },
+              }),
+            ),
+          ),
+        );
+
+        assert.equal(
+          yield* fs.readFileString(
+            path.join(
+              stageResourcesDir,
+              "resource-monitor",
+              resourceMonitorExecutableName("linux"),
+            ),
+          ),
+          "cached monitor",
+        );
+      }),
+    ),
   );
 
   it.effect("validates every ASAR-unpacked native in the packaged Windows payload", () =>
@@ -543,6 +747,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         yield* packWindowsServerAsar({
           sourceDir: fixture.sourceDir,
           asarPath: secondAsarPath,
+          arch: "x64",
         });
         const [firstAsar, secondAsar] = yield* Effect.all([
           fs.readFile(fixture.generatedAsarPath),
@@ -621,6 +826,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it.effect("skips the primary native probe for cross-architecture Windows payloads", () => {
+    const targetArch = process.arch === "arm64" ? "x64" : "arm64";
     const commands: Array<{
       readonly command: string;
       readonly options: {
@@ -637,15 +843,20 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
     return Effect.scoped(
       Effect.gen(function* () {
+        const path = yield* Path.Path;
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
         yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
-          targetArch: "arm64",
+          targetArch,
         });
 
         assert.isFalse(
-          commands.some((command) => command.options.env?.ELECTRON_RUN_AS_NODE === "1"),
+          commands.some(
+            (command) =>
+              command.command === path.join(fixture.packagedAppDir, fixture.appExecutableName) &&
+              command.options.env?.ELECTRON_RUN_AS_NODE === "1",
+          ),
         );
         assert.isTrue(
           commands.some(
@@ -655,13 +866,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         );
       }),
     ).pipe(
-      Effect.provide(
-        Layer.mergeAll(
-          spawnerLayer,
-          Layer.succeed(HostProcessPlatform, "win32"),
-          Layer.succeed(HostProcessArchitecture, "x64"),
-        ),
-      ),
+      Effect.provide(spawnerLayer),
+      Effect.provideService(HostProcessPlatform, "win32"),
+      Effect.provideService(HostProcessArchitecture, process.arch),
     );
   });
 
@@ -740,7 +947,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         yield* fs.writeFileString(nativePath, "native-binary");
         const resourceMonitorPath = path.join(
           fixture.packagedAppDir,
-          "resources/resource-monitor/t3-resource-monitor.exe",
+          "resources/resource-monitor",
+          resourceMonitorExecutableName("win"),
         );
         yield* fs.remove(resourceMonitorPath);
         yield* fs.makeDirectory(resourceMonitorPath);
@@ -753,7 +961,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.instanceOf(resourceMonitorError, WindowsPackagedPayloadValidationError);
         assert.equal(resourceMonitorError.reason, "resource-monitor-missing");
         assert.deepStrictEqual(resourceMonitorError.missingFiles, [
-          "resource-monitor/t3-resource-monitor.exe",
+          `resource-monitor/${resourceMonitorExecutableName("win")}`,
         ]);
       }),
     ),

@@ -3,7 +3,7 @@ import type { RelayClientEnvironmentRecord } from "@croki/contracts/relay";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { T3ConnectEnvironmentRow } from "./T3ConnectUserProfilePage";
+import { CrokiConnectEnvironmentRow } from "./CrokiConnectUserProfilePage";
 
 const environment: RelayClientEnvironmentRecord = {
   environmentId: "environment-1" as EnvironmentId,
@@ -24,7 +24,7 @@ function renderRow({
   readonly mutationPending?: boolean;
 } = {}) {
   return renderToStaticMarkup(
-    <T3ConnectEnvironmentRow
+    <CrokiConnectEnvironmentRow
       environment={environment}
       confirmationOpen={confirmationOpen}
       mutationPending={mutationPending}
@@ -34,7 +34,7 @@ function renderRow({
   );
 }
 
-describe("T3 Connect environment row", () => {
+describe("Croki Connect environment row", () => {
   it("keeps deregistration confirmation inline and collapsed by default", () => {
     const markup = renderRow();
 

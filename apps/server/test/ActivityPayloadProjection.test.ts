@@ -323,6 +323,62 @@ describe("automatic Thread perception projection", () => {
   });
 });
 
+describe("superseded tool.updated snapshot dedup", () => {
+  function makeToolActivity(
+    id: string,
+    kind: "tool.updated" | "tool.completed",
+    toolCallId: string,
+    turnId = "turn-a",
+  ): OrchestrationThreadActivity {
+    return {
+      id: EventId.make(id),
+      tone: "tool",
+      kind,
+      summary: "File change",
+      payload: {
+        itemType: "file_change",
+        title: "File change",
+        data: { toolCallId, toolName: "Edit", input: { file_path: "src/app.ts" } },
+      },
+      turnId: TurnId.make(turnId),
+      createdAt: "2026-07-27T00:00:00.000Z",
+    };
+  }
+
+  function projectedIds(activities: ReadonlyArray<OrchestrationThreadActivity>) {
+    return projectThreadDetailSnapshot({
+      snapshotSequence: 7,
+      thread: makeThread(activities),
+    }).thread.activities.map((activity) => activity.id);
+  }
+
+  it("drops updates superseded by a completion in the same turn", () => {
+    const update = makeToolActivity("upd-a", "tool.updated", "call-a");
+    const completed = makeToolActivity("done-a", "tool.completed", "call-a");
+
+    expect(projectedIds([update, completed])).toEqual([completed.id]);
+  });
+
+  it("keeps parallel calls and completions from other turns", () => {
+    const parallel = makeToolActivity("upd-b", "tool.updated", "call-b");
+    const update = makeToolActivity("upd-a", "tool.updated", "call-a", "turn-a");
+    const completed = makeToolActivity("done-a", "tool.completed", "call-a", "turn-b");
+
+    expect(projectedIds([parallel, update, completed])).toEqual([
+      parallel.id,
+      update.id,
+      completed.id,
+    ]);
+  });
+
+  it("keeps the next in-flight call after an earlier completion", () => {
+    const completed = makeToolActivity("done-a", "tool.completed", "call-a");
+    const nextCall = makeToolActivity("upd-a", "tool.updated", "call-a");
+
+    expect(projectedIds([completed, nextCall])).toEqual([completed.id, nextCall.id]);
+  });
+});
+
 describe("context-window snapshot dedup", () => {
   function makeContextWindowActivity(
     id: string,

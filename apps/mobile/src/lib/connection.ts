@@ -2,8 +2,6 @@ import { EnvironmentId } from "@croki/contracts";
 import { stripPairingTokenFromUrl } from "@croki/shared/remote";
 import { type EnvironmentConnectionPhase } from "@croki/client-runtime/connection";
 
-export { authClientMetadata } from "./authClientMetadata";
-
 export interface SavedRemoteConnection {
   readonly environmentId: EnvironmentId;
   readonly environmentLabel: string;

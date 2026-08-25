@@ -4,22 +4,22 @@ import { LogInIcon, ServerIcon, SmartphoneIcon } from "lucide-react";
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
 import { MobileClientsUserProfilePage } from "./MobileClientsUserProfilePage";
-import { T3ConnectUserProfilePage } from "./T3ConnectUserProfilePage";
-import { useT3ConnectAuthPrompt } from "./useT3ConnectAuthPrompt";
+import { CrokiConnectUserProfilePage } from "./CrokiConnectUserProfilePage";
+import { useCrokiConnectAuthPrompt } from "./useCrokiConnectAuthPrompt";
 
-export function T3ConnectSidebarSignIn() {
+export function CrokiConnectSidebarSignIn() {
   if (!hasCloudPublicConfig()) return null;
 
-  return <ConfiguredT3ConnectSidebarSignIn />;
+  return <ConfiguredCrokiConnectSidebarSignIn />;
 }
 
-export function T3ConnectSidebarAvatar() {
+export function CrokiConnectSidebarAvatar() {
   if (!hasCloudPublicConfig()) return null;
 
-  return <ConfiguredT3ConnectSidebarAvatar />;
+  return <ConfiguredCrokiConnectSidebarAvatar />;
 }
 
-function ConfiguredT3ConnectSidebarAvatar() {
+function ConfiguredCrokiConnectSidebarAvatar() {
   const { isLoaded, isSignedIn } = useAuth();
 
   if (!isLoaded || !isSignedIn) return null;
@@ -41,19 +41,19 @@ function ConfiguredT3ConnectSidebarAvatar() {
         <MobileClientsUserProfilePage />
       </UserButton.UserProfilePage>
       <UserButton.UserProfilePage
-        label="T3 Connect"
+        label="Croki Connect"
         labelIcon={<ServerIcon className="size-4" />}
-        url="t3-connect"
+        url="croki-connect"
       >
-        <T3ConnectUserProfilePage />
+        <CrokiConnectUserProfilePage />
       </UserButton.UserProfilePage>
     </UserButton>
   );
 }
 
-function ConfiguredT3ConnectSidebarSignIn() {
+function ConfiguredCrokiConnectSidebarSignIn() {
   const { isLoaded, isSignedIn } = useAuth();
-  const { authPrompt, openAuthPrompt } = useT3ConnectAuthPrompt();
+  const { authPrompt, openAuthPrompt } = useCrokiConnectAuthPrompt();
 
   if (!isLoaded || isSignedIn) return null;
 
