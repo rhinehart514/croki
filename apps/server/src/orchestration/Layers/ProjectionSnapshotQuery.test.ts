@@ -330,6 +330,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               planId: "plan-1",
             },
           },
+          queuedTurnStarts: [],
           createdAt: "2026-02-24T00:00:02.000Z",
           updatedAt: "2026-02-24T00:00:03.000Z",
           archivedAt: null,

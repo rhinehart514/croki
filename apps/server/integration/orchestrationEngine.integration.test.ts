@@ -19,6 +19,7 @@ import {
 } from "@croki/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -1216,6 +1217,7 @@ it.live("forwards thread.turn.interrupt to claudeAgent provider sessions", () =>
     (harness) =>
       Effect.gen(function* () {
         yield* seedProjectAndThread(harness);
+        const completeTurn = yield* Deferred.make<void>();
 
         yield* harness.adapterHarness!.queueTurnResponseForNextSession({
           events: [
@@ -1252,6 +1254,7 @@ it.live("forwards thread.turn.interrupt to claudeAgent provider sessions", () =>
               status: "completed",
             },
           ],
+          mutateWorkspace: () => Deferred.await(completeTurn),
         });
 
         yield* startTurn({
@@ -1267,7 +1270,7 @@ it.live("forwards thread.turn.interrupt to claudeAgent provider sessions", () =>
 
         const thread = yield* harness.waitForThread(
           THREAD_ID,
-          (entry) => entry.session?.threadId === "thread-1",
+          (entry) => entry.session?.status === "running" && entry.session.activeTurnId !== null,
         );
         assert.equal(thread.session?.threadId, "thread-1");
 
@@ -1287,6 +1290,7 @@ it.live("forwards thread.turn.interrupt to claudeAgent provider sessions", () =>
           "claude provider interrupt call",
         );
         assert.equal(interruptCalls.length, 1);
+        yield* Deferred.succeed(completeTurn, undefined);
       }),
     CLAUDE_AGENT_PROVIDER,
   ),

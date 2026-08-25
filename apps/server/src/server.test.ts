@@ -8154,6 +8154,16 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               runtimeMode: "full-access",
               interactionMode: "default",
               bootstrap: {
+                createThread: {
+                  projectId: defaultProjectId,
+                  title: "Bootstrap Thread",
+                  modelSelection: defaultModelSelection,
+                  runtimeMode: "full-access",
+                  interactionMode: "default",
+                  branch: "main",
+                  worktreePath: null,
+                  createdAt,
+                },
                 prepareWorktree: {
                   projectCwd: "/tmp/project",
                   baseBranch: "main",
